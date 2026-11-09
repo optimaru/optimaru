@@ -55,7 +55,7 @@ void ScoreCalculator::updateShadowVariables(TaskAssigningSolution &solution)
     }
 }
 
-Score ScoreCalculator::calculateScore(TaskAssigningSolution &solution)
+Score ScoreCalculator::score(TaskAssigningSolution &solution)
 {
     updateShadowVariables(solution);
 
@@ -94,10 +94,10 @@ Score ScoreCalculator::calculateScore(TaskAssigningSolution &solution)
     return solution.score;
 }
 
-optimaru::HardSoftScore
+optimaru::Score
 ScoreCalculator::calculateEngineScore(TaskAssigningSolution &solution)
 {
-    return toEngineScore(calculateScore(solution));
+    return toEngineScore(score(solution));
 }
 
 }  // namespace ta

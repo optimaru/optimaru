@@ -11,11 +11,11 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/score/director/score_director.hpp"
-#include "optimaru/config/localsearch/local_search_config.hpp"
-#include "optimaru/impl/heuristic/selector/common/nearby/nearby_neighborhoods.hpp"
-#include "optimaru/impl/localsearch/element_index.hpp"
-#include "optimaru/impl/localsearch/greedy_repair.hpp"
+#include "optimaru/model/editor.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/model/neighborhoods.hpp"
+#include "optimaru/model/element_index.hpp"
+#include "optimaru/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "vrp/demo_data.hpp"
 #include "vrp/domain.hpp"
@@ -71,7 +71,7 @@ void testJavaFixtures()
               -1, NULL_TIME},
     };
     plan.vehicles[0].visitIndices = {0, 1};
-    Score s = ScoreCalculator::calculateScore(plan);
+    Score s = ScoreCalculator::score(plan);
     checkEqual("vehicleCapacityCost hard penalty", -s.hard, 20);
     // travelTimeCost: the route is open by default, so only
     // home->L2->L3 = 843 + 639 = 1482 is driven.
@@ -79,7 +79,7 @@ void testJavaFixtures()
     // With returnToDepot the Java round trip home->L2->L3->home is charged:
     // 843 + 639 + 941 = 2423.
     plan.vehicles[0].returnToDepot = true;
-    s = ScoreCalculator::calculateScore(plan);
+    s = ScoreCalculator::score(plan);
     checkEqual("travelTimeCost soft penalty (return to depot)", -s.soft, 2423);
     plan.vehicles[0].returnToDepot = false;
 
@@ -93,7 +93,7 @@ void testJavaFixtures()
     plan2.visits = {Visit{"2", "John", 1, 80, hourMinute(8, 0), hourMinute(10, 0),
                           30 * 60, -1, NULL_TIME}};
     // Left out of every route == unassigned.
-    Score s2 = ScoreCalculator::calculateScore(plan2);
+    Score s2 = ScoreCalculator::score(plan2);
     checkEqual("unassignedVisitsCost medium penalty", -s2.medium, 30);
     std::printf("\n");
 }
@@ -115,8 +115,8 @@ void testScorePacking()
         if (!(back == s))
         {
             ok = false;
-            std::printf("    round-trip failed: %s -> %s\n", s.toString().c_str(),
-                        back.toString().c_str());
+            std::printf("    round-trip failed: %s -> %s\n", s.str().c_str(),
+                        back.str().c_str());
         }
     }
     check(ok, "packing round-trips on every level");
@@ -138,40 +138,40 @@ void testIncrementalMatchesFullRecompute()
     plan.rebuildUnassignedPool();
 
     VehicleRoutingIncrementalScoreCalculator calculator;
-    calculator.resetWorkingSolution(plan);
+    calculator.rebuild(plan);
 
-    using Descriptor = optimaru::SolutionDescriptor<VehicleRoutePlan>;
+    using Descriptor = optimaru::SolutionTraits<VehicleRoutePlan>;
     std::mt19937_64 rng(3);
     bool ok = true;
     for (int step = 0; step < 400 && ok; ++step)
     {
         // Move a random visit from one list to another (routes and the
         // unassigned pool alike), through the calculator's hook protocol.
-        const int listCount = Descriptor::listCount(plan);
-        int from = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
-        if (Descriptor::listSize(plan, from) == 0)
+        const int list_count = Descriptor::list_count(plan);
+        int from = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
+        if (Descriptor::list_size(plan, from) == 0)
             continue;
         const int position = static_cast<int>(
-            rng() % static_cast<std::uint64_t>(Descriptor::listSize(plan, from)));
-        const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
+            rng() % static_cast<std::uint64_t>(Descriptor::list_size(plan, from)));
+        const int to = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
 
-        calculator.beforeListChanged(from);
-        const int element = Descriptor::removeElement(plan, from, position);
-        calculator.afterListChanged(from);
+        calculator.before_list_edit(from);
+        const int element = Descriptor::remove_element(plan, from, position);
+        calculator.after_list_edit(from);
 
-        const int insertAt = static_cast<int>(
-            rng() % static_cast<std::uint64_t>(Descriptor::listSize(plan, to) + 1));
-        calculator.beforeListChanged(to);
-        Descriptor::insertElement(plan, to, insertAt, element);
-        calculator.afterListChanged(to);
+        const int insert_at = static_cast<int>(
+            rng() % static_cast<std::uint64_t>(Descriptor::list_size(plan, to) + 1));
+        calculator.before_list_edit(to);
+        Descriptor::insert_element(plan, to, insert_at, element);
+        calculator.after_list_edit(to);
 
-        const Score incremental = calculator.currentScore();
-        const Score full = ScoreCalculator::calculateScore(plan);
+        const Score incremental = calculator.current_score();
+        const Score full = ScoreCalculator::score(plan);
         if (!(incremental == full))
         {
             ok = false;
             std::printf("    step %d: incremental %s != full %s\n", step,
-                        incremental.toString().c_str(), full.toString().c_str());
+                        incremental.str().c_str(), full.str().c_str());
         }
     }
     check(ok, "incremental == full recompute over 400 random list moves");
@@ -188,8 +188,8 @@ void testSolveIntegrity()
     VehicleRoutePlan plan = buildRandomInstance(60, 6, /*seed=*/5);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(3);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(3);
+    config.seed = 5;
     Solver(config).solve(plan);
 
     // Every visit appears exactly once across the routes and the pool.
@@ -213,19 +213,19 @@ void testSolveIntegrity()
           "unassigned pool matches the routes");
 
     const Score reported = plan.score;
-    const Score recomputed = ScoreCalculator::calculateScore(plan);
+    const Score recomputed = ScoreCalculator::score(plan);
     check(reported == recomputed, "reported score matches a full recompute");
     std::printf("    solved 60 visits / 6 vehicles in 3s: %s\n",
-                plan.score.toString().c_str());
+                plan.score.str().c_str());
 
     // One vehicle plus the pool: route elimination must decline (there is no
     // other route to take the visits) and the repair must never drop an
     // element because the pool is the only list left.
     VehicleRoutePlan single = buildRandomInstance(8, 1, /*seed=*/3);
     Solver::Config singleConfig;
-    singleConfig.spentLimit = std::chrono::seconds(1);
-    singleConfig.randomSeed = 3;
-    singleConfig.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    singleConfig.time_limit = std::chrono::seconds(1);
+    singleConfig.seed = 3;
+    singleConfig.score_checks = optimaru::ScoreChecks::Full;
     Solver(singleConfig).solve(single);
     std::vector<int> seenSingle(single.visits.size(), 0);
     for (int visitIndex : single.vehicles[0].visitIndices)
@@ -240,7 +240,7 @@ void testSolveIntegrity()
 }
 
 // -------------------------------------------------------------------------
-// FULL_ASSERT drives the engine's own incremental-vs-full check on every
+// ScoreChecks::Full drives the engine's own incremental-vs-full check on every
 // move, including the ruin & recreate path with all five ruin operators.
 // -------------------------------------------------------------------------
 void testFullAssert()
@@ -249,9 +249,9 @@ void testFullAssert()
     VehicleRoutePlan plan = buildRandomInstance(25, 4, /*seed=*/9);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 9;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 9;
+    config.score_checks = optimaru::ScoreChecks::Full;
     // Kick often so the LNS path is genuinely exercised inside the budget.
     config.ruinRecreateUnimprovedStepTrigger = 50;
     config.ruinRecreatePolishSteps = 20;
@@ -261,7 +261,7 @@ void testFullAssert()
     {
         Solver(config).solve(plan);
     }
-    catch (const optimaru::ScoreCorruptionError &)
+    catch (const optimaru::ScoreMismatchError &)
     {
         threw = true;
     }
@@ -269,20 +269,20 @@ void testFullAssert()
 
     // The iterated local search as the only strategy: every descent move is
     // previewed, applied and (on a rejected iteration) restored from a
-    // snapshot, and FULL_ASSERT compares each preview with the applied score.
+    // snapshot, and ScoreChecks::Full compares each preview with the applied score.
     VehicleRoutePlan ilsPlan = buildRandomInstance(40, 5, /*seed=*/11);
     Solver::Config ilsConfig;
-    ilsConfig.spentLimit = std::chrono::seconds(2);
-    ilsConfig.randomSeed = 11;
-    ilsConfig.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-    ilsConfig.iteratedLocalSearchWeight = 1.0;
-    ilsConfig.iteratedLocalSearchMaxSegment = 3;
+    ilsConfig.time_limit = std::chrono::seconds(2);
+    ilsConfig.seed = 11;
+    ilsConfig.score_checks = optimaru::ScoreChecks::Full;
+    ilsConfig.iterated_local_search_weight = 1.0;
+    ilsConfig.iterated_local_search_max_segment = 3;
     threw = false;
     try
     {
         Solver(ilsConfig).solve(ilsPlan);
     }
-    catch (const optimaru::ScoreCorruptionError &)
+    catch (const optimaru::ScoreMismatchError &)
     {
         threw = true;
     }
@@ -315,19 +315,19 @@ void testAlnsBeatsPlainLocalSearch()
         VehicleRoutePlan alns = plain;
 
         Solver::Config base;
-        base.spentLimit = std::chrono::seconds(3);
-        base.randomSeed = static_cast<std::uint64_t>(seed);
+        base.time_limit = std::chrono::seconds(3);
+        base.seed = static_cast<std::uint64_t>(seed);
 
         Solver::Config plainConfig = base;
-        plainConfig.ruinRecreate = false;
+        plainConfig.ruin_recreate = false;
         Solver(plainConfig).solve(plain);
 
         Solver::Config alnsConfig = base;
-        alnsConfig.ruinRecreate = true;
+        alnsConfig.ruin_recreate = true;
         Solver(alnsConfig).solve(alns);
 
         std::printf("    seed %d: plain %s | ALNS %s\n", seed,
-                    plain.score.toString().c_str(), alns.score.toString().c_str());
+                    plain.score.str().c_str(), alns.score.str().c_str());
         if (alns.score >= plain.score)
             ++alnsWins;
     }
@@ -338,13 +338,13 @@ void testAlnsBeatsPlainLocalSearch()
 
 // -------------------------------------------------------------------------
 // The four local search strategies,
-// each a MoveOperator plugin in core (impl/localsearch/strategy/):
+// each a MoveOperator plugin in core (moves/ and ruin_recreate/):
 // best-improvement granular descent over a nearby route pair,
 // destroy-and-repair as an ordinary acceptor-judged move (rather than only a
 // stagnation kick), emptying a whole route in one move, and the ejection
 // chain (break capacity on purpose, then repair it). All four mutate through multi-step
 // sequences, so their rollback is where a bug would hide — every combination
-// runs under FULL_ASSERT, which recomputes the score from scratch after every
+// runs under ScoreChecks::Full, which recomputes the score from scratch after every
 // single evaluation and throws the moment an undo leaves the incremental
 // calculator disagreeing with reality.
 // -------------------------------------------------------------------------
@@ -356,8 +356,8 @@ void testSearchStrategiesAreConsistent()
         const char *label;
         double descent;
         double drMove;
-        double routeElimination;
-        double ejectionChain;
+        double route_elimination;
+        double ejection_chain;
     };
     const Case cases[] = {
         {"none (plain move mix)", 0.0, 0.0, 0.0, 0.0},
@@ -372,13 +372,13 @@ void testSearchStrategiesAreConsistent()
     {
         VehicleRoutePlan plan = buildRandomInstance(40, 5, /*seed=*/3);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 3;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-        config.descentWeight = testCase.descent;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 3;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        config.descent_weight = testCase.descent;
         config.ruinRecreateAsMoveWeight = testCase.drMove;
-        config.routeEliminationWeight = testCase.routeElimination;
-        config.ejectionChainWeight = testCase.ejectionChain;
+        config.route_elimination_weight = testCase.route_elimination;
+        config.ejection_chain_weight = testCase.ejection_chain;
         config.ruinRecreateUnimprovedStepTrigger = 50;
         config.ruinRecreatePolishSteps = 10;
 
@@ -387,7 +387,7 @@ void testSearchStrategiesAreConsistent()
         {
             Solver(config).solve(plan);
         }
-        catch (const optimaru::ScoreCorruptionError &)
+        catch (const optimaru::ScoreMismatchError &)
         {
             threw = true;
         }
@@ -405,7 +405,7 @@ void testSearchStrategiesAreConsistent()
             conserved = conserved && count == 1;
 
         const Score reported = plan.score;
-        const bool matches = reported == ScoreCalculator::calculateScore(plan);
+        const bool matches = reported == ScoreCalculator::score(plan);
         check(!threw && conserved && matches, testCase.label);
     }
     std::printf("\n");
@@ -413,7 +413,7 @@ void testSearchStrategiesAreConsistent()
 
 
 // -------------------------------------------------------------------------
-// LocalSearchConfig::unassignedList: a repair may not park a visit it took
+// SearchSettings::unassigned_list: a repair may not park a visit it took
 // off a route in the unassigned pool, however much cheaper the pool is than a
 // capacity breach, while a visit the ruin took out of the pool may go back.
 // Without the exclusion the same repair does use the pool, which is what made
@@ -422,7 +422,7 @@ void testSearchStrategiesAreConsistent()
 void testRepairNeverParksRoutedVisitsInThePool()
 {
     std::printf("== Ruin repair keeps routed visits out of the pool ==\n");
-    using Descriptor = optimaru::SolutionDescriptor<VehicleRoutePlan>;
+    using Descriptor = optimaru::SolutionTraits<VehicleRoutePlan>;
     // Four vehicles whose capacity is far below the demand they start with:
     // every insertion into a route breaches capacity (hard), the pool costs
     // medium, so an unconstrained greedy repair prefers the pool.
@@ -451,30 +451,30 @@ void testRepairNeverParksRoutedVisitsInThePool()
         }
         return plan;
     };
-    auto run = [&](int unassignedList, int &routedToPool, int &poolOriginRouted)
+    auto run = [&](int unassigned_list, int &routedToPool, int &poolOriginRouted)
     {
         VehicleRoutePlan plan = build();
-        const int pool = Descriptor::unassignedList(plan);
+        const int pool = Descriptor::unassigned_list(plan);
 
         VehicleRoutingIncrementalScoreCalculator calculator;
-        optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator);
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
         optimaru::ElementIndex<VehicleRoutePlan> index;
         index.build(plan);
-        optimaru::NearbyNeighborhoods nearby;  // disabled: every position is a candidate
-        optimaru::RuinRecreateConfig config;
-        optimaru::GreedyRepair<VehicleRoutePlan> repair(index, nearby, config, unassignedList);
+        optimaru::Neighborhoods nearby;  // disabled: every position is a candidate
+        optimaru::RuinRecreateSettings config;
+        optimaru::GreedyRepair<VehicleRoutePlan> repair(index, nearby, config, unassigned_list);
 
         // Six routed visits and one pool visit.
         const int poolVisit = plan.unassignedVisitIndices.front();
         std::vector<int> ruined = {0, 1, 2, 3, 4, 5, poolVisit};
         std::mt19937_64 rng(17);
-        repair.ruin(director, ruined);
-        repair.recreate(director, ruined, rng);
+        repair.ruin(editor, ruined);
+        repair.recreate(editor, ruined, rng);
 
         routedToPool = 0;
         for (int e = 0; e < 6; ++e)
-            if (index.listOf(e) == pool) ++routedToPool;
-        poolOriginRouted = index.listOf(poolVisit) != pool ? 1 : 0;
+            if (index.list_of(e) == pool) ++routedToPool;
+        poolOriginRouted = index.list_of(poolVisit) != pool ? 1 : 0;
         // The repair must still place every ruined visit exactly once.
         std::vector<int> seen(plan.visits.size(), 0);
         for (const Vehicle &vehicle : plan.vehicles)
@@ -486,7 +486,7 @@ void testRepairNeverParksRoutedVisitsInThePool()
     };
 
     int routedToPool = 0, poolOriginRouted = 0;
-    const int pool = Descriptor::unassignedList(build());
+    const int pool = Descriptor::unassigned_list(build());
     check(run(pool, routedToPool, poolOriginRouted), "excluded repair conserves every visit");
     check(routedToPool == 0, "excluded repair keeps all six routed visits on routes");
     std::printf("    pool-origin visit went back to a route: %d\n", poolOriginRouted);
@@ -496,7 +496,7 @@ void testRepairNeverParksRoutedVisitsInThePool()
 }
 
 // -------------------------------------------------------------------------
-// The ejection chain has to actually fire, not just survive FULL_ASSERT.
+// The ejection chain has to actually fire, not just survive ScoreChecks::Full.
 // Three vehicles of capacity 10 start as {6,4} {5,3} {4,3} with a demand-5
 // visit left over: the total demand is exactly 30, and the only full
 // assignment moves a 3 from the second route to the third so the 5 fits
@@ -542,19 +542,19 @@ void testEjectionChainFillsTightPool()
     {
         VehicleRoutePlan run = plan;
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(5);
-        config.stepCountLimit = 50;
-        config.randomSeed = seed;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-        config.ruinRecreate = false;
-        config.descentWeight = 0.0;
+        config.time_limit = std::chrono::seconds(5);
+        config.step_limit = 50;
+        config.seed = seed;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        config.ruin_recreate = false;
+        config.descent_weight = 0.0;
         config.ruinRecreateAsMoveWeight = 0.0;
-        config.routeEliminationWeight = 0.0;
-        config.iteratedLocalSearchWeight = 0.0;  // its ruin/repair could fill the pool too
-        config.ejectionChainWeight = 1.0;
+        config.route_elimination_weight = 0.0;
+        config.iterated_local_search_weight = 0.0;  // its ruin/repair could fill the pool too
+        config.ejection_chain_weight = 1.0;
         Solver(config).solve(run);
         std::printf("    seed %llu: %s\n", static_cast<unsigned long long>(seed),
-                    run.score.toString().c_str());
+                    run.score.str().c_str());
         allFilled = allFilled && run.score.hard == 0
                     && run.unassignedVisitIndices.empty();
     }
@@ -566,7 +566,7 @@ void testEjectionChainFillsTightPool()
 // Move previews must equal the applied score, bit for bit, for every move
 // kind the engine samples: previews are what the search runs on, apply only
 // following acceptance. A CVRP-shaped instance (windows never bind, no
-// waiting) keeps previews enabled; the ScoreDirector applies each move for
+// waiting) keeps previews enabled; the Editor applies each move for
 // real, scores it, and undoes it to produce the reference.
 // -------------------------------------------------------------------------
 // `nonMetric` replaces the haversine matrix with random driving times that
@@ -623,14 +623,14 @@ void testPreviewsMatchAppliedScore(bool nonMetric, bool waiting = false,
     }
 
     VehicleRoutingIncrementalScoreCalculator calculator;
-    optimaru::ScoreDirector<VehicleRoutePlan> director(plan, calculator);
+    optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
     const optimaru::testing::PreviewParity parity
-        = optimaru::testing::runPreviewParity(director, calculator, /*seed=*/21, /*trials=*/3000);
+        = optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/21, /*trials=*/3000);
     std::printf("    %d moves checked, %d previewed, %d declined\n", parity.checked,
                 parity.previewed, parity.declined);
     // Tight deadlines (non-metric) send the cached path to the walk; a plan
     // with waiting walks every preview. Either way nothing is declined.
-    check(parity.allEqual() && parity.previewed > 1000, "every preview equals the applied score");
+    check(parity.all_equal() && parity.previewed > 1000, "every preview equals the applied score");
     check(parity.declined == 0, "every preview is served");
     std::printf("\n");
 }
@@ -643,14 +643,14 @@ void testPreviewsMatchAppliedScore(bool nonMetric, bool waiting = false,
 void verifyStopAtFirstFeasibleLimit()
 {
     std::printf("== stop_at_first_feasible's limit is hard-only ==\n");
-    const optimaru::HardSoftScore limit
+    const optimaru::Score limit
         = toEngineScoreLimit(Score{0, kNoLevelFloor, kNoLevelFloor});
     check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
           "(0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
-    check(optimaru::HardSoftScore{0, -1e30} >= limit
+    check(optimaru::Score{0, -1e30} >= limit
               && toEngineScore(Score{0, -5, -(1LL << 62)}) >= limit,
           "a feasible score with any soft (-1e30; medium -5, soft -2^62) reaches it");
-    check(!(optimaru::HardSoftScore{-1, 0.0} >= limit),
+    check(!(optimaru::Score{-1, 0.0} >= limit),
           "an infeasible score does not");
     check(toEngineScoreLimit(Score{0, kNoLevelFloor, 0}).soft
                   == -std::numeric_limits<double>::infinity()

@@ -57,7 +57,7 @@ public:
 
     // Recomputes shadow variables, then the HardMediumSoftScore, storing it in
     // plan.score and returning it.
-    static Score calculateScore(PdpRoutePlan &plan);
+    static Score score(PdpRoutePlan &plan);
 
     // Ceil of a positive second-count to whole minutes.
     static std::int64_t ceilToMinutes(Seconds seconds)

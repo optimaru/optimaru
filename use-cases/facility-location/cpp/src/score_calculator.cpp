@@ -53,7 +53,7 @@ void ScoreCalculator::prepare(FacilityLocationProblem &problem)
     problem.prepared = true;
 }
 
-Score ScoreCalculator::calculateScore(FacilityLocationProblem &problem)
+Score ScoreCalculator::score(FacilityLocationProblem &problem)
 {
     prepare(problem);
 

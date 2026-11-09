@@ -27,16 +27,16 @@ struct BlockAdjacencyCost final : MemberChangeGlobalConstraint
     {
     }
     void reset(const Timetable &table,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(table);
         slotOf_.assign(table.lessons.size(), -1);
         groupOf_.resize(table.lessons.size());
         for (std::size_t i = 0; i < table.lessons.size(); ++i)
             groupOf_[i] = table.lessons[i].blockGroup;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
-            for (int entity : membersPerUnit[unit])
+            for (int entity : members_per_unit[unit])
                 slotOf_[entity] = static_cast<int>(unit);
         }
         violation_.assign(table.blockGroupCount, 0);
@@ -44,7 +44,7 @@ struct BlockAdjacencyCost final : MemberChangeGlobalConstraint
         for (int group = 0; group < table.blockGroupCount; ++group)
             refresh(table, group);
     }
-    void onMemberChanged(const Timetable &table,
+    void on_member_changed(const Timetable &table,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,

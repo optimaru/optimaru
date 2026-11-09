@@ -24,7 +24,7 @@ struct LocationCapacityCost final : QapUnitConstraint
         : QapUnitConstraint("locationCapacityCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const QuadraticAssignmentProblem &problem) override
+    void on_reset(const QuadraticAssignmentProblem &problem) override
     {
         detail::requirePrepared(problem);
         scope_ = &problem.capacitatedLocations;
@@ -41,7 +41,7 @@ struct LocationCapacityCost final : QapUnitConstraint
         const std::int64_t over = demand - problem.capacityOf[unit];
         return over > 0 ? static_cast<double>(over) : 0.0;
     }
-    const std::vector<int> *scopedUnits() const override { return scope_; }
+    const std::vector<int> *scoped_units() const override { return scope_; }
 
 private:
     const std::vector<int> *scope_ = nullptr;

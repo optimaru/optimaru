@@ -38,8 +38,8 @@ target_compile_options(pdp_test PRIVATE -Wall -Wextra)
 
 # Plugin-assembly path (pdp/constraints.hpp): the same constraint set
 # decomposed into one component each on the engine's
-# DecomposedScoreCalculator, checked bit-for-bit against
-# ScoreCalculator::calculateScore.
+# DecomposedObjective, checked bit-for-bit against
+# ScoreCalculator::score.
 add_executable(pdp_plugin_test test/pdp_plugin_test.cpp)
 target_link_libraries(pdp_plugin_test PRIVATE pdp_core)
 target_compile_options(pdp_plugin_test PRIVATE -Wall -Wextra)

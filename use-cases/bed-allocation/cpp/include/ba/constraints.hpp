@@ -52,7 +52,7 @@ namespace ba
 // The assembly lists unit constraints first and globals after, so
 // mixedGenderRoomCost comes LAST in names() / info() / list_constraints().
 //
-// This assembly scores bit-for-bit like ScoreCalculator::calculateScore and
+// This assembly scores bit-for-bit like ScoreCalculator::score and
 // the monolithic incremental calculator (both read the same kDefaultWeight
 // constants and fold medium with the same kMediumFold). It is also the
 // domain's constraint catalog: constraint_info() reads the defaults off it,

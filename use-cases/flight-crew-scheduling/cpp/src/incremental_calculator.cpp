@@ -8,17 +8,17 @@
 namespace fcs
 {
 
-void FlightCrewIncrementalScoreCalculator::resetWorkingSolution(
-    FlightCrewSchedule &workingSolution)
+void FlightCrewIncrementalScoreCalculator::rebuild(
+    FlightCrewSchedule &solution)
 {
-    ScoreCalculator::prepare(workingSolution);
-    schedule_ = &workingSolution;
+    ScoreCalculator::prepare(solution);
+    schedule_ = &solution;
 
     const int assignmentCount
-        = static_cast<int>(workingSolution.flightAssignments.size());
+        = static_cast<int>(solution.flightAssignments.size());
     assign_.assign(assignmentCount, -1);
-    byEmployee_.assign(workingSolution.employees.size(), {});
-    stats_.assign(workingSolution.employees.size(), ItineraryStats{});
+    byEmployee_.assign(solution.employees.size(), {});
+    stats_.assign(solution.employees.size(), ItineraryStats{});
     missingSkill_ = 0;
     unavailable_ = 0;
     conflictPairs_ = 0;
@@ -28,13 +28,13 @@ void FlightCrewIncrementalScoreCalculator::resetWorkingSolution(
 
     for (int i = 0; i < assignmentCount; ++i)
     {
-        const int employee = workingSolution.flightAssignments[i].employee;
+        const int employee = solution.flightAssignments[i].employee;
         if (employee >= 0)
             insert(i, employee);
     }
 }
 
-void FlightCrewIncrementalScoreCalculator::beforeVariableChanged(
+void FlightCrewIncrementalScoreCalculator::before_assign(
     int assignmentIndex)
 {
     const int oldEmployee = assign_[assignmentIndex];
@@ -42,7 +42,7 @@ void FlightCrewIncrementalScoreCalculator::beforeVariableChanged(
         retract(assignmentIndex, oldEmployee);
 }
 
-void FlightCrewIncrementalScoreCalculator::afterVariableChanged(
+void FlightCrewIncrementalScoreCalculator::after_assign(
     int assignmentIndex)
 {
     const int newEmployee
@@ -120,7 +120,7 @@ void FlightCrewIncrementalScoreCalculator::refreshEmployee(int employeeIndex)
     lastNotHome_ += fresh.lastNotHome;
 }
 
-Score FlightCrewIncrementalScoreCalculator::calculateScore()
+Score FlightCrewIncrementalScoreCalculator::score()
 {
     Score score;
     score.hard = -(kRequiredSkillWeight * missingSkill_

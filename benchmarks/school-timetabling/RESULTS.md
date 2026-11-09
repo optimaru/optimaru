@@ -171,10 +171,10 @@ there (10 s per seed, one machine, interleaved A/B).
 ### Two search strategies — worth it only by size (as-move on automatically only in the measured band)
 
 The two strategies adopted for vehicle routing were extended to the engine's
-BASIC kind and measured here too. What they share is that they are **a way of
+assignment shape and measured here too. What they share is that they are **a way of
 spending steps**, not a move kind.
 
-- `Config::descentWeight` — picks a lesson and a nearby partner, evaluates
+- `Config::descent_weight` — picks a lesson and a nearby partner, evaluates
   every slotRoom of both plus their swap, applies the best, and repeats until
   nothing improves. Always improving, so it skips the acceptor.
 - `Config::ruinRecreateAsMoveWeight` — ruins a few lessons, repairs them with
@@ -182,7 +182,7 @@ spending steps**, not a move kind.
   judge it; rejected results are undone. Unlike the stagnation kick it is
   neither rare nor unconditional.
 
-On BASIC the cost of both strategies is set by the **value range**. One
+On the assignment shape the cost of both strategies is set by the **value range**. One
 descent costs ~2 × slotRoomCount evaluations, one destroy-repair
 ruinCount × slotRoomCount, so on a 40×25 grid one of them is worth thousands of
 ordinary steps. That is why the weight sits around 1e-4 here, while an
@@ -209,7 +209,7 @@ There is one way to read this. **On this track the gain grows with the
 instance size — up to about L.** On S the baseline is already at its 175
 ceiling, so diverting budget anywhere breaks even at best; on L the ceiling is
 out of reach within the budget, so spending more than half of it on structural
-repair wins — the same story as with 1000-customer VRP, now on BASIC.
+repair wins — the same story as with 1000-customer VRP, now on the assignment shape.
 
 Re-measured on 2026-08-18 (Apple Silicon macOS, one machine, 10 s × 6 seeds,
 interleaved A/B alternating baseline and candidate on the same seeds), probing
@@ -238,7 +238,7 @@ it lost. The canonical solver's field of the same name still defaults to 0
 With this, track-1 L moves from a 6-seed average of 645.7 to 684.8 (+6.1%,
 6-0-0), while S/M take the same path as before because the rule gives 0.
 
-Why the descent is weak here is easy to guess. A BASIC descent looks at every
+Why the descent is weak here is easy to guess. An assignment-shape descent looks at every
 change/swap of two lessons — a neighbourhood the ordinary move mix already
 samples at random, so it looks at the same place at 1000 times the cost. The
 as-move's repair, by contrast, re-places the ruined lessons over the whole

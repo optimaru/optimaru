@@ -83,7 +83,7 @@ double ScoreCalculator::unfairness(const std::vector<std::int64_t> &loads)
     return unfairnessFromAggregates(sum, sumSq, static_cast<int>(loads.size()));
 }
 
-Score ScoreCalculator::calculateScore(TournamentSchedule &schedule)
+Score ScoreCalculator::score(TournamentSchedule &schedule)
 {
     const int teamCount = schedule.teamCount();
     const int dayCount = schedule.dayCount();

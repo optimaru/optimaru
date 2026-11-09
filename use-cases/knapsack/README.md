@@ -11,9 +11,9 @@ without changing the default instance format.
 [`benchmarks/knapsack/cpsat`](../../benchmarks/knapsack/cpsat) holds the exact
 CP-SAT reference.
 
-## Domain (BASIC variable)
+## Domain (assignment shape)
 
-- `Item.selected` — the only planning variable: `1` = selected, `0` = not
+- `Item.selected` — the only decision variable: `1` = selected, `0` = not
   selected (the value range is `{0, 1}`, so the engine's change move is a flip
   and its swap move trades a selected item for an unselected one). `-1`
   (undecided) exists only transiently in the engine's ruin-and-recreate or for
@@ -26,7 +26,7 @@ CP-SAT reference.
 - `warm_start` — start from the selection on the items; a plain solve ignores the
   input selection and starts from the greedy construction. Every solve resets it.
 
-## Constraints (HardSoftScore — the engine score type as-is, no mapping)
+## Constraints (Score — the engine score type as-is, no mapping)
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (one total; 0 = no violation) |
 |---|---|---|---|---|
@@ -145,7 +145,7 @@ other C++ use cases.
 
 ## cpp/
 
-- `include/ks/domain.hpp` — domain + `optimaru::SolutionDescriptor` specialization
+- `include/ks/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
 - `include/ks/constraints/` — one component per constraint:
   `knapsack_capacity_cost.hpp`, `resource_capacity_cost.hpp`,
   `mandatory_items_cost.hpp`, `forbidden_items_cost.hpp`,
@@ -173,16 +173,16 @@ ctest --test-dir build/knapsack --output-on-failure --no-tests=error
 `ks_test`: per-constraint hand checks (positive and zero) on the full recompute and
 the incremental calculator, incremental == full recompute over random flip / swap /
 undecided / batch moves (the score and every constraint's raw total after each move,
-with every constraint non-zero during the walk), the greedy cases, FULL_ASSERT
+with every constraint non-zero during the walk), the greedy cases, ScoreChecks::Full
 solves, brute-force optima (0/1 multidimensional instances and instances with every
 fact), the zero budget with a seed, determinism, multi-start and validation.
 `ks_plugin_test`: default assembly == monolith bit for bit (score and raw totals),
 plugin incremental == full recompute per constraint after each move, partial
 assemblies, overrides (exponent on the total, per-constraint hard rounding), raw
-costs by hand, a FULL_ASSERT plugin solve, the catalog and the reward guards, and
+costs by hand, a ScoreChecks::Full plugin solve, the catalog and the reward guards, and
 repeated / shifted components (a hand-calculated repeat, threshold and literal offsets
 by hand, the literal formula refused on hard at reset and kept on soft, incremental == a
-fresh recompute over a random walk, a FULL_ASSERT solve).
+fresh recompute over a random walk, a ScoreChecks::Full solve).
 
 ## Usage
 
@@ -246,13 +246,13 @@ print([item.id for item in warm.items if item.selected], warm.total_value)
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the engine is
+The solution has the **assignment** shape; the domain solver that configures the engine is
 `cpp/include/ks/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes flip (change) and swap moves (weights in
 `Solver::Config`) and runs ruin-and-recreate both on stagnation and as an ordinary
 move. A new move (a 2-for-1 exchange, say) is an `optimaru::MoveOperator<…>`
-registered with `engine.addMoveOperator(...)` in `cpp/src/solver.cpp`; registered
+registered with `engine.add_move_operator(...)` in `cpp/src/solver.cpp`; registered
 operators do not reach the engine's multi-start threads, so a solver that registers
 one runs its own worker threads (see facility-location's `CloseFacilityMove`).
 

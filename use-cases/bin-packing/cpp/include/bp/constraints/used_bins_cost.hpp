@@ -27,21 +27,21 @@ struct UsedBinsCost final : BpGlobalConstraint
     {
     }
     void reset(const BinPackingProblem &problem,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(problem);
-        used_.assign(membersPerUnit.size(), 0);
+        used_.assign(members_per_unit.size(), 0);
         count_ = 0;
-        for (std::size_t bin = 0; bin < membersPerUnit.size(); ++bin)
+        for (std::size_t bin = 0; bin < members_per_unit.size(); ++bin)
         {
-            if (!membersPerUnit[bin].empty())
+            if (!members_per_unit[bin].empty())
             {
                 used_[bin] = 1;
                 ++count_;
             }
         }
     }
-    void onUnitChanged(const BinPackingProblem & /*problem*/,
+    void on_unit_changed(const BinPackingProblem & /*problem*/,
                        int unit,
                        const std::vector<int> &members) override
     {
@@ -49,14 +49,14 @@ struct UsedBinsCost final : BpGlobalConstraint
         count_ += now - used_[unit];
         used_[unit] = now;
     }
-    bool supportsMemberChange() const override { return true; }
-    void onMemberChanged(const BinPackingProblem &problem,
+    bool supports_member_change() const override { return true; }
+    void on_member_changed(const BinPackingProblem &problem,
                          int unit,
                          const std::vector<int> &members,
                          int /*entity*/,
                          bool /*joined*/) override
     {
-        onUnitChanged(problem, unit, members);  // `members` is after the change
+        on_unit_changed(problem, unit, members);  // `members` is after the change
     }
     double cost() const override { return static_cast<double>(count_); }
 

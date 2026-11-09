@@ -12,7 +12,7 @@ namespace es {
 // an artifact of the planning window — is not penalized. Raw cost per
 // employee = len - value per over-long interior run ("avoid long gaps between
 // worked days": value=3 -> runs of 4+ cost), so 0 = no such gap. A day counts
-// as worked if it holds any shift. Runs without deltaCost (full unit re-cost
+// as worked if it holds any shift. Runs without delta_cost (full unit re-cost
 // per touch).
 struct MaxConsecutiveDaysOffCost final : EsUnitConstraint {
     static constexpr double kDefaultWeight = 1.0;
@@ -21,7 +21,7 @@ struct MaxConsecutiveDaysOffCost final : EsUnitConstraint {
     explicit MaxConsecutiveDaysOffCost(double weight = kDefaultWeight, int value = 3)
         : EsUnitConstraint("maxConsecutiveDaysOffCost", weight, kDefaultLevel),
           value_(value) {}
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         horizon_ = 0;
         day_.resize(s.shifts.size());
         for (std::size_t i = 0; i < s.shifts.size(); ++i) {

@@ -17,7 +17,7 @@ the [IBM CP scheduling example library](https://www.ibm.com/docs/en/icos/22.2.0?
 and [Gurobi's modeling examples](https://github.com/Gurobi/modeling-examples).
 The implementation is original and does not depend on a commercial runtime.
 
-## Domain (BASIC variable, decoded schedule)
+## Domain (assignment shape, decoded schedule)
 
 - One **operation row** per (lot, route step), lot order then route order. Its planning
   value folds the two decisions of the search into one int:
@@ -36,7 +36,7 @@ The implementation is original and does not depend on a commercial runtime.
   data mode) or, inside `solve`, as the **decode of its planning values** (search mode;
   a complete warm-start seed stands for itself while the values are the seed's).
 
-## Constraints (HardSoftScore — the engine score type as is)
+## Constraints (Score — the engine score type as is)
 
 Every constraint is a `GlobalConstraint` (the schedule is a function of all values) and
 reports its total as one raw cost:
@@ -170,7 +170,7 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
 ## cpp/
 
 - `include/fab/domain.hpp` — facts, `OperationRow`, `SemiconductorSchedule`, the
-  `optimaru::SolutionDescriptor` specialization
+  `optimaru::SolutionTraits` specialization
 - `include/fab/decoder.hpp` — the serial schedule-generation decoder (incremental:
   truncate to a step and decode on), `defaultChoices`, `seedState`
 - `include/fab/constraints/` — one component per constraint, each owning its unit
@@ -202,12 +202,12 @@ ctest --test-dir build/semiconductor-scheduling --output-on-failure --no-tests=e
 incremental == full recompute of every constraint's raw cost on 300 random instances x
 1000 moves (each constraint non-zero in some decoded state; the random instances cluster
 pins so that pin overlaps reach the capacity and family-conflict terms), solver contracts
-(zero budget, seeds never lost, multi-start, FULL_ASSERT, a failed solve), int64 overflow.
+(zero budget, seeds never lost, multi-start, ScoreChecks::Full, a failed solve), int64 overflow.
 `fab_plugin_test`: default assembly == monolith (data and search mode), plugin incremental
-== full per constraint, components alone, overrides, `constraintTotals()`, raw costs by
+== full per constraint, components alone, overrides, `constraint_totals()`, raw costs by
 hand, the catalog, and repeated / shifted components (a hand-calculated repeat, threshold
 and literal offsets by hand, the literal formula refused on hard at reset and kept on soft,
-incremental == a fresh recompute over random walks, FULL_ASSERT solves).
+incremental == a fresh recompute over random walks, ScoreChecks::Full solves).
 
 ## python/
 
@@ -257,13 +257,13 @@ relative order, but its start times are recomputed.
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC** (the composite rank x slot value); the domain solver is
+The solution has the **assignment** shape (the composite rank x slot value); the domain solver is
 `cpp/include/fab/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The change move's value comes from the value recommender in
 `cpp/src/solver.cpp` (a machine switch or a priority shift); `PrioritySwapMove`
 (`cpp/include/fab/moves/priority_swap.hpp`) is a custom `optimaru::MoveOperator`
-registered with `engine.addMoveOperator(...)` — use it as the template.
+registered with `engine.add_move_operator(...)` — use it as the template.
 
 **Changing the construction.** The start state is built before the engine runs
 (`beginSearch` in `cpp/src/solver.cpp`: the default machine choices at identity ranks, or

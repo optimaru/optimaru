@@ -25,7 +25,7 @@ struct FixedPartitionCost final : McUnitConstraint
     {
     }
 
-    void onReset(const MaxCutProblem &problem) override
+    void on_reset(const MaxCutProblem &problem) override
     {
         detail::requirePrepared(problem);
     }
@@ -38,8 +38,8 @@ struct FixedPartitionCost final : McUnitConstraint
         return total;
     }
 
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const MaxCutProblem &problem,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const MaxCutProblem &problem,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int vertex) const override

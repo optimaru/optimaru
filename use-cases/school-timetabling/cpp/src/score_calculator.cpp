@@ -86,7 +86,7 @@ void ScoreCalculator::prepare(Timetable &table)
     table.prepared = true;
 }
 
-Score ScoreCalculator::calculateScore(Timetable &table)
+Score ScoreCalculator::score(Timetable &table)
 {
     prepare(table);
     Score score;

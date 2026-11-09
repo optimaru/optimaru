@@ -17,7 +17,7 @@ namespace cs
 // counted positive (the reward members too; their components negate them).
 // The constraint weights are applied only in hardTotal() / softPenaltyTotal()
 // / softRewardTotal(), which read each component's kDefaultWeight
-// (score_calculator.cpp), mirroring `penalize(HardSoftScore.ofHard(w),
+// (score_calculator.cpp), mirroring `penalize(Score.ofHard(w),
 // weigher)` one to one.
 struct Breakdown
 {
@@ -83,8 +83,8 @@ struct Breakdown
 // plus one synthetic hard constraint replacing the quickstart's per-TalkType
 // value ranges.
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
 // Hard (default weight x units; units always scale with timeslot minutes;
 // the weights are the components' kDefaultWeight):
@@ -145,7 +145,7 @@ struct Breakdown
 class ScoreCalculator
 {
 public:
-    static Score calculateScore(ConferenceSchedule &schedule);
+    static Score score(ConferenceSchedule &schedule);
     static Breakdown computeBreakdown(ConferenceSchedule &schedule);
 
     // The same full recompute on an ALREADY prepared schedule. The plugin
@@ -158,7 +158,7 @@ public:
     // object), flattens the compatibility/unavailability tables and the
     // per-timeslot day/duration columns. Idempotent (guarded by
     // ConferenceSchedule::prepared). Must run before scoring;
-    // calculateScore/solve call it.
+    // score/solve call it.
     static void prepare(ConferenceSchedule &schedule);
 
     // --- shared building blocks (sorted interned-id vectors) ---

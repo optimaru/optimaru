@@ -21,7 +21,7 @@ struct CourseMaxPeriodsPerDayCost final : MemberChangeGlobalConstraint
     {
     }
     void reset(const Timetable &table,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(table);
         dayCount_ = table.dayCount;
@@ -37,13 +37,13 @@ struct CourseMaxPeriodsPerDayCost final : MemberChangeGlobalConstraint
         count_.assign(
             static_cast<std::size_t>(table.courseCount) * table.dayCount, 0);
         total_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
-            for (int entity : membersPerUnit[unit])
+            for (int entity : members_per_unit[unit])
                 apply(static_cast<int>(unit), entity, /*joined=*/true);
         }
     }
-    void onMemberChanged(const Timetable & /*table*/,
+    void on_member_changed(const Timetable & /*table*/,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,

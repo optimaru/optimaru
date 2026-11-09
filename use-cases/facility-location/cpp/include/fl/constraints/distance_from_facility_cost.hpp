@@ -25,7 +25,7 @@ struct DistanceFromFacilityCost final : FlUnitConstraint
         : FlUnitConstraint("distanceFromFacilityCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const FacilityLocationProblem &problem) override
+    void on_reset(const FacilityLocationProblem &problem) override
     {
         detail::requirePrepared(problem);
     }
@@ -38,8 +38,8 @@ struct DistanceFromFacilityCost final : FlUnitConstraint
             meters += problem.distanceOf(consumer, unit);
         return static_cast<double>(meters);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const FacilityLocationProblem &problem,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const FacilityLocationProblem &problem,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int entity) const override

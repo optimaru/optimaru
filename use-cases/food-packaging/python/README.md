@@ -17,7 +17,7 @@ uv run pytest -q
 ```python
 import food_packaging as fp
 
-schedule = fp.generate_demo_data()  # Java demo (5 lines, 100 jobs)
+schedule = fp.generate_demo_data()  # the demo plant (5 lines, 100 jobs)
 fp.solve(schedule, time_limit_seconds=10.0, random_seed=42)
 print(schedule.score)  # e.g. 0hard/-1298medium/-109664360soft
 
@@ -84,7 +84,7 @@ schedule2 = PackagingScheduleModel.model_validate_json(text).to_core()
 
 ## Score semantics
 
-Java uses `HardMediumSoftScore` and the engine `HardSoftScore(int64, double)`, so the
+Java uses `HardMediumSoftScore` and the engine `Score(int64, double)`, so the
 mapping is `engine.soft = medium * 10^10 + soft` (the domain's medium fold; every
 `constraint_costs()` entry carries it as `medium_fold`, and
 `food_packaging.constraints.score()` returns the folded engine-level `(hard, soft)`).

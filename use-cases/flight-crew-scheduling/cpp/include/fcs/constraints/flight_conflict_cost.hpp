@@ -28,8 +28,8 @@ struct FlightConflictCost final : ItineraryConstraint
     {
         return stats.conflictPairs;
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const FlightCrewSchedule &schedule,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const FlightCrewSchedule &schedule,
                      int /*unit*/,
                      const std::vector<int> &members,
                      int entity) const override

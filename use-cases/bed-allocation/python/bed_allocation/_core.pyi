@@ -3,7 +3,7 @@
 The compiled module wraps the C++ domain in `use-cases/bed-allocation/cpp`,
 which imports the generic engine in `include/optimaru`.
 
-The only planning variable is `Stay.bed` (BASIC int)::
+The only planning variable is `Stay.bed` (assignment-shape int)::
 
     -1                            uninitialized (no score contribution)
     0..bed_count()-1              real bed index
@@ -31,7 +31,7 @@ at the default weights (the C++ components' kDefaultWeight, see constraint_info(
   soft 11. department_specialty_priority_cost priority p > 1: nights x (p-1) x -10
   soft 12. preferred_patient_equipment_cost   nights x (missing preferred equipment) x -50
 
-Internally the engine uses HardSoftScore(int64 hard, double soft), mapped as
+Internally the engine uses Score(int64 hard, double soft), mapped as
 `engine.soft = medium * 10**9 + soft` (the domain's medium fold, "into_soft" with
 unit 10**9; level priority holds while |soft| < 10**9; see
 cpp/include/ba/domain.hpp for the exact rules). Medium weights are in medium units:
@@ -182,7 +182,7 @@ class SolverConfig:
     late_acceptance_size: int
     """0 = automatic: clamp(8 * stays, 8000, 12000)."""
     full_assert: bool
-    """FULL_ASSERT: compares the incremental score to a full recompute after every move
+    """Full score checks: compares the incremental score to a full recompute after every move
     (for debugging; very slow)."""
     ruin_recreate: bool
     ruin_recreate_unimproved_step_trigger: int

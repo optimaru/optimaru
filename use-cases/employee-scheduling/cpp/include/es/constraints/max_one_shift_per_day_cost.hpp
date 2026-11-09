@@ -14,7 +14,7 @@ struct MaxOneShiftPerDayCost final : GroupableAssignmentConstraint {
 
     explicit MaxOneShiftPerDayCost(double weight = kDefaultWeight)
         : GroupableAssignmentConstraint("maxOneShiftPerDayCost", weight, kDefaultLevel) {}
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         day_.resize(s.shifts.size());
         for (std::size_t i = 0; i < s.shifts.size(); ++i) {
             day_[i] = static_cast<std::int32_t>(s.shifts[i].startDay);
@@ -30,8 +30,8 @@ struct MaxOneShiftPerDayCost final : GroupableAssignmentConstraint {
         }
         return c;
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const EmployeeSchedule&, int /*unit*/,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const EmployeeSchedule&, int /*unit*/,
                      const std::vector<int>& members, int entity) const override {
         const std::int32_t day = day_[entity];
         double c = 0;

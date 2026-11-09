@@ -5,18 +5,18 @@
 #include <vector>
 
 #include "cs/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace cs
 {
 
 // The conference-scheduling implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // Every constraint is either
 //   - unary (the tag/availability/compatibility family): its contribution is
-//     a pure function of (talk, timeslot, room). resetWorkingSolution
+//     a pure function of (talk, timeslot, room). rebuild
 //     precompiles per-(talk, timeslot) and per-(talk, room) count tables, so
 //     a change is O(1);
 //   - pairwise (conflicts, diversity, prerequisites, pause, ...): summed
@@ -40,22 +40,22 @@ namespace cs
 //   - grouped (speakerMakespanCost): per-speaker day counters; a change
 //     refreshes only the changed talk's speakers, O(speakers x days).
 //
-// beforeVariableChanged retracts the talk's contribution while slotRoom
-// still holds the OLD value; afterVariableChanged inserts the NEW value.
+// before_assign retracts the talk's contribution while slotRoom
+// still holds the OLD value; after_assign inserts the NEW value.
 // Unassigned talks (slotRoom == -1) contribute nothing, so the construction
 // heuristic can score partially initialized solutions. The full-recompute
-// reference is ScoreCalculator::calculateScore (checked in the tests and
-// under EnvironmentMode::FULL_ASSERT). Every weight is a component's
+// reference is ScoreCalculator::score (checked in the tests and
+// under ScoreChecks::ScoreChecks::Full). Every weight is a component's
 // kDefaultWeight (cs/constraints/*_cost.hpp), read once at the top of
 // incremental_calculator.cpp: this is the default assembly, hand-tuned.
 class ConferenceSchedulingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<ConferenceSchedule>
+    : public optimaru::Objective<ConferenceSchedule>
 {
 public:
-    void resetWorkingSolution(ConferenceSchedule &workingSolution) override;
-    void beforeVariableChanged(int talkIndex) override;
-    void afterVariableChanged(int talkIndex) override;
-    Score calculateScore() override;
+    void rebuild(ConferenceSchedule &solution) override;
+    void before_assign(int talkIndex) override;
+    void after_assign(int talkIndex) override;
+    Score score() override;
 
     // Violation-guided selection support (the school-timetabling
     // hot-lesson pattern, sampling-based): O(1) check whether the talk's
@@ -141,18 +141,18 @@ private:
 
     // crowdControlRiskCost occupancy: risk>0 talks per timeslot, with the raw
     // unit total maintained under every counter change (weighted in
-    // calculateScore).
+    // score).
     std::vector<int> crowdCnt_;
     std::int64_t crowdUnits_ = 0;
 
     // speakerMakespanCost: assigned-talk counts per (speaker, dense day) and
     // the raw unit total, refreshed per affected speaker (weighted in
-    // calculateScore).
+    // score).
     std::vector<int> speakerDayCnt_;
     std::int64_t makespanUnits_ = 0;
 
     // Signed running score contributions of the unary + pairwise families
-    // (crowd/makespan assembled from their unit totals in calculateScore).
+    // (crowd/makespan assembled from their unit totals in score).
     std::int64_t hardBase_ = 0;
     double softBase_ = 0.0;
 

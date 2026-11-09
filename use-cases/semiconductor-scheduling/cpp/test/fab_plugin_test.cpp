@@ -2,12 +2,12 @@
 //   (a) the default assembly == the monolithic score bit-for-bit, in data
 //       mode and in search mode, on 300 random states
 //   (b) plugin incremental == full recompute, per constraint, on random
-//       ScoreDirector walks in which every constraint becomes non-zero
+//       Editor walks in which every constraint becomes non-zero
 //   (c) each component alone reports exactly its term
 //   (d) weight / level / exponent overrides match hand arithmetic
-//   (e) constraintTotals() explains exactly the reported score
-//   (f) solve(schedule, calculator) under FULL_ASSERT
-//   (g) raw costs by hand through constraintCosts(): a positive and a zero
+//   (e) constraint_totals() explains exactly the reported score
+//   (f) solve(schedule, calculator) under ScoreChecks::Full
+//   (g) raw costs by hand through constraint_costs(): a positive and a zero
 //       case per constraint
 //   (h) the catalog: info() == the components' kDefaultWeight / kDefaultLevel
 //   (i) repeated components and the offset / clip knobs: a hand-calculated
@@ -16,7 +16,7 @@
 //       in literal mode), the literal formula refused on hard at reset and
 //       kept on soft, incremental == a fresh recompute over random walks
 //       (every repeat reads the calculator's one shared schedule view) and
-//       FULL_ASSERT solves with repeated, shifted components on both levels
+//       ScoreChecks::Full solves with repeated, shifted components on both levels
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -32,7 +32,7 @@
 #include "fab/score_calculator.hpp"
 #include "fab/solver.hpp"
 #include "fab_test_support.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace fab;
 using namespace fabtest;
@@ -42,8 +42,8 @@ namespace
 
 Score scoreWith(DecomposedCalculator &calculator, SemiconductorSchedule &schedule)
 {
-    calculator.resetWorkingSolution(schedule);
-    return calculator.calculateScore();
+    calculator.rebuild(schedule);
+    return calculator.score();
 }
 
 // Exact equality of both levels (the hand cases below are exact in binary).
@@ -52,16 +52,16 @@ bool sameScore(const Score &a, const Score &b)
     return a.hard == b.hard && a.soft == b.soft;
 }
 
-// Raw cost per constraint name from constraintCosts() (one entry per global).
+// Raw cost per constraint name from constraint_costs() (one entry per global).
 std::map<std::string, double> rawByName(SemiconductorSchedule &schedule)
 {
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(schedule);
-    calculator.calculateScore();
+    calculator.rebuild(schedule);
+    calculator.score();
     std::map<std::string, double> out;
-    for (const auto &entry : calculator.constraintCosts())
-        out[entry.name] = entry.unitCosts.size() == 1 ? entry.unitCosts[0] : -1.0;
+    for (const auto &entry : calculator.constraint_costs())
+        out[entry.name] = entry.unit_costs.size() == 1 ? entry.unit_costs[0] : -1.0;
     return out;
 }
 
@@ -84,7 +84,7 @@ void verifyAssemblyParity()
         // data mode
         const Score data = scoreWith(calculator, s);
         SemiconductorSchedule copy = s;
-        if (!(data == ScoreCalculator::calculateScore(copy)))
+        if (!(data == ScoreCalculator::score(copy)))
             ++mismatches;
         // search mode, at a random state (seed or not)
         s.warmStart = round % 2 == 0;
@@ -103,12 +103,12 @@ RawTotals rawOfAssembly(const DecomposedCalculator &calculator)
 {
     RawTotals out;
     out.fill(-1);
-    for (const auto &entry : calculator.constraintCosts())
+    for (const auto &entry : calculator.constraint_costs())
     {
         for (int t = 0; t < kTermCount; ++t)
         {
-            if (entry.name == kTermNames[t] && entry.unitCosts.size() == 1)
-                out[static_cast<std::size_t>(t)] = static_cast<std::int64_t>(entry.unitCosts[0]);
+            if (entry.name == kTermNames[t] && entry.unit_costs.size() == 1)
+                out[static_cast<std::size_t>(t)] = static_cast<std::int64_t>(entry.unit_costs[0]);
         }
     }
     return out;
@@ -126,7 +126,7 @@ void verifyIncremental()
         beginSearch(s);
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
-        optimaru::ScoreDirector<SemiconductorSchedule> director(s, calculator);
+        optimaru::Editor<SemiconductorSchedule> editor(s, calculator);
         std::mt19937_64 rng(static_cast<std::uint64_t>(instance));
         const int n = s.rowCount();
         for (int m = 0; m < 300; ++m)
@@ -136,22 +136,22 @@ void verifyIncremental()
             if (m % 4 == 3 && n > 1)
             {
                 const int other = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
-                director.beginVariableChanges();
-                director.changeVariable(row, randomValue(s, rng, false));
-                director.changeVariable(other, randomValue(s, rng, true));
-                director.endVariableChanges();
+                editor.begin_batch();
+                editor.assign(row, randomValue(s, rng, false));
+                editor.assign(other, randomValue(s, rng, true));
+                editor.end_batch();
             }
             else
             {
-                director.changeVariable(row, randomValue(s, rng, true));
+                editor.assign(row, randomValue(s, rng, true));
                 if (m % 5 == 0)
                 {
-                    director.calculateScore();
-                    director.changeVariable(row, old);  // a rejected move
+                    editor.score();
+                    editor.assign(row, old);  // a rejected move
                 }
             }
             // Every constraint's raw cost, then the score.
-            const Score score = director.calculateScore();
+            const Score score = editor.score();
             const RawTotals full = ScoreCalculator::searchStateRawCosts(s);
             if (!(rawOfAssembly(calculator) == full && score == ScoreCalculator::searchStateScore(s)))
                 ++mismatches;
@@ -247,8 +247,8 @@ void verifyTotals()
     const Score score = scoreWith(calculator, s);
     double hard = 0;
     double soft = 0;
-    for (const auto &total : calculator.constraintTotals())
-        (total.isHard ? hard : soft) += total.cost;
+    for (const auto &total : calculator.constraint_totals())
+        (total.is_hard ? hard : soft) += total.cost;
     check(score.hard == -static_cast<std::int64_t>(hard) && score.soft == -soft,
           "(e) constraintTotals() sum to the score");
 }
@@ -266,9 +266,9 @@ void verifySolveFullAssert()
             DecomposedCalculator calculator;
             defaultConstraints().weight("weightedTardinessCost", 2).into(calculator);
             Solver::Config config;
-            config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-            config.stepCountLimit = 300;
-            config.randomSeed = static_cast<std::uint64_t>(seed);
+            config.score_checks = optimaru::ScoreChecks::Full;
+            config.step_limit = 300;
+            config.seed = static_cast<std::uint64_t>(seed);
             Solver(config).solve(s, calculator);
             DecomposedCalculator again;
             defaultConstraints().weight("weightedTardinessCost", 2).into(again);
@@ -283,7 +283,7 @@ void verifySolveFullAssert()
     check(ok, "(f) solve(schedule, calculator) under FULL_ASSERT; the score is the assembly's");
 }
 
-// (g) raw costs by hand, through constraintCosts().
+// (g) raw costs by hand, through constraint_costs().
 void verifyRawCostsByHand()
 {
     SemiconductorSchedule s = fabProblem();
@@ -344,10 +344,10 @@ void verifyRawCostsByHand()
 template <typename Component>
 bool rowIs(const optimaru::ConstraintInfo &row, const char *name, optimaru::Level level, double weight)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight && row.defaultLevel == level
-           && row.defaultWeight == weight && row.levelFlippable && !row.reward && row.isGlobal
-           && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight && row.default_level == level
+           && row.default_weight == weight && row.level_flippable && !row.reward && row.is_global
+           && row.default_enabled;
 }
 
 void verifyCatalog()
@@ -395,7 +395,7 @@ void verifyCatalog()
 
 // (i) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings build
+// knobs re-stated) appended with add_instances(), as the Python bindings build
 // it from a pick list. Every component is global: the offset shapes the
 // instance's total. The copies share the calculator's one "fab.schedule"
 // view, which resets once per calculator reset and decodes once per score.
@@ -423,31 +423,31 @@ ConstraintAssembly repeatedAssembly()
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("makespanCost", 5.0).clip("makespanCost", false);
     assembly.offset("machineCapacityCost", 1.0);
-    assembly.addInstances(std::move(copyOf("makespanCost")
+    assembly.add_instances(std::move(copyOf("makespanCost")
                                         .weight("makespanCost", 0.5)
                                         .exponent("makespanCost", 2.0)
                                         .offset("makespanCost", 10.0)));
-    assembly.addInstances(std::move(copyOf("lotRoutePrecedenceCost")
+    assembly.add_instances(std::move(copyOf("lotRoutePrecedenceCost")
                                         .weight("lotRoutePrecedenceCost", 1.5)
                                         .offset("lotRoutePrecedenceCost", 0.5)));
-    assembly.addInstances(std::move(copyOf("lotRoutePrecedenceCost")
+    assembly.add_instances(std::move(copyOf("lotRoutePrecedenceCost")
                                         .soft("lotRoutePrecedenceCost")
                                         .weight("lotRoutePrecedenceCost", 1.5)
                                         .offset("lotRoutePrecedenceCost", 0.5)
                                         .clip("lotRoutePrecedenceCost", false)));
-    assembly.addInstances(std::move(copyOf("batchFamilyConflictCost").offset("batchFamilyConflictCost", -2.0)));
-    assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", -1.0)));
-    assembly.addInstances(std::move(copyOf("pinnedAssignmentsCost")
+    assembly.add_instances(std::move(copyOf("batchFamilyConflictCost").offset("batchFamilyConflictCost", -2.0)));
+    assembly.add_instances(std::move(copyOf("pinnedAssignmentsCost").offset("pinnedAssignmentsCost", -1.0)));
+    assembly.add_instances(std::move(copyOf("pinnedAssignmentsCost")
                                         .soft("pinnedAssignmentsCost")
                                         .offset("pinnedAssignmentsCost", -1.0)
                                         .clip("pinnedAssignmentsCost", false)));
-    assembly.addInstances(std::move(copyOf("weightedTardinessCost")
+    assembly.add_instances(std::move(copyOf("weightedTardinessCost")
                                         .weight("weightedTardinessCost", 0.25)
                                         .exponent("weightedTardinessCost", 1.5)
                                         .offset("weightedTardinessCost", 20.0)
                                         .clip("weightedTardinessCost", false)));
-    assembly.addInstances(std::move(copyOf("cycleTimeCost").hard("cycleTimeCost").offset("cycleTimeCost", 30.0)));
-    assembly.addInstances(std::move(copyOf("machineCapacityCost").soft("machineCapacityCost")));
+    assembly.add_instances(std::move(copyOf("cycleTimeCost").hard("cycleTimeCost").offset("cycleTimeCost", 30.0)));
+    assembly.add_instances(std::move(copyOf("machineCapacityCost").soft("machineCapacityCost")));
     return assembly;
 }
 
@@ -458,28 +458,28 @@ void verifyRepeatsAndOffsets()
     const SemiconductorSchedule s = fabProblem();
     {
         ConstraintAssembly assembly = copyOf("makespanCost");
-        assembly.addInstances(
+        assembly.add_instances(
             std::move(copyOf("makespanCost").weight("makespanCost", 0.5).exponent("makespanCost", 2.0)));
         DecomposedCalculator calculator;
         assembly.into(calculator);
         SemiconductorSchedule copy = s;
         const Score score = scoreWith(calculator, copy);
         check(score.hard == 0 && score.soft == -(17 + 0.5 * 289), "(i) makespan + 0.5 x makespan^2: -161.5 soft");
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                  && entries[0].unitCosts == std::vector<double>{17.0} && entries[1].weight == 0.5
-                  && entries[1].exponent == 2.0 && entries[1].defaultWeight == 1.0
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                  && entries[0].unit_costs == std::vector<double>{17.0} && entries[1].weight == 0.5
+                  && entries[1].exponent == 2.0 && entries[1].default_weight == 1.0
                   && entries[0].name == entries[1].name,
               "(i) two instances, the same raw total, each with its own knobs");
         ConstraintAssembly twice = copyOf("machineCapacityCost");
-        twice.addInstances(copyOf("machineCapacityCost"));
+        twice.add_instances(copyOf("machineCapacityCost"));
         check(scoreOf(std::move(twice), s).hard == -4, "(i) identical picks count twice: 2 x 2");
     }
     {
         // Each instance on its own level: the soft makespan 17 next to a hard
         // repeat, 2 x (17 - 15) beyond its offset.
         ConstraintAssembly assembly = copyOf("makespanCost");
-        assembly.addInstances(std::move(
+        assembly.add_instances(std::move(
             copyOf("makespanCost").hard("makespanCost").weight("makespanCost", 2.0).offset("makespanCost", 15.0)));
         DecomposedCalculator calculator;
         assembly.into(calculator);
@@ -487,9 +487,9 @@ void verifyRepeatsAndOffsets()
         const Score score = scoreWith(calculator, copy);
         check(score.hard == -4 && score.soft == -17.0,
               "(i) soft makespan + a hard repeat beyond 15: -4 hard / -17 soft");
-        const auto entries = calculator.constraintCosts();
+        const auto entries = calculator.constraint_costs();
         check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
-                  && entries[1].level == optimaru::Level::Hard && entries[1].defaultLevel == optimaru::Level::Soft,
+                  && entries[1].level == optimaru::Level::Hard && entries[1].default_level == optimaru::Level::Soft,
               "(i) the repeat reports its own level, the default stays soft");
     }
     check(scoreOf(copyOf("makespanCost").offset("makespanCost", 10.0), s).soft == -7.0,
@@ -538,9 +538,9 @@ void verifyRepeatsAndOffsets()
         copyOf("cycleTimeCost").offset("cycleTimeCost", 2.5).clip("cycleTimeCost", false).into(calculator);
         SemiconductorSchedule copy = s;
         scoreWith(calculator, copy);
-        const auto entries = calculator.constraintCosts();
+        const auto entries = calculator.constraint_costs();
         check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip && !entries[0].scoped
-                  && entries[0].unitCosts == std::vector<double>{46.0},
+                  && entries[0].unit_costs == std::vector<double>{46.0},
               "(i) constraintCosts() reports the offset and clip, the raw total unshaped");
     }
     {
@@ -581,7 +581,7 @@ void verifyRepeatsAndOffsets()
                   == refusal("makespanCost"),
               "(i) makespan literal offset moved to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("lotRoutePrecedenceCost");
-        repeated.addInstances(std::move(copyOf("lotRoutePrecedenceCost")
+        repeated.add_instances(std::move(copyOf("lotRoutePrecedenceCost")
                                             .offset("lotRoutePrecedenceCost", 1.0)
                                             .clip("lotRoutePrecedenceCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("lotRoutePrecedenceCost"),
@@ -606,7 +606,7 @@ void verifyRepeatsAndOffsets()
             beginSearch(w);
             DecomposedCalculator calculator;
             repeatedAssembly().into(calculator);
-            optimaru::ScoreDirector<SemiconductorSchedule> director(w, calculator);
+            optimaru::Editor<SemiconductorSchedule> editor(w, calculator);
             std::mt19937_64 rng(static_cast<std::uint64_t>(instance) + 77);
             const int n = w.rowCount();
             for (int m = 0; m < 200; ++m, ++moves)
@@ -616,29 +616,29 @@ void verifyRepeatsAndOffsets()
                 if (m % 4 == 3 && n > 1)
                 {
                     const int other = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
-                    director.beginVariableChanges();
-                    director.changeVariable(row, randomValue(w, rng, false));
-                    director.changeVariable(other, randomValue(w, rng, true));
-                    director.endVariableChanges();
+                    editor.begin_batch();
+                    editor.assign(row, randomValue(w, rng, false));
+                    editor.assign(other, randomValue(w, rng, true));
+                    editor.end_batch();
                 }
                 else
                 {
-                    director.changeVariable(row, randomValue(w, rng, true));
+                    editor.assign(row, randomValue(w, rng, true));
                     if (m % 5 == 0)
                     {
-                        director.calculateScore();
-                        director.changeVariable(row, old);  // a rejected move
+                        editor.score();
+                        editor.assign(row, old);  // a rejected move
                     }
                 }
-                const Score incremental = director.calculateScore();
+                const Score incremental = editor.score();
                 SemiconductorSchedule copy = w;
                 DecomposedCalculator fresh;
                 repeatedAssembly().into(fresh);
                 const Score full = scoreWith(fresh, copy);
-                if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+                if (!optimaru::scores_agree(incremental, full) && ++mismatches <= 3)
                 {
                     std::printf("  MISMATCH instance %d move %d: incremental=%s full=%s\n", instance, m,
-                                incremental.toString().c_str(), full.toString().c_str());
+                                incremental.str().c_str(), full.str().c_str());
                 }
             }
         }
@@ -655,13 +655,13 @@ void verifyRepeatsAndOffsets()
             DecomposedCalculator calculator;
             repeatedAssembly().into(calculator);
             Solver::Config config;
-            config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
-            config.stepCountLimit = 300;
-            config.randomSeed = static_cast<std::uint64_t>(seed);
+            config.score_checks = optimaru::ScoreChecks::Full;
+            config.step_limit = 300;
+            config.seed = static_cast<std::uint64_t>(seed);
             Solver(config).solve(w, calculator);
             DecomposedCalculator again;
             repeatedAssembly().into(again);
-            ok &= optimaru::scoresAgree(w.score, scoreWith(again, w)) && !w.searching;
+            ok &= optimaru::scores_agree(w.score, scoreWith(again, w)) && !w.searching;
         }
     }
     catch (const std::exception &error)

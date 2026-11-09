@@ -675,7 +675,7 @@ def _random_problem(seed: int, items: int = 30) -> bp.BinPackingProblem:
     ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
-    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     problem = _random_problem(5)
     config = bp.SolverConfig()
     config.full_assert = True

@@ -3,16 +3,16 @@
 //       bit on random assignments (-1 sides included), the score and every
 //       unit cost (== ScoreCalculator::rawCosts)
 //   (b) plugin incremental == full recompute: random moves through the
-//       engine's ScoreDirector protocol, with the defaults and with the
+//       engine's Editor protocol, with the defaults and with the
 //       opt-in imbalance switched on; after each move the score and every
 //       unit cost equal the full recompute's, and every constraint is
 //       non-zero at some point of the walk
 //   (c) dropping one component removes exactly its term
 //   (d) weight / level / exponent overrides
-//   (e) constraintTotals() explains the score
-//   (f) a FULL_ASSERT solve(problem, calculator), exact size included
+//   (e) constraint_totals() explains the score
+//   (f) a ScoreChecks::Full solve(problem, calculator), exact size included
 //   (g) the defaultConstraints() builder: named edits == a by-hand assembly
-//   (h) raw costs by hand through constraintCosts(): positive and zero per
+//   (h) raw costs by hand through constraint_costs(): positive and zero per
 //       constraint (fixture H), the edge cases, the -1 rules
 //   (i) the catalog (info() == the components' constants) and the guards
 //   (j) repeated components and the offset / clip knobs: a hand-calculated
@@ -20,7 +20,7 @@
 //       threshold and literal offsets by hand per side (a side of raw 0
 //       counts in literal mode) and on the globals' totals, the literal
 //       formula refused on hard at reset and kept on soft, incremental == a
-//       fresh recompute over a random walk and a FULL_ASSERT solve with
+//       fresh recompute over a random walk and a ScoreChecks::Full solve with
 //       repeated, shifted components on both levels
 #include <algorithm>
 #include <chrono>
@@ -39,7 +39,7 @@
 #include "mc/score_calculator.hpp"
 #include "mc/solver.hpp"
 #include "mc_fixtures.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace mc;
 using namespace mc_test;
@@ -50,15 +50,15 @@ namespace
 Score scoreWith(DecomposedCalculator &calculator, MaxCutProblem &problem)
 {
     ScoreCalculator::prepare(problem);
-    calculator.resetWorkingSolution(problem);
-    return calculator.calculateScore();
+    calculator.rebuild(problem);
+    return calculator.score();
 }
 
 std::vector<std::vector<double>> rawTotals(const DecomposedCalculator &calculator)
 {
     std::vector<std::vector<double>> totals;
-    for (const auto &entry : calculator.constraintCosts())
-        totals.push_back(entry.unitCosts);
+    for (const auto &entry : calculator.constraint_costs())
+        totals.push_back(entry.unit_costs);
     return totals;
 }
 
@@ -96,11 +96,11 @@ void verifyAssemblyParity()
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
         const Score plugin = scoreWith(calculator, p);
-        const Score monolith = ScoreCalculator::calculateScore(p);
+        const Score monolith = ScoreCalculator::score(p);
         if (!sameScore(plugin, monolith) && ++mismatches <= 3)
         {
-            std::printf("  MISMATCH #%d: plugin=%s monolith=%s\n", k, plugin.toString().c_str(),
-                        monolith.toString().c_str());
+            std::printf("  MISMATCH #%d: plugin=%s monolith=%s\n", k, plugin.str().c_str(),
+                        monolith.str().c_str());
         }
         if (rawTotals(calculator) != expectedUnitCosts(ScoreCalculator::rawCosts(p)) && ++costMismatches <= 3)
             std::printf("  RAW COST MISMATCH #%d\n", k);
@@ -136,7 +136,7 @@ void verifyIncremental()
                 defaultConstraints().weight("partitionImbalanceCost", 1).into(calculator);
             else
                 addDefaultConstraints(calculator);
-            optimaru::ScoreDirector<MaxCutProblem> director(p, calculator);
+            optimaru::Editor<MaxCutProblem> editor(p, calculator);
             MaxCutProblem shadow = p;
 
             std::mt19937_64 rng(seed * 123);
@@ -149,31 +149,31 @@ void verifyIncremental()
                 {
                     const int v = static_cast<int>(rng() % n);
                     const int value = unit(rng) < 0.15 ? kUnassigned : static_cast<int>(rng() % 2);
-                    director.changeVariable(v, value);
+                    editor.assign(v, value);
                 }
                 else
                 {
-                    director.beginVariableChanges();
+                    editor.begin_batch();
                     const int a = static_cast<int>(rng() % n);
                     const int b = static_cast<int>(rng() % n);
                     const int va = p.side[a];
-                    director.changeVariable(a, p.side[b]);
-                    director.changeVariable(b, va);
+                    editor.assign(a, p.side[b]);
+                    editor.assign(b, va);
                     if (u > 0.9)
-                        director.changeVariable(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
-                    director.endVariableChanges();
+                        editor.assign(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
+                    editor.end_batch();
                 }
                 shadow.side = p.side;
-                Score full = ScoreCalculator::calculateScore(shadow);
+                Score full = ScoreCalculator::score(shadow);
                 const RawCosts raw = ScoreCalculator::rawCosts(shadow);
                 if (imbalanceOn)
                     full.soft = static_cast<double>(raw.cut - raw.imbalance);
-                const Score incremental = director.calculateScore();
+                const Score incremental = editor.score();
                 if (!sameScore(full, incremental) && ++mismatches <= 3)
                 {
                     std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
-                                static_cast<unsigned long long>(seed), step, incremental.toString().c_str(),
-                                full.toString().c_str());
+                                static_cast<unsigned long long>(seed), step, incremental.str().c_str(),
+                                full.str().c_str());
                 }
                 const std::vector<std::vector<double>> costs = rawTotals(calculator);
                 if (costs != expectedUnitCosts(raw) && ++costMismatches <= 3)
@@ -232,7 +232,7 @@ void verifyPartialAssemblies()
         DecomposedCalculator calculator;
         defaultConstraints().drop(c.name).into(calculator);
         const Score score = scoreWith(calculator, p);
-        check(sameScore(score, c.expected), std::string("without ") + c.name + " -> " + score.toString());
+        check(sameScore(score, c.expected), std::string("without ") + c.name + " -> " + score.str());
     }
     std::printf("\n");
 }
@@ -302,7 +302,7 @@ void verifyOverrides()
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals() explains the score.
+// (e) constraint_totals() explains the score.
 // -------------------------------------------------------------------------
 void verifyConstraintTotals()
 {
@@ -314,30 +314,30 @@ void verifyConstraintTotals()
     double hard = 0.0;
     double soft = 0.0;
     std::vector<std::string> names;
-    for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
+    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
     {
         names.push_back(total.name);
-        (total.isHard ? hard : soft) += total.cost;
+        (total.is_hard ? hard : soft) += total.cost;
     }
     check(names == std::vector<std::string>({"fixedPartitionCost", "samePartitionPairsCost",
                                              "differentPartitionPairsCost", "partitionSizeBoundsCost",
                                              "partitionImbalanceCost", "cutWeightCost"}),
           "totals in catalog order");
     check(-hard == static_cast<double>(score.hard) && -soft == score.soft,
-          "sum of the totals == the score (" + score.toString() + ")");
+          "sum of the totals == the score (" + score.str() + ")");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT solve on the plugin path.
+// (f) ScoreChecks::Full solve on the plugin path.
 // -------------------------------------------------------------------------
 bool fullAssertSolve(MaxCutProblem &p, ConstraintAssembly assembly, const std::string &label)
 {
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(10);
-    config.stepCountLimit = 4000;
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(10);
+    config.step_limit = 4000;
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
     config.ruinRecreateAsMoveWeight = 0.05;
@@ -347,7 +347,7 @@ bool fullAssertSolve(MaxCutProblem &p, ConstraintAssembly assembly, const std::s
     {
         Solver(config).solve(p, calculator);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         std::printf("  ScoreCorruptionError: %s\n", e.what());
         check(false, label);
@@ -365,7 +365,7 @@ void verifyFullAssertSolve()
         if (fullAssertSolve(p, defaultConstraints(), "FULL_ASSERT plugin solve (flips, swaps, ALNS kicks)"))
         {
             MaxCutProblem rescored = p;
-            check(sameScore(p.score, ScoreCalculator::calculateScore(rescored)),
+            check(sameScore(p.score, ScoreCalculator::score(rescored)),
                   "plugin-reported score == monolithic full recompute");
         }
     }
@@ -399,7 +399,7 @@ void verifyAssemblyBuilder()
         byHand.emplace<SamePartitionPairsCost>();
         byHand.emplace<DifferentPartitionPairsCost>(4.0);
         auto size = std::make_unique<PartitionSizeBoundsCost>();
-        size->setLevel(optimaru::Level::Soft);
+        size->set_level(optimaru::Level::Soft);
         byHand.add(std::move(size));
         byHand.emplace<PartitionImbalanceCost>(1.0);
         byHand.emplace<CutWeightCost>();
@@ -415,7 +415,7 @@ void verifyAssemblyBuilder()
     check(sameScore(scoreWith(built, p), expected), "named edits == the same assembly listed by hand");
     DecomposedCalculator plain;
     defaultConstraints().into(plain);
-    check(sameScore(scoreWith(plain, p), ScoreCalculator::calculateScore(p)),
+    check(sameScore(scoreWith(plain, p), ScoreCalculator::score(p)),
           "defaultConstraints() alone == the monolithic score");
     bool threw = false;
     try
@@ -431,7 +431,7 @@ void verifyAssemblyBuilder()
 }
 
 // -------------------------------------------------------------------------
-// (h) Raw costs by hand, read through constraintCosts().
+// (h) Raw costs by hand, read through constraint_costs().
 // -------------------------------------------------------------------------
 using Costs = std::vector<double>;
 
@@ -440,10 +440,10 @@ Costs rawCosts(MaxCutProblem &problem, const std::string &name)
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
     scoreWith(calculator, problem);
-    for (const auto &entry : calculator.constraintCosts())
+    for (const auto &entry : calculator.constraint_costs())
     {
         if (entry.name == name)
-            return entry.unitCosts;
+            return entry.unit_costs;
     }
     return {};
 }
@@ -528,13 +528,13 @@ bool rowIs(const optimaru::ConstraintInfo &row,
            const char *name,
            optimaru::Level level,
            double weight,
-           bool isGlobal,
+           bool is_global,
            bool reward = false)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight && row.defaultLevel == level
-           && row.defaultWeight == weight && row.levelFlippable == !reward && row.reward == reward
-           && row.isGlobal == isGlobal && row.defaultEnabled == (weight > 0.0);
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight && row.default_level == level
+           && row.default_weight == weight && row.level_flippable == !reward && row.reward == reward
+           && row.is_global == is_global && row.default_enabled == (weight > 0.0);
 }
 
 void verifyCatalog()
@@ -550,15 +550,15 @@ void verifyCatalog()
               && rowIs<PartitionImbalanceCost>(rows[4], "partitionImbalanceCost", Level::Soft, 0.0, true)
               && rowIs<CutWeightCost>(rows[5], "cutWeightCost", Level::Soft, 1.0, true, /*reward=*/true),
           "info() == the components' constants, in catalog order");
-    check(!rows[4].defaultEnabled, "partitionImbalanceCost is opt-in: default_enabled false at weight 0");
+    check(!rows[4].default_enabled, "partitionImbalanceCost is opt-in: default_enabled false at weight 0");
     check(defaultConstraints().names()
               == std::vector<std::string>({"fixedPartitionCost", "samePartitionPairsCost",
                                            "differentPartitionPairsCost", "partitionSizeBoundsCost",
                                            "partitionImbalanceCost", "cutWeightCost"}),
           "names() in catalog order");
     check(throwsInvalid([] { defaultConstraints().hard("cutWeightCost"); }), "hard() on the cutWeightCost reward throws");
-    check(throwsInvalid([] { CutWeightCost().setLevel(Level::Hard); }), "CutWeightCost::setLevel(Hard) throws");
-    check(throwsInvalid([] { CutWeightCost().setLevel(Level::Medium); }),
+    check(throwsInvalid([] { CutWeightCost().set_level(Level::Hard); }), "CutWeightCost::setLevel(Hard) throws");
+    check(throwsInvalid([] { CutWeightCost().set_level(Level::Medium); }),
           "the reward's level is not flippable: setLevel(Medium) throws");
     check(!throwsInvalid([] { defaultConstraints().soft("cutWeightCost"); }),
           "soft() on the reward re-states its level: a no-op");
@@ -574,7 +574,7 @@ void verifyCatalog()
         bool threw = false;
         try
         {
-            calculator.resetWorkingSolution(p);
+            calculator.rebuild(p);
         }
         catch (const std::logic_error &)
         {
@@ -591,7 +591,7 @@ void verifyCatalog()
         bool threw = false;
         try
         {
-            calculator.resetWorkingSolution(p);
+            calculator.rebuild(p);
         }
         catch (const std::logic_error &)
         {
@@ -605,7 +605,7 @@ void verifyCatalog()
 // -------------------------------------------------------------------------
 // (j) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list. The four unit constraints shape each side, the
 // two globals their total.
 // -------------------------------------------------------------------------
@@ -644,34 +644,34 @@ ConstraintAssembly repeatedAssembly()
     ConstraintAssembly assembly = defaultConstraints();
     assembly.weight("partitionImbalanceCost", 2.0).offset("partitionImbalanceCost", 3.0);
     assembly.offset("cutWeightCost", 5.0).clip("cutWeightCost", false);
-    assembly.addInstances(std::move(
+    assembly.add_instances(std::move(
         copyOf("fixedPartitionCost").weight("fixedPartitionCost", 1.5).offset("fixedPartitionCost", 0.5)));
-    assembly.addInstances(std::move(copyOf("fixedPartitionCost")
+    assembly.add_instances(std::move(copyOf("fixedPartitionCost")
                                         .soft("fixedPartitionCost")
                                         .weight("fixedPartitionCost", 1.5)
                                         .offset("fixedPartitionCost", 0.5)
                                         .clip("fixedPartitionCost", false)));
-    assembly.addInstances(std::move(copyOf("samePartitionPairsCost")
+    assembly.add_instances(std::move(copyOf("samePartitionPairsCost")
                                         .weight("samePartitionPairsCost", 2.0)
                                         .exponent("samePartitionPairsCost", 2.0)
                                         .offset("samePartitionPairsCost", 1.0)));
-    assembly.addInstances(std::move(copyOf("differentPartitionPairsCost")
+    assembly.add_instances(std::move(copyOf("differentPartitionPairsCost")
                                         .soft("differentPartitionPairsCost")
                                         .offset("differentPartitionPairsCost", -1.0)
                                         .clip("differentPartitionPairsCost", false)));
-    assembly.addInstances(std::move(copyOf("partitionSizeBoundsCost")
+    assembly.add_instances(std::move(copyOf("partitionSizeBoundsCost")
                                         .soft("partitionSizeBoundsCost")
                                         .offset("partitionSizeBoundsCost", 2.0)));
-    assembly.addInstances(std::move(copyOf("partitionImbalanceCost")
+    assembly.add_instances(std::move(copyOf("partitionImbalanceCost")
                                         .weight("partitionImbalanceCost", 0.5)
                                         .exponent("partitionImbalanceCost", 2.0)
                                         .offset("partitionImbalanceCost", -1.0)
                                         .clip("partitionImbalanceCost", false)));
-    assembly.addInstances(std::move(copyOf("cutWeightCost")
+    assembly.add_instances(std::move(copyOf("cutWeightCost")
                                         .weight("cutWeightCost", 0.25)
                                         .exponent("cutWeightCost", 1.5)
                                         .offset("cutWeightCost", 10.0)));
-    assembly.addInstances(std::move(copyOf("partitionImbalanceCost")
+    assembly.add_instances(std::move(copyOf("partitionImbalanceCost")
                                         .hard("partitionImbalanceCost")
                                         .weight("partitionImbalanceCost", 2.0)
                                         .offset("partitionImbalanceCost", 1.0)));
@@ -684,7 +684,7 @@ void verifyRepeatsAndOffsets()
     {
         // size per side [1, 1]: (1 + 1) + 2 x (1^2 + 1^2) = 6 hard.
         ConstraintAssembly assembly = copyOf("partitionSizeBoundsCost");
-        assembly.addInstances(std::move(copyOf("partitionSizeBoundsCost")
+        assembly.add_instances(std::move(copyOf("partitionSizeBoundsCost")
                                             .weight("partitionSizeBoundsCost", 2.0)
                                             .exponent("partitionSizeBoundsCost", 2.0)));
         MaxCutProblem p = hPositive();
@@ -692,10 +692,10 @@ void verifyRepeatsAndOffsets()
         assembly.into(calculator);
         const Score score = scoreWith(calculator, p);
         check(score.hard == -6 && score.soft == 0.0, "size bounds + 2 x size^2 per side: -(2 + 4) hard");
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                  && entries[0].unitCosts == Costs{1.0, 1.0} && entries[1].weight == 2.0
-                  && entries[1].exponent == 2.0 && entries[1].defaultWeight == 1.0
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                  && entries[0].unit_costs == Costs{1.0, 1.0} && entries[1].weight == 2.0
+                  && entries[1].exponent == 2.0 && entries[1].default_weight == 1.0
                   && entries[0].name == entries[1].name,
               "two instances, the same raw costs per side, each with its own knobs");
     }
@@ -704,7 +704,7 @@ void verifyRepeatsAndOffsets()
         // next to a hard repeat, 2 x (2 - 1) beyond its offset.
         ConstraintAssembly assembly = copyOf("partitionImbalanceCost");
         assembly.weight("partitionImbalanceCost", 1.0);
-        assembly.addInstances(std::move(copyOf("partitionImbalanceCost")
+        assembly.add_instances(std::move(copyOf("partitionImbalanceCost")
                                             .hard("partitionImbalanceCost")
                                             .weight("partitionImbalanceCost", 2.0)
                                             .offset("partitionImbalanceCost", 1.0)));
@@ -713,14 +713,14 @@ void verifyRepeatsAndOffsets()
         assembly.into(calculator);
         check(sameScore(scoreWith(calculator, p), Score{-2, -2.0}),
               "soft imbalance + a hard repeat beyond 1: -2 hard / -2 soft");
-        const auto entries = calculator.constraintCosts();
+        const auto entries = calculator.constraint_costs();
         check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
-                  && entries[1].level == optimaru::Level::Hard && entries[1].defaultLevel == optimaru::Level::Soft,
+                  && entries[1].level == optimaru::Level::Hard && entries[1].default_level == optimaru::Level::Soft,
               "the repeat reports its own level, the default stays soft");
     }
     {
         ConstraintAssembly assembly = copyOf("cutWeightCost");
-        assembly.addInstances(copyOf("cutWeightCost"));
+        assembly.add_instances(copyOf("cutWeightCost"));
         check(scoreOf(std::move(assembly), hPositive()).soft == 4.0, "the cut reward picked twice: +2 x 2");
     }
     {
@@ -807,9 +807,9 @@ void verifyRepeatsAndOffsets()
             .into(calculator);
         MaxCutProblem q = hPositive();
         scoreWith(calculator, q);
-        const auto entries = calculator.constraintCosts();
+        const auto entries = calculator.constraint_costs();
         check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip && !entries[0].scoped
-                  && entries[0].unitCosts == Costs{1.0, 0.0},
+                  && entries[0].unit_costs == Costs{1.0, 0.0},
               "constraintCosts() reports the offset and clip, the raw side costs unshaped");
     }
     {
@@ -851,7 +851,7 @@ void verifyRepeatsAndOffsets()
                   == refusal("partitionImbalanceCost"),
               "imbalance literal offset moved to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("fixedPartitionCost");
-        repeated.addInstances(std::move(
+        repeated.add_instances(std::move(
             copyOf("fixedPartitionCost").offset("fixedPartitionCost", 2.0).clip("fixedPartitionCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("fixedPartitionCost"),
               "a hard literal repeat next to the default: refused at reset");
@@ -879,7 +879,7 @@ void verifyRepeatsAndOffsets()
             ScoreCalculator::prepare(p);
             DecomposedCalculator calculator;
             repeatedAssembly().into(calculator);
-            optimaru::ScoreDirector<MaxCutProblem> director(p, calculator);
+            optimaru::Editor<MaxCutProblem> editor(p, calculator);
             std::mt19937_64 rng(seed * 321);
             std::uniform_real_distribution<double> unit(0.0, 1.0);
             const int n = p.vertexCount();
@@ -889,31 +889,31 @@ void verifyRepeatsAndOffsets()
                 if (u < 0.6)
                 {
                     const int v = static_cast<int>(rng() % n);
-                    director.changeVariable(v, unit(rng) < 0.15 ? kUnassigned : static_cast<int>(rng() % 2));
+                    editor.assign(v, unit(rng) < 0.15 ? kUnassigned : static_cast<int>(rng() % 2));
                 }
                 else
                 {
-                    director.beginVariableChanges();
+                    editor.begin_batch();
                     const int a = static_cast<int>(rng() % n);
                     const int b = static_cast<int>(rng() % n);
                     const int va = p.side[a];
-                    director.changeVariable(a, p.side[b]);
-                    director.changeVariable(b, va);
+                    editor.assign(a, p.side[b]);
+                    editor.assign(b, va);
                     if (u > 0.9)
-                        director.changeVariable(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
-                    director.endVariableChanges();
+                        editor.assign(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
+                    editor.end_batch();
                 }
                 MaxCutProblem shadow = p;
                 DecomposedCalculator fresh;
                 repeatedAssembly().into(fresh);
                 const Score full = scoreWith(fresh, shadow);
-                const Score incremental = director.calculateScore();
+                const Score incremental = editor.score();
                 drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-                if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+                if (!optimaru::scores_agree(incremental, full) && ++mismatches <= 3)
                 {
                     std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
-                                static_cast<unsigned long long>(seed), step, incremental.toString().c_str(),
-                                full.toString().c_str());
+                                static_cast<unsigned long long>(seed), step, incremental.str().c_str(),
+                                full.str().c_str());
                 }
             }
         }
@@ -928,7 +928,7 @@ void verifyRepeatsAndOffsets()
         {
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
-            check(optimaru::scoresAgree(p.score, scoreWith(fresh, p)),
+            check(optimaru::scores_agree(p.score, scoreWith(fresh, p)),
                   "the reported score == a fresh recompute of the same assembly");
         }
     }

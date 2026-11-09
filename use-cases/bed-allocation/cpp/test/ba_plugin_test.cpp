@@ -1,15 +1,15 @@
 // Plugin-assembly (ba/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) the default assembly on the engine's DecomposedScoreCalculator
+//   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 500 random
 //       assignments (uninitialized stays and the "no bed" sentinel included)
 //   (b) incremental score == full recompute across 3000 random moves driven
-//       through the engine's ScoreDirector protocol (plugin path)
+//       through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: removing one component removes exactly that term
 //   (d) weight / level / exponent overrides
-//   (e) constraintTotals() explains exactly the reported score
-//   (f) a 2-second solve(plan, calculator) under FULL_ASSERT
-//   (g) every component's raw cost by hand (constraintCosts()): one positive
+//   (e) constraint_totals() explains exactly the reported score
+//   (f) a 2-second solve(plan, calculator) under ScoreChecks::Full
+//   (g) every component's raw cost by hand (constraint_costs()): one positive
 //       and one zero case each
 //   (h) the catalog read off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel
@@ -22,7 +22,7 @@
 //       unassignedStaysCost), the global's total shaped once, the literal
 //       formula refused on hard at reset and kept on soft (and on the
 //       into_soft medium), incremental == a fresh recompute over a random
-//       walk and a FULL_ASSERT solve with repeated, shifted components
+//       walk and a ScoreChecks::Full solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -40,7 +40,7 @@
 #include "ba/domain.hpp"
 #include "ba/score_calculator.hpp"
 #include "ba/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace ba;
 
@@ -68,7 +68,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-52s got=%s expected=%lldhard/%lldmedium/%lldsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 static_cast<long long>(expectedHard),
                 static_cast<long long>(expectedMedium),
                 static_cast<long long>(expectedSoft));
@@ -215,8 +215,8 @@ BedPlan buildRandomInstance(int stayCount, std::uint64_t seed)
 // back into the domain's HardMediumSoft levels.
 Score scoreWith(DecomposedCalculator &calculator, BedPlan &plan)
 {
-    calculator.resetWorkingSolution(plan);
-    return fromEngineScore(calculator.calculateScore());
+    calculator.rebuild(plan);
+    return fromEngineScore(calculator.score());
 }
 
 // -------------------------------------------------------------------------
@@ -250,15 +250,15 @@ void verifyAssemblyParity()
                 stay.bed = static_cast<int>(rng() % plan.bedCount());
         }
         const Score plugin = scoreWith(calculator, plan);
-        const Score monolithic = ScoreCalculator::calculateScore(plan);
+        const Score monolithic = ScoreCalculator::score(plan);
         if (!(plugin == monolithic))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n",
                             round,
-                            plugin.toString().c_str(),
-                            monolithic.toString().c_str());
+                            plugin.str().c_str(),
+                            monolithic.str().c_str());
             }
         }
     }
@@ -269,7 +269,7 @@ void verifyAssemblyParity()
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk of change and
-// swap moves, driven through the ScoreDirector so the plugin path's
+// swap moves, driven through the Editor so the plugin path's
 // before/set/after hook contract is exercised exactly like in the engine.
 // -------------------------------------------------------------------------
 void verifyIncremental()
@@ -280,12 +280,12 @@ void verifyIncremental()
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    optimaru::ScoreDirector<BedPlan> director(plan, calculator);
+    optimaru::Editor<BedPlan> editor(plan, calculator);
     BedPlan shadow = plan;
 
     std::mt19937_64 rng(123);
     const int stayCount = static_cast<int>(plan.stays.size());
-    const int valueCount = plan.bedCount() + 1;  // + the "no bed" sentinel
+    const int value_count = plan.bedCount() + 1;  // + the "no bed" sentinel
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -297,8 +297,8 @@ void verifyIncremental()
             const int stayIndex = static_cast<int>(rng() % stayCount);
             const int value = (unit(rng) < 0.05)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(stayIndex, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(stayIndex, value);
         }
         else
         {
@@ -306,21 +306,21 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % stayCount);
             const int va = plan.stays[a].bed;
             const int vb = plan.stays[b].bed;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         for (int i = 0; i < stayCount; ++i)
             shadow.stays[i].bed = plan.stays[i].bed;
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = fromEngineScore(director.calculateScore());
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = fromEngineScore(editor.score());
         if (!(full == incremental))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -462,7 +462,7 @@ void verifyOverrides()
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals(): the per-constraint breakdown adds up to the score
+// (e) constraint_totals(): the per-constraint breakdown adds up to the score
 // the same assembly reports.
 // -------------------------------------------------------------------------
 void verifyConstraintTotals()
@@ -476,14 +476,14 @@ void verifyConstraintTotals()
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(plan);
-    const optimaru::HardSoftScore score = calculator.calculateScore();
+    calculator.rebuild(plan);
+    const optimaru::Score score = calculator.score();
 
     // A medium total is in medium units (cost is not multiplied by the
     // fold), so it folds into soft the way the score does.
     double hard = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
+    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
     {
         if (total.level == optimaru::Level::Hard)
             hard += total.cost;
@@ -495,13 +495,13 @@ void verifyConstraintTotals()
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
               && std::fabs(-soft - score.soft) < 1e-3,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraintTotals().size() == 12,
+    check(calculator.constraint_totals().size() == 12,
           "one total per assembled component");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT solve on the plugin path: the engine cross-checks the
+// (f) ScoreChecks::Full solve on the plugin path: the engine cross-checks the
 // incremental score against a full reset + recompute after every move.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
@@ -510,9 +510,9 @@ void verifyFullAssertSolve()
     BedPlan plan = buildRandomInstance(/*stayCount*/ 20, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -525,7 +525,7 @@ void verifyFullAssertSolve()
         Solver solver(config);
         solver.solve(plan, calculator);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -533,7 +533,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT plugin solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(plan);
+        const Score recomputed = ScoreCalculator::score(plan);
         check(plan.score == recomputed,
               "plugin-reported score == monolithic full recompute");
     }
@@ -543,7 +543,7 @@ void verifyFullAssertSolve()
 // -------------------------------------------------------------------------
 // (g) Raw costs by hand: every component's per-unit raw cost (beds in order,
 // then the "no bed" sentinel; one entry for the global), read through
-// constraintCosts() off the default assembly. One positive and one zero case
+// constraint_costs() off the default assembly. One positive and one zero case
 // per component; the stays span 6 nights ([0, 5]) unless stated otherwise.
 // -------------------------------------------------------------------------
 std::vector<double> rawCosts(BedPlan plan, const std::string &name)
@@ -551,12 +551,12 @@ std::vector<double> rawCosts(BedPlan plan, const std::string &name)
     ScoreCalculator::prepare(plan);
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(plan);
-    calculator.calculateScore();
-    for (const auto &entry : calculator.constraintCosts())
+    calculator.rebuild(plan);
+    calculator.score();
+    for (const auto &entry : calculator.constraint_costs())
     {
         if (entry.name == name)
-            return entry.unitCosts;
+            return entry.unit_costs;
     }
     std::printf("  no constraint named %s\n", name.c_str());
     return {};
@@ -844,13 +844,13 @@ bool rowIs(const optimaru::ConstraintInfo &row,
            const char *name,
            optimaru::Level level,
            double weight,
-           bool isGlobal)
+           bool is_global)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight
-           && row.defaultLevel == level && row.defaultWeight == weight
-           && row.levelFlippable && !row.reward && row.isGlobal == isGlobal
-           && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight
+           && row.default_level == level && row.default_weight == weight
+           && row.level_flippable && !row.reward && row.is_global == is_global
+           && row.default_enabled;
 }
 
 void verifyCatalog()
@@ -915,14 +915,14 @@ void verifyCatalog()
 // -------------------------------------------------------------------------
 // (i) The medium level: unassignedStaysCost.
 // -------------------------------------------------------------------------
-optimaru::DecomposedScoreCalculator<BedPlan>::LevelScores
+optimaru::DecomposedObjective<BedPlan>::LevelScores
 levelsWith(ConstraintAssembly assembly, BedPlan &plan)
 {
     DecomposedCalculator calculator;
     std::move(assembly).into(calculator);
-    calculator.resetWorkingSolution(plan);
-    calculator.calculateScore();
-    return calculator.levelScores();
+    calculator.rebuild(plan);
+    calculator.score();
+    return calculator.level_scores();
 }
 
 void verifyMediumLevel()
@@ -934,14 +934,14 @@ void verifyMediumLevel()
     addStay(plan, 0, 5, Gender::MALE, plan.noBedValue());
     plan.stays[addStay(plan, 0, 5, Gender::MALE, 0)].patientPreferredEquipment
         = {"television"};
-    const Score monolithic = ScoreCalculator::calculateScore(plan);
+    const Score monolithic = ScoreCalculator::score(plan);
     checkScore("the hand plan", monolithic, 0, -6, -300);
 
     {
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
-        calculator.resetWorkingSolution(plan);
-        const optimaru::HardSoftScore engine = calculator.calculateScore();
+        calculator.rebuild(plan);
+        const optimaru::Score engine = calculator.score();
         check(engine.hard == 0
                   && engine.soft
                          == -300.0 - 6.0 * static_cast<double>(kMediumUnit),
@@ -949,7 +949,7 @@ void verifyMediumLevel()
         check(engine.hard == toEngineScore(monolithic).hard
                   && engine.soft == toEngineScore(monolithic).soft,
               "default: the fold equals the monolithic Score adapter");
-        const auto levels = calculator.levelScores();
+        const auto levels = calculator.level_scores();
         check(levels.hard == 0 && levels.medium == -6.0
                   && levels.soft == -300.0,
               "levelScores() reports the unfolded levels");
@@ -1003,8 +1003,8 @@ void verifyMediumLevel()
         addStay(crowded, 0, 5);
         addStay(crowded, 0, 5);
         Solver::Config config;
-        config.spentLimit = std::chrono::milliseconds(300);
-        config.randomSeed = 1;
+        config.time_limit = std::chrono::milliseconds(300);
+        config.seed = 1;
         DecomposedCalculator calculator;
         ConstraintAssembly{}
             .emplace<BedConflictCost>()
@@ -1022,7 +1022,7 @@ void verifyMediumLevel()
 }
 
 // Incremental == full recompute with the medium term overridden, through the
-// ScoreDirector protocol (change and swap moves over the whole value range).
+// Editor protocol (change and swap moves over the whole value range).
 void verifyMediumIncremental()
 {
     std::printf("== (i) Medium overrides: incremental == full ==\n");
@@ -1050,19 +1050,19 @@ void verifyMediumIncremental()
         ScoreCalculator::prepare(plan);
         DecomposedCalculator calculator;
         variant.second().into(calculator);
-        optimaru::ScoreDirector<BedPlan> director(plan, calculator);
+        optimaru::Editor<BedPlan> editor(plan, calculator);
         std::mt19937_64 rng(41);
         const int stayCount = static_cast<int>(plan.stays.size());
-        const int valueCount = plan.bedCount() + 1;
+        const int value_count = plan.bedCount() + 1;
         int mismatches = 0;
         int mediumSteps = 0;
         for (int step = 0; step < 1500; ++step)
         {
             if (rng() % 4 != 0)
             {
-                director.changeVariable(
+                editor.assign(
                     static_cast<int>(rng() % stayCount),
-                    static_cast<int>(rng() % valueCount));
+                    static_cast<int>(rng() % value_count));
             }
             else
             {
@@ -1070,16 +1070,16 @@ void verifyMediumIncremental()
                 const int b = static_cast<int>(rng() % stayCount);
                 const int va = plan.stays[a].bed;
                 const int vb = plan.stays[b].bed;
-                director.changeVariable(a, vb);
-                director.changeVariable(b, va);
+                editor.assign(a, vb);
+                editor.assign(b, va);
             }
-            const optimaru::HardSoftScore incremental
-                = director.calculateScore();
+            const optimaru::Score incremental
+                = editor.score();
             DecomposedCalculator fresh;
             variant.second().into(fresh);
-            fresh.resetWorkingSolution(plan);
-            const optimaru::HardSoftScore full = fresh.calculateScore();
-            if (fresh.levelScores().medium != 0.0)
+            fresh.rebuild(plan);
+            const optimaru::Score full = fresh.score();
+            if (fresh.level_scores().medium != 0.0)
                 ++mediumSteps;
             if (incremental.hard != full.hard
                 || std::fabs(incremental.soft - full.soft) > 1e-6)
@@ -1100,7 +1100,7 @@ void verifyMediumIncremental()
 // -------------------------------------------------------------------------
 // (j) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list.
 // -------------------------------------------------------------------------
 ConstraintAssembly copyOf(const std::string &name)
@@ -1137,7 +1137,7 @@ ConstraintAssembly repeatedAssembly()
 {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("preferredMaxRoomCapacityCost", 3.0);
-    assembly.addInstances(
+    assembly.add_instances(
         std::move(copyOf("preferredMaxRoomCapacityCost")
                       .weight("preferredMaxRoomCapacityCost", 0.25)
                       .exponent("preferredMaxRoomCapacityCost", 2.0)
@@ -1145,23 +1145,23 @@ ConstraintAssembly repeatedAssembly()
                       .clip("preferredMaxRoomCapacityCost", false)));
     // The literal bed-conflict copy sits on soft: hard refuses the literal
     // formula with an offset (hard 0 must mean no violation).
-    assembly.addInstances(std::move(copyOf("bedConflictCost")
+    assembly.add_instances(std::move(copyOf("bedConflictCost")
                                         .soft("bedConflictCost")
                                         .weight("bedConflictCost", 2.0)
                                         .offset("bedConflictCost", 1.0)
                                         .clip("bedConflictCost", false)));
-    assembly.addInstances(std::move(copyOf("bedConflictCost")
+    assembly.add_instances(std::move(copyOf("bedConflictCost")
                                         .weight("bedConflictCost", 2.0)
                                         .offset("bedConflictCost", 1.0)));
-    assembly.addInstances(std::move(copyOf("unassignedStaysCost")
+    assembly.add_instances(std::move(copyOf("unassignedStaysCost")
                                         .exponent("unassignedStaysCost", 2.0)
                                         .offset("unassignedStaysCost", 4.0)));
-    assembly.addInstances(std::move(copyOf("unassignedStaysCost")
+    assembly.add_instances(std::move(copyOf("unassignedStaysCost")
                                         .soft("unassignedStaysCost")
                                         .weight("unassignedStaysCost", 3.0)
                                         .offset("unassignedStaysCost", -2.0)
                                         .clip("unassignedStaysCost", false)));
-    assembly.addInstances(std::move(copyOf("mixedGenderRoomCost")
+    assembly.add_instances(std::move(copyOf("mixedGenderRoomCost")
                                         .soft("mixedGenderRoomCost")
                                         .weight("mixedGenderRoomCost", 1.0)
                                         .offset("mixedGenderRoomCost", 2.0)
@@ -1176,7 +1176,7 @@ void verifyRepeatsAndOffsets()
     {
         BedPlan plan = repeatInstance();
         ConstraintAssembly assembly = copyOf("preferredMaxRoomCapacityCost");
-        assembly.addInstances(
+        assembly.add_instances(
             std::move(copyOf("preferredMaxRoomCapacityCost")
                           .weight("preferredMaxRoomCapacityCost", 0.5)
                           .exponent("preferredMaxRoomCapacityCost", 2.0)));
@@ -1186,20 +1186,20 @@ void verifyRepeatsAndOffsets()
               "8 x nights + 0.5 x nights^2 per bed: -132 soft");
         DecomposedCalculator calculator;
         ConstraintAssembly twice = copyOf("preferredMaxRoomCapacityCost");
-        twice.addInstances(
+        twice.add_instances(
             std::move(copyOf("preferredMaxRoomCapacityCost")
                           .weight("preferredMaxRoomCapacityCost", 0.5)
                           .exponent("preferredMaxRoomCapacityCost", 2.0)));
         std::move(twice).into(calculator);
-        calculator.resetWorkingSolution(plan);
-        calculator.calculateScore();
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                  && entries[0].unitCosts == std::vector<double>{6, 6, 0, 0}
+        calculator.rebuild(plan);
+        calculator.score();
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                  && entries[0].unit_costs == std::vector<double>{6, 6, 0, 0}
                   && entries[0].scoped
                   && entries[0].units == std::vector<int>{0, 1, 2}
                   && entries[1].weight == 0.5 && entries[1].exponent == 2.0
-                  && entries[1].defaultWeight == 8.0,
+                  && entries[1].default_weight == 8.0,
               "two instances, the same raw costs, each with its own knobs");
     }
     {
@@ -1246,9 +1246,9 @@ void verifyRepeatsAndOffsets()
               "unassigned literal offset 20: (12 - 20) on the sentinel only, +8 medium");
         DecomposedCalculator calculator;
         copyOf("unassignedStaysCost").into(calculator);
-        calculator.resetWorkingSolution(plan);
-        calculator.calculateScore();
-        const auto entries = calculator.constraintCosts();
+        calculator.rebuild(plan);
+        calculator.score();
+        const auto entries = calculator.constraint_costs();
         check(entries.size() == 1 && entries[0].scoped
                   && entries[0].units == std::vector<int>{plan.noBedValue()},
               "unassignedStaysCost reports the sentinel as its one evaluated unit");
@@ -1325,11 +1325,11 @@ void verifyRepeatsAndOffsets()
         ScoreCalculator::prepare(plan);
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<BedPlan> director(plan, calculator);
+        optimaru::Editor<BedPlan> editor(plan, calculator);
         std::mt19937_64 rng(321);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
         const int stayCount = static_cast<int>(plan.stays.size());
-        const int valueCount = plan.bedCount() + 1;
+        const int value_count = plan.bedCount() + 1;
         int mismatches = 0;
         int mediumSteps = 0;
         double drift = 0.0;
@@ -1341,8 +1341,8 @@ void verifyRepeatsAndOffsets()
                 const int stay = static_cast<int>(rng() % stayCount);
                 const int value = unit(rng) < 0.05
                                       ? -1
-                                      : static_cast<int>(rng() % valueCount);
-                director.changeVariable(stay, value);
+                                      : static_cast<int>(rng() % value_count);
+                editor.assign(stay, value);
             }
             else
             {
@@ -1350,19 +1350,19 @@ void verifyRepeatsAndOffsets()
                 const int b = static_cast<int>(rng() % stayCount);
                 const int va = plan.stays[a].bed;
                 const int vb = plan.stays[b].bed;
-                director.changeVariable(a, vb);
-                director.changeVariable(b, va);
+                editor.assign(a, vb);
+                editor.assign(b, va);
             }
             BedPlan shadow = plan;
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
-            fresh.resetWorkingSolution(shadow);
-            const optimaru::HardSoftScore full = fresh.calculateScore();
-            if (fresh.levelScores().medium != 0.0)
+            fresh.rebuild(shadow);
+            const optimaru::Score full = fresh.score();
+            if (fresh.level_scores().medium != 0.0)
                 ++mediumSteps;
-            const optimaru::HardSoftScore incremental = director.calculateScore();
+            const optimaru::Score incremental = editor.score();
             drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-            if (!optimaru::scoresAgree(incremental, full))
+            if (!optimaru::scores_agree(incremental, full))
                 ++mismatches;
         }
         std::printf("    largest soft drift %.3g\n", drift);
@@ -1374,9 +1374,9 @@ void verifyRepeatsAndOffsets()
     {
         BedPlan plan = buildRandomInstance(/*stayCount*/ 20, /*seed*/ 11);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 5;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 5;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
         DecomposedCalculator calculator;
@@ -1387,7 +1387,7 @@ void verifyRepeatsAndOffsets()
             Solver solver(config);
             solver.solve(plan, calculator);
         }
-        catch (const optimaru::ScoreCorruptionError &e)
+        catch (const optimaru::ScoreMismatchError &e)
         {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());

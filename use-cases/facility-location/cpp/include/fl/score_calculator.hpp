@@ -8,10 +8,10 @@ namespace fl
 
 // Port of the reference facility-location FacilityLocationConstraintProvider.
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
-// Constraints (HardSoftScore), the default assembly of fl/constraints.hpp at
+// Constraints (Score), the default assembly of fl/constraints.hpp at
 // the components' kDefaultWeight:
 //   hard 1. facilityCapacityCost       -(usedDemand - capacity) per used
 //                                      facility whose assigned demand exceeds
@@ -29,12 +29,12 @@ namespace fl
 class ScoreCalculator
 {
 public:
-    static Score calculateScore(FacilityLocationProblem &problem);
+    static Score score(FacilityLocationProblem &problem);
 
     // Precomputes the consumer->facility distance matrix so scoring reads
     // are O(1) integer lookups. Idempotent (guarded by
     // FacilityLocationProblem::prepared). Must run before scoring;
-    // calculateScore/solve call it.
+    // score/solve call it.
     static void prepare(FacilityLocationProblem &problem);
 };
 

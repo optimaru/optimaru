@@ -16,7 +16,7 @@ struct ObjectiveWeights;  // st/objective_weights.hpp
 // Raw per-constraint costs of one assignment (unweighted, positive =
 // violation), one member per constraint, named like its registry name. The
 // monolithic calculator's full recompute; the default plugin assembly
-// reports the same numbers through constraintCosts(). The soft members
+// reports the same numbers through constraint_costs(). The soft members
 // reproduce teacher_scheduling/validate.py's compute_penalties exactly
 // (Timetable.penalties). hardTotal() is what the hard score negates (each
 // hard member times its component's kDefaultWeight); softPenalty(weights)
@@ -55,7 +55,7 @@ struct Breakdown
 
 // Full-recompute scoring for the canonical domain — the reference the
 // incremental calculator is checked against (in the tests and under
-// FULL_ASSERT). All mask/pair/block helpers are shared with the incremental
+// ScoreChecks::Full). All mask/pair/block helpers are shared with the incremental
 // calculator so the two agree by construction.
 //
 // The constraints follow benchmarks/school-timetabling/cpsat/teacher_scheduling
@@ -103,18 +103,18 @@ public:
     // Full recompute of the score (also stored in table.score): hard at the
     // components' kDefaultWeight, soft at `weights` (default: the soft
     // components' kDefaultWeight). The model carries no weights.
-    static Score calculateScore(Timetable &table);
-    static Score calculateScore(Timetable &table,
+    static Score score(Timetable &table);
+    static Score score(Timetable &table,
                                 const ObjectiveWeights &weights);
 
-    // Full per-constraint recompute (used by tests and calculateScore).
+    // Full per-constraint recompute (used by tests and score).
     static Breakdown computeBreakdown(Timetable &table);
 
     // Normalizes the instance in place: derives teacher/class/course/roomType
     // counts, sizes every per-id vector with the CP-SAT defaults, builds the
     // block-group member lists and the (day, period) -> slot table. Idempotent
     // (guarded by Timetable::prepared). Throws std::invalid_argument on
-    // malformed input. Must run before scoring; calculateScore/solve call it.
+    // malformed input. Must run before scoring; score/solve call it.
     static void prepare(Timetable &table);
 
     // --- shared building blocks (also used by the incremental calculator) ---

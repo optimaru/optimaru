@@ -3,14 +3,14 @@
 The compiled module wraps the C++ domain in `use-cases/flight-crew-scheduling/cpp`,
 which imports the generic engine in `include/optimaru`.
 
-Domain: a BASIC-variable problem picking a crew member (employee index) for every crew
+Domain: a assignment-shaped problem picking a crew member (employee index) for every crew
 seat of a flight (FlightAssignment). Airport/employee/flight references are all list
 indices (the pydantic mirror `flight_crew.models` uses code/id string references).
 
 Time unit: minutes from a reference epoch (Unix in the model). Dates are day indices
 obtained as floor(minutes / 1440).
 
-Score convention: HardSoftScore, at the default weights — the same weights as the Java
+Score convention: hard/soft, at the default weights — the same weights as the Java
 quickstart, which are the C++ components' defaults (constraint_info()):
   hard 1. required_skill_cost                -100 per assignment without the skill
   hard 2. flight_conflict_cost               -10 per overlapping assignment pair of one crew member

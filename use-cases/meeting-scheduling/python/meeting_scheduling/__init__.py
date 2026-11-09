@@ -2,7 +2,7 @@
 
 A port of the Java quickstart "meeting-scheduling": assigns meetings a starting time
 grain (15-minute units) and a room. The Java entity's two planning variables
-(startingTimeGrain, room) become one BASIC variable via the composite encoding
+(startingTimeGrain, room) become one assignment-shape variable via the composite encoding
 ``grain_room = time_grain_pos * room_count + room_index`` (-1 == unassigned).
 Constraints have the same semantics as the Java ConstraintProvider (5 hard + 2 medium +
 5 soft; HardMediumSoftScore is folded as ``soft = -(medium * MEDIUM_SCALE + raw soft)``,
@@ -12,7 +12,7 @@ the raw per-constraint costs::
 
     import meeting_scheduling as ms
 
-    schedule = ms.demo_data()  # reproduces Java DemoDataGenerator (24 meetings)
+    schedule = ms.demo_data()  # the demo instance (24 meetings)
     result = ms.solve(schedule, time_limit_seconds=10.0, random_seed=42)
     print(result.score.hard, result.score.soft)
 

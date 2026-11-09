@@ -37,7 +37,7 @@ namespace mc
 //   partitionImbalanceCost       soft, weight 0 (opt-in)
 //   cutWeightCost                soft, weight 1 (a reward: never hard)
 //
-// This assembly scores bit-for-bit like ScoreCalculator::calculateScore and
+// This assembly scores bit-for-bit like ScoreCalculator::score and
 // the monolithic incremental calculator (both read the same kDefaultWeight
 // constants). It is also the domain's constraint catalog: constraint_info()
 // reads the defaults off it, so they live in the component constructors and

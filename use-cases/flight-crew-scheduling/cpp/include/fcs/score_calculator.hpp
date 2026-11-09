@@ -22,10 +22,10 @@ struct ItineraryStats
 
 // Port of the reference FlightCrewSchedulingConstraintProvider.
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
-// Constraints (HardSoftScore), the default assembly of fcs/constraints.hpp at
+// Constraints (Score), the default assembly of fcs/constraints.hpp at
 // the components' kDefaultWeight (the Java weights verbatim):
 //   hard 1. requiredSkillCost   -100 per assignment whose employee lacks the
 //                                    required skill
@@ -60,12 +60,12 @@ struct ItineraryStats
 class ScoreCalculator
 {
 public:
-    static Score calculateScore(FlightCrewSchedule &schedule);
+    static Score score(FlightCrewSchedule &schedule);
 
     // Interns skills into dense ids, flattens the employee skill sets and
     // unavailable days for O(1) lookup, and caches per-flight calendar days.
     // Idempotent (guarded by FlightCrewSchedule::prepared). Must run before
-    // scoring; calculateScore/solve call it.
+    // scoring; score/solve call it.
     static void prepare(FlightCrewSchedule &schedule);
 
     // --- shared building blocks (also used by the incremental calculator) --

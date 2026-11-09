@@ -651,7 +651,7 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
     ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
-    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     data = json.loads((Path(__file__).parent / "fixtures" / "web_demo.json").read_text())
     core = QuadraticAssignmentProblemModel.model_validate(data).to_core()
     config = qap.SolverConfig()

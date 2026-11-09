@@ -259,7 +259,7 @@ ScoreCalculator::RawCosts ScoreCalculator::rawCosts(QuadraticAssignmentProblem &
     return raw;
 }
 
-Score ScoreCalculator::calculateScore(QuadraticAssignmentProblem &problem)
+Score ScoreCalculator::score(QuadraticAssignmentProblem &problem)
 {
     const RawCosts raw = rawCosts(problem);
     Score score;

@@ -28,11 +28,11 @@ static_assert(kBedConflictWeight == BedConflictCost::kDefaultWeight
 
 }  // namespace
 
-void BedAllocationIncrementalScoreCalculator::resetWorkingSolution(
-    BedPlan &workingSolution)
+void BedAllocationIncrementalScoreCalculator::rebuild(
+    BedPlan &solution)
 {
-    plan_ = &workingSolution;
-    ScoreCalculator::prepare(workingSolution);
+    plan_ = &solution;
+    ScoreCalculator::prepare(solution);
 
     // Planning horizon: only the days some stay can occupy are tracked.
     // Stays with departureDay < arrivalDay occupy nothing (sameNightCount
@@ -107,13 +107,13 @@ void BedAllocationIncrementalScoreCalculator::resetWorkingSolution(
         insert(static_cast<int>(s), plan_->stays[s].bed);
 }
 
-void BedAllocationIncrementalScoreCalculator::beforeVariableChanged(
+void BedAllocationIncrementalScoreCalculator::before_assign(
     int stayIndex)
 {
     retract(stayIndex, assign_[stayIndex]);
 }
 
-void BedAllocationIncrementalScoreCalculator::afterVariableChanged(
+void BedAllocationIncrementalScoreCalculator::after_assign(
     int stayIndex)
 {
     insert(stayIndex, plan_->stays[stayIndex].bed);
@@ -222,8 +222,8 @@ void BedAllocationIncrementalScoreCalculator::retract(int stayIndex, int value)
     }
 }
 
-optimaru::HardSoftScore
-BedAllocationIncrementalScoreCalculator::calculateScore()
+optimaru::Score
+BedAllocationIncrementalScoreCalculator::score()
 {
     return toEngineScore(Score{-(hardSingles_ + hardBedPairs_ + hardRoomPairs_),
                                -medium_,

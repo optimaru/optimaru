@@ -7,8 +7,8 @@
 
 #include "bp/domain.hpp"
 #include "bp/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace bp
 {
@@ -17,7 +17,7 @@ namespace bp
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
 // The four bin-packing constraints, one small component each on the engine's
-// DecomposedScoreCalculator — an assembly path NEXT TO the monolithic
+// DecomposedObjective — an assembly path NEXT TO the monolithic
 // BinPackingIncrementalScoreCalculator, which stays the tuned default fast
 // path.
 //
@@ -44,14 +44,14 @@ namespace bp
 // kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the validated setters
-// (setWeight / setLevel / setExponent, or the mutable `level`), or by name
+// (set_weight / set_level / set_exponent, or the mutable `level`), or by name
 // through ConstraintAssembly. The canonical problem carries no weights
 // (removed in 0.2.0): the monolithic calculators read the same
 // kDefaultWeight constants, which is why the default assembly scores
 // bit-for-bit like them.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("binCapacityCost"); Python sees them through pythonName()
+// ("binCapacityCost"); Python sees them through python_name()
 // ("bin_capacity_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
@@ -60,7 +60,7 @@ namespace bp
 // Every component requires ScoreCalculator::prepare(problem) to have run
 // (the solve() overloads, the bindings and the monolithic path call it).
 
-using DecomposedCalculator = optimaru::DecomposedScoreCalculator<BinPackingProblem>;
+using DecomposedCalculator = optimaru::DecomposedObjective<BinPackingProblem>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<BinPackingProblem>;
 using BpUnitConstraint = optimaru::UnitConstraint<BinPackingProblem>;
 using BpGlobalConstraint = optimaru::GlobalConstraint<BinPackingProblem>;

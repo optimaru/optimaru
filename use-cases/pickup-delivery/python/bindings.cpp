@@ -32,10 +32,10 @@ PYBIND11_MODULE(_core, m)
         .def_readonly("hard", &Score::hard)
         .def_readonly("medium", &Score::medium)
         .def_readonly("soft", &Score::soft)
-        .def("is_feasible", &Score::isFeasible)
-        .def("__str__", &Score::toString)
+        .def("is_feasible", &Score::feasible)
+        .def("__str__", &Score::str)
         .def("__repr__",
-             [](const Score &s) { return "<Score " + s.toString() + ">"; });
+             [](const Score &s) { return "<Score " + s.str() + ">"; });
 
     py::class_<Location>(m, "Location", py::module_local())
         .def(py::init(
@@ -279,7 +279,7 @@ PYBIND11_MODULE(_core, m)
     m.def(
         "calculate_score",
         [](PdpRoutePlan &plan)
-        { return ScoreCalculator::calculateScore(plan); },
+        { return ScoreCalculator::score(plan); },
         py::arg("plan"),
         "Recompute shadow variables (vehicle_index, arrival_time) and the "
         "HardMediumSoft score (also stores plan.score).");
@@ -291,61 +291,61 @@ PYBIND11_MODULE(_core, m)
           py::arg("seed") = 0,
           "A randomly generated PDPTW instance, for demos and benchmarks.");
 
-    py::enum_<optimaru::AcceptorType>(m, "AcceptorType", py::module_local())
-        .value("HILL_CLIMBING", optimaru::AcceptorType::HILL_CLIMBING)
-        .value("LATE_ACCEPTANCE", optimaru::AcceptorType::LATE_ACCEPTANCE)
-        .value("ENTITY_TABU", optimaru::AcceptorType::ENTITY_TABU)
+    py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())
+        .value("HILL_CLIMBING", optimaru::AcceptanceRule::HillClimbing)
+        .value("LATE_ACCEPTANCE", optimaru::AcceptanceRule::LateAcceptance)
+        .value("ENTITY_TABU", optimaru::AcceptanceRule::EntityTabu)
         .value("SIMULATED_ANNEALING",
-               optimaru::AcceptorType::SIMULATED_ANNEALING)
-        .value("GREAT_DELUGE", optimaru::AcceptorType::GREAT_DELUGE)
+               optimaru::AcceptanceRule::SimulatedAnnealing)
+        .value("GREAT_DELUGE", optimaru::AcceptanceRule::GreatDeluge)
         .value("STEP_COUNTING_HILL_CLIMBING",
-               optimaru::AcceptorType::STEP_COUNTING_HILL_CLIMBING)
+               optimaru::AcceptanceRule::StepCountingHillClimbing)
         .value("RECORD_TO_RECORD_TRAVEL",
-               optimaru::AcceptorType::RECORD_TO_RECORD_TRAVEL);
+               optimaru::AcceptanceRule::RecordToRecordTravel);
 
-    py::enum_<optimaru::OperatorSelectionType>(m, "OperatorSelectionType", py::module_local())
+    py::enum_<optimaru::SelectionScheme>(m, "OperatorSelectionType", py::module_local())
         .value("ROULETTE_WHEEL",
-               optimaru::OperatorSelectionType::ROULETTE_WHEEL)
+               optimaru::SelectionScheme::RouletteWheel)
         .value("SEGMENTED_ROULETTE_WHEEL",
-               optimaru::OperatorSelectionType::SEGMENTED_ROULETTE_WHEEL)
-        .value("ALPHA_UCB", optimaru::OperatorSelectionType::ALPHA_UCB)
-        .value("RANDOM", optimaru::OperatorSelectionType::RANDOM);
+               optimaru::SelectionScheme::SegmentedRouletteWheel)
+        .value("ALPHA_UCB", optimaru::SelectionScheme::AlphaUcb)
+        .value("RANDOM", optimaru::SelectionScheme::Uniform);
 
-    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
+    optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
-            { return std::chrono::duration<double>(c.spentLimit).count(); },
+            { return std::chrono::duration<double>(c.time_limit).count(); },
             [](Solver::Config &c, double s)
-            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
+            { c.time_limit = optimaru::python::seconds_to_millis(s, "spent_limit_seconds"); })
         .def_property(
             "best_score_limit",
             [](const Solver::Config &c)
             {
-                return py::make_tuple(c.bestScoreLimit.hard,
-                                      c.bestScoreLimit.medium,
-                                      c.bestScoreLimit.soft);
+                return py::make_tuple(c.target_score.hard,
+                                      c.target_score.medium,
+                                      c.target_score.soft);
             },
             [](Solver::Config &c,
                std::tuple<std::int64_t, std::int64_t, std::int64_t> hms)
             {
-                c.bestScoreLimit = Score{
+                c.target_score = Score{
                     std::get<0>(hms), std::get<1>(hms), std::get<2>(hms)};
             })
-        .def_readwrite("random_seed", &Solver::Config::randomSeed)
-        .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
+        .def_readwrite("random_seed", &Solver::Config::seed)
+        .def_readwrite("step_count_limit", &Solver::Config::step_limit)
         .def_readwrite("unimproved_step_count_limit",
-                       &Solver::Config::unimprovedStepCountLimit)
+                       &Solver::Config::stall_step_limit)
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c)
             {
-                return std::chrono::duration<double>(c.unimprovedSpentLimit)
+                return std::chrono::duration<double>(c.stall_time_limit)
                     .count();
             },
             [](Solver::Config &c, double s)
-            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
+            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
         .def_readwrite("parallel_solver_count",
                        &Solver::Config::parallelSolverCount)
         .def_readwrite("first_fit_decreasing",
@@ -353,26 +353,26 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("pair_construction_heuristic",
                        &Solver::Config::pairConstructionHeuristic)
         // --- acceptance ---
-        .def_readwrite("acceptor_type", &Solver::Config::acceptorType)
+        .def_readwrite("acceptor_type", &Solver::Config::rule)
         .def_readwrite("late_acceptance_size",
-                       &Solver::Config::lateAcceptanceSize)
+                       &Solver::Config::history_length)
         .def_readwrite("record_to_record_start_gap",
                        &Solver::Config::recordToRecordStartGap)
         .def_readwrite("record_to_record_end_gap",
                        &Solver::Config::recordToRecordEndGap)
         // --- move mix ---
         .def_readwrite("relocate_move_weight",
-                       &Solver::Config::relocateMoveWeight)
+                       &Solver::Config::relocate_weight)
         .def_readwrite("list_swap_move_weight",
-                       &Solver::Config::listSwapMoveWeight)
-        .def_readwrite("two_opt_move_weight", &Solver::Config::twoOptMoveWeight)
-        .def_readwrite("or_opt_move_weight", &Solver::Config::orOptMoveWeight)
+                       &Solver::Config::list_swap_weight)
+        .def_readwrite("two_opt_move_weight", &Solver::Config::two_opt_weight)
+        .def_readwrite("or_opt_move_weight", &Solver::Config::or_opt_weight)
         .def_readwrite("tail_swap_move_weight",
-                       &Solver::Config::tailSwapMoveWeight)
+                       &Solver::Config::tail_swap_weight)
         .def_readwrite("inter_exchange_move_weight",
-                       &Solver::Config::interExchangeMoveWeight)
+                       &Solver::Config::cross_exchange_weight)
         .def_readwrite("inter_exchange_max_segment",
-                       &Solver::Config::interExchangeMaxSegment)
+                       &Solver::Config::cross_exchange_max_run)
         // --- pair-aware operators ---
         .def_readwrite("pair_moves", &Solver::Config::pairMoves)
         .def_readwrite("pair_exchange_moves",
@@ -385,7 +385,7 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::pairAssignmentProbability)
         .def_readwrite("pair_ruin", &Solver::Config::pairRuin)
         // --- adaptive ruin & recreate (ALNS) ---
-        .def_readwrite("ruin_recreate", &Solver::Config::ruinRecreate)
+        .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
         .def_readwrite("ruin_recreate_unimproved_step_trigger",
                        &Solver::Config::ruinRecreateUnimprovedStepTrigger)
         .def_readwrite("ruin_recreate_min_ruin_fraction",
@@ -400,12 +400,12 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::ruinRecreateAsMoveWeight)
         .def_readwrite("ruin_recreate_as_move_max_ruin",
                        &Solver::Config::ruinRecreateAsMoveMaxRuin)
-        .def_readwrite("descent_weight", &Solver::Config::descentWeight)
-        .def_readwrite("descent_max_sweeps", &Solver::Config::descentMaxSweeps)
+        .def_readwrite("descent_weight", &Solver::Config::descent_weight)
+        .def_readwrite("descent_max_sweeps", &Solver::Config::descent_max_sweeps)
         .def_readwrite("route_elimination_weight",
-                       &Solver::Config::routeEliminationWeight)
+                       &Solver::Config::route_elimination_weight)
         .def_readwrite("route_elimination_max_size",
-                       &Solver::Config::routeEliminationMaxSize)
+                       &Solver::Config::route_elimination_max_size)
         .def_readwrite("ruin_recreate_selection_type",
                        &Solver::Config::ruinRecreateSelectionType)
         .def_readwrite("ruin_recreate_operator_decay",
@@ -416,14 +416,14 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::ruinRecreateSelectionSegmentLength)
         .def_readwrite("ruin_recreate_selection_alpha",
                        &Solver::Config::ruinRecreateSelectionAlpha)
-        .def_readwrite("sisr_ruin", &Solver::Config::sisrRuin)
-        .def_readwrite("route_ruin", &Solver::Config::routeRuin)
+        .def_readwrite("sisr_ruin", &Solver::Config::sisr_ruin)
+        .def_readwrite("route_ruin", &Solver::Config::route_ruin)
         .def_readwrite("sisr_max_string_removals",
-                       &Solver::Config::sisrMaxStringRemovals)
+                       &Solver::Config::sisr_max_string_removals)
         .def_readwrite("sisr_max_string_size",
-                       &Solver::Config::sisrMaxStringSize)
-        .def_readwrite("regret_k", &Solver::Config::regretK)
-        .def_readwrite("blink_rate", &Solver::Config::blinkRate)
+                       &Solver::Config::sisr_max_string_size)
+        .def_readwrite("regret_k", &Solver::Config::regret_k)
+        .def_readwrite("blink_rate", &Solver::Config::blink_rate)
         // --- nearby selection ---
         .def_readwrite("driving_time_nearby",
                        &Solver::Config::drivingTimeNearby)
@@ -431,7 +431,7 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::drivingTimeNearbySize)
         .def_readwrite("driving_time_nearby_probability",
                        &Solver::Config::drivingTimeNearbyProbability)
-        .def_readwrite("on_new_best", &Solver::Config::onNewBest);
+        .def_readwrite("on_new_best", &Solver::Config::on_new_best);
 
     py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
@@ -441,7 +441,7 @@ PYBIND11_MODULE(_core, m)
             [](Solver &solver, PdpRoutePlan &plan)
             {
                 solver.solve(plan);
-                ScoreCalculator::calculateScore(plan);
+                ScoreCalculator::score(plan);
             },
             py::arg("plan"),
             // Released for the solve: with parallel_solver_count > 1 the
@@ -454,7 +454,7 @@ PYBIND11_MODULE(_core, m)
         // own instance (a fresh copy of the default component) with its own
         // knobs.
         //
-        // updateShadowVariables, not calculateScore: the plugin solve already
+        // updateShadowVariables, not score: the plugin solve already
         // stored the score THIS calculator computed, and a full recompute
         // would overwrite it with the monolithic default one.
         //
@@ -467,7 +467,7 @@ PYBIND11_MODULE(_core, m)
                const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints([] { return defaultConstraints(); },
+                tfpy::apply_constraints([] { return defaultConstraints(); },
                                        constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
@@ -481,17 +481,17 @@ PYBIND11_MODULE(_core, m)
     // pdp_routing.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
     // None = the default assembly; a pick list scores exactly those picks
-    // (applyConstraints), each entry carrying its pick's knobs, the k-th pick
+    // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
     // of a name keyed "<name>#<k>".
     m.def(
         "constraint_costs",
         [](PdpRoutePlan &plan, const py::object &constraints)
         {
             DecomposedCalculator calculator;
-            tfpy::applyConstraints([] { return defaultConstraints(); },
+            tfpy::apply_constraints([] { return defaultConstraints(); },
                                    constraints)
                 .into(calculator);
-            return tfpy::constraintCosts(calculator, plan);
+            return tfpy::constraint_costs(calculator, plan);
         },
         py::arg("plan"),
         py::arg("constraints") = py::none(),
@@ -503,7 +503,7 @@ PYBIND11_MODULE(_core, m)
     // the same strings a score breakdown reports.
     m.def(
         "list_constraints",
-        [] { return tfpy::constraintNames(defaultConstraints()); },
+        [] { return tfpy::constraint_names(defaultConstraints()); },
         "Constraint names available to pdp_routing.constraints.");
 
     // The constraint catalog, read off the same default assembly:
@@ -511,5 +511,5 @@ PYBIND11_MODULE(_core, m)
     // default_weight, level_flippable, reward, default_enabled), ...] in
     // list_constraints() order. The defaults live in the C++ components only
     // (unassigned_requests_cost: medium, weight 1 in medium units).
-    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
+    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

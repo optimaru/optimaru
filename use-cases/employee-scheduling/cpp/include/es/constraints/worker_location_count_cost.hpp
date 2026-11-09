@@ -31,7 +31,7 @@ struct WorkerLocationCountCost final : EsUnitConstraint {
                 (max_ < 0 ? std::string("inf") : std::to_string(max_)) +
                 "]";  // display only; never a lookup key
     }
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         match_.resize(s.shifts.size());
         for (std::size_t i = 0; i < s.shifts.size(); ++i)
             match_[i] = (loc_.empty() || s.shifts[i].location == loc_) ? 1 : 0;

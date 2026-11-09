@@ -35,8 +35,8 @@ struct RepeatMatchOnNextDayCost final : SlsGlobalConstraint
     {
     }
 
-    bool supportsMemberChange() const override { return true; }
-    void onUnitChanged(const LeagueSchedule & /*schedule*/,
+    bool supports_member_change() const override { return true; }
+    void on_unit_changed(const LeagueSchedule & /*schedule*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) override
     {
@@ -46,7 +46,7 @@ struct RepeatMatchOnNextDayCost final : SlsGlobalConstraint
     }
 
     void reset(const LeagueSchedule &schedule,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(schedule);
         indexCount_ = schedule.maxRoundIndex + 1;
@@ -55,15 +55,15 @@ struct RepeatMatchOnNextDayCost final : SlsGlobalConstraint
         pairAt_.assign(cells, 0);
         reverseAt_.assign(cells, 0);
         total_ = 0;
-        for (std::size_t unit = 0; unit < membersPerUnit.size(); ++unit)
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
         {
             const int index = schedule.roundIndexOf(static_cast<int>(unit));
-            for (int matchIndex : membersPerUnit[unit])
+            for (int matchIndex : members_per_unit[unit])
                 apply(schedule, matchIndex, index, /*joined=*/true);
         }
     }
 
-    void onMemberChanged(const LeagueSchedule &schedule,
+    void on_member_changed(const LeagueSchedule &schedule,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,

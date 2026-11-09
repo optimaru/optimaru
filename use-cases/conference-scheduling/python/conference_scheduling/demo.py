@@ -1,13 +1,13 @@
-"""Reproduction of the Java quickstart `DemoDataGenerator` — the same data as cpp/src/main.cpp.
+"""The demo conference: 15 talks / 6 timeslots / 5 rooms, modelled on the quickstart's demo.
 
-Even the random theme/sector/audience/content tags follow the java.util.Random(0) draw
-sequence exactly (`JavaRandom` below)."""
+The theme/sector/audience/content tags are drawn from a seeded ``random.Random``, so the
+instance is the same on every run (it is not the same draw as cpp/src/main.cpp's)."""
+
+import random
 
 from ._core import ConferenceSchedule, Room, Speaker, Talk, Timeslot
 
-__all__ = ["JavaRandom", "demo_conference"]
-
-_MASK = (1 << 48) - 1
+__all__ = ["demo_conference"]
 
 LAB = 0
 BREAKOUT = 1
@@ -18,33 +18,14 @@ AUDIENCE_TAGS = ["Programmers", "Analysts", "Managers"]
 CONTENT_TAGS = ["Optimization", "Constraints", "Metaheuristics", "Kubernetes"]
 
 
-class JavaRandom:
-    """java.util.Random's 48-bit LCG (only as much nextInt(bound) as needed)."""
-
-    def __init__(self, seed: int):
-        self._seed = (seed ^ 0x5DEECE66D) & _MASK
-
-    def _next(self, bits: int) -> int:
-        self._seed = (self._seed * 0x5DEECE66D + 0xB) & _MASK
-        return self._seed >> (48 - bits)
-
-    def next_int(self, bound: int) -> int:
-        r = self._next(31)
-        m = bound - 1
-        if (bound & m) == 0:  # power of two
-            return (bound * r) >> 31
-        u = r
-        r = u % bound
-        # int32 overflow check (Java's modulo-bias rejection loop).
-        while ((u - r + m) & 0xFFFFFFFF) >> 31:
-            u = self._next(31)
-            r = u % bound
-        return r
+def _pick(rng: random.Random, n: int) -> int:
+    """An index in [0, n). Built on random(), whose output Python guarantees per seed."""
+    return int(rng.random() * n)
 
 
 def demo_conference() -> ConferenceSchedule:
-    """Java DemoDataGenerator instance: 15 talks / 6 timeslots / 5 rooms."""
-    random = JavaRandom(0)
+    """The demo instance: 15 talks / 6 timeslots / 5 rooms."""
+    rng = random.Random(0)
 
     def slot(sid, sh, sm, eh, em, talk_type, tags=()):
         return Timeslot(
@@ -93,17 +74,16 @@ def demo_conference() -> ConferenceSchedule:
             title=title,
             talk_type=talk_type,
             speakers=[names.index(n) for n in speaker_names],
-            theme_track_tags=[THEME_TAGS[random.next_int(3)]],
-            sector_tags=[SECTOR_TAGS[random.next_int(3)]],
-            audience_types=[AUDIENCE_TAGS[random.next_int(3)]],
+            theme_track_tags=[THEME_TAGS[_pick(rng, 3)]],
+            sector_tags=[SECTOR_TAGS[_pick(rng, 3)]],
+            audience_types=[AUDIENCE_TAGS[_pick(rng, 3)]],
             audience_level=level,
-            content_tags=[CONTENT_TAGS[random.next_int(4)]],
+            content_tags=[CONTENT_TAGS[_pick(rng, 4)]],
             language="en",
             favorite_count=favorites,
             crowd_control_risk=risk,
         )
 
-    # The creation (= random draw) order must match the Java generator.
     talks = [
         talk("S01", "Talk One", LAB, ["Amy Cole", "Beth Fox"], 2, 551, 1),
         talk("S02", "Talk Two", LAB, ["Carl Green"], 3, 528, 0),
@@ -124,8 +104,7 @@ def demo_conference() -> ConferenceSchedule:
         talk("S11", "Talk Eleven", BREAKOUT, ["Dan Jones", "Elsa King"], 1, 39, 0),
         talk("S12", "Talk Twelve", BREAKOUT, ["Flo Li", "Gus Poe"], 3, 977, 0),
     ]
-    # S11's mutex tag is drawn after S12 is created in Java.
-    talks[10].mutually_exclusive_talks_tags = [CONTENT_TAGS[random.next_int(4)]]
+    talks[10].mutually_exclusive_talks_tags = [CONTENT_TAGS[_pick(rng, 4)]]
     talks += [
         talk("S13", "Talk Thirteen", BREAKOUT, ["Hugo Rye"], 3, 494, 0),
         talk("S14", "Talk Fourteen", BREAKOUT, ["Ivy Smith"], 3, 500, 0),

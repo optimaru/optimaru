@@ -25,7 +25,7 @@ struct BinCapacityCost final : BpUnitConstraint
         : BpUnitConstraint("binCapacityCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const BinPackingProblem &problem) override
+    void on_reset(const BinPackingProblem &problem) override
     {
         detail::requirePrepared(problem);
     }

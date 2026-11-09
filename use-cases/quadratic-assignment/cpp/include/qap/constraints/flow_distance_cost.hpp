@@ -15,7 +15,7 @@ namespace qap
 // distances[i][j] * flows[p_i][p_j]. One number for the whole assignment (a
 // GlobalConstraint, so the exponent shapes the total). Flows and distances are
 // not validated >= 0, so the total may be negative (scored as a bonus). When
-// either matrix holds a negative entry, rawCostCanBeNegative() says so, and
+// either matrix holds a negative entry, raw_cost_can_be_negative() says so, and
 // the calculator refuses the instance on the hard level
 // (SignedCostLevelError); without one, the total is >= 0.
 //
@@ -38,13 +38,13 @@ struct FlowDistanceCost final : QapMemberChangeGlobalConstraint
     {
     }
     void reset(const QuadraticAssignmentProblem &problem,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(problem);
         location_.assign(static_cast<std::size_t>(problem.facilityCount()), -1);
-        for (std::size_t location = 0; location < membersPerUnit.size(); ++location)
+        for (std::size_t location = 0; location < members_per_unit.size(); ++location)
         {
-            for (int facility : membersPerUnit[location])
+            for (int facility : members_per_unit[location])
                 location_[facility] = static_cast<int>(location);
         }
         total_ = 0;
@@ -60,7 +60,7 @@ struct FlowDistanceCost final : QapMemberChangeGlobalConstraint
             }
         }
     }
-    void onMemberChanged(const QuadraticAssignmentProblem &problem,
+    void on_member_changed(const QuadraticAssignmentProblem &problem,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,
@@ -78,7 +78,7 @@ struct FlowDistanceCost final : QapMemberChangeGlobalConstraint
         }
     }
     double cost() const override { return static_cast<double>(total_); }
-    bool rawCostCanBeNegative(const QuadraticAssignmentProblem &problem) const override
+    bool raw_cost_can_be_negative(const QuadraticAssignmentProblem &problem) const override
     {
         return detail::hasNegative(problem.flows) || detail::hasNegative(problem.distances);
     }

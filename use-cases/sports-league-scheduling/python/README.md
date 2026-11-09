@@ -3,7 +3,7 @@
 The `sports-league-scheduling` example model (Apache-2.0; see the repository NOTICE)
 C++ port (`../cpp`, namespace `sls`) for use from Python.
 Assigns a round (`Round`) to every match (`Match`) of the league — `Match.round`
-is the planning variable (-1 = unassigned; the value is a position in the `rounds` list).
+is the decision variable (-1 = unassigned; the value is a position in the `rounds` list).
 
 ## Install / test
 
@@ -18,7 +18,7 @@ uv run pytest -q
 ```python
 import sports_league as sl
 
-schedule = sl.demo_schedule()  # reproduces Java DemoDataGenerator (14 teams/32 rounds/182 matches)
+schedule = sl.demo_schedule()  # the demo instance (14 teams/32 rounds/182 matches)
 sl.solve(schedule, time_limit_seconds=10.0, random_seed=42, stop_at_first_feasible=True)
 print(schedule.score)  # e.g. 0hard/-218994soft (value at the first feasible stop)
 print(sum(sl.constraint_costs(schedule)["away_to_away_hop_cost"]["costs"]))  # raw km
@@ -41,8 +41,8 @@ print(sum(sl.constraint_costs(schedule)["away_to_away_hop_cost"]["costs"]))  # r
 
 ## Score mapping
 
-The Java original already uses `HardSoftScore`, so it maps identically onto the engine's
-`HardSoftScore(int64 hard, double soft)`: hard = minus the violation count (0 == feasible),
+The Java original already uses `Score`, so it maps identically onto the engine's
+`Score(int64 hard, double soft)`: hard = minus the violation count (0 == feasible),
 soft = minus the travel distance (km) plus workday derby penalties (1000 per match) (soft is
 always integer-valued, held in the engine's double field).
 
@@ -105,8 +105,8 @@ gap is treated as "no round" (the same as Java's `ifNotExists(Round)`).
 
 ## Demo data
 
-`demo_schedule()` reproduces the Java `DemoDataGenerator`: the measured distance matrix
-of 14 South American teams, 32 rounds, 182 matches over all ordered pairs, and a 5% classic
-draw implementing the `java.util.Random(0)` LCG exactly (+ symmetric closure, 18 matches in
-total). The only difference is the weekend rounds — Java uses `LocalDate.now()`, while here
-round 0 is pinned to a Wednesday for determinism (the same as the C++ demo `sls_demo`).
+`demo_schedule()` builds the demo league, modelled on the quickstart's demo: the measured
+distance matrix of 14 South American teams, 32 rounds, 182 matches over all ordered pairs, and
+a 5% classic draw from a seeded `random.Random` (+ symmetric closure, 18 matches in total).
+Round 0 is pinned to a Wednesday, so the instance is the same on every run. (The C++ demo
+`sls_demo` draws its classic matches with `std::mt19937_64`, so its instance differs.)

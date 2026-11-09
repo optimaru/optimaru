@@ -7,8 +7,8 @@
 
 #include "ta/domain.hpp"
 #include "ta/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace ta
 {
@@ -18,7 +18,7 @@ namespace ta
 // ---------------------------------------------------------------------------
 // The six constraints of the reference task-assigning
 // TaskAssigningConstraintProvider, split into one small component each on the
-// engine's DecomposedScoreCalculator — an optional assembly path NEXT TO the
+// engine's DecomposedObjective — an optional assembly path NEXT TO the
 // monolithic TaskAssigningIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
@@ -37,13 +37,13 @@ namespace ta
 //
 // Score levels: the quickstart scores with BendableScore(1 hard, 3 soft).
 // The components score on the engine's three levels and the domain folds
-// them into HardSoftScore (domain.hpp, kMediumFold and toEngineScore):
+// them into Score (domain.hpp, kMediumFold and toEngineScore):
 //   hard[0] requiredSkillCost         Level::Hard,   weight 1
 //   soft[0] unassignedTasksCost       Level::Medium, weight 1
 //   soft[1] squaredMakespanCost       Level::Soft,   weight kMakespanUnit (10^7)
 //   soft[2] {critical|major|minor}PriorityTaskEndTimeCost
 //                                     Level::Soft,   weight 4 / 2 / 1
-//   engine.hard = hard * kMissingSkillUnit + medium   (MediumFold::belowHard)
+//   engine.hard = hard * kMissingSkillUnit + medium   (MediumFold::below_hard)
 //   engine.soft = soft                                (= soft1 * 10^7 + soft2)
 // Every weight is in units of its level; the 10^9 hard unit lives in the
 // fold, not in requiredSkillCost's weight. soft[1] and soft[2] share the one
@@ -72,14 +72,14 @@ namespace ta
 // default assembly scores bit-for-bit like them.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("requiredSkillCost"); Python sees them through pythonName()
+// ("requiredSkillCost"); Python sees them through python_name()
 // ("required_skill_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score.
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<TaskAssigningSolution>;
+    = optimaru::DecomposedObjective<TaskAssigningSolution>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<TaskAssigningSolution>;
 using TaUnitConstraint = optimaru::UnitConstraint<TaskAssigningSolution>;
 using TaGlobalConstraint = optimaru::GlobalConstraint<TaskAssigningSolution>;
@@ -130,11 +130,11 @@ inline Minutes walkChain(const TaskAssigningSolution &solution,
 // priority; 0 = no task of that priority on the list.
 struct PriorityTaskEndTimeCostBase : TaUnitConstraint
 {
-    PriorityTaskEndTimeCostBase(std::string constraintName,
+    PriorityTaskEndTimeCostBase(std::string constraint_name,
                                 double weight,
                                 optimaru::Level level,
                                 Priority priority)
-        : TaUnitConstraint(std::move(constraintName), weight, level),
+        : TaUnitConstraint(std::move(constraint_name), weight, level),
           priority_(priority)
     {
     }

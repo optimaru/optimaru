@@ -100,7 +100,7 @@ void ScoreCalculator::prepare(PackagingSchedule &schedule)
     }
     for (const Line &line : schedule.lines)
     {
-        if (line.operatorIndex >= static_cast<int>(schedule.operators.size()))
+        if (line.operator_index >= static_cast<int>(schedule.operators.size()))
             throw std::invalid_argument("line " + line.id
                                         + ": bad operator index");
     }
@@ -253,8 +253,8 @@ ConstraintBreakdown ScoreCalculator::analyze(PackagingSchedule &schedule)
             const Job &jobB = schedule.jobs[b];
             if (jobB.lineIndex < 0)
                 continue;
-            if (schedule.lines[jobA.lineIndex].operatorIndex
-                != schedule.lines[jobB.lineIndex].operatorIndex)
+            if (schedule.lines[jobA.lineIndex].operator_index
+                != schedule.lines[jobB.lineIndex].operator_index)
                 continue;
             const Minutes start = std::max(jobA.startCleaningDateTime,
                                            jobB.startCleaningDateTime);
@@ -277,7 +277,7 @@ ConstraintBreakdown ScoreCalculator::analyze(PackagingSchedule &schedule)
     return breakdown;
 }
 
-Score ScoreCalculator::calculateScore(PackagingSchedule &schedule)
+Score ScoreCalculator::score(PackagingSchedule &schedule)
 {
     schedule.score = analyze(schedule).toScore();
     return schedule.score;

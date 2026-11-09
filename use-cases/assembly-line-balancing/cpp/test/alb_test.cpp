@@ -9,8 +9,8 @@
 //       override, overflow past the task count, cycles)
 //   (d) incremental score and every maintained raw total == full recompute
 //       across a long random walk of change / swap / unassign / batch moves
-//       through the ScoreDirector, each constraint non-zero at least once
-//   (e) FULL_ASSERT solves (CloseStationMove, value recommender, ALNS)
+//       through the Editor, each constraint non-zero at least once
+//   (e) ScoreChecks::Full solves (CloseStationMove, value recommender, ALNS)
 //   (f) seeded determinism, the parallel multi-start, a SALBP-like instance
 //       reaching 0hard, a complete seed surviving a zero budget
 #include <chrono>
@@ -28,7 +28,7 @@
 #include "alb/score_calculator.hpp"
 #include "alb/solver.hpp"
 #include "alb_fixtures.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace alb;
 using namespace alb_test;
@@ -45,7 +45,7 @@ RawCosts rawOf(AssemblyLineBalancingProblem p)
 Score scoreOf(AssemblyLineBalancingProblem p)
 {
     ScoreCalculator::prepare(p);
-    return ScoreCalculator::calculateScore(p);
+    return ScoreCalculator::score(p);
 }
 
 // -------------------------------------------------------------------------
@@ -209,7 +209,7 @@ AssemblyLineBalancingProblem threeTasks()
 Solver zeroBudget()
 {
     Solver::Config config;
-    config.spentLimit = std::chrono::milliseconds(0);
+    config.time_limit = std::chrono::milliseconds(0);
     return Solver(config);
 }
 
@@ -323,7 +323,7 @@ int randomWalk(AssemblyLineBalancingProblem &p,
                int &totalMismatches,
                std::map<std::string, int> &nonZeroStates)
 {
-    optimaru::ScoreDirector<AssemblyLineBalancingProblem> director(p, calculator);
+    optimaru::Editor<AssemblyLineBalancingProblem> editor(p, calculator);
     std::mt19937_64 rng(seed);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
     const int n = p.taskCount();
@@ -337,7 +337,7 @@ int randomWalk(AssemblyLineBalancingProblem &p,
         {
             const int t = static_cast<int>(rng() % n);
             const int value = unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % values);
-            director.changeVariable(t, value);
+            editor.assign(t, value);
         }
         else if (kind < 0.85)
         {
@@ -345,32 +345,32 @@ int randomWalk(AssemblyLineBalancingProblem &p,
             const int b = static_cast<int>(rng() % n);
             const int va = p.tasks[a].station;
             const int vb = p.tasks[b].station;
-            director.beginVariableChanges();
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
-            director.endVariableChanges();
+            editor.begin_batch();
+            editor.assign(a, vb);
+            editor.assign(b, va);
+            editor.end_batch();
         }
         else
         {
             // CloseStationMove-like batch: empty one station.
             const int victim = static_cast<int>(rng() % values);
-            director.beginVariableChanges();
+            editor.begin_batch();
             for (int t = 0; t < n; ++t)
             {
                 if (p.tasks[t].station == victim)
-                    director.changeVariable(t, static_cast<int>(rng() % values));
+                    editor.assign(t, static_cast<int>(rng() % values));
             }
-            director.endVariableChanges();
+            editor.end_batch();
         }
         AssemblyLineBalancingProblem shadow = p;
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (!sameScore(full, incremental) && ++mismatches <= 3)
         {
             std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                         step,
-                        incremental.toString().c_str(),
-                        full.toString().c_str());
+                        incremental.str().c_str(),
+                        full.str().c_str());
         }
         if (!sameTotals(namedTotals(calculator.rawCosts()), namedTotals(ScoreCalculator::rawCosts(shadow)),
                         nonZeroStates, "@step " + std::to_string(step), printBudget))
@@ -402,15 +402,15 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (e) FULL_ASSERT solves.
+// (e) ScoreChecks::Full solves.
 // -------------------------------------------------------------------------
 bool fullAssertSolve(AssemblyLineBalancingProblem p, const std::string &label)
 {
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(30);
-    config.stepCountLimit = 1500;
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(30);
+    config.step_limit = 1500;
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 100;
     config.ruinRecreatePolishSteps = 50;
     config.valueRecommenderProbability = 0.5;
@@ -420,7 +420,7 @@ bool fullAssertSolve(AssemblyLineBalancingProblem p, const std::string &label)
     {
         Solver(config).solve(p);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -429,7 +429,7 @@ bool fullAssertSolve(AssemblyLineBalancingProblem p, const std::string &label)
     if (corrupted)
         return false;
     AssemblyLineBalancingProblem shadow = p;
-    check(sameScore(p.score, ScoreCalculator::calculateScore(shadow)),
+    check(sameScore(p.score, ScoreCalculator::score(shadow)),
           label + ": solver-reported score == full recompute");
     return true;
 }
@@ -453,9 +453,9 @@ void verifySolves()
 {
     std::printf("== (f) Solves ==\n");
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(30);
-    config.stepCountLimit = 4000;
-    config.randomSeed = 11;
+    config.time_limit = std::chrono::seconds(30);
+    config.step_limit = 4000;
+    config.seed = 11;
     AssemblyLineBalancingProblem a = salbpInstance(40, 9);
     AssemblyLineBalancingProblem b = salbpInstance(40, 9);
     Solver(config).solve(a);
@@ -472,7 +472,7 @@ void verifySolves()
     AssemblyLineBalancingProblem shadow = c;
     check(c.assignment() == d.assignment() && sameScore(c.score, d.score),
           "the parallel multi-start is reproducible per seed");
-    check(sameScore(c.score, ScoreCalculator::calculateScore(shadow)),
+    check(sameScore(c.score, ScoreCalculator::score(shadow)),
           "the winning worker's score == full recompute");
     check(!(c.score < a.score), "three starts score no worse than worker 0 alone");
 
@@ -481,8 +481,8 @@ void verifySolves()
     for (const Task &t : big.tasks)
         total += t.duration;
     Solver::Config timed;
-    timed.spentLimit = std::chrono::seconds(2);
-    timed.randomSeed = 1;
+    timed.time_limit = std::chrono::seconds(2);
+    timed.seed = 1;
     Solver(timed).solve(big);
     bool assigned = true;
     for (const Task &t : big.tasks)

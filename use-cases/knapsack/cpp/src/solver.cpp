@@ -11,8 +11,8 @@
 #include "ks/construction.hpp"
 #include "ks/incremental_calculator.hpp"
 #include "ks/score_calculator.hpp"
-#include "optimaru/api/solver/solver.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
 
 namespace ks
 {
@@ -30,27 +30,27 @@ void requireRewards(const Solver::Config &config)
 // local search over the built-in BASIC moves, plus the ALNS kicks. The
 // engine's construction heuristic finds nothing left to place: the domain
 // construction decided every item.
-optimaru::SolverConfig engineConfigOf(const Solver::Config &config,
+optimaru::Settings engineConfigOf(const Solver::Config &config,
                                       const KnapsackProblem &problem,
                                       int starts)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    engineConfig.multiStartCount = starts;
-    engineConfig.onNewBest = config.onNewBest;
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit = config.bestScoreLimit;
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit = config.unimprovedStepCountLimit;
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    engineConfig.parallel_starts = starts;
+    engineConfig.on_new_best = config.on_new_best;
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score = config.target_score;
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit = config.stall_step_limit;
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(8 * problem.items.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight = config.swapMoveWeight;
-    engineConfig.localSearch.descentWeight = config.descentWeight;
+    engineConfig.search.moves.change_weight = config.change_weight;
+    engineConfig.search.moves.swap_weight = config.swap_weight;
+    engineConfig.search.descent_weight = config.descent_weight;
 
     // Nearby swap partners: items of similar weight. The weights are copied,
     // so the meter stays valid in the multi-start worker threads, whose
@@ -60,23 +60,23 @@ optimaru::SolverConfig engineConfigOf(const Solver::Config &config,
         auto weights = std::make_shared<std::vector<std::int64_t>>();
         for (const Item &item : problem.items)
             weights->push_back(item.weight);
-        engineConfig.localSearch.nearby.probability = config.nearbyProbability;
-        engineConfig.localSearch.nearby.size = config.nearbySize;
-        engineConfig.localSearch.nearby.distanceMeter = [weights](int a, int b)
+        engineConfig.search.nearby.probability = config.nearbyProbability;
+        engineConfig.search.nearby.size = config.nearbySize;
+        engineConfig.search.nearby.distance = [weights](int a, int b)
         { return static_cast<double>(std::llabs((*weights)[a] - (*weights)[b])); };
     }
 
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
-    lns.asMoveWeight = config.ruinRecreateAsMoveWeight;
-    lns.asMoveMaxRuin = config.ruinRecreateAsMoveMaxRuin;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
+    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
     return engineConfig;
 }
 
@@ -101,15 +101,15 @@ void Solver::solve(KnapsackProblem &problem)
         // worker threads run exactly the same search (seed + i each).
         const int starts = std::max(1, config_.parallelSolverCount);
         optimaru::Solver<KnapsackProblem> engine(engineConfigOf(config_, problem, starts));
-        engine.solveMultiStart(problem,
+        engine.solve_multistart(problem,
                                [] { return std::make_unique<KnapsackIncrementalScoreCalculator>(); });
     }
     // The authoritative final score: a full recompute on the best solution.
-    ScoreCalculator::calculateScore(problem);
+    ScoreCalculator::score(problem);
 }
 
 void Solver::solve(KnapsackProblem &problem,
-                   optimaru::DecomposedScoreCalculator<KnapsackProblem> &calculator)
+                   optimaru::DecomposedObjective<KnapsackProblem> &calculator)
 {
     requireRewards(config_);
     construct(problem);
@@ -121,9 +121,9 @@ void Solver::solve(KnapsackProblem &problem,
     }
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
-    // constraintTotals() explains exactly this score.
-    calculator.resetWorkingSolution(problem);
-    problem.score = calculator.calculateScore();
+    // constraint_totals() explains exactly this score.
+    calculator.rebuild(problem);
+    problem.score = calculator.score();
 }
 
 }  // namespace ks

@@ -7,14 +7,14 @@
 namespace ta
 {
 
-void TaskAssigningIncrementalScoreCalculator::resetWorkingSolution(
-    TaskAssigningSolution &workingSolution)
+void TaskAssigningIncrementalScoreCalculator::rebuild(
+    TaskAssigningSolution &solution)
 {
-    solution_ = &workingSolution;
+    solution_ = &solution;
     const int employeeCount
-        = static_cast<int>(workingSolution.employees.size());
-    const int typeCount = static_cast<int>(workingSolution.taskTypes.size());
-    const int taskCount = static_cast<int>(workingSolution.tasks.size());
+        = static_cast<int>(solution.employees.size());
+    const int typeCount = static_cast<int>(solution.taskTypes.size());
+    const int taskCount = static_cast<int>(solution.tasks.size());
 
     // Intern the string-based lookups: missing-skill counts per (employee,
     // task type) and durations per (employee, task).
@@ -29,12 +29,12 @@ void TaskAssigningIncrementalScoreCalculator::resetWorkingSolution(
             Task probe;
             probe.taskType = t;
             missingByEmployeeType_[e][t]
-                = workingSolution.missingSkillCount(probe, e);
+                = solution.missingSkillCount(probe, e);
         }
         for (int i = 0; i < taskCount; ++i)
         {
             durationByEmployeeTask_[e][i]
-                = workingSolution.taskDuration(workingSolution.tasks[i], e);
+                = solution.taskDuration(solution.tasks[i], e);
         }
     }
 
@@ -49,7 +49,7 @@ void TaskAssigningIncrementalScoreCalculator::resetWorkingSolution(
         insertList(e);
 }
 
-void TaskAssigningIncrementalScoreCalculator::beforeListChanged(int listIndex)
+void TaskAssigningIncrementalScoreCalculator::before_list_edit(int listIndex)
 {
     // Retract the list's cached aggregates while it still holds its OLD
     // contents.
@@ -60,7 +60,7 @@ void TaskAssigningIncrementalScoreCalculator::beforeListChanged(int listIndex)
         solution_->employees[listIndex].tasks.size());
 }
 
-void TaskAssigningIncrementalScoreCalculator::afterListChanged(int listIndex)
+void TaskAssigningIncrementalScoreCalculator::after_list_edit(int listIndex)
 {
     insertList(listIndex);
 }
@@ -91,8 +91,8 @@ void TaskAssigningIncrementalScoreCalculator::insertList(int listIndex)
     assignedCount_ += static_cast<std::int64_t>(employee.tasks.size());
 }
 
-optimaru::HardSoftScore
-TaskAssigningIncrementalScoreCalculator::calculateScore()
+optimaru::Score
+TaskAssigningIncrementalScoreCalculator::score()
 {
     const std::int64_t unassigned
         = static_cast<std::int64_t>(solution_->tasks.size()) - assignedCount_;

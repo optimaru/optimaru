@@ -656,7 +656,7 @@ def test_score_matches_the_engine_for_repeated_and_shifted_specs(specs):
     ids=["repeat", "repeat-and-offsets", "repeats-on-other-levels"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
-    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     schedule = build_schedule()
     config = sl.SolverConfig()
     config.full_assert = True

@@ -13,7 +13,7 @@ The compiled module wraps the C++ domain in
   (benchmarks/school-timetabling/cpsat) with validate.py's semantics, under
   the same names.
 
-The quickstart domain uses one BASIC int variable per entity (Lesson), so
+The quickstart domain uses one assignment-shape int variable per entity (Lesson), so
 the two variables (timeslot, room) are a single composite encoding::
 
     slot_room = timeslot_index * room_count + room_index   # -1 == unassigned
@@ -21,7 +21,7 @@ the two variables (timeslot, room) are a single composite encoding::
 Score convention: `hard` counts constraint violations (0 == feasible),
 `soft` is the objective. Both are maximised (less negative is better).
 
-Quickstart terms (HardSoftScore, not selectable):
+Quickstart terms (hard/soft, not selectable):
   hard 1. room_conflict_cost           -1 per pair of lessons in the same
                                        timeslot+room
   hard 2. teacher_conflict_cost        -1 per pair of same-teacher lessons in a
@@ -192,9 +192,9 @@ class SolverConfig:
     descent_max_sweeps: int
     """Maximum sweeps per descent (default 4)."""
     change_move_weight: float
-    """Relative weight of the BASIC change move; 0 disables it."""
+    """Relative weight of the assignment-shape change move; 0 disables it."""
     swap_move_weight: float
-    """Relative weight of the BASIC swap move; 0 disables it."""
+    """Relative weight of the assignment-shape swap move; 0 disables it."""
     best_score_limit: tuple[int, float]
     """Stops early once bestScore >= (hard, soft) (lexicographic).
     (0, -inf) stops at the first feasible solution. Default: unreachable."""
@@ -336,7 +336,7 @@ class canon:
     @overload
     @staticmethod
     def calculate_score(table: canon.Timetable) -> Score:
-        """Full HardSoftScore recompute at the default weights (also stored in `table.score`)."""
+        """Full score recompute at the default weights (also stored in `table.score`)."""
     @overload
     @staticmethod
     def calculate_score(table: canon.Timetable, weights: canon.ObjectiveWeights) -> Score:
@@ -537,6 +537,6 @@ class canon:
 
             When the assembly demotes `unassigned_lessons_cost` to soft or drops
             it, the unassign moves switch on — only then can the search leave a
-            lesson at slot -1 (the BASIC move mix's value range is [0,
+            lesson at slot -1 (the assignment-shape move mix's value range is [0,
             slot_count)). With it hard, every lesson takes a slot exactly as on
             the default path."""

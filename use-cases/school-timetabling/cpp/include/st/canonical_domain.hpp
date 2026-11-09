@@ -6,8 +6,8 @@
 #include <utility>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
 
 // ---------------------------------------------------------------------------
 // Canonical full-parity school-timetabling domain (st::canon)
@@ -54,7 +54,7 @@
 namespace st::canon
 {
 
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Lesson  (@PlanningEntity)
@@ -178,31 +178,31 @@ struct Timetable
 }  // namespace st::canon
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization: entities are lessons, the planning
+// SolutionTraits specialization: entities are lessons, the planning
 // variable is Lesson::slot, the value range is the timeslot list. Pinned
 // lessons (fixed slots) are excluded from every move.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<st::canon::Timetable>
+template <> struct optimaru::SolutionTraits<st::canon::Timetable>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const st::canon::Timetable &t)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const st::canon::Timetable &t)
     {
         return static_cast<int>(t.lessons.size());
     }
-    static int valueCount(const st::canon::Timetable &t)
+    static int value_count(const st::canon::Timetable &t)
     {
         return t.slotCount();
     }
-    static int getVariable(const st::canon::Timetable &t, int lessonIndex)
+    static int value_of(const st::canon::Timetable &t, int lessonIndex)
     {
         return t.lessons[lessonIndex].slot;
     }
-    static void setVariable(st::canon::Timetable &t, int lessonIndex, int slot)
+    static void assign(st::canon::Timetable &t, int lessonIndex, int slot)
     {
         t.lessons[lessonIndex].slot = slot;
     }
-    static bool isPinned(const st::canon::Timetable &t, int lessonIndex)
+    static bool is_pinned(const st::canon::Timetable &t, int lessonIndex)
     {
         return t.lessons[lessonIndex].pinned;
     }

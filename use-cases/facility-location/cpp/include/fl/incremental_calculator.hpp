@@ -5,14 +5,14 @@
 #include <vector>
 
 #include "fl/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace fl
 {
 
 // The facility-location implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // Every constraint is a function of per-facility aggregates, so a single
 // variable change is O(1):
@@ -25,21 +25,21 @@ namespace fl
 //   - soft 3 (distanceFromFacilityCost): one precomputed matrix lookup per
 //     change.
 //
-// beforeVariableChanged retracts the consumer's contribution while
-// `facility` still holds the OLD value; afterVariableChanged inserts the NEW
+// before_assign retracts the consumer's contribution while
+// `facility` still holds the OLD value; after_assign inserts the NEW
 // value. Unassigned consumers (facility == -1) contribute nothing, so the
 // construction heuristic can score partially initialized solutions. The
-// full-recompute reference is ScoreCalculator::calculateScore (checked in
-// the tests and under EnvironmentMode::FULL_ASSERT).
+// full-recompute reference is ScoreCalculator::score (checked in
+// the tests and under ScoreChecks::ScoreChecks::Full).
 class FacilityLocationIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<FacilityLocationProblem>
+    : public optimaru::Objective<FacilityLocationProblem>
 {
 public:
     void
-    resetWorkingSolution(FacilityLocationProblem &workingSolution) override;
-    void beforeVariableChanged(int consumerIndex) override;
-    void afterVariableChanged(int consumerIndex) override;
-    Score calculateScore() override;
+    rebuild(FacilityLocationProblem &solution) override;
+    void before_assign(int consumerIndex) override;
+    void after_assign(int consumerIndex) override;
+    Score score() override;
 
 private:
     FacilityLocationProblem *problem_ = nullptr;
@@ -50,7 +50,7 @@ private:
     std::vector<int> consumerCnt_;
 
     // Running totals (all counted positive; signs/weights applied in
-    // calculateScore).
+    // score).
     std::int64_t overCapacity_ = 0;   // hard 1
     std::int64_t usedSetupCost_ = 0;  // soft 2 (unweighted)
     std::int64_t distance_ = 0;       // soft 3 (unweighted meters)

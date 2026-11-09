@@ -75,9 +75,9 @@ struct EmployeeAssignmentDeltaGroup final
     // minutes), so the accumulated raw costs are exact: a member at a negative
     // threshold (clip with offset < 0, discontinuous at 0) keeps this group,
     // because a whole-number raw cannot drift off 0.
-    bool hasIntegralRawDeltas() const override { return true; }
+    bool has_integral_raw_deltas() const override { return true; }
 
-    bool isBeneficial() const override {
+    bool is_beneficial() const override {
         if (duplicate_ || unsupported_) return false;
         const int pairConstraintCount = (overlapIndex_ != NONE ? 1 : 0) +
                                         (sameDayIndex_ != NONE ? 1 : 0) +
@@ -85,7 +85,7 @@ struct EmployeeAssignmentDeltaGroup final
         return pairConstraintCount >= 2;
     }
 
-    void onReset(const EmployeeSchedule& schedule) override {
+    void on_reset(const EmployeeSchedule& schedule) override {
         const int newShiftCount = static_cast<int>(schedule.shifts.size());
         const std::size_t n = schedule.shifts.size();
         const bool cellsFit = n == 0 || n <= std::numeric_limits<std::size_t>::max() / n;
@@ -223,12 +223,12 @@ private:
     std::vector<PairProjection> pairProjection_;
 };
 
-inline const char* GroupableAssignmentConstraint::deltaGroupKey() const {
+inline const char* GroupableAssignmentConstraint::delta_group_key() const {
     return "es.employee-assignment-delta.v1";
 }
 
 inline std::unique_ptr<optimaru::UnitConstraintDeltaGroup<EmployeeSchedule>>
-GroupableAssignmentConstraint::createDeltaGroup() const {
+GroupableAssignmentConstraint::create_delta_group() const {
     return std::make_unique<EmployeeAssignmentDeltaGroup>();
 }
 

@@ -7,7 +7,7 @@
 
 namespace es {
 
-// calculateScore does a full recompute. The per-constraint building blocks are
+// score does a full recompute. The per-constraint building blocks are
 // exposed as static helpers so the incremental evaluator (IncrementalScore) and
 // the full recompute share exactly the same logic -- the incremental score is
 // then correct by construction.
@@ -15,11 +15,11 @@ class ScoreCalculator {
 public:
     static constexpr Minutes MIN_REST_MINUTES = 10 * 60;  // "at least 10 hours"
 
-    static Score calculateScore(EmployeeSchedule& schedule);
+    static Score score(EmployeeSchedule& schedule);
 
     // Interns skills into integer bit ids and precomputes per-shift day indices,
     // filling Employee::skillMask, Shift::requiredSkillBit, Shift::startDay/endDay.
-    // Must run before scoring; calculateScore/solve call it, every time, because
+    // Must run before scoring; score/solve call it, every time, because
     // Python can change a schedule between calls. Throws std::invalid_argument
     // for a shift without 0 <= start < end up to MAX_DAY, for an employeeIndex
     // outside the employee list, for a pinned shift with no employee, or for

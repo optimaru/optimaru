@@ -25,7 +25,7 @@ struct FacilityCapacityCost final : FlUnitConstraint
         : FlUnitConstraint("facilityCapacityCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const FacilityLocationProblem &problem) override
+    void on_reset(const FacilityLocationProblem &problem) override
     {
         detail::requirePrepared(problem);
     }

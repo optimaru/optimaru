@@ -570,7 +570,7 @@ PICKS = {
 
 @pytest.mark.parametrize("picks", list(PICKS.values()), ids=list(PICKS))
 def test_full_assert_solves_with_repeats_and_offsets(problem, picks):
-    """FULL_ASSERT re-checks the incremental score after every move; the repeated
+    """ScoreChecks::Full re-checks the incremental score after every move; the repeated
     teacher-mask instances share the calculator's one TeacherMaskHub."""
     converted = st.convert_problem(problem)
     config = canon.SolverConfig()

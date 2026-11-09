@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <random>
+#include "optimaru/portable_random.hpp"
 
 namespace op
 {
@@ -12,54 +14,8 @@ namespace op
 namespace
 {
 
-// ---------------------------------------------------------------------------
-// java.util.Random (48-bit LCG), bit-exact — the demo instance depends on the
-// exact stream of new Random(37), so the Java generator's nextInt calls are
-// replayed verbatim.
-// ---------------------------------------------------------------------------
-class JavaRandom
-{
-public:
-    explicit JavaRandom(std::int64_t seed)
-        : seed_((static_cast<std::uint64_t>(seed) ^ MULTIPLIER) & MASK)
-    {
-    }
-
-    // java.util.Random.nextInt(int bound), bound > 0.
-    int nextInt(int bound)
-    {
-        if ((bound & -bound) == bound)  // bound is a power of 2
-        {
-            return static_cast<int>(
-                (static_cast<std::int64_t>(bound) * next(31)) >> 31);
-        }
-        int bits;
-        int val;
-        do
-        {
-            bits = next(31);
-            val = bits % bound;
-            // Java's `bits - val + (bound - 1) < 0` relies on 32-bit wrap.
-        } while (
-            static_cast<std::int32_t>(static_cast<std::uint32_t>(bits)
-                                      - static_cast<std::uint32_t>(val)
-                                      + static_cast<std::uint32_t>(bound - 1))
-            < 0);
-        return val;
-    }
-
-private:
-    static constexpr std::uint64_t MULTIPLIER = 0x5DEECE66DULL;
-    static constexpr std::uint64_t MASK = (1ULL << 48) - 1;
-
-    int next(int bits)
-    {
-        seed_ = (seed_ * MULTIPLIER + 0xBULL) & MASK;
-        return static_cast<int>(seed_ >> (48 - bits));
-    }
-
-    std::uint64_t seed_;
-};
+// Seeded, platform-independent draws (see optimaru/portable_random.hpp).
+using DemoRandom = optimaru::PortableRandom;
 
 // ---------------------------------------------------------------------------
 // The DemoDataGenerator catalog: PRODUCTS with their ProductFamily, in
@@ -188,7 +144,7 @@ struct PlacedProduct
 
 // DemoDataGenerator.buildProducts: place each catalog product on a random
 // shelving of its family, random side, random row 1..ROWS_SIZE.
-std::vector<PlacedProduct> buildProducts(JavaRandom &random)
+std::vector<PlacedProduct> buildProducts(DemoRandom &random)
 {
     std::vector<PlacedProduct> products;
     products.reserve(CATALOG.size());
@@ -197,9 +153,9 @@ std::vector<PlacedProduct> buildProducts(JavaRandom &random)
         const CatalogProduct &raw = CATALOG[i];
         const std::vector<Shelf> &shelvings = shelvingsFor(raw.family);
         const int shelvingIndex
-            = random.nextInt(static_cast<int>(shelvings.size()));
-        const Side side = random.nextInt(2) == 0 ? Side::LEFT : Side::RIGHT;
-        const int row = random.nextInt(Warehouse::SHELVING_ROWS_SIZE) + 1;
+            = random.next_int(static_cast<int>(shelvings.size()));
+        const Side side = random.next_int(2) == 0 ? Side::LEFT : Side::RIGHT;
+        const int row = random.next_int(Warehouse::SHELVING_ROWS_SIZE) + 1;
         WarehouseLocation location;
         location.column = shelvings[shelvingIndex].column;
         location.shelvingRow = shelvings[shelvingIndex].row;
@@ -225,7 +181,7 @@ OrderPickingSolution buildDemoData(int trolleysCount,
                                    int bucketCount,
                                    int bucketCapacity,
                                    int ordersCount,
-                                   std::int64_t randomSeed)
+                                   std::int64_t seed)
 {
     // DemoDataGenerator.validateBucketCapacity.
     if (bucketCapacity < demoMaxProductSize())
@@ -239,7 +195,7 @@ OrderPickingSolution buildDemoData(int trolleysCount,
               "a trolley bucket. Please use a higher value");
     }
 
-    JavaRandom random(randomSeed);
+    DemoRandom random(seed);
     OrderPickingSolution solution;
 
     // START_LOCATION: shelving (A,1), LEFT side, row 0.
@@ -265,7 +221,7 @@ OrderPickingSolution buildDemoData(int trolleysCount,
     const int productCount = static_cast<int>(products.size());
     for (int orderNumber = 1; orderNumber <= ordersCount; ++orderNumber)
     {
-        const int orderItemsSize = 1 + random.nextInt(productCount - 1);
+        const int orderItemsSize = 1 + random.next_int(productCount - 1);
         const int orderIndex = static_cast<int>(solution.orders.size());
         solution.orders.push_back({std::to_string(orderNumber)});
 
@@ -276,7 +232,7 @@ OrderPickingSolution buildDemoData(int trolleysCount,
         int pickIdx = 0;
         for (int i = 0; i < orderItemsSize; ++i)
         {
-            const int productItemIndex = random.nextInt(productCount);
+            const int productItemIndex = random.next_int(productCount);
             if (taken[productItemIndex])
                 continue;
             taken[productItemIndex] = 1;

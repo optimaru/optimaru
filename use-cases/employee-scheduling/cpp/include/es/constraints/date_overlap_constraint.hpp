@@ -16,7 +16,7 @@ struct DateOverlapConstraint : GroupableAssignmentConstraint {
                           bool perDay = false)
         : GroupableAssignmentConstraint(std::move(name), weight, level), dates_(dates), sign_(sign),
           perDay_(perDay) {}
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         shiftCount_ = static_cast<int>(s.shifts.size());
         minutes_.assign(s.employees.size() * s.shifts.size(), 0);
         for (std::size_t e = 0; e < s.employees.size(); ++e) {
@@ -41,8 +41,8 @@ struct DateOverlapConstraint : GroupableAssignmentConstraint {
             if (!s.shifts[i].pinned) c += row[i];  // pinned shifts are fixed context
         return sign_ * static_cast<double>(c);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const EmployeeSchedule& s, int unit, const std::vector<int>&,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const EmployeeSchedule& s, int unit, const std::vector<int>&,
                      int entity) const override {
         return memberDelta(s, unit, entity);
     }

@@ -1,20 +1,20 @@
 // Plugin-assembly (es/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
 //   (a) the catalog: defaultConstraints().info() and
-//       catalogInfo(defaultConstraints(), catalogConstraints()) == each
+//       catalog_info(defaultConstraints(), catalogConstraints()) == each
 //       component's kDefaultWeight / kDefaultLevel, reward and flippability;
 //       registry names are camelCase and map to the Python names
 //   (b) the default assembly reproduces the monolithic score bit-for-bit on
 //       random assignments (including unassigned shifts)
 //   (c) incremental score == full recompute across random moves driven
-//       through the engine's ScoreDirector, for an assembly of all 30
+//       through the engine's Editor, for an assembly of all 30
 //       components at parameters that bind (scoped and repeated instances
 //       included)
 //   (d) ScopedUnit takes over the inner component's metadata: a scoped
-//       reward keeps reward / levelFlippable and refuses setLevel(Hard)
+//       reward keeps reward / level_flippable and refuses set_level(Hard)
 //   (e) labels: parametrized instances carry their display label in
-//       constraintTotals() / constraintCosts(); the registry name stays plain
-//   (f) parallel workers: a throwing onNewBest (worker 0) stops the other
+//       constraint_totals() / constraint_costs(); the registry name stays plain
+//   (f) parallel workers: a throwing on_new_best (worker 0) stops the other
 //       workers, so a 30 s, 4-worker solve rethrows at once (Python reaches
 //       no thread pool here: solve_request forks processes for its starts)
 //   (h) repeated components and the offset / clip knobs: a hand-calculated
@@ -22,7 +22,7 @@
 //       literal offsets by hand (literal mode charges every employee, a
 //       worker scope's employees only), the literal formula refused on hard
 //       at reset (a scoped one included) and kept on soft, incremental == a
-//       fresh recompute over a random walk and a FULL_ASSERT solve with
+//       fresh recompute over a random walk and a ScoreChecks::Full solve with
 //       repeated, shifted components (delta-grouped hard, shared-context day
 //       patterns, scoped and global ones)
 // The hand-calculated positive and zero raw cost of every constraint is
@@ -45,8 +45,8 @@
 #include "es/domain.hpp"
 #include "es/score_calculator.hpp"
 #include "es/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
+#include "optimaru/model/editor.hpp"
+#include "optimaru/worker_threads.hpp"
 #include "optimaru/python/names.hpp"
 
 using namespace es;
@@ -65,7 +65,7 @@ bool sameScore(const Score& a, const Score& b) {
     return a.hard == b.hard && std::fabs(a.soft - b.soft) <= tolerance;
 }
 
-std::string str(const Score& s) { return s.toString(); }
+std::string str(const Score& s) { return s.str(); }
 
 template <typename F>
 bool throwsInvalid(F&& f) {
@@ -132,22 +132,22 @@ void randomAssignment(EmployeeSchedule& s, std::mt19937_64& rng, bool allowUnass
 
 Score score(DecomposedCalculator& calc, EmployeeSchedule& s) {
     ScoreCalculator::prepare(s);
-    calc.resetWorkingSolution(s);
-    return calc.calculateScore();
+    calc.rebuild(s);
+    return calc.score();
 }
 
 // ---------------------------------------------------------------------------
 // (a) the catalog
 // ---------------------------------------------------------------------------
 template <typename Component>
-bool rowIs(const optimaru::ConstraintInfo& row, const char* name, optimaru::Level level, bool isGlobal,
+bool rowIs(const optimaru::ConstraintInfo& row, const char* name, optimaru::Level level, bool is_global,
            bool enabled, bool reward = false) {
     Component component;  // constructs at its default parameters
-    return row.name == name && component.name == name && row.defaultLevel == Component::kDefaultLevel &&
-           row.defaultWeight == Component::kDefaultWeight && component.weight == Component::kDefaultWeight &&
-           component.level == Component::kDefaultLevel && row.defaultLevel == level &&
-           row.defaultWeight == 1.0 && row.reward == reward && row.levelFlippable == !reward &&
-           row.isGlobal == isGlobal && row.defaultEnabled == enabled;
+    return row.name == name && component.name == name && row.default_level == Component::kDefaultLevel &&
+           row.default_weight == Component::kDefaultWeight && component.weight == Component::kDefaultWeight &&
+           component.level == Component::kDefaultLevel && row.default_level == level &&
+           row.default_weight == 1.0 && row.reward == reward && row.level_flippable == !reward &&
+           row.is_global == is_global && row.default_enabled == enabled;
 }
 
 void verifyCatalog() {
@@ -168,10 +168,10 @@ void verifyCatalog() {
                                                  true),
           "defaultConstraints().info() == the eight default components' constants");
 
-    const auto rows = optimaru::catalogInfo(defaultConstraints(), catalogConstraints());
+    const auto rows = optimaru::catalog_info(defaultConstraints(), catalogConstraints());
     bool defaultsFirst = rows.size() == 30;
     for (std::size_t i = 0; defaultsFirst && i < defaults.size(); ++i)
-        defaultsFirst = rows[i].name == defaults[i].name && rows[i].defaultEnabled;
+        defaultsFirst = rows[i].name == defaults[i].name && rows[i].default_enabled;
     check(defaultsFirst, "catalogInfo: 30 rows, the eight defaults first and enabled");
     // ConstraintAssembly::info() lists the unit constraints before the
     // global ones, so the 22 catalog-only rows come as 16 units, then 6
@@ -208,14 +208,14 @@ void verifyCatalog() {
 
     bool camel = true;
     for (const auto& row : rows) {
-        const std::string snake = optimaru::python::pythonName(row.name);
+        const std::string snake = optimaru::python::python_name(row.name);
         camel = camel && !row.name.empty() && std::islower(static_cast<unsigned char>(row.name[0])) &&
                 row.name.find(' ') == std::string::npos && snake.size() > 5 &&
                 snake.compare(snake.size() - 5, 5, "_cost") == 0;
     }
     check(camel, "every registry name is camelCase and its Python name ends in _cost");
-    check(optimaru::python::pythonName("maxConsecutiveDaysOffCost") == "max_consecutive_days_off_cost" &&
-                  optimaru::python::pythonName("workerDayCountInRangeCost") ==
+    check(optimaru::python::python_name("maxConsecutiveDaysOffCost") == "max_consecutive_days_off_cost" &&
+                  optimaru::python::python_name("workerDayCountInRangeCost") ==
                           "worker_day_count_in_range_cost",
           "pythonName maps the registry names to their snake_case Python names");
 
@@ -224,7 +224,7 @@ void verifyCatalog() {
     check(throwsInvalid([] { catalogConstraints().hard("desiredShiftCost"); }),
           "hard() on the reward desiredShiftCost throws");
     DesiredDayCost desired;
-    desired.setLevel(optimaru::Level::Soft);
+    desired.set_level(optimaru::Level::Soft);
     check(desired.level == optimaru::Level::Soft, "re-stating a reward's soft level is a no-op");
     check(!throwsInvalid([] { defaultConstraints().soft("requiredSkillCost").hard("undesiredDayCost"); }),
           "the other defaults stay flippable both ways");
@@ -243,7 +243,7 @@ void verifyDefaultAssemblyEqualsMonolith() {
     for (int round = 0; round < 300; ++round) {
         randomAssignment(s, rng, /*allowUnassigned=*/round % 3 == 0);
         EmployeeSchedule copy = s;
-        const Score monolithic = ScoreCalculator::calculateScore(copy);
+        const Score monolithic = ScoreCalculator::score(copy);
         DecomposedCalculator calc;
         addDefaultConstraints(calc);
         const Score plugin = score(calc, s);
@@ -309,7 +309,7 @@ void verifyIncrementalEqualsFull() {
     ScoreCalculator::prepare(s);
     DecomposedCalculator calc;
     addEveryComponent(calc);
-    optimaru::ScoreDirector<EmployeeSchedule> director(s, calc);
+    optimaru::Editor<EmployeeSchedule> editor(s, calc);
     const int employees = static_cast<int>(s.employees.size());
     const int shifts = static_cast<int>(s.shifts.size());
     int mismatches = 0;
@@ -320,12 +320,12 @@ void verifyIncrementalEqualsFull() {
         if (rng() % 4 == 0) {
             const int other = static_cast<int>(rng() % shifts);
             const int a = s.shifts[shift].employeeIndex, b = s.shifts[other].employeeIndex;
-            director.changeVariable(shift, b);
-            director.changeVariable(other, a);
+            editor.assign(shift, b);
+            editor.assign(other, a);
         } else {
-            director.changeVariable(shift, static_cast<int>(rng() % (employees + 1)) - 1);
+            editor.assign(shift, static_cast<int>(rng() % (employees + 1)) - 1);
         }
-        const Score incremental = director.calculateScore();
+        const Score incremental = editor.score();
         EmployeeSchedule shadow = s;
         DecomposedCalculator fresh;
         addEveryComponent(fresh);
@@ -347,17 +347,17 @@ void verifyScopedUnit() {
     std::printf("== (d) ScopedUnit keeps the inner metadata ==\n");
     ScopedUnit reward(std::make_unique<DesiredDayCost>(2.5), std::vector<int>{0}, std::vector<int>{}, true,
                       false);
-    check(reward.name == "desiredDayCost" && reward.reward && !reward.levelFlippable &&
+    check(reward.name == "desiredDayCost" && reward.reward && !reward.level_flippable &&
                   reward.weight == 2.5 && reward.level == optimaru::Level::Soft,
           "a scoped DesiredDayCost keeps name, reward, levelFlippable, weight and level");
-    check(throwsInvalid([&] { reward.setLevel(optimaru::Level::Hard); }),
+    check(throwsInvalid([&] { reward.set_level(optimaru::Level::Hard); }),
           "a scoped reward refuses setLevel(Hard)");
     ScopedUnit pattern(std::make_unique<DayPatternCost>(1.0, "OFF,Location A"), std::vector<int>{},
                        std::vector<int>{1, 2}, false, true);
     check(pattern.name == "dayPatternCost" && pattern.label == "Day pattern[OFF,Location A]" &&
-                  pattern.levelFlippable && !pattern.reward,
+                  pattern.level_flippable && !pattern.reward,
           "a scoped DayPatternCost keeps its label and stays flippable");
-    pattern.setLevel(optimaru::Level::Hard);
+    pattern.set_level(optimaru::Level::Hard);
     check(pattern.level == optimaru::Level::Hard, "the wrapper's own level is what setLevel moves");
 }
 
@@ -398,8 +398,8 @@ void verifyLabels() {
     calc.emplace<DayPatternCost>(1.0, "WORK,WORK");
     calc.emplace<DayPatternCost>(1.0, "OFF,OFF");
     score(calc, s);
-    const auto totals = calc.constraintTotals();
-    const auto costs = calc.constraintCosts();
+    const auto totals = calc.constraint_totals();
+    const auto costs = calc.constraint_costs();
     check(totals.size() == 2 && totals[0].name == "dayPatternCost" && totals[1].name == "dayPatternCost" &&
                   totals[0].label == "Day pattern[WORK,WORK]" && totals[1].label == "Day pattern[OFF,OFF]" &&
                   costs.size() == 2 && costs[1].label == "Day pattern[OFF,OFF]",
@@ -413,9 +413,9 @@ void verifyParallelFailureStopsWorkers() {
     std::printf("== (f) a failing parallel worker stops the others ==\n");
     EmployeeSchedule s = buildRoster(5);
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(30);
+    config.time_limit = std::chrono::seconds(30);
     config.parallelSolverCount = 4;
-    config.onNewBest = [](std::int64_t, const Score&) { throw std::runtime_error("boom"); };
+    config.on_new_best = [](std::int64_t, const Score&) { throw std::runtime_error("boom"); };
     const auto started = std::chrono::steady_clock::now();
     bool raised = false;
     try {
@@ -434,11 +434,11 @@ void verifyThreadStartFailureStopsWorkers() {
     std::printf("== (g) a worker thread that cannot start ==\n");
     EmployeeSchedule s = buildRoster(5);
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(30);
+    config.time_limit = std::chrono::seconds(30);
     config.parallelSolverCount = 4;
     // std::thread throws std::system_error when the system has no thread to
     // give; here worker 1's creation fails through the engine's test seam.
-    optimaru::workerThreadStartHook = [](int index) {
+    optimaru::worker_thread_start_hook = [](int index) {
         if (index == 1) {
             throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again),
                                     "injected worker thread creation failure");
@@ -451,7 +451,7 @@ void verifyThreadStartFailureStopsWorkers() {
     } catch (const std::system_error& error) {
         raised = std::string(error.what()).find("injected") != std::string::npos;
     }
-    optimaru::workerThreadStartHook = nullptr;
+    optimaru::worker_thread_start_hook = nullptr;
     const double seconds =
             std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
     check(raised && seconds < 10.0,
@@ -464,12 +464,12 @@ void verifyThreadStartFailureStopsWorkers() {
 // ---------------------------------------------------------------------------
 // The bindings build every pick as its own component (the factory), so a
 // repeat is simply a second component of the same type, and the knobs are
-// re-stated on it (applyKnobs: setWeight / setExponent / setOffset / setClip).
+// re-stated on it (apply_knobs: set_weight / set_exponent / set_offset / set_clip).
 template <typename C, typename... Args>
 std::unique_ptr<C> shaped(double offset, bool clip, Args&&... args) {
     auto component = std::make_unique<C>(std::forward<Args>(args)...);
-    component->setOffset(offset);
-    component->setClip(clip);
+    component->set_offset(offset);
+    component->set_clip(clip);
     return component;
 }
 
@@ -506,11 +506,11 @@ void addRepeatedShifted(DecomposedCalculator& calc) {
     // violation): the hard copies are thresholds, the literal ones soft.
     calc.add(shaped<RequiredSkillCost>(1.0, true, 2.0));             // delta-grouped hard, threshold
     auto literalSkill = shaped<RequiredSkillCost>(1.0, false, 2.0);  // ... and a soft literal copy
-    literalSkill->setLevel(optimaru::Level::Soft);
+    literalSkill->set_level(optimaru::Level::Soft);
     calc.add(std::move(literalSkill));
     calc.add(shaped<EmployeeUnavailabilityCost>(60.0, true));        // hard threshold
     auto squared = shaped<UndesiredDayCost>(120.0, true, 0.01);      // a repeat: (minutes - 120)^2
-    squared->setExponent(2.0);
+    squared->set_exponent(2.0);
     calc.add(std::move(squared));
     calc.add(shaped<UndesiredDayCost>(-30.0, false, 0.5));           // ... and a literal one
     calc.add(shaped<DesiredDayCost>(60.0, false));                   // a reward, literal
@@ -519,16 +519,16 @@ void addRepeatedShifted(DecomposedCalculator& calc) {
     calc.add(shaped<LocationImbalanceCost>(1.0, false, 1.0, "Location A", "", "ssd", 0, std::vector<int>{}));
     auto scoped = std::make_unique<ScopedUnit>(std::make_unique<MaxConsecutiveDaysCost>(1.0, 3),
                                                std::vector<int>{1, 3}, std::vector<int>{}, true, false);
-    scoped->setOffset(2.0);
-    scoped->setClip(false);
-    scoped->setLevel(optimaru::Level::Soft);  // a scoped literal copy, on soft
+    scoped->set_offset(2.0);
+    scoped->set_clip(false);
+    scoped->set_level(optimaru::Level::Soft);  // a scoped literal copy, on soft
     calc.add(std::move(scoped));
     // Repeats on another level than their default: a hard one soft, a soft one hard.
     auto demoted = shaped<EmployeeUnavailabilityCost>(30.0, false, 0.5);
-    demoted->setLevel(optimaru::Level::Soft);
+    demoted->set_level(optimaru::Level::Soft);
     calc.add(std::move(demoted));
     auto promoted = shaped<UndesiredDayCost>(240.0, true);
-    promoted->setLevel(optimaru::Level::Hard);
+    promoted->set_level(optimaru::Level::Hard);
     calc.add(std::move(promoted));
 }
 
@@ -539,14 +539,14 @@ void verifyRepeatsAndOffsets() {
         DecomposedCalculator calc;
         calc.emplace<UndesiredDayCost>();
         auto second = std::make_unique<UndesiredDayCost>(0.5);
-        second->setExponent(2.0);
+        second->set_exponent(2.0);
         calc.add(std::move(second));
         const Score result = score(calc, s);
         check(result.hard == 0 && result.soft == -(480.0 + 0.5 * 480.0 * 480.0),
               "undesired + 0.5 x undesired^2: -(480 + 115200) soft");
-        const auto entries = calc.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts &&
-                      entries[0].unitCosts == std::vector<double>{480.0, 0.0} && entries[1].weight == 0.5 &&
+        const auto entries = calc.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs &&
+                      entries[0].unit_costs == std::vector<double>{480.0, 0.0} && entries[1].weight == 0.5 &&
                       entries[1].exponent == 2.0 && entries[0].name == entries[1].name,
               "two instances, the same raw costs, each with its own knobs");
     }
@@ -568,12 +568,12 @@ void verifyRepeatsAndOffsets() {
               "a literal offset on a reward (raw [0, 0]): two employees rewarded 30 each");
         // A hard pick rounds per employee: 3 x (480 - 479.5) = 1.5 -> 2.
         auto hard = shaped<UndesiredDayCost>(479.5, true, 3.0);
-        hard->setLevel(optimaru::Level::Hard);
+        hard->set_level(optimaru::Level::Hard);
         check(soft(std::move(hard)).hard == -2, "hard threshold offset 479.5 at weight 3: llround(1.5) = 2");
         // The literal unavailability pick on soft charges both employees,
         // 3 x (0 - 0.5) = -1.5 each, not rounded: +3 soft.
         auto literal = shaped<EmployeeUnavailabilityCost>(0.5, false, 3.0);
-        literal->setLevel(optimaru::Level::Soft);
+        literal->set_level(optimaru::Level::Soft);
         const Score literalScore = soft(std::move(literal));
         check(literalScore.hard == 0 && literalScore.soft == 3.0,
               "soft literal offset 0.5 at weight 3 on unavailability: 2 x 1.5 = +3 soft");
@@ -581,11 +581,11 @@ void verifyRepeatsAndOffsets() {
         DecomposedCalculator scopedCalc;
         auto scoped = std::make_unique<ScopedUnit>(std::make_unique<UndesiredDayCost>(), std::vector<int>{1, 1, 7},
                                                    std::vector<int>{}, true, false);
-        scoped->setOffset(100.0);
-        scoped->setClip(false);
+        scoped->set_offset(100.0);
+        scoped->set_clip(false);
         scopedCalc.add(std::move(scoped));
         const Score scopedScore = score(scopedCalc, s);
-        const auto scopedEntries = scopedCalc.constraintCosts();
+        const auto scopedEntries = scopedCalc.constraint_costs();
         check(scopedScore.soft == 100.0 && scopedEntries.size() == 1 && scopedEntries[0].scoped &&
                       scopedEntries[0].units == std::vector<int>{1},
               "a worker-scoped literal offset charges its in-range employee only (units {1})");
@@ -619,18 +619,18 @@ void verifyRepeatsAndOffsets() {
                    "hard score (hard 0 must mean no violation)";
         };
         auto clipFirst = std::make_unique<EmployeeUnavailabilityCost>(3.0);
-        clipFirst->setClip(false);
-        clipFirst->setOffset(-0.5);
+        clipFirst->set_clip(false);
+        clipFirst->set_offset(-0.5);
         check(resetRefusal(shaped<EmployeeUnavailabilityCost>(0.5, false, 3.0)) ==
                               refusal("employeeUnavailabilityCost") &&
                       resetRefusal(std::move(clipFirst)) == refusal("employeeUnavailabilityCost"),
               "unavailability literal offset +-0.5 on hard: refused at reset");
         auto promoted = shaped<UndesiredDayCost>(100.0, false);
-        promoted->setLevel(optimaru::Level::Hard);
+        promoted->set_level(optimaru::Level::Hard);
         auto scoped = std::make_unique<ScopedUnit>(std::make_unique<MaxConsecutiveDaysCost>(1.0, 3),
                                                    std::vector<int>{1}, std::vector<int>{}, true, false);
-        scoped->setOffset(2.0);
-        scoped->setClip(false);
+        scoped->set_offset(2.0);
+        scoped->set_clip(false);
         check(resetRefusal(std::move(promoted)) == refusal("undesiredDayCost") &&
                       resetRefusal(std::move(scoped)) == refusal("maxConsecutiveDaysCost"),
               "a soft literal offset moved to hard, and a scoped hard one: refused at reset");
@@ -650,7 +650,7 @@ void verifyRepeatsAndOffsets() {
                   "a literal hard repeat next to the default: refused at reset");
         }
         auto softLiteral = shaped<EmployeeUnavailabilityCost>(0.5, false);
-        softLiteral->setLevel(optimaru::Level::Soft);
+        softLiteral->set_level(optimaru::Level::Soft);
         check(resetRefusal(shaped<EmployeeUnavailabilityCost>(0.5, true)).empty() &&
                       resetRefusal(shaped<EmployeeUnavailabilityCost>(0.0, false)).empty() &&
                       resetRefusal(std::move(softLiteral)).empty(),
@@ -665,7 +665,7 @@ void verifyRepeatsAndOffsets() {
         ScoreCalculator::prepare(s);
         DecomposedCalculator calc;
         addRepeatedShifted(calc);
-        optimaru::ScoreDirector<EmployeeSchedule> director(s, calc);
+        optimaru::Editor<EmployeeSchedule> editor(s, calc);
         const int employees = static_cast<int>(s.employees.size());
         const int shifts = static_cast<int>(s.shifts.size());
         int mismatches = 0;
@@ -675,17 +675,17 @@ void verifyRepeatsAndOffsets() {
             if (rng() % 4 == 0) {
                 const int other = static_cast<int>(rng() % shifts);
                 const int a = s.shifts[shift].employeeIndex, b = s.shifts[other].employeeIndex;
-                director.changeVariable(shift, b);
-                director.changeVariable(other, a);
+                editor.assign(shift, b);
+                editor.assign(other, a);
             } else {
-                director.changeVariable(shift, static_cast<int>(rng() % (employees + 1)) - 1);
+                editor.assign(shift, static_cast<int>(rng() % (employees + 1)) - 1);
             }
-            const Score incremental = director.calculateScore();
+            const Score incremental = editor.score();
             EmployeeSchedule shadow = s;
             DecomposedCalculator fresh;
             addRepeatedShifted(fresh);
             const Score full = score(fresh, shadow);
-            if (!optimaru::scoresAgree(incremental, full) && ++mismatches <= 3)
+            if (!optimaru::scores_agree(incremental, full) && ++mismatches <= 3)
                 std::printf("    step %d: incremental %s full %s\n", step, str(incremental).c_str(),
                             str(full).c_str());
         }
@@ -695,16 +695,16 @@ void verifyRepeatsAndOffsets() {
     {
         EmployeeSchedule s = buildRoster(17);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 5;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 5;
+        config.score_checks = optimaru::ScoreChecks::Full;
         DecomposedCalculator calc;
         addRepeatedShifted(calc);
         bool corrupted = false;
         try {
             Solver solver(config);
             solver.solve(s, calc);
-        } catch (const optimaru::ScoreCorruptionError& e) {
+        } catch (const optimaru::ScoreMismatchError& e) {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
         }

@@ -1,9 +1,9 @@
 # knapsack (Python)
 
 The pybind11 package of the knapsack use case (`../cpp`). Chooses the items to
-carry — `Item.selected` is the only planning variable (1 = selected, 0 = not).
+carry — `Item.selected` is the only decision variable (1 = selected, 0 = not).
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
 
 - hard = -(weight over capacity + resource overflow + unselected mandatory entries
   + selected forbidden entries + selection-group shortfall/excess + unmet item

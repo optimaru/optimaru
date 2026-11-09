@@ -37,27 +37,27 @@ constexpr bool kTrackWorkload = weightOf<WorkloadImbalanceCost>() != 0;
 
 }  // namespace
 
-void AssemblyLineBalancingIncrementalScoreCalculator::resetWorkingSolution(
-    AssemblyLineBalancingProblem &workingSolution)
+void AssemblyLineBalancingIncrementalScoreCalculator::rebuild(
+    AssemblyLineBalancingProblem &solution)
 {
-    if (!workingSolution.prepared)
+    if (!solution.prepared)
     {
         throw std::logic_error("alb incremental calculator requires "
                                "ScoreCalculator::prepare(problem) first");
     }
-    problem_ = &workingSolution;
-    const int n = workingSolution.taskCount();
+    problem_ = &solution;
+    const int n = solution.taskCount();
     station_.assign(n, -1);
-    load_.assign(workingSolution.stationCount, 0);
-    count_.assign(workingSolution.stationCount, 0);
-    groupTally_.assign(workingSolution.groupMembers.size(), {});
-    groupDistinct_.assign(workingSolution.groupMembers.size(), 0);
+    load_.assign(solution.stationCount, 0);
+    count_.assign(solution.stationCount, 0);
+    groupTally_.assign(solution.groupMembers.size(), {});
+    groupDistinct_.assign(solution.groupMembers.size(), 0);
     usedLoads_.clear();
     overCapacity_ = reversedArcs_ = beyondMaxStations_ = outsideBounds_ = 0;
     missedFixed_ = forbiddenHits_ = groupExtra_ = pairsTogether_ = usedStations_ = 0;
     for (int t = 0; t < n; ++t)
     {
-        const int station = workingSolution.tasks[t].station;
+        const int station = solution.tasks[t].station;
         if (station >= 0)
             insert(t, station);
     }
@@ -214,14 +214,14 @@ void AssemblyLineBalancingIncrementalScoreCalculator::retract(int task, int stat
     station_[task] = -1;
 }
 
-void AssemblyLineBalancingIncrementalScoreCalculator::beforeVariableChanged(int taskIndex)
+void AssemblyLineBalancingIncrementalScoreCalculator::before_assign(int taskIndex)
 {
     const int old = station_[taskIndex];
     if (old >= 0)
         retract(taskIndex, old);  // unassigned: nothing to retract
 }
 
-void AssemblyLineBalancingIncrementalScoreCalculator::afterVariableChanged(int taskIndex)
+void AssemblyLineBalancingIncrementalScoreCalculator::after_assign(int taskIndex)
 {
     const int now = problem_->tasks[taskIndex].station;  // the new value
     if (now >= 0)
@@ -263,7 +263,7 @@ RawCosts AssemblyLineBalancingIncrementalScoreCalculator::rawCosts() const
     return raw;
 }
 
-Score AssemblyLineBalancingIncrementalScoreCalculator::calculateScore()
+Score AssemblyLineBalancingIncrementalScoreCalculator::score()
 {
     std::int64_t workload = 0;
     if (kTrackWorkload && !usedLoads_.empty())

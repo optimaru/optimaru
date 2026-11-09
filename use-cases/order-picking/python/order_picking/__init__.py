@@ -22,7 +22,7 @@ Quick start::
 
     import order_picking as op
 
-    solution = op.build_demo_data()          # the Java demo dataset
+    solution = op.build_demo_data()          # the demo warehouse
     solution = op.solve(solution, time_limit_seconds=5.0, random_seed=0)
     print(solution.score, solution.routes())
 

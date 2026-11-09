@@ -16,7 +16,7 @@ namespace es {
 // (the min may be 0). Global because it is a min-max statistic across
 // employees, not a per-employee sum. cost() recomputes each week's min/max
 // from the maintained per-(employee, week) minute totals (cost proportional to
-// employees x weeks); onUnitChanged re-tallies only the changed employee's row.
+// employees x weeks); on_unit_changed re-tallies only the changed employee's row.
 struct WeeklyMinutesGapCost final : EsGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
@@ -25,8 +25,8 @@ struct WeeklyMinutesGapCost final : EsGlobalConstraint {
         : EsGlobalConstraint("weeklyMinutesGapCost", weight, kDefaultLevel),
           tolerance_(toleranceMinutes) {}
     void reset(const EmployeeSchedule& s,
-               const std::vector<std::vector<int>>& membersPerUnit) override {
-        units_ = static_cast<int>(membersPerUnit.size());
+               const std::vector<std::vector<int>>& members_per_unit) override {
+        units_ = static_cast<int>(members_per_unit.size());
         weeks_ = 0;
         shiftWeek_.resize(s.shifts.size());
         shiftDur_.resize(s.shifts.size());
@@ -36,9 +36,9 @@ struct WeeklyMinutesGapCost final : EsGlobalConstraint {
             weeks_ = std::max(weeks_, shiftWeek_[i] + 1);
         }
         weekMinutes_.assign(static_cast<std::size_t>(units_) * weeks_, 0);
-        for (int u = 0; u < units_; ++u) recomputeUnit(u, membersPerUnit[u]);
+        for (int u = 0; u < units_; ++u) recomputeUnit(u, members_per_unit[u]);
     }
-    void onUnitChanged(const EmployeeSchedule&, int unit,
+    void on_unit_changed(const EmployeeSchedule&, int unit,
                        const std::vector<int>& members) override {
         recomputeUnit(unit, members);
     }

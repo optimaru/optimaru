@@ -1,11 +1,11 @@
 """Type stubs for `max_cut._core` — the max-cut C++ solver.
 
 The problem is the planning solution: each vertex's side (0 or 1; -1 =
-unassigned, in no side) is the single BASIC planning variable, read and
+unassigned, in no side) is the single assignment-shape planning variable, read and
 written with `assignment()` / `set_assignment()`. A vertex with a fixed side
 is pinned: the search never moves it.
 
-Score (HardSoftScore, lexicographic), at the default weights: hard =
+Score (hard/soft, lexicographic), at the default weights: hard =
 -(fixed vertices off their side + split same-side pairs + different-side pairs
 left together + side-size shortfall/excess), soft = +(cut weight), a reward
 (partition_imbalance_cost is an opt-in objective, weight 0). The weights are
@@ -92,7 +92,7 @@ class MaxCutProblem:
         """Bulk write of the planning variable (one entry per vertex, each -1, 0 or 1)."""
 
 def calculate_score(problem: MaxCutProblem) -> Score:
-    """Full recompute of the HardSoftScore at the default constraints (also stores
+    """Full recompute of the score at the default constraints (also stores
     problem.score and sets problem.scored). Raises ValueError on invalid facts. An
     unassigned vertex (-1) is in no side: it adds nothing to the cut, the sizes or
     the pair costs, except that a same-side pair whose FIRST vertex is assigned and
@@ -133,7 +133,7 @@ class SolverConfig:
     """A swap move exchanges a side-0 and a side-1 vertex (0.2 by default; 1 in
     exact-size mode)."""
     descent_weight: float
-    """BASIC best-improvement descent strategy weight. 0 = off (off in exact-size mode)."""
+    """Assignment-shape best-improvement descent strategy weight. 0 = off (off in exact-size mode)."""
     best_score_limit: tuple[int, float]
     """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
     the first feasible solution."""

@@ -24,22 +24,22 @@ constexpr auto kDistanceWeight
 
 }  // namespace
 
-void FacilityLocationIncrementalScoreCalculator::resetWorkingSolution(
-    FacilityLocationProblem &workingSolution)
+void FacilityLocationIncrementalScoreCalculator::rebuild(
+    FacilityLocationProblem &solution)
 {
-    ScoreCalculator::prepare(workingSolution);  // distance matrix
-    problem_ = &workingSolution;
+    ScoreCalculator::prepare(solution);  // distance matrix
+    problem_ = &solution;
 
-    usedDemand_.assign(workingSolution.facilities.size(), 0);
-    consumerCnt_.assign(workingSolution.facilities.size(), 0);
+    usedDemand_.assign(solution.facilities.size(), 0);
+    consumerCnt_.assign(solution.facilities.size(), 0);
     overCapacity_ = 0;
     usedSetupCost_ = 0;
     distance_ = 0;
 
-    assign_.assign(workingSolution.consumers.size(), -1);
-    for (int c = 0; c < workingSolution.consumerCount(); ++c)
+    assign_.assign(solution.consumers.size(), -1);
+    for (int c = 0; c < solution.consumerCount(); ++c)
     {
-        const int facility = workingSolution.consumers[c].facility;
+        const int facility = solution.consumers[c].facility;
         assign_[c] = facility;
         if (facility >= 0)
             insert(c, facility);
@@ -84,7 +84,7 @@ void FacilityLocationIncrementalScoreCalculator::retract(int consumerIndex,
     distance_ -= problem_->distanceOf(consumerIndex, facilityIndex);
 }
 
-void FacilityLocationIncrementalScoreCalculator::beforeVariableChanged(
+void FacilityLocationIncrementalScoreCalculator::before_assign(
     int consumerIndex)
 {
     const int old = assign_[consumerIndex];
@@ -93,7 +93,7 @@ void FacilityLocationIncrementalScoreCalculator::beforeVariableChanged(
     assign_[consumerIndex] = -1;
 }
 
-void FacilityLocationIncrementalScoreCalculator::afterVariableChanged(
+void FacilityLocationIncrementalScoreCalculator::after_assign(
     int consumerIndex)
 {
     const int now
@@ -103,7 +103,7 @@ void FacilityLocationIncrementalScoreCalculator::afterVariableChanged(
         insert(consumerIndex, now);  // now unassigned: nothing to insert
 }
 
-Score FacilityLocationIncrementalScoreCalculator::calculateScore()
+Score FacilityLocationIncrementalScoreCalculator::score()
 {
     Score score;
     score.hard = -kCapacityWeight * overCapacity_;

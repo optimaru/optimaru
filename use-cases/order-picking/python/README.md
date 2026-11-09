@@ -9,7 +9,7 @@ Pick order items onto trolleys in a warehouse (5 shelf columns A-E x 3 rows, lef
 
 - **planning entity**: `Trolley` — `pick_task_indices` is the `@PlanningListVariable`
   (the list of `PickTask` indices the trolley picks, in visiting order).
-- **shadow variables**: `PickTask.trolley_index / previous_pick_task / next_pick_task`
+- **derived values**: `PickTask.trolley_index / previous_pick_task / next_pick_task`
   (Java's `@InverseRelationShadowVariable` / `@PreviousElementShadowVariable` /
   `@NextElementShadowVariable`) — derived from the lists and kept current by
   `calculate_score` / `solve`.
@@ -23,7 +23,7 @@ Pick order items onto trolleys in a warehouse (5 shelf columns A-E x 3 rows, lef
 | `distance_from_last_pick_task_to_path_origin_cost` | `DistanceFromLastPickTaskToPathOriginCost` | soft | 1 | distance from the last pick back to the start |
 | `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders on the trolley (summed: the trolleys an order spans, countDistinct); an unsplit order still counts 1 |
 
-Score mapping: Java `HardSoftScore`(int) → engine `HardSoftScore(int64 hard, double soft)`
+Score mapping: Java `Score`(int) → engine `Score(int64 hard, double soft)`
 1:1 (hard = -bucket shortfall, soft = -(travel distance + 1000 x (order, trolley) pairs)). No level folding:
 the domain has no medium level, so `level="medium"` raises `ValueError` (`level="hard"` / `"soft"`
 flip any constraint).
@@ -59,7 +59,7 @@ uv run pytest -q
 ```python
 import order_picking as op
 
-solution = op.build_demo_data()   # Java DemoDataGenerator dataset (bit-identical Random(37) replay)
+solution = op.build_demo_data()   # the demo warehouse (deterministic, seed 37)
 op.solve(solution, time_limit_seconds=5.0, random_seed=0)
 print(solution.score)             # e.g. 0hard/-8652soft
 print(solution.routes())          # {trolley id: [pick task id, ...]}
@@ -74,5 +74,5 @@ response = solve_request(OrderPickingRequest.model_validate(request_dict))
 print(response.feasible, response.distance_by_trolley)
 ```
 
-`SolverConfig` adjusts the engine knobs (time budget, LIST move weights, ALNS, nearby, FULL_ASSERT,
+`SolverConfig` adjusts the engine knobs (time budget, sequence move weights, ALNS, nearby, ScoreChecks::Full,
 `parallel_solver_count` multistart, ...) — see `_core.pyi`.

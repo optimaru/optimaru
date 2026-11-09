@@ -11,10 +11,10 @@ namespace qap
 
 // The quadratic-assignment cost function as one monolithic full recompute —
 // the reference the incremental calculator is checked against (in the tests
-// and under FULL_ASSERT), and the score the default assembly of
+// and under ScoreChecks::Full), and the score the default assembly of
 // qap/constraints.hpp reproduces bit-for-bit.
 //
-// Constraints (HardSoftScore), at the components' kDefaultWeight (all 1):
+// Constraints (Score), at the components' kDefaultWeight (all 1):
 //   hard 1. pinnedAssignmentsCost      fixed locations not holding their
 //                                      facility (an empty one included)
 //   hard 2. forbiddenAssignmentsCost   facilities standing at a location a
@@ -40,7 +40,7 @@ public:
     };
 
     // Full recompute at the default weights; also stores problem.score.
-    static Score calculateScore(QuadraticAssignmentProblem &problem);
+    static Score score(QuadraticAssignmentProblem &problem);
 
     // The raw totals the score is made of (prepares the problem).
     static RawCosts rawCosts(QuadraticAssignmentProblem &problem);

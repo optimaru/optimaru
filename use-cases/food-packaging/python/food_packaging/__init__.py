@@ -2,8 +2,8 @@
 
 A port of the `food-packaging` example model: assigns packaging jobs (Job) to
 production lines (Line) in order. The Java domain's Line.jobs
-(@PlanningListVariable, allowsUnassignedValues=true) maps 1:1 onto the engine's LIST
-variable, and "unassigned" is an extra unassigned pool list exposed to the engine.
+(@PlanningListVariable, allowsUnassignedValues=true) maps 1:1 onto the engine's sequence
+shape, and "unassigned" is an extra unassigned pool list exposed to the engine.
 Java's shadow variable chain is derived from list positions::
 
     startCleaning(first job)  = line.start          # zero-length cleaning window
@@ -20,7 +20,7 @@ Times are exchanged as "minutes" (int64) from a shared origin (the demo instance
 Monday 00:00 == minute 0; the pydantic mirror `food_packaging.models` converts between
 epoch minutes and `datetime.datetime`).
 
-Constraints (Java uses HardMediumSoftScore; the mapping onto engine HardSoftScore is
+Constraints (Java uses HardMediumSoftScore; the mapping onto engine Score is
 the domain's medium fold engine.soft = medium * 10^10 + soft, and the order is
 preserved exactly while |soft| < 10^10 and |medium| < 9*10^5):
   hard   1. max_end_time_cost                -1 per minute past max_end_time

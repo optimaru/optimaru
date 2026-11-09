@@ -10,11 +10,11 @@ namespace ks
 
 // The knapsack score, monolithic.
 //
-// calculateScore does a full recompute straight from the facts (it reads none
+// score does a full recompute straight from the facts (it reads none
 // of the derived indexes) — the reference the incremental calculator and the
-// plugin assembly are checked against, in the tests and under FULL_ASSERT.
+// plugin assembly are checked against, in the tests and under ScoreChecks::Full.
 //
-// Constraints (HardSoftScore), the default assembly of ks/constraints.hpp at
+// Constraints (Score), the default assembly of ks/constraints.hpp at
 // the components' kDefaultWeight (every one 1):
 //   hard 1. knapsackCapacityCost        max(0, selected weight - capacity)
 //   hard 2. resourceCapacityCost        sum over declared resources of
@@ -58,10 +58,10 @@ class ScoreCalculator
 {
 public:
     // Runs prepare(), then the full recompute; stores problem.score.
-    static Score calculateScore(KnapsackProblem &problem);
+    static Score score(KnapsackProblem &problem);
 
     // Runs prepare(), then the full recompute of every raw cost (what
-    // calculateScore weighs); leaves problem.score alone.
+    // score weighs); leaves problem.score alone.
     static RawCosts rawCosts(KnapsackProblem &problem);
 
     // Validates the facts and the selection and (re)builds the derived

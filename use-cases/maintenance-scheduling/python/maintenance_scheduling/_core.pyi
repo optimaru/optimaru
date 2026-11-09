@@ -4,7 +4,7 @@ The compiled module wraps the C++ domain in `use-cases/maintenance-scheduling/cp
 which imports the generic engine in `include/optimaru`.
 
 The Java quickstart's two planning variables (crew, startDate) are composite-encoded
-into one BASIC int variable per entity (Job)::
+into one assignment-shape int variable per entity (Job)::
 
     crew_date = start_date_index * crew_count + crew_index   # -1 == unassigned
 
@@ -17,7 +17,7 @@ reached by advancing duration days while skipping weekends
 Score convention: `hard` is the sum of constraint-violating days (0 == feasible), `soft` is
 the optimization objective. Both are maximized (less negative is better).
 
-Constraints (HardSoftScore; days are calendar days, like Java ChronoUnit.DAYS), at the
+Constraints (hard/soft; days are calendar days, like Java ChronoUnit.DAYS), at the
 default weights:
   hard 1. crew_conflict_cost          -overlapping days per overlapping job pair on the same crew
   hard 2. min_start_date_cost         -1 per day started before min_start_date
@@ -122,9 +122,8 @@ def plus_business_days(start_date: int, business_days: int) -> int:
     business_days while skipping weekends."""
 
 def generate_demo_data(size: str = "SMALL", from_date: int | None = None) -> MaintenanceSchedule:
-    """Java DemoDataGenerator instance (bit-identical java.util.Random(17)
-    reproduction). SMALL: 3 crews/8 weeks/14 jobs, LARGE: 5 crews/16 weeks/48 jobs.
-    from_date defaults to next Monday (as in the Java demo); for reproducible tests
+    """A demo instance (deterministic, seed 17). SMALL: 3 crews/8 weeks/14 jobs,
+    LARGE: 5 crews/16 weeks/48 jobs. from_date defaults to next Monday; for reproducible tests
     pass a fixed Monday epoch day."""
 
 class SolverConfig:

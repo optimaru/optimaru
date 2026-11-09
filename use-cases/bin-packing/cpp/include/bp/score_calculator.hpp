@@ -9,7 +9,7 @@ namespace bp
 {
 
 // The raw total of each default constraint (0 = no violation), before the
-// weights: what calculateScore and the monolithic incremental calculator
+// weights: what score and the monolithic incremental calculator
 // weigh by the components' kDefaultWeight. Each field is the sum of that
 // component's per-bin costs (usedBins: its single global cost).
 struct RawCosts
@@ -31,10 +31,10 @@ struct RawCosts
 
 // The bin-packing score, computed from scratch.
 //
-// calculateScore does a full recompute — the reference the incremental
-// calculator is checked against (in the tests and under FULL_ASSERT).
+// score does a full recompute — the reference the incremental
+// calculator is checked against (in the tests and under ScoreChecks::Full).
 //
-// Constraints (HardSoftScore), the default assembly of bp/constraints.hpp at
+// Constraints (Score), the default assembly of bp/constraints.hpp at
 // the components' kDefaultWeight (every one is 1):
 //   hard 1. binCapacityCost         -(load - capacity) per bin whose load
 //                                   exceeds the capacity
@@ -48,9 +48,9 @@ struct RawCosts
 class ScoreCalculator
 {
 public:
-    static Score calculateScore(BinPackingProblem &problem);
+    static Score score(BinPackingProblem &problem);
 
-    // The four raw totals calculateScore weighs (runs prepare first).
+    // The four raw totals score weighs (runs prepare first).
     static RawCosts rawCosts(BinPackingProblem &problem);
 
     // Validates the facts and builds the derived lookups (colour classes,
@@ -64,7 +64,7 @@ public:
     //   - an item weight <= 0 ("item weights must be positive"),
     //   - a conflict naming an unknown item or the same item twice,
     //   - a bin outside -1..itemCount()-1.
-    // Must run before scoring; calculateScore, rawCosts, the incremental
+    // Must run before scoring; score, rawCosts, the incremental
     // calculator's reset, Solver::solve and the bindings' calculate_score /
     // constraint_costs call it.
     static void prepare(BinPackingProblem &problem);

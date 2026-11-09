@@ -6,14 +6,14 @@
 
 #include "fcs/domain.hpp"
 #include "fcs/score_calculator.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace fcs
 {
 
 // The flight-crew-scheduling implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // Every constraint is a function of ONE employee's itinerary (plus two unary
 // terms), so a single variable change is O(delta): it only touches the old
@@ -27,20 +27,20 @@ namespace fcs
 //     the sorted list (O(n_e^2) worst case, n_e = that employee's assignment
 //     count — a handful in practice) and the running totals take the diff.
 //
-// beforeVariableChanged retracts the assignment's contribution while
-// `employee` still holds the OLD value; afterVariableChanged inserts the NEW
+// before_assign retracts the assignment's contribution while
+// `employee` still holds the OLD value; after_assign inserts the NEW
 // value. Unassigned assignments (employee == -1) contribute nothing, so the
 // construction heuristic can score partially initialized solutions. The
-// full-recompute reference is ScoreCalculator::calculateScore (checked in the
-// tests and under EnvironmentMode::FULL_ASSERT).
+// full-recompute reference is ScoreCalculator::score (checked in the
+// tests and under ScoreChecks::ScoreChecks::Full).
 class FlightCrewIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<FlightCrewSchedule>
+    : public optimaru::Objective<FlightCrewSchedule>
 {
 public:
-    void resetWorkingSolution(FlightCrewSchedule &workingSolution) override;
-    void beforeVariableChanged(int assignmentIndex) override;
-    void afterVariableChanged(int assignmentIndex) override;
-    Score calculateScore() override;
+    void rebuild(FlightCrewSchedule &solution) override;
+    void before_assign(int assignmentIndex) override;
+    void after_assign(int assignmentIndex) override;
+    Score score() override;
 
 private:
     FlightCrewSchedule *schedule_ = nullptr;
@@ -52,7 +52,7 @@ private:
     std::vector<ItineraryStats> stats_;
 
     // Running raw totals (all counted positive; the components' kDefaultWeight
-    // and the signs are applied in calculateScore).
+    // and the signs are applied in score).
     std::int64_t missingSkill_ = 0;
     std::int64_t unavailable_ = 0;
     std::int64_t conflictPairs_ = 0;

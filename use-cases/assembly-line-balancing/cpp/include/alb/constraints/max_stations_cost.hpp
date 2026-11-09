@@ -27,9 +27,9 @@ struct MaxStationsCost final : PerTaskConstraint
         : PerTaskConstraint("maxStationsCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const AssemblyLineBalancingProblem &problem) override
+    void on_reset(const AssemblyLineBalancingProblem &problem) override
     {
-        PerTaskConstraint::onReset(problem);
+        PerTaskConstraint::on_reset(problem);
         scoped_.clear();
         if (problem.maxStations)
         {
@@ -46,7 +46,7 @@ struct MaxStationsCost final : PerTaskConstraint
         const int beyond = station - *problem.maxStations + 1;
         return beyond > 0 ? static_cast<double>(beyond) : 0.0;
     }
-    const std::vector<int> *scopedUnits() const override { return &scoped_; }
+    const std::vector<int> *scoped_units() const override { return &scoped_; }
 
 private:
     std::vector<int> scoped_;

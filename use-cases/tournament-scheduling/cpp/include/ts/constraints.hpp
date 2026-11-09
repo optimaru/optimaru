@@ -26,7 +26,7 @@ namespace ts
 // ---------------------------------------------------------------------------
 // The full provider at the components' default weights and levels
 // (kDefaultWeight / kDefaultLevel). This assembly scores bit-for-bit like
-// ScoreCalculator::calculateScore and the monolithic incremental calculator —
+// ScoreCalculator::score and the monolithic incremental calculator —
 // both unfairness values go through the same
 // ScoreCalculator::unfairnessFromAggregates, and the medium level is folded
 // with the same kMediumFold (domain.hpp).

@@ -238,7 +238,7 @@ RawCosts ScoreCalculator::rawCosts(KnapsackProblem &problem)
     return raw;
 }
 
-Score ScoreCalculator::calculateScore(KnapsackProblem &problem)
+Score ScoreCalculator::score(KnapsackProblem &problem)
 {
     const RawCosts raw = rawCosts(problem);
     Score score;

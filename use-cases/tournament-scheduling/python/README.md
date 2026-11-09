@@ -46,9 +46,9 @@ class no longer shadows the `UnavailabilityPenalty` fact, which keeps its name.
 `n` is the number of items with load ≥ 1 (the Java original has no complement, so teams
 without assignments / pairs without head-to-heads are not counted).
 
-## Score mapping (HardMediumSoftBigDecimalScore → HardSoftScore)
+## Score mapping (HardMediumSoftBigDecimalScore → Score)
 
-The engine score is `HardSoftScore(hard int64, soft double)`, so Java's three levels are
+The engine score is `Score(hard int64, soft double)`, so Java's three levels are
 folded into two (the same as the `cpp/include/ts/domain.hpp` comments):
 
 ```
@@ -85,7 +85,7 @@ uv run pytest -q
 import tournament_scheduling as ts
 from tournament_scheduling.models import demo_data
 
-schedule = demo_data()  # reproduces Java DemoDataGenerator: 7 teams, 18 days x 4 slots, 12 unavailable days
+schedule = demo_data()  # the demo instance: 7 teams, 18 days x 4 slots, 12 unavailable days
 result = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score_hard, result.score_soft)  # 0, -1.54919 (feasible, 6 teams x 12 assignments)
 ```
@@ -100,7 +100,7 @@ objects. Pin an assignment with `TeamAssignmentModel.pinned=True`
 ```bash
 cd ../cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j4
-./build/ts_test    # hand-computed constraint cases + 3000 random moves incremental==full + FULL_ASSERT solve
+./build/ts_test    # hand-computed constraint cases + 3000 random moves incremental==full + ScoreChecks::Full solve
 ./build/ts_plugin_test  # default assembly == monolith, raw costs by hand, catalog, medium knobs
-./build/ts_demo 10 # reproduces the Java demo, 10 s solve, asserts feasible (0hard)
+./build/ts_demo 10 # the demo instance, 10 s solve, asserts feasible (0hard)
 ```

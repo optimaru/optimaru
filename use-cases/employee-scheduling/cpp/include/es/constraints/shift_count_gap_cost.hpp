@@ -18,18 +18,18 @@ struct ShiftCountGapCost final : EsGlobalConstraint {
         : EsGlobalConstraint("shiftCountGapCost", weight, kDefaultLevel),
           tolerance_(tolerance) {}
     void reset(const EmployeeSchedule& s,
-               const std::vector<std::vector<int>>& membersPerUnit) override {
-        counts_.assign(membersPerUnit.size(), 0);
+               const std::vector<std::vector<int>>& members_per_unit) override {
+        counts_.assign(members_per_unit.size(), 0);
         hist_.assign(s.shifts.size() + 2, 0);
-        for (std::size_t u = 0; u < membersPerUnit.size(); ++u) {
-            counts_[u] = static_cast<int>(membersPerUnit[u].size());
+        for (std::size_t u = 0; u < members_per_unit.size(); ++u) {
+            counts_[u] = static_cast<int>(members_per_unit[u].size());
             ++hist_[counts_[u]];
         }
         minC_ = 0;
         maxC_ = static_cast<int>(hist_.size()) - 1;
         tighten();
     }
-    void onUnitChanged(const EmployeeSchedule&, int unit,
+    void on_unit_changed(const EmployeeSchedule&, int unit,
                        const std::vector<int>& members) override {
         const int oldC = counts_[unit];
         const int newC = static_cast<int>(members.size());

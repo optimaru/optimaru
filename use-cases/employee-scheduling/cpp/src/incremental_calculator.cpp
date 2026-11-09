@@ -6,18 +6,18 @@
 
 namespace es {
 
-void EmployeeSchedulingIncrementalScoreCalculator::resetWorkingSolution(
-        EmployeeSchedule& workingSolution) {
-    ScoreCalculator::prepare(workingSolution);
-    sched_ = &workingSolution;
-    n_ = static_cast<int>(workingSolution.employees.size());
-    shiftCount_ = static_cast<int>(workingSolution.shifts.size());
+void EmployeeSchedulingIncrementalScoreCalculator::rebuild(
+        EmployeeSchedule& solution) {
+    ScoreCalculator::prepare(solution);
+    sched_ = &solution;
+    n_ = static_cast<int>(solution.employees.size());
+    shiftCount_ = static_cast<int>(solution.shifts.size());
 
     shiftTerms_.resize(static_cast<std::size_t>(n_) * shiftCount_);
     for (int e = 0; e < n_; ++e) {
-        const Employee& employee = workingSolution.employees[e];
+        const Employee& employee = solution.employees[e];
         for (int s = 0; s < shiftCount_; ++s) {
-            const Shift& shift = workingSolution.shifts[s];
+            const Shift& shift = solution.shifts[s];
             const std::size_t offset = employeeShiftOffset(e, s);
             shiftTerms_[offset] = {ScoreCalculator::shiftHardPenalty(employee, shift),
                                    ScoreCalculator::shiftSoftDelta(employee, shift)};
@@ -32,7 +32,7 @@ void EmployeeSchedulingIncrementalScoreCalculator::resetWorkingSolution(
         for (int a = 0; a < shiftCount_; ++a) {
             for (int b = a + 1; b < shiftCount_; ++b) {
                 const std::int64_t penalty = ScoreCalculator::pairHardPenalty(
-                        workingSolution.shifts[a], workingSolution.shifts[b]);
+                        solution.shifts[a], solution.shifts[b]);
                 pairPenalty_[pairOffset(a, b)] = penalty;
                 pairPenalty_[pairOffset(b, a)] = penalty;
             }
@@ -49,12 +49,12 @@ void EmployeeSchedulingIncrementalScoreCalculator::resetWorkingSolution(
     dayCount_ = 0;
     dayWindow_ = 0;
     byDay_.clear();
-    bucketPos_.assign(workingSolution.shifts.size(), -1);
+    bucketPos_.assign(solution.shifts.size(), -1);
     if (shiftCount_ > 0) {
-        int minDay = workingSolution.shifts[0].startDay;
+        int minDay = solution.shifts[0].startDay;
         int maxDay = minDay;
         Minutes maxDuration = 0;
-        for (const Shift& shift : workingSolution.shifts) {
+        for (const Shift& shift : solution.shifts) {
             minDay = std::min(minDay, shift.startDay);
             maxDay = std::max(maxDay, shift.startDay);
             maxDuration = std::max(maxDuration, shift.end - shift.start);
@@ -85,8 +85,8 @@ void EmployeeSchedulingIncrementalScoreCalculator::resetWorkingSolution(
         }
     }
 
-    assign_.assign(workingSolution.shifts.size(), -1);
-    shiftPosition_.assign(workingSolution.shifts.size(), -1);
+    assign_.assign(solution.shifts.size(), -1);
+    shiftPosition_.assign(solution.shifts.size(), -1);
     empShifts_.assign(n_, {});
     empPenalty_.assign(n_, 0);
     empSoft_.assign(n_, 0);
@@ -109,8 +109,8 @@ void EmployeeSchedulingIncrementalScoreCalculator::resetWorkingSolution(
     penalized_.clear();
     penalizedPos_.assign(n_, -1);
 
-    for (int i = 0; i < static_cast<int>(workingSolution.shifts.size()); ++i) {
-        int e = workingSolution.shifts[i].employeeIndex;
+    for (int i = 0; i < static_cast<int>(solution.shifts.size()); ++i) {
+        int e = solution.shifts[i].employeeIndex;
         assign_[i] = e;
         if (e >= 0) {
             shiftPosition_[i] = static_cast<int>(empShifts_[e].size());
@@ -125,11 +125,11 @@ void EmployeeSchedulingIncrementalScoreCalculator::resetWorkingSolution(
         long c = static_cast<long>(empShifts_[e].size());
         balSum_ += c;
         balSumSq_ += c * c;
-        setPenalized(e, empPenalty_[e] > 0);
+        set_penalized(e, empPenalty_[e] > 0);
     }
 }
 
-void EmployeeSchedulingIncrementalScoreCalculator::setPenalized(int e, bool on) {
+void EmployeeSchedulingIncrementalScoreCalculator::set_penalized(int e, bool on) {
     int pos = penalizedPos_[e];
     if (on && pos == -1) {
         penalizedPos_[e] = static_cast<int>(penalized_.size());
@@ -212,7 +212,7 @@ std::int64_t EmployeeSchedulingIncrementalScoreCalculator::pairPenaltyOf(int a, 
     return ScoreCalculator::pairHardPenalty(sched_->shifts[a], sched_->shifts[b]);
 }
 
-void EmployeeSchedulingIncrementalScoreCalculator::beforeVariableChanged(int shiftIndex) {
+void EmployeeSchedulingIncrementalScoreCalculator::before_assign(int shiftIndex) {
     int e = assign_[shiftIndex];
     if (e < 0) return;  // unassigned: nothing to retract
 
@@ -238,11 +238,11 @@ void EmployeeSchedulingIncrementalScoreCalculator::beforeVariableChanged(int shi
 
     // The hot list changes only when this employee crosses hard zero.
     const bool isPenalized = empPenalty_[e] > 0;
-    if (wasPenalized != isPenalized) setPenalized(e, isPenalized);
+    if (wasPenalized != isPenalized) set_penalized(e, isPenalized);
     assign_[shiftIndex] = -1;
 }
 
-void EmployeeSchedulingIncrementalScoreCalculator::afterVariableChanged(int shiftIndex) {
+void EmployeeSchedulingIncrementalScoreCalculator::after_assign(int shiftIndex) {
     int e = sched_->shifts[shiftIndex].employeeIndex;  // the new value
     assign_[shiftIndex] = e;
     if (e < 0) return;  // now unassigned: nothing to insert
@@ -263,10 +263,10 @@ void EmployeeSchedulingIncrementalScoreCalculator::afterVariableChanged(int shif
     if (dayCount_ > 0) bucketInsert(e, shiftIndex);
 
     const bool isPenalized = empPenalty_[e] > 0;
-    if (wasPenalized != isPenalized) setPenalized(e, isPenalized);
+    if (wasPenalized != isPenalized) set_penalized(e, isPenalized);
 }
 
-Score EmployeeSchedulingIncrementalScoreCalculator::calculateScore() {
+Score EmployeeSchedulingIncrementalScoreCalculator::score() {
     double unfairness;
     if (balSum_ == shiftCount_ && balSumSq_ >= 0
         && static_cast<std::size_t>(balSumSq_) < unfairnessBySumSq_.size()) {

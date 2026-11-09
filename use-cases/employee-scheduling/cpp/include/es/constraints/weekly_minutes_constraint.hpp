@@ -15,7 +15,7 @@ struct WeeklyMinutesConstraint : EsUnitConstraint {
         : EsUnitConstraint(std::move(name), weight, level),
           threshold_(static_cast<std::int64_t>(minutes)),
           weekAnchor_(weekAnchor) {}
-    void onReset(const EmployeeSchedule& s) override {
+    void on_reset(const EmployeeSchedule& s) override {
         const std::size_t n = s.shifts.size();
         week_.resize(n);
         duration_.resize(n);

@@ -436,7 +436,7 @@ def _raw():
 def test_score_reproduces_the_engine_score_exactly():
     """Python scoring must match the engine's hard/soft exactly.
 
-    The engine reports HardSoftScore with the medium level folded into soft; `score()`
+    The engine reports Score with the medium level folded into soft; `score()`
     folds the same way (the `medium_fold` of every entry). This assertion pins down, in
     this package, that `score()` reproduces the engine's applyRaw arithmetic (weights,
     shaping, per-unit hard rounding)."""
@@ -744,7 +744,7 @@ def test_offset_zero_reproduces_the_0_2_0_scores():
     ids=["repeat", "repeat-and-offsets"],
 )
 def test_full_assert_solves_with_repeats_and_offsets(picks):
-    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     schedule = build_schedule()
     config = ms.SolverConfig()
     config.full_assert = True

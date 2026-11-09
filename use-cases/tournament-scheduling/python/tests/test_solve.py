@@ -1,4 +1,4 @@
-"""Demo solve: the instance reproducing Java DemoDataGenerator reaches feasible
+"""Demo solve: the demo instance reaches feasible
 and pinned assignments are kept."""
 
 import tournament_scheduling as ts

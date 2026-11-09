@@ -128,7 +128,7 @@ def build_demo_data(
     orders_count: int = 8,
     random_seed: int = 37,
 ) -> OrderPickingSolution:
-    """The Java quickstart's DemoDataGenerator dataset (bit-exact replay)."""
+    """The demo warehouse (deterministic for a given random_seed)."""
 
 class SolverConfig:
     def __init__(self) -> None: ...

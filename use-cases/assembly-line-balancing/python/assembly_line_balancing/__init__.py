@@ -1,10 +1,10 @@
 """Assembly-line balancing — Python wrapper of the C++ solver on the optimaru engine.
 
 Simple assembly-line balancing (SALBP-1) with zoning and station domains: one
-BASIC planning variable (`Task.station`, a station index, -1 = unassigned)
+assignment-shape planning variable (`Task.station`, a station index, -1 = unassigned)
 puts every task on one station of the line.
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
   hard = -(capacity overflow + reversed precedences + stations beyond max_stations
            + station-domain distance + missed fixed stations + forbidden stations hit
            + extra stations of same-station groups + different-station pairs together)

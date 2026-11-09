@@ -36,10 +36,10 @@ inline Score weightedScore(std::int64_t overload, std::int64_t lateness, std::in
 
 }  // namespace
 
-void VehicleRoutingIncrementalScoreCalculator::resetWorkingSolution(
-    VehicleRoutePlan &workingSolution)
+void VehicleRoutingIncrementalScoreCalculator::rebuild(
+    VehicleRoutePlan &solution)
 {
-    plan_ = &workingSolution;
+    plan_ = &solution;
     vehicleCount_ = static_cast<int>(plan_->vehicles.size());
 
     terms_.assign(static_cast<std::size_t>(vehicleCount_), RouteTerms{});
@@ -72,7 +72,7 @@ void VehicleRoutingIncrementalScoreCalculator::resetWorkingSolution(
     }
 }
 
-void VehicleRoutingIncrementalScoreCalculator::beforeListChanged(int listIndex)
+void VehicleRoutingIncrementalScoreCalculator::before_list_edit(int listIndex)
 {
     if (listIndex >= vehicleCount_)
     {
@@ -86,7 +86,7 @@ void VehicleRoutingIncrementalScoreCalculator::beforeListChanged(int listIndex)
     drivingTotal_ -= t.driving;
 }
 
-void VehicleRoutingIncrementalScoreCalculator::afterListChanged(int listIndex)
+void VehicleRoutingIncrementalScoreCalculator::after_list_edit(int listIndex)
 {
     // The cache only serves previews; without them it would be pure overhead.
     if (noWaiting_)
@@ -187,15 +187,15 @@ std::int64_t VehicleRoutingIncrementalScoreCalculator::unassignedMinutes() const
     return total;
 }
 
-Score VehicleRoutingIncrementalScoreCalculator::currentScore() const
+Score VehicleRoutingIncrementalScoreCalculator::current_score() const
 {
     return weightedScore(overloadTotal_, latenessTotal_, unassignedTotal_, drivingTotal_);
 }
 
-optimaru::HardSoftScore
-VehicleRoutingIncrementalScoreCalculator::calculateScore()
+optimaru::Score
+VehicleRoutingIncrementalScoreCalculator::score()
 {
-    return toEngineScore(currentScore());
+    return toEngineScore(current_score());
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +275,7 @@ Seconds VehicleRoutingIncrementalScoreCalculator::minEndOf(const ListCache &cach
     return result;
 }
 
-void VehicleRoutingIncrementalScoreCalculator::Run::insertAt(int index, const Piece &piece)
+void VehicleRoutingIncrementalScoreCalculator::Run::insert_at(int index, const Piece &piece)
 {
     // `index` counts elements across the run; split the piece it falls in.
     assert(count + 2 <= kCapacity);  // a split adds two pieces
@@ -312,7 +312,7 @@ void VehicleRoutingIncrementalScoreCalculator::Run::insertAt(int index, const Pi
 // A plan with waiting has no prefix-sum caches: write each run out as a visit
 // sequence and walk it like evaluateRoute does. Always exact, never declines.
 bool VehicleRoutingIncrementalScoreCalculator::previewRunsByWalk(
-    const Run *runs, int runCount, optimaru::HardSoftScore &out) const
+    const Run *runs, int runCount, optimaru::Score &out) const
 {
     std::int64_t overload = overloadTotal_;
     std::int64_t lateness = latenessTotal_;
@@ -357,7 +357,7 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRunsByWalk(
 
 // Score the solution with each run's list replaced by the run's pieces.
 bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run *runs, int runCount,
-                                                           optimaru::HardSoftScore &out) const
+                                                           optimaru::Score &out) const
 {
     if (!noWaiting_)
         return previewRunsByWalk(runs, runCount, out);
@@ -435,12 +435,12 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run *runs, int 
     return true;
 }
 
-bool VehicleRoutingIncrementalScoreCalculator::previewSegmentMove(
-    int fromList, int start, int len, int toList, int insertAt, optimaru::HardSoftScore &out)
+bool VehicleRoutingIncrementalScoreCalculator::preview_segment_move(
+    int fromList, int start, int len, int toList, int insert_at, optimaru::Score &out)
 {
     if (!previewsEnabled() || len <= 0)
         return false;
-    const int fromSize = listSize(fromList);
+    const int fromSize = list_size(fromList);
     const Piece segment{fromList, start, start + len, false};
     Run runs[2];
     runs[0].list = fromList;
@@ -448,18 +448,18 @@ bool VehicleRoutingIncrementalScoreCalculator::previewSegmentMove(
     runs[0].add({fromList, start + len, fromSize, false});
     if (fromList == toList)
     {
-        runs[0].insertAt(insertAt, segment);
+        runs[0].insert_at(insert_at, segment);
         return previewRuns(runs, 1, out);
     }
     runs[1].list = toList;
-    runs[1].add({toList, 0, insertAt, false});
+    runs[1].add({toList, 0, insert_at, false});
     runs[1].add(segment);
-    runs[1].add({toList, insertAt, listSize(toList), false});
+    runs[1].add({toList, insert_at, list_size(toList), false});
     return previewRuns(runs, 2, out);
 }
 
-bool VehicleRoutingIncrementalScoreCalculator::previewSwap(int l1, int p1, int l2, int p2,
-                                                           optimaru::HardSoftScore &out)
+bool VehicleRoutingIncrementalScoreCalculator::preview_swap(int l1, int p1, int l2, int p2,
+                                                           optimaru::Score &out)
 {
     if (!previewsEnabled())
         return false;
@@ -468,7 +468,7 @@ bool VehicleRoutingIncrementalScoreCalculator::previewSwap(int l1, int p1, int l
     {
         if (p1 == p2)
         {
-            out = calculateScore();
+            out = score();
             return true;
         }
         const int a = std::min(p1, p2), b = std::max(p1, p2);
@@ -477,22 +477,22 @@ bool VehicleRoutingIncrementalScoreCalculator::previewSwap(int l1, int p1, int l
         runs[0].add({l1, b, b + 1, false});
         runs[0].add({l1, a + 1, b, false});
         runs[0].add({l1, a, a + 1, false});
-        runs[0].add({l1, b + 1, listSize(l1), false});
+        runs[0].add({l1, b + 1, list_size(l1), false});
         return previewRuns(runs, 1, out);
     }
     runs[0].list = l1;
     runs[0].add({l1, 0, p1, false});
     runs[0].add({l2, p2, p2 + 1, false});
-    runs[0].add({l1, p1 + 1, listSize(l1), false});
+    runs[0].add({l1, p1 + 1, list_size(l1), false});
     runs[1].list = l2;
     runs[1].add({l2, 0, p2, false});
     runs[1].add({l1, p1, p1 + 1, false});
-    runs[1].add({l2, p2 + 1, listSize(l2), false});
+    runs[1].add({l2, p2 + 1, list_size(l2), false});
     return previewRuns(runs, 2, out);
 }
 
-bool VehicleRoutingIncrementalScoreCalculator::previewReverse(int list, int first, int last,
-                                                              optimaru::HardSoftScore &out)
+bool VehicleRoutingIncrementalScoreCalculator::preview_reverse(int list, int first, int last,
+                                                              optimaru::Score &out)
 {
     if (!previewsEnabled())
         return false;
@@ -500,28 +500,28 @@ bool VehicleRoutingIncrementalScoreCalculator::previewReverse(int list, int firs
     run.list = list;
     run.add({list, 0, first, false});
     run.add({list, first, last + 1, true});
-    run.add({list, last + 1, listSize(list), false});
+    run.add({list, last + 1, list_size(list), false});
     return previewRuns(&run, 1, out);
 }
 
-bool VehicleRoutingIncrementalScoreCalculator::previewTailSwap(int l1, int c1, int l2, int c2,
-                                                               optimaru::HardSoftScore &out)
+bool VehicleRoutingIncrementalScoreCalculator::preview_tail_swap(int l1, int c1, int l2, int c2,
+                                                               optimaru::Score &out)
 {
     if (!previewsEnabled())
         return false;
     Run runs[2];
     runs[0].list = l1;
     runs[0].add({l1, 0, c1, false});
-    runs[0].add({l2, c2, listSize(l2), false});
+    runs[0].add({l2, c2, list_size(l2), false});
     runs[1].list = l2;
     runs[1].add({l2, 0, c2, false});
-    runs[1].add({l1, c1, listSize(l1), false});
+    runs[1].add({l1, c1, list_size(l1), false});
     return previewRuns(runs, 2, out);
 }
 
-bool VehicleRoutingIncrementalScoreCalculator::previewExchange(int l1, int p1, int len1, int l2,
+bool VehicleRoutingIncrementalScoreCalculator::preview_exchange(int l1, int p1, int len1, int l2,
                                                                int p2, int len2,
-                                                               optimaru::HardSoftScore &out)
+                                                               optimaru::Score &out)
 {
     if (!previewsEnabled())
         return false;
@@ -529,18 +529,18 @@ bool VehicleRoutingIncrementalScoreCalculator::previewExchange(int l1, int p1, i
     runs[0].list = l1;
     runs[0].add({l1, 0, p1, false});
     runs[0].add({l2, p2, p2 + len2, false});
-    runs[0].add({l1, p1 + len1, listSize(l1), false});
+    runs[0].add({l1, p1 + len1, list_size(l1), false});
     runs[1].list = l2;
     runs[1].add({l2, 0, p2, false});
     runs[1].add({l1, p1, p1 + len1, false});
-    runs[1].add({l2, p2 + len2, listSize(l2), false});
+    runs[1].add({l2, p2 + len2, list_size(l2), false});
     return previewRuns(runs, 2, out);
 }
 
 // Walk the route with the element in: the waiting-plan path and the fallback
 // of the cached path when the candidate route may be late.
 bool VehicleRoutingIncrementalScoreCalculator::previewInsertByWalk(
-    int list, int pos, int element, optimaru::HardSoftScore &out) const
+    int list, int pos, int element, optimaru::Score &out) const
 {
     walkScratch_ = plan_->vehicles[static_cast<std::size_t>(list)].visitIndices;
     walkScratch_.insert(walkScratch_.begin() + pos, element);
@@ -552,8 +552,8 @@ bool VehicleRoutingIncrementalScoreCalculator::previewInsertByWalk(
     return true;
 }
 
-bool VehicleRoutingIncrementalScoreCalculator::previewInsert(int list, int pos, int element,
-                                                             optimaru::HardSoftScore &out)
+bool VehicleRoutingIncrementalScoreCalculator::preview_insert(int list, int pos, int element,
+                                                             optimaru::Score &out)
 {
     if (!previewsEnabled())
         return false;

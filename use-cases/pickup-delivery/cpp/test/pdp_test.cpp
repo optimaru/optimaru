@@ -99,7 +99,7 @@ void testCouplingConstraints()
     PdpRoutePlan legal = buildTinyInstance();
     legal.vehicles[0].nodeIndices = {0, 1, 2, 3};
     legal.rebuildUnassignedPool();
-    Score s = ScoreCalculator::calculateScore(legal);
+    Score s = ScoreCalculator::score(legal);
     check(s.hard == 0, "a properly ordered pair is feasible");
     check(s.medium == 0, "nothing unassigned when every stop is routed");
     check(s.soft < 0, "travel time is penalized on the soft level");
@@ -122,32 +122,32 @@ void testCouplingConstraints()
         check(back > 0, "the closing leg of the tiny instance is not free");
         check(-s.soft == open, "an open route charges no leg back home");
         legal.vehicles[0].returnToDepot = true;
-        const Score closed = ScoreCalculator::calculateScore(legal);
+        const Score closed = ScoreCalculator::score(legal);
         check(-closed.soft == open + back,
               "returnToDepot adds exactly the last-stop -> home leg");
         legal.vehicles[0].returnToDepot = false;
-        ScoreCalculator::calculateScore(legal);
+        ScoreCalculator::score(legal);
     }
 
     // Dropoff before pickup.
     PdpRoutePlan reversed = buildTinyInstance();
     reversed.vehicles[0].nodeIndices = {1, 0, 2, 3};
     reversed.rebuildUnassignedPool();
-    check(ScoreCalculator::calculateScore(reversed).hard == -penalty,
+    check(ScoreCalculator::score(reversed).hard == -penalty,
           "dropoff before pickup is penalized once");
 
     // Half-assigned: p1 routed, d1 left out.
     PdpRoutePlan half = buildTinyInstance();
     half.vehicles[0].nodeIndices = {0, 2, 3};
     half.rebuildUnassignedPool();
-    check(ScoreCalculator::calculateScore(half).hard == -penalty,
+    check(ScoreCalculator::score(half).hard == -penalty,
           "a half-routed request is penalized once");
 
     // Both stops unassigned: medium, not hard.
     PdpRoutePlan dropped = buildTinyInstance();
     dropped.vehicles[0].nodeIndices = {2, 3};
     dropped.rebuildUnassignedPool();
-    Score droppedScore = ScoreCalculator::calculateScore(dropped);
+    Score droppedScore = ScoreCalculator::score(dropped);
     check(droppedScore.hard == 0,
           "a fully dropped request is not hard-infeasible");
     check(droppedScore.medium == -10,
@@ -157,7 +157,7 @@ void testCouplingConstraints()
     PdpRoutePlan overloaded = buildTinyInstance(/*demand=*/6);
     overloaded.vehicles[0].nodeIndices = {0, 2, 1, 3};  // p1 p2 d1 d2
     overloaded.rebuildUnassignedPool();
-    check(ScoreCalculator::calculateScore(overloaded).hard == -2,
+    check(ScoreCalculator::score(overloaded).hard == -2,
           "the running-load peak is what breaks capacity (12 > 10)");
 
     // The same demand carried one request after the other fits fine — the
@@ -165,7 +165,7 @@ void testCouplingConstraints()
     PdpRoutePlan sequential = buildTinyInstance(/*demand=*/6);
     sequential.vehicles[0].nodeIndices = {0, 1, 2, 3};
     sequential.rebuildUnassignedPool();
-    check(ScoreCalculator::calculateScore(sequential).hard == 0,
+    check(ScoreCalculator::score(sequential).hard == 0,
           "the same demand is feasible when the requests do not overlap");
 
     // Split across vehicles.
@@ -174,7 +174,7 @@ void testCouplingConstraints()
     split.vehicles[0].nodeIndices = {0, 2, 3};
     split.vehicles[1].nodeIndices = {1};
     split.rebuildUnassignedPool();
-    check(ScoreCalculator::calculateScore(split).hard == -penalty,
+    check(ScoreCalculator::score(split).hard == -penalty,
           "a pair split across two vehicles is penalized once");
     std::printf("\n");
 }
@@ -186,57 +186,57 @@ void testIncrementalMatchesFullRecompute()
     plan.rebuildUnassignedPool();
 
     PdpIncrementalScoreCalculator calculator;
-    calculator.resetWorkingSolution(plan);
+    calculator.rebuild(plan);
 
-    using Descriptor = optimaru::SolutionDescriptor<PdpRoutePlan>;
+    using Descriptor = optimaru::SolutionTraits<PdpRoutePlan>;
     std::mt19937_64 rng(3);
     bool ok = true;
     for (int step = 0; step < 500 && ok; ++step)
     {
-        const int listCount = Descriptor::listCount(plan);
+        const int list_count = Descriptor::list_count(plan);
         const int from
-            = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
-        if (Descriptor::listSize(plan, from) == 0)
+            = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
+        if (Descriptor::list_size(plan, from) == 0)
             continue;
         const int position = static_cast<int>(
             rng()
-            % static_cast<std::uint64_t>(Descriptor::listSize(plan, from)));
+            % static_cast<std::uint64_t>(Descriptor::list_size(plan, from)));
         const int to
-            = static_cast<int>(rng() % static_cast<std::uint64_t>(listCount));
+            = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
 
-        calculator.beforeListChanged(from);
-        const int element = Descriptor::removeElement(plan, from, position);
-        calculator.afterListChanged(from);
+        calculator.before_list_edit(from);
+        const int element = Descriptor::remove_element(plan, from, position);
+        calculator.after_list_edit(from);
 
         // Score in the transient half-assigned state too: the engine does
         // exactly this between a remove and the matching insert.
-        if (!(calculator.currentScore()
-              == ScoreCalculator::calculateScore(plan)))
+        if (!(calculator.current_score()
+              == ScoreCalculator::score(plan)))
         {
             ok = false;
             std::printf("    step %d (mid-move): incremental %s != full %s\n",
                         step,
-                        calculator.currentScore().toString().c_str(),
-                        plan.score.toString().c_str());
+                        calculator.current_score().str().c_str(),
+                        plan.score.str().c_str());
             break;
         }
 
-        const int insertAt = static_cast<int>(
+        const int insert_at = static_cast<int>(
             rng()
-            % static_cast<std::uint64_t>(Descriptor::listSize(plan, to) + 1));
-        calculator.beforeListChanged(to);
-        Descriptor::insertElement(plan, to, insertAt, element);
-        calculator.afterListChanged(to);
+            % static_cast<std::uint64_t>(Descriptor::list_size(plan, to) + 1));
+        calculator.before_list_edit(to);
+        Descriptor::insert_element(plan, to, insert_at, element);
+        calculator.after_list_edit(to);
 
-        const Score incremental = calculator.currentScore();
-        const Score full = ScoreCalculator::calculateScore(plan);
+        const Score incremental = calculator.current_score();
+        const Score full = ScoreCalculator::score(plan);
         if (!(incremental == full))
         {
             ok = false;
             std::printf("    step %d: incremental %s != full %s\n",
                         step,
-                        incremental.toString().c_str(),
-                        full.toString().c_str());
+                        incremental.str().c_str(),
+                        full.str().c_str());
         }
     }
     check(ok, "incremental == full recompute over 500 random list moves");
@@ -249,8 +249,8 @@ void testSolveIntegrity()
     PdpRoutePlan plan = buildRandomInstance(40, 5, /*seed=*/5);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(5);
-    config.randomSeed = 5;
+    config.time_limit = std::chrono::seconds(5);
+    config.seed = 5;
     Solver(config).solve(plan);
 
     std::vector<int> seen(plan.nodes.size(), 0);
@@ -267,9 +267,9 @@ void testSolveIntegrity()
     check(conserved, "every stop appears exactly once (routes + pool)");
 
     const Score reported = plan.score;
-    check(reported == ScoreCalculator::calculateScore(plan),
+    check(reported == ScoreCalculator::score(plan),
           "reported score matches a full recompute");
-    check(plan.score.isFeasible(),
+    check(plan.score.feasible(),
           "the solution is feasible: every pair coupled, ordered and in "
           "capacity");
 
@@ -282,7 +282,7 @@ void testSolveIntegrity()
             ++routed;
     }
     std::printf("    40 requests / 5 vehicles in 5s: %s (%d/%d routed)\n",
-                plan.score.toString().c_str(),
+                plan.score.str().c_str(),
                 routed,
                 static_cast<int>(plan.deliveries.size()));
     std::printf("\n");
@@ -294,9 +294,9 @@ void testFullAssert()
     PdpRoutePlan plan = buildRandomInstance(15, 3, /*seed=*/9);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(3);
-    config.randomSeed = 9;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(3);
+    config.seed = 9;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 50;
     config.ruinRecreatePolishSteps = 20;
 
@@ -305,7 +305,7 @@ void testFullAssert()
     {
         Solver(config).solve(plan);
     }
-    catch (const optimaru::ScoreCorruptionError &)
+    catch (const optimaru::ScoreMismatchError &)
     {
         threw = true;
     }
@@ -369,9 +369,9 @@ void testPairOperatorsMatter()
         PdpRoutePlan with = without;
 
         Solver::Config base;
-        base.stepCountLimit = 100'000;
-        base.spentLimit = std::chrono::minutes(1);  // safety net only
-        base.randomSeed = static_cast<std::uint64_t>(seed);
+        base.step_limit = 100'000;
+        base.time_limit = std::chrono::minutes(1);  // safety net only
+        base.seed = static_cast<std::uint64_t>(seed);
 
         Solver::Config withoutConfig = base;
         withoutConfig.pairMoves = false;
@@ -382,8 +382,8 @@ void testPairOperatorsMatter()
 
         std::printf("    seed %d: built-ins only %-28s | pair-aware %s\n",
                     seed,
-                    without.score.toString().c_str(),
-                    with.score.toString().c_str());
+                    without.score.str().c_str(),
+                    with.score.str().c_str());
         if (with.score.medium > without.score.medium)
             ++pairWins;
         else if (without.score.medium > with.score.medium)
@@ -467,7 +467,7 @@ void testConstructionRespectsRequiredVehicle()
 {
     std::printf("== Construction and the required vehicle ==\n");
     Solver::Config config;
-    config.spentLimit = std::chrono::milliseconds(0);
+    config.time_limit = std::chrono::milliseconds(0);
 
     // The bound request is right next to vehicle 0 and bound to vehicle 1.
     PdpRoutePlan detour = buildLine({0, 1000}, {{1, 100000}});
@@ -483,7 +483,7 @@ void testConstructionRespectsRequiredVehicle()
     Solver(config).solve(contested);
     check(contested.vehicles[0].nodeIndices == std::vector<int>({2, 3})
               && contested.vehicles[1].nodeIndices == std::vector<int>({0, 1})
-              && contested.score.isFeasible(),
+              && contested.score.feasible(),
           "a bound request is placed before a free one can take its slot");
 
     // Vehicle 1 is too far away to make the window; vehicle 0 is not.
@@ -517,14 +517,14 @@ void testConstructionRespectsRequiredVehicle()
 void verifyStopAtFirstFeasibleLimit()
 {
     std::printf("== stop_at_first_feasible's limit is hard-only ==\n");
-    const optimaru::HardSoftScore limit
+    const optimaru::Score limit
         = toEngineScoreLimit(Score{0, kNoLevelFloor, kNoLevelFloor});
     check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
           "(0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
-    check(optimaru::HardSoftScore{0, -1e30} >= limit
+    check(optimaru::Score{0, -1e30} >= limit
               && toEngineScore(Score{0, -5, -(1LL << 62)}) >= limit,
           "a feasible score with any soft (-1e30; medium -5, soft -2^62) reaches it");
-    check(!(optimaru::HardSoftScore{-1, 0.0} >= limit),
+    check(!(optimaru::Score{-1, 0.0} >= limit),
           "an infeasible score does not");
     check(toEngineScoreLimit(Score{0, kNoLevelFloor, 0}).soft
                   == -std::numeric_limits<double>::infinity()

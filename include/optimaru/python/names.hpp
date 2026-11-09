@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Part of the optimaru engine, a modified derivative of Timefold Solver (Apache-2.0). See NOTICE.
+// Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
 #ifndef OPTIMARU_PYTHON_NAMES_HPP
 #define OPTIMARU_PYTHON_NAMES_HPP
@@ -29,9 +29,9 @@ namespace python {
 // letter ("HTTPTag" -> "h_t_t_p_tag"), because the rule cannot tell an
 // acronym from adjacent words without a dictionary. Spell an acronym in the
 // C++ name the way it should read in Python ("httpTagCost").
-inline std::string pythonName(const std::string& constraintName) {
+inline std::string python_name(const std::string& constraint_name) {
     std::string out;
-    for (const char c : constraintName) {
+    for (const char c : constraint_name) {
         if (std::isupper(static_cast<unsigned char>(c))) {
             if (!out.empty() && out.back() != '_') out += '_';
             out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -43,9 +43,9 @@ inline std::string pythonName(const std::string& constraintName) {
 }
 
 // The key of each constraint instance in `constraint_costs()`, given the
-// instances' Python names in calculator order: the Python name itself, and
+// instances' Python names in objective order: the Python name itself, and
 // "<name>#<k>" for the k-th instance (k >= 2) of a name picked more than
-// once (applyConstraints, employee-scheduling's rule factory). The Python
+// once (apply_constraints, employee-scheduling's rule factory). The Python
 // base (_constraint.py instance_keys) derives the same keys from a selection
 // list, and the CP-SAT references (cpsat-common resolve()) number repeated
 // picks the same way, so they agree as long as they see the same list in the
@@ -54,11 +54,11 @@ inline std::string pythonName(const std::string& constraintName) {
 // refused with std::invalid_argument (ValueError in Python), in the words of
 // the Python base (_constraint.py Constraint.__init_subclass__);
 // ConstraintAssembly refuses it where a component is added.
-inline std::vector<std::string> instanceKeys(const std::vector<std::string>& pythonNames) {
+inline std::vector<std::string> instance_keys(const std::vector<std::string>& python_names) {
     std::map<std::string, int> seen;
     std::vector<std::string> keys;
-    keys.reserve(pythonNames.size());
-    for (const std::string& name : pythonNames) {
+    keys.reserve(python_names.size());
+    for (const std::string& name : python_names) {
         if (name.find('#') != std::string::npos) {
             throw std::invalid_argument("constraint '" + name +
                                         "': a name must not contain '#', which constraint_costs() "

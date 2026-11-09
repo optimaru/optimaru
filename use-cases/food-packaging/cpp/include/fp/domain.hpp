@@ -8,9 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
+#include "optimaru/score/levels.hpp"
 
 namespace fp
 {
@@ -32,7 +32,7 @@ constexpr Minutes kNoTime = std::numeric_limits<std::int64_t>::min();
 // Score  (HardMediumSoftScore mirror)
 // ---------------------------------------------------------------------------
 // The Java quickstart scores with HardMediumSoftScore; the generic engine
-// (include/optimaru/) only knows HardSoftScore(int64 hard, double soft). Mapping rule
+// (include/optimaru/) only knows Score(int64 hard, double soft). Mapping rule
 // (the bed-allocation port's convention, with a larger unit because the
 // makespan penalty is quadratic):
 //
@@ -59,7 +59,7 @@ constexpr Minutes kNoTime = std::numeric_limits<std::int64_t>::min();
 // their soft weight; some docs said 10^9, which was never the value.)
 constexpr std::int64_t kMediumUnit = 10000000000LL;  // 10^10
 constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::intoSoft(static_cast<double>(kMediumUnit));
+    = optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
 
 struct Score
 {
@@ -67,7 +67,7 @@ struct Score
     std::int64_t medium = 0;
     std::int64_t soft = 0;
 
-    bool isFeasible() const { return hard >= 0; }
+    bool feasible() const { return hard >= 0; }
 
     bool operator<(const Score &o) const
     {
@@ -85,28 +85,28 @@ struct Score
         return hard == o.hard && medium == o.medium && soft == o.soft;
     }
 
-    std::string toString() const
+    std::string str() const
     {
         return std::to_string(hard) + "hard/" + std::to_string(medium)
                + "medium/" + std::to_string(soft) + "soft";
     }
 };
 
-inline optimaru::HardSoftScore toEngineScore(const Score &s)
+inline optimaru::Score toEngineScore(const Score &s)
 {
     // soft + medium * 10^10: for the integral levels of this domain the same
     // value as the old int64 `medium * kMediumUnit + soft` (exact while
     // |engine soft| < 2^53, see above).
-    return kMediumFold.toEngine(s.hard,
+    return kMediumFold.to_engine(s.hard,
                                 static_cast<double>(s.medium),
                                 static_cast<double>(s.soft));
 }
 
 // Inverse of toEngineScore. Every constraint penalizes (medium/soft <= 0 and
 // integral), so truncating integer division decodes the two levels exactly.
-inline Score fromEngineScore(const optimaru::HardSoftScore &e)
+inline Score fromEngineScore(const optimaru::Score &e)
 {
-    const std::int64_t combined = optimaru::roundScoreLevel(e.soft, "soft");
+    const std::int64_t combined = optimaru::round_score_level(e.soft, "soft");
     return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
 }
 
@@ -172,7 +172,7 @@ struct Job
     // @PlanningPin: a pinned job keeps its exact (line, position) — or stays
     // unassigned — and is scored like any other job. Because the engine's
     // LIST moves cannot skip elements, pinning is enforced structurally: the
-    // SolutionDescriptor below exposes only unpinned jobs to the engine, and
+    // SolutionTraits below exposes only unpinned jobs to the engine, and
     // pinned jobs must form a PREFIX of their line (the quickstart's
     // continuous-planning flow pins everything before "now", which is always
     // a prefix). ScoreCalculator::prepare validates this.
@@ -189,7 +189,7 @@ struct Job
 // Line  (@PlanningEntity)
 // ---------------------------------------------------------------------------
 // jobs is the @PlanningListVariable(allowsUnassignedValues = true): the
-// ordered job sequence. operatorIndex mirrors the Java basic
+// ordered job sequence. operator_index mirrors the Java basic
 // @PlanningVariable Line.operator; the generic engine drives ONE variable
 // model per solution (here: the job lists), so the operator assignment is
 // optimized by fp::Solver in an alternating outer loop instead of jointly
@@ -199,7 +199,7 @@ struct Line
     std::string id;
     std::string name;
     Minutes startDateTime = 0;
-    int operatorIndex = -1;  // -1 == unassigned (Java: operator == null)
+    int operator_index = -1;  // -1 == unassigned (Java: operator == null)
     std::vector<int> jobs;   // ordered job indices
 };
 
@@ -265,7 +265,7 @@ struct PackagingSchedule
 }  // namespace fp
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization (the @PlanningEntity/@PlanningListVariable
+// SolutionTraits specialization (the @PlanningEntity/@PlanningListVariable
 // annotations of the C++ engine): the lists are the packaging lines plus the
 // unassigned pool, the elements are the unpinned jobs. Position/element ids
 // are translated so pinned jobs (always a validated prefix of their list)
@@ -273,34 +273,34 @@ struct PackagingSchedule
 // shifted, which reproduces Java's @PlanningPin for list elements.
 // ScoreCalculator::prepare must run before the engine touches the solution.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<fp::PackagingSchedule>
+template <> struct optimaru::SolutionTraits<fp::PackagingSchedule>
 {
-    static constexpr optimaru::VariableKind kind = optimaru::VariableKind::LIST;
+    static constexpr optimaru::Shape shape = optimaru::Shape::Sequence;
 
-    static int listCount(const fp::PackagingSchedule &s)
+    static int list_count(const fp::PackagingSchedule &s)
     {
         return s.listCountWithPool();
     }
-    static int elementCount(const fp::PackagingSchedule &s)
+    static int element_count(const fp::PackagingSchedule &s)
     {
         return static_cast<int>(s.engineToJob.size());
     }
-    static int listSize(const fp::PackagingSchedule &s, int l)
+    static int list_size(const fp::PackagingSchedule &s, int l)
     {
         return static_cast<int>(s.rawList(l).size()) - s.pinnedPrefixLen[l];
     }
-    static int getElement(const fp::PackagingSchedule &s, int l, int p)
+    static int element_at(const fp::PackagingSchedule &s, int l, int p)
     {
         return s.jobToEngine[s.rawList(l)[s.pinnedPrefixLen[l] + p]];
     }
     static void
-    insertElement(fp::PackagingSchedule &s, int l, int p, int element)
+    insert_element(fp::PackagingSchedule &s, int l, int p, int element)
     {
         std::vector<int> &list = s.rawList(l);
         list.insert(list.begin() + s.pinnedPrefixLen[l] + p,
                     s.engineToJob[element]);
     }
-    static int removeElement(fp::PackagingSchedule &s, int l, int p)
+    static int remove_element(fp::PackagingSchedule &s, int l, int p)
     {
         std::vector<int> &list = s.rawList(l);
         const int job = list[s.pinnedPrefixLen[l] + p];
@@ -308,7 +308,7 @@ template <> struct optimaru::SolutionDescriptor<fp::PackagingSchedule>
         return s.jobToEngine[job];
     }
     static void
-    reverseSegment(fp::PackagingSchedule &s, int l, int first, int last)
+    reverse_segment(fp::PackagingSchedule &s, int l, int first, int last)
     {
         std::vector<int> &list = s.rawList(l);
         std::reverse(list.begin() + s.pinnedPrefixLen[l] + first,

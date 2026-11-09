@@ -2,7 +2,7 @@
 
 A port of the `maintenance-scheduling` example model: assigns maintenance jobs (Job)
 a crew and a start date (TimeGrain excluding weekends). The Java domain's two planning
-variables (crew, startDate) are composite-encoded into one engine BASIC variable::
+variables (crew, startDate) are composite-encoded into one engine assignment-shape variable::
 
     crew_date = start_date_index * crew_count + crew_index   # -1 == unassigned
 
@@ -10,7 +10,7 @@ Dates are exchanged as epoch days (days since 1970-01-01, Java LocalDate.toEpoch
 The pydantic mirror (`maintenance_scheduling.models`, optional dependency) converts to
 and from `datetime.date`.
 
-Constraints (HardSoftScore — same semantics as the Java ConstraintProvider), at the
+Constraints (Score — same semantics as the Java ConstraintProvider), at the
 default weights:
   hard 1. crew_conflict_cost          -overlapping days per overlapping job pair on the same crew
   hard 2. min_start_date_cost         -1 per day started before min_start_date

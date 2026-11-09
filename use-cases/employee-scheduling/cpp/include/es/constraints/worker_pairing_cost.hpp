@@ -14,7 +14,7 @@ namespace es {
 // cost = the number of violating buckets — >= 0 in BOTH modes (it is not a
 // reward) — so 0 = the pairing holds on every bucket. anchor/paired are
 // engine worker indices (the default -1 never works, so it never costs). Only
-// these two units affect the cost, so onUnitChanged ignores others. Each
+// these two units affect the cost, so on_unit_changed ignores others. Each
 // instance carries the label "Worker pairing[<anchor>==|!=<paired>]".
 struct WorkerPairingCost final : EsGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
@@ -33,19 +33,19 @@ struct WorkerPairingCost final : EsGlobalConstraint {
             targets_.emplace(bucketDays[i], std::move(bucketLocations[i]));
     }
     void reset(const EmployeeSchedule& s,
-               const std::vector<std::vector<int>>& membersPerUnit) override {
+               const std::vector<std::vector<int>>& members_per_unit) override {
         day_.resize(s.shifts.size());
         loc_.resize(s.shifts.size());
         for (std::size_t i = 0; i < s.shifts.size(); ++i) {
             day_[i] = static_cast<int>(s.shifts[i].startDay);
             loc_[i] = s.shifts[i].location;
         }
-        const int units = static_cast<int>(membersPerUnit.size());
-        aMembers_ = (anchor_ >= 0 && anchor_ < units) ? membersPerUnit[anchor_] : std::vector<int>{};
-        bMembers_ = (paired_ >= 0 && paired_ < units) ? membersPerUnit[paired_] : std::vector<int>{};
+        const int units = static_cast<int>(members_per_unit.size());
+        aMembers_ = (anchor_ >= 0 && anchor_ < units) ? members_per_unit[anchor_] : std::vector<int>{};
+        bMembers_ = (paired_ >= 0 && paired_ < units) ? members_per_unit[paired_] : std::vector<int>{};
         recompute();
     }
-    void onUnitChanged(const EmployeeSchedule&, int unit,
+    void on_unit_changed(const EmployeeSchedule&, int unit,
                        const std::vector<int>& members) override {
         if (unit == anchor_) {
             aMembers_ = members;

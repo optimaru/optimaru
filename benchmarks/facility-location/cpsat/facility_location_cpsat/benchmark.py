@@ -18,7 +18,7 @@ PACKAGE = "facility_location"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
-# Java DemoDataGenerator's London bounding box.
+# The demo's London bounding box.
 SOUTH_WEST = (51.44, -0.16)
 NORTH_EAST = (51.56, -0.01)
 AVERAGE_SETUP_COST = 50_000
@@ -35,9 +35,8 @@ def _build(
     """Mirrors DemoDataBuilder.build(): uniform locations in the box, equal
     capacity/demand shares, Gaussian setup costs.
 
-    Python's RNG stream differs from both java.util.Random and the C++ demo's
-    mt19937_64, so an instance matches the Java demo in scale and distribution
-    rather than bit-for-bit — the same caveat the C++ demo already carries.
+    Python's RNG stream differs from the C++ demo's mt19937_64, so an instance
+    matches the C++ demo in scale and distribution rather than bit-for-bit.
     """
     import facility_location as fl
 
@@ -79,7 +78,7 @@ def _build(
 
 def instances() -> dict[str, Callable[[], Any]]:
     return {
-        # The Java quickstart's own demo scale.
+        # The quickstart demo's scale.
         "demo": lambda: _build(30, 60, 4500, 900, seed=0),
         "medium": lambda: _build(50, 200, 15_000, 3_000, seed=1),
         "large": lambda: _build(80, 600, 45_000, 9_000, seed=2),

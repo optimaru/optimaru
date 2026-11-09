@@ -12,10 +12,10 @@
 #include <vector>
 
 #include "pdp/domain.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
-#include "optimaru/config/localsearch/decider/acceptor/local_search_acceptor_config.hpp"
-#include "optimaru/impl/heuristic/selector/move/generic/ruin_recreate_selector.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
+#include "optimaru/model/editor.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/select/schemes.hpp"
 
 namespace pdp
 {
@@ -45,13 +45,13 @@ public:
     struct Config
     {
         // --- termination ---
-        std::chrono::milliseconds spentLimit{std::chrono::seconds(30)};
-        Score bestScoreLimit{std::numeric_limits<std::int64_t>::max(),
+        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
+        Score target_score{std::numeric_limits<std::int64_t>::max(),
                              std::numeric_limits<std::int64_t>::max(),
                              std::numeric_limits<std::int64_t>::max()};
-        std::chrono::milliseconds unimprovedSpentLimit{0};
-        std::int64_t stepCountLimit = 0;
-        std::int64_t unimprovedStepCountLimit = 0;
+        std::chrono::milliseconds stall_time_limit{0};
+        std::int64_t step_limit = 0;
+        std::int64_t stall_step_limit = 0;
 
         // --- construction heuristic ---
         // Tightest time window / largest demand first.
@@ -62,9 +62,9 @@ public:
         bool pairConstructionHeuristic = true;
 
         // --- acceptance ---
-        optimaru::AcceptorType acceptorType
-            = optimaru::AcceptorType::LATE_ACCEPTANCE;
-        std::size_t lateAcceptanceSize = 0;  // 0 = auto
+        optimaru::AcceptanceRule rule
+            = optimaru::AcceptanceRule::LateAcceptance;
+        std::size_t history_length = 0;  // 0 = auto
         double recordToRecordStartGap = 0.02;
         double recordToRecordEndGap = 0.0;
 
@@ -74,13 +74,13 @@ public:
         // and get rejected, so the pair move carries the search. They are not
         // zero because intra-route reordering (2-opt / or-opt) is still how a
         // route's sequence gets polished once the assignment is settled.
-        double relocateMoveWeight = 0.15;
-        double listSwapMoveWeight = 0.1;
-        double twoOptMoveWeight = 0.35;
-        double orOptMoveWeight = 0.3;
-        double tailSwapMoveWeight = 0.1;
-        double interExchangeMoveWeight = 0.0;
-        int interExchangeMaxSegment = 3;
+        double relocate_weight = 0.15;
+        double list_swap_weight = 0.1;
+        double two_opt_weight = 0.35;
+        double or_opt_weight = 0.3;
+        double tail_swap_weight = 0.1;
+        double cross_exchange_weight = 0.0;
+        int cross_exchange_max_run = 3;
 
         // Whether to register the pair-aware move operator (on by default;
         // turn it off to measure what it is worth).
@@ -97,7 +97,7 @@ public:
         double pairAssignmentProbability = 0.1;
 
         // --- adaptive ruin & recreate (ALNS) ---
-        bool ruinRecreate = true;
+        bool ruin_recreate = true;
         bool pairRuin = true;
         std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
         double ruinRecreateMinRuinFraction = 0.10;
@@ -109,22 +109,22 @@ public:
         // individual nodes; pair-aware move/ruin operators are the defaults.
         double ruinRecreateAsMoveWeight = 0.0;
         int ruinRecreateAsMoveMaxRuin = 12;
-        double descentWeight = 0.0;
-        int descentMaxSweeps = 4;
-        double routeEliminationWeight = 0.0;
-        int routeEliminationMaxSize = 12;
-        optimaru::OperatorSelectionType ruinRecreateSelectionType
-            = optimaru::OperatorSelectionType::ROULETTE_WHEEL;
+        double descent_weight = 0.0;
+        int descent_max_sweeps = 4;
+        double route_elimination_weight = 0.0;
+        int route_elimination_max_size = 12;
+        optimaru::SelectionScheme ruinRecreateSelectionType
+            = optimaru::SelectionScheme::RouletteWheel;
         double ruinRecreateOperatorDecay = 0.8;
         std::vector<double> ruinRecreateRewards{3.0, 2.0, 1.0, 0.5};
         std::int64_t ruinRecreateSelectionSegmentLength = 100;
         double ruinRecreateSelectionAlpha = 0.05;
-        bool sisrRuin = true;
-        bool routeRuin = true;
-        int sisrMaxStringRemovals = 3;
-        int sisrMaxStringSize = 12;
-        int regretK = 3;
-        double blinkRate = 0.01;
+        bool sisr_ruin = true;
+        bool route_ruin = true;
+        int sisr_max_string_removals = 3;
+        int sisr_max_string_size = 12;
+        int regret_k = 3;
+        double blink_rate = 0.01;
 
         // --- nearby selection ---
         bool drivingTimeNearby = true;
@@ -132,18 +132,18 @@ public:
         double drivingTimeNearbyProbability = 0.8;
 
         // --- engine ---
-        std::uint64_t randomSeed = 0;
+        std::uint64_t seed = 0;
         int parallelSolverCount = 1;
-        optimaru::EnvironmentMode environmentMode
-            = optimaru::EnvironmentMode::NON_ASSERT;
+        optimaru::ScoreChecks score_checks
+            = optimaru::ScoreChecks::Off;
         // Called with each new best score, in the same levels as the final
         // plan.score of the solve() overload in use.
-        std::function<void(std::int64_t, const Score &)> onNewBest;
+        std::function<void(std::int64_t, const Score &)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
         // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stopFlag;
+        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;
@@ -159,13 +159,13 @@ public:
     // operators included (they read the plan, not the calculator). Weights
     // come from the assembly, NOT from the defaults. The final plan.score is
     // computed by THIS calculator, its three levels read before the medium
-    // fold (levelScores()), so a soft total of 10^9 or more stays soft;
-    // onNewBest reports its scores the same way. The calculator is left
-    // primed on the final solution, so constraintTotals() explains exactly
+    // fold (level_scores()), so a soft total of 10^9 or more stays soft;
+    // on_new_best reports its scores the same way. The calculator is left
+    // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
     // so parallelSolverCount is ignored.
     void solve(PdpRoutePlan &plan,
-               optimaru::DecomposedScoreCalculator<PdpRoutePlan> &calculator);
+               optimaru::DecomposedObjective<PdpRoutePlan> &calculator);
 
 private:
     Config config_;

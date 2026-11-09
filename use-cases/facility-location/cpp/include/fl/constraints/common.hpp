@@ -7,8 +7,8 @@
 
 #include "fl/domain.hpp"
 #include "fl/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace fl
 {
@@ -18,7 +18,7 @@ namespace fl
 // ---------------------------------------------------------------------------
 // The three constraints of the reference facility-location
 // FacilityLocationConstraintProvider, split into one small component each on
-// the engine's DecomposedScoreCalculator — an optional assembly path NEXT TO
+// the engine's DecomposedObjective — an optional assembly path NEXT TO
 // the monolithic FacilityLocationIncrementalScoreCalculator, which stays the
 // tuned default fast path.
 //
@@ -52,7 +52,7 @@ namespace fl
 // bit-for-bit like them.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("facilityCapacityCost"); Python sees them through pythonName()
+// ("facilityCapacityCost"); Python sees them through python_name()
 // ("facility_capacity_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
@@ -62,7 +62,7 @@ namespace fl
 // (the solve() overload and the monolithic path both call it).
 
 using DecomposedCalculator
-    = optimaru::DecomposedScoreCalculator<FacilityLocationProblem>;
+    = optimaru::DecomposedObjective<FacilityLocationProblem>;
 using ConstraintAssembly
     = optimaru::ConstraintAssembly<FacilityLocationProblem>;
 using FlUnitConstraint = optimaru::UnitConstraint<FacilityLocationProblem>;

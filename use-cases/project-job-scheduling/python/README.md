@@ -17,7 +17,7 @@ uv run pytest -q
 import project_job as pj
 from project_job.demo import generate_demo_data
 
-schedule = generate_demo_data()  # pydantic model (reproduces the Java demo)
+schedule = generate_demo_data()  # pydantic model (the demo instance)
 result = pj.solve(schedule, time_limit_seconds=10.0, random_seed=42)
 print(result.score_hard, result.score_medium, result.score_soft)
 for allocation in result.allocations:
@@ -58,7 +58,7 @@ score(raw), score(raw, [*others, ProjectDelayCost(weight=2)])        # re-priced
 - **Job** — SOURCE / STANDARD / SINK. One or more execution modes (duration + resource
   demand); SOURCE/SINK have one zero-duration mode.
 - **Allocation** (planning entity) — 1:1 with jobs. Java's two planning variables
-  `(executionMode, delay∈[0, 500))` are ported as one composite-encoded BASIC variable
+  `(executionMode, delay∈[0, 500))` are ported as one composite-encoded assignment variable
   `mode_delay = delay * max_mode_count + mode_slot`
   (real mode index = `mode_slot % the job's mode count`, -1 == uninitialized).
   SOURCE/SINK allocations are always pinned (Java's `@PlanningPin` + `setPinned`).
@@ -95,7 +95,7 @@ weight moved from 10^9 (soft) to 1 (medium units).
 
 ## Score mapping
 
-Java uses `HardMediumSoftScore`; the engine only knows `HardSoftScore(int64 hard, double
+Java uses `HardMediumSoftScore`; the engine only knows `Score(int64 hard, double
 soft)`. The same offset mapping as bed-allocation/meeting-scheduling is used, declared once
 as the domain's medium fold (`kMediumFold` in `../cpp/include/pjs/domain.hpp`; every
 `constraint_costs()` entry carries it as `medium_fold`, and
@@ -125,5 +125,5 @@ instances). Rule details are in `../cpp/include/pjs/domain.hpp`.
   (the SOURCE/SINK convention of the Java demo).
 - **Allocation's sourceAllocation/sinkAllocation fields**: references unused by any Java
   constraint, so not ported (REST shape only).
-- **Demo data**: scale and distributions follow the Java `DemoDataGenerator`, but the
-  `java.util.Random(0)` stream itself is not reproduced.
+- **Demo data**: scale and distributions follow the quickstart's demo, drawn from a
+  seeded `random.Random`.

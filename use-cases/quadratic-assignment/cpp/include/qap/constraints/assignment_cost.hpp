@@ -12,7 +12,7 @@ namespace qap
 // One number for the whole assignment (a GlobalConstraint, so the exponent
 // shapes the total, as the 0.1.x single-entry list did). The matrix is not
 // validated >= 0, so the total may be negative (scored as a bonus). When the
-// matrix holds a negative entry, rawCostCanBeNegative() says so, and the
+// matrix holds a negative entry, raw_cost_can_be_negative() says so, and the
 // calculator refuses the instance on the hard level (SignedCostLevelError):
 // a negative hard total would cancel a broken pin. Without one, the total is
 // >= 0 and may move to hard like any constraint.
@@ -29,17 +29,17 @@ struct AssignmentCost final : QapMemberChangeGlobalConstraint
     {
     }
     void reset(const QuadraticAssignmentProblem &problem,
-               const std::vector<std::vector<int>> &membersPerUnit) override
+               const std::vector<std::vector<int>> &members_per_unit) override
     {
         detail::requirePrepared(problem);
         total_ = 0;
-        for (std::size_t location = 0; location < membersPerUnit.size(); ++location)
+        for (std::size_t location = 0; location < members_per_unit.size(); ++location)
         {
-            for (int facility : membersPerUnit[location])
+            for (int facility : members_per_unit[location])
                 total_ += problem.directCostOf(facility, static_cast<int>(location));
         }
     }
-    void onMemberChanged(const QuadraticAssignmentProblem &problem,
+    void on_member_changed(const QuadraticAssignmentProblem &problem,
                          int unit,
                          const std::vector<int> & /*members*/,
                          int entity,
@@ -49,7 +49,7 @@ struct AssignmentCost final : QapMemberChangeGlobalConstraint
         total_ += joined ? cost : -cost;
     }
     double cost() const override { return static_cast<double>(total_); }
-    bool rawCostCanBeNegative(const QuadraticAssignmentProblem &problem) const override
+    bool raw_cost_can_be_negative(const QuadraticAssignmentProblem &problem) const override
     {
         return detail::hasNegative(problem.assignmentCosts);
     }

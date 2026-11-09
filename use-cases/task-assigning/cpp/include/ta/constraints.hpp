@@ -30,7 +30,7 @@ namespace ta
 // ---------------------------------------------------------------------------
 // The full provider at the components' default weights and levels (each
 // component's kDefaultWeight / kDefaultLevel; constraint_info() reads them off
-// this assembly). It scores bit-for-bit like ScoreCalculator::calculateScore
+// this assembly). It scores bit-for-bit like ScoreCalculator::score
 // and the monolithic incremental calculator. The calculator scores the unit
 // constraints first and the global unassignedTasksCost after them, which is
 // the list_constraints() order.

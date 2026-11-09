@@ -1,10 +1,10 @@
 # assembly_line_balancing (Python)
 
 The pybind11 package of the assembly-line-balancing use case (`../cpp`). Puts every
-task on one station of a paced line — `Task.station` is the only planning variable
+task on one station of a paced line — `Task.station` is the only decision variable
 (station index, -1 = unassigned).
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
 
 - hard = -(station capacity overflow + reversed precedences + stations beyond
   `max_stations` + station-domain distance + missed fixed stations + forbidden

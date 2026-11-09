@@ -6,8 +6,8 @@
 
 #include "mc/domain.hpp"
 #include "mc/score_calculator.hpp"
-#include "optimaru/api/score/calculator/constraint_assembly.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
 
 namespace mc
 {
@@ -16,7 +16,7 @@ namespace mc
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
 // The six max-cut constraints, one small component each on the engine's
-// DecomposedScoreCalculator — the assembly path NEXT TO the monolithic
+// DecomposedObjective — the assembly path NEXT TO the monolithic
 // MaxCutIncrementalScoreCalculator, which stays the default fast path.
 //
 // Unit choice: the BASIC descriptor's units are the two VALUES — unit 0 holds
@@ -33,7 +33,7 @@ namespace mc
 //   partitionSizeBoundsCost      max(0, min - n) + max(0, n - max) for this
 //                                side's size n               (O(1) re-cost)
 // and two are statistics of the whole partition, GlobalConstraints fed by
-// onMemberChanged (supportsMemberChange, O(1) / O(degree) per join/leave):
+// on_member_changed (supports_member_change, O(1) / O(degree) per join/leave):
 //   partitionImbalanceCost       |n0 - n1|
 //   cutWeightCost                -(weight of the edges between the sides)
 //
@@ -57,13 +57,13 @@ namespace mc
 // kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the validated setters
-// (setWeight / setLevel / setExponent), or by name through
+// (set_weight / set_level / set_exponent), or by name through
 // ConstraintAssembly. The canonical problem carries no weights: the
 // monolithic calculators read the same kDefaultWeight constants, which is why
 // the default assembly scores bit-for-bit like them.
 //
 // Registry names are the struct names with a lower-case first letter
-// ("fixedPartitionCost"); Python sees them through pythonName()
+// ("fixedPartitionCost"); Python sees them through python_name()
 // ("fixed_partition_cost").
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
@@ -72,14 +72,14 @@ namespace mc
 //
 // The pair deltas read the partner's side from the working solution. That is
 // exact because the engine notifies BASIC changes one entity at a time
-// (before / set / after): at every deltaCost() call each OTHER vertex's side
-// equals its unit membership. FULL_ASSERT solves (swaps and ruin-and-recreate
+// (before / set / after): at every delta_cost() call each OTHER vertex's side
+// equals its unit membership. ScoreChecks::Full solves (swaps and ruin-and-recreate
 // included) and the random-walk tests check it.
 //
 // Every component requires ScoreCalculator::prepare(problem) to have run
 // (both solve() overloads and the monolithic path call it).
 
-using DecomposedCalculator = optimaru::DecomposedScoreCalculator<MaxCutProblem>;
+using DecomposedCalculator = optimaru::DecomposedObjective<MaxCutProblem>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<MaxCutProblem>;
 using McUnitConstraint = optimaru::UnitConstraint<MaxCutProblem>;
 using McGlobalConstraint = optimaru::GlobalConstraint<MaxCutProblem>;
@@ -112,11 +112,11 @@ struct MemberChangeConstraint : McGlobalConstraint
 {
     using McGlobalConstraint::McGlobalConstraint;
 
-    bool supportsMemberChange() const final { return true; }
+    bool supports_member_change() const final { return true; }
 
-    // Never called (supportsMemberChange): every change arrives as a
-    // join/leave through onMemberChanged.
-    void onUnitChanged(const MaxCutProblem & /*problem*/,
+    // Never called (supports_member_change): every change arrives as a
+    // join/leave through on_member_changed.
+    void on_unit_changed(const MaxCutProblem & /*problem*/,
                        int /*unit*/,
                        const std::vector<int> & /*members*/) final
     {

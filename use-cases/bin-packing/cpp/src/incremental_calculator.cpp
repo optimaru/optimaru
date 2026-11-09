@@ -28,17 +28,17 @@ constexpr auto kUsedBinsWeight
 
 }  // namespace
 
-void BinPackingIncrementalScoreCalculator::resetWorkingSolution(
-    BinPackingProblem &workingSolution)
+void BinPackingIncrementalScoreCalculator::rebuild(
+    BinPackingProblem &solution)
 {
-    ScoreCalculator::prepare(workingSolution);  // derived lookups
-    problem_ = &workingSolution;
+    ScoreCalculator::prepare(solution);  // derived lookups
+    problem_ = &solution;
 
-    const std::size_t n = workingSolution.items.size();
+    const std::size_t n = solution.items.size();
     load_.assign(n, 0);
     count_.assign(n, 0);
     const std::size_t cells
-        = n * static_cast<std::size_t>(workingSolution.colorClassCount);
+        = n * static_cast<std::size_t>(solution.colorClassCount);
     flatColors_ = cells <= maxFlatColorCells_;
     colorCountFlat_.assign(flatColors_ ? cells : 0, 0);
     colorCountMap_.clear();
@@ -48,9 +48,9 @@ void BinPackingIncrementalScoreCalculator::resetWorkingSolution(
     usedBins_ = 0;
 
     assign_.assign(n, -1);
-    for (int i = 0; i < workingSolution.itemCount(); ++i)
+    for (int i = 0; i < solution.itemCount(); ++i)
     {
-        const int bin = workingSolution.items[i].bin;
+        const int bin = solution.items[i].bin;
         if (bin >= 0)
             insert(i, bin);
     }
@@ -119,21 +119,21 @@ void BinPackingIncrementalScoreCalculator::retract(int itemIndex, int bin)
     }
 }
 
-void BinPackingIncrementalScoreCalculator::beforeVariableChanged(int itemIndex)
+void BinPackingIncrementalScoreCalculator::before_assign(int itemIndex)
 {
     const int old = assign_[itemIndex];
     if (old >= 0)
         retract(itemIndex, old);  // unassigned: nothing to retract
 }
 
-void BinPackingIncrementalScoreCalculator::afterVariableChanged(int itemIndex)
+void BinPackingIncrementalScoreCalculator::after_assign(int itemIndex)
 {
     const int now = problem_->items[itemIndex].bin;  // the new value
     if (now >= 0)
         insert(itemIndex, now);  // now unassigned: nothing to insert
 }
 
-Score BinPackingIncrementalScoreCalculator::calculateScore()
+Score BinPackingIncrementalScoreCalculator::score()
 {
     Score score;
     score.hard = -(kBinCapacityWeight * overCapacity_ + kColorConflictWeight * colorExcess_

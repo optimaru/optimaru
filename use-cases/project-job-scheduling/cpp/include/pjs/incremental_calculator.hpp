@@ -6,14 +6,14 @@
 #include <vector>
 
 #include "pjs/domain.hpp"
-#include "optimaru/api/score/calculator/incremental_score_calculator.hpp"
+#include "optimaru/score/objective.hpp"
 
 namespace pjs
 {
 
 // The project-job-scheduling implementation of the engine's
-// optimaru::IncrementalScoreCalculator — the C++ analog of implementing
-// Java's IncrementalScoreCalculator instead of a ConstraintProvider.
+// optimaru::Objective — the C++ analog of implementing
+// Java's Objective instead of a ConstraintProvider.
 //
 // The hard part of this domain is the Java shadow-variable chain
 // (predecessorsDoneDate -> startDate -> endDate): changing one allocation's
@@ -26,7 +26,7 @@ namespace pjs
 //     over-capacity total,
 //   - the per-sink project-delay total (medium) and a multiset of sink end
 //     dates (soft = max).
-// All work happens in afterVariableChanged: it diffs against the recorded
+// All work happens in after_assign: it diffs against the recorded
 // state, so it is correct under every hook sequence the engine produces
 // (change, swap, ruin's unassign to -1, snapshot restores, rollbacks via
 // inverse writes). Date changes are re-propagated over ONLY the affected
@@ -38,16 +38,16 @@ namespace pjs
 // duration 0 and contribute no resource usage (the Java suppliers'
 // null-handling), so the construction heuristic scores partially
 // initialized solutions. The full-recompute reference is
-// ScoreCalculator::calculateScore (checked in the tests and under
-// EnvironmentMode::FULL_ASSERT).
+// ScoreCalculator::score (checked in the tests and under
+// ScoreChecks::ScoreChecks::Full).
 class ProjectJobSchedulingIncrementalScoreCalculator final
-    : public optimaru::IncrementalScoreCalculator<ProjectJobSchedule>
+    : public optimaru::Objective<ProjectJobSchedule>
 {
 public:
-    void resetWorkingSolution(ProjectJobSchedule &workingSolution) override;
-    void beforeVariableChanged(int allocationIndex) override;
-    void afterVariableChanged(int allocationIndex) override;
-    optimaru::HardSoftScore calculateScore() override;
+    void rebuild(ProjectJobSchedule &solution) override;
+    void before_assign(int allocationIndex) override;
+    void after_assign(int allocationIndex) override;
+    optimaru::Score score() override;
 
 private:
     ProjectJobSchedule *schedule_ = nullptr;
@@ -59,7 +59,7 @@ private:
     std::vector<int> end_;
 
     // Resource usage and running over-capacity totals (positive penalty
-    // units; signs applied in calculateScore).
+    // units; signs applied in score).
     std::vector<std::int64_t> nonRenewableUsage_;   // [resource]
     std::vector<std::vector<int>> renewableUsage_;  // [resource][day]
     std::int64_t hardNonRenewable_ = 0;
@@ -67,7 +67,7 @@ private:
 
     // medium: sum over sinks of max(0, end - criticalPathEnd).
     std::int64_t mediumTotal_ = 0;
-    // soft = max sink end date: recomputed in calculateScore by scanning the
+    // soft = max sink end date: recomputed in score by scanning the
     // (few, one per project) sink allocations against end_ — profiling
     // showed the previous std::multiset spent more time on tree-node
     // allocation churn per date change than the scan costs per score call.
@@ -76,7 +76,7 @@ private:
     // Propagation scratch: topological position per allocation, a "queued"
     // flag, and the (position, allocation) min-heap + touched list reused
     // across propagations (member buffers keep the hot path allocation-free;
-    // see afterVariableChanged).
+    // see after_assign).
     std::vector<int> topologicalPosition_;
     std::vector<char> queued_;
     std::vector<std::pair<int, int>> propagationHeap_;

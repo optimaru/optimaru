@@ -3,13 +3,13 @@
 The Timefold Quickstarts `flight-crew-scheduling` example model
 (Apache-2.0; see the repository [NOTICE](../../NOTICE))
 ported, with modifications,
-onto this repository's C++ engine (`include/optimaru/`). A **BASIC variable** problem
+onto this repository's C++ engine (`include/optimaru/`). An **assignment-shaped** problem
 that picks a crew member (`employee`) for every crew seat of a flight (`FlightAssignment`).
 
 ## Score mapping
 
-The Java original uses `HardSoftScore` (two integer levels), so it maps onto the engine's
-`HardSoftScore(int64 hard, double soft)` **as-is (identity)**. No level folding (no medium
+The Java original uses `Score` (two integer levels), so it maps onto the engine's
+`Score(int64 hard, double soft)` **as-is (identity)**. No level folding (no medium
 level). The default weights are exactly those of the Java `ConstraintProvider`:
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per employee (0 = no violation) |
@@ -73,21 +73,21 @@ start a pair, and all ties at the later end count. first/last also count all tie
 cd cpp
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j4
-./build/fcs_test         # per-constraint hand checks + random walk + FULL_ASSERT + pinned
+./build/fcs_test         # per-constraint hand checks + random walk + ScoreChecks::Full + pinned
 ./build/fcs_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
-./build/fcs_demo 10   # reproduces the Java DemoDataGenerator scale, 10 s solve
+./build/fcs_demo 10   # the demo instance, 10 s solve
 
 cd ../python
 uv venv && uv pip install -e . pytest pydantic
 uv run pytest -q
 ```
 
-The demo generates the same scale as the Java demo (6 airports, 5 days, 14 flights, ~60
+The demo generates an instance at the scale of the quickstart's demo (6 airports, 5 days, 14 flights, ~60
 seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 
 ## Layout
 
-- `cpp/include/fcs/domain.hpp` — domain + `SolutionDescriptor` specialization
+- `cpp/include/fcs/domain.hpp` — domain + `SolutionTraits` specialization
   (including the pinned extension)
 - `cpp/include/fcs/constraints/` — one component per constraint:
   `required_skill_cost.hpp`, `flight_conflict_cost.hpp`,
@@ -109,8 +109,8 @@ seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 
 - Java `Airport.taxiTimeInMinutes` is a field no constraint or demo uses even in the
   original, so it was omitted.
-- The demo data uses the same generation logic and scale as Java, but the RNG differs
-  (std::mt19937_64 vs java.util.Random), so the instances are not byte-identical.
+- The demo data follows the quickstart's generation logic and scale, drawn from a seeded
+  `std::mt19937_64`.
 - `pinned` is an extension of this port (not in the original quickstart; the same pattern
   as the es/st ports).
 
@@ -174,17 +174,17 @@ Assignments are matched by id. An assignment the solution leaves out is placed b
 ## Extending
 
 Engine contracts and code skeletons: [use-cases/README.md](../README.md#extending-a-use-case).
-The planning variable is **BASIC**; the domain solver that configures the
+The solution has the **assignment** shape; the domain solver that configures the
 engine is `cpp/include/fcs/solver.hpp` + `cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
-`optimaru::MoveOperator<…>` registered with `engine.addMoveOperator(...)` next
+`optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `cpp/src/solver.cpp`; a ruin for LNS is a
-`RuinOperator` registered with `engine.addRuinOperator(...)`.
+`RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set
-`engineConfig.constructionHeuristic.entityDifficulty` for First Fit
+`engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 

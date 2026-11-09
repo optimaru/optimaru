@@ -79,7 +79,7 @@ Built globalOf(Args &&...args)
 // lookup all read it, and es::catalogConstraints() holds the same components
 // (tests/test_constraint_specs.py checks the two agree). Each builder passes
 // the component's kDefaultWeight and reads the domain parameters after it;
-// the knobs are applied afterwards (applyKnobs), on the outermost component.
+// the knobs are applied afterwards (apply_knobs), on the outermost component.
 struct FactoryEntry
 {
     const char *name;
@@ -278,7 +278,7 @@ py::dict paramsOf(const py::handle &pick)
 // Builds one pick and adds it to `calc`: the factory component (at its
 // kDefaultWeight / kDefaultLevel and the given parameters), wrapped in a
 // ScopedUnit when the pick has a worker / shift scope, with the pick's
-// knobs re-stated on the outermost component by tfpy::applyKnobs (weight
+// knobs re-stated on the outermost component by tfpy::apply_knobs (weight
 // None keeps kDefaultWeight, level None keeps kDefaultLevel; a reward refuses
 // level='hard'; the type and range checks speak the Python base's words).
 //
@@ -306,7 +306,7 @@ void addConstraintByName(DecomposedCalculator &calc,
                               + "'; available: " + known);
     }
     Built built = entry->build(params);
-    if (tfpy::pythonName(built.metadata().name) != name)
+    if (tfpy::python_name(built.metadata().name) != name)
     {
         throw std::logic_error("factory entry '" + name + "' builds '"
                                + built.metadata().name + "'");
@@ -346,7 +346,7 @@ void addConstraintByName(DecomposedCalculator &calc,
                               + name + "'");
     }
 
-    tfpy::applyKnobs(built.metadata(), pick, name, optimaru::MediumFold::none());
+    tfpy::apply_knobs(built.metadata(), pick, name, optimaru::MediumFold::none());
     if (built.unit)
         calc.add(std::move(built.unit));
     else
@@ -405,10 +405,10 @@ PYBIND11_MODULE(_core, m)
     py::class_<Score>(m, "Score")
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
-        .def("is_feasible", &Score::isFeasible)
-        .def("__str__", &Score::toString)
+        .def("is_feasible", &Score::feasible)
+        .def("__str__", &Score::str)
         .def("__repr__",
-             [](const Score &s) { return "<Score " + s.toString() + ">"; });
+             [](const Score &s) { return "<Score " + s.str() + ">"; });
 
     py::class_<Employee>(m, "Employee")
         .def(py::init(
@@ -492,7 +492,7 @@ PYBIND11_MODULE(_core, m)
              });
 
     m.def("calculate_score",
-          &ScoreCalculator::calculateScore,
+          &ScoreCalculator::score,
           py::arg("schedule"),
           "Full recompute of the hard/soft score (also stores "
           "schedule.score).");
@@ -537,7 +537,7 @@ PYBIND11_MODULE(_core, m)
             {
                 // kwargs are domain parameters, which the factory reads by name
                 // and otherwise ignores: the old knob must not vanish there.
-                tfpy::refuseHardKeyword(kwargs);
+                tfpy::refuse_hard_keyword(kwargs);
                 // The same checks as a spec pick: a SimpleNamespace carrying
                 // the five knobs goes through the one factory path.
                 py::object pick = py::module_::import("types").attr(
@@ -579,8 +579,8 @@ PYBIND11_MODULE(_core, m)
             [](DecomposedCalculator &calc, EmployeeSchedule &schedule)
             {
                 ScoreCalculator::prepare(schedule);
-                calc.resetWorkingSolution(schedule);
-                Score s = calc.calculateScore();
+                calc.rebuild(schedule);
+                Score s = calc.score();
                 schedule.score = s;
                 return s;
             },
@@ -594,14 +594,14 @@ PYBIND11_MODULE(_core, m)
             {
                 py::list out;
                 for (const optimaru::ConstraintTotal &t :
-                     calc.constraintTotals())
+                     calc.constraint_totals())
                 {
                     py::dict d;
-                    d["name"] = tfpy::pythonName(t.name);
+                    d["name"] = tfpy::python_name(t.name);
                     d["label"] = t.label;  // the instance's display text
                     d["cost"] = t.cost;    // weighted; positive = penalizing
-                    d["level"] = optimaru::levelName(t.level);
-                    d["is_hard"] = t.isHard;
+                    d["level"] = optimaru::level_name(t.level);
+                    d["is_hard"] = t.is_hard;
                     out.append(d);
                 }
                 return out;
@@ -610,7 +610,7 @@ PYBIND11_MODULE(_core, m)
             "solution (positive = penalizing, negative = rewarding): "
             "{name, label, cost, level, is_hard}.")
         .def_property_readonly("delta_group_count",
-                               &DecomposedCalculator::deltaGroupCount,
+                               &DecomposedCalculator::delta_group_count,
                                "Number of structural delta groups compiled by "
                                "the last reset/solve.");
 
@@ -635,7 +635,7 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(schedule);
             auto calc = calculatorFor(constraints);
-            return tfpy::constraintCosts(*calc, schedule);
+            return tfpy::constraint_costs(*calc, schedule);
         },
         py::arg("schedule"),
         py::arg("constraints") = py::none(),
@@ -649,51 +649,51 @@ PYBIND11_MODULE(_core, m)
     // The constraint catalog: the eight defaults (default_enabled=True),
     // then every other constraint the factory builds (default_enabled=False),
     // read off es::defaultConstraints() / es::catalogConstraints().
-    tfpy::bindConstraintInfo(
+    tfpy::bind_constraint_info(
         m,
         [] { return defaultConstraints(); },
         [] { return catalogConstraints(); });
 
-    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig"))
+    optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig"))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
-            { return std::chrono::duration<double>(c.spentLimit).count(); },
+            { return std::chrono::duration<double>(c.time_limit).count(); },
             [](Solver::Config &c, double s)
-            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
+            { c.time_limit = optimaru::python::seconds_to_millis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c)
             {
-                return std::chrono::duration<double>(c.unimprovedSpentLimit)
+                return std::chrono::duration<double>(c.stall_time_limit)
                     .count();
             },
             [](Solver::Config &c, double s)
-            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
+            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
         .def_property(
             "no_improvement_limit_seconds",
             [](const Solver::Config &c)
             {
-                return std::chrono::duration<double>(c.unimprovedSpentLimit)
+                return std::chrono::duration<double>(c.stall_time_limit)
                     .count();
             },
             [](Solver::Config &c, double s)
-            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "no_improvement_limit_seconds"); })
-        .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
+            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "no_improvement_limit_seconds"); })
+        .def_readwrite("step_count_limit", &Solver::Config::step_limit)
         .def_readwrite("unimproved_step_count_limit",
-                       &Solver::Config::unimprovedStepCountLimit)
+                       &Solver::Config::stall_step_limit)
         .def_property(
             "no_improvement_step_count_limit",
-            [](const Solver::Config &c) { return c.unimprovedStepCountLimit; },
+            [](const Solver::Config &c) { return c.stall_step_limit; },
             [](Solver::Config &c, std::int64_t steps)
             {
                 if (steps < 0)
                     throw py::value_error(
                         "no_improvement_step_count_limit must be non-negative");
-                c.unimprovedStepCountLimit = steps;
+                c.stall_step_limit = steps;
             })
-        .def_readwrite("random_seed", &Solver::Config::randomSeed)
+        .def_readwrite("random_seed", &Solver::Config::seed)
         .def_readwrite("guided_moves", &Solver::Config::guidedMoves)
         .def_readwrite("employee_greedy_construction",
                        &Solver::Config::employeeGreedyConstruction)
@@ -710,15 +710,15 @@ PYBIND11_MODULE(_core, m)
             })
         .def_property(
             "late_acceptance_size",
-            [](const Solver::Config &c) { return c.lateAcceptanceSize; },
+            [](const Solver::Config &c) { return c.history_length; },
             [](Solver::Config &c, std::int64_t size)
             {
                 if (size <= 0)
                     throw py::value_error(
                         "late_acceptance_size must be positive");
-                c.lateAcceptanceSize = static_cast<std::size_t>(size);
+                c.history_length = static_cast<std::size_t>(size);
             })
-        .def_readwrite("ruin_recreate", &Solver::Config::ruinRecreate)
+        .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
         .def_readwrite("ruin_recreate_unimproved_step_trigger",
                        &Solver::Config::ruinRecreateUnimprovedStepTrigger)
         .def_readwrite("ruin_recreate_min_ruin_fraction",
@@ -745,10 +745,10 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::ruinRecreateAsMoveWeight)
         .def_readwrite("ruin_recreate_as_move_max_ruin",
                        &Solver::Config::ruinRecreateAsMoveMaxRuin)
-        .def_readwrite("descent_weight", &Solver::Config::descentWeight)
-        .def_readwrite("descent_max_sweeps", &Solver::Config::descentMaxSweeps)
-        .def_readwrite("change_move_weight", &Solver::Config::changeMoveWeight)
-        .def_readwrite("swap_move_weight", &Solver::Config::swapMoveWeight)
+        .def_readwrite("descent_weight", &Solver::Config::descent_weight)
+        .def_readwrite("descent_max_sweeps", &Solver::Config::descent_max_sweeps)
+        .def_readwrite("change_move_weight", &Solver::Config::change_weight)
+        .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
         .def_readwrite("nearby_shifts", &Solver::Config::nearbyShifts)
         .def_property(
             "nearby_shifts_probability",
@@ -799,40 +799,40 @@ PYBIND11_MODULE(_core, m)
             })
         .def_property(
             "custom_move_probability",
-            [](const Solver::Config &c) { return c.customMoveProbability; },
+            [](const Solver::Config &c) { return c.custom_move_probability; },
             [](Solver::Config &c, double probability)
             {
                 if (probability < 0.0 || probability > 1.0)
                     throw py::value_error(
                         "custom_move_probability must be between 0 and 1");
-                c.customMoveProbability = probability;
+                c.custom_move_probability = probability;
             })
         .def_readwrite("employee_ruin_moves",
                        &Solver::Config::employeeRuinMoves)
         .def_readwrite("employee_unassign_moves",
                        &Solver::Config::employeeUnassignMoves)
         .def_readwrite("relocate_move_weight",
-                       &Solver::Config::relocateMoveWeight)
+                       &Solver::Config::relocate_weight)
         .def_readwrite("list_swap_move_weight",
-                       &Solver::Config::listSwapMoveWeight)
-        .def_readwrite("two_opt_move_weight", &Solver::Config::twoOptMoveWeight)
-        .def_readwrite("or_opt_move_weight", &Solver::Config::orOptMoveWeight)
+                       &Solver::Config::list_swap_weight)
+        .def_readwrite("two_opt_move_weight", &Solver::Config::two_opt_weight)
+        .def_readwrite("or_opt_move_weight", &Solver::Config::or_opt_weight)
         .def_readwrite("tail_swap_move_weight",
-                       &Solver::Config::tailSwapMoveWeight)
+                       &Solver::Config::tail_swap_weight)
         // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",
             [](const Solver::Config &c)
             {
-                return py::make_tuple(c.bestScoreLimit.hard,
-                                      c.bestScoreLimit.soft);
+                return py::make_tuple(c.target_score.hard,
+                                      c.target_score.soft);
             },
             [](Solver::Config &c, std::pair<std::int64_t, double> hs)
-            { c.bestScoreLimit = Score{hs.first, hs.second}; })
+            { c.target_score = Score{hs.first, hs.second}; })
         // Callback fired on every new best solution: on_new_best(step, score).
         // The pybind11 wrapper re-acquires the GIL, which solve() releases.
-        .def_readwrite("on_new_best", &Solver::Config::onNewBest);
+        .def_readwrite("on_new_best", &Solver::Config::on_new_best);
 
     py::class_<Solver>(m, "Solver")
         .def(py::init<>())
@@ -848,7 +848,7 @@ PYBIND11_MODULE(_core, m)
         .def("solve",
              py::overload_cast<
                  EmployeeSchedule &,
-                 optimaru::DecomposedScoreCalculator<EmployeeSchedule> &>(
+                 optimaru::DecomposedObjective<EmployeeSchedule> &>(
                  &Solver::solve),
              py::arg("schedule"),
              py::arg("calculator"),

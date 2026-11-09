@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "fab/domain.hpp"
-#include "optimaru/preview/api/move/operators.hpp"
+#include "optimaru/search/operators.hpp"
 
 namespace fab
 {
@@ -30,7 +30,7 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        SemiconductorSchedule &s = ctx.director.workingSolution();
+        SemiconductorSchedule &s = ctx.editor.solution();
         const int n = s.rowCount();
         if (n < 2)
             return false;
@@ -59,21 +59,21 @@ public:
         b_ = b;
         oldA_ = valueA;
         oldB_ = valueB;
-        ctx.director.beginVariableChanges();
-        ctx.director.changeVariable(a, s.valueOf(s.rankOf(valueB), s.slotOf(valueA)));
-        ctx.director.changeVariable(b, s.valueOf(rankA, s.slotOf(valueB)));
-        ctx.director.endVariableChanges();
+        ctx.editor.begin_batch();
+        ctx.editor.assign(a, s.valueOf(s.rankOf(valueB), s.slotOf(valueA)));
+        ctx.editor.assign(b, s.valueOf(rankA, s.slotOf(valueB)));
+        ctx.editor.end_batch();
         entities.push_back(a);
         entities.push_back(b);
         return true;
     }
 
-    void undoLast(optimaru::OperatorContext<SemiconductorSchedule> &ctx) override
+    void undo_last(optimaru::OperatorContext<SemiconductorSchedule> &ctx) override
     {
-        ctx.director.beginVariableChanges();
-        ctx.director.changeVariable(a_, oldA_);
-        ctx.director.changeVariable(b_, oldB_);
-        ctx.director.endVariableChanges();
+        ctx.editor.begin_batch();
+        ctx.editor.assign(a_, oldA_);
+        ctx.editor.assign(b_, oldB_);
+        ctx.editor.end_batch();
     }
 
 private:

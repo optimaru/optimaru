@@ -50,21 +50,21 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
         .def_property(
             "spent_limit_seconds",
             [](const Config &c)
-            { return std::chrono::duration<double>(c.spentLimit).count(); },
+            { return std::chrono::duration<double>(c.time_limit).count(); },
             [](Config &c, double s)
-            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
+            { c.time_limit = optimaru::python::seconds_to_millis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Config &c) {
-                return std::chrono::duration<double>(c.unimprovedSpentLimit)
+                return std::chrono::duration<double>(c.stall_time_limit)
                     .count();
             },
             [](Config &c, double s)
-            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
-        .def_readwrite("step_count_limit", &Config::stepCountLimit)
+            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
+        .def_readwrite("step_count_limit", &Config::step_limit)
         .def_readwrite("unimproved_step_count_limit",
-                       &Config::unimprovedStepCountLimit)
-        .def_readwrite("random_seed", &Config::randomSeed)
+                       &Config::stall_step_limit)
+        .def_readwrite("random_seed", &Config::seed)
         .def_property(
             "parallel_solver_count",
             [](const Config &c) { return c.parallelSolverCount; },
@@ -80,28 +80,28 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
         // lessons, 400, 3200)).
         .def_property(
             "late_acceptance_size",
-            [](const Config &c) { return c.lateAcceptanceSize; },
+            [](const Config &c) { return c.history_length; },
             [](Config &c, std::int64_t size)
             {
                 if (size < 0)
                     throw py::value_error(
                         "late_acceptance_size must be >= 0 (0 = auto)");
-                c.lateAcceptanceSize = static_cast<std::size_t>(size);
+                c.history_length = static_cast<std::size_t>(size);
             })
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).
         .def_property(
             "full_assert",
             [](const Config &c) {
-                return c.environmentMode
-                       == optimaru::EnvironmentMode::FULL_ASSERT;
+                return c.score_checks
+                       == optimaru::ScoreChecks::Full;
             },
             [](Config &c, bool on)
             {
-                c.environmentMode = on ? optimaru::EnvironmentMode::FULL_ASSERT
-                                       : optimaru::EnvironmentMode::NON_ASSERT;
+                c.score_checks = on ? optimaru::ScoreChecks::Full
+                                       : optimaru::ScoreChecks::Off;
             })
-        .def_readwrite("ruin_recreate", &Config::ruinRecreate)
+        .def_readwrite("ruin_recreate", &Config::ruin_recreate)
         .def_readwrite("ruin_recreate_unimproved_step_trigger",
                        &Config::ruinRecreateUnimprovedStepTrigger)
         .def_readwrite("ruin_recreate_min_ruin_fraction",
@@ -128,38 +128,38 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
                        &Config::ruinRecreateAsMoveWeight)
         .def_readwrite("ruin_recreate_as_move_max_ruin",
                        &Config::ruinRecreateAsMoveMaxRuin)
-        .def_readwrite("descent_weight", &Config::descentWeight)
-        .def_readwrite("descent_max_sweeps", &Config::descentMaxSweeps)
-        .def_readwrite("change_move_weight", &Config::changeMoveWeight)
-        .def_readwrite("swap_move_weight", &Config::swapMoveWeight)
+        .def_readwrite("descent_weight", &Config::descent_weight)
+        .def_readwrite("descent_max_sweeps", &Config::descent_max_sweeps)
+        .def_readwrite("change_move_weight", &Config::change_weight)
+        .def_readwrite("swap_move_weight", &Config::swap_weight)
         // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(
             "best_score_limit",
             [](const Config &c) {
-                return py::make_tuple(c.bestScoreLimit.hard,
-                                      c.bestScoreLimit.soft);
+                return py::make_tuple(c.target_score.hard,
+                                      c.target_score.soft);
             },
             [](Config &c, std::pair<std::int64_t, double> hs)
-            { c.bestScoreLimit = Score{hs.first, hs.second}; })
+            { c.target_score = Score{hs.first, hs.second}; })
         // Callback fired on every new best solution: on_new_best(step, score).
         // The pybind11 wrapper re-acquires the GIL, so it is safe from the
         // engine's multi-start worker threads too.
-        .def_readwrite("on_new_best", &Config::onNewBest);
+        .def_readwrite("on_new_best", &Config::on_new_best);
 }
 
 // ---------------------------------------------------------------------------
 // Canonical constraint picks -> the standard resolve path
 // ---------------------------------------------------------------------------
-// The Python names are pythonName() of the components' registry names
+// The Python names are python_name() of the components' registry names
 // (teacherGapCost -> teacher_gap_cost), resolved against the default
-// assembly by tfpy::applyConstraints — no name table of our own. The one
+// assembly by tfpy::apply_constraints — no name table of our own. The one
 // domain-specific piece is the TeacherMaskHub: the five teacher-mask
 // components of ONE calculator share one projection, so a pick added to a
 // calculator that already holds family members joins their hub
 // (cn::sharedTeacherMaskHub) — the factory is defaultConstraints(hub).
 //
-// A name may be picked several times: applyConstraints calls the factory
+// A name may be picked several times: apply_constraints calls the factory
 // once more per repeat and appends that copy. Every call hands out the SAME
 // hub (the calculator's, or one made here for an empty calculator), so the
 // repeated teacher-mask instances subscribe to the projection the others
@@ -172,7 +172,7 @@ void addPicks(cn::DecomposedCalculator &calc, const py::object &picks)
     std::shared_ptr<cn::TeacherMaskHub> hub = cn::sharedTeacherMaskHub(calc);
     if (hub == nullptr)
         hub = std::make_shared<cn::TeacherMaskHub>();
-    tfpy::applyConstraints([&] { return cn::defaultConstraints(hub); }, picks)
+    tfpy::apply_constraints([&] { return cn::defaultConstraints(hub); }, picks)
         .into(calc);
 }
 
@@ -181,7 +181,7 @@ std::vector<std::string> catalogNames()
 {
     std::vector<std::string> names;
     for (const std::string &name : cn::constraintOrder())
-        names.push_back(tfpy::pythonName(name));
+        names.push_back(tfpy::python_name(name));
     return names;
 }
 
@@ -203,14 +203,14 @@ std::vector<optimaru::ConstraintInfo> catalogRows()
     return ordered;
 }
 
-// tfpy::constraintCosts(calc, table) with its entries in the catalog order:
+// tfpy::constraint_costs(calc, table) with its entries in the catalog order:
 // each catalog name's instances together, in the calculator's order (the
-// keys stay tfpy's: "<name>", "<name>#2", ..., the instanceKeys rule).
+// keys stay tfpy's: "<name>", "<name>#2", ..., the instance_keys rule).
 py::dict orderedConstraintCosts(cn::DecomposedCalculator &calc,
                                 cn::Timetable &table)
 {
     cn::ScoreCalculator::prepare(table);
-    const py::dict costs = tfpy::constraintCosts(calc, table);
+    const py::dict costs = tfpy::constraint_costs(calc, table);
     py::dict ordered;
     for (const std::string &name : catalogNames())
     {
@@ -278,7 +278,7 @@ double checkedWeight(const char *field, const py::object &value)
 
 void bindCanon(py::module_ &canon)
 {
-    // The soft weights of the monolithic fast path (SolverConfig.weights),
+    // The soft weights of the monolithic fast path (Settings.weights),
     // named like the soft constraints; the defaults are the components'
     // kDefaultWeight. Never part of the model, never read by the plugin path.
     const cn::ObjectiveWeights defaultWeights{};
@@ -476,13 +476,13 @@ void bindCanon(py::module_ &canon)
 
     canon.def("calculate_score",
               py::overload_cast<cn::Timetable &>(
-                  &cn::ScoreCalculator::calculateScore),
+                  &cn::ScoreCalculator::score),
               py::arg("table"),
-              "Full recompute of the HardSoftScore at the default weights "
+              "Full recompute of the score at the default weights "
               "(also stores table.score).");
     canon.def("calculate_score",
               py::overload_cast<cn::Timetable &, const cn::ObjectiveWeights &>(
-                  &cn::ScoreCalculator::calculateScore),
+                  &cn::ScoreCalculator::score),
               py::arg("table"),
               py::arg("weights"),
               "Full recompute with the soft terms at `weights` (the fast "
@@ -509,7 +509,7 @@ void bindCanon(py::module_ &canon)
         .def(py::init<>())
         // Example: DecomposedCalculator([TeacherGapCost(weight=40), ...]).
         // Duck-typed picks (.name/.weight/.level/.exponent, optionally
-        // .offset/.clip), resolved and checked by tfpy::applyConstraints:
+        // .offset/.clip), resolved and checked by tfpy::apply_constraints:
         // weight None keeps the component's kDefaultWeight, level None its
         // kDefaultLevel; a name picked several times is one instance per
         // pick.
@@ -539,7 +539,7 @@ void bindCanon(py::module_ &canon)
             {
                 // The knobs are the only keywords; the removed one gets the
                 // words every path uses, any other the usual TypeError.
-                tfpy::refuseHardKeyword(kwargs);
+                tfpy::refuse_hard_keyword(kwargs);
                 for (const auto &item : kwargs)
                     throw py::type_error("add() got an unexpected keyword argument '"
                                          + py::str(item.first).cast<std::string>() + "'");
@@ -579,8 +579,8 @@ void bindCanon(py::module_ &canon)
             [](cn::DecomposedCalculator &calc, cn::Timetable &table)
             {
                 cn::ScoreCalculator::prepare(table);
-                calc.resetWorkingSolution(table);
-                const Score s = calc.calculateScore();
+                calc.rebuild(table);
+                const Score s = calc.score();
                 table.score = s;
                 return s;
             },
@@ -593,7 +593,7 @@ void bindCanon(py::module_ &canon)
             [](const cn::DecomposedCalculator &calc)
             {
                 // In the catalog order, like constraint_costs():
-                // constraintTotals() lists the unit constraints before the
+                // constraint_totals() lists the unit constraints before the
                 // global ones. Anything outside the catalog comes last.
                 const std::vector<std::string> order = cn::constraintOrder();
                 const auto rank = [&order](const std::string &name)
@@ -602,7 +602,7 @@ void bindCanon(py::module_ &canon)
                            - order.begin();
                 };
                 std::vector<optimaru::ConstraintTotal> totals
-                    = calc.constraintTotals();
+                    = calc.constraint_totals();
                 std::stable_sort(totals.begin(),
                                  totals.end(),
                                  [&rank](const optimaru::ConstraintTotal &a,
@@ -612,11 +612,11 @@ void bindCanon(py::module_ &canon)
                 for (const optimaru::ConstraintTotal &t : totals)
                 {
                     py::dict d;
-                    d["name"] = tfpy::pythonName(t.name);
+                    d["name"] = tfpy::python_name(t.name);
                     d["label"] = t.label;
                     d["cost"] = t.cost;  // weighted; positive = penalizing
-                    d["level"] = optimaru::levelName(t.level);
-                    d["is_hard"] = t.isHard;
+                    d["level"] = optimaru::level_name(t.level);
+                    d["is_hard"] = t.is_hard;
                     out.append(d);
                 }
                 return out;
@@ -632,7 +632,7 @@ void bindCanon(py::module_ &canon)
             "Raw per-unit costs of this assembly's constraints on `table` "
             "(the constraint_costs() dict shape; re-primes the calculator).")
         .def_property_readonly("delta_group_count",
-                               &cn::DecomposedCalculator::deltaGroupCount,
+                               &cn::DecomposedCalculator::delta_group_count,
                                "Number of structural delta groups compiled by "
                                "the last reset/solve.");
 
@@ -678,7 +678,7 @@ void bindCanon(py::module_ &canon)
     py::class_<cn::Solver::Config> config(
         canon, "SolverConfig", py::module_local());
 
-    optimaru::python::bindConfigCopy(config);
+    optimaru::python::bind_config_copy(config);
     bindSolverConfigCommon(config);
     // The fast path's soft weights (solve(table) only; the model carries
     // none, the plugin path's components carry their own).
@@ -734,10 +734,10 @@ PYBIND11_MODULE(_core, m)
     py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
-        .def("is_feasible", &Score::isFeasible)
-        .def("__str__", &Score::toString)
+        .def("is_feasible", &Score::feasible)
+        .def("__str__", &Score::str)
         .def("__repr__",
-             [](const Score &s) { return "<Score " + s.toString() + ">"; });
+             [](const Score &s) { return "<Score " + s.str() + ">"; });
 
     py::class_<Timeslot>(m, "Timeslot", py::module_local())
         .def(py::init(
@@ -853,13 +853,13 @@ PYBIND11_MODULE(_core, m)
             py::arg("assignment"));
 
     m.def("calculate_score",
-          &ScoreCalculator::calculateScore,
+          &ScoreCalculator::score,
           py::arg("table"),
-          "Full recompute of the HardSoftScore (also stores table.score).");
+          "Full recompute of the score (also stores table.score).");
 
     py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
 
-    optimaru::python::bindConfigCopy(config);
+    optimaru::python::bind_config_copy(config);
     bindSolverConfigCommon(config);
     // Same-group nearby swap bias (see st/solver.hpp).
     config.def_readwrite("same_group_nearby", &Solver::Config::sameGroupNearby);
@@ -888,9 +888,9 @@ PYBIND11_MODULE(_core, m)
     // reward, default_enabled)], read off the C++ components'
     // kDefaultWeight / kDefaultLevel, in list_constraints() order. Bound on
     // the top-level module so ConstraintInfo pickles by reference. The rows
-    // go through bindInfoRows directly (not bindConstraintInfo) only to keep
+    // go through bind_info_rows directly (not bind_constraint_info) only to keep
     // the catalog order, which ConstraintAssembly::info() does not.
-    tfpy::detail::bindInfoRows(m, [] { return catalogRows(); });
+    tfpy::detail::bind_info_rows(m, [] { return catalogRows(); });
     m.def(
         "list_constraints",
         [] { return catalogNames(); },

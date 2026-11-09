@@ -764,7 +764,7 @@ def test_score_matches_the_engine_for_repeats_and_offsets(picks):
 
 @pytest.mark.parametrize("picks", list(SELECTIONS.values()), ids=list(SELECTIONS))
 def test_full_assert_solves_with_repeats_and_offsets(picks):
-    """FULL_ASSERT re-checks the incremental score against a full recompute after every move."""
+    """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     solution = build_solution()
     config = ta.SolverConfig()
     config.full_assert = True

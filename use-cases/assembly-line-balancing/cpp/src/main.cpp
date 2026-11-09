@@ -53,8 +53,8 @@ int main(int argc, char **argv)
     const std::int64_t lowerBound = (total + problem.cycleTime - 1) / problem.cycleTime;
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(seconds);
-    config.randomSeed = 42;
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 42;
     Solver solver(config);
     solver.solve(problem);
 
@@ -63,7 +63,7 @@ int main(int argc, char **argv)
                 static_cast<long long>(problem.cycleTime),
                 static_cast<long long>(total));
     std::printf("score %s, stations used %d (lower bound %lld)\n",
-                problem.score.toString().c_str(),
+                problem.score.str().c_str(),
                 problem.stationsUsed(),
                 static_cast<long long>(lowerBound));
     if (problem.score.hard != 0)

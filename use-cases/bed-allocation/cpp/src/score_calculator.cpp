@@ -255,7 +255,7 @@ ScoreCalculator::singleStayImpact(const BedPlan &plan, int stayIndex, int value)
     return impact;
 }
 
-Score ScoreCalculator::calculateScore(BedPlan &plan)
+Score ScoreCalculator::score(BedPlan &plan)
 {
     prepare(plan);
 

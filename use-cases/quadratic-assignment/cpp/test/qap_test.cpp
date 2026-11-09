@@ -8,9 +8,9 @@
 //   (c) prepare() validation
 //   (d) incremental == full recompute, score and per-constraint raw totals,
 //       across random swaps and unassign / reassign sequences driven through
-//       the engine's ScoreDirector; every constraint is non-zero on some step
+//       the engine's Editor; every constraint is non-zero on some step
 //   (e) the solver: zero budget keeps the start (identity or seed), warm
-//       start rules, n = 0 / 1, bijection after single / parallel / FULL_ASSERT
+//       start rules, n = 0 / 1, bijection after single / parallel / ScoreChecks::Full
 //       solves, brute-force optimum on small instances
 #include <algorithm>
 #include <chrono>
@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 #include "qap/domain.hpp"
 #include "qap/incremental_calculator.hpp"
 #include "qap/score_calculator.hpp"
@@ -67,12 +67,12 @@ void verifyHandScores()
         QuadraticAssignmentProblem p = twoFacilities();
         identity(p);
         check(!p.score, "a problem never scored has no score");
-        check(sameScore(ScoreCalculator::calculateScore(p), Score{0, -22.0}), "2x2 identity scores 0hard/-22soft");
+        check(sameScore(ScoreCalculator::score(p), Score{0, -22.0}), "2x2 identity scores 0hard/-22soft");
         check(p.score && sameScore(*p.score, Score{0, -22.0}), "calculateScore stores problem.score");
         check(p.totalCost() == 22 && p.flowDistanceCost() == 22 && p.assignmentCost() == 0, "2x2 total cost 22");
         // swapped: D[0][1] * F[1][0] + D[1][0] * F[0][1] = 4*2 + 5*3 = 23
         place(p, {1, 0});
-        check(sameScore(ScoreCalculator::calculateScore(p), Score{0, -23.0}), "2x2 swapped scores 0hard/-23soft");
+        check(sameScore(ScoreCalculator::score(p), Score{0, -23.0}), "2x2 swapped scores 0hard/-23soft");
     }
     {
         // L1<-F1, L2<-F2: pin L1->F2 broken (1), F2 at L2 forbidden (1),
@@ -80,18 +80,18 @@ void verifyHandScores()
         QuadraticAssignmentProblem p = sideInstance();
         identity(p);
         check(rawIs(ScoreCalculator::rawCosts(p), 1, 1, 2, 15, 22), "side instance, identity: raw 1/1/2/15/22");
-        check(sameScore(ScoreCalculator::calculateScore(p), Score{-4, -37.0}), "side instance, identity: -4hard/-37soft");
+        check(sameScore(ScoreCalculator::score(p), Score{-4, -37.0}), "side instance, identity: -4hard/-37soft");
         // L1<-F2, L2<-F1: every side constraint kept, direct 2 + 1 = 3, flow 23.
         place(p, {1, 0});
         check(rawIs(ScoreCalculator::rawCosts(p), 0, 0, 0, 3, 23), "side instance, swapped: raw 0/0/0/3/23");
-        check(sameScore(ScoreCalculator::calculateScore(p), Score{0, -26.0}), "side instance, swapped: 0hard/-26soft");
+        check(sameScore(ScoreCalculator::score(p), Score{0, -26.0}), "side instance, swapped: 0hard/-26soft");
     }
     {
         // The 0.1.x seed {L3: F1, L1: F2, L2: F3}: 2 * (3*4 + 1*2 + 2*1) = 32.
         QuadraticAssignmentProblem p = threeFacilities();
         place(p, {1, 2, 0});
         check(p.totalCost() == 32, "3x3 seed total cost 32");
-        check(sameScore(ScoreCalculator::calculateScore(p), Score{0, -32.0}), "3x3 seed scores 0hard/-32soft");
+        check(sameScore(ScoreCalculator::score(p), Score{0, -32.0}), "3x3 seed scores 0hard/-32soft");
         check(p.assignment() == std::vector<int>({1, 2, 0}) && p.isBijection(), "assignment() per location");
     }
     std::printf("\n");
@@ -164,7 +164,7 @@ void verifyConstraintsByHand()
         check(ScoreCalculator::rawCosts(p).assignmentCost == 4, "direct: 4 + 0 -> 4");
         place(p, {1, 0});
         check(ScoreCalculator::rawCosts(p).assignmentCost == -4, "direct: -6 + 2 -> -4 (a negative raw cost)");
-        check(sameScore(ScoreCalculator::calculateScore(p), Score{0, 4.0}), "a negative raw cost scores a soft bonus");
+        check(sameScore(ScoreCalculator::score(p), Score{0, 4.0}), "a negative raw cost scores a soft bonus");
         QuadraticAssignmentProblem none = emptyInstance(2);
         identity(none);
         check(ScoreCalculator::rawCosts(none).assignmentCost == 0, "direct: no matrix -> 0");
@@ -237,7 +237,7 @@ void verifyValidation()
 }
 
 // -------------------------------------------------------------------------
-// (d) Incremental == full recompute through the ScoreDirector.
+// (d) Incremental == full recompute through the Editor.
 // -------------------------------------------------------------------------
 void verifyIncremental()
 {
@@ -255,7 +255,7 @@ void verifyIncremental()
         std::mt19937_64 rng(100 + round);
         place(p, randomPermutation(12, rng));
         QuadraticAssignmentIncrementalScoreCalculator calculator;
-        optimaru::ScoreDirector<QuadraticAssignmentProblem> director(p, calculator);
+        optimaru::Editor<QuadraticAssignmentProblem> editor(p, calculator);
         std::uniform_int_distribution<int> facility(0, 11);
         std::uniform_int_distribution<int> kind(0, 9);
         for (int step = 0; step < 1250; ++step)
@@ -268,31 +268,31 @@ void verifyIncremental()
                 // A swap (the solver's only move), batched like the engine does.
                 const int la = p.facilities[a].location;
                 const int lb = p.facilities[b].location;
-                director.beginVariableChanges();
-                director.changeVariable(a, lb);
-                director.changeVariable(b, la);
-                director.endVariableChanges();
+                editor.begin_batch();
+                editor.assign(a, lb);
+                editor.assign(b, la);
+                editor.end_batch();
             }
             else if (what < 9)
             {
                 // Unassign / reassign (partial states a caller may write).
                 const int target = p.facilities[a].location < 0 ? facility(rng) : -1;
-                director.changeVariable(a, target);
+                editor.assign(a, target);
             }
             else
             {
-                director.changeVariable(a, facility(rng));  // a change move (two on one location)
+                editor.assign(a, facility(rng));  // a change move (two on one location)
             }
-            const Score incremental = director.calculateScore();
+            const Score incremental = editor.score();
             QuadraticAssignmentProblem copy = p;
-            const Score full = ScoreCalculator::calculateScore(copy);
+            const Score full = ScoreCalculator::score(copy);
             const std::vector<std::int64_t> live = perConstraint(calculator.rawCosts());
             const std::vector<std::int64_t> reset = perConstraint(ScoreCalculator::rawCosts(copy));
             ++checks;
             if (!sameScore(incremental, full) && ++mismatches <= 3)
             {
                 std::printf("  MISMATCH round %d step %d: incremental=%s full=%s\n", round, step,
-                            incremental.toString().c_str(), full.toString().c_str());
+                            incremental.str().c_str(), full.str().c_str());
             }
             for (std::size_t c = 0; c < reset.size(); ++c)
             {
@@ -323,16 +323,16 @@ void verifyIncremental()
 Solver::Config budget(std::int64_t steps, std::uint64_t seed = 1)
 {
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(60);
-    config.stepCountLimit = steps;
-    config.randomSeed = seed;
+    config.time_limit = std::chrono::seconds(60);
+    config.step_limit = steps;
+    config.seed = seed;
     return config;
 }
 
 Solver::Config zeroBudget()
 {
     Solver::Config config;
-    config.spentLimit = std::chrono::milliseconds(0);
+    config.time_limit = std::chrono::milliseconds(0);
     return config;
 }
 
@@ -359,7 +359,7 @@ Score bruteForceOptimum(QuadraticAssignmentProblem problem)
     do
     {
         place(problem, perm);
-        const Score score = ScoreCalculator::calculateScore(problem);
+        const Score score = ScoreCalculator::score(problem);
         if (score > best)
             best = score;
     } while (std::next_permutation(perm.begin(), perm.end()));
@@ -425,7 +425,7 @@ void verifySolver()
         QuadraticAssignmentProblem p = randomInstance(15, 5);
         Solver(budget(3000, 3)).solve(p);
         QuadraticAssignmentProblem copy = p;
-        check(p.isBijection() && sameScore(*p.score, ScoreCalculator::calculateScore(copy)),
+        check(p.isBijection() && sameScore(*p.score, ScoreCalculator::score(copy)),
               "single solve: a bijection, score = full recompute");
         QuadraticAssignmentProblem q = randomInstance(15, 5);
         Solver::Config parallel = budget(3000, 3);
@@ -434,7 +434,7 @@ void verifySolver()
         check(q.isBijection(), "4 parallel starts: a bijection");
         QuadraticAssignmentProblem f = randomInstance(10, 8);
         Solver::Config full = budget(1500, 9);
-        full.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        full.score_checks = optimaru::ScoreChecks::Full;
         bool ok = true;
         try
         {
@@ -449,8 +449,8 @@ void verifySolver()
         // The entity-tabu acceptor keeps the permutation too.
         QuadraticAssignmentProblem t = randomInstance(10, 12);
         Solver::Config tabu = budget(2000, 4);
-        tabu.acceptorType = optimaru::AcceptorType::ENTITY_TABU;
-        tabu.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        tabu.rule = optimaru::AcceptanceRule::EntityTabu;
+        tabu.score_checks = optimaru::ScoreChecks::Full;
         Solver(tabu).solve(t);
         check(t.isBijection(), "ENTITY_TABU FULL_ASSERT solve: a bijection");
     }
@@ -466,17 +466,17 @@ void verifySolver()
             if (sameScore(*p.score, optimum))
                 ++reached;
             else
-                std::printf("  n=%d: solver %s, optimum %s\n", n, p.score->toString().c_str(),
-                            optimum.toString().c_str());
+                std::printf("  n=%d: solver %s, optimum %s\n", n, p.score->str().c_str(),
+                            optimum.str().c_str());
         }
         check(reached == instances, std::to_string(reached) + "/" + std::to_string(instances)
                                         + " small instances (n = 4..7) reach the brute-force optimum");
     }
     {
-        // onNewBest fires and the seeded solve is reproducible.
+        // on_new_best fires and the seeded solve is reproducible.
         int calls = 0;
         Solver::Config config = budget(2000, 21);
-        config.onNewBest = [&calls](std::int64_t, const Score &) { ++calls; };
+        config.on_new_best = [&calls](std::int64_t, const Score &) { ++calls; };
         QuadraticAssignmentProblem a = randomInstance(12, 77);
         Solver(config).solve(a);
         QuadraticAssignmentProblem b = randomInstance(12, 77);

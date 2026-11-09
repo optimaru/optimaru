@@ -1,10 +1,10 @@
 """Facility location — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the facility-location example model: one BASIC planning variable
+A port of the facility-location example model: one assignment-shape planning variable
 (`Consumer.facility`, a facility index, -1 = unassigned) picks one facility
 per consumer.
 
-Score (HardSoftScore), at the default weights:
+Score, at the default weights:
   hard = -(sum over used facilities of max(0, assigned demand - capacity))  # facility_capacity_cost
   soft = -(2 x setup cost of used facilities                                 # facility_setup_cost
            + 6 x consumer-facility distance)                                 # distance_from_facility_cost

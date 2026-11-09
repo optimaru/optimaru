@@ -33,7 +33,7 @@ namespace sls
 // The full provider at the quickstart's weights, each component at its own
 // kDefaultWeight / kDefaultLevel: four hard rules at weight 1, the five
 // travel hops in plain kilometres and workdayClassicMatchesCost at x 1'000.
-// This assembly scores bit-for-bit like ScoreCalculator::calculateScore and
+// This assembly scores bit-for-bit like ScoreCalculator::score and
 // the monolithic incremental calculator. Its info() is the domain's
 // constraint catalog (the Python constraint_info()); the catalog order is
 // the assembly's: the three unit constraints (startToAwayHopCost,

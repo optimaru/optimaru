@@ -9,7 +9,7 @@ namespace fl
 // Soft, weight 2: facilitySetupCost — a facility serving at least one
 // consumer costs its setup price once. Raw cost per facility = its setup cost
 // while used, 0 while unused. The weight 2 is the provider's fixed
-// HardSoftScore.ofSoft(2) (before 0.2.0 it was also stored on the problem as
+// Score.ofSoft(2) (before 0.2.0 it was also stored on the problem as
 // setupCostWeight).
 //
 // A step function of "is this facility used at all", which is why the domain
@@ -26,7 +26,7 @@ struct FacilitySetupCost final : FlUnitConstraint
         : FlUnitConstraint("facilitySetupCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const FacilityLocationProblem &problem) override
+    void on_reset(const FacilityLocationProblem &problem) override
     {
         detail::requirePrepared(problem);
     }

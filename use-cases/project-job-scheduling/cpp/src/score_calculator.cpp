@@ -161,7 +161,7 @@ void ScoreCalculator::updateDates(ProjectJobSchedule &schedule)
     }
 }
 
-Score ScoreCalculator::calculateScore(ProjectJobSchedule &schedule)
+Score ScoreCalculator::score(ProjectJobSchedule &schedule)
 {
     prepare(schedule);
     updateDates(schedule);

@@ -25,7 +25,7 @@ struct StationCapacityCost final : AlbUnitConstraint
         : AlbUnitConstraint("stationCapacityCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const AssemblyLineBalancingProblem &problem) override
+    void on_reset(const AssemblyLineBalancingProblem &problem) override
     {
         detail::requirePrepared(problem);
     }

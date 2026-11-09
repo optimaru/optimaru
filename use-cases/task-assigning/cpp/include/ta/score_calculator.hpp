@@ -2,7 +2,7 @@
 #define TA_SCORE_CALCULATOR_HPP
 
 #include "ta/domain.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/score/score.hpp"
 
 namespace ta
 {
@@ -11,7 +11,7 @@ namespace ta
 // full-recompute reference: walks every employee's task list, re-derives the
 // shadow variables and sums the four Bendable levels. It is the correctness
 // oracle for the incremental calculator (checked in the tests and under
-// EnvironmentMode::FULL_ASSERT) and the authoritative final scoring.
+// ScoreChecks::ScoreChecks::Full) and the authoritative final scoring.
 class ScoreCalculator
 {
 public:
@@ -30,11 +30,11 @@ public:
     //   soft[2]  criticalPriorityTaskEndTimeCost  endTime x 4
     //            majorPriorityTaskEndTimeCost     endTime x 2
     //            minorPriorityTaskEndTimeCost     endTime x 1
-    static Score calculateScore(TaskAssigningSolution &solution);
+    static Score score(TaskAssigningSolution &solution);
 
-    // calculateScore mapped into the engine's HardSoftScore through the
+    // score mapped into the engine's Score through the
     // domain's medium fold (see the mapping rule in ta/domain.hpp).
-    static optimaru::HardSoftScore
+    static optimaru::Score
     calculateEngineScore(TaskAssigningSolution &solution);
 };
 

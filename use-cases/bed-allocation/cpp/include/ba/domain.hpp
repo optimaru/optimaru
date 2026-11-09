@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
+#include "optimaru/score/levels.hpp"
 
 namespace ba
 {
@@ -20,7 +20,7 @@ namespace ba
 // Score  (HardMediumSoftScore mirror)
 // ---------------------------------------------------------------------------
 // The Java quickstart scores with HardMediumSoftScore; the generic engine
-// (include/optimaru/) only knows HardSoftScore(int64 hard, double soft). Mapping rule:
+// (include/optimaru/) only knows Score(int64 hard, double soft). Mapping rule:
 //
 //   engine.hard = hard
 //   engine.soft = medium * kMediumUnit + soft      (kMediumUnit = 10^9)
@@ -40,7 +40,7 @@ namespace ba
 // therefore in medium units (unassignedStaysCost: 1), never 10^9.
 constexpr std::int64_t kMediumUnit = 1000000000LL;  // 10^9
 constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::intoSoft(static_cast<double>(kMediumUnit));
+    = optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
 
 struct Score
 {
@@ -48,7 +48,7 @@ struct Score
     std::int64_t medium = 0;
     std::int64_t soft = 0;
 
-    bool isFeasible() const { return hard >= 0; }
+    bool feasible() const { return hard >= 0; }
 
     bool operator<(const Score &o) const
     {
@@ -66,24 +66,24 @@ struct Score
         return hard == o.hard && medium == o.medium && soft == o.soft;
     }
 
-    std::string toString() const
+    std::string str() const
     {
         return std::to_string(hard) + "hard/" + std::to_string(medium)
                + "medium/" + std::to_string(soft) + "soft";
     }
 };
 
-inline optimaru::HardSoftScore toEngineScore(const Score &s)
+inline optimaru::Score toEngineScore(const Score &s)
 {
     // soft + medium * 10^9: the same double arithmetic as the old
     // `medium * kMediumUnit + soft` (exact for the integral levels of this
     // domain, |engine soft| < 2^53).
-    return kMediumFold.toEngine(s.hard,
+    return kMediumFold.to_engine(s.hard,
                                 static_cast<double>(s.medium),
                                 static_cast<double>(s.soft));
 }
 
-// A best-score LIMIT (Solver::Config::bestScoreLimit) in engine terms.
+// A best-score LIMIT (Solver::Config::target_score) in engine terms.
 // kNoLevelFloor (INT64_MIN) on the medium or the soft level means "no floor
 // on the soft side": the engine's soft limit becomes -inf, so only the hard
 // level is compared and no soft score, however low, can miss the stop.
@@ -92,7 +92,7 @@ inline optimaru::HardSoftScore toEngineScore(const Score &s)
 // low enough soft score never reaches. Any other limit folds as a score.
 constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
 
-inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
+inline optimaru::Score toEngineScoreLimit(const Score &limit)
 {
     if (limit.medium == kNoLevelFloor || limit.soft == kNoLevelFloor)
         return {limit.hard, -std::numeric_limits<double>::infinity()};
@@ -101,9 +101,9 @@ inline optimaru::HardSoftScore toEngineScoreLimit(const Score &limit)
 
 // Inverse of toEngineScore. Every constraint penalizes (medium/soft <= 0 and
 // integral), so truncating integer division decodes the two levels exactly.
-inline Score fromEngineScore(const optimaru::HardSoftScore &e)
+inline Score fromEngineScore(const optimaru::Score &e)
 {
-    const std::int64_t combined = optimaru::roundScoreLevel(e.soft, "soft");
+    const std::int64_t combined = optimaru::round_score_level(e.soft, "soft");
     return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
 }
 
@@ -171,7 +171,7 @@ struct Bed
 //                         penalized per night on the medium level
 //                         (unassignedStaysCost)
 // The sentinel keeps allowsUnassigned semantics inside the engine's BASIC
-// value range [0, valueCount): local search can move a stay to "no bed" when
+// value range [0, value_count): local search can move a stay to "no bed" when
 // every real bed causes a hard conflict.
 //
 // Dates are integer day indices (e.g. LocalDate::toEpochDay); only
@@ -227,7 +227,7 @@ struct BedPlan
     Score score;
 
     // Set once by ScoreCalculator::prepare; guards against re-interning the
-    // equipment ids on every calculateScore call.
+    // equipment ids on every score call.
     bool prepared = false;
 
     // Filled by ScoreCalculator::prepare:
@@ -252,26 +252,26 @@ struct BedPlan
 }  // namespace ba
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization  (the @PlanningEntity/@PlanningVariable
+// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
 // annotations of the C++ engine): entities are stays, the planning variable
 // is Stay::bed, the value range is the bed list plus the "no bed" sentinel
 // (allowsUnassigned = true). The Java quickstart has no @PlanningPin, so no
-// isPinned hook is declared.
+// is_pinned hook is declared.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<ba::BedPlan>
+template <> struct optimaru::SolutionTraits<ba::BedPlan>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const ba::BedPlan &p)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const ba::BedPlan &p)
     {
         return static_cast<int>(p.stays.size());
     }
-    static int valueCount(const ba::BedPlan &p) { return p.bedCount() + 1; }
-    static int getVariable(const ba::BedPlan &p, int stayIndex)
+    static int value_count(const ba::BedPlan &p) { return p.bedCount() + 1; }
+    static int value_of(const ba::BedPlan &p, int stayIndex)
     {
         return p.stays[stayIndex].bed;
     }
-    static void setVariable(ba::BedPlan &p, int stayIndex, int bed)
+    static void assign(ba::BedPlan &p, int stayIndex, int bed)
     {
         p.stays[stayIndex].bed = bed;
     }

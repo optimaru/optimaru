@@ -1,7 +1,7 @@
 # flight_crew
 
 The Python package wrapping, with pybind11, the C++ port (`../cpp`) of the
-flight-crew-scheduling example model. Solves the BASIC-variable problem of picking a crew member for every
+flight-crew-scheduling example model. Solves the assignment-shaped problem of picking a crew member for every
 crew seat of a flight with late-acceptance local search + ALNS.
 
 ## Install
@@ -62,7 +62,7 @@ for a in result.flight_assignments:
 - Fine-grained settings go through `models.SolveConfig` (serializable) or `fc.SolverConfig`:
   `fc.solve(problem, config=SolveConfig(time_limit_seconds=10, parallel_solver_count=4))`.
 
-## Constraints (the Java ConstraintProvider as-is, HardSoftScore)
+## Constraints (the Java ConstraintProvider as-is, Score)
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per employee (0 = no violation) |
 |---|---|---|---|---|
@@ -73,7 +73,7 @@ for a in result.flight_assignments:
 | `first_assignment_not_departing_from_home_cost` | `FirstAssignmentNotDepartingFromHomeCost` | soft | 1000 | earliest assignments not departing from home |
 | `last_assignment_not_arriving_at_home_cost` | `LastAssignmentNotArrivingAtHomeCost` | soft | 1000 | latest assignments not arriving at home |
 
-The score is the original `HardSoftScore` as-is (no level folding). `fc.constraint_info()`
+The score is the original `Score` as-is (no level folding). `fc.constraint_info()`
 reports this catalog (`ConstraintInfo(name, default_level, default_weight, level_flippable,
 reward, default_enabled)`) straight from the C++ components; every constraint is flippable
 between hard and soft (`level="medium"` raises `ValueError`: there is no medium level), none

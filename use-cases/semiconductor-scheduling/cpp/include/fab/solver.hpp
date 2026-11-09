@@ -11,9 +11,9 @@
 #include <vector>
 
 #include "fab/domain.hpp"
-#include "optimaru/api/score/calculator/decomposed_score_calculator.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
-#include "optimaru/config/localsearch/decider/acceptor/local_search_acceptor_config.hpp"
+#include "optimaru/score/decomposed_objective.hpp"
+#include "optimaru/model/editor.hpp"
+#include "optimaru/settings.hpp"
 
 namespace fab
 {
@@ -42,24 +42,24 @@ public:
     {
         // Wall-clock budget. 0 stops right after construction (the start is
         // returned as is; the zero-budget idiom of the tests).
-        std::chrono::milliseconds spentLimit{std::chrono::seconds(30)};
+        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
-        // Stop early once bestScore >= bestScoreLimit (default: never).
-        Score bestScoreLimit{std::numeric_limits<std::int64_t>::max(),
+        // Stop early once bestScore >= target_score (default: never).
+        Score target_score{std::numeric_limits<std::int64_t>::max(),
                              std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds unimprovedSpentLimit{0};
-        std::int64_t stepCountLimit = 0;
-        std::int64_t unimprovedStepCountLimit = 0;
+        std::chrono::milliseconds stall_time_limit{0};
+        std::int64_t step_limit = 0;
+        std::int64_t stall_step_limit = 0;
 
-        std::uint64_t randomSeed = 0;
+        std::uint64_t seed = 0;
         // Independent starts, one thread each (seed + i); the best wins. The
         // constraints overload runs a single start (see there).
         int parallelSolverCount = 1;
 
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).
-        optimaru::EnvironmentMode environmentMode = optimaru::EnvironmentMode::NON_ASSERT;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
         // Acceptor: simulated annealing (the 0.1.x search was one too). With a
         // (0, 0) starting temperature (the default) it is auto: hard 0 (a
@@ -68,29 +68,29 @@ public:
         // (at least 1), cooling linearly over the spent limit. Measured on the
         // benchmark instances and the web demo, 1% beat late acceptance (which
         // stalls within a second on these plateaus) and 0.5% / 2% / 5%.
-        // lateAcceptanceSize (LATE_ACCEPTANCE) 0 = auto: clamp(16 * rows, 400, 3200).
-        optimaru::AcceptorType acceptorType = optimaru::AcceptorType::SIMULATED_ANNEALING;
-        Score simulatedAnnealingStartingTemperature{0, 0.0};
+        // history_length (LATE_ACCEPTANCE) 0 = auto: clamp(16 * rows, 400, 3200).
+        optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::SimulatedAnnealing;
+        Score start_temperature{0, 0.0};
         double simulatedAnnealingTemperatureFraction = 0.01;
-        std::size_t lateAcceptanceSize = 0;
+        std::size_t history_length = 0;
 
         // Moves. The change move draws its value from the recommender: with
         // machineMoveProbability another machine for the row (rank kept),
         // otherwise a small priority shift (machine kept, rank +- 1..8);
-        // `changeMoveWeight` / `swapMoveWeight` are the engine's BASIC mix
+        // `change_weight` / `swap_weight` are the engine's BASIC mix
         // (the built-in swap would trade whole values between unrelated
         // rows, so it is off). The priority swap exchanges the ranks of two
-        // rows of different lots, both machines kept; customMoveProbability
+        // rows of different lots, both machines kept; custom_move_probability
         // gates how often a step may draw it.
-        double changeMoveWeight = 1.0;
-        double swapMoveWeight = 0.0;
+        double change_weight = 1.0;
+        double swap_weight = 0.0;
         double machineMoveProbability = 0.55;
         bool prioritySwapMoves = true;
-        double customMoveProbability = 0.45;
+        double custom_move_probability = 0.45;
 
         // Ruin-and-recreate (the engine's ALNS). Off: a recreate evaluates
         // every value of every ruined row, each one a decode.
-        bool ruinRecreate = false;
+        bool ruin_recreate = false;
         std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
         double ruinRecreateMinRuinFraction = 0.10;
         double ruinRecreateMaxRuinFraction = 0.30;
@@ -99,12 +99,12 @@ public:
         std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
         std::int64_t ruinRecreatePolishSteps = 5000;
 
-        std::function<void(std::int64_t, const Score &)> onNewBest;
+        std::function<void(std::int64_t, const Score &)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
         // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stopFlag;
+        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;
@@ -120,18 +120,18 @@ public:
     // The same search scored by a caller-assembled plugin calculator (see
     // fab/constraints.hpp). The final score is computed by THIS calculator in
     // data mode, and the calculator is left primed on the final assignments,
-    // so constraintTotals() explains exactly that score; makespan and the
+    // so constraint_totals() explains exactly that score; makespan and the
     // totals come from every constraint, as always. Single start: the
     // caller-owned calculator cannot be cloned, so parallelSolverCount is
     // ignored.
     void solve(SemiconductorSchedule &schedule,
-               optimaru::DecomposedScoreCalculator<SemiconductorSchedule> &calculator);
+               optimaru::DecomposedObjective<SemiconductorSchedule> &calculator);
 
 private:
     // solve(schedule) after beginSearch(): the starts and endSearch().
     void searchFromBegun(SemiconductorSchedule &schedule);
     void runSingle(SemiconductorSchedule &schedule,
-                   optimaru::IncrementalScoreCalculator<SemiconductorSchedule> &calculator) const;
+                   optimaru::Objective<SemiconductorSchedule> &calculator) const;
 
     Config config_;
 };

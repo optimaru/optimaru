@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <stdexcept>
 #include <string>
-#include "optimaru/api/score/level.hpp"
+#include "optimaru/score/levels.hpp"
 
 namespace st::canon
 {
@@ -66,7 +66,7 @@ double Breakdown::softPenalty(const ObjectiveWeights &w) const
 
 Score Breakdown::toScore(const ObjectiveWeights &w) const
 {
-    return {-hardTotal(), optimaru::withoutNegativeZero(-softPenalty(w))};
+    return {-hardTotal(), optimaru::without_negative_zero(-softPenalty(w))};
 }
 
 std::int64_t
@@ -365,12 +365,12 @@ Breakdown ScoreCalculator::computeBreakdown(Timetable &table)
     return b;
 }
 
-Score ScoreCalculator::calculateScore(Timetable &table)
+Score ScoreCalculator::score(Timetable &table)
 {
-    return calculateScore(table, ObjectiveWeights{});
+    return score(table, ObjectiveWeights{});
 }
 
-Score ScoreCalculator::calculateScore(Timetable &table,
+Score ScoreCalculator::score(Timetable &table,
                                       const ObjectiveWeights &weights)
 {
     const Breakdown b = computeBreakdown(table);

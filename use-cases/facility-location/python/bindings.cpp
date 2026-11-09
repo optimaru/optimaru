@@ -30,10 +30,10 @@ PYBIND11_MODULE(_core, m)
     py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
-        .def("is_feasible", &Score::isFeasible)
-        .def("__str__", &Score::toString)
+        .def("is_feasible", &Score::feasible)
+        .def("__str__", &Score::str)
         .def("__repr__",
-             [](const Score &s) { return "<Score " + s.toString() + ">"; });
+             [](const Score &s) { return "<Score " + s.str() + ">"; });
 
     py::class_<Location>(m, "Location", py::module_local())
         .def(py::init(
@@ -158,31 +158,31 @@ PYBIND11_MODULE(_core, m)
             py::arg("assignment"));
 
     m.def("calculate_score",
-          &ScoreCalculator::calculateScore,
+          &ScoreCalculator::score,
           py::arg("problem"),
-          "Full recompute of the HardSoftScore (also stores problem.score).");
+          "Full recompute of the score (also stores problem.score).");
 
-    optimaru::python::bindConfigCopy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
+    optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
             [](const Solver::Config &c)
-            { return std::chrono::duration<double>(c.spentLimit).count(); },
+            { return std::chrono::duration<double>(c.time_limit).count(); },
             [](Solver::Config &c, double s)
-            { c.spentLimit = optimaru::python::secondsToMillis(s, "spent_limit_seconds"); })
+            { c.time_limit = optimaru::python::seconds_to_millis(s, "spent_limit_seconds"); })
         .def_property(
             "unimproved_spent_limit_seconds",
             [](const Solver::Config &c)
             {
-                return std::chrono::duration<double>(c.unimprovedSpentLimit)
+                return std::chrono::duration<double>(c.stall_time_limit)
                     .count();
             },
             [](Solver::Config &c, double s)
-            { c.unimprovedSpentLimit = optimaru::python::secondsToMillis(s, "unimproved_spent_limit_seconds"); })
-        .def_readwrite("step_count_limit", &Solver::Config::stepCountLimit)
+            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
+        .def_readwrite("step_count_limit", &Solver::Config::step_limit)
         .def_readwrite("unimproved_step_count_limit",
-                       &Solver::Config::unimprovedStepCountLimit)
-        .def_readwrite("random_seed", &Solver::Config::randomSeed)
+                       &Solver::Config::stall_step_limit)
+        .def_readwrite("random_seed", &Solver::Config::seed)
         .def_property(
             "parallel_solver_count",
             [](const Solver::Config &c) { return c.parallelSolverCount; },
@@ -197,29 +197,29 @@ PYBIND11_MODULE(_core, m)
         // (clamp(8 * consumers, 400, 3200)).
         .def_property(
             "late_acceptance_size",
-            [](const Solver::Config &c) { return c.lateAcceptanceSize; },
+            [](const Solver::Config &c) { return c.history_length; },
             [](Solver::Config &c, std::int64_t size)
             {
                 if (size < 0)
                     throw py::value_error(
                         "late_acceptance_size must be >= 0 (0 = auto)");
-                c.lateAcceptanceSize = static_cast<std::size_t>(size);
+                c.history_length = static_cast<std::size_t>(size);
             })
-        // FULL_ASSERT re-verifies the incremental score against a full
+        // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).
         .def_property(
             "full_assert",
             [](const Solver::Config &c)
             {
-                return c.environmentMode
-                       == optimaru::EnvironmentMode::FULL_ASSERT;
+                return c.score_checks
+                       == optimaru::ScoreChecks::Full;
             },
             [](Solver::Config &c, bool on)
             {
-                c.environmentMode = on ? optimaru::EnvironmentMode::FULL_ASSERT
-                                       : optimaru::EnvironmentMode::NON_ASSERT;
+                c.score_checks = on ? optimaru::ScoreChecks::Full
+                                       : optimaru::ScoreChecks::Off;
             })
-        .def_readwrite("ruin_recreate", &Solver::Config::ruinRecreate)
+        .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
         .def_readwrite("ruin_recreate_unimproved_step_trigger",
                        &Solver::Config::ruinRecreateUnimprovedStepTrigger)
         .def_readwrite("ruin_recreate_min_ruin_fraction",
@@ -243,13 +243,13 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("ruin_recreate_polish_steps",
                        &Solver::Config::ruinRecreatePolishSteps)
         // Destroy-and-repair as an ordinary acceptor-judged move (engine
-        // ruinRecreate.asMoveWeight). 0 disables it.
+        // ruin_recreate.as_move_weight). 0 disables it.
         .def_readwrite("ruin_recreate_as_move_weight",
                        &Solver::Config::ruinRecreateAsMoveWeight)
         .def_readwrite("ruin_recreate_as_move_max_ruin",
                        &Solver::Config::ruinRecreateAsMoveMaxRuin)
-        .def_readwrite("change_move_weight", &Solver::Config::changeMoveWeight)
-        .def_readwrite("swap_move_weight", &Solver::Config::swapMoveWeight)
+        .def_readwrite("change_move_weight", &Solver::Config::change_weight)
+        .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
         // Nearby selection over consumers (geo distance): swap-partner bias
         // and LNS related-ruin upgrade. probability 0 = off.
         .def_readwrite("nearby_probability", &Solver::Config::nearbyProbability)
@@ -261,11 +261,11 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("value_recommender_keep",
                        &Solver::Config::valueRecommenderKeep)
         // BASIC best-improvement descent strategy weight. 0 = off.
-        .def_readwrite("descent_weight", &Solver::Config::descentWeight)
+        .def_readwrite("descent_weight", &Solver::Config::descent_weight)
         // Gate on how often a step may draw CloseFacilityMove. 1 = engine
         // default (unrestricted).
         .def_readwrite("custom_move_probability",
-                       &Solver::Config::customMoveProbability)
+                       &Solver::Config::custom_move_probability)
         // CloseFacilityMove: the domain macro move that takes one facility
         // out of service in a single step (see cpp/src/solver.cpp).
         .def_readwrite("close_facility_moves",
@@ -280,15 +280,15 @@ PYBIND11_MODULE(_core, m)
             "best_score_limit",
             [](const Solver::Config &c)
             {
-                return py::make_tuple(c.bestScoreLimit.hard,
-                                      c.bestScoreLimit.soft);
+                return py::make_tuple(c.target_score.hard,
+                                      c.target_score.soft);
             },
             [](Solver::Config &c, std::pair<std::int64_t, double> hs)
-            { c.bestScoreLimit = Score{hs.first, hs.second}; })
+            { c.target_score = Score{hs.first, hs.second}; })
         // Callback fired on every new best solution: on_new_best(step, score).
         // The pybind11 wrapper re-acquires the GIL, so it is safe from the
         // engine's multi-start worker threads too.
-        .def_readwrite("on_new_best", &Solver::Config::onNewBest);
+        .def_readwrite("on_new_best", &Solver::Config::on_new_best);
 
     py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
@@ -312,7 +312,7 @@ PYBIND11_MODULE(_core, m)
             {
                 ScoreCalculator::prepare(problem);
                 DecomposedCalculator calculator;
-                tfpy::applyConstraints([] { return defaultConstraints(); },
+                tfpy::apply_constraints([] { return defaultConstraints(); },
                                        constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
@@ -325,7 +325,7 @@ PYBIND11_MODULE(_core, m)
     // facility_location.constraints.score() turns into a score. Scoring once
     // is enough: re-pricing any assembly is pure Python arithmetic on these.
     // None = the default assembly; a pick list scores exactly those picks
-    // (applyConstraints), each entry carrying its pick's knobs, the k-th pick
+    // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
     // of a name keyed "<name>#<k>".
     m.def(
         "constraint_costs",
@@ -333,10 +333,10 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            tfpy::applyConstraints([] { return defaultConstraints(); },
+            tfpy::apply_constraints([] { return defaultConstraints(); },
                                    constraints)
                 .into(calculator);
-            return tfpy::constraintCosts(calculator, problem);
+            return tfpy::constraint_costs(calculator, problem);
         },
         py::arg("problem"),
         py::arg("constraints") = py::none(),
@@ -346,12 +346,12 @@ PYBIND11_MODULE(_core, m)
     // the same strings a score breakdown reports.
     m.def(
         "list_constraints",
-        [] { return tfpy::constraintNames(defaultConstraints()); },
+        [] { return tfpy::constraint_names(defaultConstraints()); },
         "Constraint names available to facility_location.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,
     // default_weight, level_flippable, reward, default_enabled), ...] in
     // list_constraints() order. The defaults live in the C++ components only.
-    tfpy::bindConstraintInfo(m, [] { return defaultConstraints(); });
+    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

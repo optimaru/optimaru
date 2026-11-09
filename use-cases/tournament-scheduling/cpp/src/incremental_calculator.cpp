@@ -12,19 +12,19 @@ namespace ts
 // (ts/constraints.hpp): the components' kDefaultWeight constants, checked to
 // be integral and on the level they are summed into.
 
-void TournamentSchedulingIncrementalScoreCalculator::resetWorkingSolution(
-    TournamentSchedule &workingSolution)
+void TournamentSchedulingIncrementalScoreCalculator::rebuild(
+    TournamentSchedule &solution)
 {
-    schedule_ = &workingSolution;
-    teamCount_ = workingSolution.teamCount();
-    dayCount_ = workingSolution.dayCount();
+    schedule_ = &solution;
+    teamCount_ = solution.teamCount();
+    dayCount_ = solution.dayCount();
 
     const std::size_t cells = static_cast<std::size_t>(teamCount_) * dayCount_;
     cellCnt_.assign(cells, 0);
     penaltyCnt_.assign(cells, 0);
     teamLoad_.assign(teamCount_, 0);
     confCnt_.assign(static_cast<std::size_t>(teamCount_) * teamCount_, 0);
-    assign_.assign(workingSolution.teamAssignments.size(), -1);
+    assign_.assign(solution.teamAssignments.size(), -1);
 
     pairSum_ = 0;
     unavailHit_ = 0;
@@ -36,16 +36,16 @@ void TournamentSchedulingIncrementalScoreCalculator::resetWorkingSolution(
     confN_ = 0;
 
     for (const UnavailabilityPenalty &penalty :
-         workingSolution.unavailabilityPenalties)
+         solution.unavailabilityPenalties)
     {
         ++penaltyCnt_[cellOffset(penalty.team, penalty.day)];
     }
 
     const int assignmentCount
-        = static_cast<int>(workingSolution.teamAssignments.size());
+        = static_cast<int>(solution.teamAssignments.size());
     for (int i = 0; i < assignmentCount; ++i)
     {
-        const int team = workingSolution.teamAssignments[i].team;
+        const int team = solution.teamAssignments[i].team;
         if (team >= 0)
             insert(i, team);
     }
@@ -140,7 +140,7 @@ void TournamentSchedulingIncrementalScoreCalculator::retract(
     assign_[assignmentIndex] = -1;
 }
 
-void TournamentSchedulingIncrementalScoreCalculator::beforeVariableChanged(
+void TournamentSchedulingIncrementalScoreCalculator::before_assign(
     int assignmentIndex)
 {
     const int team = assign_[assignmentIndex];
@@ -148,7 +148,7 @@ void TournamentSchedulingIncrementalScoreCalculator::beforeVariableChanged(
         retract(assignmentIndex, team);
 }
 
-void TournamentSchedulingIncrementalScoreCalculator::afterVariableChanged(
+void TournamentSchedulingIncrementalScoreCalculator::after_assign(
     int assignmentIndex)
 {
     const int team = schedule_->teamAssignments[assignmentIndex].team;
@@ -156,7 +156,7 @@ void TournamentSchedulingIncrementalScoreCalculator::afterVariableChanged(
         insert(assignmentIndex, team);
 }
 
-Score TournamentSchedulingIncrementalScoreCalculator::calculateScore()
+Score TournamentSchedulingIncrementalScoreCalculator::score()
 {
     Score score;
     score.hard = -(kHardWeight<TeamConflictCost> * pairSum_

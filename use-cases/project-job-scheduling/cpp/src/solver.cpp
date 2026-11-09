@@ -12,9 +12,9 @@
 
 #include "pjs/incremental_calculator.hpp"
 #include "pjs/score_calculator.hpp"
-#include "optimaru/api/solver/solver_factory.hpp"
-#include "optimaru/config/solver/solver_config.hpp"
-#include "optimaru/impl/solver/worker_threads.hpp"
+#include "optimaru/solver.hpp"
+#include "optimaru/settings.hpp"
+#include "optimaru/worker_threads.hpp"
 
 namespace pjs
 {
@@ -23,16 +23,16 @@ namespace
 {
 
 // The domain Score of a plugin calculator, read from its three accumulators
-// (levelScores(), before the medium fold) rather than decoded from the folded
+// (level_scores(), before the medium fold) rather than decoded from the folded
 // engine soft, which would file a soft total of 10^9 or more (a demoted or
 // heavily re-weighted term) under medium.
 Score levelScoreOf(
-    const optimaru::DecomposedScoreCalculator<ProjectJobSchedule> &calculator)
+    const optimaru::DecomposedObjective<ProjectJobSchedule> &calculator)
 {
-    const auto levels = calculator.levelScores();
+    const auto levels = calculator.level_scores();
     return {static_cast<std::int64_t>(levels.hard),
-            optimaru::roundScoreLevel(levels.medium, "medium"),
-            optimaru::roundScoreLevel(levels.soft, "soft")};
+            optimaru::round_score_level(levels.medium, "medium"),
+            optimaru::round_score_level(levels.soft, "soft")};
 }
 
 // Shared engine wiring for both solve() overloads: termination, late
@@ -40,55 +40,55 @@ Score levelScoreOf(
 // recommender (which reads only the working solution, so it applies to the
 // plugin path too), driven by whichever calculator the caller brought.
 // `reportedScore` turns the engine's new-best score into the domain Score
-// handed to config.onNewBest, in the same levels as the final
+// handed to config.on_new_best, in the same levels as the final
 // schedule.score of the calling overload.
 void runEngine(
     const Solver::Config &config,
     ProjectJobSchedule &schedule,
-    optimaru::IncrementalScoreCalculator<ProjectJobSchedule> &calculator,
-    std::function<Score(const optimaru::HardSoftScore &)> reportedScore)
+    optimaru::Objective<ProjectJobSchedule> &calculator,
+    std::function<Score(const optimaru::Score &)> reportedScore)
 {
-    optimaru::SolverConfig engineConfig;
-    engineConfig.randomSeed = config.randomSeed;
-    engineConfig.environmentMode = config.environmentMode;
-    if (config.onNewBest)
+    optimaru::Settings engineConfig;
+    engineConfig.seed = config.seed;
+    engineConfig.score_checks = config.score_checks;
+    if (config.on_new_best)
     {
-        auto onNewBest = config.onNewBest;
-        engineConfig.onNewBest
-            = [onNewBest, reportedScore = std::move(reportedScore)](
-                  std::int64_t step, const optimaru::HardSoftScore &score)
-        { onNewBest(step, reportedScore(score)); };
+        auto on_new_best = config.on_new_best;
+        engineConfig.on_new_best
+            = [on_new_best, reportedScore = std::move(reportedScore)](
+                  std::int64_t step, const optimaru::Score &score)
+        { on_new_best(step, reportedScore(score)); };
     }
-    engineConfig.termination.spentLimit = config.spentLimit;
-    engineConfig.termination.bestScoreLimit
-        = toEngineScoreLimit(config.bestScoreLimit);
-    engineConfig.termination.unimprovedSpentLimit = config.unimprovedSpentLimit;
-    engineConfig.termination.stepCountLimit = config.stepCountLimit;
-    engineConfig.termination.unimprovedStepCountLimit
-        = config.unimprovedStepCountLimit;
-    // lateAcceptanceSize 0 = auto-scale with the instance (see Config).
+    engineConfig.limits.time_limit = config.time_limit;
+    engineConfig.limits.target_score
+        = toEngineScoreLimit(config.target_score);
+    engineConfig.limits.stall_time_limit = config.stall_time_limit;
+    engineConfig.limits.step_limit = config.step_limit;
+    engineConfig.limits.stall_step_limit
+        = config.stall_step_limit;
+    // history_length 0 = auto-scale with the instance (see Config).
     // 16x (up from the initial 8x) measured best once the allocation-free
     // calculator doubled moves/s: the longer horizon converts the extra
     // steps into deeper medium/soft improvements (x4 bench +31% at 16n vs
     // 8n; the clamp keeps demo-sized instances at the 400 floor).
-    engineConfig.localSearch.acceptor.lateAcceptanceSize
-        = config.lateAcceptanceSize != 0
-              ? config.lateAcceptanceSize
+    engineConfig.search.acceptance.history_length
+        = config.history_length != 0
+              ? config.history_length
               : std::clamp<std::size_t>(
                     16 * schedule.allocations.size(), 400, 3200);
-    engineConfig.localSearch.moveSelector.changeMoveWeight
-        = config.changeMoveWeight;
-    engineConfig.localSearch.moveSelector.swapMoveWeight
-        = config.swapMoveWeight;
-    auto &lns = engineConfig.localSearch.ruinRecreate;
-    lns.enabled = config.ruinRecreate;
-    lns.unimprovedStepTrigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.minRuinFraction = config.ruinRecreateMinRuinFraction;
-    lns.maxRuinFraction = config.ruinRecreateMaxRuinFraction;
-    lns.maxRuinCount = config.ruinRecreateMaxRuinCount;
-    lns.operatorDecay = config.ruinRecreateOperatorDecay;
+    engineConfig.search.moves.change_weight
+        = config.change_weight;
+    engineConfig.search.moves.swap_weight
+        = config.swap_weight;
+    auto &lns = engineConfig.search.ruin_recreate;
+    lns.enabled = config.ruin_recreate;
+    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
+    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
+    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
+    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
+    lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
-    lns.polishSteps = config.ruinRecreatePolishSteps;
+    lns.polish_steps = config.ruinRecreatePolishSteps;
 
     // Guided value selection (see Config::nearCurrentDelayProbability): a
     // recommended change-move value keeps the delay within a small geometric
@@ -103,7 +103,7 @@ void runEngine(
     {
         const double guidedProbability = config.nearCurrentDelayProbability;
         const ProjectJobSchedule *working = &schedule;
-        engineConfig.localSearch.valueRecommender
+        engineConfig.search.value_hint
             = [working, guidedProbability](std::mt19937_64 &rng,
                                            int allocationIndex) -> int
         {
@@ -130,11 +130,10 @@ void runEngine(
     }
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
-    auto engine = optimaru::SolverFactory<ProjectJobSchedule>::create(
-                      std::move(engineConfig))
-                      .buildSolver();
-    if (config.stopFlag)
-        engine.adoptTerminateEarlyFlag(config.stopFlag);
+    auto engine = optimaru::Solver<ProjectJobSchedule>(
+                      std::move(engineConfig));
+    if (config.stop_flag)
+        engine.share_stop_flag(config.stop_flag);
     engine.solve(schedule, calculator);
 }
 
@@ -146,18 +145,18 @@ void Solver::solve(ProjectJobSchedule &schedule)
     // Pinned allocations must be initialized before solving (the engine
     // refuses an unassigned pinned entity): fix stragglers at
     // (first mode, delay 0), like the Java demo data does for SOURCE/SINK.
-    using Descriptor = optimaru::SolutionDescriptor<ProjectJobSchedule>;
+    using Descriptor = optimaru::SolutionTraits<ProjectJobSchedule>;
     for (int a = 0; a < schedule.allocationCount(); ++a)
     {
         if (schedule.allocations[a].modeDelay < 0
-            && Descriptor::isPinned(schedule, a))
+            && Descriptor::is_pinned(schedule, a))
         {
             schedule.allocations[a].modeDelay = schedule.valueOf(0, 0);
         }
     }
     if (schedule.allocations.empty())
     {
-        ScoreCalculator::calculateScore(schedule);
+        ScoreCalculator::score(schedule);
         return;
     }
     if (config_.ruinRecreateRewards.size() != 4)
@@ -167,7 +166,7 @@ void Solver::solve(ProjectJobSchedule &schedule)
     }
 
     // Multi-start at the domain level instead of the engine's
-    // solveMultiStart: the guided value selection below captures the working
+    // solve_multistart: the guided value selection below captures the working
     // solution, so every start needs its own schedule copy AND its own
     // recommender wiring.
     const int workerCount = std::max(1, config_.parallelSolverCount);
@@ -180,7 +179,7 @@ void Solver::solve(ProjectJobSchedule &schedule)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::runWorkerThreads(
+        optimaru::run_worker_threads(
             workerCount, *stop,
             [this, &candidates, &failures, &stop](int i)
             {
@@ -188,11 +187,11 @@ void Solver::solve(ProjectJobSchedule &schedule)
                 {
                     Config workerConfig = config_;
                     workerConfig.parallelSolverCount = 1;
-                    workerConfig.stopFlag = stop;
-                    workerConfig.randomSeed
+                    workerConfig.stop_flag = stop;
+                    workerConfig.seed
                         += static_cast<std::uint64_t>(i);
                     if (i != 0)
-                        workerConfig.onNewBest = nullptr;
+                        workerConfig.on_new_best = nullptr;
                     Solver worker(std::move(workerConfig));
                     worker.solve(candidates[i]);
                 }
@@ -225,19 +224,19 @@ void Solver::solve(ProjectJobSchedule &schedule)
 
     // The authoritative final score (and derived dates): a full recompute on
     // the best solution.
-    ScoreCalculator::calculateScore(schedule);
+    ScoreCalculator::score(schedule);
 }
 
 void Solver::solve(
     ProjectJobSchedule &schedule,
-    optimaru::DecomposedScoreCalculator<ProjectJobSchedule> &calculator)
+    optimaru::DecomposedObjective<ProjectJobSchedule> &calculator)
 {
     ScoreCalculator::prepare(schedule);  // validate + topological order
-    using Descriptor = optimaru::SolutionDescriptor<ProjectJobSchedule>;
+    using Descriptor = optimaru::SolutionTraits<ProjectJobSchedule>;
     for (int a = 0; a < schedule.allocationCount(); ++a)
     {
         if (schedule.allocations[a].modeDelay < 0
-            && Descriptor::isPinned(schedule, a))
+            && Descriptor::is_pinned(schedule, a))
         {
             schedule.allocations[a].modeDelay = schedule.valueOf(0, 0);
         }
@@ -256,20 +255,20 @@ void Solver::solve(
         runEngine(config_,
                   schedule,
                   calculator,
-                  [&calculator](const optimaru::HardSoftScore &)
+                  [&calculator](const optimaru::Score &)
                   { return levelScoreOf(calculator); });
     }
 
     // Refresh the shadow dates on the best solution (the plugin components
     // derive their own chain and never write these), then score it with the
     // caller's constraint assembly (custom weights and levels included),
-    // leaving the calculator primed on it so constraintTotals() explains
+    // leaving the calculator primed on it so constraint_totals() explains
     // exactly this score. The three levels come straight from the
-    // calculator's accumulators (levelScores(), before the medium fold)
+    // calculator's accumulators (level_scores(), before the medium fold)
     // rather than from decoding the folded engine score, so a demoted or
     // re-weighted term lands on the level the assembly gave it.
     ScoreCalculator::updateDates(schedule);
-    calculator.resetWorkingSolution(schedule);
+    calculator.rebuild(schedule);
     schedule.score = levelScoreOf(calculator);
 }
 

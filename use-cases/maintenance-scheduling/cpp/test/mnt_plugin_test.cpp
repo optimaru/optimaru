@@ -1,14 +1,14 @@
 // Plugin-assembly (mnt/constraints.hpp) tests, engine test/ style: check() + a
 // non-zero exit on any failure.
-//   (a) the default assembly on the engine's DecomposedScoreCalculator
+//   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 400 random
 //       assignments (unassigned jobs included)
 //   (b) incremental score == full recompute across 3000 random moves driven
-//       through the engine's ScoreDirector protocol (plugin path)
+//       through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
 //   (d) weight / level overrides
-//   (e) constraintTotals() explains exactly the reported score
-//   (f) a 2-second solve(schedule, calculator) under FULL_ASSERT
+//   (e) constraint_totals() explains exactly the reported score
+//   (f) a 2-second solve(schedule, calculator) under ScoreChecks::Full
 //   (g) the defaultConstraints() builder: named edits == by-hand assembly
 //   (h) each component's raw cost, hand-calculated: a positive and a zero
 //       case per constraint (raw 0 = no violation)
@@ -20,7 +20,7 @@
 //       counts, an empty one included; a global shapes its one total), the
 //       literal formula refused on hard at reset and kept on soft,
 //       incremental == a fresh recompute over a random walk and a
-//       FULL_ASSERT solve with repeated, shifted components
+//       ScoreChecks::Full solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -37,7 +37,7 @@
 #include "mnt/domain.hpp"
 #include "mnt/score_calculator.hpp"
 #include "mnt/solver.hpp"
-#include "optimaru/api/score/director/score_director.hpp"
+#include "optimaru/model/editor.hpp"
 
 using namespace mnt;
 
@@ -66,7 +66,7 @@ void checkScore(const std::string &label,
     std::printf("  [%s] %-46s got=%s expected=%lldhard/%gsoft\n",
                 ok ? "PASS" : "FAIL",
                 label.c_str(),
-                actual.toString().c_str(),
+                actual.str().c_str(),
                 expectedHard,
                 expectedSoft);
     if (!ok)
@@ -144,8 +144,8 @@ MaintenanceSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
 
 Score scoreWith(DecomposedCalculator &calculator, MaintenanceSchedule &s)
 {
-    calculator.resetWorkingSolution(s);
-    return calculator.calculateScore();
+    calculator.rebuild(s);
+    return calculator.score();
 }
 
 // -------------------------------------------------------------------------
@@ -173,15 +173,15 @@ void verifyAssemblyParity()
                                : static_cast<int>(rng() % s.crewDateCount());
         }
         const Score plugin = scoreWith(calculator, s);
-        const Score monolithic = ScoreCalculator::calculateScore(s);
+        const Score monolithic = ScoreCalculator::score(s);
         if (!sameScore(plugin, monolithic))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n",
                             round,
-                            plugin.toString().c_str(),
-                            monolithic.toString().c_str());
+                            plugin.str().c_str(),
+                            monolithic.str().c_str());
             }
         }
     }
@@ -201,12 +201,12 @@ void verifyIncremental()
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    optimaru::ScoreDirector<MaintenanceSchedule> director(s, calculator);
+    optimaru::Editor<MaintenanceSchedule> editor(s, calculator);
     MaintenanceSchedule shadow = s;
 
     std::mt19937_64 rng(123);
     const int jobCount = static_cast<int>(s.jobs.size());
-    const int valueCount = s.crewDateCount();
+    const int value_count = s.crewDateCount();
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
     int mismatches = 0;
@@ -218,8 +218,8 @@ void verifyIncremental()
             const int job = static_cast<int>(rng() % jobCount);
             const int value = (unit(rng) < 0.10)
                                   ? -1
-                                  : static_cast<int>(rng() % valueCount);
-            director.changeVariable(job, value);
+                                  : static_cast<int>(rng() % value_count);
+            editor.assign(job, value);
         }
         else
         {
@@ -227,21 +227,21 @@ void verifyIncremental()
             const int b = static_cast<int>(rng() % jobCount);
             const int va = s.jobs[a].crewDate;
             const int vb = s.jobs[b].crewDate;
-            director.changeVariable(a, vb);
-            director.changeVariable(b, va);
+            editor.assign(a, vb);
+            editor.assign(b, va);
         }
         for (int i = 0; i < jobCount; ++i)
             shadow.jobs[i].crewDate = s.jobs[i].crewDate;
-        const Score full = ScoreCalculator::calculateScore(shadow);
-        const Score incremental = director.calculateScore();
+        const Score full = ScoreCalculator::score(shadow);
+        const Score incremental = editor.score();
         if (!sameScore(full, incremental))
         {
             if (++mismatches <= 3)
             {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                             step,
-                            incremental.toString().c_str(),
-                            full.toString().c_str());
+                            incremental.str().c_str(),
+                            full.str().c_str());
             }
         }
     }
@@ -394,7 +394,7 @@ void verifyOverrides()
 }
 
 // -------------------------------------------------------------------------
-// (e) constraintTotals(): the per-constraint breakdown adds up.
+// (e) constraint_totals(): the per-constraint breakdown adds up.
 // -------------------------------------------------------------------------
 void verifyConstraintTotals()
 {
@@ -411,18 +411,18 @@ void verifyConstraintTotals()
 
     double hard = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal &total : calculator.constraintTotals())
-        (total.isHard ? hard : soft) += total.cost;
+    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
+        (total.is_hard ? hard : soft) += total.cost;
     check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
               && std::fabs(-soft - score.soft) < 1e-6,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraintTotals().size() == 6,
+    check(calculator.constraint_totals().size() == 6,
           "one total per assembled component");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
-// (f) FULL_ASSERT solve on the plugin path.
+// (f) ScoreChecks::Full solve on the plugin path.
 // -------------------------------------------------------------------------
 void verifyFullAssertSolve()
 {
@@ -430,9 +430,9 @@ void verifyFullAssertSolve()
     MaintenanceSchedule s = buildRandomInstance(/*jobCount*/ 16, /*seed*/ 11);
 
     Solver::Config config;
-    config.spentLimit = std::chrono::seconds(2);
-    config.randomSeed = 3;
-    config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+    config.time_limit = std::chrono::seconds(2);
+    config.seed = 3;
+    config.score_checks = optimaru::ScoreChecks::Full;
     config.ruinRecreateUnimprovedStepTrigger = 200;
     config.ruinRecreatePolishSteps = 100;
 
@@ -445,7 +445,7 @@ void verifyFullAssertSolve()
         Solver solver(config);
         solver.solve(s, calculator);
     }
-    catch (const optimaru::ScoreCorruptionError &e)
+    catch (const optimaru::ScoreMismatchError &e)
     {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -453,7 +453,7 @@ void verifyFullAssertSolve()
     check(!corrupted, "2s FULL_ASSERT plugin solve without score corruption");
     if (!corrupted)
     {
-        const Score recomputed = ScoreCalculator::calculateScore(s);
+        const Score recomputed = ScoreCalculator::score(s);
         check(sameScore(s.score, recomputed),
               "plugin-reported score == monolithic full recompute");
     }
@@ -500,7 +500,7 @@ void verifyAssemblyBuilder()
     // The default assembly, untouched, still matches the monolith.
     DecomposedCalculator plain;
     defaultConstraints().into(plain);
-    check(sameScore(scoreWith(plain, s), ScoreCalculator::calculateScore(s)),
+    check(sameScore(scoreWith(plain, s), ScoreCalculator::score(s)),
           "defaultConstraints() alone == the monolithic score");
 
     // A typo must not quietly leave the cost function as it was.
@@ -528,7 +528,7 @@ void verifyAssemblyBuilder()
 // -------------------------------------------------------------------------
 // (h) Each component's raw cost on hand-built instances: one violating
 // (positive) case and one clean (zero) case per constraint, read through
-// constraintCosts() — the raw numbers before weight, exponent and level.
+// constraint_costs() — the raw numbers before weight, exponent and level.
 // Per-job rules report one cost per (start date, crew) cell; the two
 // pairwise rules are global and report a single total.
 // -------------------------------------------------------------------------
@@ -538,9 +538,9 @@ DecomposedCalculator::ConstraintCosts rawCosts(MaintenanceSchedule &schedule,
     ScoreCalculator::prepare(schedule);
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
-    calculator.resetWorkingSolution(schedule);
-    calculator.calculateScore();
-    for (const auto &entry : calculator.constraintCosts())
+    calculator.rebuild(schedule);
+    calculator.score();
+    for (const auto &entry : calculator.constraint_costs())
     {
         if (entry.name == name)
             return entry;
@@ -574,7 +574,7 @@ void verifyRawCostsByHand()
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         s.jobs[1].crewDate = s.crewDateOf(0, 0);
         const auto entry = rawCosts(s, "crewConflictCost");
-        check(entry.isGlobal && entry.unitCosts == std::vector<double>{5.0},
+        check(entry.is_global && entry.unit_costs == std::vector<double>{5.0},
               "crewConflictCost: [5] (same crew, 5 shared days)");
     }
     {
@@ -585,7 +585,7 @@ void verifyRawCostsByHand()
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         s.jobs[1].crewDate = s.crewDateOf(0, 1);
-        check(rawCosts(s, "crewConflictCost").unitCosts
+        check(rawCosts(s, "crewConflictCost").unit_costs
                   == std::vector<double>{0.0},
               "crewConflictCost: [0] on different crews");
     }
@@ -599,7 +599,7 @@ void verifyRawCostsByHand()
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         s.jobs[1].crewDate = s.crewDateOf(0, 1);
         const auto entry = rawCosts(s, "tagConflictCost");
-        check(entry.isGlobal && entry.unitCosts == std::vector<double>{2.0},
+        check(entry.is_global && entry.unit_costs == std::vector<double>{2.0},
               "tagConflictCost: [2] (2 shared tags x 1 day)");
     }
     {
@@ -610,7 +610,7 @@ void verifyRawCostsByHand()
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         s.jobs[1].crewDate = s.crewDateOf(1, 1);
-        check(rawCosts(s, "tagConflictCost").unitCosts
+        check(rawCosts(s, "tagConflictCost").unit_costs
                   == std::vector<double>{0.0},
               "tagConflictCost: [0] on consecutive days");
     }
@@ -620,7 +620,7 @@ void verifyRawCostsByHand()
         addJob(s, 2, {}, /*minStartDate*/ DAY_1 + 3);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 1);
-        check(rawCosts(s, "minStartDateCost").unitCosts
+        check(rawCosts(s, "minStartDateCost").unit_costs
                   == oneCell(s, s.crewDateOf(0, 1), 3.0),
               "minStartDateCost: 3 in the job's cell, 0 elsewhere");
     }
@@ -630,7 +630,7 @@ void verifyRawCostsByHand()
         addJob(s, 2, {}, /*minStartDate*/ DAY_1);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
-        check(rawCosts(s, "minStartDateCost").unitCosts
+        check(rawCosts(s, "minStartDateCost").unit_costs
                   == oneCell(s, s.crewDateOf(0, 0), 0.0),
               "minStartDateCost: all 0 when starting on minStartDate");
     }
@@ -641,7 +641,7 @@ void verifyRawCostsByHand()
         addJob(s, 2, {}, kNoDate, /*maxEndDate*/ DAY_1 + 1);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
-        check(rawCosts(s, "maxEndDateCost").unitCosts
+        check(rawCosts(s, "maxEndDateCost").unit_costs
                   == oneCell(s, s.crewDateOf(0, 0), 1.0),
               "maxEndDateCost: 1 in the job's cell, 0 elsewhere");
     }
@@ -651,7 +651,7 @@ void verifyRawCostsByHand()
         addJob(s, 2, {}, kNoDate, /*maxEndDate*/ DAY_1 + 2);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
-        check(rawCosts(s, "maxEndDateCost").unitCosts
+        check(rawCosts(s, "maxEndDateCost").unit_costs
                   == oneCell(s, s.crewDateOf(0, 0), 0.0),
               "maxEndDateCost: all 0 when ending on maxEndDate");
     }
@@ -661,10 +661,10 @@ void verifyRawCostsByHand()
         addJob(s, 2, {}, kNoDate, kNoDate, /*idealEndDate*/ DAY_1 + 5);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
-        check(rawCosts(s, "beforeIdealEndDateCost").unitCosts
+        check(rawCosts(s, "beforeIdealEndDateCost").unit_costs
                   == oneCell(s, s.crewDateOf(0, 0), 3.0),
               "beforeIdealEndDateCost: 3 in the job's cell, 0 elsewhere");
-        check(rawCosts(s, "afterIdealEndDateCost").unitCosts
+        check(rawCosts(s, "afterIdealEndDateCost").unit_costs
                   == oneCell(s, s.crewDateOf(0, 0), 0.0),
               "afterIdealEndDateCost: all 0 when ending early");
     }
@@ -674,10 +674,10 @@ void verifyRawCostsByHand()
         addJob(s, 2, {}, kNoDate, kNoDate, /*idealEndDate*/ DAY_1 + 1);
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
-        check(rawCosts(s, "afterIdealEndDateCost").unitCosts
+        check(rawCosts(s, "afterIdealEndDateCost").unit_costs
                   == oneCell(s, s.crewDateOf(0, 0), 1.0),
               "afterIdealEndDateCost: 1 in the job's cell, 0 elsewhere");
-        check(rawCosts(s, "beforeIdealEndDateCost").unitCosts
+        check(rawCosts(s, "beforeIdealEndDateCost").unit_costs
                   == oneCell(s, s.crewDateOf(0, 0), 0.0),
               "beforeIdealEndDateCost: all 0 when ending late");
     }
@@ -688,8 +688,8 @@ void verifyRawCostsByHand()
         ScoreCalculator::prepare(s);
         s.jobs[0].crewDate = s.crewDateOf(0, 0);
         const std::vector<double> zero = oneCell(s, s.crewDateOf(0, 0), 0.0);
-        check(rawCosts(s, "beforeIdealEndDateCost").unitCosts == zero
-                  && rawCosts(s, "afterIdealEndDateCost").unitCosts == zero,
+        check(rawCosts(s, "beforeIdealEndDateCost").unit_costs == zero
+                  && rawCosts(s, "afterIdealEndDateCost").unit_costs == zero,
               "before/afterIdealEndDateCost: all 0 when ending on the ideal "
               "date");
     }
@@ -718,13 +718,13 @@ bool rowIs(const optimaru::ConstraintInfo &row,
            const char *name,
            optimaru::Level level,
            double weight,
-           bool isGlobal)
+           bool is_global)
 {
-    return row.name == name && row.defaultLevel == Component::kDefaultLevel
-           && row.defaultWeight == Component::kDefaultWeight
-           && row.defaultLevel == level && row.defaultWeight == weight
-           && row.levelFlippable && !row.reward && row.isGlobal == isGlobal
-           && row.defaultEnabled;
+    return row.name == name && row.default_level == Component::kDefaultLevel
+           && row.default_weight == Component::kDefaultWeight
+           && row.default_level == level && row.default_weight == weight
+           && row.level_flippable && !row.reward && row.is_global == is_global
+           && row.default_enabled;
 }
 
 void verifyCatalog()
@@ -771,7 +771,7 @@ void verifyCatalog()
 // -------------------------------------------------------------------------
 // (j) Repeated components and offsets. A repeat is a fresh copy of a
 // default component (another defaultConstraints(), the one name kept, its
-// knobs re-stated) appended with addInstances(), as the Python bindings
+// knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list.
 // -------------------------------------------------------------------------
 ConstraintAssembly copyOf(const std::string &name)
@@ -809,29 +809,29 @@ ConstraintAssembly repeatedAssembly()
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("afterIdealEndDateCost", 2.0);
     assembly.offset("crewConflictCost", 1.0);
-    assembly.addInstances(std::move(copyOf("crewConflictCost")
+    assembly.add_instances(std::move(copyOf("crewConflictCost")
                                         .soft("crewConflictCost")
                                         .offset("crewConflictCost", 1.0)
                                         .clip("crewConflictCost", false)));
-    assembly.addInstances(std::move(copyOf("minStartDateCost")
+    assembly.add_instances(std::move(copyOf("minStartDateCost")
                                         .soft("minStartDateCost")
                                         .weight("minStartDateCost", 2.0)
                                         .offset("minStartDateCost", 1.0)
                                         .clip("minStartDateCost", false)));
-    assembly.addInstances(std::move(copyOf("tagConflictCost")
+    assembly.add_instances(std::move(copyOf("tagConflictCost")
                                         .weight("tagConflictCost", 0.25)
                                         .exponent("tagConflictCost", 2.0)
                                         .offset("tagConflictCost", 3.0)));
-    assembly.addInstances(std::move(copyOf("beforeIdealEndDateCost")
+    assembly.add_instances(std::move(copyOf("beforeIdealEndDateCost")
                                         .weight("beforeIdealEndDateCost", 0.5)
                                         .offset("beforeIdealEndDateCost", -2.0)));
-    assembly.addInstances(std::move(copyOf("crewConflictCost")));
-    assembly.addInstances(std::move(copyOf("maxEndDateCost")
+    assembly.add_instances(std::move(copyOf("crewConflictCost")));
+    assembly.add_instances(std::move(copyOf("maxEndDateCost")
                                         .soft("maxEndDateCost")
                                         .weight("maxEndDateCost", 1.5)
                                         .offset("maxEndDateCost", 1.0)
                                         .clip("maxEndDateCost", false)));
-    assembly.addInstances(std::move(copyOf("tagConflictCost")
+    assembly.add_instances(std::move(copyOf("tagConflictCost")
                                         .hard("tagConflictCost")
                                         .weight("tagConflictCost", 2.0)
                                         .offset("tagConflictCost", 4.0)));
@@ -845,7 +845,7 @@ void verifyRepeatsAndOffsets()
         MaintenanceSchedule s = repeatInstance();
         check(s.crewDateCount() == 80, "80 (start date, crew) cells");
         ConstraintAssembly assembly = copyOf("crewConflictCost");
-        assembly.addInstances(std::move(copyOf("crewConflictCost")
+        assembly.add_instances(std::move(copyOf("crewConflictCost")
                                             .weight("crewConflictCost", 2.0)
                                             .exponent("crewConflictCost", 2.0)));
         DecomposedCalculator calculator;
@@ -854,17 +854,17 @@ void verifyRepeatsAndOffsets()
                    scoreWith(calculator, s),
                    -55,
                    0.0);
-        const auto entries = calculator.constraintCosts();
-        check(entries.size() == 2 && entries[0].unitCosts == entries[1].unitCosts
-                  && entries[0].unitCosts.size() == 1
+        const auto entries = calculator.constraint_costs();
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
+                  && entries[0].unit_costs.size() == 1
                   && entries[1].weight == 2.0 && entries[1].exponent == 2.0
-                  && entries[1].defaultWeight == 1.0,
+                  && entries[1].default_weight == 1.0,
               "two global instances, the same total, each with its own knobs");
     }
     {
         MaintenanceSchedule s = repeatInstance();
         ConstraintAssembly assembly = copyOf("minStartDateCost");
-        assembly.addInstances(std::move(copyOf("minStartDateCost")
+        assembly.add_instances(std::move(copyOf("minStartDateCost")
                                             .weight("minStartDateCost", 3.0)
                                             .exponent("minStartDateCost", 2.0)));
         DecomposedCalculator calculator;
@@ -879,7 +879,7 @@ void verifyRepeatsAndOffsets()
         // (1000 x 5) next to a hard repeat, 2 x (5 - 1) beyond its offset.
         MaintenanceSchedule s = repeatInstance();
         ConstraintAssembly assembly = copyOf("tagConflictCost");
-        assembly.addInstances(std::move(copyOf("tagConflictCost")
+        assembly.add_instances(std::move(copyOf("tagConflictCost")
                                             .hard("tagConflictCost")
                                             .weight("tagConflictCost", 2.0)
                                             .offset("tagConflictCost", 1.0)));
@@ -889,10 +889,10 @@ void verifyRepeatsAndOffsets()
                    scoreWith(calculator, s),
                    -8,
                    -5000.0);
-        const auto entries = calculator.constraintCosts();
+        const auto entries = calculator.constraint_costs();
         check(entries.size() == 2 && entries[0].level == optimaru::Level::Soft
                   && entries[1].level == optimaru::Level::Hard
-                  && entries[1].defaultLevel == optimaru::Level::Soft,
+                  && entries[1].default_level == optimaru::Level::Soft,
               "the repeat reports its own level, the default stays soft");
     }
     {
@@ -900,7 +900,7 @@ void verifyRepeatsAndOffsets()
         // the early cell, 0.5 x (0 - 1) on each of the 79 others.
         MaintenanceSchedule s = repeatInstance();
         ConstraintAssembly assembly = copyOf("minStartDateCost");
-        assembly.addInstances(std::move(copyOf("minStartDateCost")
+        assembly.add_instances(std::move(copyOf("minStartDateCost")
                                             .soft("minStartDateCost")
                                             .weight("minStartDateCost", 0.5)
                                             .offset("minStartDateCost", 1.0)
@@ -1040,7 +1040,7 @@ void verifyRepeatsAndOffsets()
                   == refusal("tagConflictCost"),
               "tag literal offset moved to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("minStartDateCost");
-        repeated.addInstances(std::move(copyOf("minStartDateCost")
+        repeated.add_instances(std::move(copyOf("minStartDateCost")
                                             .offset("minStartDateCost", 1.0)
                                             .clip("minStartDateCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("minStartDateCost"),
@@ -1065,11 +1065,11 @@ void verifyRepeatsAndOffsets()
         ScoreCalculator::prepare(s);
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::ScoreDirector<MaintenanceSchedule> director(s, calculator);
+        optimaru::Editor<MaintenanceSchedule> editor(s, calculator);
         std::mt19937_64 rng(321);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
         const int jobCount = static_cast<int>(s.jobs.size());
-        const int valueCount = s.crewDateCount();
+        const int value_count = s.crewDateCount();
         int mismatches = 0;
         double drift = 0.0;
         const int steps = 3000;
@@ -1080,8 +1080,8 @@ void verifyRepeatsAndOffsets()
                 const int job = static_cast<int>(rng() % jobCount);
                 const int value = unit(rng) < 0.10
                                       ? -1
-                                      : static_cast<int>(rng() % valueCount);
-                director.changeVariable(job, value);
+                                      : static_cast<int>(rng() % value_count);
+                editor.assign(job, value);
             }
             else
             {
@@ -1089,25 +1089,25 @@ void verifyRepeatsAndOffsets()
                 const int b = static_cast<int>(rng() % jobCount);
                 const int va = s.jobs[a].crewDate;
                 const int vb = s.jobs[b].crewDate;
-                director.changeVariable(a, vb);
-                director.changeVariable(b, va);
+                editor.assign(a, vb);
+                editor.assign(b, va);
             }
             MaintenanceSchedule shadow = s;
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
             const Score full = scoreWith(fresh, shadow);
-            const Score incremental = director.calculateScore();
+            const Score incremental = editor.score();
             drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-            // The engine's FULL_ASSERT rule (scoresAgree): hard exact, soft
+            // The engine's ScoreChecks::Full rule (scores_agree): hard exact, soft
             // within 1e-6 (the fractional weights accumulate a few ulps).
-            if (!optimaru::scoresAgree(incremental, full))
+            if (!optimaru::scores_agree(incremental, full))
             {
                 if (++mismatches <= 3)
                 {
                     std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
                                 step,
-                                incremental.toString().c_str(),
-                                full.toString().c_str());
+                                incremental.str().c_str(),
+                                full.str().c_str());
                 }
             }
         }
@@ -1120,9 +1120,9 @@ void verifyRepeatsAndOffsets()
     {
         MaintenanceSchedule s = buildRandomInstance(/*jobCount*/ 16, /*seed*/ 11);
         Solver::Config config;
-        config.spentLimit = std::chrono::seconds(2);
-        config.randomSeed = 5;
-        config.environmentMode = optimaru::EnvironmentMode::FULL_ASSERT;
+        config.time_limit = std::chrono::seconds(2);
+        config.seed = 5;
+        config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;
         config.ruinRecreatePolishSteps = 100;
         DecomposedCalculator calculator;
@@ -1133,7 +1133,7 @@ void verifyRepeatsAndOffsets()
             Solver solver(config);
             solver.solve(s, calculator);
         }
-        catch (const optimaru::ScoreCorruptionError &e)
+        catch (const optimaru::ScoreMismatchError &e)
         {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
@@ -1141,7 +1141,7 @@ void verifyRepeatsAndOffsets()
         check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
         DecomposedCalculator fresh;
         repeatedAssembly().into(fresh);
-        check(!corrupted && optimaru::scoresAgree(s.score, scoreWith(fresh, s)),
+        check(!corrupted && optimaru::scores_agree(s.score, scoreWith(fresh, s)),
               "the reported score == a fresh recompute of the same assembly");
     }
     std::printf("\n");

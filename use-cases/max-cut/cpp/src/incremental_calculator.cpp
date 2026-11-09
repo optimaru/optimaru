@@ -34,15 +34,15 @@ static_assert(kFixedWeight == FixedPartitionCost::kDefaultWeight
 
 }  // namespace
 
-void MaxCutIncrementalScoreCalculator::resetWorkingSolution(MaxCutProblem &workingSolution)
+void MaxCutIncrementalScoreCalculator::rebuild(MaxCutProblem &solution)
 {
-    if (!workingSolution.prepared)
+    if (!solution.prepared)
     {
         throw std::logic_error("MaxCutIncrementalScoreCalculator requires "
                                "ScoreCalculator::prepare(problem) first");
     }
-    problem_ = &workingSolution;
-    const int n = workingSolution.vertexCount();
+    problem_ = &solution;
+    const int n = solution.vertexCount();
     side_.assign(n, kUnassigned);
     count_[0] = count_[1] = 0;
     fixed_ = sameSplit_ = diffJoined_ = cut_ = 0;
@@ -51,7 +51,7 @@ void MaxCutIncrementalScoreCalculator::resetWorkingSolution(MaxCutProblem &worki
     // pair and edge term is counted exactly once.
     for (int v = 0; v < n; ++v)
     {
-        const int now = workingSolution.side[v];
+        const int now = solution.side[v];
         if (now == kUnassigned)
             continue;
         apply(v, -1);
@@ -60,11 +60,11 @@ void MaxCutIncrementalScoreCalculator::resetWorkingSolution(MaxCutProblem &worki
     }
 }
 
-void MaxCutIncrementalScoreCalculator::beforeVariableChanged(int /*vertex*/)
+void MaxCutIncrementalScoreCalculator::before_assign(int /*vertex*/)
 {
 }
 
-void MaxCutIncrementalScoreCalculator::afterVariableChanged(int vertex)
+void MaxCutIncrementalScoreCalculator::after_assign(int vertex)
 {
     const int now = problem_->side[vertex];
     if (now == side_[vertex])
@@ -131,14 +131,14 @@ MaxCutIncrementalScoreCalculator::Totals MaxCutIncrementalScoreCalculator::total
     for (int s = 0; s < kSideCount; ++s)
     {
         const std::int64_t n = count_[s];
-        totals.size[s] = std::max<std::int64_t>(0, p.minSize() - n) + std::max<std::int64_t>(0, n - p.maxSize());
+        totals.size[s] = std::max<std::int64_t>(0, p.minSize() - n) + std::max<std::int64_t>(0, n - p.max_size());
     }
     totals.imbalance = std::llabs(count_[0] - count_[1]);
     totals.cut = cut_;
     return totals;
 }
 
-Score MaxCutIncrementalScoreCalculator::calculateScore()
+Score MaxCutIncrementalScoreCalculator::score()
 {
     const Totals t = totals();
     Score score;

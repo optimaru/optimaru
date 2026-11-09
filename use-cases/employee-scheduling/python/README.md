@@ -409,7 +409,7 @@ config.descent_weight = 0.02            # best-improvement descent over a shift 
 config.descent_max_sweeps = 4
 config.ruin_recreate_as_move_weight = 0.0    # ruin+repair as an ordinary move
 config.ruin_recreate_as_move_max_ruin = 12
-config.change_move_weight = 0.8         # BASIC move mix; weights are relative
+config.change_move_weight = 0.8         # assignment-shape move mix; weights are relative
 config.swap_move_weight = 0.2
 config.smart_change_moves = False       # sample several employees for one shift
 config.smart_change_candidate_count = 6
@@ -428,8 +428,8 @@ solver = es.Solver(config)
 ```
 
 `guided_moves=False` also disables the employee-aware moves and falls back to the
-generic BASIC change/swap search. The `relocate/list_swap/two_opt/or_opt/tail_swap`
-weights are generic LIST-variable options and do not affect this domain.
+generic assignment-shape change/swap search. The `relocate/list_swap/two_opt/or_opt/tail_swap`
+weights are generic sequence-shaped options and do not affect this domain.
 
 `es.calculate_score(schedule)` scores a fixed assignment without solving (the
 default eight at their default weights).
@@ -438,8 +438,8 @@ default eight at their default weights).
 
 Every rule ships its own incremental evaluation: when the solver moves one shift
 between two employees, only the change is recomputed
-(`UnitConstraint::deltaCost`), and rules precompute lookup tables once per solve
-(`UnitConstraint::onReset`). See the use case's
+(`UnitConstraint::delta_cost`), and rules precompute lookup tables once per solve
+(`UnitConstraint::on_reset`). See the use case's
 [README](../README.md#extending) for the steps. Weights, level changes and
 exponents need no code.
 

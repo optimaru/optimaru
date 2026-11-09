@@ -25,7 +25,7 @@ struct DifferentStationPairsCost final : AlbUnitConstraint
         : AlbUnitConstraint("differentStationPairsCost", weight, kDefaultLevel)
     {
     }
-    void onReset(const AssemblyLineBalancingProblem &problem) override
+    void on_reset(const AssemblyLineBalancingProblem &problem) override
     {
         detail::requirePrepared(problem);
     }
@@ -47,8 +47,8 @@ struct DifferentStationPairsCost final : AlbUnitConstraint
         }
         return static_cast<double>(together);
     }
-    bool supportsDelta() const override { return true; }
-    double deltaCost(const AssemblyLineBalancingProblem &problem,
+    bool supports_delta() const override { return true; }
+    double delta_cost(const AssemblyLineBalancingProblem &problem,
                      int unit,
                      const std::vector<int> & /*members*/,
                      int entity) const override

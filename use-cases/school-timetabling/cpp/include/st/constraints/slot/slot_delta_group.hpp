@@ -16,9 +16,9 @@ namespace st::canon
 // per-lesson tables and the monolithic (owner, slot) occupancy count maps —
 // the same closed forms as CanonicalIncrementalScoreCalculator's
 // insert()/retract(), so the deltas are bit-for-bit the per-constraint
-// deltaCost() values. The count maps are maintained here (join/leave is
+// delta_cost() values. The count maps are maintained here (join/leave is
 // inferred from the already-written planning variable) and rebuilt from the
-// solution at every onReset.
+// solution at every on_reset.
 struct SlotDeltaGroup final : optimaru::UnitConstraintDeltaGroup<Timetable>
 {
     static constexpr std::size_t NONE = std::numeric_limits<std::size_t>::max();
@@ -67,16 +67,16 @@ struct SlotDeltaGroup final : optimaru::UnitConstraintDeltaGroup<Timetable>
 
     // Duplicate components must add up independently, which one shared count
     // map cannot express — fall back to the per-constraint deltas then.
-    bool isBeneficial() const override { return !duplicate_ && !unsupported_; }
+    bool is_beneficial() const override { return !duplicate_ && !unsupported_; }
 
     // Every delta below is an integer count/excess, so hard members with
     // integral weight take the calculator's direct hard-delta fast path, and
     // the accumulated raw costs are exact: a member at a negative threshold
     // (clip with offset < 0, discontinuous at 0) stays on this group too,
     // because a whole-number raw cannot drift off 0.
-    bool hasIntegralRawDeltas() const override { return true; }
+    bool has_integral_raw_deltas() const override { return true; }
 
-    void onReset(const Timetable &table) override
+    void on_reset(const Timetable &table) override
     {
         detail::requirePrepared(table);
         const int lessonCount = static_cast<int>(table.lessons.size());
@@ -187,7 +187,7 @@ struct SlotDeltaGroup final : optimaru::UnitConstraintDeltaGroup<Timetable>
                   double *deltas) override
     {
         // The planning variable is already written when the calculator
-        // notifies a member change (afterVariableChanged), so it tells join
+        // notifies a member change (after_assign), so it tells join
         // from leave: a join is notified on the NEW slot (variable == unit),
         // a leave on the OLD one (variable != unit). Rolled-back moves arrive
         // as inverse notifications through the same path, keeping the count
@@ -264,7 +264,7 @@ private:
         slot = index;
     }
 
-    // The count-map part of evaluate() alone, for the onReset replay.
+    // The count-map part of evaluate() alone, for the on_reset replay.
     void applyCounts(const Timetable &table, int entity, int slot, bool joined)
     {
         if (classIndex_ != NONE)
@@ -328,13 +328,13 @@ private:
     std::vector<int> roomDemandCnt_;
 };
 
-inline const char *GroupableSlotConstraint::deltaGroupKey() const
+inline const char *GroupableSlotConstraint::delta_group_key() const
 {
     return "st.canon.slot-delta.v1";
 }
 
 inline std::unique_ptr<optimaru::UnitConstraintDeltaGroup<Timetable>>
-GroupableSlotConstraint::createDeltaGroup() const
+GroupableSlotConstraint::create_delta_group() const
 {
     return std::make_unique<SlotDeltaGroup>();
 }

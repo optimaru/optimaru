@@ -16,9 +16,9 @@ namespace es {
 //                 before the inner cost runs).
 //
 // Empty index list => "all" for that dimension. Indices are resolved against
-// the solution order by the caller; onReset expands them to constant-time masks.
+// the solution order by the caller; on_reset expands them to constant-time masks.
 //
-// The inner constraint keeps its own cost/deltaCost. Scoped constraints opt
+// The inner constraint keeps its own cost/delta_cost. Scoped constraints opt
 // out of the calculator's structural delta-grouping and shared-context fast
 // paths (those virtuals stay at their nullptr defaults here), which is correct:
 // grouping keys off the concrete type (a ScopedUnit is not RequiredSkillCost
@@ -26,9 +26,9 @@ namespace es {
 // fall back to their own local context when none is bound.
 //
 // The wrapper takes over ALL of the inner component's metadata — registry
-// name, weight, level, reward, levelFlippable, exponent, label — so a scoped
+// name, weight, level, reward, level_flippable, exponent, label — so a scoped
 // reward stays a reward (hard() refused) and the knobs a caller re-states
-// afterwards (python::applyKnobs on the ScopedUnit) see the inner defaults.
+// afterwards (python::apply_knobs on the ScopedUnit) see the inner defaults.
 // The inner component's own knobs are never read again: the calculator
 // weighs the wrapper.
 struct ScopedUnit final : EsUnitConstraint {
@@ -51,8 +51,8 @@ struct ScopedUnit final : EsUnitConstraint {
         static_cast<optimaru::ConstraintMetadata&>(*this) = *inner_;
     }
 
-    void onReset(const EmployeeSchedule& s) override {
-        inner_->onReset(s);
+    void on_reset(const EmployeeSchedule& s) override {
+        inner_->on_reset(s);
         if (hasWorker_) {
             workerMask_.assign(s.employees.size(), 0);
             for (int i : workerIdx_)
@@ -80,17 +80,17 @@ struct ScopedUnit final : EsUnitConstraint {
     // (cost() returns 0 for every other unit), so expose that scope: the
     // calculator then skips it when re-costing all the workers it can't touch.
     // Without a worker scope it may apply to any unit -> nullptr ("all").
-    const std::vector<int>* scopedUnits() const override {
+    const std::vector<int>* scoped_units() const override {
         return hasWorker_ ? &workerIdx_ : nullptr;
     }
 
     // Worker scope preserves the inner delta contract; shift scope filters
     // members, which breaks delta exactness, so fall back to full recompute.
-    bool supportsDelta() const override { return !hasShift_ && inner_->supportsDelta(); }
-    double deltaCost(const EmployeeSchedule& s, int unit, const std::vector<int>& members,
+    bool supports_delta() const override { return !hasShift_ && inner_->supports_delta(); }
+    double delta_cost(const EmployeeSchedule& s, int unit, const std::vector<int>& members,
                      int entity) const override {
         if (hasWorker_ && !workerMask_[unit]) return 0.0;
-        return inner_->deltaCost(s, unit, members, entity);
+        return inner_->delta_cost(s, unit, members, entity);
     }
 };
 

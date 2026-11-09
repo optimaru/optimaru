@@ -9,18 +9,18 @@
 #include <vector>
 
 #include "st/canonical_domain.hpp"
-#include "optimaru/preview/api/move/operators.hpp"
+#include "optimaru/search/operators.hpp"
 
 namespace st::canon
 {
 
 // Moved verbatim out of canonical_solver.cpp — one operator per file, the
-// domain-side counterpart of the engine's generic/ruin layout.
+// domain-side counterpart of the engine's ruin_recreate/ layout.
 
 // Smart same-class swap (a SmartChangeMove-style pattern): pick a seed lesson —
 // preferring one involved in a hard violation while any exists — evaluate the
 // swap with up to `candidateCount` random classmates through the score
-// director, and apply the best one. Same-class swaps keep the class occupancy
+// editor, and apply the best one. Same-class swaps keep the class occupancy
 // multiset untouched (class-conflict-neutral on dense instances), so this
 // concentrates search effort on the moves that can actually improve. Selection
 // between this operator and the built-in move mix is adaptive (roulette wheel
@@ -53,7 +53,7 @@ public:
                std::mt19937_64 &rng,
                std::vector<int> &entities) override
     {
-        Timetable &table = ctx.director.workingSolution();
+        Timetable &table = ctx.editor.solution();
         const int lessonCount = static_cast<int>(table.lessons.size());
         if (lessonCount < 2)
             return false;
@@ -93,15 +93,15 @@ public:
                 continue;
             ++tried;
             const int slotB = table.lessons[b].slot;
-            ctx.director.beginVariableChanges();
-            ctx.director.changeVariable(a, slotB);
-            ctx.director.changeVariable(b, slotA);
-            ctx.director.endVariableChanges();
-            const Score score = ctx.director.calculateScore();
-            ctx.director.beginVariableChanges();
-            ctx.director.changeVariable(a, slotA);
-            ctx.director.changeVariable(b, slotB);
-            ctx.director.endVariableChanges();
+            ctx.editor.begin_batch();
+            ctx.editor.assign(a, slotB);
+            ctx.editor.assign(b, slotA);
+            ctx.editor.end_batch();
+            const Score score = ctx.editor.score();
+            ctx.editor.begin_batch();
+            ctx.editor.assign(a, slotA);
+            ctx.editor.assign(b, slotB);
+            ctx.editor.end_batch();
             if (!found || score > bestScore)
             {
                 found = true;
@@ -116,18 +116,18 @@ public:
         return true;
     }
 
-    void undoLast(optimaru::OperatorContext<Timetable> &ctx) override
+    void undo_last(optimaru::OperatorContext<Timetable> &ctx) override
     {
         if (lastB_ >= 0)
         {
-            ctx.director.beginVariableChanges();
-            ctx.director.changeVariable(lastA_, lastSlotA_);
-            ctx.director.changeVariable(lastB_, lastSlotB_);
-            ctx.director.endVariableChanges();
+            ctx.editor.begin_batch();
+            ctx.editor.assign(lastA_, lastSlotA_);
+            ctx.editor.assign(lastB_, lastSlotB_);
+            ctx.editor.end_batch();
         }
         else
         {
-            ctx.director.changeVariable(lastA_, lastSlotA_);
+            ctx.editor.assign(lastA_, lastSlotA_);
         }
     }
 
@@ -138,7 +138,7 @@ private:
                             std::mt19937_64 &rng,
                             std::vector<int> &entities)
     {
-        Timetable &table = ctx.director.workingSolution();
+        Timetable &table = ctx.editor.solution();
         const int lessonCount = static_cast<int>(table.lessons.size());
         int a = hotSource_->hotLesson(rng);
         for (int attempt = 0; attempt < 8 && (a < 0 || table.lessons[a].pinned);
@@ -174,7 +174,7 @@ private:
         lastA_ = a;
         lastB_ = -1;
         lastSlotA_ = table.lessons[a].slot;
-        ctx.director.changeVariable(a, v);
+        ctx.editor.assign(a, v);
         entities.push_back(a);
         return true;
     }
@@ -184,15 +184,15 @@ private:
                    int b,
                    std::vector<int> &entities)
     {
-        Timetable &table = ctx.director.workingSolution();
+        Timetable &table = ctx.editor.solution();
         lastA_ = a;
         lastB_ = b;
         lastSlotA_ = table.lessons[a].slot;
         lastSlotB_ = table.lessons[b].slot;
-        ctx.director.beginVariableChanges();
-        ctx.director.changeVariable(a, lastSlotB_);
-        ctx.director.changeVariable(b, lastSlotA_);
-        ctx.director.endVariableChanges();
+        ctx.editor.begin_batch();
+        ctx.editor.assign(a, lastSlotB_);
+        ctx.editor.assign(b, lastSlotA_);
+        ctx.editor.end_batch();
         entities.push_back(a);
         entities.push_back(b);
     }

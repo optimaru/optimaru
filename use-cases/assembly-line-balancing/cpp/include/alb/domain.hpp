@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "optimaru/api/domain/solution_descriptor.hpp"
-#include "optimaru/api/score/buildin/hard_soft_score.hpp"
+#include "optimaru/model/solution_traits.hpp"
+#include "optimaru/score/score.hpp"
 
 namespace alb
 {
@@ -17,7 +17,7 @@ namespace alb
 // Score
 // ---------------------------------------------------------------------------
 // Simple assembly-line balancing (SALBP-1 with zoning and station domains)
-// scores with HardSoftScore, exactly the engine's score type, so the mapping
+// scores with Score, exactly the engine's score type, so the mapping
 // is the identity and there is no medium level (no optimaru::MediumFoldOf
 // specialization). At the components' default weights (alb/constraints/*.hpp):
 //   hard = -(station capacity overflow + reversed precedence arcs
@@ -28,7 +28,7 @@ namespace alb
 //   soft = -(stations used + 0 * workload range)
 // Every raw cost is an integer; soft is stored in a double, exact for these
 // magnitudes (< 2^53).
-using Score = optimaru::HardSoftScore;
+using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Task  (@PlanningEntity)
@@ -157,18 +157,18 @@ struct AssemblyLineBalancingProblem
 }  // namespace alb
 
 // ---------------------------------------------------------------------------
-// SolutionDescriptor specialization: entities are tasks, the planning
+// SolutionTraits specialization: entities are tasks, the planning
 // variable is Task::station, the value range is the frozen station count.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionDescriptor<alb::AssemblyLineBalancingProblem>
+template <> struct optimaru::SolutionTraits<alb::AssemblyLineBalancingProblem>
 {
-    static constexpr optimaru::VariableKind kind
-        = optimaru::VariableKind::BASIC;
-    static int entityCount(const alb::AssemblyLineBalancingProblem &problem)
+    static constexpr optimaru::Shape shape
+        = optimaru::Shape::Assignment;
+    static int entity_count(const alb::AssemblyLineBalancingProblem &problem)
     {
         return problem.taskCount();
     }
-    static int valueCount(const alb::AssemblyLineBalancingProblem &problem)
+    static int value_count(const alb::AssemblyLineBalancingProblem &problem)
     {
         // Never a live max(station): a calculator sizes its per-station
         // caches from this at reset, so it must not change mid-search.
@@ -179,12 +179,12 @@ template <> struct optimaru::SolutionDescriptor<alb::AssemblyLineBalancingProble
         }
         return problem.stationCount;
     }
-    static int getVariable(const alb::AssemblyLineBalancingProblem &problem,
+    static int value_of(const alb::AssemblyLineBalancingProblem &problem,
                            int taskIndex)
     {
         return problem.tasks[taskIndex].station;
     }
-    static void setVariable(alb::AssemblyLineBalancingProblem &problem,
+    static void assign(alb::AssemblyLineBalancingProblem &problem,
                             int taskIndex,
                             int station)
     {

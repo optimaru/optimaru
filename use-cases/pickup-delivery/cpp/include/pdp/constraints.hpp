@@ -66,7 +66,7 @@ namespace pdp
 //   requiredVehicleCost          hard, weight 1000
 //
 // On a plan that sets no route policy, pins nothing and binds no request,
-// this assembly scores bit-for-bit like ScoreCalculator::calculateScore (both
+// this assembly scores bit-for-bit like ScoreCalculator::score (both
 // read the same kDefaultWeight constants). It is also the domain's constraint
 // catalog: constraint_info() reads the defaults off it, so they live in the
 // component constructors and nowhere else.

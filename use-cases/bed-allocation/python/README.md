@@ -2,7 +2,7 @@
 
 The `bed-allocation` example model (Apache-2.0; see the repository NOTICE)
 (hospital bed allocation, PAS): the pybind11 package of the `../cpp` implementation ported
-onto the generic C++ engine in `include/optimaru/`. A BASIC-variable domain that picks one bed (Bed) per stay (Stay).
+onto the generic C++ engine in `include/optimaru/`. An assignment-shaped domain that picks one bed (Bed) per stay (Stay).
 
 ## Install / test
 
@@ -27,9 +27,9 @@ print([s.bed_id for s in result.stays][:5])
 Passing a hand-built `_core.BedPlan` solves it in place. For JSON serialization use
 `bed_allocation.models.BedPlanModel` (pydantic v2).
 
-## Domain and planning variables
+## Domain and decision variables
 
-`Stay.bed` is the only planning variable (engine BASIC encoding):
+`Stay.bed` is the only decision variable (the engine's assignment shape):
 
 | Value | Meaning |
 |---|---|
@@ -42,9 +42,9 @@ adding one sentinel to the value range: the search can move a stay to "no bed", 
 that stay is penalized per night at the medium level (`unassigned_stays_cost`). So hard 0
 is always reachable (every hard violation can be resolved by giving up the assignment).
 
-## Score mapping (HardMediumSoftScore -> engine HardSoftScore)
+## Score mapping (HardMediumSoftScore -> engine Score)
 
-The original score type is `HardMediumSoftScore`; the engine only has `HardSoftScore(int64 hard,
+The original score type is `HardMediumSoftScore`; the engine only has `Score(int64 hard,
 double soft)`. The mapping rule (`cpp/include/ba/domain.hpp`):
 
 ```
@@ -127,9 +127,8 @@ Caveats (kept exactly as in the original):
 
 ## Demo
 
-`bed_allocation.demo.generate_demo_data()` reproduces the Java `DemoDataGenerator`:
+`bed_allocation.demo.generate_demo_data()` builds a demo instance modelled on the quickstart's demo:
 1 department (3 specialties), 10 rooms, all SAME_GENDER (13 beds), 28 nights, ~75
 sequential stays per room timeline, with the original's gender/age/equipment
-distributions. (The java.util.Random stream itself is not identical — distributions and
-scale are the reference.) The C++ demo (`build/bed-allocation/ba_demo`, built as shown in
+distributions, drawn from a seeded `random.Random`. The C++ demo (`build/bed-allocation/ba_demo`, built as shown in
 ../README.md) reaches hard 0 / medium 0 (everyone assigned) within 10 s.
