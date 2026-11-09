@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - **Background solves fail safely.** An exception thrown inside a
   `solve_in_background()` job (a `ScoreMismatchError` under
