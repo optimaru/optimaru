@@ -7,7 +7,7 @@ dependencies = [
     "ortools>=9.15,<10",
     "pydantic>=2.13.2,<3",
     "pydantic-settings>=2.4.0,<3",
-    # Reading/writing Korean teacher-load workbooks (teacher_scheduling.excel / .export)
+    # Reading/writing Korean teacher load table workbooks (teacher_scheduling.excel / .export)
     "openpyxl>=3.1,<4",
     # The constraint specs and their defaults (constraint_info()): the registry subclasses the
     # engine's specs, so both solvers share one name and one default per constraint.
