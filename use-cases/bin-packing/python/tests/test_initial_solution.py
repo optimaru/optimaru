@@ -17,14 +17,14 @@ def _problem() -> BinPackingProblemModel:
 
 
 def _no_search() -> SolverConfig:
-    """Zero budget: the engine stops before its first step (0.1.x spelled it max_iterations=0)."""
+    """Zero budget: the engine stops before its first step."""
     config = SolverConfig()
     config.spent_limit_seconds = 0
     return config
 
 
 def _steps(count: int, seed: int) -> SolverConfig:
-    """A deterministic search of `count` steps (0.1.x spelled it max_iterations=count)."""
+    """A deterministic search of `count` steps."""
     config = SolverConfig()
     config.step_count_limit = count
     config.random_seed = seed
@@ -91,8 +91,8 @@ def test_partial_seed_is_completed_by_best_fit_before_the_search():
 def test_partial_seed_never_reaches_the_search_with_minus_one():
     """The construction completes a partial seed before the engine starts.
 
-    (0.1.x checked this by monkeypatching its Python moves; the C++ moves are covered by
-    bp_test.cpp's construction and ScoreChecks::Full checks.) A zero-budget solve returns exactly
+    (The C++ moves are covered by bp_test.cpp's construction and ScoreChecks::Full
+    checks.) A zero-budget solve returns exactly
     what the search would start from.
     """
     seeded = with_initial_solution(_problem(), {"items": [{"id": "A", "bin": 0}]}).to_core()
@@ -104,7 +104,7 @@ def test_partial_seed_never_reaches_the_search_with_minus_one():
 
 
 def test_seeded_zero_budget_result_stays_inside_the_bins_and_feeds_back():
-    """0.1.x could place an item that fits nowhere in bin n; the port opens the lowest empty bin."""
+    """An item that fits nowhere when bin n would be next goes to the lowest empty bin."""
     problem = BinPackingProblemModel(bin_capacity=5, items=[{"id": "A", "weight": 2}, {"id": "B", "weight": 9}])
     seeded = with_initial_solution(problem, {"items": [{"id": "A", "bin": 1}]}).to_core()
     solve(seeded, config=_no_search())

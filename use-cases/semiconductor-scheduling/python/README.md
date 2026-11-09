@@ -30,10 +30,10 @@ score(raw), score(raw, picks), score(raw, [WeightedTardinessCost(exponent=2.0)])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip
 # shift the shaping of the total (clip=True: only the minutes beyond 480 count).
 score(raw, [MakespanCost(), MakespanCost(weight=100, offset=480)])
-fab.constraint_items(problem)              # the per-item lists (0.1.x constraint_costs)
+fab.constraint_items(problem)              # the per-item lists behind each total
 ```
 
-Every constraint is global: `exponent`, `offset` and `clip` (0.3.0) shape its total, a raw
+Every constraint is global: `exponent`, `offset` and `clip` shape its total, a raw
 0 included. `clip=False` with an offset is refused on hard, where hard 0 must mean no
 violation: `ValueError: constraint 'machine_capacity_cost': clip=False with a non-zero offset
 cannot be hard, because hard 0 must mean no violation; use clip=True (a threshold) or another
@@ -50,7 +50,7 @@ uv sync --python 3.14 --all-groups --all-extras      # builds the C++ extension
 uv run --python 3.14 --with pytest python -m pytest -q tests
 ```
 
-`tests/reference_semiconductor_scheduling.py` is the frozen 0.1.x Python scorer and
+`tests/reference_semiconductor_scheduling.py` is a pure-Python reference scorer and
 decoder: `tests/test_reference_parity.py` checks the C++ raw costs, per-item lists, default
 score, decoded schedules and seed states against it on every sample and on 200 seeded
 random instances.
@@ -86,14 +86,6 @@ For finer control build `fab.SolverConfig()` and pass `config=`:
 | `change_move_weight`, `swap_move_weight` | 1, 0 | the engine's assignment-shape move mix |
 | `ruin_recreate`, `ruin_recreate_*` | off | the engine's ALNS (a recreate decodes once per candidate value) |
 | `best_score_limit`, `full_assert`, `on_new_best` | | stop early, verify every move, `on_new_best(step, score)` |
-
-**0.2.0.** These replace the simulated-annealing knobs `max_iterations`,
-`stagnation_limit`, `temperature` and `cooling_rate` (`max_iterations=0` ->
-`spent_limit_seconds=0`, `max_iterations=N` -> `step_count_limit=N`); `on_new_best` now
-receives `(step, Score)`. The constraints are renamed to `*_cost` (see the use-case
-README for the table); `constraint_costs()` returns the standard dict with one total per
-constraint, and `exponent` shapes that total (0.1.x shaped each item). Raw costs and the
-default score are unchanged.
 
 ## Starting from an existing solution
 

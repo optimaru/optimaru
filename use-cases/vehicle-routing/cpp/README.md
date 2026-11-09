@@ -34,7 +34,7 @@ cmake -B build && cmake --build build
 ### The four constraints
 
 The four rules of the Java `VehicleRoutingConstraintProvider`, under their
-0.2.0 component names (`include/vrp/constraints/<subject>_cost.hpp`; the
+component names (`include/vrp/constraints/<subject>_cost.hpp`; the
 registry name is the struct name with a lower-case first letter):
 
 - **Hard** `VehicleCapacityCost` (`vehicleCapacityCost`) — penalize

@@ -214,11 +214,6 @@ def test_score_agrees_with_the_engine_when_a_constraint_moves_to_medium():
     assert plan.score.medium < 0
 
 
-def test_the_knob_was_renamed():
-    with pytest.raises(TypeError):
-        TravelTimeCost(hard=True)
-
-
 def test_unknown_constraint_name_raises():
     """A typo must not silently leave the cost function unchanged."""
 
@@ -252,7 +247,7 @@ def test_default_instance_carries_no_overrides():
         assert (
             getattr(specs, spec.name) is spec
         )  # the instance is named after the constraint
-    # The opt-in objectives no longer pass an explicit weight=0: the C++ default is 0.
+    # The opt-in objectives pass no explicit weight=0: the C++ default is 0.
     assert specs.enclosing_circle_radius_cost.weight is None
 
 
@@ -294,14 +289,14 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name (e.g. a typo) must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
 # --- The catalog: constraint_info() ------------------------------------------
@@ -361,10 +356,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == vrp.list_constraints()
     for row in vrp.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"], entry["global"]) == (
             True,
@@ -428,7 +422,7 @@ def test_the_medium_level_folds_into_soft():
 
 
 def test_a_demoted_medium_constraint_is_soft_in_the_engine_too():
-    """level="soft" moves unassigned_visits_cost to soft in the solver (it was a no-op before 0.2.0).
+    """level="soft" moves unassigned_visits_cost to soft in the solver.
 
     With driving hard, parking every vehicle wins; the dropped visits then cost
     soft minutes, not medium ones."""
@@ -576,36 +570,6 @@ def test_the_weight_zero_objectives_are_opt_in(spec_class):
     )
 
 
-# 0.2.0 migration: the pre-0.2.0 catalog names (vehicle_fixed_cost kept its name).
-OLD_NAMES = [
-    "vehicle_capacity",
-    "service_finished_after_max_end_time",
-    "minimize_travel_time",
-    "max_travel_time",
-    "max_route_duration",
-    "vehicle_end_time",
-    "max_stops",
-    "max_route_radius",
-    "minimize_enclosing_circle_radius",
-    "min_capacity_utilization",
-    "minimize_route_duration",
-    "minimize_latency",
-    "maximize_visits_assigned",
-]
-
-
-@pytest.mark.parametrize("old", OLD_NAMES)
-def test_old_names_are_gone(old):
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-    with pytest.raises(ValueError, match="unknown constraint"):
-        solve([pick], seconds=0.05)
-    plan = small_plan()
-    plan.rebuild_unassigned_pool()
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(vrp.constraint_costs(plan), [pick])
-
-
 def test_on_new_best_with_two_workers_neither_hangs_nor_aborts():
     """Solver.solve releases the GIL, so two workers can call back (and raise) into Python."""
     cfg = vrp.SolverConfig()
@@ -646,7 +610,7 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
 def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     """Creating worker thread 1 fails (std::system_error, injected through the module's test
     seam): the worker already running is stopped and joined, and the error reaches the caller
-    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    at once. A joinable std::thread destroyed on that path would call std::terminate."""
     import time
 
     from vrp_routing import _core
@@ -664,7 +628,7 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
         _core._fail_worker_thread_start(-1)
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs -----------------------------------
 
 # Everything on a line, the position in seconds of driving from the depots.
 HAND_PLACES = {"v": 0, "w": 0, "x": 0, "a": 100, "b": 300, "c": 600, "d": 900, "e": 1000}
@@ -814,8 +778,8 @@ def test_the_route_constraints_evaluate_the_vehicles_and_not_the_pool():
     assert _zero_budget([pick]) == (0, 6.0)
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_is_the_plain_shaping():
+    """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
     plain = [VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(exponent=2)]
     shifted = [
         VehicleCapacityCost(offset=0.0, clip=False),
@@ -857,7 +821,7 @@ def test_score_matches_the_engine_for_repeated_and_shifted_picks(picks):
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own."""
+    """A constraint may be picked several times: each pick is scored on its own."""
     assert get_constraints([TravelTimeCost(), TravelTimeCost()]) == [TravelTimeCost(), TravelTimeCost()]
     picks = [VehicleCapacityCost(), TravelTimeCost(weight=10), TravelTimeCost()]
     assert _zero_budget(picks) == (-1, -(10 + 1) * 900.0)
@@ -908,7 +872,7 @@ def test_a_repeat_is_checked_on_its_own_level():
         score(vrp.constraint_costs(_hand_plan()), [TravelTimeCost(), pick])
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score ---------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -971,7 +935,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (VehicleCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
         (VehicleCapacityCost(offset=-3.0), (-4, 0.0)),  # 1 + 3 on the overloaded vehicle only
-        (VehicleCapacityCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (VehicleCapacityCost(clip=False), (-1, 0.0)),  # clip=False with offset 0: the plain shaping
         (VehicleCapacityCost(offset=0.0, clip=False), (-1, 0.0)),
     ],
 )

@@ -307,9 +307,9 @@ void Solver::solve(PackagingSchedule &schedule)
         // Keep running the remaining legs even when the operator assignment
         // reaches a fixed point: a leg still searches the job lists (fresh
         // acceptor + reseeded RNG = a restart-continuation), and breaking
-        // here used to abandon the remaining wall budget — on a shared-
-        // operator instance the alternation hit the fixed point after leg 1
-        // and returned with 2/3 of the time limit unused (adopted, R3).
+        // here would abandon the remaining wall budget — on a shared-
+        // operator instance the alternation hits the fixed point after leg 1
+        // and would return with 2/3 of the time limit unused.
         if (round < rounds - 1)
             improveOperatorAssignment(schedule);
     }

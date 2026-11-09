@@ -20,9 +20,8 @@ strategies run by default on top of the move mix: an ejection chain
 and an iterated local search (`iterated_local_search_weight`: ruin a few
 visits, repair, descend to a local optimum) that does most of the work on
 large instances; with it the nearby neighbourhood is 25 visits
-(`driving_time_nearby_size`, was 50). Both change the search trajectory for a
-given seed compared with earlier releases; see `Solver::Config` for the
-measurements behind each default.
+(`driving_time_nearby_size`). See `Solver::Config` for the measurements behind
+each default.
 
 Score convention (HardMediumSoft, as in the reference VRP example model), at
 the default weights:

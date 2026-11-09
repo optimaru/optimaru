@@ -149,7 +149,7 @@ def _assert_parity(problem_dict: dict, cpsat_result: Timetable, weights: dict[st
 
     # Hard-violation counts match exactly (a valid cpsat solution => 0 on both sides).
     assert violations == []
-    assert all(raw[name] == 0 for name, entry in costs.items() if entry["hard"])
+    assert all(raw[name] == 0 for name, entry in costs.items() if entry["level"] == "hard")
 
     # Soft: raw counts match per key (one name on both sides) + the weighted sums match (cpsat's
     # reported value included).
@@ -325,7 +325,7 @@ def test_teacher_gap_made_hard_is_forbidden_on_both_paths():
     assert solve_cpsat(gapped, config, constraints=constraints).status == SolveStatus.INFEASIBLE
 
 
-# ---------------------------------------------------------------- 0.3.0: repeated picks, offset / clip
+# ----------------------------------------------------------------------- repeated picks, offset / clip
 
 
 def _tiny_problem():
@@ -492,7 +492,7 @@ def test_an_offset_cpsat_cannot_shape_is_refused():
         solve_cpsat(problem, config, constraints=merge(default_constraints(), TeacherGapCost(level="hard", offset=1)))
 
 
-# ------------------------------------------- 0.3.0: clip=False with an offset stays off hard
+# ------------------------------------------------ clip=False with an offset stays off hard
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "

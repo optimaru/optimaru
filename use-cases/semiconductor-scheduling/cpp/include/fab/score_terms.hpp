@@ -52,7 +52,7 @@ constexpr std::size_t termIndex(Term term) { return static_cast<std::size_t>(ter
 
 // Raw (unweighted, unshaped) totals of every term; 0 = no violation.
 using RawTotals = std::array<std::int64_t, kTermCount>;
-// The per-item raw costs of every term, in the 0.1.x item order (what
+// The per-item raw costs of every term, in the reference item order (what
 // constraint_items() returns): one list per term.
 using RawItems = std::array<std::vector<std::int64_t>, kTermCount>;
 
@@ -83,7 +83,7 @@ struct ScorePlacement
     Time start = 0;
     Time end = 0;
     // Position in the assignment list: the last tie-break of the machine
-    // order (start, end, lot id) — the 0.1.x stable sort.
+    // order (start, end, lot id) — a stable sort.
     std::int64_t seq = 0;
     BatchKey batchKey;
 };
@@ -162,8 +162,7 @@ inline void sortMachineRows(const SemiconductorSchedule &schedule, PlacementList
 
 }  // namespace terms
 
-// Data mode: the raw costs of an assignment list (the 0.1.x
-// constraint_costs), with the per-item lists when `items` is given.
+// Data mode: the raw costs of an assignment list, with the per-item lists when `items` is given.
 RawTotals rawCostsOf(const SemiconductorSchedule &schedule,
                      const std::vector<Assignment> &assignments,
                      RawItems *items = nullptr);

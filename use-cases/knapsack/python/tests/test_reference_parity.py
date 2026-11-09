@@ -1,17 +1,18 @@
-"""The C++ port computes exactly what the 0.1.5 pure-Python package computed.
+"""The C++ domain computes exactly what the pure-Python reference computes.
 
-`reference_knapsack` is the frozen 0.1.5 scorer and greedy construction (an
-oracle, plain data in and out). On every sample — the web demo
+`reference_knapsack` is an independent pure-Python scorer and greedy construction
+(an oracle, plain data in and out). On every sample — the web demo
 (`fixtures/web_demo.json`, a copy of the web app's sample) and the package's own
 test fixtures — and on seeded random instances, the C++ `constraint_costs`
-totals equal the oracle's per constraint (under the 0.2.0 names), the default
+totals equal the oracle's per constraint (mapped to the engine names), the default
 score equals the oracle's, and the greedy construction (the zero-budget solve and
 `with_initial_solution`'s fill) returns the oracle's selection.
 
-0.1.5 listed one term per resource / entry / group / pair; 0.2.0 reports one
-total per constraint (every knapsack constraint is global). The totals are what
-must match; the documented differences (the exponent shapes the total, hard
-rounds per constraint, a hard reward is refused) have their own tests below.
+The reference lists one term per resource / entry / group / pair; the engine
+reports one total per constraint (every knapsack constraint is global). The totals
+are what must match; where the two differ by design (the engine's exponent shapes
+the total, hard rounds per constraint, a hard reward is refused) there are tests
+below.
 """
 
 from __future__ import annotations
@@ -126,7 +127,7 @@ def _cpp_totals(data: dict) -> dict[str, float]:
 
 
 def _ref_totals(data: dict) -> dict[str, float]:
-    return {ref.RENAMED[name]: sum(terms) for name, terms in ref.constraint_costs(_dump(data)).items()}
+    return {ref.ENGINE_NAME[name]: sum(terms) for name, terms in ref.constraint_costs(_dump(data)).items()}
 
 
 def _cpp_score(data: dict) -> tuple[int, float]:
@@ -157,7 +158,7 @@ def _constructed(data: dict) -> list[bool]:
 
 
 def test_the_catalog_maps_one_to_one():
-    assert [ref.RENAMED[name] for name in ref.OLD_NAMES] == knapsack.list_constraints()
+    assert [ref.ENGINE_NAME[name] for name in ref.REFERENCE_NAMES] == knapsack.list_constraints()
 
 
 # ----------------------------------------------------------------------------- samples
@@ -169,7 +170,7 @@ def test_every_sample_matches_the_oracle(name):
     rng = random.Random(f"parity:{name}")
     states = [
         [item.get("selected", False) for item in problem["items"]],  # the sample as given
-        ref.greedy_selection(problem),  # the 0.1.5 starting point
+        ref.greedy_selection(problem),  # the reference starting point
         [True] * len(problem["items"]),
         [False] * len(problem["items"]),
     ]
@@ -285,16 +286,16 @@ def test_random_instances_match_the_oracle(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_scores_match_the_oracle_at_integer_weights(seed):
-    """score() re-prices like 0.1.5 score_costs at integer weights and exponent 1, whatever the levels.
+    """score() re-prices like the reference score_costs at integer weights and exponent 1, whatever the levels.
 
-    (level="hard" on the selected_value_cost reward is left out: 0.1.5 scored it as a positive hard
-    term, 0.2.0 refuses it — see test_a_hard_reward_is_refused_now.)"""
+    (level="hard" on the selected_value_cost reward is left out: the reference scores it as a positive
+    hard term, the engine refuses it — see test_a_hard_reward_is_refused.)"""
     rng = random.Random(1000 + seed)
     problem = _random_instance(rng)
     data = _with_selection(problem, _random_selection(problem, rng))
     raw = knapsack.constraint_costs(Model.model_validate(data).to_core())
-    old = ref.constraint_costs(_dump(data))
-    by_old = {new: old_name for old_name, new in ref.RENAMED.items()}
+    reference = ref.constraint_costs(_dump(data))
+    reference_name = {engine: name for name, engine in ref.ENGINE_NAME.items()}
     specs = get_constraints()
     rng.shuffle(specs)
     picked: list[Constraint] = []
@@ -303,9 +304,9 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
         level = rng.choice([None, "soft"] if spec.name == "selected_value_cost" else [None, "hard", "soft"])
         picked.append(type(spec)(weight=weight, level=level))
     expected = ref.score_costs(
-        old,
+        reference,
         [
-            (by_old[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0)
+            (reference_name[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0)
             for spec in picked
         ],
     )
@@ -322,23 +323,23 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
 @pytest.mark.parametrize("seed", range(20))
 @pytest.mark.parametrize("exponent", [0.5, 2.0, 3.0])
 def test_single_term_constraints_shape_like_the_oracle(seed, exponent):
-    """knapsack_capacity_cost and selected_value_cost were one term in 0.1.5 already, so
+    """knapsack_capacity_cost and selected_value_cost are one term in the reference too, so
     any exponent gives the same score."""
     rng = random.Random(3000 + seed)
     problem = _random_instance(rng)
     data = _with_selection(problem, _random_selection(problem, rng))
     raw = knapsack.constraint_costs(Model.model_validate(data).to_core())
-    old = ref.constraint_costs(_dump(data))
+    reference = ref.constraint_costs(_dump(data))
     picked = [KnapsackCapacityCost(exponent=exponent, level="soft"), SelectedValueCost(exponent=exponent, weight=2)]
-    expected = ref.score_costs(old, [("capacity", None, False, exponent), ("maximize_value", 2, None, exponent)])
+    expected = ref.score_costs(reference, [("capacity", None, False, exponent), ("maximize_value", 2, None, exponent)])
     assert tuple(score(raw, picked)) == pytest.approx(expected)
 
 
-# ----------------------------------------------------------------------------- documented 0.2.0 changes
+# ----------------------------------------------------------------------------- differences by design
 
 
-def test_the_exponent_now_shapes_each_total():
-    """0.1.5 shaped every term ([1, 1, 1] -> 3 at any exponent); 0.2.0 shapes the total (3 -> 9)."""
+def test_the_exponent_shapes_each_total():
+    """The reference shapes every term ([1, 1, 1] -> 3 at any exponent); the engine shapes the total (3 -> 9)."""
     data = _with_selection(
         {
             "capacity": 50,
@@ -347,28 +348,28 @@ def test_the_exponent_now_shapes_each_total():
         },
         [False, False, False],
     )
-    old = ref.constraint_costs(_dump(data))
-    assert old["mandatory_items"] == [1, 1, 1]
-    assert ref.score_costs(old, [("mandatory_items", None, None, 2.0)]) == (-3, 0.0)
+    reference = ref.constraint_costs(_dump(data))
+    assert reference["mandatory_items"] == [1, 1, 1]
+    assert ref.score_costs(reference, [("mandatory_items", None, None, 2.0)]) == (-3, 0.0)
     raw = knapsack.constraint_costs(Model.model_validate(data).to_core())
     assert raw["mandatory_items_cost"]["costs"] == [3.0]
     assert score(raw, [MandatoryItemsCost(exponent=2.0)]) == (-9, 0.0)
 
 
-def test_fractional_hard_weights_now_round_per_constraint():
-    """0.1.5 rounded the hard total once (0.5 + 0.5 -> -1); the engine rounds each constraint (-2)."""
+def test_fractional_hard_weights_round_per_constraint():
+    """The reference rounds the hard total once (0.5 + 0.5 -> -1); the engine rounds each constraint (-2)."""
     data = _samples()["extended"]  # A selected: mandatory 1, forbidden 1
-    old = ref.constraint_costs(_dump(data))
-    assert ref.score_costs(old, [("mandatory_items", 0.5, None, 1.0), ("forbidden_items", 0.5, None, 1.0)]) == (-1, 0.0)
+    reference = ref.constraint_costs(_dump(data))
+    assert ref.score_costs(reference, [("mandatory_items", 0.5, None, 1.0), ("forbidden_items", 0.5, None, 1.0)]) == (-1, 0.0)
     raw = knapsack.constraint_costs(Model.model_validate(data).to_core())
     assert score(raw, [MandatoryItemsCost(weight=0.5), ForbiddenItemsCost(weight=0.5)]) == (-2, 0.0)
 
 
-def test_a_hard_reward_is_refused_now():
-    """0.1.5 scored maximize_value with hard=True as a positive hard score; 0.2.0 raises."""
+def test_a_hard_reward_is_refused():
+    """The reference scores maximize_value with hard=True as a positive hard score; the engine raises."""
     data = _samples()["extended"]
-    old = ref.constraint_costs(_dump(data))
-    assert ref.score_costs(old, [("maximize_value", None, True, 1.0)]) == (5, 0.0)
+    reference = ref.constraint_costs(_dump(data))
+    assert ref.score_costs(reference, [("maximize_value", None, True, 1.0)]) == (5, 0.0)
     raw = knapsack.constraint_costs(Model.model_validate(data).to_core())
     with pytest.raises(ValueError, match="is a reward"):
         score(raw, [SelectedValueCost(level="hard")])

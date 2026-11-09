@@ -14,8 +14,7 @@ namespace ks
 // listed twice counts twice; undecided counts as not selected), one total;
 // 0 = every mandatory item is selected. O(1) per flip.
 //
-// One total (a global constraint): the exponent shapes the count (0.1.x
-// shaped each 0/1 entry, so its exponent had no effect; see the README).
+// One total (a global constraint): the exponent shapes the count.
 struct MandatoryItemsCost final : detail::SelectionConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

@@ -2,7 +2,7 @@
 MeetingSchedulingConstraintProviderTest through the Python bindings.
 
 The raw costs come from `constraint_costs()` (summed over the units of each
-constraint), the only per-constraint surface since 0.2.0.
+constraint), the per-constraint surface.
 """
 
 import meeting_scheduling as ms

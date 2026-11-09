@@ -15,7 +15,7 @@ assignment gives the same raw cost per constraint in both solvers
 `level="medium"` is refused by both (`this use case has no medium level`). Not supported on
 CP-SAT: `exponent != 1` and non-integer weights (refused).
 
-**0.3.0:** a constraint may be picked several times (as specs or as
+A constraint may be picked several times (as specs or as
 `{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms with
 its own knobs, its level included. The six per-station constraints add one term per station,
 an empty one included (`max_stations_cost` and `forbidden_task_stations_cost` exactly their

@@ -59,7 +59,7 @@ def _weighted(penalties: dict[str, int], weights: dict[str, int]) -> float:
 def test_list_constraints_matches_core_registry():
     names = list_constraints()
     assert names == list(canon.CONSTRAINT_NAMES) == st._core.list_constraints()  # a list, like the other packages
-    assert len(names) == 17  # 0.2.0 adds fixed_slots_cost / parallel_groups_cost
+    assert len(names) == 17  # fixed_slots_cost / parallel_groups_cost included
     # The default Assembly holds the whole registry in the same order.
     assert [spec.name for spec in Assembly()] == names
 
@@ -147,7 +147,7 @@ def test_constraint_totals_follow_the_catalog_order():
 def test_drop_component(problem):
     """(3) Dropping a component: the term leaves the calculator and its rescoring weight becomes 0."""
     assembly = Assembly().drop("teacher_workday_cost")
-    assert len(assembly) == 16  # 17 defaults (0.2.0 adds the two structural constraints) - 1
+    assert len(assembly) == 16  # 17 defaults (the two structural constraints included) - 1
     assert "teacher_workday_cost" not in assembly
     assert "teacher_gap_cost" in assembly
 
@@ -327,7 +327,7 @@ def test_every_cpsat_constraint_has_the_engine_name():
 
 
 def test_structural_constraints_assemble_like_any_other(problem):
-    """fixed_slots_cost / parallel_groups_cost are real components now: they assemble, cost 0, stay hard."""
+    """fixed_slots_cost / parallel_groups_cost are real components: they assemble, cost 0, stay hard."""
     assembly = Assembly([st.constraints.fixed_slots_cost, st.constraints.parallel_groups_cost])
     assert [spec.name for spec in assembly] == ["fixed_slots_cost", "parallel_groups_cost"]
     converted = st.convert_problem(problem)

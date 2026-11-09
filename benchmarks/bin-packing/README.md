@@ -12,7 +12,7 @@ uv run --project cpsat pytest -q cpsat/tests
 uv run --project cpsat python -m bench.run_bench --seconds 60
 # offline: generated instances, the shared engine-vs-CP-SAT runner
 uv run --project cpsat python -m bin_packing_cpsat.benchmark --seconds 1 --workers 2 --cpsat-grace 20
-# offline: search quality against 0.1.5 on generated coloured instances (exit 1 = regression)
+# offline: search quality against a recorded baseline on generated coloured instances (exit 1 = regression)
 uv run --project cpsat python -m bench.quality --seconds 2 --seeds 1,2,3 --check
 ```
 
@@ -25,7 +25,7 @@ the engine's raw cost (0 = no violation). `level="soft"` / `level="hard"` moves 
 the soft / hard level in both solvers, and `level="medium"` is refused by both (`this use
 case has no medium level`). CP-SAT accepts only exponent 1 and integer weights.
 
-**0.3.0:** a constraint may be picked several times (as specs or as
+A constraint may be picked several times (as specs or as
 `{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms with
 its own knobs, its level included. The three per-bin constraints add one term per bin
 0..n-1, an empty bin included, and `used_bins_cost` one term for the bin count, so an
@@ -51,46 +51,45 @@ single-threaded; CP-SAT uses 8 workers and its time includes model construction.
 snapshot, not a statistical study.
 <!-- results:end -->
 
-## Search quality against 0.1.5
+## Search quality against a recorded baseline
 
-The 0.2.0 review found the C++ search 1-2 bins behind 0.1.5's pure-Python annealing on
-instances with colours and conflicts: its only bin-emptying move, `EmptyBinMove`, checks
-the capacity only, so emptying a bin broke a colour or a conflict and late acceptance
+A search review found the C++ search 1-2 bins behind a pure-Python simulated-annealing
+baseline on instances with colours and conflicts: its only bin-emptying move, `EmptyBinMove`,
+checks the capacity only, so emptying a bin broke a colour or a conflict and late acceptance
 turned the move down. `RepackMove` (see the use case's
 [Search](../../use-cases/bin-packing/README.md#search)) closes that gap.
 [`bench/quality.py`](bench/quality.py) generates every instance below
 (`--extra` for those after the first four pairs); `--check` fails when a run on the
-review's four coloured instances uses more bins than 0.1.5 did, or any run ends
+review's four coloured instances uses more bins than the recorded baseline (the most bins
+the annealing used over seeds 1-3: sq1 44, g11 43, g22 45, g33 43), or any run ends
 infeasible.
 
 Bins used, seeds 1, 2, 3, one thread; \* = ended infeasible. "LB" is the weight lower
-bound, ceil(total weight / capacity). 0.1.5 is optimaru 0.1.5 from PyPI; it stops by
-itself after its 50,000 iterations (before 10 s on all but the 500- and 1000-item
-instances), so its 10 s runs mostly repeat the 2 s ones. "0.2.0 without RepackMove" is
-the release candidate the review measured (commit b9d70f0).
+bound, ceil(total weight / capacity). "Without RepackMove" is the engine with that move
+taken out (commit b9d70f0), the ablation that shows what the move adds.
 
-| instance (items, LB) | 0.1.5 2 s | 0.1.5 10 s | 0.2.0 without RepackMove 2 s | 0.2.0 without RepackMove 10 s | 0.2.0 2 s | 0.2.0 10 s |
-| --- | --- | --- | --- | --- | --- | --- |
-| sq1 (120, 43) | 44, 44\*, 44 | 44, 44, 44 | 46, 45, 46 | 45, 45, 46 | 43, 43, 43 | 43, 43, 43 |
-| g11 (120, 42) | 43, 43, 43 | 43, 43, 43 | 45, 44, 44 | 45, 44, 44 | 42, 42, 42 | 42, 42, 42 |
-| g22 (120, 44) | 45, 45, 44 | 45, 45, 44 | 46, 45, 46 | 46, 45, 46 | 44, 44, 44 | 44, 44, 44 |
-| g33 (120, 42) | 43, 43, 43 | 43, 43, 43 | 44, 44, 43 | 44, 44, 43 | 42, 42, 42 | 42, 42, 42 |
-| colours-only-sq1 (120, 43) | 44, 45, 45 | 44, 44, 44 | 46, 46, 46 | 46, 45, 46 | 43, 43, 43 | 43, 43, 43 |
-| review-250 (250, 86) | 87\*, 88\*, 87\* | 88\*, 88\*, 87\* | 88, 91, 91 | 88, 89, 89 | 86, 86, 86 | 86, 86, 86 |
-| plain-sq1 (120, 43) | 44, 44, 44 | 44, 44, 44 | 44, 44, 44 | 44, 44, 44 | 43, 43, 43 | 43, 43, 43 |
-| plain-g11 (120, 42) | 43, 43, 43 | 43, 43, 43 | 43, 43, 43 | 43, 43, 43 | 42, 42, 42 | 42, 42, 42 |
-| plain-g22 (120, 44) | 44, 44, 44 | 44, 44, 44 | 44, 44, 44 | 44, 44, 44 | 44, 44, 44 | 44, 44, 44 |
-| plain-g33 (120, 42) | 42, 42, 42 | 42, 42, 42 | 42, 42, 42 | 42, 42, 42 | 42, 42, 42 | 42, 42, 42 |
-| web-demo (20, 8) | 8, 8, 8 | 8, 8, 8 | 8, 8, 8 | 8, 8, 8 | 8, 8, 8 | 8, 8, 8 |
-| web-demo-x6 (120, 45) | 48, 49, 48\* | 48, 49, 48\* | 49, 48, 48 | 48, 48, 48 | 47, 48, 47 | 47, 47, 47 |
-| bench-small (12, 5) | 6, 6, 6 | 6, 6, 6 | 6, 6, 6 | 6, 6, 6 | 6, 6, 6 | 6, 6, 6 |
-| bench-medium (30, 12) | 12, 12, 12 | 12, 12, 12 | 12, 12, 12 | 12, 12, 12 | 12, 12, 12 | 12, 12, 12 |
-| bench-large (60, 26) | 26, 26, 26 | 26, 26, 26 | 26, 26, 26 | 26, 26, 26 | 26, 26, 26 | 26, 26, 26 |
-| u500-coloured (500, 198) | 201\*, 202\*, 202\* | 201\*, 202\*, 202\* | 211, 210, 210 | 211, 210, 207 | 199, 199, 199 | 199, 199, 199 |
-| u250 (250, 106) | 107, 107, 107 | 107, 107, 107 | 107, 107, 107 | 107, 107, 107 | 106, 107, 106 | 106, 107, 106 |
-| u500 (500, 199) | 201, 201, 201 | 201, 201, 201 | 201, 201, 201 | 201, 201, 201 | 200, 200, 200 | 200, 200, 200 |
-| u1000 (1000, 399) | 403, 403, 403 | 403, 403, 403 | 403, 403, 403 | 403, 403, 403 | 401, 401, 401 | 401, 401, 401 |
-| t120 (120, 40) | 44, 44, 44 | 44, 44, 44 | 43, 43, 43 | 42, 42, 43 | 41, 41, 41 | 41, 41, 41 |
+| instance (items, LB) | without RepackMove 2 s | without RepackMove 10 s | engine 2 s | engine 10 s |
+| --- | --- | --- | --- | --- |
+| sq1 (120, 43) | 46, 45, 46 | 45, 45, 46 | 43, 43, 43 | 43, 43, 43 |
+| g11 (120, 42) | 45, 44, 44 | 45, 44, 44 | 42, 42, 42 | 42, 42, 42 |
+| g22 (120, 44) | 46, 45, 46 | 46, 45, 46 | 44, 44, 44 | 44, 44, 44 |
+| g33 (120, 42) | 44, 44, 43 | 44, 44, 43 | 42, 42, 42 | 42, 42, 42 |
+| colours-only-sq1 (120, 43) | 46, 46, 46 | 46, 45, 46 | 43, 43, 43 | 43, 43, 43 |
+| review-250 (250, 86) | 88, 91, 91 | 88, 89, 89 | 86, 86, 86 | 86, 86, 86 |
+| plain-sq1 (120, 43) | 44, 44, 44 | 44, 44, 44 | 43, 43, 43 | 43, 43, 43 |
+| plain-g11 (120, 42) | 43, 43, 43 | 43, 43, 43 | 42, 42, 42 | 42, 42, 42 |
+| plain-g22 (120, 44) | 44, 44, 44 | 44, 44, 44 | 44, 44, 44 | 44, 44, 44 |
+| plain-g33 (120, 42) | 42, 42, 42 | 42, 42, 42 | 42, 42, 42 | 42, 42, 42 |
+| web-demo (20, 8) | 8, 8, 8 | 8, 8, 8 | 8, 8, 8 | 8, 8, 8 |
+| web-demo-x6 (120, 45) | 49, 48, 48 | 48, 48, 48 | 47, 48, 47 | 47, 47, 47 |
+| bench-small (12, 5) | 6, 6, 6 | 6, 6, 6 | 6, 6, 6 | 6, 6, 6 |
+| bench-medium (30, 12) | 12, 12, 12 | 12, 12, 12 | 12, 12, 12 | 12, 12, 12 |
+| bench-large (60, 26) | 26, 26, 26 | 26, 26, 26 | 26, 26, 26 | 26, 26, 26 |
+| u500-coloured (500, 198) | 211, 210, 210 | 211, 210, 207 | 199, 199, 199 | 199, 199, 199 |
+| u250 (250, 106) | 107, 107, 107 | 107, 107, 107 | 106, 107, 106 | 106, 107, 106 |
+| u500 (500, 199) | 201, 201, 201 | 201, 201, 201 | 200, 200, 200 | 200, 200, 200 |
+| u1000 (1000, 399) | 403, 403, 403 | 403, 403, 403 | 401, 401, 401 | 401, 401, 401 |
+| t120 (120, 40) | 43, 43, 43 | 42, 42, 43 | 41, 41, 41 | 41, 41, 41 |
 
 - sq1, g11, g22, g33: the review's recipe (120 items, weights 10..60, capacity 100,
   about 40% of the items in one of 4 colours, 10 conflict pairs; generator seeds

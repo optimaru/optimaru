@@ -85,7 +85,7 @@ harness exchange the same shape.
 ## Weights (`ObjectiveWeights`)
 
 The weights of the six soft constraints, keyed by the constraint names (one
-name per constraint in every layer since 0.2.0). `penalties` holds the **raw
+name per constraint in every layer). `penalties` holds the **raw
 counts** under the same keys, and `objective_value` is their weighted sum.
 Partial timetabling (`unassigned_lessons_cost` relaxed) adds
 `penalties["unassigned_lessons_cost"]`, the unfilled weekly periods.

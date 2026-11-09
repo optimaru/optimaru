@@ -190,10 +190,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     unit_names = ts.list_constraints()[:2]
     for row in ts.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
         assert entry["global"] == (row.name not in unit_names)
@@ -291,25 +290,6 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(TypeError, match=re.escape(message)):
         ConfrontationCountImbalanceCost(**knobs)
-
-
-OLD_NAMES = (
-    "one_assignment_per_date_per_team",
-    "unavailability_penalty",
-    "fair_assignment_count_per_team",
-    "evenly_confrontation_count",
-)
-
-
-@pytest.mark.parametrize("old", OLD_NAMES)
-def test_old_names_are_gone(old):
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-    with pytest.raises(ValueError, match="unknown constraint"):
-        ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(ts.constraint_costs(build_schedule()), [pick])
-    assert old not in ts.list_constraints()
 
 
 NEAR_MISSES = (
@@ -474,20 +454,20 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name (e.g. a typo) must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    The later pick neither wins in silence nor is an error: both are
     instances with their own knobs, and they add up."""
     picks = [TeamConflictCost(), ConfrontationCountImbalanceCost(weight=10), ConfrontationCountImbalanceCost()]
     engine = _zero_budget(_hand(), picks)
@@ -500,7 +480,7 @@ def test_naming_a_constraint_twice_scores_both_picks():
     assert python.soft == pytest.approx(schedule.score.soft)
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs -----------------------------------
 #
 # The hand instance is _hand(): the pinned _uneven_loads() schedule plus three
 # unavailability facts, T0 twice on D0 (it plays D0) and T2 on D3 (it does not). Raw per
@@ -670,8 +650,8 @@ def test_only_the_scoped_constraint_reports_units():
     assert _agrees(_zero_budget(clear, [pick]), (0, 4.0))
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_is_the_plain_shaping():
+    """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
     plain = [*get_constraints()[:-1], ConfrontationCountImbalanceCost(exponent=2)]
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
@@ -768,18 +748,16 @@ def test_core_refuses_an_unknown_level_like_the_python_base():
         ts.constraint_costs(_hand(), [pick])
 
 
-def test_the_knob_was_renamed():
-    """hard= is gone: a spec refuses it, and an old duck-typed pick that carries `hard` but
-    no `level` is refused on every path instead of running at the default level."""
-    with pytest.raises(TypeError):
-        TeamConflictCost(hard=True)
-    old = SimpleNamespace(name="team_conflict_cost", weight=None, hard=True, exponent=1.0)
+def test_a_pick_without_a_level_is_refused():
+    """A duck-typed pick without `level` is refused on every path instead of running at the
+    default level."""
+    pick = SimpleNamespace(name="team_conflict_cost", weight=None, exponent=1.0)
     with pytest.raises(AttributeError, match="level"):
-        ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[old])
+        ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(AttributeError, match="level"):
-        ts.constraint_costs(_hand(), [old])
+        ts.constraint_costs(_hand(), [pick])
     with pytest.raises(AttributeError, match="level"):
-        score(ts.constraint_costs(_hand()), [old])
+        score(ts.constraint_costs(_hand()), [pick])
 
 
 @pytest.mark.parametrize(
@@ -833,7 +811,7 @@ def test_a_repeat_is_checked_on_its_own_level():
         score(ts.constraint_costs(_hand()), [TeamConflictCost(), pick])
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score ---------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -910,7 +888,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
         # _hand(): team_unavailability_cost [2, 0] on T0 and T2, hard.
         (TeamUnavailabilityCost(offset=1), (-1, 0.0)),  # clip=True on hard: a threshold
         (TeamUnavailabilityCost(offset=-1), (-3, 0.0)),  # adds 1 to the non-zero team only
-        (TeamUnavailabilityCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (TeamUnavailabilityCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the plain shaping
         (TeamUnavailabilityCost(offset=0.0, clip=False), (-2, 0.0)),
         (TeamConflictCost(offset=-1), (0, 0.0)),  # no conflict: a threshold adds nothing to a raw 0
     ],

@@ -17,7 +17,7 @@ Score, at the default weights: hard = -(team_conflict_cost +
 consecutive_home_matches_cost + consecutive_away_matches_cost +
 repeat_match_on_next_day_cost), soft = -(the five *_hop_cost travel terms in km +
 1000 x workday_classic_matches_cost). `constraint_costs(schedule)` gives the raw cost of
-every constraint (the only per-constraint surface since 0.2.0); `constraint_info()`
+every constraint (the only per-constraint surface); `constraint_info()`
 lists every constraint with its default level and weight. Change a weight or a level
 through a constraint selection (see `sports_league.constraints`).
 

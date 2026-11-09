@@ -30,9 +30,8 @@ Score, at the default weights:
 - soft = -(`before_ideal_end_date_cost` x1 + `after_ideal_end_date_cost` x1,000,000 +
   `tag_conflict_cost` x1,000)
 
-The constraint names carry a `_cost` suffix since 0.2.0 (`crew_conflict` ->
-`crew_conflict_cost`, ...; the job fields `min_start_date` / `max_end_date` keep their
-names). Pick, re-weight or flip constraints with `maintenance_scheduling.constraints`, and read
+The constraint names carry a `_cost` suffix (`crew_conflict_cost`, ...), which keeps them
+apart from the job fields `min_start_date` / `max_end_date`. Pick, re-weight or flip constraints with `maintenance_scheduling.constraints`, and read
 the defaults with `mnt.constraint_info()`. Each spec takes `(weight=None, level=None,
 exponent=1.0)` and the keyword-only `offset=0.0` / `clip=True`, and a constraint may be
 picked several times, each pick with its own knobs. `level` is `"hard"` or `"soft"`

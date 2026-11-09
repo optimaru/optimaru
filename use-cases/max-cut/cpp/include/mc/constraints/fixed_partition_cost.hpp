@@ -11,8 +11,8 @@ namespace mc
 // Hard, weight 1: fixedPartitionCost — fixed vertices (fixedSide >= 0) that
 // sit on the other side. Raw cost per side u = the members v of side u with
 // fixedSide[v] >= 0 and fixedSide[v] != u, so 0 = every fixed vertex is on
-// its side. The two sides sum to the 0.1.x count of fixed vertices off their
-// side (0.1.x listed one 0/1 term per fixed vertex). The engine never moves a
+// its side. The two sides sum to the count of fixed vertices off their
+// side. The engine never moves a
 // pinned (fixed) vertex, so during search it stays 0; only a warm-start seed
 // that contradicts fixed_partition makes it positive. Per-member delta: O(1).
 struct FixedPartitionCost final : McUnitConstraint

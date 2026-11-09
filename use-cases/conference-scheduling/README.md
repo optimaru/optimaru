@@ -79,23 +79,17 @@ same constants. The three `*_diversity_cost` rows are **rewards**: their raw cos
 they are never hard (`level="hard"` raises `ValueError` on both solvers) and their level is
 not flippable (`level_flippable=False`). Every other constraint flips both ways
 (`level="hard"` / `level="soft"`). `audience_type_diversity_cost` rewards same-timeslot pairs
-that SHARE an audience type, despite its name; 0.2.0 keeps that arithmetic (rename only).
+that SHARE an audience type, despite its name.
 `exponent` shapes the one total of each constraint (they are all global).
 
-**0.2.0:** every constraint was renamed to the unified `*_cost` names, in every layer (C++
-struct, header and registry name, the C++ `Breakdown` members, the Python spec classes,
-their module-level default instances, the CP-SAT plugins): `talk_type_compatibility` -> `talk_type_incompatibility_cost`, `room_unavailable_timeslot` -> `room_unavailability_cost`, `room_conflict` -> `room_conflict_cost`, `speaker_unavailable_timeslot` -> `speaker_unavailability_cost`, `speaker_conflict` -> `speaker_conflict_cost`, `talk_prerequisite_talks` -> `talk_prerequisite_talks_cost`, `talk_mutually_exclusive_talks_tags` -> `talk_mutually_exclusive_talks_tags_cost`, `consecutive_talks_pause` -> `consecutive_talks_pause_cost`, `crowd_control` -> `crowd_control_risk_cost`, `speaker_required_timeslot_tags` -> `speaker_required_timeslot_tags_cost`, `speaker_prohibited_timeslot_tags` -> `speaker_prohibited_timeslot_tags_cost`, `talk_required_timeslot_tags` -> `talk_required_timeslot_tags_cost`, `talk_prohibited_timeslot_tags` -> `talk_prohibited_timeslot_tags_cost`, `speaker_required_room_tags` -> `speaker_required_room_tags_cost`, `speaker_prohibited_room_tags` -> `speaker_prohibited_room_tags_cost`, `talk_required_room_tags` -> `talk_required_room_tags_cost`, `talk_prohibited_room_tags` -> `talk_prohibited_room_tags_cost`, `theme_track_conflict` -> `theme_track_conflict_cost`, `theme_track_room_stability` -> `theme_track_room_change_cost`, `sector_conflict` -> `sector_conflict_cost`, `audience_type_theme_track_conflict` -> `audience_type_theme_track_conflict_cost`, `content_audience_level_flow_violation` -> `content_audience_level_flow_violation_cost`, `content_conflict` -> `content_conflict_cost`, `same_day_talks` -> `different_day_talks_cost`, `popular_talks` -> `popular_talks_room_size_cost`, `speaker_preferred_timeslot_tags` -> `speaker_preferred_timeslot_tags_cost`, `speaker_undesired_timeslot_tags` -> `speaker_undesired_timeslot_tags_cost`, `talk_preferred_timeslot_tags` -> `talk_preferred_timeslot_tags_cost`, `talk_undesired_timeslot_tags` -> `talk_undesired_timeslot_tags_cost`, `speaker_preferred_room_tags` -> `speaker_preferred_room_tags_cost`, `speaker_undesired_room_tags` -> `speaker_undesired_room_tags_cost`, `talk_preferred_room_tags` -> `talk_preferred_room_tags_cost`, `talk_undesired_room_tags` -> `talk_undesired_room_tags_cost`, `speaker_makespan` -> `speaker_makespan_cost`, `audience_type_diversity` -> `audience_type_diversity_cost`, `audience_level_diversity` -> `audience_level_diversity_cost`, `language_diversity` -> `language_diversity_cost`. The Python
-classes follow (`RoomConflict` -> `RoomConflictCost`, `SameDayTalks` ->
-`DifferentDayTalksCost`, ...); the old names are unknown now. `compute_breakdown()` and
-the Python `Breakdown` class are gone: `constraint_costs(schedule)` is the one
-per-constraint surface (each reward reported negated, as its raw cost <= 0), and
-`constraint_info()` is the catalog. Raw costs and the default score are unchanged.
+`constraint_costs(schedule)` is the one per-constraint surface (each reward reported
+negated, as its raw cost <= 0), and `constraint_info()` is the catalog.
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. Each constraint's one total `x` is shaped as
+**Offsets and repeated picks.** Every constraint takes the knobs `weight`, `level`,
+`exponent` and, keyword-only, `offset` and `clip`, and may be picked several times. Each constraint's one total `x` is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges a total of 0 as
-well and acts as a reward below the offset); `offset=0` is the 0.2.0 shaping. `clip=False`
+well and acts as a reward below the offset); `offset=0` is the plain power shaping. `clip=False`
 with an offset is refused on hard (`RoomConflictCost` and the other hard constraints by
 default), because hard 0 must mean no violation. Each pick is its own instance with its own
 knobs, and the instances add up:
@@ -111,8 +105,7 @@ cs.solve(schedule, constraints=[
 CP-SAT reference adds each plugin's terms as the one total the engine shapes, so it takes
 integral offsets on every constraint.
 
-The `hard` knob is gone in 0.3.0 (`hard=` raises `TypeError`): `level` replaces it, a
-`Level` (`Level.HARD`, `Level.SOFT`, from `conference_scheduling.constraints`) or its name.
+`level` is a `Level` (`Level.HARD`, `Level.SOFT`, from `conference_scheduling.constraints`) or its name.
 Each repeated pick carries its own level, so `RoomConflictCost()` and
 `RoomConflictCost(level="soft", offset=10)` charge the same room conflict once hard and once
 soft beyond ten minutes. This use case has no medium level: `level="medium"` raises
@@ -140,9 +133,9 @@ interleaved A/B — absolute values depend on the machine):
 
 Two changed defaults / structures:
 
-- **Aggregated incremental pairwise deltas** — previously every insert/retract was an
-  O(n) sweep over all talks (2n per change move, 4n per swap). Now they are exact
-  aggregate queries: per-slot tag occupancy counts (theme/sector/audience/content/mutex +
+- **Aggregated incremental pairwise deltas** — instead of an O(n) sweep over all talks
+  per insert/retract (2n per change move, 4n per swap), they are exact aggregate
+  queries: per-slot tag occupancy counts (theme/sector/audience/content/mutex +
   the theme x audience joint + per-(slot,room) theme + content x level + level/language),
   a (slot,room) occupancy grid (`room_conflict_cost`), per-capacity-class favorite-rank
   Fenwick trees (`popular_talks_room_size_cost`), and adjacency lists only for the truly sparse relations (shared

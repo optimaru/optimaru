@@ -8,9 +8,7 @@ namespace bp
 
 // Hard, weight 1: binCapacityCost — the load a bin carries beyond the
 // capacity. Raw cost per bin = max(0, summed item weight - binCapacity), so
-// 0 = within capacity (an empty bin costs 0). 0.1.5 listed bins 0..max bin;
-// the extra bins up to n-1 are always 0, so totals and shaped totals are
-// unchanged.
+// 0 = within capacity (an empty bin costs 0).
 //
 // No delta contract: max(0, load - capacity) is not a sum of per-member
 // terms (the clamp is what makes it non-additive), so the marginal cost of

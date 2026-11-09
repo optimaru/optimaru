@@ -1,16 +1,16 @@
-"""The C++ port computes exactly what the 0.1.5 pure-Python package computed.
+"""The C++ engine computes exactly what the pure-Python reference scorer computes.
 
-`reference_quadratic_assignment` is the frozen 0.1.5 scorer (an oracle, plain
+`reference_quadratic_assignment` is an independent scorer (an oracle, plain
 data in and out). On every sample — the web demo (`fixtures/web_demo.json`, a
 copy of the web app's sample) and the package's own test fixtures, under every
 permutation of the small ones — and on seeded random instances, the C++
-`constraint_costs` totals equal the oracle's per constraint (under the 0.2.0
+`constraint_costs` totals equal the oracle's per constraint (under the engine's
 names), the default score and `total_cost` equal the oracle's, and the shaped
 totals agree for any exponent.
 
-0.1.5 listed `fixed_assignments` once per fixed location and
-`forbidden_assignments` once per assignment entry; 0.2.0 lists both per location
-(location order), zeros included. The non-zero terms are the same, so totals and
+The reference lists `fixed_assignments` once per fixed location and
+`forbidden_assignments` once per assignment entry; the engine lists both per
+location (location order), zeros included. The non-zero terms are the same, so totals and
 shaped totals match; the documented differences (hard rounds per unit, a
 non-injective assignment is refused) have their own tests below.
 """
@@ -46,7 +46,7 @@ SPECS = {
     "assignment_cost": AssignmentCost,
     "flow_distance_cost": FlowDistanceCost,
 }
-OLD_OF = {new: old for old, new in ref.RENAMED.items()}
+REFERENCE_NAME = {engine: reference for reference, engine in ref.ENGINE_NAME.items()}
 
 
 def _samples() -> dict[str, dict]:
@@ -141,7 +141,7 @@ def _cpp_totals(data: dict) -> dict[str, float]:
 
 
 def _ref_totals(data: dict) -> dict[str, float]:
-    return {ref.RENAMED[name]: sum(terms) for name, terms in ref.constraint_costs(_dump(data)).items()}
+    return {ref.ENGINE_NAME[name]: sum(terms) for name, terms in ref.constraint_costs(_dump(data)).items()}
 
 
 def _assert_parity(data: dict) -> None:
@@ -171,7 +171,7 @@ def _permutations(problem: dict, rng: random.Random, count: int):
 
 
 def test_the_catalog_maps_one_to_one():
-    assert [ref.RENAMED[name] for name in ref.OLD_NAMES] == qap.list_constraints()
+    assert [ref.ENGINE_NAME[name] for name in ref.REFERENCE_NAMES] == qap.list_constraints()
 
 
 # ----------------------------------------------------------------------------- samples
@@ -187,7 +187,7 @@ def test_every_sample_matches_the_oracle_under_every_permutation(name):
 
 @pytest.mark.parametrize("name", list(_samples()))
 def test_the_assignment_key_order_does_not_matter(name):
-    """0.1.5 listed forbidden terms in assignment-dict order; the totals never depended on it."""
+    """The reference lists forbidden terms in assignment-dict order; the totals do not depend on it."""
     problem = _samples()[name]
     rng = random.Random(f"order:{name}")
     for _ in range(5):
@@ -213,7 +213,7 @@ def test_a_solved_sample_matches_the_oracle(name):
 
 
 def test_the_identity_start_matches_the_oracle():
-    """The zero-budget solve returns the 0.1.5 starting point (facility i at location i)."""
+    """The zero-budget solve returns the identity starting point (facility i at location i)."""
     for name, problem in _samples().items():
         model = Model.model_validate(problem)
         qap.solve(model, time_limit_seconds=0)
@@ -273,16 +273,16 @@ def test_random_instances_match_the_oracle(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_scores_match_the_oracle_at_integer_weights(seed):
-    """score() re-prices like 0.1.5 score_costs at integer weights and exponent 1, whatever the levels.
+    """score() re-prices like the reference score_costs at integer weights and exponent 1, whatever the levels.
 
-    Except where 0.3.0 refuses the level: an objective whose data holds a negative entry (its
+    Except where the engine refuses the level: an objective whose data holds a negative entry (its
     entry is "signed") cannot be hard, since a negative hard total would cancel a violation;
     both paths refuse that pick in the same words."""
     rng = random.Random(1000 + seed)
     problem = _random_instance(rng)
     data = _with_assignment(problem, _random_permutation(problem, rng))
     raw = _cpp_costs(data)
-    old = ref.constraint_costs(_dump(data))
+    ref_raw = ref.constraint_costs(_dump(data))
     specs = get_constraints()
     rng.shuffle(specs)
     picked: list[Constraint] = []
@@ -304,9 +304,9 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
         assert str(mirror.value) == str(engine.value) == message
         return
     expected = ref.score_costs(
-        old,
+        ref_raw,
         [
-            (OLD_OF[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0)
+            (REFERENCE_NAME[spec.name], spec.weight, {None: None, "hard": True, "soft": False}[spec.level], 1.0)
             for spec in picked
         ],
     )
@@ -322,61 +322,61 @@ def test_scores_match_the_oracle_at_integer_weights(seed):
 @pytest.mark.parametrize("exponent", [0.5, 2.0, 3.0])
 def test_every_constraint_shapes_like_the_oracle(seed, exponent):
     """The per-location lists hold the oracle's non-zero terms (plus zeros), and the objectives one
-    total each as 0.1.5 did: every exponent shapes the same values. (Soft level, so per-unit vs
+    total each as the reference does: every exponent shapes the same values. (Soft level, so per-unit vs
     once-at-the-end hard rounding does not enter.)"""
     rng = random.Random(3000 + seed)
     problem = _random_instance(rng)
     data = _with_assignment(problem, _random_permutation(problem, rng))
     raw = _cpp_costs(data)
-    old = ref.constraint_costs(_dump(data))
+    ref_raw = ref.constraint_costs(_dump(data))
     for name, spec_class in SPECS.items():
         picked = [spec_class(exponent=exponent, level="soft", weight=2)]
-        expected = ref.score_costs(old, [(OLD_OF[name], 2, False, exponent)])
+        expected = ref.score_costs(ref_raw, [(REFERENCE_NAME[name], 2, False, exponent)])
         assert tuple(score(raw, picked)) == pytest.approx(expected), name
         nonzero = sorted(value for value in raw[name]["costs"] if value != 0)
-        assert nonzero == sorted(float(value) for value in old[OLD_OF[name]] if value != 0), name
+        assert nonzero == sorted(float(value) for value in ref_raw[REFERENCE_NAME[name]] if value != 0), name
 
 
-# ----------------------------------------------------------------------------- documented 0.2.0 changes
+# ----------------------------------------------------------------------------- where the engine differs
 
 
-def test_fractional_hard_weights_now_round_per_unit():
-    """0.1.5 rounded the hard total once (0.5 + 0.5 -> -1); the engine rounds each location (-2)."""
+def test_fractional_hard_weights_round_per_unit():
+    """The reference rounds the hard total once (0.5 + 0.5 -> -1); the engine rounds each location (-2)."""
     data = _with_assignment(_samples()["three-fixed-twice"], ["F2", "F3", "F1"])  # both pins broken
-    old = ref.constraint_costs(_dump(data))
-    assert old["fixed_assignments"] == [1, 1]
-    assert ref.score_costs(old, [("fixed_assignments", 0.5, None, 1.0)]) == (-1, 0.0)
+    ref_raw = ref.constraint_costs(_dump(data))
+    assert ref_raw["fixed_assignments"] == [1, 1]
+    assert ref.score_costs(ref_raw, [("fixed_assignments", 0.5, None, 1.0)]) == (-1, 0.0)
     raw = _cpp_costs(data)
     assert raw["pinned_assignments_cost"]["costs"] == [1.0, 1.0, 0.0]
     assert score(raw, [PinnedAssignmentsCost(weight=0.5)]) == (-2, 0.0)
 
 
-def test_a_fractional_exponent_on_a_hard_side_constraint_now_rounds_per_unit():
-    """A shaped per-location value is fractional too: 0.1.5 rounded 2 * sqrt(2) once (-3); the engine
+def test_a_fractional_exponent_on_a_hard_side_constraint_rounds_per_unit():
+    """A shaped per-location value is fractional too: the reference rounds 2 * sqrt(2) once (-3); the engine
     rounds each location's sqrt(2) (-2)."""
     problem = {**_samples()["three"], "facility_demands": {"F1": 3, "F2": 3}, "location_capacities": {"L1": 1, "L2": 1}}
     data = _with_assignment(problem, ["F1", "F2", "F3"])
-    old = ref.constraint_costs(_dump(data))
-    assert old["location_capacities"] == [2, 2, 0]
-    assert ref.score_costs(old, [("location_capacities", None, None, 0.5)]) == (-3, 0.0)
+    ref_raw = ref.constraint_costs(_dump(data))
+    assert ref_raw["location_capacities"] == [2, 2, 0]
+    assert ref.score_costs(ref_raw, [("location_capacities", None, None, 0.5)]) == (-3, 0.0)
     raw = _cpp_costs(data)
     assert raw["location_capacity_cost"]["costs"] == [2.0, 2.0, 0.0]
     assert score(raw, [LocationCapacityCost(exponent=0.5)]) == (-2, 0.0)
 
 
-def test_unit_lists_are_per_location_now():
-    """0.1.5: one term per FIXED location / per assignment ENTRY; 0.2.0: one per location, in order."""
+def test_unit_lists_are_per_location():
+    """Reference: one term per FIXED location / per assignment ENTRY; engine: one per location, in order."""
     data = _with_assignment(_samples()["repeats"], ["A", "B", "C", "D", "E"], order=["z", "y", "x", "w", "v"])
-    old = ref.constraint_costs(_dump(data))
-    assert len(old["fixed_assignments"]) == 3 and len(old["forbidden_assignments"]) == 5
+    ref_raw = ref.constraint_costs(_dump(data))
+    assert len(ref_raw["fixed_assignments"]) == 3 and len(ref_raw["forbidden_assignments"]) == 5
     raw = _cpp_costs(data)
     assert all(len(raw[name]["costs"]) == 5 for name in SPECS if not raw[name]["global"])
     assert raw["forbidden_assignments_cost"]["costs"] == [0.0, 1.0, 0.0, 1.0, 0.0]  # B at w, D at y (rows deduped)
-    assert old["forbidden_assignments"] == [0, 1, 0, 1, 0][::-1]  # the same terms, in assignment-dict order
+    assert ref_raw["forbidden_assignments"] == [0, 1, 0, 1, 0][::-1]  # the same terms, in assignment-dict order
 
 
-def test_a_non_injective_assignment_is_refused_now():
-    """0.1.5 scored one facility at two locations; the C++ model cannot represent it (to_core raises)."""
+def test_a_non_injective_assignment_is_refused():
+    """The reference scores one facility at two locations; the C++ model cannot represent it (to_core raises)."""
     data = json.loads(json.dumps(_samples()["three"]))
     data["assignment"] = {"L1": "F1", "L2": "F1", "L3": "F3"}
     assert ref.calculate_score(_dump(data)) == (0, -12.0)  # F1 counted at L1 and L2: 2 * (4*1 + 2*1)
@@ -384,7 +384,7 @@ def test_a_non_injective_assignment_is_refused_now():
         qap.calculate_score(Model.model_validate(data))
 
 
-def test_a_partial_assignment_raises_on_the_model_like_0_1_5():
+def test_a_partial_assignment_raises_on_the_model_like_the_reference():
     data = json.loads(json.dumps(_samples()["web-demo"]))
     with pytest.raises(KeyError):
         ref.constraint_costs(_dump(data))

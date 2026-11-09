@@ -77,7 +77,7 @@ def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
 def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     """Creating worker thread 1 fails (std::system_error, injected through the module's test
     seam): the worker already running is stopped and joined, and the error reaches the caller
-    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    at once. A joinable std::thread destroyed on that path would call std::terminate."""
     from task_assigning import _core
 
     _core._fail_worker_thread_start(1)
@@ -91,10 +91,10 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
 
 
 def test_a_hard_total_beyond_the_fold_saturates_instead_of_looking_feasible():
-    """0.1.5's NoMissingSkills weight 1e9 on 21 missing skills: 2.1e10 hard units x the 1e9 fold.
+    """RequiredSkillCost at weight 1e9 on 21 missing skills: 2.1e10 hard units x the 1e9 fold.
 
-    It used to wrap to a positive, feasible-looking engine hard score; now it saturates at
-    -(2**63 - 1), and the Score reports the unfolded hard level exactly."""
+    The engine hard score saturates at -(2**63 - 1) instead of wrapping to a positive,
+    feasible-looking value, and the Score reports the unfolded hard level exactly."""
     from task_assigning.constraints import RequiredSkillCost, get_constraints, score
 
     model = generate_demo_data()

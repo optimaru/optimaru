@@ -31,18 +31,11 @@ its start — every overlap constraint is computed over that whole span.
 pair (global) ones; `constraint_info()` reports each default level and weight from the C++
 components (`kDefaultLevel` / `kDefaultWeight`), and `constraint_costs(schedule)` the raw
 per-unit costs (`meeting_scheduling.constraints.score()` turns them into a score). Every
-constraint is flippable, none is a reward, all twelve are on by default. The old
-`overtime_cost` quirk is kept: its raw cost is the last grain index, not the overrun.
+constraint is flippable, none is a reward, all twelve are on by default. Note that
+`overtime_cost`'s raw cost is the last grain index, not the overrun.
 
-**0.2.0:** every constraint gained the `_cost` suffix or a new name (`avoid_overtime` ->
-`overtime_cost`, `required_room_capacity` -> `room_capacity_cost`, `start_and_end_on_same_day`
--> `day_crossing_cost`, `do_meetings_as_soon_as_possible` -> `meeting_end_time_cost`,
-`one_break_between_consecutive_meetings` -> `consecutive_meetings_cost`,
-`overlapping_meetings` -> `meeting_overlap_cost`, `assign_larger_rooms_first` ->
-`larger_room_capacity_cost`, `room_stability` -> `room_change_cost`, the other four + `_cost`);
-`compute_breakdown()` / `Breakdown` are removed in favour of `constraint_costs()`. The medium
-pair now defaults to weight 1 in medium units (was 1e6 on soft): `level="hard"` gives one hard
-unit per person-grain, `level="soft"` one soft unit (outside the fold).
+The medium pair defaults to weight 1 in medium units: `level="hard"` gives one hard unit per
+person-grain, `level="soft"` one soft unit (outside the fold).
 
 ### Score mapping (HardMediumSoftScore → Score)
 
@@ -93,19 +86,18 @@ score(raw), score(raw, [RoomConflictCost(), MeetingOverlapCost(weight=100)])
 score(raw, [*get_constraints(), MeetingOverlapCost(weight=1, exponent=2, offset=8)])
 ```
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. A raw cost `x` (per (grain, room) cell for the five
+Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
+(keyword-only), and may be picked several times. A raw cost `x` (per (grain, room) cell for the five
 per-meeting constraints, the one total for the seven pair constraints) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges every cell, an
-empty one included, and rewards a cost below the offset); `offset=0` is the 0.2.0 shaping.
+empty one included, and rewards a cost below the offset); `offset=0` is the plain shaping.
 `clip=False` with an offset is refused on hard (`ValueError: constraint 'overtime_cost':
 clip=False with a non-zero offset cannot be hard, because hard 0 must mean no violation; use
 clip=True (a threshold) or another level`); on soft and on medium (folded into soft) it is
 allowed. Each pick is its own instance with its own knobs, the instances add up, and
 `ms.constraint_costs(schedule, picks)` keys the second pick `meeting_overlap_cost#2`.
-The `hard` knob is gone (`hard=` raises `TypeError`): `level` replaces it (`Level.HARD` /
-`Level.MEDIUM` / `Level.SOFT`, or the names), any constraint may move onto medium (its
+`level` is `Level.HARD` / `Level.MEDIUM` / `Level.SOFT` (or the names), any constraint may move onto medium (its
 weight then in medium units, folded at 1e6), and each repeated pick carries its own level.
 
 ## Build / test

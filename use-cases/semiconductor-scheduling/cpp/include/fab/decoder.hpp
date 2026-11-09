@@ -14,9 +14,9 @@ namespace fab
 // The serial schedule-generation decoder
 // ---------------------------------------------------------------------------
 // Turns a search state — one machine option and one priority rank per
-// operation row — into a schedule. An exact port of the 0.1.x Python
-// `_construct` (frozen in python/tests/reference_semiconductor_scheduling.py
-// as the test oracle); every order-sensitive detail is kept:
+// operation row — into a schedule. It matches the pure-Python reference
+// `construct` (python/tests/reference_semiconductor_scheduling.py, the test
+// oracle) in every order-sensitive detail:
 //
 //   - pins are placed first, as obstacles on their machine and their
 //     resources, in pinnedAssignments order;
@@ -88,7 +88,7 @@ public:
         return step >= stepCount() ? static_cast<int>(output_.size())
                                    : steps_[static_cast<std::size_t>(step)];
     }
-    // The decoded schedule, batch ids included (the 0.1.x post-pass).
+    // The decoded schedule, batch ids included (a post-pass).
     std::vector<Assignment> assignments() const;
 
 private:
@@ -127,11 +127,11 @@ private:
 
 // --- whole-schedule helpers (the test hooks and the solver) -----------------
 
-// The 0.1.x solve start: per row, the option with the least
+// The solve start: per row, the option with the least
 // (preference cost, duration), the first on ties.
 std::vector<int> defaultChoices(const SemiconductorSchedule &schedule);
 
-// The 0.1.x `_seed_state`: `schedule.assignments` as a (choices, ranks)
+// The seed state: `schedule.assignments` as a (choices, ranks)
 // state. A seeded row takes the LAST option with the seeded machine and
 // duration (else keeps choices[row]); ranks follow (unseeded last, seeded
 // start, row).

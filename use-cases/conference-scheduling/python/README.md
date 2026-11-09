@@ -85,30 +85,19 @@ score(raw, [ContentConflictCost(), ContentConflictCost(weight=1, exponent=2, off
 The three `*_diversity_cost` rewards are never hard: `level="hard"` raises `ValueError`
 (in `solve`, in `score()` and on the CP-SAT path).
 
-**0.2.0:** every constraint was renamed to a `*_cost` name (`room_conflict` ->
-`room_conflict_cost`, `talk_type_compatibility` -> `talk_type_incompatibility_cost`,
-`room_unavailable_timeslot` / `speaker_unavailable_timeslot` -> `room_unavailability_cost` /
-`speaker_unavailability_cost`, `crowd_control` -> `crowd_control_risk_cost`,
-`theme_track_room_stability` -> `theme_track_room_change_cost`, `same_day_talks` ->
-`different_day_talks_cost`, `popular_talks` -> `popular_talks_room_size_cost`, the rest gain
-the `_cost` suffix; the full list is in the use-case README), with the spec classes and the
-module-level default instances alike. `compute_breakdown()` and `Breakdown` were removed;
-use `constraint_costs()`. Raw costs and the default score are unchanged.
-
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. Every constraint here is global, so the one total `x` is
+Every constraint takes the knobs `weight`, `level`, `exponent` and, keyword-only, `offset`
+and `clip`, and may be picked several times. Every constraint here is global, so the one total `x` is
 shaped as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which also charges a total of 0
-and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. `clip=False` with an
+and rewards a total below the offset); `offset=0` is the plain power shaping. `clip=False` with an
 offset is refused on hard (`ValueError: constraint 'room_conflict_cost': clip=False with a
 non-zero offset cannot be hard, because hard 0 must mean no violation; use clip=True (a
 threshold) or another level`), so a literal pick of a hard constraint goes on
 `level="soft"`. Each pick is its own instance with its own knobs, the instances add up, and
 `cs.constraint_costs(schedule, picks)` keys the second pick `content_conflict_cost#2`.
 A literal offset on a reward (`AudienceTypeDiversityCost(offset=..., clip=False)`) shifts
-the reward further; a threshold offset rewards only the part beyond it. The `hard` knob is
-gone (`hard=` raises `TypeError`): `level` replaces it (`Level.HARD` / `Level.SOFT`, or
-`"hard"` / `"soft"`), each repeated pick carries its own, and `level="medium"` raises
+the reward further; a threshold offset rewards only the part beyond it. `level` is
+`Level.HARD` / `Level.SOFT` (or `"hard"` / `"soft"`), each repeated pick carries its own, and `level="medium"` raises
 `ValueError`, as this use case has no medium level.
 
 ### Value range replacement (the only semantic difference)

@@ -50,39 +50,26 @@ by default (`default_enabled`). The medium level folds into the engine's soft le
 `medium x 1e6` (`MEDIUM_SCALE`, `kMediumFold` in `cpp/include/ms/domain.hpp`); a weight is
 in units of the level in effect, so a medium weight is in medium units.
 
-**0.2.0:** the constraints were renamed (`room_conflict` -> `room_conflict_cost`,
-`avoid_overtime` -> `overtime_cost`, `required_attendance_conflict` ->
-`required_attendance_conflict_cost`, `required_room_capacity` -> `room_capacity_cost`,
-`start_and_end_on_same_day` -> `day_crossing_cost`, `required_and_preferred_attendance_conflict`
--> `required_and_preferred_attendance_conflict_cost`, `preferred_attendance_conflict` ->
-`preferred_attendance_conflict_cost`, `do_meetings_as_soon_as_possible` ->
-`meeting_end_time_cost`, `one_break_between_consecutive_meetings` -> `consecutive_meetings_cost`,
-`overlapping_meetings` -> `meeting_overlap_cost`, `assign_larger_rooms_first` ->
-`larger_room_capacity_cost`, `room_stability` -> `room_change_cost`; the spec classes and the
-module-level default instances follow, e.g. `OverlappingMeetings` / `overlapping_meetings` ->
-`MeetingOverlapCost` / `meeting_overlap_cost`). The two medium constraints now default to
-weight 1 in medium units (was 1e6 on the soft level), so `level="hard"` charges 1 hard per
-person-grain (was 1e6), `level="soft"` demotes them to soft at 1 per person-grain (was a no-op
-that kept the 1e6), and an explicit `weight` is in medium units. `compute_breakdown()` and the
-`Breakdown` class are gone: `constraint_costs(schedule)` is the per-constraint surface (sum a
-constraint's `costs` for the old totals). Raw costs and the default score are unchanged.
+The two medium constraints default to weight 1 in medium units, so `level="hard"` charges 1
+hard per person-grain and `level="soft"` charges 1 soft per person-grain; an explicit `weight`
+is in medium units. `constraint_costs(schedule)` is the per-constraint surface (sum a
+constraint's `costs` for its total).
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. A raw cost `x` (per cell for the five unit constraints, the
+Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
+(keyword-only), and may be picked several times. A raw cost `x` (per cell for the five unit constraints, the
 one total for the seven pair constraints) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges every
 (grain, room) cell of a unit constraint, an empty one included, and acts as a reward below
-the offset); `offset=0` is the 0.2.0 shaping. `clip=False` with an offset is refused on
+the offset); `offset=0` is the plain shaping. `clip=False` with an offset is refused on
 hard (`OvertimeCost`, `RoomConflictCost` and the other hard constraints by default), because
 hard 0 must mean no violation; it is allowed on medium, which folds into soft. Each pick is
 its own instance with its own knobs, and the instances add up;
 `ms.constraint_costs(schedule, picks)` keys the second pick `"<name>#2"`. The CP-SAT
 reference takes integral offsets on every constraint (see its README).
 
-The `hard` knob is gone in 0.3.0 (`hard=` raises `TypeError`): `level` replaces it, a
-`Level` (`Level.HARD`, `Level.MEDIUM`, `Level.SOFT`, from `meeting_scheduling.constraints`)
-or its name. Medium is no longer a default-only level: any constraint may move onto it,
+`level` is a `Level` (`Level.HARD`, `Level.MEDIUM`, `Level.SOFT`, from
+`meeting_scheduling.constraints`) or its name. Any constraint may move onto medium:
 `MeetingOverlapCost(level="medium", weight=3)` charges 3 medium units per overlapping grain
 (3e6 soft after the fold). Each repeated pick carries its own level, so one constraint can
 count on two levels at once: `MeetingEndTimeCost()` plus

@@ -337,8 +337,8 @@ PYBIND11_MODULE(_core, m)
             },
             py::arg("assignment"));
 
-    // No Breakdown class and no compute_breakdown() (removed in 0.2.0):
-    // constraint_costs() is the one per-constraint surface. The C++
+    // No Python Breakdown class: constraint_costs() is the one
+    // per-constraint surface. The C++
     // cs::Breakdown keeps its members, named after the registry names.
 
     m.def("calculate_score",

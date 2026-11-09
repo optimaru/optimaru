@@ -11,8 +11,7 @@ namespace fp
 // the sum over its jobs of max(0, end - idealEndTime), so 0 = every job on
 // the line ends by its ideal time. Missing the ideal time is a cost, missing
 // maxEndTime is a violation, which is why the two sit on different levels
-// with otherwise identical shapes. 0.2.0 migration note: was
-// idealEndDateTime, soft at weight 10^10.
+// with otherwise identical shapes.
 //
 // The weight is in MEDIUM units: the domain folds the medium level into the
 // engine's soft level as `medium * kMediumUnit` (kMediumUnit = 10^10,

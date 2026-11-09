@@ -13,7 +13,7 @@ moves a term to the soft / hard level on both solvers, and `level="medium"` is r
 on both (`this use case has no medium level`). Like every CP-SAT reference,
 `exponent != 1` and non-integer weights are rejected.
 
-**0.3.0:** a constraint may be picked several times (as specs or as
+A constraint may be picked several times (as specs or as
 `{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own
 terms with its own knobs, its level included. Every plugin adds one term per trolley,
 an empty one included, so an integral `offset` shapes each trolley exactly as the

@@ -16,7 +16,7 @@ namespace mc
 {
 
 // Thin domain-side wrapper around the generic engine in include/optimaru/: it
-// builds the start partition (the 0.1.x rule, see solve()), wires up the
+// builds the start partition (see solve()), wires up the
 // incremental score calculator and delegates the search to
 // optimaru::Solver<MaxCutProblem> — late acceptance over the built-in BASIC
 // moves (a change move flips one vertex, a swap move exchanges a side-0 and a
@@ -24,7 +24,7 @@ namespace mc
 // stagnation. Fixed vertices are pinned: no move, swap or ruin touches them.
 //
 // Exact-size mode (problem.exactSize(): min_partition_size ==
-// max_partition_size, both given) keeps the 0.1.x contract "the search never
+// max_partition_size, both given) keeps the contract "the search never
 // changes the side sizes": the solver then forces change_weight = 0,
 // swap_weight = 1 and turns ruin-and-recreate (kicks and the as-move),
 // descent off, whatever the Config says; with fewer than two movable vertices
@@ -105,7 +105,7 @@ public:
     // full recompute; problem.scored = true), and resets problem.warmStart to
     // false.
     //
-    // The start partition is the 0.1.x one: without warmStart every side is
+    // The start partition: without warmStart every side is
     // reset first; then every unassigned vertex takes its fixed side when it
     // has one, else (index % 2). With warmStart the given sides are kept (a
     // seed that contradicts a fixed side is kept too: the vertex is pinned,

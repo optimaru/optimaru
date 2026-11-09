@@ -355,7 +355,7 @@ void verifyOverrides()
     twoPins.fixedAssignments.push_back({1, 0});
     identity(twoPins);  // both pins broken: [1, 1]
     check(sameScore(scoreWith(defaultConstraints().weight("pinnedAssignmentsCost", 0.5), twoPins), {-2, 0.0}),
-          "hard weight 0.5 on two broken pins rounds per location: 2 (0.1.x rounded the total: 1)");
+          "hard weight 0.5 on two broken pins rounds per location: 2, not round(0.5 + 0.5) = 1");
     std::printf("\n");
 }
 
@@ -457,7 +457,7 @@ void verifyNames()
     check(python
               == std::vector<std::string>{"pinned_assignments_cost", "forbidden_assignments_cost",
                                           "location_capacity_cost", "assignment_cost", "flow_distance_cost"},
-          "pythonName() gives the 0.2.0 snake_case names");
+          "pythonName() gives the snake_case names");
     std::printf("\n");
 }
 

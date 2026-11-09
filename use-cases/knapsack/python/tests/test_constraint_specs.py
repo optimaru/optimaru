@@ -46,7 +46,7 @@ NAMES = [
 
 
 def extended(selected=("A",)) -> KnapsackProblemModel:
-    """The 0.1.x extended fixture: with only A selected, each of five hard terms is 1."""
+    """The extended fixture of the reference tests: with only A selected, each of five hard terms is 1."""
     return KnapsackProblemModel(
         capacity=10,
         resource_capacities={"labor": 2},
@@ -158,10 +158,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == NAMES
     for row in knapsack.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (row.level_flippable, row.reward)
         assert entry["global"] is True and len(entry["costs"]) == 1
@@ -193,7 +192,7 @@ def test_constraint_costs_match_the_hand_calculation():
 
 
 def test_globals_shape_their_total():
-    """0.2.0: the exponent shapes each constraint's total (0.1.x shaped each term)."""
+    """The exponent shapes each constraint's total, not each term."""
     problem = KnapsackProblemModel(
         capacity=100,
         resource_capacities={"r1": 1, "r2": 0},
@@ -302,7 +301,7 @@ def test_the_reward_refuses_level_hard_on_every_path(level):
         ({"exponent": -1.0}, ValueError),
         ({"level": 1}, TypeError),
         ({"level": "firm"}, ValueError),
-        ({"hard": True}, TypeError),  # the removed knob is an unknown keyword
+        ({"hard": True}, TypeError),  # an unknown keyword
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -354,20 +353,10 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         MandatoryItemsCost(**knobs)
 
 
-def test_unknown_and_old_names_are_refused():
-    """0.2.0 renamed the catalog; the 0.1.x names are unknown now (no aliases)."""
-    old_names = (
-        "capacity",
-        "resource_capacities",
-        "mandatory_items",
-        "forbidden_items",
-        "selection_group_bounds",
-        "item_dependencies",
-        "maximize_value",
-    )
+def test_unknown_names_are_refused():
     raw = knapsack.constraint_costs(extended())
-    for old in (*old_names, "knapsack_capacity_costs"):
-        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
+    for unknown in ("capacity", "knapsack_capacity_costs"):
+        pick = SimpleNamespace(name=unknown, weight=None, level=None, exponent=1.0)
         with pytest.raises(ValueError, match="unknown constraint"):
             knapsack.solve(basic(), time_limit_seconds=0, constraints=[pick])
         with pytest.raises(ValueError, match="unknown constraint"):
@@ -384,9 +373,9 @@ def test_an_empty_pick_list_is_rejected():
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    Neither pick wins in silence, nor is it an error: both are
     instances with their own knobs, and they add up."""
     problem = basic()
     problem.items[0].selected = problem.items[2].selected = True  # A + C: 11 on 10
@@ -463,7 +452,7 @@ def test_score_equals_the_engine_for_the_default_assembly():
     assert (python.hard, python.soft) == (engine.hard, engine.soft)
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------
 
 
 def shifted() -> KnapsackProblemModel:
@@ -589,8 +578,8 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert (engine.score.hard, engine.score.soft) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with offset 0."""
     plain = [ResourceCapacityCost(exponent=2), MandatoryItemsCost(), SelectedValueCost(exponent=1.5)]
     shifted_by_zero = [
         ResourceCapacityCost(exponent=2, offset=0.0, clip=False),
@@ -686,7 +675,7 @@ def test_levels_by_hand_on_both_paths(picks, expected):
     raw = knapsack.constraint_costs(problem, picks)
     for pick, key in zip(picks, instance_keys(picks), strict=True):
         assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
-        assert raw[key]["hard"] == (raw[key]["level"] == "hard"), key
+        assert "hard" not in raw[key], key
     assert score(raw, picks) == expected
     assert knapsack.calculate_score(problem, picks) == expected
     engine = engine_solve(problem, picks)
@@ -729,16 +718,11 @@ def test_a_level_must_be_a_level():
         engine_solve(shifted(), [MandatoryItemsCost(), pick])
 
 
-def test_the_knob_was_renamed():
-    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
-    with pytest.raises(TypeError):
-        MandatoryItemsCost(hard=True)
-    with pytest.raises(TypeError):
-        ForbiddenItemsCost(weight=None, hard=False)
+def test_a_level_name_equals_its_enum():
     assert MandatoryItemsCost(level="soft") == MandatoryItemsCost(level=Level.SOFT)
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -805,7 +789,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (KnapsackCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold, a raw 0 stays 0
         (ResourceCapacityCost(offset=-3.0), (-8, 0.0)),  # 5 + 3
-        (ResourceCapacityCost(clip=False), (-5, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (ResourceCapacityCost(clip=False), (-5, 0.0)),  # clip=False with offset 0: the plain shaping
         (ResourceCapacityCost(offset=0.0, clip=False), (-5, 0.0)),
         (MandatoryItemsCost(level="hard", offset=1.0), (-2, 0.0)),
     ],

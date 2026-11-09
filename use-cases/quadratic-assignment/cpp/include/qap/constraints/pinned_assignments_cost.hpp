@@ -11,9 +11,8 @@ namespace qap
 // not standing there (also when the location is empty), else 0; an unfixed
 // location is always 0, so 0 = every pin is kept. Two locations fixed to the
 // same facility cost at least 1 (the facility can stand at only one of them).
-// The 0.1.x Python scorer listed one 0/1 term per fixed location; this lists
-// one per location with the unfixed ones at 0 — the same non-zero terms, so
-// the shaped total is the same for every exponent.
+// It lists one term per location with the unfixed ones at 0, so the shaped
+// total equals one 0/1 term per fixed location for every exponent.
 //
 // Delta contract: a facility appears at most once among a location's members,
 // so the cost is 1 - [fixed facility among the members] and the marginal cost

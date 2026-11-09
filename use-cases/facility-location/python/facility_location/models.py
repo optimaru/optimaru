@@ -67,7 +67,7 @@ class ConsumerModel(BaseModel):
 class FacilityLocationProblemModel(BaseModel):
     """Planning solution mirror. score is a read-only result, kept as a separate field.
 
-    The canonical problem carries no constraint weights (removed in 0.2.0): weights
+    The canonical problem carries no constraint weights: weights
     come only from constraint selections, and the defaults (setup 2, distance 6)
     are the C++ components' (``facility_location.constraint_info()``).
     """

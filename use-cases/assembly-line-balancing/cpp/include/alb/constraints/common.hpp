@@ -97,7 +97,7 @@ inline void requirePrepared(const AssemblyLineBalancingProblem &problem)
 // sum of independent per-(task, station) terms, so the subclass writes
 // `taskCost` only and both the full re-cost and the exact O(1) delta follow
 // from it. The raw cost of a station is the sum over its tasks, so the
-// exponent shapes that per-station sum (the 0.1.5 pure-Python package shaped
+// exponent shapes that per-station sum (the pure-Python reference shapes
 // each task's term; the two agree at exponent 1).
 struct PerTaskConstraint : AlbUnitConstraint
 {

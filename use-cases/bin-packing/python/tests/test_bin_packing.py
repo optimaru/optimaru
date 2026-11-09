@@ -12,7 +12,7 @@ def test_constraint_costs_match_hand_calculation() -> None:
     # problem.items returns copies: the bins are written in bulk.
     candidate.set_assignment([0, 0, 1, 1])
     raw = constraint_costs(candidate)
-    # One entry per bin 0..n-1 (0.1.x listed bins 0..max bin, i.e. [5, 0]).
+    # One entry per bin 0..n-1.
     assert raw["bin_capacity_cost"]["costs"] == [5, 0, 0, 0]
     assert raw["used_bins_cost"]["costs"] == [2]
     assert score(raw) == (-5, -2.0)
@@ -79,6 +79,6 @@ def test_color_and_conflict_costs_match_manual_count():
         conflicts=[ConflictModel(first="A", second="C")],
     )
     raw = constraint_costs(model.to_core())
-    # Per bin (0.1.x listed colour excess per (bin, colour) [1, 0] and conflicts per pair [1]).
+    # Per bin.
     assert raw["color_conflict_cost"]["costs"] == [1, 0, 0]
     assert raw["item_conflict_cost"]["costs"] == [1, 0, 0]

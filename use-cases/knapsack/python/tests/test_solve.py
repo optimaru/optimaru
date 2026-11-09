@@ -53,17 +53,15 @@ def test_solver_config_refuses_invalid_values(attribute, value):
         setattr(config, attribute, value)
 
 
-def test_the_sa_knobs_are_gone():
-    """0.2.0: the engine knobs replace the 0.1.x simulated-annealing ones."""
+def test_unknown_config_knobs_are_refused():
+    """SolverConfig carries the engine's knobs only."""
     config = knapsack.SolverConfig()
-    for old in ("max_iterations", "stagnation_limit", "temperature", "cooling_rate"):
-        assert not hasattr(config, old)
+    for unknown in ("max_iterations", "stagnation_limit", "temperature", "cooling_rate"):
+        assert not hasattr(config, unknown)
         with pytest.raises(AttributeError):
-            setattr(config, old, 1)
+            setattr(config, unknown, 1)
     with pytest.raises(TypeError):
         knapsack.SolverConfig(max_iterations=0)
-    for gone in ("anneal", "configure", "DEFAULTS", "_greedy_selection"):
-        assert not hasattr(knapsack, gone)
 
 
 def test_solve_on_the_engine_object_and_on_the_model_agree():
@@ -203,7 +201,7 @@ def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
 def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     """Creating worker thread 1 fails (std::system_error, injected through the module's test
     seam): the worker already running is stopped and joined, and the error reaches the caller
-    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    at once. A joinable std::thread destroyed on that path would call std::terminate."""
     from knapsack import _core
 
     _core._fail_worker_thread_start(1)
@@ -218,8 +216,8 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
 
 def test_stop_at_first_feasible_has_no_soft_floor(monkeypatch):
     """stop_at_first_feasible hands the engine best_score_limit (0, -inf): only the hard level
-    is compared, so no soft score, however low, misses the stop. The first 0.2.0 limit,
-    (0, -1e18), was never reached by a soft score below -1e18. A soft score that low cannot
+    is compared, so no soft score, however low, misses the stop. A finite limit such as
+    (0, -1e18) would never be reached by a soft score below -1e18. A soft score that low cannot
     be built here (its only default soft term is a reward (selected_value_cost)), so the limit
     itself is checked; the stop is exercised end to end
     in the other packages' tests."""

@@ -213,8 +213,7 @@ def constraint_costs(
     picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
     "<name>#<k>" from the second on. The three *_diversity_cost rewards report a
     total <= 0 (reward=True, level_flippable=False). conference_scheduling.constraints.score()
-    turns it into a score. The only per-constraint surface (compute_breakdown() was
-    removed in 0.2.0)."""
+    turns it into a score. The only per-constraint surface."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

@@ -57,7 +57,7 @@ namespace fab
 // ("machine_capacity_cost").
 //
 // Global constraints shape their TOTAL: exponent e scores weight * total^e
-// (0.1.x shaped each item). Hard totals are rounded per constraint.
+// (not each item). Hard totals are rounded per constraint.
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. Every

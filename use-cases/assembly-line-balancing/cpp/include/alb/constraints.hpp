@@ -67,7 +67,7 @@ namespace alb
 // Catalog order: an assembly keeps its unit and global components apart
 // (names() / info() list the units first), but this domain's catalog order —
 // list_constraints(), constraint_info(), the CP-SAT registry — interleaves
-// them as the 0.1.5 catalog did. The order is stated ONCE, here:
+// them (the reference's catalog order). The order is stated ONCE, here:
 // defaultConstraints() and catalogNames() are both built from it.
 template <typename Visit>
 void forEachDefaultConstraint(Visit &&visit)

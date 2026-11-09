@@ -1,4 +1,4 @@
-"""The C++ port against the frozen 0.1.x Python scorer and decoder (the oracle).
+"""The C++ implementation against the pure-Python reference scorer and decoder (the oracle).
 
 Same input and assignment -> the same raw cost per constraint (and the same per-item lists),
 the same default score, the same decoded schedule (order and batch ids included) and the
@@ -62,10 +62,10 @@ def _assert_costs_match(model: SemiconductorScheduleModel) -> None:
     oracle = ref.constraint_costs(model)
     costs = fab.constraint_costs(model)
     items = fab.constraint_items(model)
-    assert list(costs) == ref.NEW_NAMES
-    for old, new in ref.RENAME.items():
-        assert costs[new]["costs"] == [sum(oracle[old])], new
-        assert items[new] == oracle[old], new
+    assert list(costs) == ref.ENGINE_NAMES
+    for reference, engine in ref.ENGINE_NAME.items():
+        assert costs[engine]["costs"] == [sum(oracle[reference])], engine
+        assert items[engine] == oracle[reference], engine
     assert tuple(fab.calculate_score(model.model_copy(deep=True))) == ref.score(oracle)
     assert tuple(fab.constraints.score(costs)) == ref.score(oracle)
 
@@ -108,7 +108,7 @@ def test_seed_state_and_default_choices_match_the_oracle(name, data):
 
 @pytest.mark.parametrize(("name", "data"), SAMPLES, ids=[name for name, _ in SAMPLES])
 def test_a_zero_budget_solve_is_the_oracle_start(name, data):
-    """The solve start is 0.1.x's: the default choices at identity ranks (or the seed), decoded."""
+    """The solve start is the oracle's: the default choices at identity ranks (or the seed), decoded."""
     model = _model(data)
     rows = fab._operation_rows(model)
     expected = _rows(ref.construct(model, ref.default_choices(model), list(range(len(rows)))))

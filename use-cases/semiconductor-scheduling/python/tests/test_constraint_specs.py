@@ -50,30 +50,6 @@ NAMES = [
     "makespan_cost",
 ]
 
-OLD_NAMES = [
-    "machine_eligibility",
-    "lot_route_precedence",
-    "machine_capacity",
-    "batch_capacity",
-    "batch_family_compatibility",
-    "setup_transitions",
-    "maintenance_windows",
-    "maximum_queue_time",
-    "minimum_queue_time",
-    "inter_tool_transport",
-    "auxiliary_resource_capacity",
-    "auxiliary_resource_availability",
-    "pinned_assignments",
-    "maximum_cycle_time",
-    "machine_preference",
-    "minimum_batch_fill",
-    "machine_load_balance",
-    "weighted_tardiness",
-    "total_cycle_time",
-    "makespan",
-]
-
-
 def _problem(seed: int = 3) -> SemiconductorScheduleModel:
     return SemiconductorScheduleModel.model_validate(instance(seed))
 
@@ -88,7 +64,7 @@ def _busy_problem() -> SemiconductorScheduleModel:
     raise AssertionError("no busy instance")
 
 
-def test_list_constraints_is_the_renamed_catalog_in_order():
+def test_list_constraints_is_the_catalog_in_order():
     assert fab.list_constraints() == NAMES
     assert [spec.name for spec in get_constraints()] == NAMES
 
@@ -115,7 +91,7 @@ def test_get_constraints_contract():
         get_constraints([])
     with pytest.raises(ValueError, match="must not be empty"):
         fab.constraint_costs(_problem(), [])
-    # Since 0.3.0 a constraint may be picked several times: each pick is its own instance.
+    # A constraint may be picked several times: each pick is its own instance.
     assert get_constraints([specs.MakespanCost(), specs.MakespanCost()]) == [specs.MakespanCost()] * 2
     with pytest.raises(TypeError, match="registry `name`"):
 
@@ -155,10 +131,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == NAMES
     for row in fab.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"], entry["global"]) == (True, False, True)
         assert (entry["name"], entry["label"], entry["exponent"]) == (row.name, "", 1.0)
@@ -203,7 +178,7 @@ def test_score_equals_the_engine_under_random_knobs():
 
 
 def test_exponent_shapes_the_total_of_a_global_constraint():
-    """0.2.0: weight * total ** exponent (0.1.x shaped each item)."""
+    """weight * total ** exponent: the exponent shapes the total, not each item."""
     problem = _busy_problem()
     raw = fab.constraint_costs(problem)
     total = raw["cycle_time_cost"]["costs"][0]
@@ -245,7 +220,7 @@ def test_levels_flip_both_ways():
         ({"exponent": 0}, ValueError),
         ({"level": 1}, TypeError),
         ({"level": "firm"}, ValueError),
-        ({"hard": True}, TypeError),  # the removed knob is an unknown keyword
+        ({"hard": True}, TypeError),  # an unknown keyword
     ],
 )
 def test_specs_validate_their_knobs(kwargs, error):
@@ -293,16 +268,6 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         specs.MakespanCost(**knobs)
 
 
-@pytest.mark.parametrize("old", OLD_NAMES)
-def test_old_names_are_unknown(old):
-    """0.2.0 renamed the catalog; the 0.1.x names are gone (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-    with pytest.raises(ValueError, match="unknown constraint"):
-        fab.calculate_score(_problem(), [pick])
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(fab.constraint_costs(_problem()), [pick])
-
-
 # --- Solving with picks ---------------------------------------------------------
 
 
@@ -332,7 +297,7 @@ def _steps(count: int) -> fab.SolverConfig:
     return config
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs -----------------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -451,8 +416,8 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert _engine(problem, [pick]) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_is_the_plain_shaping():
+    """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
     plain = [MaxQueueTimeCost(weight=0.5), specs.CycleTimeCost(exponent=2), WeightedTardinessCost(exponent=1.5)]
     shifted = [
         MaxQueueTimeCost(weight=0.5, offset=0.0, clip=False),
@@ -596,7 +561,7 @@ def test_levels_by_hand_on_both_paths(picks, expected):
     raw = fab.constraint_costs(problem, picks)
     for pick, key in zip(picks, instance_keys(picks), strict=True):
         assert raw[key]["level"] == (pick.level or raw[key]["default_level"]), key
-        assert raw[key]["hard"] == (raw[key]["level"] == "hard"), key
+        assert "hard" not in raw[key], key
     assert score(raw, picks) == expected
     assert _engine(problem, picks) == expected
 
@@ -628,16 +593,7 @@ def test_a_level_must_be_a_level():
         _engine(_problem(), [specs.MakespanCost(), pick])
 
 
-def test_the_knob_was_renamed():
-    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
-    with pytest.raises(TypeError):
-        specs.MakespanCost(hard=True)
-    with pytest.raises(TypeError):
-        MachineCapacityCost(weight=None, hard=False)
-    assert specs.MakespanCost(level="hard") == specs.MakespanCost(level=Level.HARD)
-
-
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score ---------------------------
 
 
 @pytest.mark.parametrize("offset", [3.0, -3.0])
@@ -700,7 +656,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (MachineCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold, a raw 0 stays 0
         (specs.PinnedAssignmentsCost(offset=-3.0), (-5, 0.0)),  # 2 + 3
-        (specs.PinnedAssignmentsCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (specs.PinnedAssignmentsCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the plain shaping
         (specs.PinnedAssignmentsCost(offset=0.0, clip=False), (-2, 0.0)),
         (specs.MakespanCost(level="hard", offset=5.0), (-6, 0.0)),  # 11 - 5
     ],

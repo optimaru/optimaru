@@ -65,7 +65,7 @@ from pydantic import (
 
 from . import _core
 from . import constraints as _specs
-from ._constraint import _HARD_REMOVED, _check_literal_offset
+from ._constraint import _check_literal_offset
 
 __all__ = [
     "WorkerModel",
@@ -193,8 +193,7 @@ class RuleBase(BaseModel):
     values the spec takes: ``weight: true`` or ``"2"`` is refused here as the
     spec refuses it. ``clip: false`` with a non-zero ``offset`` is refused on
     hard (the rule's ``level``, or its default level), in the engine's words,
-    because hard 0 must mean no violation. A ``"hard"`` key, the knob
-    ``level`` replaced in 0.3.0, is refused with the words every path uses.
+    because hard 0 must mean no violation. Unknown keys are refused.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -221,15 +220,6 @@ class RuleBase(BaseModel):
     )
 
     spec_class: ClassVar[type]
-
-    @model_validator(mode="before")
-    @classmethod
-    def _refuse_hard(cls, data: Any) -> Any:
-        # `extra="forbid"` alone would only say "Extra inputs are not
-        # permitted" for the knob `level` replaced in 0.3.0.
-        if isinstance(data, Mapping) and "hard" in data:
-            raise ValueError(_HARD_REMOVED)
-        return data
 
     def to_spec(self) -> _specs.Constraint:
         """The constraint spec this rule states."""

@@ -30,8 +30,7 @@ Every spec takes five knobs:
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
                case has no medium level: ``level="medium"`` raises ValueError.
                ``CutWeightCost`` is a reward and always soft: ``level="hard"``
-               raises ValueError. (``level`` replaced the ``hard`` knob; ``hard=``
-               raises TypeError.)
+               raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| ** exponent``.
                The four unit constraints (fixed, same-side, different-side,
                size bounds) shape each SIDE's cost; the two globals (imbalance,

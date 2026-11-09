@@ -220,7 +220,7 @@ def _load_engine_solver():
 
 
 def _load_engine_assembly():
-    """`st_timetabling.constraints.Assembly` (None when not built / an older version)."""
+    """`st_timetabling.constraints.Assembly` (None when the package is not built)."""
     if str(ST_DIR / "python") not in sys.path:
         sys.path.insert(0, str(ST_DIR / "python"))
     try:

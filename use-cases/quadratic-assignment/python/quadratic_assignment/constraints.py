@@ -33,7 +33,7 @@ Every spec takes five knobs:
 - ``exponent`` sign-preserving power shaping ``weight * sign(c) * |c| ** exponent``:
                per location for the three side constraints (pinned, forbidden,
                capacity), on the single total for ``AssignmentCost`` and
-               ``FlowDistanceCost`` — exactly the terms 0.1.x shaped.
+               ``FlowDistanceCost``.
 - ``offset``   (keyword) shifts that shaping, per location or on the total;
                0.0 = none.
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the

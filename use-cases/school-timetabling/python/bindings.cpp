@@ -3,7 +3,7 @@
 // the generic optimaru engine from ../../../include; the engine itself
 // is not modified here. Two domains are exposed:
 //   - the quickstart port (st::Timetable, slotRoom composite encoding) at the
-//     module top level, unchanged for backwards compatibility;
+//     module top level;
 //   - the canonical full-parity domain (st::canon) in the `canon` submodule,
 //     mirroring the CP-SAT reference package's constraints under the same
 //     names (unassigned_lessons_cost ... parallel_groups_cost). Its catalog
@@ -537,9 +537,7 @@ void bindCanon(py::module_ &canon)
                const py::object &clip,
                const py::kwargs &kwargs)
             {
-                // The knobs are the only keywords; the removed one gets the
-                // words every path uses, any other the usual TypeError.
-                tfpy::refuse_hard_keyword(kwargs);
+                // The knobs are the only keywords; any other is a TypeError.
                 for (const auto &item : kwargs)
                     throw py::type_error("add() got an unexpected keyword argument '"
                                          + py::str(item.first).cast<std::string>() + "'");

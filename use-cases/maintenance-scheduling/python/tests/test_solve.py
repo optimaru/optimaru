@@ -136,7 +136,7 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
 def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     """Creating worker thread 1 fails (std::system_error, injected through the module's test
     seam): the worker already running is stopped and joined, and the error reaches the caller
-    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    at once. A joinable std::thread destroyed on that path would call std::terminate."""
     import time
 
     import pytest
@@ -158,7 +158,7 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
 
     Every enabled soft penalty at weight 1e21 puts the soft score far below -1e18 at the
     first feasible solution: the solve still stops there instead of running its whole
-    30 s. The first 0.2.0 limit, (0, -1e18), was never reached by such a score.
+    30 s. A finite soft limit such as (0, -1e18) would never be reached by such a score.
     """
     import dataclasses
     import time

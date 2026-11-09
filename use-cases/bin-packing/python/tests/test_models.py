@@ -45,7 +45,7 @@ def test_round_trip_through_the_core_is_lossless():
     back = BinPackingProblemModel.from_core(model.to_core())
     outputs = {"bins_used", "bin_loads", "score_hard", "score_soft"}
     assert back.model_dump(exclude=outputs) == model.model_dump(exclude=outputs)
-    assert (back.bins_used, back.bin_loads) == (2, [8, 0, 9])  # gaps show as 0, as in 0.1.x
+    assert (back.bins_used, back.bin_loads) == (2, [8, 0, 9])  # gaps show as 0
     clone = BinPackingProblemModel.model_validate_json(back.model_dump_json())
     assert clone == back
 
@@ -61,8 +61,8 @@ def test_from_core_reports_the_solved_outputs():
 
 
 @pytest.mark.parametrize("field", ["capacity_weight", "used_bin_weight", "color_weight", "conflict_weight"])
-def test_the_removed_weight_fields_are_refused(field):
-    """Since 0.2.0 the canonical problem carries no weights; extra="forbid" refuses the old fields."""
+def test_weight_fields_are_refused(field):
+    """The canonical problem carries no weights; extra="forbid" refuses weight fields."""
     data = BinPackingProblemModel.from_core(rich_model().to_core()).model_dump()
     assert field not in data
     data[field] = 2
@@ -109,8 +109,8 @@ def test_the_core_checks_the_facts_the_model_cannot_see():
 def test_every_scoring_entry_point_refuses_a_non_positive_capacity(capacity):
     """Core-only construction: scoring checks bin_capacity too, not only solve().
 
-    A negative capacity used to score -7hard through the monolith and -13hard through
-    the plugin assembly (which also charges the empty bins); both now raise.
+    Without the check a negative capacity would score -7hard through the monolith and
+    -13hard through the plugin assembly (which also charges the empty bins); both raise.
     """
     problem = bp.BinPackingProblem(capacity, [bp.Item("A", 2, 0), bp.Item("B", 2, 0), bp.Item("C", 1)])
     with pytest.raises(ValueError, match="bin_capacity must be positive"):
@@ -132,7 +132,7 @@ def test_a_capacity_edited_after_scoring_is_refused():
 
 
 def test_a_bin_beyond_the_items_is_accepted_by_the_model_and_ignored_by_a_plain_solve():
-    """The model keeps 0.1.x's bin >= -1 bound; a plain solve ignores the input bins anyway."""
+    """The model only bounds bin >= -1; a plain solve ignores the input bins anyway."""
     model = BinPackingProblemModel(bin_capacity=10, items=[ItemModel(id="A", weight=3, bin=9)])
     core = model.to_core()
     bp.solve(core, time_limit_seconds=0.0)

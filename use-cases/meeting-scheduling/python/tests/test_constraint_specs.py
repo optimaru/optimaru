@@ -226,10 +226,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     unit_names = ms.list_constraints()[:5]
     for row in ms.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
         assert entry["global"] == (row.name not in unit_names)
@@ -324,33 +323,6 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         ms.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(TypeError, match=re.escape(message)):
         MeetingOverlapCost(**knobs)
-
-
-OLD_NAMES = (
-    "room_conflict",
-    "avoid_overtime",
-    "required_attendance_conflict",
-    "required_room_capacity",
-    "start_and_end_on_same_day",
-    "required_and_preferred_attendance_conflict",
-    "preferred_attendance_conflict",
-    "do_meetings_as_soon_as_possible",
-    "one_break_between_consecutive_meetings",
-    "overlapping_meetings",
-    "assign_larger_rooms_first",
-    "room_stability",
-)
-
-
-@pytest.mark.parametrize("old", OLD_NAMES)
-def test_old_names_are_gone(old):
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-    with pytest.raises(ValueError, match="unknown constraint"):
-        ms.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(ms.constraint_costs(build_schedule()), [pick])
-    assert old not in ms.list_constraints()
 
 
 # --- The medium level -------------------------------------------------------------
@@ -507,27 +479,27 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name (e.g. a typo) must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    The later pick does not replace the earlier one, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [RoomConflictCost(), MeetingOverlapCost(weight=10), MeetingOverlapCost()]
     assert _engine_score(picks) == (0, -(10 + 10) * 2)  # overlap 2, default weight 10 twice
     assert get_constraints([RoomConflictCost(), RoomConflictCost()]) == [RoomConflictCost(), RoomConflictCost()]
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------------
 #
 # The attendance clash (12 grains x 2 rooms = 24 cells): meeting_end_time_cost reads 3 in
 # cell 0 and 5 in cell 5 (soft, weight 1, a unit constraint); meeting_overlap_cost 2 (soft,
@@ -702,15 +674,8 @@ def test_any_flippable_constraint_may_move_onto_medium(spec, level, expected):
     assert _engine_score([pick]) == expected
 
 
-def test_the_hard_knob_is_gone():
-    """0.3.0 replaced hard= by level=; the old keyword is a TypeError, not a silent default."""
-    with pytest.raises(TypeError, match="hard"):
-        MeetingOverlapCost(hard=True)
-    assert MeetingOverlapCost(level="medium") == MeetingOverlapCost(level=Level.MEDIUM)
-
-
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
     plain = [*HARD_PICKS, MeetingEndTimeCost(exponent=2), meeting_overlap_cost, preferred_attendance_conflict_cost]
     shifted = [
         *HARD_PICKS,
@@ -761,7 +726,7 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert score(ms.constraint_costs(schedule), picks) == python  # the default costs score the repeats too
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -838,7 +803,7 @@ def test_the_same_literal_pick_on_soft_or_medium_is_accepted(offset, level, unit
         (OvertimeCost(offset=0.5), (0, 0.0)),  # clip=True on hard: a threshold keeps a 0 at 0
         (OvertimeCost(offset=-0.5), (0, 0.0)),
         (MeetingEndTimeCost(level="hard", offset=-1), (-(4 + 6), 0.0)),  # adds 1 to the non-zero cells only
-        (OvertimeCost(clip=False), (0, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (OvertimeCost(clip=False), (0, 0.0)),  # clip=False with offset 0: the plain shaping
         (MeetingEndTimeCost(level="hard", offset=0.0, clip=False), (-8, 0.0)),
     ],
 )

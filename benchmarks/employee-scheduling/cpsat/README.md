@@ -65,7 +65,7 @@ about 5.5 of the 30 seconds.
 
 ## Repeated rules
 
-A rule may be listed several times (since 0.3.0 with the same parameters too):
+A rule may be listed several times, with the same parameters too:
 `registry_for` makes one plugin per entry, the k-th repeat named `"<name>#<k>"`, and
 each adds its own terms with its own knobs, as the engine adds one component per pick.
 

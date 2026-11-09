@@ -175,10 +175,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     raw = fl.constraint_costs(build_problem())
     for row in fl.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"], entry["global"]) == (True, False, False)
         assert (entry["name"], entry["label"]) == (row.name, "")  # one instance per name, no label
@@ -283,20 +282,6 @@ def test_core_accepts_numpy_scalars_like_the_python_base():
     assert score(fl.constraint_costs(problem), [spec]) == (problem.score.hard, pytest.approx(problem.score.soft))
 
 
-def test_old_names_are_gone():
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    for old in ("facility_capacity", "distance_from_facility"):
-
-        class Old:
-            name = old
-            weight = None
-            level = None
-            exponent = 1.0
-
-        with pytest.raises(ValueError, match="unknown constraint"):
-            solve([Old()])
-
-
 def test_constraint_costs_match_capacity_setup_and_distance_by_hand():
     """Each raw component is checked without running a solver.
 
@@ -388,20 +373,20 @@ def test_score_is_additive_over_the_picked_constraints():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name must not be silently ignored."""
     raw = fl.constraint_costs(_solved())
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    Neither pick wins in silence, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [FacilityCapacityCost(), DistanceFromFacilityCost(weight=10), DistanceFromFacilityCost()]
     problem = _zero_budget_solve(_two_assigned(), picks)
@@ -434,7 +419,7 @@ def _zero_budget_solve(problem, picks):
 
 
 def test_a_hard_total_beyond_int64_saturates_on_both_paths():
-    """3 x 4.5e18 used to wrap to a positive, feasible-looking hard score; it saturates now."""
+    """3 x 4.5e18 must not wrap to a positive, feasible-looking hard score; it saturates."""
     picks = [FacilityCapacityCost(weight=1.5e18)]
     assert fl.constraint_costs(_three_overloaded())["facility_capacity_cost"]["costs"] == [3.0, 3.0, 3.0]
     assert score(fl.constraint_costs(_three_overloaded()), picks).hard == -(2**63 - 1)
@@ -454,7 +439,7 @@ def test_a_hard_total_beyond_int64_saturates_on_both_paths():
 )
 def test_an_out_of_range_contribution_raises_overflow_error_on_both_paths(pick):
     """Python (score) and C++ (the solve) refuse the same contribution with the same message,
-    naming the constraint by its Python name (the C++ path used to name the registry id)."""
+    naming the constraint by its Python name (not by its registry id)."""
     with pytest.raises(OverflowError, match=f"^constraint '{pick.name}': ") as in_python:
         score(fl.constraint_costs(_three_overloaded()), [pick])
     with pytest.raises(OverflowError) as in_engine:
@@ -472,14 +457,14 @@ def test_the_overflow_message_reads_the_same_on_both_paths():
         _zero_budget_solve(_three_overloaded(), hard)
     assert str(in_engine.value) == expected
     # A weight of 0 is exactly 0 at any exponent on both paths: cost**400 beyond a double is
-    # never computed, so 0 x inf can no longer turn an opt-in term left at 0 into nan.
+    # never computed, so 0 x inf cannot turn an opt-in term left at 0 into nan.
     zero = [FacilityCapacityCost(), DistanceFromFacilityCost(weight=0.0, exponent=400)]
     assert score(fl.constraint_costs(_three_overloaded()), zero) == (-9, 0.0)
     solved = _zero_budget_solve(_three_overloaded(), zero)
     assert (solved.score.hard, solved.score.soft) == (-9, 0.0)
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------
 
 
 def _two_assigned():
@@ -584,8 +569,8 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert (engine.score.hard, engine.score.soft) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with offset 0."""
     plain = [FacilityCapacityCost(), FacilitySetupCost(), DistanceFromFacilityCost(exponent=2)]
     shifted = [
         FacilityCapacityCost(offset=0.0, clip=False),
@@ -660,7 +645,7 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert score(fl.constraint_costs(problem), picks) == python  # the default costs score the repeats too
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -718,7 +703,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (FacilityCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
         (FacilityCapacityCost(offset=-3.0), (-5, 0.0)),  # 2 + 3 on the overloaded facility only
-        (FacilityCapacityCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (FacilityCapacityCost(clip=False), (-2, 0.0)),  # clip=False with offset 0: the plain shaping
         (FacilityCapacityCost(offset=0.0, clip=False), (-2, 0.0)),
     ],
 )
@@ -745,7 +730,7 @@ def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
 
 @pytest.mark.parametrize("offset", [Fraction(1, 10**400), np.longdouble("1e-4000")], ids=["Fraction", "longdouble"])
 def test_an_offset_that_is_zero_as_a_double_is_no_offset_on_every_path(offset):
-    """The engine reads float(offset) and sees 0.0, so the literal pick on hard is the 0.2.0
+    """The engine reads float(offset) and sees 0.0, so the literal pick on hard is the plain
     shaping there; score() checks and shapes the same double instead of refusing the pick."""
     assert offset != 0 and float(offset) == 0.0
     pick = FacilityCapacityCost(offset=offset, clip=False)  # the default level, hard

@@ -1,18 +1,18 @@
-"""The C++ port computes exactly what the 0.1.5 pure-Python package computed.
+"""The C++ domain computes exactly what the pure-Python reference computes.
 
-`reference_max_cut` is the frozen 0.1.5 scorer and start partition (an oracle,
-plain data in and out). On every sample — the web demo (`fixtures/web_demo.json`,
+`reference_max_cut` is an independent pure-Python scorer and start partition (an
+oracle, plain data in and out). On every sample — the web demo (`fixtures/web_demo.json`,
 a copy of the web app's sample) and the package's own test fixtures — and on
 seeded random instances, the C++ `constraint_costs` totals equal the oracle's per
-constraint (under the 0.2.0 names), the default score equals the oracle's, a
+constraint (mapped to the engine names), the default score equals the oracle's, a
 selection at integral weights scores like the oracle, and the zero-budget solve
 returns the oracle's start partition.
 
-0.1.5 listed one 0/1 term per fixed vertex / same-side pair / different-side pair;
-0.2.0 reports one cost per side for those (the size bounds keep their two terms,
-the imbalance and the cut their one). The totals are what must match; the
-documented differences (the exponent shapes per side, hard rounds per side, a hard
-reward is refused, a partial partition is not scored) have their own tests below.
+The reference lists one 0/1 term per fixed vertex / same-side pair / different-side
+pair; the engine reports one cost per side for those (the size bounds have two terms,
+the imbalance and the cut one). The totals are what must match; where the two differ
+by design (the exponent shapes per side, hard rounds per side, a hard reward is
+refused, a partial partition is not scored) there are tests below.
 """
 
 from __future__ import annotations
@@ -37,8 +37,8 @@ from max_cut.constraints import (
 from max_cut.models import MaxCutProblemModel as Model
 
 FIXTURES = Path(__file__).parent / "fixtures"
-NEW_NAMES = [ref.RENAMED[name] for name in ref.OLD_NAMES]
-OLD_OF = {new: old for old, new in ref.RENAMED.items()}
+ENGINE_NAMES = [ref.ENGINE_NAME[name] for name in ref.REFERENCE_NAMES]
+REFERENCE_NAME = {engine: name for name, engine in ref.ENGINE_NAME.items()}
 
 
 def _samples() -> dict[str, dict]:
@@ -181,23 +181,23 @@ def test_constraint_costs_and_default_score_equal_the_oracle(name, data):
     expected = ref.constraint_costs(dumped)
     model = Model.model_validate(data)
     raw = max_cut.constraint_costs(model)
-    assert list(raw) == NEW_NAMES
-    for new_name, entry in raw.items():
-        old_terms = expected[OLD_OF[new_name]]
-        assert sum(entry["costs"]) == sum(old_terms), f"{name}: {new_name}"
-    # Same length and order where 0.1.5 already had per-unit lists.
-    for new_name in ("partition_size_bounds_cost", "partition_imbalance_cost", "cut_weight_cost"):
-        assert raw[new_name]["costs"] == [float(value) for value in expected[OLD_OF[new_name]]]
+    assert list(raw) == ENGINE_NAMES
+    for engine_name, entry in raw.items():
+        terms = expected[REFERENCE_NAME[engine_name]]
+        assert sum(entry["costs"]) == sum(terms), f"{name}: {engine_name}"
+    # Same length and order where the reference has per-unit lists too.
+    for engine_name in ("partition_size_bounds_cost", "partition_imbalance_cost", "cut_weight_cost"):
+        assert raw[engine_name]["costs"] == [float(value) for value in expected[REFERENCE_NAME[engine_name]]]
     result = max_cut.calculate_score(model)
     assert (result.hard, result.soft) == ref.calculate_score(dumped)
     assert score(raw) == ref.calculate_score(dumped)
     assert model.cut_weight == ref.cut_weight(dumped)
 
 
-def _old_selection(specs: list[Constraint]) -> list[dict]:
+def _reference_selection(specs: list[Constraint]) -> list[dict]:
     return [
         {
-            "name": OLD_OF[spec.name],
+            "name": REFERENCE_NAME[spec.name],
             "weight": spec.weight,
             "hard": {None: None, "hard": True, "soft": False}[spec.level],
             "exponent": spec.exponent,
@@ -207,7 +207,7 @@ def _old_selection(specs: list[Constraint]) -> list[dict]:
 
 
 def _random_selection(rng: random.Random) -> list[Constraint]:
-    """A random subset with integral weights and level flips (exponent 1: where 0.1.5 and 0.2.0 agree)."""
+    """A random subset with integral weights and level flips (exponent 1: where the reference and the engine agree)."""
     picked = [spec for spec in get_constraints() if rng.random() < 0.7] or [get_constraints()[-1]]
     selection = []
     for spec in picked:
@@ -218,7 +218,7 @@ def _random_selection(rng: random.Random) -> list[Constraint]:
 
 
 def test_selections_at_integral_weights_score_like_the_oracle():
-    """Integral weights, any level, exponent 1: the per-side rounding cannot differ from 0.1.5's."""
+    """Integral weights, any level, exponent 1: the per-side rounding cannot differ from the reference's."""
     rng = random.Random(7)
     checked = 0
     for name, data in CASES[::3]:
@@ -226,7 +226,7 @@ def test_selections_at_integral_weights_score_like_the_oracle():
         raw = max_cut.constraint_costs(Model.model_validate(data))
         for _ in range(3):
             selection = _random_selection(rng)
-            assert score(raw, selection) == ref.score_costs(ref.constraint_costs(dumped), _old_selection(selection)), (
+            assert score(raw, selection) == ref.score_costs(ref.constraint_costs(dumped), _reference_selection(selection)), (
                 name,
                 selection,
             )
@@ -236,7 +236,7 @@ def test_selections_at_integral_weights_score_like_the_oracle():
 
 @pytest.mark.parametrize("name", list(_samples()))
 def test_the_zero_budget_solve_returns_the_oracle_start(name):
-    """No warm start, a complete warm start and a partial one: the 0.1.5 start partition."""
+    """No warm start, a complete warm start and a partial one: the reference start partition."""
     problem = _samples()[name]
     plain = Model.model_validate({**problem, "partition": {}})
     max_cut.solve(plain, time_limit_seconds=0)
@@ -254,7 +254,7 @@ def test_the_zero_budget_solve_returns_the_oracle_start(name):
     assert (seeded.score_hard, seeded.score_soft) == ref.calculate_score({**seeded.model_dump()})
 
 
-def test_a_warm_start_against_a_fixed_side_is_kept_like_0_1_5():
+def test_a_warm_start_against_a_fixed_side_is_kept_like_the_reference():
     """A raw body (not with_initial_solution) may seed a fixed vertex on the other side: kept, penalized."""
     problem = _samples()["exact"]
     data = _with_partition(problem, [0, 0, 1, 1], warm_start=True)  # A is fixed to 1
@@ -265,11 +265,11 @@ def test_a_warm_start_against_a_fixed_side_is_kept_like_0_1_5():
     assert (model.score_hard, model.score_soft) == ref.calculate_score(model.model_dump())
 
 
-# --- The documented 0.2.0 differences ---------------------------------------
+# --- Differences by design ---------------------------------------------------
 
 
 def test_the_exponent_shapes_each_side_not_each_term():
-    """0.1.5 shaped every 0/1 term (an exponent had no effect); 0.2.0 shapes each side's count."""
+    """The reference shapes every 0/1 term (an exponent has no effect); the engine shapes each side's count."""
     data = _with_partition(_samples()["path"], [0, 0, 0, 1])  # A, B, C fixed to 1, all on side 0
     dumped = _dump(data)
     raw = max_cut.constraint_costs(Model.model_validate(data))
@@ -282,12 +282,12 @@ def test_fractional_hard_weights_round_per_side():
     data = _with_partition(_samples()["path"], [1, 1, 1, 0])  # 3 + 1 on [2, 2]: size [1, 1]
     dumped = _dump(data)
     raw = max_cut.constraint_costs(Model.model_validate(data))
-    old = ref.score_costs(ref.constraint_costs(dumped), [{"name": "partition_size_bounds", "weight": 0.4}])
-    assert old == (-1, 0.0)  # 0.1.5 rounded the hard total once: round(0.8)
-    assert score(raw, [PartitionSizeBoundsCost(weight=0.4)]) == (0, 0.0)  # 0.2.0: round(0.4) per side
+    reference = ref.score_costs(ref.constraint_costs(dumped), [{"name": "partition_size_bounds", "weight": 0.4}])
+    assert reference == (-1, 0.0)  # the reference rounds the hard total once: round(0.8)
+    assert score(raw, [PartitionSizeBoundsCost(weight=0.4)]) == (0, 0.0)  # the engine: round(0.4) per side
 
 
-def test_a_hard_reward_is_refused_where_0_1_5_scored_it():
+def test_a_hard_reward_is_refused_where_the_reference_scores_it():
     data = _samples()["triangle"]
     dumped = _dump(data)
     assert ref.score_costs(ref.constraint_costs(dumped), [{"name": "maximize_cut_weight", "hard": True}]) == (5, 0.0)
@@ -295,9 +295,9 @@ def test_a_hard_reward_is_refused_where_0_1_5_scored_it():
         score(max_cut.constraint_costs(Model.model_validate(data)), [CutWeightCost(level="hard")])
 
 
-def test_a_partial_partition_is_refused_where_0_1_5_scored_it():
+def test_a_partial_partition_is_refused_where_the_reference_scores_it():
     data = _samples()["web-demo"]  # no partition at all
-    # 0.1.5: a missing vertex is its own "side" for the pairs and side 0 for the sizes:
+    # The reference: a missing vertex is its own "side" for the pairs and side 0 for the sizes:
     # fixed A 1 + different (C, F) 1 + sizes (8 - 4) + (4 - 0) = 10.
     assert ref.calculate_score(_dump(data)) == (-10, 0.0)
     with pytest.raises(ValueError, match="partition is partial"):

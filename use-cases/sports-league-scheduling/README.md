@@ -60,28 +60,20 @@ reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultW
 The consecutive rules charge the whole run length (a run of 4 costs 4), as the Java
 provider does.
 
-**0.2.0:** the constraints were renamed — `matches_on_same_day` -> `team_conflict_cost`,
-`classic_matches` -> `workday_classic_matches_cost`, and every other name gained the
-`_cost` suffix (`consecutive_home_matches` -> `consecutive_home_matches_cost`, ...,
-`away_to_end_hop` -> `away_to_end_hop_cost`); the spec classes, module-level default
-instances, C++ structs/headers and registry names follow (`MatchesOnSameDay` ->
-`TeamConflictCost`, `"matchesOnSameDay"` -> `"teamConflictCost"`, ...). The Python
-`Breakdown` / `compute_breakdown()` are gone: `constraint_costs()` is the only
-per-constraint surface. The CP-SAT reference reads its defaults from `constraint_info()`,
-which fixes its workday-derby weight (it used 1 instead of the engine's 1000). Raw costs
-and the default score are unchanged.
+`constraint_costs()` is the per-constraint surface. The CP-SAT reference reads its
+defaults from `constraint_info()`, so it cannot disagree with the engine on a default.
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. A raw cost `x` (per round position for the three unit
+Every constraint takes the knobs `weight`, `level`, `exponent`, `offset` and `clip`
+(`offset` and `clip` keyword-only), and may be picked several times. A raw cost `x` (per round position for the three unit
 constraints, the single total for the seven globals — the granularity of `exponent`) is
 shaped as `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
-every round below the offset, an empty one included); `offset=0` is the 0.2.0 shaping.
+every round below the offset, an empty one included); `offset=0` is the plain power.
 Both apply per round position (or to a global's one total), not to the sum over the
 rounds. `clip=False` with an offset is refused on hard (`team_conflict_cost` and the other
 three hard globals by default), because hard 0 must mean no violation.
-Each pick is its own instance with its own knobs, its level included (`level` replaced
-the `hard` knob; `hard=` raises `TypeError`), and the instances add up:
+Each pick is its own instance with its own knobs, its level included, and the instances
+add up:
 
 ```python
 from sports_league.constraints import AwayToAwayHopCost, get_constraints

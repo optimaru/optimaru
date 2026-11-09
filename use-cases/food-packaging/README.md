@@ -54,25 +54,16 @@ units), and a repeated pick carries its own level. A solve with `constraints=` r
 (`levelScores()`), not by decoding the folded soft, so a soft total of 10^10 or more stays
 on soft in both.
 
-**0.2.0:** the constraints were renamed (`max_end_date_time` -> `max_end_time_cost`,
-`operator_cleaning_conflict` -> `operator_cleaning_conflict_cost`, `ideal_end_date_time`
--> `after_ideal_end_time_cost`, `maximize_jobs_assigned` -> `unassigned_jobs_cost`,
-`minimize_makespan` -> `squared_makespan_cost`; the spec classes, module-level default
-instances, C++ structs, headers and registry names follow). The two medium constraints
-used to carry the fold as a soft weight of 10^10 (some docs said 10^9, which was never
-the value); now their default weight is 1 on the medium level and the fold belongs to the
-domain, so `level="hard"` costs 1 hard per minute (was 10^10) and `level="soft"` demotes them
-to soft in both solvers (it was a no-op in the engine and landed on medium in CP-SAT).
-`analyze()` / `ConstraintBreakdown` are no longer exposed to Python:
-`constraint_costs()` is the one per-constraint surface. Raw costs and the default score
-are unchanged.
+The two medium constraints have default weight 1 on the medium level, and the fold belongs
+to the domain, so `level="hard"` costs 1 hard per minute and `level="soft"` demotes them to
+soft in both solvers. `constraint_costs()` is the one per-constraint surface in Python.
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. A raw cost `x` (per line for the three per-line constraints,
+Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
+(keyword-only), and may be picked several times. A raw cost `x` (per line for the three per-line constraints,
 on the one total for the two globals) is shaped as `sign(x) * max(0, |x| - offset) **
 exponent` (`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
 (`clip=False`, which charges every unit the constraint evaluates, a raw 0 included, and
-acts as a reward below the offset); `offset=0` is the 0.2.0 shaping. The per-line
+acts as a reward below the offset); `offset=0` is the plain shaping. The per-line
 constraints evaluate the packaging lines, an empty one included, and never the unassigned
 pool list (it is no line; their `constraint_costs()` entries list the lines as `"units"`).
 Both apply per line (or on a global's total), not to the total violation. `clip=False` with

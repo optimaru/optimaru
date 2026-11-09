@@ -8,11 +8,11 @@ namespace bp
 
 // Soft, weight 1: usedBinsCost — the objective, the number of bins in use.
 // Raw cost = the bins holding at least one item (one global value; 0 = no
-// item is assigned). 0.1.5 counted bins with a positive load, which is the
-// same because every weight is > 0 (ScoreCalculator::prepare checks it).
+// item is assigned), the same as the bins with a positive load because every
+// weight is > 0 (ScoreCalculator::prepare checks it).
 //
 // A GlobalConstraint on purpose: its exponent shapes the COUNT (count ** e,
-// exactly as in 0.1.5, whose costs list was [count]); per-bin units would
+// its costs list is [count]); per-bin units would
 // shape each bin's 1 instead. O(1) per move through the member-change fast
 // path: a bin switches on when its first item joins and off when its last
 // item leaves. A step function no single change can cross, which is why the

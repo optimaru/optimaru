@@ -1,5 +1,5 @@
 """Constraint spot checks: the full recompute (`calculate_score`) and the raw
-per-constraint costs (`constraint_costs`, the only per-constraint surface since 0.2.0)
+per-constraint costs (`constraint_costs`, the only per-constraint surface)
 against some hand-computed cases of the C++ tests."""
 
 import sports_league as sl

@@ -204,10 +204,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == NAMES
     for row in bp.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
         assert entry["global"] is (row.name == "used_bins_cost")
@@ -305,20 +304,6 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         UsedBinsCost(**knobs)
 
 
-def test_old_names_are_gone():
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    for old in ("bin_capacity", "color_compatibility", "item_conflicts", "minimize_bins"):
-        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-        with pytest.raises(ValueError, match="unknown constraint"):
-            solve([pick])
-        with pytest.raises(ValueError, match="unknown constraint"):
-            score(bp.constraint_costs(build_problem()), [pick])
-    import bin_packing.constraints as module
-
-    for old in ("BinCapacity", "ColorCompatibility", "ItemConflicts", "MinimizeBins", "minimize_bins"):
-        assert not hasattr(module, old)
-
-
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
 
 
@@ -382,7 +367,7 @@ def test_python_score_equals_cpp_calculate_score_for_random_specs():
 
 
 def test_exponent_shapes_per_bin_and_the_bin_count():
-    """The 0.2.0 unit granularity: per bin for colours/conflicts, on the count for used bins."""
+    """The unit granularity: per bin for colours/conflicts, on the count for used bins."""
     problem = bp.BinPackingProblem(
         100,
         [bp.Item(f"R{k}", 1, color="red") for k in range(3)] + [bp.Item(f"B{k}", 1, color="blue") for k in range(2)],
@@ -390,8 +375,8 @@ def test_exponent_shapes_per_bin_and_the_bin_count():
     )
     problem.set_assignment([0, 0, 0, 0, 0])
     raw = bp.constraint_costs(problem)
-    assert score(raw, [ColorConflictCost(exponent=2.0)]).hard == -9  # 0.1.x: 2**2 + 1**2 = 5
-    assert score(raw, [ItemConflictCost(exponent=2.0)]).hard == -4  # 0.1.x: 1 + 1 = 2
+    assert score(raw, [ColorConflictCost(exponent=2.0)]).hard == -9  # not 2**2 + 1**2 = 5
+    assert score(raw, [ItemConflictCost(exponent=2.0)]).hard == -4  # not 1 + 1 = 2
     problem.set_assignment([0, 1, 2, 3, 4])
     assert bp.calculate_score(problem, [UsedBinsCost(exponent=2.0)]) == bp.Score(0, -25.0)
 
@@ -409,17 +394,17 @@ def test_score_is_additive_over_the_picked_constraints():
 def test_score_rejects_an_unknown_constraint_name():
     raw = bp.constraint_costs(_solved())
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    The later pick does not win in silence, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [UsedBinsCost(), UsedBinsCost(weight=10)]
     problem = _zero_budget_solve(_hand(), picks)
@@ -427,7 +412,7 @@ def test_naming_a_constraint_twice_scores_both_picks():
     assert get_constraints([UsedBinsCost(), UsedBinsCost()]) == [UsedBinsCost(), UsedBinsCost()]
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -574,8 +559,8 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert _engine([pick]) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
     plain = [BinCapacityCost(exponent=2), ColorConflictCost(), ItemConflictCost(), UsedBinsCost(exponent=2)]
     shifted = [
         BinCapacityCost(exponent=2, offset=0.0, clip=False),
@@ -757,15 +742,7 @@ def test_a_level_must_be_a_level():
         _engine([UsedBinsCost(), pick])
 
 
-def test_the_knob_was_renamed():
-    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
-    with pytest.raises(TypeError):
-        UsedBinsCost(hard=True)
-    with pytest.raises(TypeError):
-        BinCapacityCost(weight=None, hard=False)
-
-
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------------
 
 
 @pytest.mark.parametrize("offset", [3.0, -3.0])
@@ -816,7 +793,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (BinCapacityCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
         (BinCapacityCost(offset=-3.0), (-6, 0.0)),  # 3 + 3 on bin 0 only
-        (BinCapacityCost(clip=False), (-3, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (BinCapacityCost(clip=False), (-3, 0.0)),  # clip=False with offset 0: the plain shaping
         (BinCapacityCost(offset=0.0, clip=False), (-3, 0.0)),
         (UsedBinsCost(level="hard", offset=-3.0), (-5, 0.0)),
     ],

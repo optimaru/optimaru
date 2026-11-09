@@ -49,7 +49,7 @@ inline void select(KnapsackProblem &problem, const std::vector<int> &selected)
         problem.items[i].selected = kSelected;
 }
 
-// The basic instance of the 0.1.x tests: capacity 10, A 6/9, B 4/7, C 5/8.
+// The basic instance of the reference tests: capacity 10, A 6/9, B 4/7, C 5/8.
 inline KnapsackProblem basicInstance()
 {
     KnapsackProblem problem;
@@ -58,7 +58,7 @@ inline KnapsackProblem basicInstance()
     return problem;
 }
 
-// The extended instance of the 0.1.x tests (test_extended_constraint_costs):
+// The extended instance of the reference tests (test_extended_constraint_costs):
 // capacity 10, resource labor 2, mandatory C, forbidden A, group {A, B, C}
 // exactly 2, A 3/5 (labor 3, requires B), B 2/4, C 1/1.
 inline KnapsackProblem extendedInstance()

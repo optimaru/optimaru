@@ -14,19 +14,19 @@ CP-SAT (they raise `ValueError`).
 
 The CP-SAT model: one bool `x[f, l]` per facility and location with exactly one location per facility
 and one facility per location; `pinned_assignments_cost` = sum over fixed locations of `1 - x`,
-`forbidden_assignments_cost` = sum of `x` over the **distinct** forbidden pairs (0.2.0 fix: a repeated
-row used to count twice here and once in the engine), `location_capacity_cost` = per capacitated
+`forbidden_assignments_cost` = sum of `x` over the **distinct** forbidden pairs (a repeated
+row counts once, as in the engine), `location_capacity_cost` = per capacitated
 location an excess variable `>= demand - capacity`, `assignment_cost` = `sum c[f][l] * x[f, l]` and
 `flow_distance_cost` = the diagonal `sum flows[a][a] * distances[l][l] * x[a, l]` plus, per facility pair
 `a < b` and pair of distinct locations, a bool `y[a, b, la, lb]` with the coefficient
 `flows[a][b] * distances[la][lb] + flows[b][a] * distances[lb][la]`. `y` is tied to `x` by linear
 equalities (`sum over lb of y = x[a, la]`, `sum over la of y = x[b, lb]`), which on a permutation
 force `y = x[a, la] AND x[b, lb]` exactly (O(n^4) pair bools and O(n^3) equalities, built only when
-the constraint is selected; 0.1.x used one multiplication constraint per ordered pair, which presolves
-much more slowly). Flows, distances and direct costs may be negative: the objective bounds cover each
+the constraint is selected; one multiplication constraint per ordered pair presolves much more
+slowly). Flows, distances and direct costs may be negative: the objective bounds cover each
 term's whole value range, so the hard level still dominates the soft one.
 
-**0.3.0:** a constraint may be picked several times (as specs or as
+A constraint may be picked several times (as specs or as
 `{"name", "weight", "level", "offset", "clip"}` mappings); each pick builds its own terms with
 its own knobs, its level included (`level="soft"` / `level="hard"` move a term in both
 solvers; `level="medium"` is refused by both: `this use case has no medium level`). The

@@ -12,8 +12,7 @@ namespace pjs
 // over projects of max(0, SINK endDate - criticalPathEndDate), in days, so
 // 0 = every project ends on or before its critical-path end date. Projects
 // finishing early cost nothing; only lateness counts. The exponent shapes
-// the total. 0.2.0 migration note: was totalProjectDelay, soft at weight
-// 10^9.
+// the total.
 //
 // The weight is in MEDIUM units (kMediumFold in domain.hpp folds medium into
 // the engine's soft level as `medium * 10^9`); hard() makes it 1 hard per

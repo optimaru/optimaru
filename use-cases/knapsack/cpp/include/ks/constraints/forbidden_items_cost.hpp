@@ -14,8 +14,7 @@ namespace ks
 // twice counts twice), one total; 0 = no forbidden item is selected. O(1) per
 // flip.
 //
-// One total (a global constraint): the exponent shapes the count (0.1.x
-// shaped each 0/1 entry; see the README).
+// One total (a global constraint): the exponent shapes the count.
 struct ForbiddenItemsCost final : detail::SelectionConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

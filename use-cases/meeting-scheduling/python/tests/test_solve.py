@@ -67,7 +67,7 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
 
     Every enabled soft penalty at weight 1e21 puts the soft score far below -1e18 at the
     first feasible solution: the solve still stops there instead of running its whole
-    30 s. The first 0.2.0 limit, (0, -1e18), was never reached by such a score.
+    30 s. A limit of (0, -1e18) would never be reached by such a score.
     """
     import dataclasses
     import time

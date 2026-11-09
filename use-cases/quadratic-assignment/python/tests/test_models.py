@@ -150,7 +150,7 @@ def test_to_core_refuses_an_assignment_it_cannot_represent(assignment, message):
 
 
 def test_model_level_scoring_needs_a_complete_assignment():
-    """On a model, calculate_score / constraint_costs need every location (0.1.x raised KeyError)."""
+    """On a model, calculate_score / constraint_costs need every location."""
     model = rich({"Lw": "Fd", "Lx": "Fa"})
     with pytest.raises(ValueError, match=r"missing: \['Ly', 'Lz'\]"):
         qap.calculate_score(model)
@@ -195,7 +195,7 @@ def test_validators_are_unchanged(change, message):
 
 
 def test_negative_matrix_entries_stay_accepted():
-    """0.2.0 adds no sign validation: negative flows, distances and direct costs are scored as given."""
+    """There is no sign validation: negative flows, distances and direct costs are scored as given."""
     model = QuadraticAssignmentProblemModel(
         facilities=["A", "B"],
         locations=["X", "Y"],

@@ -116,7 +116,7 @@ def test_level_can_be_flipped():
     """Promoting a soft constraint to hard moves its penalty to the hard side.
 
     As long as every task is assigned, priority end times can never be 0. Raising the
-    level charges its weight in HARD units (0.2.0: the 10^9 between the hard and the
+    level charges its weight in HARD units (the 10^9 between the hard and the
     medium level is the domain's fold, not a weight), so the penalty moves from soft2
     to the Bendable hard level wholesale."""
     picks = [unassigned_tasks_cost]
@@ -153,9 +153,9 @@ def test_empty_constraint_list_is_rejected():
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    The later pick neither wins in silence nor is an error: both are
     instances with their own knobs, and they add up."""
     picks = [RequiredSkillCost(), SquaredMakespanCost(weight=10), SquaredMakespanCost()]
     assert _zero_budget(_hand(), picks) == (-MEDIUM_PER_HARD, -(10 + SOFT1_WEIGHT) * (900 + 25))
@@ -237,10 +237,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     raw = ta.constraint_costs(build_solution())
     for row in ta.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
         assert entry["global"] == (row.name == "unassigned_tasks_cost")
@@ -361,25 +360,6 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
         ta.solve(build_solution(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(TypeError, match=re.escape(message)):
         SquaredMakespanCost(**knobs)
-
-
-def test_old_names_are_gone():
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    old_names = (
-        "no_missing_skills",
-        "minimize_unassigned_tasks",
-        "minimize_makespan",
-        "critical_priority_task_end_time",
-        "major_priority_task_end_time",
-        "minor_priority_task_end_time",
-    )
-    raw = ta.constraint_costs(build_solution())
-    for old in old_names:
-        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-        with pytest.raises(ValueError, match="unknown constraint"):
-            ta.solve(build_solution(), time_limit_seconds=0.1, constraints=[pick])
-        with pytest.raises(ValueError, match="unknown constraint"):
-            score(raw, [pick])
 
 
 # --- The medium level (unassigned_tasks_cost, folded below hard) --------------
@@ -541,17 +521,17 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name (e.g. a typo) must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs -----------------------------------
 #
 # The hand instance is _hand(): e0 (no skills) runs t0 (critical, 0..10, needs skill x)
 # and t1 (major, 10..30), e1 runs t2 (minor, 0..5), e2 is idle; every task is assigned
@@ -720,8 +700,8 @@ def test_the_global_total_is_shaped_once(make_pick, expected):
     assert engine(solution.score) == expected(tasks)
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_is_the_plain_shaping():
+    """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
     plain = [*get_constraints()[:-1], UnassignedTasksCost(exponent=2)]
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
@@ -815,18 +795,16 @@ def test_core_refuses_an_unknown_level_like_the_python_base():
         ta.constraint_costs(_hand(), [pick])
 
 
-def test_the_knob_was_renamed():
-    """hard= is gone: a spec refuses it, and an old duck-typed pick that carries `hard` but
-    no `level` is refused on every path instead of running at the default level."""
-    with pytest.raises(TypeError):
-        RequiredSkillCost(hard=True)
-    old = SimpleNamespace(name="required_skill_cost", weight=None, hard=True, exponent=1.0)
+def test_a_pick_without_a_level_is_refused():
+    """A duck-typed pick without `level` is refused on every path instead of running at the
+    default level."""
+    pick = SimpleNamespace(name="required_skill_cost", weight=None, exponent=1.0)
     with pytest.raises(AttributeError, match="level"):
-        ta.solve(build_solution(), time_limit_seconds=0.1, constraints=[old])
+        ta.solve(build_solution(), time_limit_seconds=0.1, constraints=[pick])
     with pytest.raises(AttributeError, match="level"):
-        ta.constraint_costs(_hand(), [old])
+        ta.constraint_costs(_hand(), [pick])
     with pytest.raises(AttributeError, match="level"):
-        score(ta.constraint_costs(_hand()), [old])
+        score(ta.constraint_costs(_hand()), [pick])
 
 
 @pytest.mark.parametrize(
@@ -892,7 +870,7 @@ def test_a_repeat_is_checked_on_its_own_level():
         score(ta.constraint_costs(_hand()), [RequiredSkillCost(), pick])
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score ---------------------------
 # Medium folds BELOW hard here (engine.hard = hard * 10^9 + medium), so medium counts
 # toward the hard score and refuses the literal formula too, with its own message.
 
@@ -981,7 +959,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
         # _hand(): required_skill [1, 0, 0] on hard, critical [10, 0, 0] moved to medium.
         (RequiredSkillCost(offset=0.5), (-MEDIUM_PER_HARD, 0.0)),  # clip=True on hard: 0.5 -> 1
         (RequiredSkillCost(offset=-1), (-2 * MEDIUM_PER_HARD, 0.0)),  # adds 1 to the non-zero employee only
-        (RequiredSkillCost(clip=False), (-MEDIUM_PER_HARD, 0.0)),  # clip=False with offset 0: 0.2.0
+        (RequiredSkillCost(clip=False), (-MEDIUM_PER_HARD, 0.0)),  # clip=False with offset 0: the plain shaping
         (RequiredSkillCost(offset=0.0, clip=False), (-MEDIUM_PER_HARD, 0.0)),
         (CriticalPriorityTaskEndTimeCost(level="medium", offset=4), (-24, 0.0)),  # a threshold on medium
         (CriticalPriorityTaskEndTimeCost(level="medium", clip=False), (-40, 0.0)),

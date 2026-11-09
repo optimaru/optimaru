@@ -10,8 +10,7 @@ namespace fp
 // that is on no packaging LINE, so dropping a long job hurts more than
 // dropping a short one. Raw cost (one global total) = the summed
 // durationMinutes of the jobs in the unassigned pool or in no list at all,
-// so 0 = every job is on a line. The exponent shapes that total. 0.2.0
-// migration note: was maximizeJobsAssigned, soft at weight 10^10.
+// so 0 = every job is on a line. The exponent shapes that total.
 //
 // The weight is in MEDIUM units (kMediumFold in domain.hpp folds medium into
 // the engine's soft level as `medium * 10^10`); hard() makes it 1 hard per

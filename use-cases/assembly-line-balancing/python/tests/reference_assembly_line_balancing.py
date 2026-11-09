@@ -1,22 +1,20 @@
-"""The 0.1.5 pure-Python assembly-line-balancing scorer and construction, frozen as a test oracle.
+"""An independent pure-Python assembly-line-balancing scorer and construction, a test oracle.
 
-This is a verbatim transcription of what ``assembly_line_balancing`` computed
-before the 0.2.0 C++ port (``__init__.py``: ``_loads`` / ``constraint_costs`` /
-the construction at the top of ``solve``; ``common.py``: ``score_costs``), kept
-only so the tests can prove that the C++ port computes the same raw costs and
-the same default score. It imports nothing from the package: it works on the
-problem as plain data (``AssemblyLineBalancingProblemModel.model_dump()`` or the
-JSON a client sends). Never import it from the package itself.
+It exists only so the tests can prove that the C++ domain computes the same
+raw costs, the same default score and the same construction. It imports
+nothing from the package: it works on the problem as plain data
+(``AssemblyLineBalancingProblemModel.model_dump()`` or the JSON a client
+sends). Never import it from the package itself.
 
-Names are the 0.1.5 catalog names; ``RENAMED`` maps them to the 0.2.0 names.
+The reference has its own constraint names; ``ENGINE_NAME`` maps them to the
+engine's names.
 
-Semantics kept as they were (the C++ port differs only where noted in the
-package README):
+Where the reference differs from the C++ domain:
 
 - an unassigned task (station -1) is scored as if -1 were a station index
   (bounds cost ``min_station + 1``, an unmet fixed station costs 1, a pair
   with both tasks at -1 counts 1, an arc into a task at -1 counts as
-  reversed); the C++ port follows the engine convention instead (an
+  reversed); the C++ domain follows the engine convention instead (an
   unassigned task contributes 0), so parity is asserted on complete
   assignments and, for partial ones, against :func:`restricted_to_assigned`;
 - ``score_costs`` rounds the hard total once (the engine rounds per unit; the
@@ -30,8 +28,8 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-#: 0.1.5 catalog order (list_constraints()).
-OLD_NAMES = (
+#: The reference catalog order (the engine catalog order too).
+REFERENCE_NAMES = (
     "station_capacity",
     "task_precedence",
     "station_count_limit",
@@ -44,8 +42,8 @@ OLD_NAMES = (
     "workload_balance",
 )
 
-#: 0.1.5 defaults: name -> (hard, weight).
-OLD_DEFAULTS = {
+#: The reference defaults: name -> (hard, weight).
+REFERENCE_DEFAULTS = {
     "station_capacity": (True, 1.0),
     "task_precedence": (True, 1.0),
     "station_count_limit": (True, 1.0),
@@ -58,8 +56,8 @@ OLD_DEFAULTS = {
     "workload_balance": (False, 0.0),
 }
 
-#: 0.1.5 constraint name -> its 0.2.0 registry name.
-RENAMED = {
+#: Reference constraint name -> the engine name.
+ENGINE_NAME = {
     "station_capacity": "station_capacity_cost",
     "task_precedence": "task_precedence_cost",
     "station_count_limit": "max_stations_cost",
@@ -91,7 +89,7 @@ def _tasks(problem: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def loads(problem: Mapping[str, Any]) -> list[int]:
-    """0.1.5 ``_loads``: one entry per station 0..max(station), empty stations included."""
+    """Station loads: one entry per station 0..max(station), empty stations included."""
     tasks = _tasks(problem)
     count = max((task["station"] for task in tasks), default=-1) + 1
     result = [0] * count
@@ -102,7 +100,7 @@ def loads(problem: Mapping[str, Any]) -> list[int]:
 
 
 def constraint_costs(problem: Mapping[str, Any]) -> dict[str, list[int]]:
-    """0.1.5 ``constraint_costs``: {old name: list of raw costs} (per station / task / group / pair)."""
+    """Raw costs: {reference name: list of raw costs} (per station / task / group / pair)."""
     tasks = _tasks(problem)
     cycle_time = problem["cycle_time"]
     max_stations = problem.get("max_stations")
@@ -141,20 +139,20 @@ def constraint_costs(problem: Mapping[str, Any]) -> dict[str, list[int]]:
 
 
 def totals(problem: Mapping[str, Any]) -> dict[str, int]:
-    """Per-constraint raw totals under the 0.2.0 names (the comparable quantity)."""
-    return {RENAMED[name]: sum(values) for name, values in constraint_costs(problem).items()}
+    """Per-constraint raw totals under the engine names (the comparable quantity)."""
+    return {ENGINE_NAME[name]: sum(values) for name, values in constraint_costs(problem).items()}
 
 
 def score_costs(
     costs: Mapping[str, Sequence[float]],
     picks: Sequence[tuple[str, float | None, bool | None, float]] | None = None,
 ) -> tuple[int, float]:
-    """0.1.5 ``common.score_costs``: picks are ``(old name, weight, hard, exponent)``; None = defaults.
+    """Score raw costs: picks are ``(reference name, weight, hard, exponent)``; None = defaults.
 
     Each element is shaped sign-preserving by the exponent, the weighted totals
     are summed per level, and the hard total is rounded ONCE (half away from zero).
     """
-    selected = [(name, None, None, 1.0) for name in OLD_NAMES] if picks is None else list(picks)
+    selected = [(name, None, None, 1.0) for name in REFERENCE_NAMES] if picks is None else list(picks)
     if not selected:
         raise ValueError("constraints must not be empty (pass None for defaults)")
     hard = 0.0
@@ -162,7 +160,7 @@ def score_costs(
     for name, weight, is_hard, exponent in selected:
         if name not in costs:
             raise ValueError(f"unknown constraint: {name}")
-        default_hard, default_weight = OLD_DEFAULTS[name]
+        default_hard, default_weight = REFERENCE_DEFAULTS[name]
         weight = default_weight if weight is None else weight
         is_hard = default_hard if is_hard is None else is_hard
         if exponent <= 0:
@@ -177,12 +175,12 @@ def score_costs(
 
 
 def default_score(problem: Mapping[str, Any]) -> tuple[int, float]:
-    """0.1.5 ``calculate_score`` at the default constraint set."""
+    """The score at the default constraint set."""
     return score_costs(constraint_costs(problem))
 
 
 def topological_order(problem: Mapping[str, Any]) -> list[str]:
-    """0.1.5 construction, step 1: level-synchronous Kahn order, ids sorted within a level."""
+    """Construction, step 1: level-synchronous Kahn order, ids sorted within a level."""
     tasks = _tasks(problem)
     predecessor_ids: dict[str, list[str]] = {task["id"]: [] for task in tasks}
     for edge in problem.get("precedences") or []:
@@ -201,7 +199,7 @@ def topological_order(problem: Mapping[str, Any]) -> list[str]:
 
 
 def construct(problem: Mapping[str, Any]) -> list[int]:
-    """0.1.5 construction, step 2: the initial stations ``solve`` started its search from.
+    """Construction, step 2: the initial stations a search starts from.
 
     A warm start (``warm_start=True``) keeps its seeded stations (>= 0); the
     others go first fit, in topological order, onto a station pointer that
@@ -237,10 +235,10 @@ def construct(problem: Mapping[str, Any]) -> list[int]:
 def restricted_to_assigned(problem: Mapping[str, Any]) -> dict[str, Any]:
     """The problem with every unassigned task (and what touches it) left out.
 
-    The 0.2.0 engine convention, stated in 0.1.5 terms: an unassigned task
+    The engine convention, stated in the reference's terms: an unassigned task
     contributes nothing, so its arcs and pairs do not count and it is not a
     member of any group (a group with no assigned member is left out: it
-    cannot be split). ``constraint_costs`` of the result equals the C++ port's
+    cannot be split). ``constraint_costs`` of the result equals the C++ domain's
     raw totals on the original, partial assignment.
     """
     kept = [dict(task) for task in problem["tasks"] if task.get("station", -1) >= 0]

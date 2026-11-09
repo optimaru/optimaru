@@ -62,9 +62,7 @@ Names (`name`) are the C++ component names in snake_case
 (``RoomConflictCost`` -> ``room_conflict_cost``). The core derives them mechanically,
 so there is no hand-maintained alias table — check them with `cs.list_constraints()`.
 Module-level instance names use the same snake_case, so they match the strings
-`list_constraints()` prints. 0.2.0 renamed every constraint (``room_conflict`` ->
-``room_conflict_cost``, ``same_day_talks`` -> ``different_day_talks_cost``, ...); the
-old names are unknown now.
+`list_constraints()` prints.
 """
 
 from ._constraint import Constraint, Level, Score, score_costs, select
@@ -727,7 +725,7 @@ class SpeakerMakespanCost(Constraint):
 class AudienceTypeDiversityCost(Constraint):
     """**Reward**: talks in one timeslot that share an audience type. Valued by shared
     audience types × slot duration (a negative cost, so it raises the score). Despite the
-    name it rewards SHARED audience types; 0.2.0 keeps the 0.1.x arithmetic (rename only).
+    name it rewards SHARED audience types.
     Default: soft, weight 1; a reward, so never hard."""
 
     name = "audience_type_diversity_cost"
@@ -735,12 +733,12 @@ class AudienceTypeDiversityCost(Constraint):
     label_ko = "청중 유형 다양성(보상)"
     description_en = (
         "A reward: for every pair of talks in the same timeslot, minus the audience types they share times the slot's "
-        "duration in minutes, so the raw cost is <= 0. Despite the name it rewards pairs that share an audience type "
-        "(kept from 0.1.x). 0 means no reward is earned."
+        "duration in minutes, so the raw cost is <= 0. Despite the name it rewards pairs that share an audience type. "
+        "0 means no reward is earned."
     )
     description_ko = (
         "보상 항목입니다. 같은 시간대의 발표 쌍마다 공통 청중 유형 수에 시간대 길이(분)를 곱한 값을 빼므로 원시 비용은 "
-        "0 이하입니다. 이름과 달리 청중 유형을 공유하는 쌍에 보상을 줍니다(0.1.x 동작 유지). 0이면 받은 보상이 "
+        "0 이하입니다. 이름과 달리 청중 유형을 공유하는 쌍에 보상을 줍니다. 0이면 받은 보상이 "
         "없습니다."
     )
 

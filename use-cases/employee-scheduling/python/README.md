@@ -167,15 +167,13 @@ instance is scored on its own, `constraint_totals()` tells them apart by `label`
 `add(...)` builds a calculator incrementally (`add` takes the same knobs,
 `offset` / `clip` as keywords).
 
-**0.3.0:** the "same rule with the same options twice" refusal is gone (every pick is
-an instance), and every rule takes `offset` / `clip` (also in the JSON rule models:
-`{"name": "undesired_day_cost", "offset": 120, "clip": false}`); `offset=0` is the
-0.2.0 shaping, so existing rule lists score exactly as before. `clip=False` with an offset
-is refused on hard, in a spec list, in `add()` and in a JSON rule alike: `ValueError:
-constraint 'required_skill_cost': clip=False with a non-zero offset cannot be hard, because
-hard 0 must mean no violation; use clip=True (a threshold) or another level`. The `hard`
-knob is gone (`hard=` raises `TypeError`, in a spec and in `add()`): `level` replaces it,
-in JSON too (`"level": "hard" | "soft"`), and each repeated pick carries its own, so
+Every rule takes `offset` / `clip` (also in the JSON rule models:
+`{"name": "undesired_day_cost", "offset": 120, "clip": false}`); `offset=0` is the plain
+power shaping. `clip=False` with an offset is refused on hard, in a spec list, in `add()`
+and in a JSON rule alike: `ValueError: constraint 'required_skill_cost': clip=False with a
+non-zero offset cannot be hard, because hard 0 must mean no violation; use clip=True (a
+threshold) or another level`. The level is `level`, in JSON too
+(`"level": "hard" | "soft"`), and each repeated pick carries its own, so
 `UndesiredDayCost()` plus `UndesiredDayCost(level="hard", offset=400)` makes the undesired
 minutes beyond 400 a must as well.
 
@@ -248,36 +246,15 @@ pattern="Location A,OFF,Location B")` (weight, level, exponent, offset and clip 
 keyword arguments, `weight=None` = the default; adding a name again adds another
 instance). `es.list_constraints()` lists every name.
 
-### 0.2.0
+### Rule models
 
-- Every rule is now `<Subject>Cost` / `<subject>_cost` (Python name = C++ registry
-  name in snake_case): `RequiredSkill` → `RequiredSkillCost`, `UnavailableEmployee`
-  → `EmployeeUnavailabilityCost`, `OverlappingShift` → `ShiftOverlapCost`,
-  `one_shift_per_day` → `max_one_shift_per_day_cost`, `MinimumRest` →
-  `MinRestCost`, `BalanceShiftAssignments` → `ShiftCountImbalanceCost`,
-  `MaxConsecutiveOff` → `MaxConsecutiveDaysOffCost`, `UnassignedShift` →
-  `UnassignedShiftsCost`, `BalanceMinMaxGap` → `ShiftCountGapCost`,
-  `BalanceWeeklyMinutesGap` → `WeeklyMinutesGapCost`, `location_run` →
-  `location_run_length_cost`, `balance_location` → `location_imbalance_cost`,
-  `worker_pair_same_shift` → `worker_pairing_cost`; the others gain the `Cost` /
-  `_cost` suffix. The C++ structs, headers and registry names follow
-  (`"Missing required skill"` → `"requiredSkillCost"`); the parametrized display
-  names (`"Day pattern[...]"`) moved to the instance `label`.
-- One class per rule, the spec: the hand-written pydantic `*Rule` models are
-  replaced by JSON models generated from the specs (`models.RULE_MODELS`,
-  `models.rule_model(...)`); `SchedulingInput.rules` takes specs or JSON. JSON:
-  `policy: "hard" | "soft"` → `hard: true | false` (since 0.3.0
-  `level: "hard" | "soft"`); `weight` defaults to `null` (the rule's default).
-  Old names and `policy` are refused.
-- The generated JSON models are named `<SpecClass>Model` (no class ends in
-  `Rule`), so 0.1.5 imports such as
-  `from es_scheduling.models import MaxConsecutiveDaysRule` or `AssignmentCostRule`
-  raise `ImportError`. Pass the spec instances (`MaxConsecutiveDaysRule` →
-  `constraints.MaxConsecutiveDaysCost`, `UnavailableWorkerRule` →
-  `EmployeeUnavailabilityCost`, `WorkerDayCountInRuleRange` →
-  `WorkerDayCountInRangeCost`, `BalanceAssignmentsRule` →
-  `ShiftCountImbalanceCost`, ...) or JSON dicts to `SchedulingInput.rules`; use
-  `models.rule_model(name)` for the model class itself.
+- Every rule is `<Subject>Cost` / `<subject>_cost` (Python name = C++ registry name in
+  snake_case); a parametrized rule's display name (`"Day pattern[...]"`) is the
+  instance `label`.
+- One class per rule, the spec: the JSON models are generated from the specs
+  (`models.RULE_MODELS`, `models.rule_model(...)`) and named `<SpecClass>Model`;
+  `SchedulingInput.rules` takes specs or JSON (`"level": "hard" | "soft"`, `weight`
+  defaults to `null`, the rule's default). Unknown names and keys are refused.
 - `SchedulingInput.rules` validates on assignment too
   (`model_input.rules = [MaxConsecutiveDaysCost(value=5)]`), and a rule model's
   `weight` / `exponent` refuse a bool or a numeric string, as the spec does.
@@ -289,16 +266,12 @@ instance). `es.list_constraints()` lists every name.
   per-employee rules and on `shift_coverage_cost`. The other global rules
   (`unassigned_shifts_cost`, `shift_count_imbalance_cost`, `shift_count_gap_cost`,
   `weekly_minutes_gap_cost`, `location_imbalance_cost`, `worker_pairing_cost`)
-  refuse them, even as `null`; in 0.1.5 every rule accepted them.
+  refuse them, even as `null`.
 - `weight=None` everywhere (also `DecomposedCalculator.add`); the defaults come
   from C++ (`constraint_info()`). The two rewards refuse `level="hard"`.
-- New: `constraint_costs(schedule, constraints)`, `constraint_info()`, the 10
-  rule-only constraints as spec classes, `UndesiredDayCost.per_day`,
-  `DesiredDayCost.per_day`, `MaxWeeklyMinutesCost.week_anchor`,
-  `MinWeeklyMinutesCost.week_anchor`; `constraint_totals()` reports
+- `constraint_costs(schedule, constraints)` and `constraint_info()` report the raw
+  costs and the catalog; `constraint_totals()` reports
   `{name, label, cost, level, is_hard}`.
-- `worker_location_count_cost` and `worker_day_count_in_range_cost` are soft by
-  default (as they always were in C++; the old documentation said hard).
 
 ## Pinning
 

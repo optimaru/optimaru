@@ -1,6 +1,6 @@
 // Monolithic-path tests (ScoreCalculator, the incremental calculator and the
 // Solver), engine test/ style: check() + a non-zero exit on any failure.
-//   (a) hand-calculated scores: the 0.1.x 2x2 / side-constraint / 3x3 cases
+//   (a) hand-calculated scores: the 2x2 / side-constraint / 3x3 cases
 //   (b) each constraint's raw total, hand-calculated: a positive and a zero
 //       case per constraint (raw 0 = no violation), plus the edge cases
 //       (diagonal flow, repeated forbidden rows, one facility pinned twice,
@@ -87,7 +87,7 @@ void verifyHandScores()
         check(sameScore(ScoreCalculator::score(p), Score{0, -26.0}), "side instance, swapped: 0hard/-26soft");
     }
     {
-        // The 0.1.x seed {L3: F1, L1: F2, L2: F3}: 2 * (3*4 + 1*2 + 2*1) = 32.
+        // The seed {L3: F1, L1: F2, L2: F3}: 2 * (3*4 + 1*2 + 2*1) = 32.
         QuadraticAssignmentProblem p = threeFacilities();
         place(p, {1, 2, 0});
         check(p.totalCost() == 32, "3x3 seed total cost 32");

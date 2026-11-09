@@ -47,76 +47,35 @@ components (`kDefaultLevel` / `kDefaultWeight`). An unassigned task (`station = 
 contributes nothing (the engine convention): an arc, pair or group member counts
 only while its tasks are assigned.
 
-### 0.2.0
+### Scoring
 
-The package was a pure-Python reference (simulated annealing over
-`constraint_costs()`); it is now the C++ engine with pybind11 bindings, like the
-other C++ use cases.
+- **Exponent granularity**: the engine shapes a unit constraint per station and a
+  global on its total. `max_stations_cost`, `task_station_bounds_cost`,
+  `fixed_task_stations_cost`, `forbidden_task_stations_cost` and
+  `different_station_pairs_cost` are shaped per station, `same_station_groups_cost`
+  on its total. CP-SAT rejects any exponent other than 1.
+- Hard contributions are rounded per unit (half away from zero).
+- `constraint_costs()` returns the standard dict
+  `{name: {"costs", "weight", "exponent", "offset", "clip", "global", "level",
+  "reward", "level_flippable", "name", "label", "default_weight", "default_level"}}`
+  with per-station lists (`0 .. station_count - 1`).
 
-- **Names** (no aliases): `station_capacity` -> `station_capacity_cost`,
-  `task_precedence` -> `task_precedence_cost`, `station_count_limit` ->
-  `max_stations_cost`, `task_station_bounds` -> `task_station_bounds_cost`,
-  `fixed_task_stations` -> `fixed_task_stations_cost`, `forbidden_task_stations` ->
-  `forbidden_task_stations_cost`, `same_station_groups` -> `same_station_groups_cost`,
-  `different_station_pairs` -> `different_station_pairs_cost`, `minimize_stations` ->
-  `used_stations_cost`, `workload_balance` -> `workload_imbalance_cost`; the spec
-  classes and module-level instances follow (`StationCountLimit` -> `MaxStationsCost`,
-  `MinimizeStations` -> `UsedStationsCost`, `WorkloadBalance` -> `WorkloadImbalanceCost`,
-  every other class gains `Cost`). The model fields `same_station_groups` and
-  `different_station_pairs` keep their names.
-- **Raw costs are unchanged for every complete assignment** (each constraint's
-  total, and the default score). Changed by design:
-  - an unassigned task contributes 0 (0.1.5 scored `-1` as a station index: the
-    unassigned web demo was `-18hard`, it is now `0hard`);
-  - **exponent granularity**: the engine shapes a unit constraint per station and a
-    global on its total. `max_stations_cost`, `task_station_bounds_cost`,
-    `fixed_task_stations_cost` and `forbidden_task_stations_cost` are shaped per
-    station (0.1.5: per task), `different_station_pairs_cost` per station (0.1.5: per
-    pair) and `same_station_groups_cost` on its total (0.1.5: per group). Identical at
-    exponent 1 (CP-SAT rejects any other exponent);
-  - hard contributions are rounded per unit (0.1.5 rounded the hard total once):
-    different only for fractional hard weights;
-  - `constraint_costs()` returns the standard dict
-    `{name: {"costs", "weight", "exponent", "hard", "global", "level", "reward",
-    "level_flippable", "name", "label"}}` with per-station lists
-    (`0 .. station_count - 1`; 0.1.5: `{name: [per station | task | group | pair]}`);
-  - a constraint picked twice raised `ValueError` (0.1.5 counted it twice; since
-    0.3.0 each pick is scored again, see below).
-- **`SolverConfig`** is the engine's (the other C++ packages' knobs:
-  `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
-  `parallel_solver_count`, `late_acceptance_size`, `full_assert`, `ruin_recreate*`,
-  `change/swap_move_weight`, `value_recommender_probability`, `descent_weight`,
-  `custom_move_probability`, `close_station_moves`, `best_score_limit`, `on_new_best`).
-  The simulated-annealing knobs `max_iterations`, `stagnation_limit`, `temperature`,
-  `cooling_rate`, the keyword constructor and the `anneal` / `configure` helpers are
-  gone. Zero budget = `spent_limit_seconds = 0` (`step_count_limit = 0` means "no
-  limit"); a bounded search = `step_count_limit = N`. `on_new_best(step, score)`
-  (0.1.5: `on_new_best(state)`).
-- `solve()` returns the engine `Score` (`.hard`, `.soft`; 0.1.5: a tuple) and takes the
-  engine object or the model (written back in place). `calculate_score(problem,
-  constraints)` returns the engine `Score` for the defaults and a
-  `constraints.Score(hard, soft)` named tuple for a selection. `DEFAULTS` and the
-  top-level `score` are gone (use `constraints.get_constraints()` /
-  `constraints.score()`). With `constraints=...` a solve is single-start
-  (`parallel_solver_count` is ignored), as in every C++ package.
-- The JSON input/output schema of `AssemblyLineBalancingProblemModel` is unchanged.
+### Offsets and repeated picks
 
-### 0.3.0
-
-Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
-picked several times. A raw cost `x` (per station for the six per-station constraints,
-the single total for the four globals — the granularity of `exponent`) is shaped as
-`sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
-`(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
-every evaluated station below the offset, an empty one included); `offset=0` is the 0.2.0
-shaping. `max_stations_cost` and `forbidden_task_stations_cost` evaluate only their own
-stations (from `max_stations` on, and the stations some task forbids), so `clip=False`
-charges those and no other; `constraint_costs()` lists them as `"units"`. Both formulas
-apply per station (or to a global's one total), not to the sum over the stations.
-`clip=False` with an offset is refused on hard (every constraint but `used_stations_cost`
-and `workload_imbalance_cost` by default), because hard 0 must mean no violation. Each pick
-is its own instance with its own knobs, its level included (`level` replaced the `hard`
-knob; `hard=` raises `TypeError`), and the instances add up:
+Every constraint takes the knobs `weight`, `level`, `exponent` and, keyword-only,
+`offset` and `clip`, and may be picked several times. A raw cost `x` (per station for
+the six per-station constraints, the single total for the four globals — the
+granularity of `exponent`) is shaped as `sign(x) * max(0, |x| - offset) ** exponent`
+(`clip=True`, the default) or `(x - offset) ** exponent`, sign-preserving
+(`clip=False`, which lowers the penalty of every evaluated station below the offset, an
+empty one included); `offset=0` is the plain power shaping. `max_stations_cost` and
+`forbidden_task_stations_cost` evaluate only their own stations (from `max_stations`
+on, and the stations some task forbids), so `clip=False` charges those and no other;
+`constraint_costs()` lists them as `"units"`. Both formulas apply per station (or to a
+global's one total), not to the sum over the stations. `clip=False` with an offset is
+refused on hard (every constraint but `used_stations_cost` and
+`workload_imbalance_cost` by default), because hard 0 must mean no violation. Each pick
+is its own instance with its own knobs, its level included, and the instances add up:
 
 ```python
 from assembly_line_balancing.constraints import UsedStationsCost, get_constraints
@@ -131,6 +90,22 @@ alb.solve(problem, constraints=[
 name's instances together, the names in catalog order). The CP-SAT reference takes
 integral offsets.
 
+### Python API
+
+- **`SolverConfig`** is the engine's: `spent_limit_seconds`, `step_count_limit`,
+  `unimproved_*`, `random_seed`, `parallel_solver_count`, `late_acceptance_size`,
+  `full_assert`, `ruin_recreate*`, `change/swap_move_weight`,
+  `value_recommender_probability`, `descent_weight`, `custom_move_probability`,
+  `close_station_moves`, `best_score_limit`, `on_new_best(step, score)`. Zero budget =
+  `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded search
+  = `step_count_limit = N`.
+- `solve()` returns the engine `Score` (`.hard`, `.soft`) and takes the engine object
+  or the model (written back in place). `calculate_score(problem, constraints)` returns
+  the engine `Score` for the defaults and a `constraints.Score(hard, soft)` named tuple
+  for a selection (see `constraints.get_constraints()` / `constraints.score()`). With
+  `constraints=...` a solve is single-start (`parallel_solver_count` is ignored), as in
+  every C++ package.
+
 ## cpp/
 
 - `include/alb/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
@@ -141,8 +116,9 @@ integral offsets.
   `used_stations_cost.hpp`, `workload_imbalance_cost.hpp` (+ `common.hpp`);
   `include/alb/constraints.hpp` assembles the default set (`defaultConstraints()`) and
   states the catalog order once (`forEachDefaultConstraint`)
-- `construction` — the 0.1.5 construction, ported exactly (level-synchronous Kahn
-  order, first fit on a station pointer that never moves down, fixed-station override)
+- `construction` — level-synchronous Kahn order, first fit on a station pointer that
+  never moves down, fixed-station override (identical to the pure-Python reference in
+  `python/tests/reference_assembly_line_balancing.py`)
 - `score_calculator` — full recompute (the reference) and `rawCosts()`
 - `incremental_calculator` — before/after hooks, O(degree) per move
 - `solver` — engine wrapper (construction + Late Acceptance + adaptive ruin & recreate
@@ -234,9 +210,8 @@ topological order, into their precedence windows) is defined and registered in
 LNS is a `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** `cpp/src/construction.cpp` places every task
-before the engine starts (the engine only fills what is still unassigned). It is the
-0.1.5 construction, ported exactly; `alb_test` and the Python reference-parity tests
-pin its results.
+before the engine starts (the engine only fills what is still unassigned). `alb_test`
+and the Python reference-parity tests pin its results.
 
 **Adding a hard or soft cost.** One file per constraint under
 `cpp/include/alb/constraints/`:

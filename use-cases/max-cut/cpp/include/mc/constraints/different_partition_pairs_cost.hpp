@@ -10,8 +10,8 @@ namespace mc
 
 // Hard, weight 1: differentPartitionPairsCost — must-be-apart pairs that sit
 // on one side. Raw cost per side u = the pairs with both endpoints on side u,
-// so 0 = every pair is split. The two sides sum to the 0.1.x count of joined
-// pairs (0.1.x listed one 0/1 term per pair). A self-pair is always joined
+// so 0 = every pair is split. The two sides sum to the count of joined
+// pairs. A self-pair is always joined
 // (1 on its vertex's side); a repeated pair counts once per entry.
 //
 // cost() is a pure function of (unit, members) (a pair counts only when both

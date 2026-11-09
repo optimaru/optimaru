@@ -309,7 +309,7 @@ def constraint_costs(
     second on. semiconductor_scheduling.constraints.score() turns it into a score."""
 
 def constraint_items(schedule: SemiconductorSchedule) -> dict[str, list[int]]:
-    """Per-item raw costs (0.1.x lists: one item per lot, route pair, machine, window, ...)."""
+    """Per-item raw costs (one item per lot, route pair, machine, window, ...)."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

@@ -93,12 +93,12 @@ def _core_of(problem, *, complete: bool = False) -> QuadraticAssignmentProblem:
 def constraint_costs(problem, constraints=None) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight / exponent / offset / level.
 
-    ``{key: {"costs": [...], "weight", "exponent", "offset", "clip", "hard", "global",
+    ``{key: {"costs": [...], "weight", "exponent", "offset", "clip", "global",
     "level", "reward", "level_flippable", "name", "label", ...}}``: None = the default
     constraints in `list_constraints()` order; a pick list (as for `solve`) scores exactly
     those picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
     ``"<name>#<k>"``. The three side constraints list one raw cost per location (location
-    order; 0.1.x listed the fixed locations / the assignment entries only) and their
+    order) and their
     evaluated locations as ``"units"`` (the fixed, the forbidden-row and the capacitated
     locations: the only ones a literal offset charges); `assignment_cost` and
     `flow_distance_cost` are one total each. `constraints.score()` turns it into a score.

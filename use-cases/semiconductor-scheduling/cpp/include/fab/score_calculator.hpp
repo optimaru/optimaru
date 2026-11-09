@@ -12,8 +12,8 @@ namespace fab
 // ---------------------------------------------------------------------------
 // ScoreCalculator — the monolithic full recompute
 // ---------------------------------------------------------------------------
-// The straight port of the 0.1.x scorer: rawCostsOf() walks an assignment
-// list exactly like the Python `constraint_costs` did (and yields the same
+// The straightforward scorer: rawCostsOf() walks an assignment list exactly
+// like the Python reference `constraint_costs` (and yields the same
 // per-item lists), and the score is the default weighted sum:
 //
 //   hard = -(sum of the 14 hard terms)                 (weight 1 each)

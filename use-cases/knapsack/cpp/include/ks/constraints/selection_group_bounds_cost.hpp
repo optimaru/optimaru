@@ -17,7 +17,7 @@ namespace ks
 // groups) per flip.
 //
 // One total (a global constraint): the exponent shapes the summed violation,
-// not each group's (0.1.x shaped each group; see the README).
+// not each group's.
 struct SelectionGroupBoundsCost final : detail::SelectionConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

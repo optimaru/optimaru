@@ -47,7 +47,7 @@ namespace fl
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the mutable `level` / `weight` /
 // `exponent`, or by name through ConstraintAssembly. The canonical problem
-// carries no weights (removed in 0.2.0): the monolithic calculators read the
+// carries no weights: the monolithic calculators read the
 // same kDefaultWeight constants, which is why the default assembly scores
 // bit-for-bit like them.
 //

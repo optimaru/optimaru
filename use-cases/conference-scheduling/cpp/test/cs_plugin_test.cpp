@@ -1242,7 +1242,7 @@ void verifyGuards()
           "a negative weight and a non-positive exponent are refused");
     check(
         throwsInvalid([] { defaultConstraints().weight("roomConflict", 2.0); }),
-        "a pre-0.2.0 name is unknown");
+        "an unknown name is refused");
     std::printf("\n");
 }
 

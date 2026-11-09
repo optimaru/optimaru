@@ -12,9 +12,7 @@ Score, at the default weights:
   - distance weight 6 = the `ConstraintWeightOverrides` value of the Java solution (provider
     default 5).
 
-The problem carries no weights (removed in 0.2.0, together with the rename of
-`facility_capacity` / `distance_from_facility` to `facility_capacity_cost` /
-`distance_from_facility_cost`). Pick, re-weight or flip constraints with
+The problem carries no weights. Pick, re-weight or flip constraints with
 `facility_location.constraints`, and read the defaults with `fl.constraint_info()`:
 
 ```python

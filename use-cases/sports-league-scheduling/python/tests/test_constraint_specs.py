@@ -229,17 +229,17 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name (e.g. a typo) must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
-# --- The 0.2.0 catalog: constraint_info() and the knobs -------------------------
+# --- The catalog: constraint_info() and the knobs -------------------------------
 
 #: (spec class, default level, default weight, global) in list_constraints() order.
 CATALOG = [
@@ -287,10 +287,9 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == sl.list_constraints()
     for row, (_, _, _, is_global) in zip(sl.constraint_info(), CATALOG, strict=True):
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"], entry["global"]) == (True, False, is_global)
         assert (entry["name"], entry["label"], entry["exponent"]) == (row.name, "", 1.0)
@@ -403,9 +402,9 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
 
 
 def test_a_constraint_named_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    The later pick neither wins in silence nor is an error: both are
     instances with their own knobs, and they add up."""
     assert get_constraints([TeamConflictCost(), TeamConflictCost(weight=2)]) == [
         TeamConflictCost(),
@@ -417,31 +416,7 @@ def test_a_constraint_named_twice_scores_both_picks():
     assert (solved.score.hard, solved.score.soft) == (-(1 + 2), 0.0)  # the one unavoidable conflict, twice
 
 
-def test_old_names_are_gone():
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    raw = sl.constraint_costs(build_schedule())
-    for old in [
-        "matches_on_same_day",
-        "consecutive_home_matches",
-        "consecutive_away_matches",
-        "repeat_match_on_next_day",
-        "start_to_away_hop",
-        "home_to_away_hop",
-        "away_to_away_hop",
-        "away_to_home_hop",
-        "away_to_end_hop",
-        "classic_matches",
-    ]:
-        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-        with pytest.raises(ValueError, match="unknown constraint"):
-            sl.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
-        with pytest.raises(ValueError, match="unknown constraint"):
-            score(raw, [pick])
-    for gone in ("Breakdown", "compute_breakdown"):
-        assert not hasattr(sl, gone)
-
-
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs -----------------------------------
 
 
 def _two_rounds():
@@ -581,8 +556,8 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
     assert _engine([pick]) == expected
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_is_the_plain_shaping():
+    """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
     plain = [*get_constraints()[:9], AwayToHomeHopCost(exponent=2)]
     shifted = [type(spec)(offset=0.0, clip=bool(index % 2)) for index, spec in enumerate(get_constraints()[:9])]
     shifted.append(AwayToHomeHopCost(exponent=2, offset=0, clip=False))
@@ -734,15 +709,7 @@ def test_a_level_must_be_a_level():
         _engine([HomeToAwayHopCost(), pick])
 
 
-def test_the_knob_was_renamed():
-    """0.3.0 replaced hard=True / hard=False by level="hard" / level="soft"; hard= is unknown."""
-    with pytest.raises(TypeError):
-        HomeToAwayHopCost(hard=True)
-    with pytest.raises(TypeError):
-        TeamConflictCost(weight=None, hard=False)
-
-
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score ---------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -803,7 +770,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (TeamConflictCost(offset=3.0), (0, 0.0)),  # clip=True on hard: a threshold
         (TeamConflictCost(offset=-3.0), (0, 0.0)),  # ...which leaves a raw 0 at 0
-        (TeamConflictCost(clip=False), (0, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (TeamConflictCost(clip=False), (0, 0.0)),  # clip=False with offset 0: the plain shaping
         (StartToAwayHopCost(level="hard", offset=-5.0), (-26, 0.0)),  # 21 + 5 on round 0 only
         (StartToAwayHopCost(level="hard", offset=0.0, clip=False), (-21, 0.0)),
     ],

@@ -83,7 +83,7 @@ void Decoder::truncate(int step)
     }
 }
 
-// (rank, -lot priority, lot id): the 0.1.x selection key.
+// (rank, -lot priority, lot id): the selection key.
 bool Decoder::before(int a, int b, const std::int64_t *rank) const
 {
     const std::int64_t rankA = rank[a];

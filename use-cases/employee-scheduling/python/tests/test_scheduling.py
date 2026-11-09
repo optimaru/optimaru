@@ -931,19 +931,16 @@ def test_worker_pairing_cost_share_and_avoid_modes():
     assert score(0, -1, True) == 0
 
 
-HARD_REMOVED = (
-    "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps the default)"
+HARD_KEYWORD = (
+    "unexpected keyword argument 'hard'; use level='hard' or level='soft' (level=None keeps the default)"
 )
 
 
-def test_add_refuses_the_old_hard_knob():
-    """add() reads other keywords as rule parameters, where hard= would vanish silently.
-
-    It names its replacement in the words every path uses (the spec's, a JSON rule's)."""
+def test_add_refuses_a_hard_keyword():
+    """add() reads other keywords as rule parameters, where hard= would vanish silently."""
     for value in (True, False):
         with pytest.raises(TypeError) as raised:
             es.DecomposedCalculator().add("required_skill_cost", hard=value)
-        assert str(raised.value) == HARD_REMOVED
-    with pytest.raises(TypeError) as raised:
+        assert str(raised.value) == HARD_KEYWORD
+    with pytest.raises(TypeError, match="unexpected keyword argument 'hard'"):
         es.constraints.RequiredSkillCost(hard=True)
-    assert str(raised.value) == HARD_REMOVED

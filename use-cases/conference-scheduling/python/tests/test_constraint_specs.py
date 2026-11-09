@@ -210,9 +210,9 @@ def test_empty_constraint_list_is_rejected():
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
-    """Since 0.3.0 a constraint may be picked several times: each pick is scored on its own.
+    """A constraint may be picked several times: each pick is scored on its own.
 
-    The later pick no longer wins in silence, nor is it an error: both are
+    The later pick does not win in silence, nor is it an error: both are
     instances with their own knobs, and they add up."""
     picks = [RoomConflictCost(), RoomConflictCost(weight=10)]
     solved = _pinned_solve(_three_talks(), picks)
@@ -279,22 +279,14 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     assert list(raw) == cs.list_constraints()
     for row in cs.constraint_info():
         entry = raw[row.name]
-        assert (entry["weight"], entry["level"], entry["hard"]) == (
+        assert (entry["weight"], entry["level"]) == (
             row.default_weight,
             row.default_level,
-            row.default_level == "hard",
         )
         assert (entry["level_flippable"], entry["reward"]) == (row.level_flippable, row.reward)
         assert entry["global"] is True and len(entry["costs"]) == 1  # one total per constraint
         assert (entry["name"], entry["label"]) == (row.name, "")
         assert "medium_fold" not in entry  # no medium level in this domain
-
-
-def test_the_breakdown_api_is_gone():
-    """0.2.0: constraint_costs() is the only per-constraint surface."""
-    assert not hasattr(cs, "compute_breakdown")
-    assert not hasattr(cs, "Breakdown")
-    assert not hasattr(cs._core, "compute_breakdown")
 
 
 # --- The knobs ------------------------------------------------------------------
@@ -442,53 +434,6 @@ def test_a_reward_stays_soft_and_raises_the_score():
     )
 
 
-def test_old_names_are_gone():
-    """0.2.0 renamed the catalog; the pre-0.2.0 names are unknown now (no aliases)."""
-    for old in [
-        "talk_type_compatibility",
-        "room_unavailable_timeslot",
-        "room_conflict",
-        "speaker_unavailable_timeslot",
-        "speaker_conflict",
-        "talk_prerequisite_talks",
-        "talk_mutually_exclusive_talks_tags",
-        "consecutive_talks_pause",
-        "crowd_control",
-        "speaker_required_timeslot_tags",
-        "speaker_prohibited_timeslot_tags",
-        "talk_required_timeslot_tags",
-        "talk_prohibited_timeslot_tags",
-        "speaker_required_room_tags",
-        "speaker_prohibited_room_tags",
-        "talk_required_room_tags",
-        "talk_prohibited_room_tags",
-        "theme_track_conflict",
-        "theme_track_room_stability",
-        "sector_conflict",
-        "audience_type_theme_track_conflict",
-        "content_audience_level_flow_violation",
-        "content_conflict",
-        "same_day_talks",
-        "popular_talks",
-        "speaker_preferred_timeslot_tags",
-        "speaker_undesired_timeslot_tags",
-        "talk_preferred_timeslot_tags",
-        "talk_undesired_timeslot_tags",
-        "speaker_preferred_room_tags",
-        "speaker_undesired_room_tags",
-        "talk_preferred_room_tags",
-        "talk_undesired_room_tags",
-        "speaker_makespan",
-        "audience_type_diversity",
-        "audience_level_diversity",
-        "language_diversity",
-    ]:
-        assert old not in cs.list_constraints()
-        pick = SimpleNamespace(name=old, weight=None, level=None, exponent=1.0)
-        with pytest.raises(ValueError, match="unknown constraint"):
-            cs.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
-
-
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
 
 
@@ -571,17 +516,17 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 
 def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a renamed component) must not be silently ignored."""
+    """A spec with a wrong name (e.g. a misspelled component) must not be silently ignored."""
     raw, _ = _raw()
 
-    class Renamed(Constraint):
+    class Misnamed(Constraint):
         name = "definitely_not_a_constraint"
 
     with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Renamed()])
+        score(raw, [Misnamed()])
 
 
-# --- 0.3.0: repeated picks and the offset / clip knobs ------------------------------
+# --- repeated picks and the offset / clip knobs ------------------------------------
 
 
 def _three_talks():
@@ -776,13 +721,6 @@ def test_medium_is_refused_on_every_path(level):
             score(cs.constraint_costs(_three_talks()), picks)
 
 
-def test_the_hard_knob_is_gone():
-    """0.3.0 replaced hard= by level=; the old keyword is a TypeError, not a silent default."""
-    with pytest.raises(TypeError, match="hard"):
-        ContentConflictCost(hard=True)
-    assert ContentConflictCost(level="hard") == ContentConflictCost(level=Level.HARD)
-
-
 def test_a_second_reward_pick_still_refuses_hard():
     with pytest.raises(ValueError, match="is a reward"):
         _pinned_solve(_three_talks(), [LanguageDiversityCost(), LanguageDiversityCost(level="hard")])
@@ -790,8 +728,8 @@ def test_a_second_reward_pick_still_refuses_hard():
         score(cs.constraint_costs(_three_talks()), [LanguageDiversityCost(), LanguageDiversityCost(level="hard")])
 
 
-def test_offset_zero_reproduces_the_0_2_0_scores():
-    """offset 0 is the plain shaping in both modes, so every 0.2.0 selection scores the same."""
+def test_offset_zero_reproduces_the_plain_scores():
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
     plain = [*HARD_PICKS, ContentConflictCost(exponent=2), LanguageDiversityCost()]
     shifted = [
         *HARD_PICKS[:2],
@@ -851,7 +789,7 @@ def test_full_assert_solves_with_repeats_and_offsets(picks):
     assert score(cs.constraint_costs(schedule), picks) == python  # the default costs score the repeats too
 
 
-# --- 0.3.0: clip=False with an offset stays off the hard score -------------------------
+# --- clip=False with an offset stays off the hard score -------------------------------
 
 HARD_REFUSAL = (
     "constraint {q}: clip=False with a non-zero offset cannot be hard, because hard 0 must mean no "
@@ -913,7 +851,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     [
         (RoomConflictCost(offset=100.0), (0, 0.0)),  # clip=True on hard: a threshold
         (RoomConflictCost(offset=-20.0), (-1000 * 80, 0.0)),  # adds 20 to the non-zero total only
-        (RoomConflictCost(clip=False), (-60000, 0.0)),  # clip=False with offset 0: the 0.2.0 shaping
+        (RoomConflictCost(clip=False), (-60000, 0.0)),  # clip=False with offset 0: the plain shaping
         (RoomConflictCost(offset=0.0, clip=False), (-60000, 0.0)),
         (SpeakerMakespanCost(level="hard", offset=-10.0), (0, 0.0)),  # a total of 0 stays 0
     ],

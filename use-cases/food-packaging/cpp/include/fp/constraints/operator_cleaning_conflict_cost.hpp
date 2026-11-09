@@ -11,8 +11,7 @@ namespace fp
 // machines at once. Raw cost (one global total) = the summed overlap, in
 // minutes, of the cleaning windows [startCleaning, startProduction) over every
 // unordered pair of assigned jobs whose lines share an operator, so 0 = no
-// operator has two cleanings at once. The exponent shapes that total. 0.2.0
-// migration note: was operatorCleaningConflict.
+// operator has two cleanings at once. The exponent shapes that total.
 //
 // Global because the pairs span units: the conflicting jobs sit on DIFFERENT
 // lines (two jobs on the same line share its operator too, but their windows

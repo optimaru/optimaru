@@ -98,7 +98,7 @@ struct FacilityLocationProblem
     Location southWestCorner{-90.0, -180.0};
     Location northEastCorner{90.0, 180.0};
 
-    // No constraint weights here (removed in 0.2.0): the defaults are the
+    // No constraint weights here: the defaults are the
     // components' kDefaultWeight (setup 2 = the provider's ofSoft(2); distance
     // 6 = the quickstart solution's ConstraintWeightOverrides value over the
     // provider's ofSoft(5)), and a caller re-weights through a constraint

@@ -28,24 +28,14 @@ is a reward and all six are scored by default (`default_enabled`);
 (`kDefaultLevel` / `kDefaultWeight`). All six are unit
 constraints over one employee's itinerary, so `exponent` shapes each employee's raw cost.
 
-**0.2.0:** the constraints were renamed with the `_cost` suffix in every layer
-(`required_skill` -> `required_skill_cost`, `flight_conflict` -> `flight_conflict_cost`,
-`transfer_between_two_flights` -> `transfer_between_two_flights_cost`,
-`employee_unavailability` -> `employee_unavailability_cost`,
-`first_assignment_not_departing_from_home` -> `first_assignment_not_departing_from_home_cost`,
-`last_assignment_not_arriving_at_home` -> `last_assignment_not_arriving_at_home_cost`; the
-spec classes, module-level default instances, C++ structs/headers and registry names follow,
-e.g. `RequiredSkill` -> `RequiredSkillCost` / `"requiredSkillCost"`). The old names are
-unknown now (no aliases). The defaults are declared once, as each component's
-`kDefaultWeight` / `kDefaultLevel`; the monolithic calculators read the same constants (the
-`fcs::REQUIRED_SKILL_WEIGHT` ... `LAST_NOT_HOME_WEIGHT` constants of `domain.hpp` are gone).
-Raw costs, levels, weights and the default score are unchanged.
+The defaults are declared once, as each component's `kDefaultWeight` / `kDefaultLevel`;
+the monolithic calculators read the same constants.
 
-**0.3.0:** every constraint takes two more knobs, `offset` and `clip` (keyword-only), and
-may be picked several times. Each employee's raw cost `x` is shaped as
+Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
+(keyword-only), and may be picked several times. Each employee's raw cost `x` is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
-every employee below the offset, an idle one included); `offset=0` is the 0.2.0 shaping.
+every employee below the offset, an idle one included); `offset=0` is the plain shaping.
 Both apply per employee, not to the total. `clip=False` with an offset is refused on hard
 (the four crew rules by default), because hard 0 must mean no violation. Each pick is its
 own instance with its own knobs, and the instances add up:

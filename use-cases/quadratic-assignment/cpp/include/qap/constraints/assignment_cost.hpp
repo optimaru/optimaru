@@ -10,7 +10,7 @@ namespace qap
 // assignment. Raw cost = sum over assigned facilities f of
 // assignment_costs[f][location of f]; 0 without an assignment_costs matrix.
 // One number for the whole assignment (a GlobalConstraint, so the exponent
-// shapes the total, as the 0.1.x single-entry list did). The matrix is not
+// shapes the total). The matrix is not
 // validated >= 0, so the total may be negative (scored as a bonus). When the
 // matrix holds a negative entry, raw_cost_can_be_negative() says so, and the
 // calculator refuses the instance on the hard level (SignedCostLevelError):

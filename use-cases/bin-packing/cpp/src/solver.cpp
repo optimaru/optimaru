@@ -34,7 +34,7 @@ void requireRewards(const Solver::Config &config)
     }
 }
 
-// The 0.1.5 solver checks, in its order and words.
+// The problem checks, in a fixed order and wording.
 void validate(const BinPackingProblem &problem)
 {
     if (problem.binCapacity <= 0)

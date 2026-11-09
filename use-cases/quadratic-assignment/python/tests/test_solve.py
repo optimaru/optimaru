@@ -53,20 +53,14 @@ def test_solver_config_refuses_invalid_values(attribute, value):
         setattr(config, attribute, value)
 
 
-def test_the_sa_knobs_and_the_value_assigning_moves_are_gone():
-    """0.2.0: the engine knobs replace the 0.1.x simulated-annealing ones; nothing that could
-    break the permutation (change moves, ruin-and-recreate, descent) is exposed."""
+def test_no_permutation_breaking_knob_is_exposed():
+    """Nothing that could break the permutation (change moves, ruin-and-recreate, descent) is exposed."""
     config = qap.SolverConfig()
-    gone = ("max_iterations", "stagnation_limit", "temperature", "cooling_rate")
     breaking = ("change_move_weight", "swap_move_weight", "ruin_recreate", "descent_weight", "nearby_probability")
-    for old in (*gone, *breaking):
-        assert not hasattr(config, old)
+    for name in breaking:
+        assert not hasattr(config, name)
         with pytest.raises(AttributeError):
-            setattr(config, old, 1)
-    with pytest.raises(TypeError):
-        qap.SolverConfig(max_iterations=0)
-    for removed in ("anneal", "configure", "DEFAULTS", "common", "score"):
-        assert not hasattr(qap, removed)
+            setattr(config, name, 1)
 
 
 def test_solve_on_the_engine_object_and_on_the_model_agree():
@@ -232,7 +226,7 @@ def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
 def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     """Creating worker thread 1 fails (std::system_error, injected through the module's test
     seam): the worker already running is stopped and joined, and the error reaches the caller
-    at once. A joinable std::thread destroyed on that path used to call std::terminate."""
+    at once. A joinable std::thread destroyed on that path would call std::terminate."""
     from quadratic_assignment import _core
 
     _core._fail_worker_thread_start(1)
@@ -282,7 +276,7 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
 
     Every enabled soft penalty at weight 1e21 puts the soft score far below -1e18 at the
     first feasible solution: the solve still stops there instead of running its whole
-    30 s. The first 0.2.0 limit, (0, -1e18), was never reached by such a score.
+    30 s. A limit of (0, -1e18) would never be reached by such a score.
     """
     import dataclasses
     import time

@@ -70,7 +70,7 @@ def test_from_core_round_trips_the_facts_and_fills_the_results_once_scored():
     expected.update(cut_weight=5, score_hard=core.score.hard, score_soft=core.score.soft)
     assert back.model_dump() == expected
     assert back.score_soft == 5.0
-    assert list(back.fixed_partition) == ["A", "D"]  # vertex order (0.1.x kept the dict order)
+    assert list(back.fixed_partition) == ["A", "D"]  # vertex order, not the dict order
 
 
 def test_from_core_leaves_unassigned_vertices_out_of_the_partition():
@@ -108,8 +108,8 @@ def test_solving_the_model_writes_the_result_back_in_place():
     assert model.cut_weight == result.soft  # the default score's soft level is the cut weight
 
 
-def test_the_json_schema_is_unchanged():
-    """The OpenAPI components and the web sample depend on the 0.1.x field set."""
+def test_the_json_schema_fields():
+    """The OpenAPI components and the web sample depend on this field set."""
     schema = MaxCutProblemModel.model_json_schema()
     assert set(schema["properties"]) == {
         "vertices",
@@ -162,7 +162,7 @@ def test_validators_are_unchanged(change, message):
     ],
 )
 def test_the_partition_is_validated(partition, message):
-    """0.2.0: the engine keeps one side per vertex, so stray entries are refused (0.1.x ignored them)."""
+    """The engine keeps one side per vertex, so stray entries are refused."""
     data = rich().model_dump()
     data["partition"] = partition
     with pytest.raises(ValidationError, match=message):

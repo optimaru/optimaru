@@ -261,7 +261,7 @@ void verifyOverrides()
     }
     {
         // Weight 0.5 on two hard constraints with 1 each: each rounds on its
-        // own (llround(0.5) = 1), so -2, where 0.1.x rounded the sum (-1).
+        // own (llround(0.5) = 1), so -2, not the rounded sum (-1).
         KnapsackProblem q = extendedInstance();
         select(q, {0});
         DecomposedCalculator calculator;

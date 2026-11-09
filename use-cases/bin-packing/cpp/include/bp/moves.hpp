@@ -20,7 +20,7 @@ namespace bp
 // ScoreCalculator::prepare (every solve and every calculator reset runs it).
 
 // ---------------------------------------------------------------------------
-// EmptyBinMove — the domain's missing macro move (0.1.5 `_try_empty_bin`)
+// EmptyBinMove — the domain's bin-emptying macro move
 // ---------------------------------------------------------------------------
 // usedBinsCost is a step function of "does this bin hold anything": a bin
 // only stops costing once its LAST item leaves, so every single-item change
@@ -29,7 +29,7 @@ namespace bp
 // `candidates` lightest non-empty bins (uniformly; random among equal loads)
 // and move its items, heaviest first (random among equal weights), each to
 // the best-fitting OTHER non-empty bin that still has room. It gives up (no
-// move) when some item fits nowhere. Like 0.1.5 it checks the capacity only:
+// move) when some item fits nowhere. It checks the capacity only:
 // colours and conflicts are judged by the score, through the acceptor, like
 // everything else.
 //
@@ -165,8 +165,8 @@ private:
 // ---------------------------------------------------------------------------
 // EmptyBinMove checks the capacity only, so on an instance with colours or
 // conflicts emptying a bin into the others nearly always breaks one of them,
-// and late acceptance rejects the move: the 0.2.0 search reached feasibility
-// by opening bins and never closed them again. This move empties a light bin
+// and late acceptance rejects the move: without RepackMove the search reaches
+// feasibility by opening bins and never closes them again. This move empties a light bin
 // TOGETHER with a few other light bins, so the items have somewhere new to go:
 //   1. the source is one of the `candidates` lightest non-empty bins
 //      (uniformly; random among equal loads), like EmptyBinMove's;

@@ -11,11 +11,11 @@ the default level and weight of every plugin come from
 uses the levels `hard`, `medium`, `soft`; the two medium constraints sit on
 `medium` at weight 1 like the engine, and `level="hard"`, `"medium"` or `"soft"`
 (or a `Level`) moves any pick onto that level with its weight in units of it, as
-the engine does (`level="soft"` has demoted a medium constraint to `soft` on both
-solvers since 0.2.0). Not supported on CP-SAT: `exponent != 1` and non-integer
+the engine does (`level="soft"` demotes a medium constraint to `soft` on both
+solvers). Not supported on CP-SAT: `exponent != 1` and non-integer
 weights.
 
-**0.3.0: repeats, `offset` and `clip`.** A constraint may be picked several times
+**Repeats, `offset` and `clip`.** A constraint may be picked several times
 (as specs or as `{"name", "weight", "level", "offset", "clip"}` mappings): each
 pick builds its own terms with its own knobs, its level included, keyed `name`,
 `name#2`, … like the engine's `constraint_costs()`. Under an offset the end-time

@@ -29,8 +29,7 @@ the domain has no medium level, so `level="medium"` raises `ValueError` (`level=
 flip any constraint).
 `order_picking.constraint_info()` lists the table's defaults (read off the C++ components),
 `order_picking.constraint_costs(solution)` the raw per-trolley costs — the only per-constraint
-surface since 0.2.0 (`ConstraintTotals` / `calculate_totals()` are gone; the old names
-`required_number_of_buckets` and `minimize_*` are unknown now, see the use-case README).
+surface.
 
 Pick, reweight or flip constraints with `order_picking.constraints`:
 

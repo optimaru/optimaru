@@ -14,8 +14,8 @@ namespace alb
 // several stations. A group costs max(0, distinct stations of its assigned
 // members - 1) (a task listed twice counts once); raw cost = the sum over the
 // groups, so 0 = every group on one station. One total (a global), so the
-// exponent shapes that sum (the 0.1.5 pure-Python package shaped each
-// group's term; the two agree at exponent 1).
+// exponent shapes that sum (the pure-Python reference shapes each group's
+// term; the two agree at exponent 1).
 //
 // Member-change fast path: per group a small station -> member-count tally
 // and its distinct-station count; a join or leave updates every group of the

@@ -13,7 +13,6 @@ namespace pjs
 // in resource units, so 0 = every stock is within its capacity. A stock that
 // is consumed once, so WHEN a job runs is irrelevant: this is the one
 // component that skips the date chain. The exponent shapes the total.
-// 0.2.0 migration note: was nonRenewableResourceCapacity.
 struct NonRenewableResourceCapacityCost final : ScheduleAggregateConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

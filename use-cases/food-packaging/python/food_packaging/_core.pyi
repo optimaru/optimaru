@@ -172,7 +172,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw per-unit cost of every constraint, before weight/exponent/offset/level:
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
-    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
     "default_weight": float, "default_level": str, "units": [...],
     "medium_fold": {"kind": "into_soft", "unit": 1e10}}}. Units are the lists (the
@@ -183,7 +183,7 @@ def constraint_costs(
     picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
     "<name>#<k>" from the second on. `medium_fold` is on EVERY entry (the fold belongs
     to the domain), and `food_packaging.constraints.score()` applies it. The only
-    per-constraint surface since 0.2.0 (analyze() / ConstraintBreakdown were removed)."""
+    per-constraint surface."""
 
 class ConstraintInfo(NamedTuple):
     """One constraint-catalog row, read off the C++ default assembly."""

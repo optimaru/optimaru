@@ -19,7 +19,7 @@ engine: `level="soft"` demotes a hard or medium term to soft, and `level="medium
 puts a hard or soft term on the Bendable soft[0], below hard. Not supported on
 CP-SAT: `exponent != 1` and non-integer weights.
 
-**0.3.0: repeats, `offset` and `clip`.** A constraint may be picked several times (as
+**Repeats, `offset` and `clip`.** A constraint may be picked several times (as
 specs or as `{"name", "weight", "level", "offset", "clip"}` mappings): each pick builds
 its own terms with its own knobs, its level included, keyed `name`, `name#2`, … like
 the engine's `constraint_costs()`. Every plugin adds one term per employee (an idle one

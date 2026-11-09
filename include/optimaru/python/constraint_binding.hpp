@@ -64,18 +64,18 @@ namespace py = pybind11;
 // python_name() (names.hpp) is the one mapping between the C++ registry name
 // and the Python name: facilityCapacityCost -> facility_capacity_cost.
 
-// The TypeError text for the knob `level` replaced in 0.3.0, word for word
-// the Python base's (_constraint.py _HARD_REMOVED), for the binding paths
-// that take knobs as keywords (employee scheduling's and school
-// timetabling's DecomposedObjective.add()).
-inline constexpr const char* kHardRemoved =
-        "hard= was removed in optimaru 0.3.0; use level='hard' or level='soft' (level=None keeps "
+// The TypeError text for a `hard` keyword on a binding that reads its other
+// keywords as domain parameters (employee scheduling's
+// DecomposedCalculator.add()), where an unread keyword would otherwise be
+// ignored: the level is the `level` knob.
+inline constexpr const char* kHardKeyword =
+        "unexpected keyword argument 'hard'; use level='hard' or level='soft' (level=None keeps "
         "the default)";
 
-// Refuses a `hard` keyword with kHardRemoved; call it first on the **kwargs
-// of a binding that takes knobs as keywords.
+// Refuses a `hard` keyword with kHardKeyword; call it first on the **kwargs
+// of a binding that reads its keywords as domain parameters.
 inline void refuse_hard_keyword(const py::kwargs& kwargs) {
-    if (kwargs.contains("hard")) throw py::type_error(kHardRemoved);
+    if (kwargs.contains("hard")) throw py::type_error(kHardKeyword);
 }
 
 // Python name -> the assembly's own name. Throws with the available names
@@ -113,7 +113,7 @@ std::vector<std::string> constraint_names(const ConstraintAssembly<Solution>& as
 // scoring pass at all.
 //
 // Returns {key: {"costs": [...], "weight": w, "exponent": e, "offset": o,
-//                "clip": bool, "hard": bool, "global": bool,
+//                "clip": bool, "global": bool,
 //                "level": "hard"|"medium"|"soft",
 //                "reward": bool, "level_flippable": bool, "name": str,
 //                "label": str, "default_weight": w0,
@@ -145,7 +145,6 @@ std::vector<std::string> constraint_names(const ConstraintAssembly<Solution>& as
 //        component (ConstraintMetadata::default_weight / default_level): the
 //        Python score() reads these, so re-pricing costs computed under one
 //        selection with another leaves an unset knob at the real default.
-// "hard" stays for pre-0.2.0 readers (it is level == "hard").
 template <typename Solution>
 py::dict constraint_costs(DecomposedObjective<Solution>& objective, Solution& solution) {
     objective.rebuild(solution);
@@ -165,7 +164,6 @@ py::dict constraint_costs(DecomposedObjective<Solution>& objective, Solution& so
         info["exponent"] = entry.exponent;
         info["offset"] = entry.offset;
         info["clip"] = entry.clip;
-        info["hard"] = entry.is_hard;
         info["global"] = entry.is_global;
         info["level"] = level_name(entry.level);
         info["reward"] = entry.reward;

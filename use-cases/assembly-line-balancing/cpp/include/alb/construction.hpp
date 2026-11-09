@@ -8,9 +8,10 @@
 namespace alb
 {
 
-// The domain-side construction the Solver runs before the engine — an exact
-// port of the 0.1.5 pure-Python construction, so a zero-budget solve returns
-// exactly the stations it returned.
+// The domain-side construction the Solver runs before the engine — identical
+// to the pure-Python reference's construction
+// (python/tests/reference_assembly_line_balancing.py), so a zero-budget solve
+// returns exactly the stations the reference returns.
 
 // Level-synchronous Kahn order of the task indices: every task whose
 // predecessors are all in earlier levels forms the next level, sorted by

@@ -5,7 +5,7 @@ sequence-dependent recipe setups, simultaneous batches, inter-tool transport,
 queue-time limits, preventive maintenance, priorities and due dates. It also
 models reusable operators/reticles/fixtures, their capacities and calendars,
 frozen assignments for replanning, minimum hold times and maximum lot cycle
-times. Since 0.2.0 it runs on this repository's C++ engine (`include/optimaru/`):
+times. It runs on this repository's C++ engine (`include/optimaru/`):
 `cpp/` holds the domain, the decoder, the 20 constraint components, the
 calculators and the solver; `python/` is the pybind11 package with the Pydantic
 models; [`benchmarks/semiconductor-scheduling/cpsat`](../../benchmarks/semiconductor-scheduling/cpsat)
@@ -28,9 +28,9 @@ The implementation is original and does not depend on a commercial runtime.
   (rank, -lot priority, lot id) at its earliest feasible start — past machine and resource
   downtime, resource capacity, unary overlaps, incompatible batch families and setups —
   and pulls compatible ready lots into the same batch run. Pins are obstacles placed
-  first. It is an exact port of the 0.1.x Python decoder (the frozen oracle in
-  `python/tests/reference_semiconductor_scheduling.py` proves it on every sample and on
-  random instances).
+  first. It matches the pure-Python reference decoder (the test oracle in
+  `python/tests/reference_semiconductor_scheduling.py`) on every sample and on random
+  instances.
 - Two modes: a schedule is scored **as given** (`calculate_score`, `constraint_costs`:
   data mode) or, inside `solve`, as the **decode of its planning values** (search mode;
   a complete warm-start seed stands for itself while the values are the seed's).
@@ -68,25 +68,25 @@ Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` 
 a reward, and all 20 are scored by default (`default_enabled`);
 `semiconductor_scheduling.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`).
-The 0.1.x quirks are kept on purpose: a route overlap is charged by
+Some overlaps are charged more than once, on purpose: a route overlap is charged by
 `lot_route_precedence_cost`, by `min_queue_time_cost` (min 0) and by
 `missing_transport_time_cost` (no entry); `makespan_cost` reads only the lots' last
 steps; `machine_preference_cost` charges even on a duration mismatch.
 
-### 0.3.0
+### Offset, clip and repeats
 
-Every constraint takes two more knobs, `offset` and `clip` (keyword-only), and may be
-picked several times. Every constraint is global, so the offset shapes its single raw
-total `x`: `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
-`(x - offset) ** exponent`, sign-preserving (`clip=False`, which charges a total of 0 too
-and rewards a total below the offset); `offset=0` is the 0.2.0 shaping. Both apply to the
-constraint's one total (every constraint is global), a raw 0 included. `clip=False` with
-an offset is refused on hard (the 14 constraints that are hard by default, or a soft one
-moved to hard), because hard 0 must mean no violation: a clean total would otherwise turn
-into a hard reward that cancels another constraint's violation. Each pick is its own
-instance with its own knobs, its level included (`level` replaced the `hard` knob;
-`hard=` raises `TypeError`), and the instances add up (every instance reads the
-calculator's one shared schedule view, so a repeat costs no second decode):
+Every constraint takes the knobs `weight`, `level`, `exponent`, `offset` and `clip`
+(`offset` and `clip` keyword-only), and may be picked several times. Every constraint is
+global, so the exponent and the offset shape its single raw total `x`, not each item (a
+lot, a pair, a window): `weight * sign(x) * max(0, |x| - offset) ** exponent`
+(`clip=True`, the default) or `weight * (x - offset) ** exponent`, sign-preserving
+(`clip=False`, which charges a total of 0 too and rewards a total below the offset);
+`offset=0` is the plain power. Hard contributions are rounded per constraint. `clip=False`
+with an offset is refused on hard (the 14 constraints that are hard by default, or a soft
+one moved to hard), because hard 0 must mean no violation: a clean total would otherwise
+turn into a hard reward that cancels another constraint's violation. Each pick is its own
+instance with its own knobs, its level included, and the instances add up (every instance
+reads the calculator's one shared schedule view, so a repeat costs no second decode):
 
 ```python
 fab.solve(problem, constraints=[
@@ -101,54 +101,24 @@ fab.solve(problem, constraints=[
 CP-SAT reference takes the same picks (integral offsets on its eight penalized
 constraints; its twelve structural ones refuse an offset like a weight or a level).
 
-### 0.2.0
+### Scoring and solving
 
-- **Names**: `machine_eligibility` -> `machine_eligibility_cost`, `lot_route_precedence` ->
-  `lot_route_precedence_cost`, `machine_capacity` -> `machine_capacity_cost`,
-  `batch_capacity` -> `batch_capacity_cost`, `batch_family_compatibility` ->
-  `batch_family_conflict_cost`, `setup_transitions` -> `missing_setup_time_cost`,
-  `maintenance_windows` -> `machine_unavailability_cost`, `maximum_queue_time` ->
-  `max_queue_time_cost`, `minimum_queue_time` -> `min_queue_time_cost`,
-  `inter_tool_transport` -> `missing_transport_time_cost`, `auxiliary_resource_capacity` ->
-  `auxiliary_resource_capacity_cost`, `auxiliary_resource_availability` ->
-  `auxiliary_resource_unavailability_cost`, `pinned_assignments` -> `pinned_assignments_cost`,
-  `maximum_cycle_time` -> `max_cycle_time_cost`, `machine_preference` ->
-  `machine_preference_cost`, `minimum_batch_fill` -> `min_batch_size_cost`,
-  `machine_load_balance` -> `machine_load_imbalance_cost`, `weighted_tardiness` ->
-  `weighted_tardiness_cost`, `total_cycle_time` -> `cycle_time_cost`, `makespan` ->
-  `makespan_cost` (classes likewise: `MachineEligibility` -> `MachineEligibilityCost`, ...,
-  `BatchFamilyCompatibility` -> `BatchFamilyConflictCost`, `SetupTransitions` ->
-  `MissingSetupTimeCost`, `MaintenanceWindows` -> `MachineUnavailabilityCost`,
-  `InterToolTransport` -> `MissingTransportTimeCost`, `AuxiliaryResourceAvailability` ->
-  `AuxiliaryResourceUnavailabilityCost`, `MinimumBatchFill` -> `MinBatchSizeCost`,
-  `MachineLoadBalance` -> `MachineLoadImbalanceCost`, `TotalCycleTime` -> `CycleTimeCost`).
-  The model fields (`batch_capacity`, `pinned_assignments`, `makespan`,
-  `total_cycle_time`, ...) keep their names. The old names are unknown (no aliases).
-- **Raw costs and the default score are unchanged** (golden check and the oracle tests).
-- **Exponent granularity**: every constraint is global, so `exponent` shapes its TOTAL
-  (`weight * total ** exponent`); 0.1.x shaped each item (a lot, a pair, a window) before
-  summing. Hard contributions are rounded per constraint (0.1.x rounded the hard sum once;
-  this differs only for fractional hard weights). At exponent 1 and integral weights
-  nothing changes.
-- **`constraint_costs()` shape**: the standard C++-package dict
-  `{name: {"costs": [total], "weight", "exponent", "hard", "global", "level", "reward",
-  "level_flippable", "name", "label"}}` instead of `{name: [items]}`; the 0.1.x per-item
-  lists are `constraint_items(problem)`.
+- **`constraint_costs()`**: the standard C++-package dict
+  `{name: {"costs": [total], "weight", "exponent", "offset", "clip", "global", "level",
+  "reward", "level_flippable", "name", "label", ...}}`; the per-item lists (one item per lot,
+  route pair, machine, window, ...) are `constraint_items(problem)`.
 - **`SolverConfig`**: the engine's knobs (`spent_limit_seconds`, `step_count_limit`,
   `unimproved_*`, `random_seed`, `parallel_solver_count`, `acceptor_type`,
   `simulated_annealing_starting_temperature`, `simulated_annealing_temperature_fraction`,
   `late_acceptance_size`, `machine_move_probability`, `priority_swap_moves`,
   `custom_move_probability`, `ruin_recreate*`, `best_score_limit`, `full_assert`,
-  `on_new_best`) replace the simulated-annealing knobs `max_iterations`,
-  `stagnation_limit`, `temperature` and `cooling_rate`; `on_new_best` is called with
-  `(step, Score)` instead of the search state. `max_iterations=0` becomes
-  `spent_limit_seconds=0` (the start is returned as is) and `max_iterations=N` becomes
-  `step_count_limit=N`. The `anneal` / `configure` helpers and `common.py` are gone.
+  `on_new_best`); `on_new_best` is called with `(step, Score)`. `spent_limit_seconds=0`
+  returns the start as is.
 - **Search**: the engine's simulated annealing over the decoded state (auto temperature:
   1% of the start's soft score, cooling over the time limit, or over `step_count_limit` when
   that is further along; change moves steered to a
-  machine switch or a small priority shift, plus a priority swap of two lots' operations)
-  replaces the Python simulated annealing; `parallel_solver_count` runs independent
+  machine switch or a small priority shift, plus a priority swap of two lots' operations);
+  `parallel_solver_count` runs independent
   threads (seed + i), the strictly best wins. The temperature follows the larger of the
   step fraction and the time fraction, so a seeded, step-limited run repeats only while
   the step fraction leads: give it a time limit generous enough for the step budget. Once
@@ -157,12 +127,12 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
   so returning to the seed's values later in the search scores the supplied schedule
   again.
 - `solve` / `calculate_score` return a `Score` (iterable and comparable as `(hard, soft)`)
-  and accept the Pydantic model (written back in place, as before) or the engine object
-  `_core.SemiconductorSchedule` (`to_core()` / `from_core()` now convert to and from it).
+  and accept the Pydantic model (written back in place) or the engine object
+  `_core.SemiconductorSchedule` (`to_core()` / `from_core()` convert to and from it).
 - **Integer range**: times, durations, priorities and costs are int64 in the engine.
   `to_core()` refuses an input beyond |2**62| with `ValueError`; a derived time or a cost
   (a tardiness product, an overload area, a sum) that leaves int64 raises `OverflowError`
-  instead of wrapping (0.1.x computed exact Python integers). A solve that fails (an
+  instead of wrapping. A solve that fails (an
   overflow, or the decoder giving up after 10 000 passes) leaves the schedule as it was:
   both scoring paths score its assignment list again.
 
@@ -183,7 +153,7 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
   `weighted_tardiness_cost.hpp`, `cycle_time_cost.hpp`, `makespan_cost.hpp`
   (+ `common.hpp`: the shared `ScheduleView` and the global base);
   `include/fab/constraints.hpp` assembles the default set (`defaultConstraints()`)
-- `score_calculator` — the monolithic full recompute (`rawCostsOf`: the 0.1.x scorer)
+- `score_calculator` — the monolithic full recompute (`rawCostsOf`)
 - `evaluator` + `incremental_calculator` — lazy suffix re-decode from the earliest
   `readyStep` of the changed rows, re-costing only the rows, lots, machines, groups,
   resources and pins whose placements moved

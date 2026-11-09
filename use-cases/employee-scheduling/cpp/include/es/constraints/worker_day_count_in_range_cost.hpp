@@ -5,8 +5,7 @@
 
 namespace es {
 
-// SOFT, weight 1 (the C++ default; pre-0.2.0 documentation that called it
-// hard was wrong): workerDayCountInRangeCost. The number of DISTINCT worked
+// SOFT, weight 1: workerDayCountInRangeCost. The number of DISTINCT worked
 // days (at `location`; empty = any) a worker (the unit) has within a fixed,
 // contiguous day range [lo, hi], bounded to [min, max] (max < 0 = no upper
 // bound). Raw cost per employee = the shortfall below min plus the excess

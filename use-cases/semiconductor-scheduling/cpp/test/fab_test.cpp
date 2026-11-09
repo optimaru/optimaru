@@ -625,7 +625,7 @@ void testSolver()
 }
 
 // Times and costs are exact int64; what leaves int64 throws instead of
-// wrapping (0.1.x computed exact Python integers).
+// wrapping.
 void testCheckedArithmetic()
 {
     constexpr std::int64_t kMax = std::numeric_limits<std::int64_t>::max();

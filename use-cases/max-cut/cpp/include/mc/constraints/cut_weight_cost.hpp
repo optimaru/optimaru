@@ -16,7 +16,7 @@ namespace mc
 // violation". A self-loop is never cut; parallel edges add up; an edge with
 // an unassigned endpoint is not cut. It is never hard (reward,
 // level_flippable = false: hard() / set_level(Hard) throw). The shaping is
-// sign-preserving, so the exponent semantics are those of 0.1.x.
+// sign-preserving.
 //
 // Keeps its own copy of the sides; a join or leave of vertex e walks e's CSR
 // adjacency, O(degree): an edge (e, w) is cut while both are assigned and on

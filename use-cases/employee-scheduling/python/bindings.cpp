@@ -536,7 +536,7 @@ PYBIND11_MODULE(_core, m)
                const py::kwargs &kwargs)
             {
                 // kwargs are domain parameters, which the factory reads by name
-                // and otherwise ignores: the old knob must not vanish there.
+                // and otherwise ignores: hard= must not vanish there.
                 tfpy::refuse_hard_keyword(kwargs);
                 // The same checks as a spec pick: a SimpleNamespace carrying
                 // the five knobs goes through the one factory path.

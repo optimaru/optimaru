@@ -714,12 +714,11 @@ void verifyCatalog()
                       "renewableResourceCapacityCost", 0.0);
               }),
           "a non-positive exponent is refused");
-    // 0.2.0 migration: the pre-0.2.0 registry names have no alias.
     check(throwsInvalid(
-              [] { defaultConstraints().weight("totalProjectDelay", 2.0); })
+              [] { defaultConstraints().weight("noSuchConstraint", 2.0); })
               && throwsInvalid([]
-                               { defaultConstraints().hard("totalMakespan"); }),
-          "a pre-0.2.0 registry name is unknown");
+                               { defaultConstraints().hard("noSuchCost"); }),
+          "an unknown registry name is refused");
     std::printf("\n");
 }
 

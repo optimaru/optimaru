@@ -785,10 +785,10 @@ template <typename Calculator>
 void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
                       Calculator& calculator, Clock::time_point deadline) {
     if (!config.guidedMoves || schedule.shifts.empty() || schedule.employees.empty()) return;
-    // Respect the solve-wide wall-clock budget. This final repair used to run
-    // to convergence with no time check, so on a many-constraint instance where
-    // local search never reaches feasibility it could overshoot the limit many
-    // times over (a 3s budget ran 34s; a 20s budget ran 184s). The deadline is
+    // Respect the solve-wide wall-clock budget. Run to convergence with no time
+    // check, this final repair could overshoot the limit many times over on a
+    // many-constraint instance where local search never reaches feasibility
+    // (a 3s budget ran 34s; a 20s budget ran 184s). The deadline is
     // checked between repair scans and inside them (see RepairDeadline). Only a
     // strict improvement is applied: two equal repairs could undo each other
     // until the step limit.

@@ -30,7 +30,7 @@ def test_assignment_side_constraints_match_manual_values():
         location_capacities={"L1": 3, "L2": 10},
     )
     costs = constraint_costs(problem)
-    # 0.2.0: per location (location order) for the side constraints, one total for the objectives.
+    # Per location (location order) for the side constraints, one total for the objectives.
     assert costs["pinned_assignments_cost"]["costs"] == [1, 0]
     assert costs["forbidden_assignments_cost"]["costs"] == [0, 1]
     assert costs["location_capacity_cost"]["costs"] == [2, 0]

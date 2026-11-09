@@ -114,8 +114,8 @@ def test_full_assert_solves_on_both_paths(constraints):
     assert (check.hard, check.soft) == (model.score_hard, model.score_soft)
 
 
-def test_the_input_schema_is_unchanged():
-    """The canonical problem's JSON fields (the server's OpenAPI input/output) did not change in 0.2.0."""
+def test_the_input_schema_fields():
+    """The canonical problem's JSON fields (the server's OpenAPI input/output)."""
     schema = AssemblyLineBalancingProblemModel.model_json_schema()
     assert list(schema["properties"]) == [
         "cycle_time",

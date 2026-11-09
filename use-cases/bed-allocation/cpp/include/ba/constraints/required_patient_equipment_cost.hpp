@@ -10,8 +10,8 @@ namespace ba
 // least one piece of required equipment, the penalty is weighed by the
 // number of required pieces the room DOES have. That is the quickstart's
 // exact, unit-test-pinned semantics (a room with none of the required
-// equipment therefore costs 0), reproduced here verbatim and kept on purpose
-// in 0.2.0 (it is NOT a missing-items count like RequiredSkillCost).
+// equipment therefore costs 0), reproduced here verbatim on purpose (it is
+// NOT a missing-items count like RequiredSkillCost).
 // Raw cost per bed = sum over its stays whose room misses a required item of
 // nights * (required items present), so 0 = every stay has all of its
 // required equipment, or none of it.

@@ -68,7 +68,7 @@ inline void identity(QuadraticAssignmentProblem &problem)
         problem.facilities[f].location = f;
 }
 
-// The 2x2 instance of the 0.1.x tests (test_manual_two_facilities):
+// The 2x2 hand-calculation instance:
 // flows [[0,3],[2,0]], distances [[0,4],[5,0]]; identity costs 4*3 + 5*2 = 22.
 inline QuadraticAssignmentProblem twoFacilities()
 {
@@ -78,8 +78,7 @@ inline QuadraticAssignmentProblem twoFacilities()
     return problem;
 }
 
-// The side-constraint instance of the 0.1.x tests
-// (test_assignment_side_constraints_match_manual_values): the 2x2 flows and
+// The side-constraint instance: the 2x2 flows and
 // distances plus assignment costs [[7,1],[2,8]], L1 fixed to F2, (F2, L2)
 // forbidden, demands F1=5 F2=2, capacities L1=3 L2=10.
 inline QuadraticAssignmentProblem sideInstance()
@@ -95,7 +94,7 @@ inline QuadraticAssignmentProblem sideInstance()
     return problem;
 }
 
-// The 3x3 instance of the 0.1.x initial-solution tests.
+// The 3x3 initial-solution instance.
 inline QuadraticAssignmentProblem threeFacilities()
 {
     QuadraticAssignmentProblem problem = emptyInstance(3);

@@ -357,7 +357,7 @@ void verifyOverrides()
 {
     std::printf("== (d) weight / level / exponent overrides ==\n");
     {
-        // The 0.1.5 hand calculation: {A8, B7}, {C3, D2}; capacity soft x3,
+        // A hand calculation: {A8, B7}, {C3, D2}; capacity soft x3,
         // usedBins hard x2 -> (-4, -15).
         BinPackingProblem p;
         p.binCapacity = 10;
@@ -374,7 +374,7 @@ void verifyOverrides()
     }
     {
         // Per-bin exponent granularity: red x3 + blue x2 in ONE bin is a
-        // raw 3 for that bin, so exponent 2 gives 9 (0.1.5: 2^2 + 1^2 = 5).
+        // raw 3 for that bin, so exponent 2 gives 9 (not 2^2 + 1^2 = 5).
         BinPackingProblem p;
         p.binCapacity = 100;
         p.items = {makeItem("R1", 1, 0, "red"),
@@ -633,7 +633,7 @@ void verifyCatalog()
     check(throwsInvalid([] { defaultConstraints().weight("usedBinsCost", -1.0); }), "a negative weight is refused");
     check(throwsInvalid([] { defaultConstraints().exponent("itemConflictCost", 0.0); }),
           "a non-positive exponent is refused");
-    check(throwsInvalid([] { defaultConstraints().drop("minimizeBins"); }), "the 0.1.5 names are unknown");
+    check(throwsInvalid([] { defaultConstraints().drop("noSuchCost"); }), "an unknown name is refused");
     std::printf("\n");
 }
 
