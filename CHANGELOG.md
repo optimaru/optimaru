@@ -55,11 +55,9 @@
   (CVRPLIB) benchmarks download their instances from those academic sources,
   each file SHA-256 pinned. Use-case READMEs cite literature formulations
   instead of third-party examples. The Augerat instance formerly reached as
-  `A-n44-k7` is `A-n44-k6`, its CVRPLIB name. Two exceptions remain: the five
+  `A-n44-k7` is `A-n44-k6`, its CVRPLIB name. One exception remains: the five
   RG30 RCPSP instances still come from a small re-packaged archive (the
-  original RCPLIB release is 86 MB and withdraws older versions), and the
-  engine's granular-descent comments are reworded after the engine
-  restructuring lands.
+  original RCPLIB release is 86 MB and withdraws older versions).
 
 ## 0.3.0
 
