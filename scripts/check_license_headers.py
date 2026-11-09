@@ -10,9 +10,9 @@ each file carries, as its first two lines::
     python3 scripts/check_license_headers.py     # exit 1 and list every file without it
 
 The derivation line is applied to every engine file on purpose, including files that
-implement published algorithms or were added by optimaru: a conservative choice that
-NOTICE states. Use-case sources are out of scope; NOTICE and each use case's README
-give their notice per directory.
+implement published algorithms or were added by optimaru: a deliberately conservative
+choice (over-attribution is the safe side). Use-case sources are out of scope; NOTICE
+and each use case's README give their notice per directory.
 
 A UTF-8 BOM and CRLF line endings are tolerated. Run from anywhere; paths resolve
 against the repository root.
