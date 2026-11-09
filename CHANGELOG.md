@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Corrected license attribution.** NOTICE now states that the engine is
+  derived from Timefold Solver (itself derived from OptaPlanner and OptaPy),
+  lists every use case and benchmark harness derived from Timefold
+  Quickstarts, and adds a section 4(b) modification notice and a trademark
+  notice. Redistributors should ship the updated NOTICE. Every engine header
+  now carries an SPDX identifier and a derivation line. No functional or
+  behavioral changes.
+
 ## 0.3.0
 
 0.3.0 changes the constraint contract of all 22 use cases in three ways:

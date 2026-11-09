@@ -1,6 +1,7 @@
 # Food Packaging (C++ / Python)
 
-A C++ engine port of the `food-packaging` example model (Apache-2.0; see the repository NOTICE).
+A C++ engine port of the Timefold Quickstarts `food-packaging` example model
+(Apache-2.0; see the repository [NOTICE](../../NOTICE)), with modifications.
 Assigns packaging jobs (Job) to production lines (Line) **in order** — every product change
 inserts a cleanup time that depends on the previous product, and the cleaning windows of
 lines run by the same operator must not overlap.

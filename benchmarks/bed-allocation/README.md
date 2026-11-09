@@ -1,5 +1,8 @@
 # Bed allocation benchmark
 
+Transcribes the Timefold Quickstarts `bed-allocation` example's demo data generator (Apache-2.0),
+with modifications; see the repository [NOTICE](../../NOTICE).
+
 The [`bed-allocation`](../../use-cases/bed-allocation) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `bed_allocation_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are

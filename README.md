@@ -169,6 +169,10 @@ benchmarks/cpsat-common/  comparison runner; points external-solver at this chec
 
 ## Engine layout
 
+The engine is a C++ reimplementation, with modifications, of the
+[Timefold Solver](https://github.com/TimefoldAI/timefold-solver) core
+(Apache-2.0); see [NOTICE](NOTICE).
+
 ```
 include/optimaru/
 ├── optimaru.hpp                       umbrella include for consumers
@@ -272,3 +276,11 @@ version neither builds nor publishes on `main`; PRs always build.
 ## License
 
 [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
+
+The engine and several of the use cases are derived from Apache-2.0 works —
+[Timefold Solver](https://github.com/TimefoldAI/timefold-solver) and
+[Timefold Quickstarts](https://github.com/TimefoldAI/timefold-quickstarts) —
+translated into C++ and Python and modified; [NOTICE](NOTICE) lists exactly
+which parts. When you redistribute optimaru or a derivative of it, include
+both [LICENSE](LICENSE) and [NOTICE](NOTICE). optimaru is not affiliated with
+or endorsed by Timefold BV.

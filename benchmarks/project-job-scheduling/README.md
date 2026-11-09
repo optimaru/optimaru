@@ -1,5 +1,8 @@
 # Project job scheduling benchmark
 
+Transcribes the Timefold Quickstarts `project-job-scheduling` example's
+demo data generator (Apache-2.0), with modifications; see the repository [NOTICE](../../NOTICE).
+
 The [`project-job-scheduling`](../../use-cases/project-job-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `project_job_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are

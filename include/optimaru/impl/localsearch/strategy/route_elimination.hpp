@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Part of the optimaru engine, a modified derivative of Timefold Solver (Apache-2.0). See NOTICE.
+
 #ifndef OPTIMARU_IMPL_LOCALSEARCH_STRATEGY_ROUTE_ELIMINATION_HPP
 #define OPTIMARU_IMPL_LOCALSEARCH_STRATEGY_ROUTE_ELIMINATION_HPP
 

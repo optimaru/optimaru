@@ -1,5 +1,8 @@
 # Tournament scheduling benchmark
 
+Transcribes the Timefold Quickstarts `tournament-scheduling` example's
+demo data generator (Apache-2.0), with modifications; see the repository [NOTICE](../../NOTICE).
+
 The [`tournament-scheduling`](../../use-cases/tournament-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `tournament_scheduling_cpsat`). The CP-SAT model implements the
 same four constraints under the same names, with the defaults read from the engine's

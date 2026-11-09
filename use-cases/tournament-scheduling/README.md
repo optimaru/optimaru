@@ -1,5 +1,8 @@
 # Tournament Scheduling
 
+Derived from the Timefold Quickstarts `tournament-scheduling` example (Apache-2.0), translated
+and modified; see the repository [NOTICE](../../NOTICE).
+
 Domain model, constraints and API details: [`python/`](python/README.md).
 
 ## Usage

@@ -1,17 +1,33 @@
 optimaru
 Copyright 2026 The optimaru Authors
 
-This product's architecture, directory layout, class names and API are
-modelled on Timefold Solver (https://github.com/TimefoldAI/timefold-solver),
-which is licensed under the Apache License, Version 2.0.
-Copyright Timefold BV and contributors.
+Paths below refer to the source repository,
+https://github.com/optimaru/optimaru; in the Python distribution each
+use-cases/<name> is the subpackage optimaru.<name with dashes as underscores>.
 
-The domain models and constraint definitions of the following use cases are
-C++ translations, with modifications, of the corresponding examples in
-Timefold Quickstarts (https://github.com/TimefoldAI/timefold-quickstarts),
-licensed under the Apache License, Version 2.0. Timefold Quickstarts is a
-derivative work of OptaPlanner Quickstarts, Copyright Red Hat, Inc.,
-affiliates, and contributors.
+This product includes software derived from Timefold Solver
+(https://github.com/TimefoldAI/timefold-solver), which is licensed under the
+Apache License, Version 2.0. Copyright Timefold BV and contributors.
+Timefold Solver is a derivative work of OptaPlanner and OptaPy, which include
+copyrights of the original creator, Red Hat, Inc., affiliates, and
+contributors, all licensed under the Apache License, Version 2.0.
+
+The engine in include/optimaru/ is a C++ reimplementation, with
+modifications, of the Timefold Solver core: its architecture, package and
+directory layout, class names, API and local-search framework are derived
+from the Java originals. Some engine files instead implement algorithms
+from the published literature or were written by optimaru (for example SISR
+ruin-and-recreate and adaptive operator selection). Every engine file
+carries the same header, which states that it is part of this modified,
+derived engine.
+
+The domain models, constraint definitions and, where applicable, demo data
+of the following use cases are C++ and Python translations, with
+modifications, of the corresponding examples in Timefold Quickstarts
+(https://github.com/TimefoldAI/timefold-quickstarts), licensed under the
+Apache License, Version 2.0. Timefold Quickstarts is a derivative work of
+OptaPlanner Quickstarts, Copyright Red Hat, Inc., affiliates, and
+contributors.
 
   use-cases/bed-allocation
   use-cases/conference-scheduling
@@ -29,5 +45,33 @@ affiliates, and contributors.
   use-cases/tournament-scheduling
   use-cases/vehicle-routing
 
-optimaru is an independent C++ implementation and is not affiliated with or
-endorsed by Timefold BV. "Timefold" is a trademark of Timefold BV.
+use-cases/pickup-delivery extends the vehicle-routing translation above and
+is likewise a derivative of the Timefold Quickstarts vehicle-routing example.
+All other directories under use-cases/ are original to optimaru.
+
+The following benchmark harnesses transcribe the corresponding quickstart's
+demo data generator or constraint scoring and are derivatives of the same
+examples:
+
+  benchmarks/bed-allocation
+  benchmarks/facility-location
+  benchmarks/flight-crew-scheduling
+  benchmarks/project-job-scheduling
+  benchmarks/school-timetabling
+  benchmarks/tournament-scheduling
+
+All other directories under benchmarks/ are original to optimaru: they call
+the use-case packages under use-cases/ but do not transcribe Timefold code.
+
+Modification notice (Apache License 2.0, section 4(b)): files in the
+directories named above that derive from the Timefold originals were
+translated from Java into C++ and Python and modified by The optimaru
+Authors; the changes are recorded in the version history at
+https://github.com/optimaru/optimaru.
+Other files in those directories (for example bindings, build files, tests
+and constraints added by optimaru) are original to optimaru.
+
+optimaru is an independent implementation and is not affiliated with or
+endorsed by Timefold BV or Red Hat, Inc. "Timefold" is a trademark of
+Timefold BV; other product names are trademarks of their respective owners.
+These names are used here only to describe the origin of the work.

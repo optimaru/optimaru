@@ -1,5 +1,8 @@
 # Employee Scheduling
 
+Derived from the Timefold Quickstarts `employee-scheduling` example (Apache-2.0), translated
+and modified; see the repository [NOTICE](../../NOTICE).
+
 Domain model, constraints and API details: [`python/`](python/README.md).
 
 <!-- usage-and-extending -->
