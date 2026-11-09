@@ -67,8 +67,8 @@ with the engine's message, when the objective is built: hard 0 must mean no
 violation. Each benchmark's README (or `cpsat/README.md`) lists its own
 limits, including the plugins that refuse an offset.
 
-The run commands in each README use `--seconds 10` for a quick check; the
-published results blocks state their own budget (30 s per solver and
-instance for the CP-SAT comparisons, so pass `--seconds 30` to reproduce
-them).
+The `<slug>-compare` commands in the READMEs use `--seconds 10` for a quick
+check, and the public-instance runners show their own budgets. Every results
+block and `RESULTS.md` states the budget it was measured with (30 s per solver
+and instance for most); pass that `--seconds` to reproduce it.
 
