@@ -47,9 +47,9 @@ WEB_DEMO = (
 REVIEW_SEEDS = {"sq1": 20261031, "g11": 11, "g22": 22, "g33": 33}
 
 # The recorded baseline (the pure-Python simulated annealing, seeds 1-3 at 2 s and
-# 10 s, measured when RepackMove was added in commit 5e3f7d3, whose README table
-# lists the runs): the most bins it used on each coloured review instance.
-# --check fails above.
+# 10 s, measured when RepackMove was added in commit
+# 5e3f7d3a5f85ed7c5263be34c126f94b4cb2afa8, whose README table lists the runs):
+# the most bins it used on each coloured review instance. --check fails above.
 BASELINE_BINS = {"sq1": 44, "g11": 43, "g22": 45, "g33": 43}
 
 
