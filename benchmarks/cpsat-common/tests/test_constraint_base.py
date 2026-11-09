@@ -329,6 +329,12 @@ def test_unset_knobs_mean_the_default_even_for_costs_of_another_selection():
     del hand_made["conflict_cost"]["level"]
     with pytest.raises(ValueError, match="needs 'default_level' or 'level'"):
         score_costs(hand_made, [ConflictCost()])
+    # ... and so is one with neither weight key, when the pick leaves its weight unset.
+    hand_made["conflict_cost"]["level"] = "soft"
+    del hand_made["conflict_cost"]["weight"]
+    with pytest.raises(ValueError, match="'conflict_cost' needs 'default_weight' or 'weight'"):
+        score_costs(hand_made, [ConflictCost()])
+    assert score_costs(hand_made, [ConflictCost(weight=5.0)]) == (0, -15.0)
 
 
 def test_a_non_flippable_check_uses_the_default_level():

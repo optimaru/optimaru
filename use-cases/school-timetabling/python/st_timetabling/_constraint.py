@@ -338,14 +338,18 @@ def _default_level(entry: Mapping[str, Any]) -> str:
     """
     level = entry.get("default_level") or entry.get("level")
     if not level:
-        raise ValueError(f"constraint entry {entry.get('name', '?')!r} needs 'default_level' or 'level'")
+        raise ValueError(f"constraint entry {entry.get('name') or '?'!r} needs 'default_level' or 'level'")
     return level
 
 
 def _default_weight(entry: Mapping[str, Any]) -> float:
     """The weight ``weight=None`` means: ``default_weight``, else ``weight`` (as for the level)."""
     weight = entry.get("default_weight")
-    return entry["weight"] if weight is None else weight
+    if weight is None:
+        weight = entry.get("weight")
+    if weight is None:
+        raise ValueError(f"constraint entry {entry.get('name') or '?'!r} needs 'default_weight' or 'weight'")
+    return weight
 
 
 def _level(spec: Any, entry: Mapping[str, Any]) -> str:
