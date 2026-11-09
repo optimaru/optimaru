@@ -7,7 +7,8 @@
   lists every use case and benchmark harness derived from Timefold
   Quickstarts, and adds a section 4(b) modification notice and a trademark
   notice. Redistributors should ship the updated NOTICE. Every engine header
-  now carries an SPDX identifier and a derivation line. No code changes.
+  now carries an SPDX identifier and a derivation line. No functional or
+  behavioral changes.
 
 ## 0.3.0
 

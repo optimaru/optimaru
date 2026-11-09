@@ -46,6 +46,7 @@ contributors.
 
 use-cases/pickup-delivery extends the vehicle-routing translation above and
 is likewise a derivative of the Timefold Quickstarts vehicle-routing example.
+All other directories under use-cases/ are original to optimaru.
 
 The following benchmark harnesses transcribe the corresponding quickstart's
 demo data generator or constraint scoring and are derivatives of the same

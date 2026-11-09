@@ -52,7 +52,8 @@ def main() -> int:
         )
     if missing:
         print(
-            f"{len(missing)}/{len(files)} engine headers lack the header; see the docstring.",
+            f"{len(missing)}/{len(files)} engine headers lack the header. "
+            f"Start each file with these two lines:\n{HEADER}",
             file=sys.stderr,
         )
         return 1
