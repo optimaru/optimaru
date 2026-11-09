@@ -478,7 +478,7 @@ void bindCanon(py::module_ &canon)
               py::overload_cast<cn::Timetable &>(
                   &cn::ScoreCalculator::score),
               py::arg("table"),
-              "Full recompute of the HardSoftScore at the default weights "
+              "Full recompute of the score at the default weights "
               "(also stores table.score).");
     canon.def("calculate_score",
               py::overload_cast<cn::Timetable &, const cn::ObjectiveWeights &>(
@@ -855,7 +855,7 @@ PYBIND11_MODULE(_core, m)
     m.def("calculate_score",
           &ScoreCalculator::score,
           py::arg("table"),
-          "Full recompute of the HardSoftScore (also stores table.score).");
+          "Full recompute of the score (also stores table.score).");
 
     py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
 

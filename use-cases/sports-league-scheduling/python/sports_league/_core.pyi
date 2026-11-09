@@ -11,7 +11,7 @@ first / last) is all based on `Round.index`.
 Score convention: `hard` is the number of constraint violations (0 == feasible), `soft`
 is minus the sum of travel distance (km) and classic penalties. Both are maximized.
 
-Constraints (HardSoftScore, same semantics as the Java quickstart), at the default
+Constraints (hard/soft, same semantics as the Java quickstart), at the default
 weights (the C++ components' defaults, reported by constraint_info()):
   hard 1. team_conflict_cost            -1 per pair of matches in the same round index
                                         sharing a team (once per pair even if both teams match)

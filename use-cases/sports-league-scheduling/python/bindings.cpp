@@ -146,7 +146,7 @@ PYBIND11_MODULE(_core, m)
     m.def("calculate_score",
           &ScoreCalculator::score,
           py::arg("schedule"),
-          "Full recompute of the HardSoftScore (also stores schedule.score).");
+          "Full recompute of the score (also stores schedule.score).");
     // No Breakdown / compute_breakdown (removed in 0.2.0): constraint_costs()
     // is the only per-constraint surface.
 

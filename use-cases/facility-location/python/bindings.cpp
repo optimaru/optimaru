@@ -160,7 +160,7 @@ PYBIND11_MODULE(_core, m)
     m.def("calculate_score",
           &ScoreCalculator::score,
           py::arg("problem"),
-          "Full recompute of the HardSoftScore (also stores problem.score).");
+          "Full recompute of the score (also stores problem.score).");
 
     optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())

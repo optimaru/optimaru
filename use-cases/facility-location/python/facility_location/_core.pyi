@@ -5,7 +5,7 @@ The problem is the planning solution: each consumer's `facility` (an index
 into `problem.facilities`, -1 == unassigned) is the single assignment-shape planning
 variable.
 
-Score (HardSoftScore, lexicographic), at the default weights: hard =
+Score (hard/soft, lexicographic), at the default weights: hard =
 -(over-capacity demand summed over used facilities), soft = -(2 * used
 facilities' setup cost + 6 * consumer->facility meters). The weights are the
 C++ components' defaults (constraint_info()); the problem carries none.
@@ -82,7 +82,7 @@ class FacilityLocationProblem:
         """Bulk write of the planning variable."""
 
 def calculate_score(problem: FacilityLocationProblem) -> Score:
-    """Full recompute of the HardSoftScore (also stores problem.score)."""
+    """Full recompute of the score (also stores problem.score)."""
 
 class SolverConfig:
     def __init__(self) -> None: ...

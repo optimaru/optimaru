@@ -4,7 +4,7 @@
 #ifndef OPTIMARU_PYTHON_SOLVER_CONFIG_HPP
 #define OPTIMARU_PYTHON_SOLVER_CONFIG_HPP
 
-// Shared rules for every package's Python Settings binding.
+// Shared rules for every package's Python SolverConfig binding.
 //
 //   seconds_to_millis(s, "spent_limit_seconds")
 //       A time limit in seconds (spent_limit_seconds,
@@ -17,8 +17,8 @@
 //       packages refused a negative limit. 0 is a valid limit (construction
 //       only).
 //
-//   bind_config_copy(py::class_<Config>(m, "Settings", ...))
-//       Settings.__copy__ / __deepcopy__ (the C++ copy, on_new_best
+//   bind_config_copy(py::class_<Config>(m, "SolverConfig", ...))
+//       SolverConfig.__copy__ / __deepcopy__ (the C++ copy, on_new_best
 //       included), so a package's solve(config=cfg, ...) can apply its
 //       keyword overrides to a copy and leave the caller's config alone.
 
@@ -32,7 +32,7 @@
 namespace optimaru {
 namespace python {
 
-// The largest time limit a Settings accepts. The engine compares a limit
+// The largest time limit a SolverConfig accepts. The engine compares a limit
 // with steady_clock durations (nanoseconds on the usual platforms) and some
 // packages add it to steady_clock::now() for a deadline, so the limit in
 // nanoseconds plus the clock's own reading (time since boot) must fit an

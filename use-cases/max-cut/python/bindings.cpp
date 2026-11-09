@@ -165,7 +165,7 @@ PYBIND11_MODULE(_core, m)
         "calculate_score",
         [](MaxCutProblem &problem) { return ScoreCalculator::score(problem); },
         py::arg("problem"),
-        "Full recompute of the HardSoftScore at the default constraints (also "
+        "Full recompute of the score at the default constraints (also "
         "stores problem.score and sets problem.scored). Unassigned vertices "
         "(-1) follow the C++ rule: in no side.");
 

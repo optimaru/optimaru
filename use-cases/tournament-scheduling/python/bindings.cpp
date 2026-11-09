@@ -158,7 +158,7 @@ PYBIND11_MODULE(_core, m)
     m.def("calculate_score",
           &ScoreCalculator::score,
           py::arg("schedule"),
-          "Full recompute of the HardSoftScore (also stores schedule.score).");
+          "Full recompute of the score (also stores schedule.score).");
     m.def("unfairness",
           &ScoreCalculator::unfairness,
           py::arg("loads"),

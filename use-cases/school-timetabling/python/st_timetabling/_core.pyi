@@ -21,7 +21,7 @@ the two variables (timeslot, room) are a single composite encoding::
 Score convention: `hard` counts constraint violations (0 == feasible),
 `soft` is the objective. Both are maximised (less negative is better).
 
-Quickstart terms (HardSoftScore, not selectable):
+Quickstart terms (hard/soft, not selectable):
   hard 1. room_conflict_cost           -1 per pair of lessons in the same
                                        timeslot+room
   hard 2. teacher_conflict_cost        -1 per pair of same-teacher lessons in a
@@ -336,7 +336,7 @@ class canon:
     @overload
     @staticmethod
     def calculate_score(table: canon.Timetable) -> Score:
-        """Full HardSoftScore recompute at the default weights (also stored in `table.score`)."""
+        """Full score recompute at the default weights (also stored in `table.score`)."""
     @overload
     @staticmethod
     def calculate_score(table: canon.Timetable, weights: canon.ObjectiveWeights) -> Score:

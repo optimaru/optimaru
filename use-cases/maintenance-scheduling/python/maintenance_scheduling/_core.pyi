@@ -17,7 +17,7 @@ reached by advancing duration days while skipping weekends
 Score convention: `hard` is the sum of constraint-violating days (0 == feasible), `soft` is
 the optimization objective. Both are maximized (less negative is better).
 
-Constraints (HardSoftScore; days are calendar days, like Java ChronoUnit.DAYS), at the
+Constraints (hard/soft; days are calendar days, like Java ChronoUnit.DAYS), at the
 default weights:
   hard 1. crew_conflict_cost          -overlapping days per overlapping job pair on the same crew
   hard 2. min_start_date_cost         -1 per day started before min_start_date

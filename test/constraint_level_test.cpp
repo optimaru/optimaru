@@ -399,7 +399,7 @@ void testMediumFold() {
         check(levels.hard == -4 && levels.medium == -2.0 && std::fabs(levels.soft + 26.5) < 1e-9,
               "levelScores() reports the three accumulators before the fold");
         check(same(kSoftFold.to_engine(levels.hard, levels.medium, levels.soft), score),
-              "the domain adapter's MediumFold::toEngine == the calculator's fold");
+              "the domain adapter's MediumFold::to_engine == the objective's fold");
         bool levelsReported = true;
         for (const auto& total : calc.constraint_totals()) {
             if (total.name == "overloadCost")
@@ -969,11 +969,11 @@ void listMediumPreviews(const std::string& label, double mediumWeight, std::uint
     }
     std::printf("    %d previews checked, %d declined\n", parity.checked, parity.declined);
     check(!corrupted && parity.all_equal() && parity.declined == 0 && parity.checked > 1000,
-          label + ": every preview equals the applied score (FULL_ASSERT: == a full recompute)");
+          label + ": every preview equals the applied score (ScoreChecks::Full: == a full recompute)");
 }
 
 void testListMediumPreviews() {
-    std::printf("== (k) LIST kind with a medium level: previews ==\n");
+    std::printf("== (k) sequence shape with a medium level: previews ==\n");
     listMediumPreviews<SoftFoldRoutes>("IntoSoft, medium weight 1", 1.0, 41);
     listMediumPreviews<SoftFoldRoutes>("IntoSoft, medium weight 0.37", 0.37, 43);
     listMediumPreviews<HardFoldRoutes>("BelowHard, medium weight 1", 1.0, 47);
@@ -1067,9 +1067,9 @@ void testScoreRange() {
     check(folded.hard == -kLimit,
           "BelowHard: three busy workers at 4e16 fold past int64 -> -INT64_MAX, got " + str(folded));
     check(kHardFold.to_engine(-100000000000000000LL, -5.0, 0.0).hard == -kLimit,
-          "MediumFold::toEngine(BelowHard) saturates like the calculator");
+          "MediumFold::to_engine(BelowHard) saturates like the objective");
     check(kHardFold.to_engine(-3, -5.0, 0.0).hard == -305,
-          "MediumFold::toEngine(BelowHard) is exact in range");
+          "MediumFold::to_engine(BelowHard) is exact in range");
     check(saturatingWalk<Tasks>(3e18, 61), "incremental == fresh across saturation (fold-less)");
     check(saturatingWalk<HardFoldTasks>(3e16, 67), "incremental == fresh across saturation (BelowHard)");
 
@@ -1675,7 +1675,7 @@ void listRepeatPreviews(const std::string& label, std::uint64_t seed) {
     }
     std::printf("    %d previews checked, %d declined\n", parity.checked, parity.declined);
     check(!corrupted && parity.all_equal() && parity.declined == 0 && parity.checked > 1000,
-          label + ": repeated, offset picks: every preview equals the applied score (FULL_ASSERT)");
+          label + ": repeated, offset picks: every preview equals the applied score (ScoreChecks::Full)");
 }
 
 void testInstances() {
@@ -1782,8 +1782,8 @@ void testInstances() {
     check(walkAgrees<Tasks>([] { return groupedRepeats<Tasks>(); }, 37),
           "grouped deltas: the direct hard fold for the unshaped instances, the shaped path for "
           "the offset ones; incremental == fresh");
-    listRepeatPreviews<SoftFoldRoutes>("LIST IntoSoft", 59);
-    listRepeatPreviews<HardFoldRoutes>("LIST BelowHard", 61);
+    listRepeatPreviews<SoftFoldRoutes>("sequence IntoSoft", 59);
+    listRepeatPreviews<HardFoldRoutes>("sequence BelowHard", 61);
     std::printf("\n");
 }
 
@@ -1911,7 +1911,7 @@ void testLiteralOffsetGuard() {
         check(conflict->level == Level::Soft && conflict->offset == 3.0 && !conflict->clip,
               "...and every knob of it is applied");
         SoftFoldTasks a = assignmentA<SoftFoldTasks>();
-        check(!throwsLogic(std::move(assembly), a), "...and the calculator accepts it at reset");
+        check(!throwsLogic(std::move(assembly), a), "...and the objective accepts it at reset");
     }
     {
         auto assembly = defaults<HardFoldTasks>();
@@ -2488,10 +2488,10 @@ void testExactNegativeThreshold() {
                             .piecewiseCalls;
             if (offset < 0.0) {
                 check(!corrupted && parity.all_equal() && parity.checked > 1000 && calls == 0,
-                      "LIST, offset -1: every preview equals the applied score, through cost()");
+                      "sequence, offset -1: every preview equals the applied score, through cost()");
             } else {
                 check(!corrupted && parity.all_equal() && calls > 0,
-                      "LIST, offset 0: the piecewise answer still serves the previews");
+                      "sequence, offset 0: the piecewise answer still serves the previews");
             }
         }
     }

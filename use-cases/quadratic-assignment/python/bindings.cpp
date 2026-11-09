@@ -200,7 +200,7 @@ PYBIND11_MODULE(_core, m)
         "calculate_score",
         [](QuadraticAssignmentProblem &problem) { return ScoreCalculator::score(problem); },
         py::arg("problem"),
-        "Full recompute of the HardSoftScore at the default constraints (also "
+        "Full recompute of the score at the default constraints (also "
         "stores problem.score).");
 
     py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())

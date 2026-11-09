@@ -61,7 +61,7 @@ the opt-in weight-0 objectives (`EnclosingCircleRadiusCost`,
 ## How it runs on the generic engine
 
 `Solver` (`solver.hpp`) is a thin wrapper that translates the quickstart's
-config into a `optimaru::SolverConfig`. The engine then does:
+config into an `optimaru::Settings`. The engine then does:
 
 1. **Construction heuristic** — cheapest insertion, in First-Fit-Decreasing
    order (tightest time window and largest demand first).

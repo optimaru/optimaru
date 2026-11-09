@@ -223,7 +223,7 @@ PYBIND11_MODULE(_core, m)
     m.def("calculate_score",
           &ScoreCalculator::score,
           py::arg("schedule"),
-          "Full recompute of the HardSoftScore (also stores schedule.score).");
+          "Full recompute of the score (also stores schedule.score).");
     m.def("demo_data",
           &buildDemoData,
           "The demo instance (deterministic; see ms/demo_data.hpp).");

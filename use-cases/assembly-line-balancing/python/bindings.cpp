@@ -170,7 +170,7 @@ PYBIND11_MODULE(_core, m)
             return ScoreCalculator::score(problem);
         },
         py::arg("problem"),
-        "Full recompute of the HardSoftScore at the default constraints (also "
+        "Full recompute of the score at the default constraints (also "
         "stores problem.score).");
 
     optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))

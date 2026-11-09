@@ -29,7 +29,7 @@ the default weights (the C++ components' kDefaultWeight, see constraint_info()):
                                                   (medium units, global)
   soft   4. makespan_cost                         -(latest SINK end date) (global)
 
-Internally the engine uses HardSoftScore(int64 hard, double soft), mapped as
+Internally the engine uses Score(int64 hard, double soft), mapped as
 `engine.soft = medium * 10**9 + soft` (the domain's medium fold, "into_soft" with unit
 10**9; level priority holds while |soft| < 10**9; see cpp/include/pjs/domain.hpp for
 the exact rules). Medium weights are in medium units: project_delay_cost's default
@@ -187,7 +187,7 @@ class SolverConfig:
     late_acceptance_size: int
     """0 = automatic: clamp(8 * allocations, 400, 3200)."""
     full_assert: bool
-    """FULL_ASSERT: compares the incremental score to a full recompute after every move
+    """Full score checks: compares the incremental score to a full recompute after every move
     (for debugging; very slow)."""
     ruin_recreate: bool
     ruin_recreate_unimproved_step_trigger: int

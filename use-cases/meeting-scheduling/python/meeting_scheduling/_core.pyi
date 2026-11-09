@@ -24,7 +24,7 @@ Constraints of the Java quickstart (HardMediumSoftScore) and the score mapping
   soft 12. room_change_cost         -1 when an attendee's consecutive (gap <= 2 grains)
                                     meetings change room
 
-The engine score is HardSoftScore(hard int, soft float), so medium is folded into
+The engine score is Score(hard int, soft float), so medium is folded into
 soft: ``soft = -(medium penalty * MEDIUM_SCALE + raw soft penalty)``
 (MEDIUM_SCALE == 1e6; medium always dominates soft).
 

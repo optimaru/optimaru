@@ -6,7 +6,7 @@ The problem is the planning solution: each task's `station` (a station index,
 bounded above by the facts; a solve freezes the value range at
 max(task count, 1 + max station) after its construction (`station_count`).
 
-Score (HardSoftScore, lexicographic), at the default weights: hard = -(the
+Score (hard/soft, lexicographic), at the default weights: hard = -(the
 eight hard raw costs, weight 1 each), soft = -(stations used); the
 workload range is an opt-in objective (default weight 0). The weights are
 the C++ components' defaults (constraint_info()); the problem carries none.
@@ -107,7 +107,7 @@ class AssemblyLineBalancingProblem:
         """Bulk write of the planning variable (every station >= -1)."""
 
 def calculate_score(problem: AssemblyLineBalancingProblem) -> Score:
-    """Full recompute of the HardSoftScore at the default constraints (also stores
+    """Full recompute of the score at the default constraints (also stores
     problem.score). Unassigned tasks contribute nothing."""
 
 class SolverConfig:

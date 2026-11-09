@@ -12,6 +12,7 @@
 #include "ts/domain.hpp"
 #include "ts/score_calculator.hpp"
 #include "ts/solver.hpp"
+#include "optimaru/portable_random.hpp"
 
 using namespace ts;
 
@@ -22,39 +23,8 @@ constexpr int DAY_COUNT = 18;
 constexpr int ASSIGNMENTS_PER_DAY = 4;
 constexpr int UNAVAILABILITY_PENALTY_COUNT = 12;
 
-// The demo generator's random draws: std::mt19937_64 with hand-written
-// bounded draws, so a seed gives the same instance with every standard
-// library (the std:: distributions are implementation-defined).
-class DemoRandom
-{
-public:
-    explicit DemoRandom(std::uint64_t seed)
-        : engine_(seed)
-    {
-    }
-
-    // Uniform in [0, bound), bound > 0.
-    int next_int(int bound)
-    {
-        return static_cast<int>(engine_() % static_cast<std::uint64_t>(bound));
-    }
-
-    // Uniform in [0, bound), bound > 0.
-    std::int64_t next_long(std::int64_t bound)
-    {
-        return static_cast<std::int64_t>(engine_()
-                                         % static_cast<std::uint64_t>(bound));
-    }
-
-    // Uniform in [0, 1).
-    double next_double()
-    {
-        return static_cast<double>(engine_() >> 11) * 0x1.0p-53;
-    }
-
-private:
-    std::mt19937_64 engine_;
-};
+// Seeded, platform-independent draws (see optimaru/portable_random.hpp).
+using DemoRandom = optimaru::PortableRandom;
 
 // The demo instance: teams, days, penalties, assignments.
 TournamentSchedule generateDemoData()

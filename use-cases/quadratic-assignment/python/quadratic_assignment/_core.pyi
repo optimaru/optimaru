@@ -6,7 +6,7 @@ into `problem.locations`, -1 == unassigned) is the single assignment-shape plann
 variable. The solver keeps the facilities a permutation of the locations
 (swap moves only).
 
-Score (HardSoftScore, lexicographic), at the default weights: hard =
+Score (hard/soft, lexicographic), at the default weights: hard =
 -(pinned locations not holding their facility + facilities at a forbidden
 location + demand above location capacities), soft = -(direct assignment cost
 + flow-distance cost). The weights are the C++ components' defaults
@@ -112,7 +112,7 @@ class QuadraticAssignmentProblem:
         facilities not named become unassigned."""
 
 def calculate_score(problem: QuadraticAssignmentProblem) -> Score:
-    """Full recompute of the HardSoftScore at the default constraints (also
+    """Full recompute of the score at the default constraints (also
     stores problem.score)."""
 
 class AcceptorType:

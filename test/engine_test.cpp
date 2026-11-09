@@ -162,7 +162,7 @@ Score bruteForceOptimum(TaskAssignment s) {  // NOLINT: by-value scratch copy
 }
 
 void testAcceptors(const Score& separableOptimum, const Score& optimum) {
-    std::printf("== BASIC: acceptors ==\n");
+    std::printf("== assignment: acceptors ==\n");
     struct Case {
         optimaru::AcceptanceRule type;
         const char* name;
@@ -213,7 +213,7 @@ void testAcceptors(const Score& separableOptimum, const Score& optimum) {
 }
 
 void testTerminations(const Score& optimum) {
-    std::printf("== BASIC: terminations ==\n");
+    std::printf("== assignment: terminations ==\n");
     using Clock = std::chrono::steady_clock;
 
     {   // stepLimit fires long before the 30s time_limit.
@@ -252,7 +252,7 @@ void testTerminations(const Score& optimum) {
         TaskAssignmentCalculator calculator;
         optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
-        check(sec < 5.0, "unimprovedSpentLimit terminates early (" + std::to_string(sec) + "s)");
+        check(sec < 5.0, "stall_time_limit terminates early (" + std::to_string(sec) + "s)");
     }
     {   // The cooling gradient follows a step limit when it is further along
         // than the wall clock (simulated annealing on a step-limited run).
@@ -262,16 +262,16 @@ void testTerminations(const Score& optimum) {
         optimaru::StopCondition stepLimited(termination);
         stepLimited.should_stop(250, Score{0, 0.0}, /*forceTimeCheck=*/true);
         check(std::fabs(stepLimited.progress() - 0.25) < 0.01,
-              "timeGradient() = step fraction (0.25) on a step-limited run");
+              "progress() = step fraction (0.25) on a step-limited run");
         termination.step_limit = 0;
         optimaru::StopCondition timeOnly(termination);
         timeOnly.should_stop(250, Score{0, 0.0}, /*forceTimeCheck=*/true);
-        check(timeOnly.progress() < 0.01, "timeGradient() = time fraction without a step limit");
+        check(timeOnly.progress() < 0.01, "progress() = time fraction without a step limit");
     }
 }
 
 void testEnvironmentMode() {
-    std::printf("== BASIC: FULL_ASSERT score-corruption detection ==\n");
+    std::printf("== assignment: ScoreChecks::Full score-corruption detection ==\n");
     {   // A correct calculator survives ScoreChecks::Full.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
@@ -285,7 +285,7 @@ void testEnvironmentMode() {
         } catch (const optimaru::ScoreMismatchError&) {
             threw = true;
         }
-        check(!threw, "correct calculator passes FULL_ASSERT");
+        check(!threw, "correct objective passes ScoreChecks::Full");
     }
     {   // A buggy calculator is caught.
         TaskAssignment s = buildTaskInstance();
@@ -300,12 +300,12 @@ void testEnvironmentMode() {
         } catch (const optimaru::ScoreMismatchError&) {
             threw = true;
         }
-        check(threw, "corrupted calculator throws ScoreCorruptionError");
+        check(threw, "corrupted objective throws ScoreMismatchError");
     }
 }
 
 void testMultiStartAndFfd(const Score& optimum) {
-    std::printf("== BASIC: multi-start + FFD ordering ==\n");
+    std::printf("== assignment: multi-start + FFD ordering ==\n");
     {   // 4 SA threads on the conflicted instance; the best start must win.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
@@ -393,7 +393,7 @@ void testMultiStartAndFfd(const Score& optimum) {
             caught = true;
         }
         check(caught && stop.load() && ran.load() == 2,
-              "runWorkerThreads: a failure at thread 2 sets stop, joins threads 0 and 1, rethrows");
+              "run_worker_threads: a failure at thread 2 sets stop, joins threads 0 and 1, rethrows");
         stop.store(false);
         optimaru::worker_thread_start_hook = [](int) {
             throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
@@ -404,7 +404,7 @@ void testMultiStartAndFfd(const Score& optimum) {
         } catch (const std::system_error&) {
             caught = true;
         }
-        check(caught && stop.load(), "runWorkerThreads: a failure at thread 0 is rethrown too");
+        check(caught && stop.load(), "run_worker_threads: a failure at thread 0 is rethrown too");
         optimaru::worker_thread_start_hook = nullptr;
         stop.store(false);
         std::vector<int> seen(5, 0);
@@ -423,7 +423,7 @@ void testMultiStartAndFfd(const Score& optimum) {
         solver.solve_multistart(s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
         const double seconds =
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-        check(seconds < 10.0, "terminateEarly() stops every multi-start start");
+        check(seconds < 10.0, "request_stop() stops every multi-start start");
     }
     {   // First Fit Decreasing: initialize high-cost tasks first.
         TaskAssignment s = buildSeparableInstance();
@@ -536,7 +536,7 @@ double bruteForceTspOptimum(const TspSolution& s) {
 }
 
 void testListVariable() {
-    std::printf("== LIST: TSP construction + local search ==\n");
+    std::printf("== sequence: TSP construction + local search ==\n");
     const double optimum = bruteForceTspOptimum(buildTsp(1));
     {   // Single route: cheapest-insertion CH + LS must find the optimal tour.
         TspSolution s = buildTsp(1);
@@ -573,7 +573,7 @@ void testListVariable() {
         bool conserved = all.size() == s.city.size();
         for (std::size_t i = 0; conserved && i < all.size(); ++i) conserved = (all[i] == static_cast<int>(i));
         double recomputed = routeLength(s, s.routes[0]) + routeLength(s, s.routes[1]);
-        check(!threw, "list moves pass FULL_ASSERT (2 routes)");
+        check(!threw, "list moves pass ScoreChecks::Full (2 routes)");
         check(conserved, "every element assigned exactly once after solving");
         check(std::fabs(-result.soft - recomputed) < 1e-9, "returned score matches recompute");
     }
@@ -679,7 +679,7 @@ bool refusesPinnedWithoutValue(Solve&& solve) {
 }
 
 void testPinnedEntities() {
-    std::printf("== BASIC: pinned entities ==\n");
+    std::printf("== assignment: pinned entities ==\n");
     const std::vector<int> high{5, 4, 5, 3, 5, 4, 5, 2};
 
     int calls = 0;
@@ -740,7 +740,7 @@ void testPinnedEntities() {
     check(refusesPinnedWithoutValue([&] {
               optimaru::solve_in_background({}, managed, managedCalculator);
           }),
-          "SolverManager refuses it on the calling thread");
+          "solve_in_background refuses it on the calling thread");
 
     PinnedTasks noValues{0, pinnedUnassigned, allButOne};
     PinnedTasksCalculator noValuesCalculator;
@@ -844,7 +844,7 @@ void testLnsEscapesLocalOptimum(const Score& optimum) {
     } catch (const optimaru::ScoreMismatchError&) {
         threw = true;
     }
-    check(!threw, "BASIC ruin & recreate passes FULL_ASSERT");
+    check(!threw, "assignment-shape ruin & recreate passes ScoreChecks::Full");
 }
 
 // 100 uniform-random cities (fixed instance seed): the standard benchmark
@@ -865,7 +865,7 @@ TspSolution buildRandomTsp(int routeCount, int cityCount) {
 }
 
 void testNearbyAndLnsOnRandomTsp() {
-    std::printf("== LIST: nearby selection + LNS on random TSP (100 cities) ==\n");
+    std::printf("== sequence: nearby selection + LNS on random TSP (100 cities) ==\n");
 
     auto solveWith = [&](bool performanceFeatures) {
         TspSolution s = buildRandomTsp(1, 100);
@@ -918,7 +918,7 @@ void testNearbyAndLnsOnRandomTsp() {
     for (std::size_t i = 0; conserved && i < all.size(); ++i) {
         conserved = (all[i] == static_cast<int>(i));
     }
-    check(!threw, "LIST nearby moves + ruin & recreate pass FULL_ASSERT");
+    check(!threw, "sequence nearby moves + ruin & recreate pass ScoreChecks::Full");
     check(conserved, "elements conserved through ruin & recreate");
 }
 
@@ -1064,7 +1064,7 @@ void testShadowVariables() {
         } catch (const optimaru::ScoreMismatchError&) {
             threw = true;
         }
-        check(!threw, "shadow-reading solve passes FULL_ASSERT (all mutation paths)");
+        check(!threw, "shadow-reading solve passes ScoreChecks::Full (all mutation paths)");
 
         // The returned solution's shadows equal a from-scratch recompute.
         std::vector<double> returned = s.arrival;
@@ -1096,7 +1096,7 @@ void testShadowVariables() {
         } catch (const optimaru::ScoreMismatchError&) {
             threw = true;
         }
-        check(threw, "stale shadow listener throws ScoreCorruptionError");
+        check(threw, "stale shadow listener throws ScoreMismatchError");
     }
 }
 
@@ -1222,7 +1222,7 @@ void testChainedVariables() {
     } catch (const optimaru::ScoreMismatchError&) {
         threw = true;
     }
-    check(!threw, "chained solve passes FULL_ASSERT (all moves + LNS)");
+    check(!threw, "chained solve passes ScoreChecks::Full (all moves + LNS)");
 
     // Validity of the returned previous pointers, decoded independently.
     std::vector<std::vector<int>> chains = decodeChains(s);
@@ -1245,7 +1245,7 @@ void testChainedVariables() {
 }  // namespace
 
 // ===========================================================================
-// Engine breadth: expanded moves, score analysis, SolverManager, terminations
+// Engine breadth: expanded moves, score explanation, background solve, limits
 // ===========================================================================
 namespace {
 
@@ -1335,7 +1335,7 @@ void testExpandedMoves() {
         for (std::size_t i = 0; conserved && i < all.size(); ++i) {
             conserved = (all[i] == static_cast<int>(i));
         }
-        check(!threw, "Or-opt + tail swap pass FULL_ASSERT (2 routes)");
+        check(!threw, "Or-opt + tail swap pass ScoreChecks::Full (2 routes)");
         check(conserved, "elements conserved with the expanded move mix");
     }
     {   // Single route: expanded mix still reaches the brute-force optimum
@@ -1471,7 +1471,7 @@ struct TaBalance final : optimaru::GlobalConstraint<TaskAssignment> {
 };
 
 void testDecomposedDeltaCalculator() {
-    std::printf("== DecomposedScoreCalculator (delta path vs fallback vs recompute) ==\n");
+    std::printf("== DecomposedObjective (delta path vs fallback vs recompute) ==\n");
     TaskAssignment s = buildTaskInstance();
     for (int t = 0; t < 6; ++t) s.assignment[t] = t % 4;
 
@@ -1759,7 +1759,7 @@ struct TspLongestRouteSums final : optimaru::GlobalConstraint<TspSolution> {
 };
 
 void testDecomposedPiecewisePreviews() {
-    std::printf("== DecomposedScoreCalculator: piecewise LIST previews ==\n");
+    std::printf("== DecomposedObjective: piecewise sequence previews ==\n");
     TspSolution s = buildRandomTsp(3, 24);
     for (int c = 0; c < 24; ++c) s.routes[c % 3].push_back(c);
     // The same harness run (same seed, hence the same moves) with the unit
@@ -1835,7 +1835,7 @@ void testDecomposedPiecewisePreviews() {
 }
 
 void testDecomposedListPreviews() {
-    std::printf("== DecomposedScoreCalculator: LIST move previews ==\n");
+    std::printf("== DecomposedObjective: sequence move previews ==\n");
     TspSolution s = buildRandomTsp(3, 24);
     for (int c = 0; c < 24; ++c) s.routes[c % 3].push_back(c);
 
@@ -1952,8 +1952,8 @@ void testConstraintAssembly() {
     std::printf("\n");
 }
 
-void testSolverManagerAndTerminations() {
-    std::printf("== SolverManager + unimprovedStepCountLimit ==\n");
+void testBackgroundSolveAndLimits() {
+    std::printf("== background solve + stall_step_limit ==\n");
     using Clock = std::chrono::steady_clock;
     {   // stall_step_limit fires long before the 30s time_limit.
         TaskAssignment s = buildTaskInstance();
@@ -1965,9 +1965,9 @@ void testSolverManagerAndTerminations() {
         optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
         check(sec < 5.0,
-              "unimprovedStepCountLimit terminates early (" + std::to_string(sec) + "s)");
+              "stall_step_limit terminates early (" + std::to_string(sec) + "s)");
     }
-    {   // SolverManager: async job + request_stop stops a 30s solve quickly.
+    {   // solve_in_background: request_stop stops a 30s solve quickly.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);
@@ -1980,8 +1980,44 @@ void testSolverManagerAndTerminations() {
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
         bool done = job.status() == optimaru::SolveStatus::Idle;
         check(wasActive && done && sec < 5.0,
-              "SolverJob reports status and terminateEarly stops in " + std::to_string(sec) + "s");
+              "BackgroundSolve reports status and request_stop stops in " + std::to_string(sec) + "s");
         check(final == fullScore(s), "job's final best score matches the returned solution");
+    }
+    {   // Assigning a new job over a running one stops and joins the old one
+        // first (it used to free the Solver its thread was still running).
+        TaskAssignment s1 = buildTaskInstance();
+        TaskAssignment s2 = buildTaskInstance();
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::seconds(30);
+        TaskAssignmentCalculator c1, c2;
+        auto t0 = Clock::now();
+        auto job = optimaru::solve_in_background(config, s1, c1);
+        job = optimaru::solve_in_background(config, s2, c2);
+        job.request_stop();
+        job.wait();
+        double sec = std::chrono::duration<double>(Clock::now() - t0).count();
+        check(sec < 5.0,
+              "assigning over a running BackgroundSolve stops the old solve (" +
+                      std::to_string(sec) + "s)");
+    }
+    {   // An exception inside the background solve reaches wait() instead of
+        // terminating the process.
+        TaskAssignment s = buildTaskInstance();
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::seconds(30);
+        config.on_new_best = [](std::int64_t, const Score&) {
+            throw std::runtime_error("on_new_best failed");
+        };
+        TaskAssignmentCalculator calculator;
+        auto job = optimaru::solve_in_background(config, s, calculator);
+        bool rethrown = false;
+        try {
+            job.wait();
+        } catch (const std::runtime_error& e) {
+            rethrown = std::string(e.what()) == "on_new_best failed";
+        }
+        check(rethrown && job.status() == optimaru::SolveStatus::Idle,
+              "a failing background solve rethrows from wait()");
     }
 }
 
@@ -2006,7 +2042,7 @@ int main() {
     testDecomposedListPreviews();
     testDecomposedPiecewisePreviews();
     testConstraintAssembly();
-    testSolverManagerAndTerminations();
+    testBackgroundSolveAndLimits();
     testShadowVariables();
     testChainedVariables();
 
