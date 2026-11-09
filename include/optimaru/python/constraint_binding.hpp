@@ -487,7 +487,7 @@ inline void fail_worker_thread_start(int index) {
 // failure", a RuntimeError in Python), as std::thread does when the system
 // has no thread left; -1 switches it off again. The package tests use it to
 // check that such a solve stops and joins the workers already running and
-// raises, where it used to call std::terminate. Not for production use.
+// raises instead of calling std::terminate. Not for production use.
 inline void bind_worker_thread_seam(py::module_& m) {
     m.def(
             "_fail_worker_thread_start",

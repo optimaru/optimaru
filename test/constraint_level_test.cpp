@@ -1,4 +1,4 @@
-// Constraint levels, the medium fold and the knob guards (0.2.0 contract),
+// Constraint levels, the medium fold and the knob guards,
 // engine test/ style: check() + a non-zero exit on any failure.
 //   (a) Level metadata, is_hard() and metadata copies
 //   (b) the medium fold: IntoSoft and BelowHard fold the same three
@@ -36,7 +36,7 @@
 //       literal (x - offset)^e, by hand, per unit for a unit constraint
 //       (zero-raw units and a scoped constraint's units in literal mode,
 //       negative offsets, rewards, hard rounding) and on the total for a
-//       global; offset 0 is the 0.2.0 shaping bit for bit; the knob checks
+//       global; offset 0 is the plain shaping bit for bit; the knob checks
 //   (p) several instances of one name: add_instance()/add_instances(), by-name
 //       edits on the first instance, each instance scored on its own with
 //       its own knobs, constraint_costs() in instance order; incremental ==
@@ -126,7 +126,7 @@ struct TasksDescriptor {
     static void assign(S& s, int e, int v) { s.assignment[e] = v; }
 };
 
-// The domain-side declaration a migrated use case writes once, next to its
+// The domain-side declaration a use case writes once, next to its
 // Score adapter.
 constexpr MediumFold kSoftFold = MediumFold::into_soft(1000.0);
 constexpr MediumFold kHardFold = MediumFold::below_hard(100);
@@ -194,7 +194,7 @@ struct optimaru::MediumFoldOf<HardFoldRoutes> {
 
 namespace {
 
-// --- components, written the 0.2.0 way -------------------------------------
+// --- components --------------------------------------------------------------
 
 // Hard: conflicting task pairs sharing a worker.
 template <typename S>
@@ -1364,17 +1364,17 @@ void testOffsetClip() {
     check(shape_cost(4.0, 2.0, -1.0, true) == 25.0 && shape_cost(0.0, 2.0, -1.0, true) == 0.0 &&
                   shape_cost(-4.0, 1.0, -1.0, true) == -5.0 && shape_cost(0.0, 2.0, -1.0, false) == 1.0,
           "a negative offset: threshold adds |offset| to every non-zero x, literal to every x");
-    bool same020 = true;
+    bool samePlain = true;
     for (double x : {-7.5, -1.0, -0.0, 0.0, 0.3, 1.0, 2.0, 17.25, 1e10}) {
         for (double e : {0.5, 1.0, 2.0, 3.0}) {
             for (bool clip : {true, false}) {
                 const double a = shape_cost(x, e, 0.0, clip);
                 const double b = shape_cost(x, e);
-                same020 &= std::memcmp(&a, &b, sizeof a) == 0;
+                samePlain &= std::memcmp(&a, &b, sizeof a) == 0;
             }
         }
     }
-    check(same020, "offset 0 is the 0.2.0 shapeCost bit for bit, in both modes");
+    check(samePlain, "offset 0 is the plain shape_cost bit for bit, in both modes");
     check(optimaru::weighted_cost(0.0, 0.0, 400.0, 10.0, false) == 0.0 &&
                   optimaru::weighted_cost(0.0, 1e300, 50.0, -3.0, true) == 0.0,
           "weight 0 contributes exactly 0 at any offset / exponent");
@@ -1500,14 +1500,14 @@ void testOffsetClip() {
         check(bare.offset == -2.0 && !bare.clip, "restateKnobs applies offset / clip to a component");
     }
     {
-        // Every 0.2.0 assembly (offset 0) scores exactly as before.
+        // An assembly with offset 0 scores exactly like the plain shaping.
         Tasks a = assignmentA<Tasks>();
         auto plain = [] { return defaults<Tasks>().soft("overloadCost").soft("idleWorkerCost"); };
         const Score before = scoreOf(plain(), a);
         const Score restated =
                 scoreOf(plain().offset("taskCostCost", 0.0).clip("taskCostCost", false), a);
         check(before == restated && before.hard == -4 && before.soft == -28.5,
-              "offset 0 with clip false scores exactly like the 0.2.0 shaping (-4hard/-28.5soft)");
+              "offset 0 with clip false scores exactly like the plain shaping (-4hard/-28.5soft)");
     }
     std::printf("\n");
 }
@@ -1872,7 +1872,7 @@ void testLiteralOffsetGuard() {
         ConflictCost<Tasks> unshifted;
         unshifted.set_clip(false);  // offset stays 0
         check(refusal([&] { check_literal_offset(unshifted, none, "'conflict_cost'"); }).empty(),
-              "checkLiteralOffset: clip=False with offset 0 on hard is allowed (the 0.2.0 shaping)");
+              "checkLiteralOffset: clip=False with offset 0 on hard is allowed (the plain shaping)");
     }
 
     // Both restate_knobs overloads check once every knob is re-stated, so the

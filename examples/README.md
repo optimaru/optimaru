@@ -86,5 +86,3 @@ explained notebook, and the others follow the same outline:
 - [`use-cases/README.md`](../use-cases/README.md) explains how to add a move, change the construction
   heuristic, or add a hard or soft cost.
 - Each use case's README covers its usage and how to extend it.
-- Coming from optimaru 0.1.x? [`CHANGELOG.md`](../CHANGELOG.md) lists every renamed constraint and
-  every removed API.

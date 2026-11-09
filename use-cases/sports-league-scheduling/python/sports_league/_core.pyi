@@ -177,7 +177,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Per-constraint **raw** costs — before weight/exponent/offset/level rounding:
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
-    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
     "default_weight": float, "default_level": str}}. The three unit constraints
     report one cost per round position, an empty round included, the seven globals

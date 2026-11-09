@@ -299,7 +299,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint on schedule.assignments, before
     weight/exponent/offset/level: {key: {"costs": [total], "weight": float,
-    "exponent": float, "offset": float, "clip": bool, "hard": bool, "global": True,
+    "exponent": float, "offset": float, "clip": bool, "global": True,
     "level": "hard" | "soft", "reward": bool, "level_flippable": bool, "name": str,
     "label": str, "default_weight": float, "default_level": str}}, "level" being the
     level in effect (the pick's, or the default) and "hard" the same as level == "hard".

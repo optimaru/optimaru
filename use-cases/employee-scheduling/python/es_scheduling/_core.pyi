@@ -316,7 +316,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw per-employee cost of every constraint instance, before
     weight/exponent/offset/level: {key: {"costs": [...], "weight": float,
-    "exponent": float, "offset": float, "clip": bool, "hard": bool, "global":
+    "exponent": float, "offset": float, "clip": bool, "global":
     bool, "level": "hard" | "medium" | "soft", "reward": bool,
     "level_flippable": bool, "name": str, "label": str, "default_weight":
     float, "default_level": str[, "units": [...]]}}.

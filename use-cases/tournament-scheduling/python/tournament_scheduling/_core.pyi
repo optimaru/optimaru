@@ -170,7 +170,7 @@ def constraint_costs(
     A unit is a team; the two imbalance (global) constraints report one cost.
     `tournament_scheduling.constraints.score()` takes these and produces a score:
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
-    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "medium" | "soft",
+    "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
     "default_weight": float, "default_level": str,
     "medium_fold": {"kind": "into_soft", "unit": 1e6}}}. The scoped

@@ -206,7 +206,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight/exponent/offset/level: every
     constraint is global, so "costs" holds one total. {key: {"costs": [total],
-    "weight": float, "exponent": float, "offset": float, "clip": bool, "hard": bool,
+    "weight": float, "exponent": float, "offset": float, "clip": bool,
     "global": True, "level": "hard" | "soft", "reward": bool, "level_flippable": bool,
     "name": str, "label": str, "default_weight": float, "default_level": str}}.
     None = the default constraints; a pick list (as for solve) scores exactly those

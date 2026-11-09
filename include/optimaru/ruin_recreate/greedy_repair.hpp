@@ -26,11 +26,10 @@ namespace optimaru {
 // ---------------------------------------------------------------------------
 // GreedyRepair
 // ---------------------------------------------------------------------------
-// The destroy-and-repair half of the local search, factored out of
+// The destroy-and-repair half of the local search, kept apart from
 // LocalSearch so that the moves in moves/ and ruin_recreate/ can use it
 // without reaching into local search: the LNS kick, destroy-repair-as-a-move and
-// route elimination all ruin a set and rebuild it the same way, and only the
-// local search used to own the machinery.
+// route elimination all ruin a set and rebuild it the same way.
 //
 // ruin() unassigns; recreate() puts everything back by cheapest insertion, or
 // by regret-k when configured. All scratch buffers are members and reused, so

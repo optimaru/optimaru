@@ -185,7 +185,7 @@ def constraint_costs(
 ) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight/exponent/offset/level:
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
-    "clip": bool, "hard": bool, "global": bool, "level": "hard" | "soft",
+    "clip": bool, "global": bool, "level": "hard" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
     "default_weight": float, "default_level": str[, "units": [int, ...]][, "signed": True]}},
     "level" being the level in effect (the pick's, or the default) and "hard" the same as
