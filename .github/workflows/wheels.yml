@@ -172,6 +172,29 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # The release notes are the version's CHANGELOG.md section.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+          path: src
+
+      # Fails before anything is uploaded when the CHANGELOG has no section for
+      # this version.
+      - name: Release notes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          {
+            echo "pip install optimaru==${VERSION} — https://pypi.org/project/optimaru/${VERSION}/"
+            echo
+            awk -v heading="## ${VERSION}" '$0 == heading {found = 1; next} /^## / {found = 0} found' src/CHANGELOG.md
+          } > release-notes.md
+          if [ "$(wc -l < release-notes.md)" -le 2 ]; then
+            echo "CHANGELOG.md has no '## ${VERSION}' section" >&2
+            exit 1
+          fi
+
       # PyPI first: if the upload fails, no tag or release is created and the
       # next push to main retries.
       - uses: pypa/gh-action-pypi-publish@release/v1
@@ -185,5 +208,4 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --target "${GITHUB_SHA}" \
             --title "optimaru ${VERSION}" \
-            --generate-notes \
-            --notes "pip install optimaru==${VERSION} — https://pypi.org/project/optimaru/${VERSION}/"
+            --notes-file release-notes.md
