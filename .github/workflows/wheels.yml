@@ -1,16 +1,19 @@
-# Builds the `optimaru` Python distribution (sdist + wheels for Linux, macOS,
-# Windows) on every PR that touches it, so a build that breaks is caught before
-# the merge. A push to main builds only when it is going to publish: the PR
-# already built everything else.
+# Builds and publishes the `optimaru` Python distribution (sdist + wheels for
+# Linux, macOS, Windows). It runs only when the version changes, so ordinary
+# PRs do not pay for the full wheel matrix:
+#   - on a PR whose pyproject.toml carries a different version than the base
+#     branch, it builds everything (nothing is published), so a release that
+#     breaks is caught before the merge;
+#   - on a push to main whose version has no `v<version>` tag yet, it builds and
+#     publishes;
+#   - `workflow_dispatch` builds on demand without publishing (for example
+#     after editing this workflow).
 #
-# Releasing is driven by the version in pyproject.toml. On a push to main, if
-# there is no `v<version>` tag yet, the publish job:
+# Publishing:
 #   1. uploads the sdist + wheels to PyPI, then
 #   2. creates the `v<version>` tag on that commit and a GitHub release with the
 #      same files attached.
-# If the tag already exists (version unchanged), nothing is published. PRs and
-# other branches never publish. So to release: bump `version` in pyproject.toml
-# in a PR and merge it.
+# So to release: bump `version` in pyproject.toml in a PR and merge it.
 #
 # PyPI upload uses Trusted Publishing (OIDC) — there is no API token. The PyPI
 # project lists this repository as a trusted publisher:
@@ -23,26 +26,10 @@ on:
   pull_request:
     paths:
       - pyproject.toml
-      - setup.py
-      - MANIFEST.in
-      - python/**
-      - include/**
-      - use-cases/*/cpp/include/**
-      - use-cases/*/cpp/src/**
-      - use-cases/*/python/**
-      - .github/workflows/wheels.yml
   push:
     branches: [main]
     paths:
       - pyproject.toml
-      - setup.py
-      - MANIFEST.in
-      - python/**
-      - include/**
-      - use-cases/*/cpp/include/**
-      - use-cases/*/cpp/src/**
-      - use-cases/*/python/**
-      - .github/workflows/wheels.yml
   workflow_dispatch:
 
 permissions:
@@ -60,6 +47,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       release: ${{ steps.v.outputs.release }}
+      build: ${{ steps.v.outputs.build }}
     steps:
       - uses: actions/checkout@v4
 
@@ -82,12 +70,22 @@ jobs:
             release=false
           fi
           echo "release=${release}" >> "$GITHUB_OUTPUT"
+          # Build when publishing, on demand, or on a PR that changes the version.
+          build=${release}
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            build=true
+          elif [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            git fetch --quiet --depth=1 origin "${GITHUB_BASE_REF}"
+            base=$(git show FETCH_HEAD:pyproject.toml | python3 -c "import sys, tomllib; print(tomllib.loads(sys.stdin.read())['project']['version'])")
+            if [ "${base}" != "${version}" ]; then build=true; fi
+          fi
+          echo "build=${build}" >> "$GITHUB_OUTPUT"
           echo "### optimaru ${version}" >> "$GITHUB_STEP_SUMMARY"
-          echo "tag v${version} exists: ${exists} · publish: ${release}" >> "$GITHUB_STEP_SUMMARY"
+          echo "tag v${version} exists: ${exists} · build: ${build} · publish: ${release}" >> "$GITHUB_STEP_SUMMARY"
 
   wheels:
     needs: version
-    if: github.event_name != 'push' || needs.version.outputs.release == 'true'
+    if: needs.version.outputs.build == 'true'
     name: wheels (${{ matrix.os }}, ${{ matrix.python }}${{ startsWith(matrix.os, 'ubuntu') && format(' {0}', matrix.libc) || '' }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -133,7 +131,7 @@ jobs:
 
   sdist:
     needs: version
-    if: github.event_name != 'push' || needs.version.outputs.release == 'true'
+    if: needs.version.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
