@@ -19,7 +19,7 @@ import food_packaging as fp
 
 schedule = fp.generate_demo_data()  # the demo plant (5 lines, 100 jobs)
 fp.solve(schedule, time_limit_seconds=10.0, random_seed=42)
-print(schedule.score)  # e.g. 0hard/-1298medium/-109664360soft
+print(schedule.score)  # e.g. 0hard/0medium/-96677943soft
 
 for line in schedule.lines:
     print(line.name, [schedule.jobs[j].name for j in line.jobs])

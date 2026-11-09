@@ -6,13 +6,13 @@ demo data generator (Apache-2.0), with modifications; see the repository [NOTICE
 The [`flight-crew-scheduling`](../../use-cases/flight-crew-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `flight_crew_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
-rescored by the use case's own evaluator; parity tests in `cpsat/tests`
-keep the two cost definitions identical.
+rescored by the use case's own evaluator; parity tests in external-solver
+(`tests/flight_crew_scheduling/`) keep the two cost definitions identical.
 
 ```sh
 cd benchmarks/flight-crew-scheduling/cpsat
 uv sync --all-groups --all-extras      # builds the engine extension too
-uv run pytest -q                       # CP-SAT model + parity tests
+uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run flight-crew-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```
 

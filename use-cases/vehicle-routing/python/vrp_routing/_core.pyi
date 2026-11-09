@@ -48,8 +48,9 @@ class Location:
     def __init__(self, latitude: float, longitude: float) -> None: ...
     latitude: float
     longitude: float
-    index: int
-    """Row/column into the driving-time matrix; set by VehicleRoutePlan."""
+    @property
+    def index(self) -> int:
+        """Row/column into the driving-time matrix; set by VehicleRoutePlan."""
 
 class Visit:
     """Planning entity: one customer stop (demand, time window, service)."""
@@ -73,10 +74,12 @@ class Visit:
     service_duration: int
     unassigned_penalty_minutes: int
     def unassigned_penalty(self) -> int: ...
-    vehicle_index: int
-    """Shadow: index of the serving vehicle; -1 == unassigned."""
-    arrival_time: int
-    """Shadow: arrival seconds; -1 == unassigned."""
+    @property
+    def vehicle_index(self) -> int:
+        """Shadow: index of the serving vehicle; -1 == unassigned."""
+    @property
+    def arrival_time(self) -> int:
+        """Shadow: arrival seconds; -1 == unassigned."""
 
 class Vehicle:
     def __init__(
@@ -122,10 +125,13 @@ class VehicleRoutePlan:
         visits: list[Visit],
         driving_seconds: list[list[int]] | None = None,
     ) -> None: ...
-    name: str
-    locations: list[Location]
+    @property
+    def name(self) -> str: ...
+    @property
+    def locations(self) -> list[Location]: ...
     vehicles: list[Vehicle]
-    visits: list[Visit]
+    @property
+    def visits(self) -> list[Visit]: ...
     unassigned_visit_indices: list[int]
     """The unassigned pool: visits the solver chose not to route. Filled by
     solve(); penalized on the medium score level."""

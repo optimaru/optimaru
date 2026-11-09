@@ -264,10 +264,12 @@ different heuristic is a different `constructBins` order or rule.
    `description_en` / `description_ko` to `python/bin_packing/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/bin-packing/cpsat`](../../benchmarks/bin-packing/cpsat) (a plugin
-   subclassing the spec; defaults come from `constraint_info()`) and extend its
-   pinned-assignment parity test, so both solvers keep one semantics.
+5. mirror it in the CP-SAT model, `external_solver.bin_packing` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), and extend its pinned-assignment parity
+   test there, so both solvers keep one semantics;
+   [`benchmarks/bin-packing/cpsat`](../../benchmarks/bin-packing/cpsat) runs it against this
+   engine.
 
 ## Benchmark
 

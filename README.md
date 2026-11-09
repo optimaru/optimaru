@@ -73,13 +73,12 @@ cd use-cases/<slug>/python && uv sync --all-groups --all-extras && uv run pytest
 ## Benchmarks
 
 [`benchmarks/README.md`](benchmarks/README.md) lists every comparison. In
-short: every use case is compared with OR-Tools CP-SAT on the same instances
-and rescored by the use case's own evaluator; vehicle routing is compared with
-the OR-Tools Routing solver on CVRPLIB Set X, and school
-timetabling with OR-Tools CP-SAT. Pickup & delivery,
-project-job scheduling, bin packing, quadratic assignment and assembly-line
-balancing also run on public instance sets (Li & Lim, RG30, Falkenauer,
-QAPLIB, SALBP).
+short: every use case but vehicle routing is compared with OR-Tools CP-SAT on
+the same instances and rescored by the use case's own evaluator; vehicle
+routing is compared with the OR-Tools Routing solver on CVRPLIB Set X (and
+single Augerat instances). Pickup & delivery, project-job scheduling, bin
+packing, quadratic assignment and assembly-line balancing also run on public
+instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
 
 ## Features
 

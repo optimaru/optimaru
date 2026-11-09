@@ -3,12 +3,12 @@
 CP-SAT alternative with independently selectable bucket, travel and order
 consolidation plugins.
 
-The plugins ([`external_solver.order_picking.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/order_picking/constraints.py)) subclass the domain specs of
+The plugins ([`external_solver.order_picking.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/order_picking/constraints.py)) subclass the domain specs of
 the same name (`TrolleyCapacityCost`, `DistanceFromPreviousPickTaskCost`,
 `DistanceFromLastPickTaskToPathOriginCost`, `OrderSplitByTrolleyCost`, in
 `list_constraints()` order). Their default level and weight come from the
 engine's `order_picking.constraint_info()`, so the catalog cannot drift from the
-C++ components (`tests/test_solve.py` checks it); `level="soft"` / `level="hard"`
+C++ components (external-solver's `tests/order_picking/test_solve.py` checks it); `level="soft"` / `level="hard"`
 moves a term to the soft / hard level on both solvers, and `level="medium"` is refused
 on both (`this use case has no medium level`). Like every CP-SAT reference,
 `exponent != 1` and non-integer weights are rejected.

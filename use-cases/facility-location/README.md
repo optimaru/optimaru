@@ -175,9 +175,10 @@ solver's `solve` before the engine runs — the engine only fills what is still 
    `description_en` / `description_ko` to `python/facility_location/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/facility-location/cpsat`](../../benchmarks/facility-location/cpsat) (a plugin
-   subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
+5. mirror it in the CP-SAT model, `external_solver.facility_location` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), so the benchmark in
+   [`benchmarks/facility-location/cpsat`](../../benchmarks/facility-location/cpsat) stays like
    for like.
 
 ## Benchmark

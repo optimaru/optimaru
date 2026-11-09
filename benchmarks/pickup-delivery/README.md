@@ -3,13 +3,13 @@
 The [`pickup-delivery`](../../use-cases/pickup-delivery) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `pickup_delivery_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
-rescored by the use case's own evaluator; parity tests in `cpsat/tests`
-keep the two cost definitions identical.
+rescored by the use case's own evaluator; parity tests in external-solver
+(`tests/pickup_delivery/`) keep the two cost definitions identical.
 
 ```sh
 cd benchmarks/pickup-delivery/cpsat
 uv sync --all-groups --all-extras      # builds the engine extension too
-uv run pytest -q                       # CP-SAT model + parity tests
+uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run pickup-delivery-public-bench --help              # Li & Lim PDPTW (SINTEF TOP archive)
 uv run pickup-delivery-public-bench --synthetic 200 --seconds 30 --workers 8   # seeded synthetic instance
 ```

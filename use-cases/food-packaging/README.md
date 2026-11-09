@@ -114,7 +114,7 @@ result = fp.solve(solution, time_limit_seconds=5.0, random_seed=42)
 print(result.score)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`food_packaging.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`food_packaging.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
 
 ```sh
 cmake -S use-cases/food-packaging/cpp -B build/food-packaging && cmake --build build/food-packaging -j
@@ -176,10 +176,11 @@ solver's `solve` before the engine runs — the engine only fills what is still 
    `description_en` / `description_ko` to `python/food_packaging/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/food-packaging/cpsat`](../../benchmarks/food-packaging/cpsat) (a plugin
-   subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
-   for like.
+5. mirror it in the CP-SAT model, `external_solver.food_packaging` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), so the benchmark in
+   [`benchmarks/food-packaging/cpsat`](../../benchmarks/food-packaging/cpsat)
+   stays like for like.
 
 ## Benchmark
 

@@ -3,14 +3,14 @@
 The [`max-cut`](../../use-cases/max-cut) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `max_cut_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units — one external-solver
-`ConstraintPlugin` per constraint ([`external_solver.max_cut.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/max_cut/constraints.py)), each a
+`ConstraintPlugin` per constraint ([`external_solver.max_cut.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/max_cut/constraints.py)), each a
 subclass of the domain spec with its defaults read from
 `max_cut.constraint_info()` — so both answers are rescored by the use case's
 own evaluator. The model has one bool per vertex (its side) and one per edge
 (crossed); every term is an exact function of the sides (equalities, not
 one-sided bounds), and the first vertex is put on side 0 when nothing is fixed
 (every constraint is symmetric under swapping the sides; `symmetry_breaking=False`
-turns it off). `cpsat/tests/test_constraint_parity.py` pins every partition of
+turns it off). External-solver's `tests/max_cut/test_constraint_parity.py` pins every partition of
 small instances (and 60 seeded random instances) and checks that each
 constraint's CP-SAT term equals the engine's `constraint_costs()` total (the sum
 of its per-side costs; 0 exactly when the engine reports no violation, `-cut` for
@@ -33,7 +33,7 @@ when the objective is built.
 ```sh
 cd benchmarks/max-cut/cpsat
 uv sync --all-groups --all-extras
-uv run pytest -q                       # CP-SAT model + engine parity tests
+uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run max-cut-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
 

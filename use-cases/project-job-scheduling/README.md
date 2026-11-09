@@ -22,7 +22,7 @@ result = pj.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score_hard, result.score_medium, result.score_soft)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`project_job.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`project_job.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
 
 ```sh
 cmake -S use-cases/project-job-scheduling/cpp -B build/project-job-scheduling && cmake --build build/project-job-scheduling -j
@@ -142,9 +142,10 @@ solver's `solve` before the engine runs — the engine only fills what is still 
    `description_en` / `description_ko` to `python/project_job/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model in
+5. mirror it in the CP-SAT model, `external_solver.project_job_scheduling` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), so the benchmark in
    [`benchmarks/project-job-scheduling/cpsat`](../../benchmarks/project-job-scheduling/cpsat)
-   (a plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark
    stays like for like.
 
 ## Benchmark

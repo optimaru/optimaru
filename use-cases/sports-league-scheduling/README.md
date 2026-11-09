@@ -103,7 +103,7 @@ sl.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(schedule.score)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`sports_league.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`sports_league.SolverConfig` or `models.SolveConfig`) and `constraints` (see below). The C++ side builds and tests with:
 
 ```sh
 cmake -S use-cases/sports-league-scheduling/cpp -B build/sports-league-scheduling && cmake --build build/sports-league-scheduling -j
@@ -166,8 +166,8 @@ solver's `solve` before the engine runs — the engine only fills what is still 
    `description_en` / `description_ko` to `python/sports_league/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/sports-league-scheduling/cpsat`](../../benchmarks/sports-league-scheduling/cpsat)
+5. mirror it in the CP-SAT model in external-solver's
+   [`external_solver.sports_league_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/sports_league_scheduling/constraints.py)
    (a plugin subclassing the spec; defaults come from `constraint_info()`) so the
    benchmark stays like for like.
 

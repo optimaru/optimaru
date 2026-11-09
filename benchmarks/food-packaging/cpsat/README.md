@@ -26,6 +26,6 @@ offset is shaped exactly as in the engine, in both modes; a fractional offset is
 refused (`offset must be an integer for CP-SAT`). `clip=False` with an offset is refused
 on hard with the engine's message (`constraint 'max_end_time_cost': clip=False with a
 non-zero offset cannot be hard, ...`); medium folds into soft, as in the engine, so it
-takes the literal formula. `tests/test_solve.py` pins several layouts and checks that the CP-SAT
+takes the literal formula. External-solver's `tests/food_packaging/test_solve.py` pins several layouts and checks that the CP-SAT
 objective, the engine's own score and `food_packaging.constraints.score()` agree per
 level under repeated, shifted and re-levelled picks.

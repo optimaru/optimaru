@@ -243,9 +243,10 @@ solver's `solve` before the engine runs — the engine only fills what is still 
    `description_en` / `description_ko` to `python/conference_scheduling/constraints.py`
    (plus its module-level default instance); callers then pick, reweight or flip it:
    `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/conference-scheduling/cpsat`](../../benchmarks/conference-scheduling/cpsat) (a
-   plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark
+5. mirror it in the CP-SAT model, `external_solver.conference_scheduling` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), so the benchmark in
+   [`benchmarks/conference-scheduling/cpsat`](../../benchmarks/conference-scheduling/cpsat)
    stays like for like.
 
 ## Benchmark

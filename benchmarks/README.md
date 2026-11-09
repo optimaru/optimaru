@@ -35,7 +35,11 @@ taken as the result.
 The CP-SAT models come from
 [external-solver](https://github.com/optimaru/external-solver), installed from
 its GitHub release tag (`external_solver.<subpackage>`); the models and their
-own tests live there. Each comparison is a `uv` project in
+own tests live there. Two benchmarks are set up differently: school-timetabling
+keeps its CP-SAT model (`teacher_scheduling`) and its parity test in
+[`school-timetabling/cpsat`](school-timetabling/cpsat), and vehicle-routing is
+the single `uv` project [`vehicle-routing`](vehicle-routing), which runs the
+OR-Tools Routing solver. Every other comparison is a `uv` project in
 `benchmarks/<slug>/cpsat` that depends on `use-cases/<slug>/python` by path, so
 a run always measures the engine in this checkout. Importing the project's
 package calls `cpsat_plugins.checkout.use_checkout_engine`, which registers that
@@ -62,4 +66,9 @@ on hard, and on medium where it counts toward the hard score (task assigning),
 with the engine's message, when the objective is built: hard 0 must mean no
 violation. Each benchmark's README (or `cpsat/README.md`) lists its own
 limits, including the plugins that refuse an offset.
+
+The `<slug>-compare` commands in the READMEs use `--seconds 10` for a quick
+check, and the public-instance runners show their own budgets. Every results
+block and `RESULTS.md` states the budget it was measured with (30 s per solver
+and instance for most); pass that `--seconds` to reproduce it.
 

@@ -1,7 +1,7 @@
 """Partial timetabling that allows unassigned lessons.
 
-Comcigan leaves unfillable periods in an "unassigned list" and shows the rest
-placed. In the default configuration unassigned_lessons_cost (weekly periods met) is hard, so a
+A timetabler usually wants unfillable periods left in an unassigned list with
+the rest placed. In the default configuration unassigned_lessons_cost (weekly periods met) is hard, so a
 single cell that does not fit makes the whole problem INFEASIBLE — and the user
 cannot see why.
 
@@ -61,7 +61,7 @@ def solve_partial(problem: TimetableProblem, config: SolverConfig | None = None)
 
 
 def unassigned_courses(problem: TimetableProblem, timetable: Timetable) -> list[UnassignedCourse]:
-    """Courses whose periods could not all be filled — Comcigan's "unassigned list"."""
+    """Courses whose periods could not all be filled (the unassigned list)."""
     scheduled: dict[str, int] = {}
     for lesson in timetable.lessons:
         scheduled[lesson.course_id] = scheduled.get(lesson.course_id, 0) + 1

@@ -22,7 +22,7 @@ result = ta.solve(solution, time_limit_seconds=5.0, random_seed=42)
 print(result.score_hard, result.score_soft0, result.score_soft1, result.score_soft2)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`task_assigning.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`task_assigning.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
 
 ```sh
 cmake -S use-cases/task-assigning/cpp -B build/task-assigning && cmake --build build/task-assigning -j
@@ -103,7 +103,8 @@ ta.solve(solution, constraints=[
 ])
 ```
 
-`ta.constraint_costs(solution, picks)` keys the second pick
+`ta.constraint_costs(solution.to_core(), picks)` (it takes the engine object, not the
+pydantic model) keys the second pick
 `critical_priority_task_end_time_cost#2`. The CP-SAT reference takes integral offsets on
 every constraint (one term per employee, one for the global total).
 
@@ -155,8 +156,8 @@ walk and the priority-family base):
    `description_en` / `description_ko` to `python/task_assigning/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/task-assigning/cpsat`](../../benchmarks/task-assigning/cpsat) (a plugin
+5. mirror it in the CP-SAT model in external-solver's
+   [`external_solver.task_assigning.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/task_assigning/constraints.py) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
    for like.
 

@@ -1,12 +1,13 @@
 """Use-case-local engine/CP-SAT comparison.
 
-The formulation, deterministic comparison instances, and CLI entry point live
-together in this use-case package.
+Deterministic comparison instances and the CLI entry point; the CP-SAT
+formulation is `external_solver.employee_scheduling`.
 
 `es_scheduling.constraint_costs` takes an engine schedule and the rule list,
-while the runner hands over a request, so `PACKAGE` names this package, whose
-`constraint_costs(request)` builds the engine's `DecomposedCalculator` from the
-request's rules. It is still the engine's score.
+while the runner hands over a request, so `PACKAGE` names
+`external_solver.employee_scheduling`, whose `constraint_costs(request)` builds
+the engine's `DecomposedCalculator` from the request's rules. It is still the
+engine's score.
 """
 
 from __future__ import annotations

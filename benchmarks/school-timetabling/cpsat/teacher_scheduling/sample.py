@@ -1,4 +1,4 @@
-"""A Comcigan-style demo school.
+"""A demo school in the shape of a Korean teacher load table.
 
 - 5-day week: Mon–Thu 7 periods, Fri 6 periods -> 34 cells per class
 - 3 grades x 2 classes (1-1 … 3-2)

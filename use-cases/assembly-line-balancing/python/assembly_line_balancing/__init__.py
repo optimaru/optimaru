@@ -83,7 +83,7 @@ def _core_of(problem) -> AssemblyLineBalancingProblem:
 def constraint_costs(problem, constraints=None) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight / exponent / offset / level.
 
-    ``{key: {"costs": [...], "weight", "exponent", "offset", "clip", "hard", "global",
+    ``{key: {"costs": [...], "weight", "exponent", "offset", "clip", "global",
     "level", "reward", "level_flippable", "name", "label", "default_weight",
     "default_level"}}`` in `list_constraints()` order: one cost per station
     (``0 .. station_count - 1``) for the per-station constraints, one total for the global

@@ -23,7 +23,7 @@ timetable = st.solve(problem, time_limit_seconds=5.0, random_seed=42)  # canonic
 print(timetable["status"], len(timetable["lessons"]))
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`st_timetabling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `mode` (`"canonical"`, the default, or `"quickstart"`), `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `weights`, `on_new_best`, a full `config` (`st_timetabling.canon.SolverConfig` in the default mode, `st_timetabling.SolverConfig` in quickstart mode, or a `models.SolveConfig`), `initial_solution` (below) and `constraints` (see below). The C++ side builds and tests with:
 
 ```sh
 cmake -S use-cases/school-timetabling/cpp -B build/school-timetabling && cmake --build build/school-timetabling -j

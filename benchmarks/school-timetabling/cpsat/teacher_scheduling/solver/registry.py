@@ -261,8 +261,8 @@ class UnassignedLessonsCost(domain.UnassignedLessonsCost, _EnginePlugin):
     """Weekly periods per course.
 
     Hard (the default) matches them exactly; ``level="soft"`` relaxes to "at
-    most" and turns unfilled periods into a penalty — Comcigan's "unassigned
-    list" works this way. With the relaxed mode's `weight` above the sum of the
+    most" and turns unfilled periods into a penalty (an unassigned list).
+    With the relaxed mode's `weight` above the sum of the
     other soft terms (`UNASSIGNED_WEIGHT`), every period that can be filled is
     filled and only the truly impossible ones stay unassigned.
     """

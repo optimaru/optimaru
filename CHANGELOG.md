@@ -55,13 +55,16 @@ First release.
     hard total saturates instead of wrapping.
 - **Examples.** One Jupyter notebook per use case in `examples/`, with
   visualizations.
-- **Benchmarks.** Every use case is compared with OR-Tools CP-SAT on the same
-  instances and rescored by the use case's own evaluator; vehicle routing is
-  also compared with the OR-Tools Routing solver on CVRPLIB Set X. Pickup and
+- **Benchmarks.** Every use case but vehicle routing is compared with OR-Tools
+  CP-SAT on the same instances and rescored by the use case's own evaluator;
+  vehicle routing is compared with the OR-Tools Routing solver on CVRPLIB Set X.
+  The CP-SAT models come from the separate
+  [external-solver](https://github.com/optimaru/external-solver) repository,
+  except school timetabling's, which stays in `benchmarks/`. Pickup and
   delivery, project-job scheduling, bin packing, quadratic assignment,
   assembly-line balancing and vehicle routing also run on public instance sets
-  (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP, Augerat), downloaded from their
-  original sources with SHA-256 pinned files.
+  (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP, Augerat), downloaded on demand as
+  SHA-256 pinned files.
 - **License.** Apache License 2.0. NOTICE states that the engine is a modified
   derivative of Timefold Solver (itself derived from OptaPlanner and OptaPy),
   lists the use cases and benchmark harnesses derived from Timefold

@@ -1,6 +1,9 @@
 # Employee scheduling CP-SAT
 
-CP-SAT backend for the rule list of an `es_scheduling` request. One boolean per
+CP-SAT backend for the rule list of an `es_scheduling` request,
+`external_solver.employee_scheduling` from
+[external-solver](https://github.com/optimaru/external-solver); this project runs it
+against the engine in this checkout. One boolean per
 (shift, worker) plus one "unassigned" boolean per shift, then one plugin per rule
 under the rule's own name and units. Hard cost is minimized before soft cost, and
 the reported score always comes from the engine's own calculator.
@@ -17,8 +20,9 @@ uv run employee-scheduling-compare --instance demo --seconds 2 --json
 ```
 
 `es_scheduling.constraint_costs(schedule, constraints)` works on an engine
-schedule and a rule list, while the runner hands over a request, so this package
-provides the `constraint_costs(request)` the runner calls. It builds
+schedule and a rule list, while the runner hands over a request, so
+`external_solver.employee_scheduling` provides the `constraint_costs(request)` the
+runner calls. It builds
 `es_scheduling.DecomposedCalculator` from the request's rules and returns what
 that calculator reports for the roster, which is the calculator the engine
 searches with. The engine runs through `solve_request` with its default
@@ -26,7 +30,7 @@ settings and one start.
 
 ## Rules
 
-All 30 constraints of `es_scheduling.constraints` are modelled; `tests/test_solve.py`
+All 30 constraints of `es_scheduling.constraints` are modelled; external-solver's `tests/employee_scheduling/test_solve.py`
 checks that list against the rule union and `catalog()` against
 `es_scheduling.constraint_info()` row for row. Each plugin subclasses its spec
 (`class MaxConsecutiveDaysCost(domain.MaxConsecutiveDaysCost, RulePlugin)`) and
@@ -81,7 +85,7 @@ These are refused with a `ValueError`, not approximated:
   `required_skill_cost`, `employee_unavailability_cost`, `undesired_day_cost`,
   `desired_day_cost` (one term per evaluated employee, a worker scope's in-range ones,
   a 0 included) and `unassigned_shifts_cost` (its total). On the soft level the offset
-  moves to the `SCALE` grid with the term (`solve.selection`). Every other rule refuses
+  moves to the `SCALE` grid with the term (external-solver's `solve.selection`). Every other rule refuses
   an offset with "offset is not supported by this CP-SAT model".
 - `clip=False` with an offset on a hard rule (its `level`, or its default level), for
   every plugin. The rule schema refuses it already, and the objective refuses it again

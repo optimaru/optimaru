@@ -49,7 +49,8 @@ fc.solve(problem, constraints=[
 ])
 ```
 
-`fc.constraint_costs(schedule, picks)` keys the second pick `flight_conflict_cost#2`. The
+`fc.constraint_costs(schedule, picks)` (on the engine `FlightCrewSchedule`, e.g.
+`problem.to_core()`) keys the second pick `flight_conflict_cost#2`. The
 CP-SAT reference takes integral offsets.
 
 "Consecutive" follows the Java stream semantics: a pair (a, b) is consecutive when
@@ -198,10 +199,11 @@ solver's `solve` before the engine runs — the engine only fills what is still 
    `description_en` / `description_ko` to `python/flight_crew/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/flight-crew-scheduling/cpsat`](../../benchmarks/flight-crew-scheduling/cpsat) (a
-   plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays
-   like for like.
+5. mirror it in the CP-SAT model, `external_solver.flight_crew_scheduling` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), so the benchmark in
+   [`benchmarks/flight-crew-scheduling/cpsat`](../../benchmarks/flight-crew-scheduling/cpsat)
+   stays like for like.
 
 ## Benchmark
 

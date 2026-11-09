@@ -6,7 +6,7 @@ result with the shared engine evaluator.
 
 ## Constraints
 
-[`external_solver.bed_allocation.constraints`](https://github.com/optimaru/external-solver/tree/main/src/external_solver/bed_allocation/constraints.py) holds one plugin per engine constraint, named
+[`external_solver.bed_allocation.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/bed_allocation/constraints.py) holds one plugin per engine constraint, named
 like the domain spec it subclasses (`BedConflictCost`, ..., `UnassignedStaysCost`, ...,
 `MixedGenderRoomCost`), in `list_constraints()` order. A plugin carries only `build()`:
 its default level and weight come from `bed_allocation.constraint_info()` (the C++
@@ -25,7 +25,7 @@ integral offset is shaped exactly as in the engine, in both modes; a fractional 
 refused (`offset must be an integer for CP-SAT`). `clip=False` with an offset is refused on
 hard with the engine's message (`constraint 'bed_conflict_cost': clip=False with a non-zero
 offset cannot be hard, ...`); medium folds into soft, as in the engine, so it takes the
-literal formula. `tests/test_solve.py` pins all 27
+literal formula. External-solver's `tests/bed_allocation/test_solve.py` pins all 27
 assignments of a tiny instance and checks that the CP-SAT objective, the engine's own score
 and `bed_allocation.constraints.score()` agree per level under repeated, shifted and
 re-levelled picks.

@@ -91,7 +91,8 @@ ba.solve(plan, constraints=[
 ])
 ```
 
-`ba.constraint_costs(plan, picks)` keys the second pick `unassigned_stays_cost#2`. The
+`ba.constraint_costs(plan.to_core(), picks)` (it takes the engine `BedPlan`) keys the second
+pick `unassigned_stays_cost#2`. The
 CP-SAT reference takes integral offsets on every constraint (one term per evaluated unit,
 one for the global total).
 
@@ -150,9 +151,10 @@ solver's `solve` before the engine runs — the engine only fills what is still 
    `description_en` / `description_ko` to `python/bed_allocation/constraints.py` (plus its
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/bed-allocation/cpsat`](../../benchmarks/bed-allocation/cpsat) (a plugin
-   subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
+5. mirror it in the CP-SAT model, `external_solver.bed_allocation` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), so the benchmark in
+   [`benchmarks/bed-allocation/cpsat`](../../benchmarks/bed-allocation/cpsat) stays like
    for like.
 
 ## Benchmark

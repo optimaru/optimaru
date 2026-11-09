@@ -5,8 +5,9 @@ this repository's C++ engine (`include/optimaru/`): put every task on one
 station of a paced line so that no station exceeds the cycle time, precedences
 run forward, and as few stations as possible are opened. The base model is
 the standard SALBP-1 formulation (Scholl 1999; Otto, Otto & Scholl 2013).
-[`benchmarks/assembly-line-balancing/cpsat`](../../benchmarks/assembly-line-balancing/cpsat)
-holds the exact CP-SAT reference.
+The exact CP-SAT reference is `external_solver.assembly_line_balancing`
+([external-solver](https://github.com/optimaru/external-solver)), run against this engine by
+[`benchmarks/assembly-line-balancing/cpsat`](../../benchmarks/assembly-line-balancing/cpsat).
 
 ## Domain (assignment shape)
 
@@ -17,9 +18,10 @@ holds the exact CP-SAT reference.
 - Facts: `cycle_time`; per task `duration`, `min_station`, `max_station`,
   `fixed_station` (a penalty, not a pin), `forbidden_stations`; `precedences`
   (before/after), `max_stations`, `same_station_groups`, `different_station_pairs`.
-  The engine object refuses what the pydantic model refuses (a `ValueError` naming
+  The engine object refuses, like the pydantic model (a `ValueError` naming
   the field): `cycle_time` or a `duration` <= 0, `max_stations` < 1, a
   `min_station` or `fixed_station` < 0 and a `max_station` below `min_station`.
+  The pydantic model also requires station-domain indices below the task count.
 - `warm_start` — start from the stations on the tasks (tasks at `-1` go through the
   construction); a plain solve ignores input stations. Every solve resets it.
 
@@ -232,10 +234,12 @@ and the Python reference-parity tests pin its results.
    `description_en` / `description_ko` to `python/assembly_line_balancing/constraints.py`
    (plus its module-level default instance); callers then pick, reweight or flip it:
    `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model in
+5. mirror it in the CP-SAT model, `external_solver.assembly_line_balancing` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), with an exact encoding so its
+   `tests/assembly_line_balancing/test_constraint_parity.py` can pin assignments;
    [`benchmarks/assembly-line-balancing/cpsat`](../../benchmarks/assembly-line-balancing/cpsat)
-   (a plugin subclassing the spec; defaults come from `constraint_info()`), with an exact
-   encoding so `test_constraint_parity.py` can pin assignments.
+   runs it against this engine.
 
 ## Benchmark
 

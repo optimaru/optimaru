@@ -1,7 +1,5 @@
 """Exporting a timetable — the NEIS bulk file (CSV) and printable Excel.
 
-Matches Comcigan's "print" menu.
-
 - `neis_bundle()`   : the NEIS bulk file. One CSV per class.
 - `timetable_workbook()` : Excel with the overall / class / teacher / special-room timetables.
 
@@ -38,7 +36,7 @@ DAY_LABELS = ("월요일", "화요일", "수요일", "목요일", "금요일", "
 class NeisFormat:
     """Finer format of the NEIS base-timetable CSV.
 
-    Chapter 10 of the manual only shows how to **create and upload** the file —
+    Chapter 10 of the NEIS manual only shows how to **create and upload** the file —
     confirmed are the file name rule
     (`기초시간표(<school year>-<semester>,<grade>-<class>).csv`), the weekday x
     period grid, and that both subject and teacher names are matched; the CSV's
@@ -195,7 +193,7 @@ def neis_bundle(
                     )
             writer.writerow(row)
 
-        # The name rule Comcigan uses: 기초시간표(<school year>-<semester>,<grade>-<class>).csv
+        # The per-class file name used for the NEIS upload: 기초시간표(<school year>-<semester>,<grade>-<class>).csv
         number = _class_number(group.name, group.id)
         name = f"기초시간표({options.school_year}-{options.semester},{group.grade}-{number}).csv"
         text = buffer.getvalue()

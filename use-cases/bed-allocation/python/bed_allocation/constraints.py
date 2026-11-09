@@ -61,7 +61,7 @@ square of those beyond 10 (on the sentinel's total, the scoped unit)::
         UnassignedStaysCost(exponent=2, offset=10),
     ])
 
-``ba.constraint_costs(plan, picks)`` keys the second pick ``"unassigned_stays_cost#2"``.
+``ba.constraint_costs(plan.to_core(), picks)`` keys the second pick ``"unassigned_stays_cost#2"``.
 
 Names (`name`) are the C++ component names in snake_case
 (``BedConflictCost`` -> ``bed_conflict_cost``). The core derives them

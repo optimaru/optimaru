@@ -1,10 +1,10 @@
-"""Generates a sample workbook in the Comcigan layout.
+"""Generates a sample teacher-load workbook.
 
 Builds an example file in exactly the layout `excel.import_workbook` reads.
 A user downloads it as the teacher-load template and overwrites it with the
 school's own data; uploaded as is, it is also complete data that solves.
 Sheet names, column headers, keywords and weekday notation are the Korean
-labels of the Comcigan format; the sample data itself is in English.
+labels of the workbook format; the sample data itself is in English.
 
 School: 3 grades x 3 classes, 32–34 periods a week, 5 special-room types.
 """
@@ -105,7 +105,7 @@ def _assign_teacher(subject: str, grade: int, number: int) -> str:
 def build_rows() -> list[tuple[str, str, str, dict[tuple[int, int], int]]]:
     """(official subject name, short subject name, teacher name, {(grade, class): periods}) rows.
 
-    As in Comcigan, only rows with the same (official subject, short subject, teacher) are combined.
+    Only rows with the same (official subject, short subject, teacher) are combined.
     """
     official = {short: full for short, full, *_ in SUBJECTS}
     grouped: dict[tuple[str, str], dict[tuple[int, int], int]] = {}
@@ -145,7 +145,7 @@ def write_workbook(destination: str | IO[bytes] | None = None) -> bytes:
     basics.column_dimensions["B"].width = 24
     rows: list[tuple[str, Any]] = [
         ("항목", "값"),  # item, value
-        ("학교명", "Comcigan Middle School"),  # school name
+        ("학교명", "Sample Middle School"),  # school name
         ("학년도", 2026),  # school year
         *[(f"{grade}학년 학급수", CLASSES_PER_GRADE) for grade in GRADES],  # classes in grade N
         ("점심시간 직전교시", 4),  # period right before lunch

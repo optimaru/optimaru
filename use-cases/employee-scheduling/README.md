@@ -102,9 +102,10 @@ sit next to them):
    `bounds` to `python/es_scheduling/constraints.py`, plus its module-level default
    instance and its place in `SPEC_CLASSES`; the JSON rule model is generated from it.
    Add a hand-calculated positive and zero case to `tests/test_constraint_costs.py`;
-6. mirror it in the CP-SAT model in
-   [`benchmarks/employee-scheduling/cpsat`](../../benchmarks/employee-scheduling/cpsat) (a
-   plugin subclassing the spec; defaults come from `constraint_info()`) so the benchmark
+6. mirror it in the CP-SAT model, `external_solver.employee_scheduling` in
+   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
+   spec; defaults come from `constraint_info()`), so the benchmark in
+   [`benchmarks/employee-scheduling/cpsat`](../../benchmarks/employee-scheduling/cpsat)
    stays like for like.
 
 ## Benchmark

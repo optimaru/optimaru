@@ -1,7 +1,9 @@
 # task-assigning-cpsat
 
-CP-SAT alternative for task assigning. `catalog()` exposes independently
-selectable constraints/objectives; passing `constraints` replaces the defaults.
+CP-SAT alternative for task assigning: external-solver's `external_solver.task_assigning`
+(this package holds the engine vs CP-SAT comparison and points external-solver at the engine
+in this checkout). Its `catalog()` exposes independently selectable constraints/objectives;
+passing `constraints` replaces the defaults.
 
 Each plugin subclasses the `task_assigning.constraints` spec of the same name
 (`RequiredSkillCost`, `SquaredMakespanCost`, `CriticalPriorityTaskEndTimeCost`,
@@ -31,7 +33,7 @@ medium fold (`medium_fold="below_hard"`, read off `constraint_costs()`), so `cli
 with an offset is refused on hard and on medium with the engine's messages (`constraint
 'required_skill_cost': clip=False with a non-zero offset cannot be hard, ...` and
 `constraint 'unassigned_tasks_cost': clip=False with a non-zero offset cannot be medium
-here, ...`). `tests/test_solve.py` pins several layouts and checks
+here, ...`). External-solver's `tests/task_assigning/test_solve.py` pins several layouts and checks
 that the CP-SAT objective, `task_assigning.constraints.score()` and (wherever every task
 is assigned) the engine's own score agree per level under repeated, shifted and
 re-levelled picks.
