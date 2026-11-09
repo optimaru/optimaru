@@ -114,10 +114,10 @@ public:
             if (l1 < 0) return false;
 
             // The pair: the seed's list and one of the closest routes that
-            // contains a granular-neighbour. PyVRP samples from a bounded
-            // candidate set rather than considering every route pair; doing
-            // the same keeps the exhaustive move scan predictable on large
-            // instances while avoiding unrelated route exchanges.
+            // contains a granular-neighbour. Sampling from a bounded candidate
+            // set rather than considering every route pair keeps the
+            // exhaustive move scan predictable on large instances while
+            // avoiding unrelated route exchanges.
             int l2 = -1;
             std::vector<int> route_candidates;
             if (advanced_list_ && nearby_.enabled()) {
@@ -404,7 +404,7 @@ private:
 
     // Granular route-pair descent. The ordinary sequence move selector samples
     // one candidate and scores it. This pass enumerates the bounded
-    // neighbourhood used by PyVRP-style local search and applies the single
+    // granular neighbourhood (Toth & Vigo 2003) and applies the single
     // best improving move. All trial moves are reverted immediately, so the
     // live element index remains coherent and undo_last() can restore the
     // accepted sequence atomically if the acceptor rejects it.
@@ -435,7 +435,7 @@ private:
 
         // Exchange(1,1), both between routes and within each route. The
         // intra-route form is important for ordering and is the cheap
-        // counterpart of PyVRP's Exchange11 operator.
+        // counterpart of the inter-route exchange.
         consider_swaps(editor, l1, l2, remember);
 
         // 2-opt/2-opt inside either route.

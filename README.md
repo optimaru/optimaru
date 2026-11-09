@@ -78,7 +78,7 @@ and rescored by the use case's own evaluator; vehicle routing is compared with
 the OR-Tools Routing solver on CVRPLIB Set X, and school
 timetabling with OR-Tools CP-SAT. Pickup & delivery,
 project-job scheduling, bin packing, quadratic assignment and assembly-line
-balancing also run on public instance sets (Li & Lim, Patterson, Hexaly BPP,
+balancing also run on public instance sets (Li & Lim, RG30, Falkenauer,
 QAPLIB, SALBP).
 
 ## Features

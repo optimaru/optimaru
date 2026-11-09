@@ -10,7 +10,7 @@ SAMPLE = """\
 """
 
 
-def test_parse_and_convert_hexaly_rcpsp() -> None:
+def test_parse_and_convert_patterson_rcpsp() -> None:
     instance = parse_instance(SAMPLE, name="tiny")
     assert critical_path(instance) == 3
     model = make_model(instance)

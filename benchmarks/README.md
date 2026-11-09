@@ -12,8 +12,8 @@ taken as the result.
 | [vehicle-routing](vehicle-routing) | OR-Tools Routing | CVRPLIB Set X, Augerat |
 | [school-timetabling](school-timetabling) | OR-Tools CP-SAT | generated S/M/L schools |
 | [pickup-delivery](pickup-delivery) | OR-Tools CP-SAT | Li & Lim PDPTW |
-| [project-job-scheduling](project-job-scheduling) | OR-Tools CP-SAT | Patterson RCPSP + generated |
-| [bin-packing](bin-packing) | OR-Tools CP-SAT | Hexaly BPP instances |
+| [project-job-scheduling](project-job-scheduling) | OR-Tools CP-SAT | RG30 RCPSP (Patterson format) + generated |
+| [bin-packing](bin-packing) | OR-Tools CP-SAT | Falkenauer u/t (OR-Library) |
 | [quadratic-assignment](quadratic-assignment) | OR-Tools CP-SAT | QAPLIB |
 | [assembly-line-balancing](assembly-line-balancing) | OR-Tools CP-SAT | SALBP-1 |
 | [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated |

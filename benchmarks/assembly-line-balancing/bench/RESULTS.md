@@ -14,7 +14,6 @@ capacity and precedence feasibility before its station count is reported.
 | `instance_n=100_100` | 100 | engine | 30 s | 26 | 25 | 4.00% |
 | `instance_n=100_100` | 100 | CP-SAT | 6.2 s | 25 | 25 | 0.00% |
 
-CP-SAT's budget column is the time it took to prove the optimum. Hexaly reports a 0.2%
-average 60-second gap over the complete 525-instance large and 525-instance very-large
-collections; the three rows above are a sample, not an equivalent aggregate. The complete
-sweep is available through `--all`.
+CP-SAT's budget column is the time it took to prove the optimum. The three rows above are
+a sample of the 525-instance large collection, not an aggregate result. The complete sweep
+is available through `--all`.

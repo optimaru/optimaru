@@ -10,7 +10,7 @@ keep the two cost definitions identical.
 cd benchmarks/pickup-delivery/cpsat
 uv sync --all-groups --all-extras      # builds the engine extension too
 uv run pytest -q                       # CP-SAT model + parity tests
-uv run pickup-delivery-public-bench --help              # Li & Lim PDPTW (Hexaly archive)
+uv run pickup-delivery-public-bench --help              # Li & Lim PDPTW (SINTEF TOP archive)
 uv run pickup-delivery-public-bench --synthetic 200 --seconds 30 --workers 8   # seeded synthetic instance
 ```
 

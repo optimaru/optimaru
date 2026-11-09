@@ -16,7 +16,8 @@ OR-Tools lives here only; it is not part of the use case.
   (Uchoa et al. 2017, 100–1000 customers) with the current best-known
   solutions (BKS), read from the official catalog or its
   [GitHub mirror](https://github.com/PyVRP/Instances). Single Augerat
-  instances (`--instance A-n32-k5`) come from a SHA-256-pinned archive.
+  Set A instances (`--instance A-n32-k5`) are downloaded from CVRPLIB one
+  file at a time, each SHA-256 pinned.
 - **Same inputs**: every backend gets the fleet size from the instance name
   (`-kN`), the vehicle capacity, and the same rounded integer distance
   matrix (CVRPLIB's EUC_2D rule). Routes are round trips from the depot.
@@ -64,7 +65,7 @@ except that an incomplete engine plan fails the job (`--fail-on-incomplete`).
 ```
 vrp_benchmark/
 ├── run.py              CLI, series runner, summaries (python -m vrp_benchmark)
-├── instance.py         CVRPLIB parser, Augerat archive, rescore()
+├── instance.py         CVRPLIB parser, Augerat Set A download, rescore()
 ├── cvrplib.py          Set X catalog + BKS download and cache
 └── solvers/
     ├── engine.py           optimaru via vrp_routing

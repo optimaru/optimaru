@@ -5,10 +5,8 @@ The quadratic assignment problem on this repository's C++ engine
 minimizing the flow between every pair of facilities times the distance between
 their locations, plus an optional direct facility-location cost, with pinned and
 forbidden placements and facility-demand / location-capacity compatibility as
-hard constraints. The model is aligned with the quadratic-assignment examples
-listed in the
-[IBM CP Optimizer model library](https://www.ibm.com/docs/en/icos/22.2.0?topic=programming-where-find-cp-examples)
-and Gurobi's public quadratic-assignment modeling examples.
+hard constraints. The objective is the Koopmans-Beckmann (1957) formulation of the quadratic
+assignment problem.
 [`benchmarks/quadratic-assignment/cpsat`](../../benchmarks/quadratic-assignment/cpsat)
 holds the exact CP-SAT reference.
 
@@ -279,11 +277,10 @@ qap.solve(warm, time_limit_seconds=1.0, random_seed=42)
 print(warm.assignment, warm.total_cost)
 ```
 
-## QAPLIB benchmark used by Hexaly
+## QAPLIB benchmark
 
-`benchmarks/quadratic-assignment/bench/run_bench.py` downloads the same QAP
-template archive published by Hexaly and the corresponding QAPLIB solution
-archive, verifies both SHA-256 checksums, then re-scores every result with this
+`benchmarks/quadratic-assignment/bench/run_bench.py` downloads the QAPLIB
+instance and solution archives, verifies both SHA-256 checksums, then re-scores every result with this
 package's `constraint_costs()` (`flow_distance_cost`). Downloaded files stay in
 `benchmarks/quadratic-assignment/bench/.cache/` and are not committed.
 
@@ -297,9 +294,6 @@ uv run --project cpsat python -m bench.run_bench \
 ```
 
 The report shows the raw objective and gap to the QAPLIB best-known solution.
-Hexaly's website publishes a 1.1% aggregate gap at 60 seconds, not its
-per-instance assignments, so the script labels that number as an external
-aggregate rather than pretending it is a directly reproduced solver run.
 The checked-in local snapshot is [`bench/RESULTS.md`](../../benchmarks/quadratic-assignment/bench/RESULTS.md).
 
 ## Extending

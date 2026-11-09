@@ -14,7 +14,7 @@ cd benchmarks/project-job-scheduling/cpsat
 uv sync --all-groups --all-extras      # builds the engine extension too
 uv run pytest -q                       # CP-SAT model + parity tests
 uv run project-job-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
-uv run project-job-public-bench --help              # Patterson RCPSP (Hexaly archive)
+uv run project-job-public-bench --help              # RG30 RCPSP instances (Patterson format)
 ```
 
 Public-instance protocol and results: [`cpsat/PUBLIC_BENCHMARKS.md`](cpsat/PUBLIC_BENCHMARKS.md).

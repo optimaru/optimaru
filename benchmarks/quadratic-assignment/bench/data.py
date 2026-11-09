@@ -1,24 +1,39 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import re
 import tarfile
 import urllib.request
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from quadratic_assignment import QuadraticAssignmentProblemModel
 
-HEXALY_QAP_URL = "https://www.hexaly.com/examples/qap.zip"
-HEXALY_QAP_SHA256 = "6ee4f072c2697b26781b1ab488a8323a8d75ebef3b1a37f70d7d0567c4b780c1"
+QAPLIB_DATA_URL = (
+    "https://coral.ise.lehigh.edu/wp-content/uploads/2014/07/qapdata.tar.gz"
+)
+QAPLIB_DATA_SHA256 = "c6bf0e277156d097df21124f53ca5a5d0fa5344481ee401e13acb67694e190b3"
 QAPLIB_SOLUTIONS_URL = (
     "https://coral.ise.lehigh.edu/wp-content/uploads/2014/07/qapsoln.tar.gz"
 )
 QAPLIB_SOLUTIONS_SHA256 = (
     "002243dea9452000ec7ee5e43bd0aa651a639eb61039c4f35679531e67d71744"
 )
+
+
+# The benchmark covers every QAPLIB instance with 30 to 50 facilities (33 of
+# the archive's 136); `load_suite` reads only these.
+SUITE = (
+    "esc32a", "esc32b", "esc32c", "esc32d", "esc32e", "esc32g", "esc32h",
+    "kra30a", "kra30b", "kra32",
+    "lipa30a", "lipa30b", "lipa40a", "lipa40b", "lipa50a", "lipa50b",
+    "nug30",
+    "sko42", "sko49",
+    "ste36a", "ste36b", "ste36c",
+    "tai30a", "tai30b", "tai35a", "tai35b", "tai40a", "tai40b", "tai50a", "tai50b",
+    "tho30", "tho40",
+    "wil50",
+)  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -50,7 +65,9 @@ def _download(url: str, destination: Path, sha256: str) -> Path:
 
 def download_archives(cache_dir: Path) -> tuple[Path, Path]:
     return (
-        _download(HEXALY_QAP_URL, cache_dir / "hexaly-qap.zip", HEXALY_QAP_SHA256),
+        _download(
+            QAPLIB_DATA_URL, cache_dir / "qaplib-data.tar.gz", QAPLIB_DATA_SHA256
+        ),
         _download(
             QAPLIB_SOLUTIONS_URL,
             cache_dir / "qaplib-solutions.tar.gz",
@@ -115,17 +132,24 @@ def load_suite(
                     extracted.read().decode("ascii")
                 )
 
-    suite: dict[str, tuple[QuadraticAssignmentProblemModel, QapReference | None]] = {}
-    with zipfile.ZipFile(io.BytesIO(data_archive.read_bytes())) as archive:
-        for name in sorted(archive.namelist()):
-            if not name.lower().endswith(".dat"):
+    payloads: dict[str, str] = {}
+    with tarfile.open(data_archive, "r:gz") as archive:
+        for member in archive.getmembers():
+            if not member.isfile() or not member.name.lower().endswith(".dat"):
                 continue
-            instance = Path(name).stem.lower()
-            suite[instance] = (
-                parse_qap_data(archive.read(name).decode("ascii")),
-                references.get(instance),
-            )
-    return suite
+            instance = Path(member.name).stem.lower()
+            if instance not in SUITE:
+                continue
+            extracted = archive.extractfile(member)
+            if extracted is not None:
+                payloads[instance] = extracted.read().decode("ascii")
+    missing = sorted(set(SUITE) - payloads.keys())
+    if missing:
+        raise ValueError(f"QAPLIB archive lacks {', '.join(missing)}")
+    return {
+        instance: (parse_qap_data(payloads[instance]), references.get(instance))
+        for instance in SUITE
+    }
 
 
 def apply_permutation(

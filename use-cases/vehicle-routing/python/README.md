@@ -61,7 +61,7 @@ print(plan.routes())                   # {"V1": ["C1"]}
   the 0.2.0 renames and the 0.3.0 knobs are in the
   [use-case README](../README.md#constraints).
 
-The default VRP configuration also enables a PyVRP-style granular descent:
+The default VRP configuration also enables a granular descent (Toth & Vigo 2003):
 nearby route pairs are searched with best-improvement relocate, swap, 2-opt,
 2-opt* and bounded CROSS-exchange moves. Set `granular_descent = False` (or
 lower `descent_weight`) when a cheaper sampled neighbourhood is preferred.

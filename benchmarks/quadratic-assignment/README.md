@@ -59,9 +59,9 @@ in about 1.5 s, and at 10 s it matches the engine on all three instances (table 
 The engine runs single-threaded; CP-SAT gets `--workers` search workers and its time includes model
 construction.
 
-## QAPLIB (Hexaly archive)
+## QAPLIB harness
 
-`bench/run_bench.py` downloads QAPLIB (the Hexaly archive) with the QAPLIB best-known solutions on
+`bench/run_bench.py` downloads the QAPLIB instance and solution archives on
 demand, checksum-verified ([`bench/data.py`](bench/data.py)), and rescores every answer with
 `quadratic_assignment.constraint_costs` (`flow_distance_cost`).
 
@@ -90,7 +90,7 @@ Measured 2026-11-04 on one Apple M4 Max Mac (16 cores), 30 s per solver and inst
 
 ## QAPLIB
 
-QAPLIB (Hexaly example instances), measured 2026-11-04 with the C++ engine on one Apple M4 Max Mac (16 cores), 30 s per
+QAPLIB instances, measured 2026-11-04 with the C++ engine on one Apple M4 Max Mac (16 cores), 30 s per
 solver and instance, seed 1, the engine single-threaded. Lower is better. CP-SAT runs only up to the
 exact-model size cap (`--exact-max-size`); these n=30 instances are above it.
 

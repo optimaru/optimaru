@@ -130,7 +130,7 @@ public:
         // tried, and it is the selection schemes that are not ready for it.
         double ruinRecreateAsMoveWeight = 0.05;
         int ruinRecreateAsMoveMaxRuin = 12;
-        // PyVRP-style granular intensification: enumerate the bounded
+        // Granular intensification (Toth & Vigo 2003): enumerate the bounded
         // Exchange/2-opt/2-opt*/CROSS neighbourhood around a nearby route
         // pair. This is more expensive than a sampled move, so keep the
         // strategy at a measured small share of the search budget.
@@ -153,7 +153,7 @@ public:
         // It is what reaches the slack shifts a tightly loaded fleet needs —
         // each single swap is uphill, so late acceptance never chains them.
         // 0.05 measured on CVRPLIB Set X (60s, seeds 0-1, one instance per
-        // Hexaly bucket): X-n895-k37 goes from 1-2 unassigned visits to fully
+        // size bucket): X-n895-k37 goes from 1-2 unassigned visits to fully
         // assigned, X-n289-k60 from 15.8/14.4% to 9.7/9.3% gap, and X-n153
         // (3.1/2.6 -> 1.5/2.5), X-n491 (5.1/4.7 -> 4.8/3.8) and X-n701
         // (5.1/4.4 -> 4.3/4.4) improve too. Measured with the stagnation kick
@@ -213,8 +213,8 @@ public:
         // The ejection chain and the iterated local search need it: with it
         // off they decline every draw and only burn their share of the steps.
         bool drivingTimeNearby = true;
-        // PyVRP's granular neighbourhood defaults to 50 nearest customers;
-        // keep the same candidate horizon for route-pair intensification.
+        // Granular neighbourhood (Toth & Vigo 2003); 50 nearest customers was
+        // the initial candidate horizon for route-pair intensification.
         // 25 (from 50) with the iterated local search: half the candidates
         // per visit for the descent and the repair, which bought more than
         // the lost reach on Set X (see iterated_local_search_weight).

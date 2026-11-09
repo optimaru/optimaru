@@ -66,8 +66,8 @@ config into an `optimaru::Settings`. The engine then does:
 1. **Construction heuristic** — cheapest insertion, in First-Fit-Decreasing
    order (tightest time window and largest demand first).
 2. **Local search** — the sampled move mix (relocate / swap / 2-opt / or-opt /
-   2-opt\* tail swap / CROSS-exchange), plus a PyVRP-style granular
-   best-improvement descent on nearby route pairs. The descent enumerates
+   2-opt\* tail swap / CROSS-exchange), plus a granular
+   best-improvement descent (Toth & Vigo 2003) on nearby route pairs. The descent enumerates
    relocate, swap, 2-opt, 2-opt\* and bounded ExchangeNM moves, then applies
    the best candidate through the same acceptor (late acceptance by default).
    It is enabled by `granularDescent` and controlled by

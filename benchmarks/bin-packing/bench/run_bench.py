@@ -69,7 +69,7 @@ def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Compare our solvers on the instances shipped by Hexaly's BPP template."
+        description="Compare our solvers on Falkenauer's uniform and triplet instances (OR-Library)."
     )
     parser.add_argument(
         "--instance",
@@ -95,7 +95,8 @@ def main(argv: list[str] | None = None) -> int:
 
     results = []
     for name in selected:
-        source = suite[name]
+        source = suite[name].problem
+        best_known = suite[name].best_known_bins
         lower_bound = _lower_bound(source)
         runs = [_run_engine(source.model_copy(deep=True), args.seconds, args.seed)]
         if args.exact_max_size and len(source.items) <= args.exact_max_size:
@@ -110,11 +111,17 @@ def main(argv: list[str] | None = None) -> int:
                 if run["bins"] is None
                 else (run["bins"] - lower_bound) / lower_bound * 100.0
             )
+            run["gap_to_best_known_percent"] = (
+                None
+                if run["bins"] is None
+                else (run["bins"] - best_known) / best_known * 100.0
+            )
         results.append(
             {
                 "instance": name,
                 "items": len(source.items),
                 "lower_bound": lower_bound,
+                "best_known": best_known,
                 "runs": runs,
             }
         )
@@ -123,22 +130,22 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(results, indent=2))
         return 0
     print(
-        f"Hexaly BPP template instances — {args.seconds:g}s per solver, seed {args.seed}"
+        f"Falkenauer u/t instances (OR-Library) — {args.seconds:g}s per solver, seed {args.seed}"
     )
     print(
-        "These t/u files are not the BPPLIB GI collection used in Hexaly's 2024 benchmark article."
-    )
-    print(
-        f"{'instance':<12} {'items':>6} {'solver':<9} {'bins':>7} {'weight LB':>10} {'LB gap':>9} {'seconds':>9}"
+        f"{'instance':<12} {'items':>6} {'solver':<9} {'bins':>7} {'weight LB':>10} {'LB gap':>9} {'best':>6} {'BKS gap':>9} {'seconds':>9}"
     )
     for result in results:
         for run in result["runs"]:
             gap = run["gap_to_capacity_lower_bound_percent"]
             gap_text = "—" if gap is None else f"{gap:.2f}%"
+            bks_gap = run["gap_to_best_known_percent"]
+            bks_gap_text = "—" if bks_gap is None else f"{bks_gap:.2f}%"
             bins = run["bins"] if run["bins"] is not None else "—"
             print(
                 f"{result['instance']:<12} {result['items']:>6} {run['solver']:<9} {bins!s:>7} "
-                f"{result['lower_bound']:>10} {gap_text:>9} {run['seconds']:>9.3f}"
+                f"{result['lower_bound']:>10} {gap_text:>9} "
+                f"{result['best_known']:>6} {bks_gap_text:>9} {run['seconds']:>9.3f}"
             )
             if run.get("status"):
                 print(f"  {run['status']}")

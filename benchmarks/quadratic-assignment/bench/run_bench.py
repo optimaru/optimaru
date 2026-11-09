@@ -79,7 +79,7 @@ def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Run our QAP engines on the public instances shipped by Hexaly."
+        description="Run our QAP engines on QAPLIB instances with 30 to 50 facilities."
     )
     parser.add_argument(
         "--instance",
@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--all",
         action="store_true",
-        help="run every instance in Hexaly's QAP template archive",
+        help="run every instance of the benchmark's QAPLIB selection",
     )
     parser.add_argument("--seconds", type=float, default=60.0)
     parser.add_argument("--seed", type=int, default=1)
@@ -151,12 +151,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.as_json:
         print(json.dumps(results, indent=2))
         return 0
-    print(
-        f"QAPLIB via Hexaly template — {args.seconds:g}s per solver, seed {args.seed}"
-    )
-    print(
-        "Hexaly's published 60s aggregate gap is 1.1%; it does not publish per-instance assignments here."
-    )
+    print(f"QAPLIB — {args.seconds:g}s per solver, seed {args.seed}")
     print(
         f"{'instance':<12} {'n':>4} {'solver':<9} {'objective':>14} {'QAPLIB BKS':>14} {'gap':>9} {'seconds':>9}"
     )

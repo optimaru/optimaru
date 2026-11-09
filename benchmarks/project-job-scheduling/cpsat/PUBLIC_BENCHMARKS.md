@@ -1,7 +1,10 @@
 # RCPSP public comparison
 
-Source: Hexaly's Patterson-format archive
-(`https://www.hexaly.com/examples/rcpsp.zip`). Every activity duration,
+Instances: Pat1-Pat5 of the RG30 set (Vanhoucke et al.), 30 activities and
+four renewable resources each, in Patterson format. They are downloaded from a
+small SHA-256-pinned third-party archive
+(`https://www.hexaly.com/examples/rcpsp.zip`), because the original RCPLIB
+release is a large archive whose older versions are withdrawn. Every activity duration,
 precedence arc, renewable resource demand and capacity is mapped directly.
 
 ```bash

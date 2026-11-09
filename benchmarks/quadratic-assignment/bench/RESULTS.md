@@ -10,10 +10,9 @@ The solution is re-scored by `quadratic_assignment.constraint_costs`.
 | `lipa30a` | 30 | engine | 30 s | 13,403 | 13,178 | 1.71% |
 | `tai30a` | 30 | engine | 30 s | 1,883,012 | 1,818,146 | 3.57% |
 
-Hexaly reports a 1.1% average 60-second gap over 26 Taillard instances. Only
-`tai30a` above belongs to that family, so this table must not be read as an
-aggregate head-to-head result. Running all available archive instances is
-explicit:
+These three instances are a small sample, not an aggregate result. Running
+every instance of the benchmark's QAPLIB selection (33 instances with 30 to 50
+facilities) is explicit:
 
 ```sh
 cd benchmarks/quadratic-assignment && uv run --project cpsat python -m bench.run_bench --all --seconds 60 --json
