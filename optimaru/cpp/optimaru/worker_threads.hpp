@@ -16,8 +16,8 @@ namespace optimaru {
 // run_worker_threads
 // ---------------------------------------------------------------------------
 // Runs work(i) for every i in [0, count) on a thread of its own and joins
-// them all: the start-up and shutdown of every parallel pool in the engine
-// (Solver::solve_multistart) and in the use cases' own worker pools.
+// them all: the start-up and shutdown of both parallel pools of the engine
+// (Solver::solve_multistart and solve_parallel_starts).
 //
 // Creating a thread can fail: std::thread throws std::system_error when the
 // system has no thread to give (and the thread state allocation can throw

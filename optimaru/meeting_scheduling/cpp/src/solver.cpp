@@ -75,8 +75,8 @@ void runEngine(const Solver::Config& config, MeetingSchedule& schedule,
     // lists), never a decision variable, so the engine's multi-start — which
     // copies this config into every worker thread while the workers mutate
     // their own solution copies — stays safe. A hook reading live variables
-    // would have to move to hand-rolled workers (the school-timetabling
-    // pattern).
+    // would have to run its starts through optimaru::solve_parallel_starts
+    // (the pattern of school timetabling's canonical solver).
     std::vector<std::vector<int>> dayFitStarts;
     if (config.day_fit_value_probability > 0.0) {
         dayFitStarts = buildDayFitStarts(schedule);
