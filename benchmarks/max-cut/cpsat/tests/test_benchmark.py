@@ -21,3 +21,10 @@ def test_both_answers_rescore_with_the_engine_evaluator() -> None:
     answer = benchmark.solve_cpsat(problem, 2.0, 1, 2)
     rescored = score_solution(benchmark.PACKAGE, answer)
     assert rescored.levels == (answer.score_hard, answer.score_soft) == (0, float(answer.cut_weight))
+
+
+def test_every_instance_builds() -> None:
+    built = {name: build() for name, build in benchmark.instances().items()}
+    assert built and all(problem is not None for problem in built.values())
+    # Every rung has a size to show beside its name.
+    assert all(benchmark.describe(problem) for problem in built.values())

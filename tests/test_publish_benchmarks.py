@@ -365,6 +365,10 @@ def test_the_two_solver_runs_of_a_use_case_are_joined_into_its_comparison(tmp_pa
     assert compared["knapsack"][0] == json.loads(json.dumps(both))
     assert "| a | 3 jobs | **0hard/-3soft** | 0hard/-5soft |" in publish.compare_block(compared["knapsack"], "footer")
 
+    # `--workers` is CP-SAT's: the engine half may record another value, and the join keeps CP-SAT's.
+    (joined,) = publish.join_solver_runs("knapsack", [_half("engine", workers=1)], [_half("cp-sat", workers=8)])
+    assert joined["workers"] == 8
+
 
 @pytest.mark.parametrize(
     ("cpsat", "message"),
@@ -400,7 +404,7 @@ def test_a_comparison_without_a_run_of_each_solver_is_refused(tmp_path) -> None:
             )
         )
     with pytest.raises(SystemExit, match="expected <slug>.json"):
-        publish.load_compared(_files(tmp_path / "other", knapsack__gurobi=[_half("engine")]))
+        publish.load_compared(_files(tmp_path / "other", knapsack__other=[_half("engine")]))
     # A failed instance has no runs to count; it is reported as failed, as before.
     failed = [{"case": "knapsack", "instance": "demo", "error": "Traceback"}]
     assert publish.load_compared(_files(tmp_path / "failed", knapsack=failed)) == {"knapsack": failed}

@@ -79,8 +79,8 @@ and `--solver engine` or `--solver cp-sat` runs one solver only, which lets
 the single-threaded engine runs and the CP-SAT runs be measured side by side.
 The publisher joins the JSON of the two runs (`compare/<slug>.engine.json` and
 `compare/<slug>.cp-sat.json`) into the comparison after checking that they are
-of the same instances, budget, seed and workers; it refuses a comparison that
-lacks a run of either solver.
+of the same instances, budget and seed; it refuses a comparison that lacks a
+run of either solver.
 
 A CP-SAT run gets the budget as its time limit, which CP-SAT counts from the
 start of the search, so building the model comes on top. The comparison runner

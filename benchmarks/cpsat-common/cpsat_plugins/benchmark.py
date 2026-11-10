@@ -229,7 +229,9 @@ def run_instance(
         if deadline is not None and getattr(case, "__spec__", None) is not None:
             runs.append(_solve_cpsat_bounded(case, instance, seconds, seed, workers, deadline))
         else:
-            runs.append(_solve_cpsat(case, factory(), seconds, seed, workers))
+            # The engine solves its problem in place, so CP-SAT gets a fresh one after it.
+            problem = factory() if "engine" in solvers else engine_problem
+            runs.append(_solve_cpsat(case, problem, seconds, seed, workers))
 
     return InstanceResult(
         case=case.NAME,

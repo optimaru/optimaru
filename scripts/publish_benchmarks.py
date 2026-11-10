@@ -1074,15 +1074,18 @@ def _load(results: Path, name: str):
     return json.loads(path.read_text()) if path.exists() else None
 
 
-#: What a result says about its instance and its run, apart from the runs themselves.
-_SAME_IN_BOTH_RUNS = ("instance", "size", "budget", "seed", "workers", "exact", "caveat")
+#: What a result says about its instance and its run, apart from the runs themselves and
+#: from `workers`, which is CP-SAT's alone (the engine runs single-threaded).
+_SAME_IN_BOTH_RUNS = ("instance", "size", "budget", "seed", "exact", "caveat")
 
 
 def join_solver_runs(slug: str, engine: list[dict], cpsat: list[dict]) -> list[dict]:
     """The comparison that an engine-only and a CP-SAT-only run of the same instances add up to.
 
-    Refused: a failed instance, instances that differ in name, order, size, budget, seed or
-    workers, and a result that is not of the one solver its file is for.
+    Refused: a failed instance (a run of both solvers reports one as failed; here one half
+    would be missing, so it is run again first), instances that differ in name, order, size,
+    budget or seed, and a result that is not of the one solver its file is for. The joined
+    result states the workers of the CP-SAT run.
     """
     if [result.get("instance") for result in engine] != [result.get("instance") for result in cpsat]:
         raise SystemExit(f"{slug}: the engine and the cp-sat file hold different instances")
@@ -1098,7 +1101,7 @@ def join_solver_runs(slug: str, engine: list[dict], cpsat: list[dict]) -> list[d
         for result, solver in ((left, "engine"), (right, "cp-sat")):
             if [run["solver"] for run in result["runs"]] != [solver]:
                 raise SystemExit(f"{slug}: {name} in the {solver} file is not a run of {solver} alone")
-        joined.append({**left, "runs": [*left["runs"], *right["runs"]]})
+        joined.append({**left, "workers": right.get("workers"), "runs": [*left["runs"], *right["runs"]]})
     return joined
 
 
@@ -1109,6 +1112,8 @@ def load_compared(directory: Path) -> dict[str, list[dict]]:
     ``<slug>.cp-sat.json`` are the two ``--solver`` runs and are joined. Refused: one of
     the two without the other, both forms for one use case, and an instance without a run
     of each solver, which would otherwise be published as a solver that found nothing.
+    A failed instance of a ``<slug>.json`` passes and is published as failed; the per-solver
+    files are stricter (`join_solver_runs`), and that difference is meant.
     """
     whole: dict[str, list[dict]] = {}
     halves: dict[str, dict[str, list[dict]]] = {}
