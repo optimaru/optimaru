@@ -13,8 +13,10 @@
 #include "optimaru/select/scheme.hpp"
 #include "optimaru/model/element_index.hpp"
 #include "optimaru/ruin_recreate/greedy_repair.hpp"
+#include "optimaru/ruin_recreate/removal_gain.hpp"
 #include "optimaru/model/snapshot.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/portable_random.hpp"
 
 namespace optimaru {
 
@@ -32,7 +34,7 @@ namespace optimaru {
 // outcome is reported back to it, so a ruin operator is credited for what it
 // achieves here too and not only for what it achieves in a kick.
 //
-// Works for both variable kinds: on assignment the repair is plain best-value.
+// Works for both shapes: on assignment the repair is plain best-value.
 template <typename Solution>
 class RuinRecreateMove final : public MoveOperator<Solution> {
     using Traits = SolutionTraits<Solution>;
@@ -52,14 +54,14 @@ public:
     bool apply(OperatorContext<Solution>& ctx, std::mt19937_64& rng,
                std::vector<int>& entities) override {
         Editor<Solution>& editor = ctx.editor;
-        const int n = GreedyRepair<Solution>::candidate_count(editor.solution());
+        const int n = ruin_candidate_count(ctx);
         if (n < 2 || ruins_.empty()) return false;
 
         // Much smaller than a kick's ruin: it has to be cheap enough to run
         // every few steps, and small enough that the acceptor sees a local
         // change rather than a restart.
         const int ruin_count = std::clamp(
-                1 + static_cast<int>(rng() % static_cast<std::uint64_t>(std::max(1, max_ruin_))),
+                1 + random_index(rng, std::max(1, max_ruin_)),
                 1, n - 1);
 
         drawn_ruin_ = ruin_selector_.select(rng);

@@ -18,6 +18,7 @@
 #include "optimaru/moves/preview_evaluation.hpp"
 #include "optimaru/stop/stop_throttle.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/portable_random.hpp"
 
 namespace optimaru {
 
@@ -34,7 +35,7 @@ namespace optimaru {
 // So: pick a nearby pair, then repeatedly apply the single best improving move
 // over it until the pair is locally optimal or the sweep cap hits. This is the
 // difference between "is this one random move an improvement?" and "what is
-// the best move available here?". The pair is per kind:
+// the best move available here?". The pair is per shape:
 //
 //  - sequence:  two geometrically nearby lists; every relocation between them, in
 //           both directions. An opt-in granular mode also enumerates
@@ -60,7 +61,7 @@ namespace optimaru {
 // improvement". Note also that an element relocated on more than one sweep
 // appears in `entities` more than once, which entity tabu tolerates.
 //
-// Both kinds.
+// Both shapes.
 template <typename Solution>
 class Descent final : public MoveOperator<Solution> {
     using Traits = SolutionTraits<Solution>;
@@ -79,7 +80,7 @@ public:
         : index_(index),
           nearby_(nearby),
           max_sweeps_(max_sweeps),
-          entity_recommender_(entity_hint),
+          entity_hint_(entity_hint),
           advanced_list_(advanced_list),
           list_max_segment_(std::max(1, list_max_segment)),
           list_candidate_routes_(std::max(1, list_candidate_routes)),
@@ -108,7 +109,7 @@ public:
             evaluations_ = 0;
 
             const int seed =
-                    static_cast<int>(rng() % static_cast<std::uint64_t>(element_count));
+                    random_index(rng, element_count);
             const int l1 = index_.list_of(seed);
             if (l1 < 0) return false;
 
@@ -143,7 +144,7 @@ public:
                 l2 = route_candidates[static_cast<std::size_t>(rng() % route_candidates.size())];
             }
             if (l2 < 0) {
-                l2 = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count - 1));
+                l2 = random_index(rng, list_count - 1);
                 if (l2 >= l1) ++l2;
             }
 
@@ -200,7 +201,7 @@ private:
 
     // --- assignment ---
 
-    // Picks an entity (through the recommender when the use case supplies one)
+    // Picks an entity (through the entity hint when the use case supplies one)
     // plus a nearby partner, then repeatedly applies the single best improving
     // change-or-swap over the two until none is left or the sweep cap hits.
     bool apply_basic(OperatorContext<Solution>& ctx, std::mt19937_64& rng,
@@ -218,14 +219,14 @@ private:
             if (entity_count < 1 || value_count < 2) return false;
 
             std::uniform_int_distribution<int> entity_pick(0, entity_count - 1);
-            int e1 = entity_recommender_ ? entity_recommender_(rng) : -1;
+            int e1 = entity_hint_ ? entity_hint_(rng) : -1;
             if (e1 < 0 || e1 >= entity_count) e1 = entity_pick(rng);
             e1 = movable_entity(solution, e1, entity_pick, rng);
             // Degenerate all-pinned case: movable_entity hands back the pinned
             // entity it was given rather than corrupting the assignment.
             if (entity_is_pinned<Traits>(solution, e1)) return false;
 
-            // Partner: a nearby entity when a distance meter is configured
+            // Partner: a nearby entity when nearby selection is configured
             // (classmates in timetabling, same-day shifts in rostering), else a
             // uniform draw. -1 = descend on e1 alone.
             int e2 = -1;
@@ -541,7 +542,7 @@ private:
     ElementIndex<Solution>& index_;
     const Neighborhoods& nearby_;
     int max_sweeps_;
-    const std::function<int(std::mt19937_64&)>& entity_recommender_;
+    const std::function<int(std::mt19937_64&)>& entity_hint_;
     bool advanced_list_;
     int list_max_segment_;
     int list_candidate_routes_;

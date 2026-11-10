@@ -31,7 +31,18 @@
 - **Docs.** `docs/extending.md` is a step-by-step guide to adding a move or a
   cost, and a documentation site (MkDocs, with an API reference generated from
   the sources) is built from `docs/` and published on GitHub Pages. The engine
-  layout in the README lists every header.
+  layout in the README lists every directory. `CONTRIBUTING.md` and a section
+  near the top of the README give the short version of adding a constraint or
+  a move and link to the guide.
+- **Engine internals.** The step loop (`search/local_search.hpp`) and the
+  decomposed objective (`score/decomposed_objective.hpp`) are shorter: the
+  move mix, the kick's polish loop and the adaptive selectors share one
+  sampling and scoring path, the score levels fold in one place, and the
+  built-in per-constraint profiler (the undocumented `ES_PROFILE` environment
+  variable) is gone; use a sampling profiler instead. `ListMove::Kind`
+  enumerators are PascalCase like every other engine enum, and
+  `GreedyRepair::candidate_count` is replaced by `ruin_candidate_count`. A
+  seeded, step-limited solve gives the same result as before.
 
 ## 0.4.0
 

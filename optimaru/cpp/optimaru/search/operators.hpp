@@ -11,7 +11,7 @@
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/model/editor.hpp"
 // The plugin point only, never the select/schemes.hpp umbrella: that
-// one includes the localsearch config, which would close a cycle back here.
+// one includes settings.hpp, which includes this header's scheme back.
 #include "optimaru/select/scheme.hpp"
 
 namespace optimaru {
@@ -23,7 +23,7 @@ namespace optimaru {
 
 // What a custom operator gets to see: the score editor (the ONLY way it may
 // mutate the solution), the precomputed nearby lists (empty when no
-// local_search.nearby.distance is configured), and — for sequence solutions — the engine's
+// search.nearby.distance is configured), and — for sequence solutions — the engine's
 // live element index (element_list[e] / element_position[e] = where element e
 // currently is; -1 = unassigned). The index is read-only for operators; the
 // engine resynchronizes it automatically after a custom move (the editor

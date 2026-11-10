@@ -12,6 +12,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/ruin_recreate/random_ruin.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/portable_random.hpp"
 
 namespace optimaru {
 
@@ -33,7 +34,7 @@ namespace optimaru {
 //
 // sequence shape only — a "string" is a run of consecutive positions, which has no
 // meaning for assignment variables. Requires nearby lists (a configured
-// local_search.nearby.distance); without either it delegates to the random ruin.
+// search.nearby.distance); without either it delegates to the random ruin.
 template <typename Solution>
 class SisrRuin final : public RuinOperator<Solution> {
     using Traits = SolutionTraits<Solution>;
@@ -73,7 +74,7 @@ public:
             ruined.reserve(static_cast<std::size_t>(ruin_count));
             int cut_lists = 0;
 
-            const int seed = static_cast<int>(rng() % static_cast<std::uint64_t>(element_count));
+            const int seed = random_index(rng, element_count);
             // The seed itself first, then outward through its neighbours: each
             // contributes the run around it in its own (not yet cut) list.
             if (!cut_string_around(ctx, seed, list_cut, ruined, max_string_size, ruin_count, rng)) {
@@ -113,8 +114,8 @@ private:
         // Run length in [1, min(list_size, max_string_size)], positioned so that
         // `element` falls somewhere inside it (the paper's random offset).
         const int upper = std::min(list_size, max_string_size);
-        const int size = 1 + static_cast<int>(rng() % static_cast<std::uint64_t>(upper));
-        const int offset = static_cast<int>(rng() % static_cast<std::uint64_t>(size));
+        const int size = 1 + random_index(rng, upper);
+        const int offset = random_index(rng, size);
         int start = ctx.element_position[element] - offset;
 
         for (int k = 0; k < size; ++k) {

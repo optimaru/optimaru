@@ -15,6 +15,8 @@
 #include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/model/neighborhoods.hpp"
+#include "optimaru/portable_random.hpp"
+#include "optimaru/ruin_recreate/removal_gain.hpp"
 #include "optimaru/select/schemes.hpp"
 #include "optimaru/ruin_recreate/random_ruin.hpp"
 #include "optimaru/ruin_recreate/related_ruin.hpp"
@@ -99,7 +101,7 @@ public:
         const SearchSettings& ls = config_.search;
         Score current_score = editor.score();
         Score best_score = current_score;
-        auto best = Snapshot::take(solution);
+        Snapshot best = Snapshot::take(solution);
         if (config_.on_new_best) config_.on_new_best(0, best_score);
 
         std::unique_ptr<Acceptor> acceptor = make_acceptor(current_score);
@@ -130,15 +132,15 @@ public:
             if (lns.route_ruin) ruins.push_back(&route_ruin);
         }
         for (const auto& op : ruin_operators_) ruins.push_back(op.get());
-        auto ruin_selector = make_operator_selection_scheme(
-                lns.selection_type, static_cast<int>(ruins.size()), lns.rewards, lns.operator_decay,
-                lns.selection_segment_length, lns.selection_alpha);
-
+        const auto make_selector = [&lns](std::size_t operator_count) {
+            return make_operator_selection_scheme(
+                    lns.selection_type, static_cast<int>(operator_count), lns.rewards,
+                    lns.operator_decay, lns.selection_segment_length, lns.selection_alpha);
+        };
+        auto ruin_selector = make_selector(ruins.size());
         // Adaptive selection over {built-in move mix, custom operators...};
         // only consulted when custom move operators are registered.
-        auto move_selector = make_operator_selection_scheme(
-                lns.selection_type, 1 + static_cast<int>(move_operators_.size()), lns.rewards,
-                lns.operator_decay, lns.selection_segment_length, lns.selection_alpha);
+        auto move_selector = make_selector(1 + move_operators_.size());
         OperatorContext<Solution> operator_context{editor, nearby_, index_.lists(),
                                                   index_.positions()};
 
@@ -162,9 +164,7 @@ public:
                 index_, nearby_, ls.iterated_local_search_max_segment);
         // Its own adaptive ruin weights: an ILS outcome is measured after the
         // descent and would otherwise retrain the destroy-repair move's.
-        auto ils_ruin_selector = make_operator_selection_scheme(
-                lns.selection_type, static_cast<int>(ruins.size()), lns.rewards, lns.operator_decay,
-                lns.selection_segment_length, lns.selection_alpha);
+        auto ils_ruin_selector = make_selector(ruins.size());
         [[maybe_unused]] IteratedLocalSearchMove<Solution> iterated_local_search(
                 index_, repair_, granular_local_search, ruins, *ils_ruin_selector,
                 ls.iterated_local_search_min_ruin, ls.iterated_local_search_max_ruin,
@@ -173,7 +173,7 @@ public:
         // Route elimination is sequence-only, for the same reason the SISR and
         // route ruins are: it declines on assignment solutions, so registering it
         // there would only burn steps on an operator that can never move.
-        // Descent has a neighbourhood on both kinds and is registered on both.
+        // Descent has a neighbourhood on both shapes and is registered on both.
         if constexpr (Traits::shape == Shape::Sequence) {
             if (ls.route_elimination_weight > 0.0) {
                 strategies.push_back({ls.route_elimination_weight, &route_elimination});
@@ -238,81 +238,55 @@ public:
                 steps_since_best_or_lns = 0;
                 lns_trigger = std::min(lns_trigger * 2, lns_trigger_cap);
             } else {
-                // A built-in strategy plugin if one is drawn, otherwise the
-                // ordinary move mix / a caller's operator under the adaptive
-                // selector. `selector_index` < 0 means nothing to report back.
+                // A built-in strategy plugin if one is drawn; otherwise a
+                // caller's operator or the ordinary move mix (op == nullptr),
+                // chosen by the adaptive selector when custom operators are
+                // registered. `selector_index` >= 0: the selector was asked
+                // and hears the outcome (0 is the move mix).
                 MoveOperator<Solution>* op = draw_strategy(strategies, rng);
                 int selector_index = -1;
-                bool custom = false;
-                if (op == nullptr) {
-                    int move_op = 0;
-                    bool selector_consulted = false;
-                    if (!move_operators_.empty()) {
-                        const double gate = ls.custom_move_probability;
-                        if (gate >= 1.0 || (gate > 0.0 && unit_(rng) < gate)) {
-                            move_op = move_selector->select(rng);
-                            selector_consulted = true;
-                        }
+                if (op == nullptr && custom_operators_get_a_turn(rng)) {
+                    selector_index = move_selector->select(rng);
+                    if (selector_index > 0) {
+                        op = move_operators_[static_cast<std::size_t>(selector_index) - 1].get();
                     }
-                    if (move_op != 0) {
-                        op = move_operators_[static_cast<std::size_t>(move_op) - 1].get();
-                        custom = true;
-                    }
-                    if (selector_consulted) selector_index = move_op;
                 }
-                AppliedMove move;
-                bool applied = true;
-                // A previewed move is scored from the objective's cached
-                // route data without touching the solution, and applied only
-                // if the acceptor takes it. Most moves are rejected, so this
-                // is where the apply/score/undo cost of a step disappears.
-                // `previewed`: the move is not applied and `sampled_score` is
-                // its preview; `scored`: `sampled_score` is its score either
-                // way (see score_list_move).
+                const bool custom = selector_index > 0;
+
+                // The candidate: its score, the entities it touched (for the
+                // acceptor's tabu memory), and whether it is in place.
+                // `previewed`: scored from the objective's cached data without
+                // touching the solution, and applied only if accepted. Most
+                // moves are rejected, so this is where the apply/score/undo
+                // cost of a step disappears.
+                AppliedMove move;        // the move mix's own move
                 bool previewed = false;
-                bool scored = false;
-                Score sampled_score;
+                bool applied = true;     // false: the operator found no move
+                Score candidate_score;
+                const int* entities = move.entities;
+                int entity_count = 0;
                 editor.begin_trial();
                 if (op == nullptr) {
-                    if constexpr (Traits::shape == Shape::Assignment) {
-                        move = apply_basic_move(editor, rng);
-                    } else {
-                        move = sample_list_move(editor, rng);
-                        previewed = score_list_move(editor, move, sampled_score);
-                        scored = true;
-                    }
+                    previewed = sample_move(editor, rng, move, candidate_score);
+                    entity_count = move.entity_count;
                 } else {
                     if (custom) editor.track_touched_lists();
                     custom_entities.clear();
                     applied = op->apply(operator_context, rng, custom_entities);
+                    if (applied) candidate_score = editor.score();
+                    entities = custom_entities.data();
+                    entity_count = static_cast<int>(custom_entities.size());
                 }
                 if (applied) {
-                    Score candidate_score = scored ? sampled_score
-                                                          : editor.score();
-                    const int* move_entities = op == nullptr ? move.entities
-                                                            : custom_entities.data();
-                    const int move_entity_count =
-                            op == nullptr ? move.entity_count
-                                          : static_cast<int>(custom_entities.size());
-                    bool accepted = acceptor->accepts(candidate_score, current_score, best_score,
-                                                         move_entities, move_entity_count,
-                                                         needs_time_gradient
-                                                                 ? stop.progress()
-                                                                 : 0.0,
-                                                         rng);
+                    const bool accepted = acceptor->accepts(
+                            candidate_score, current_score, best_score, entities, entity_count,
+                            needs_time_gradient ? stop.progress() : 0.0, rng);
                     const MoveOutcome outcome =
-                            candidate_score > best_score      ? MoveOutcome::NewBest
-                            : candidate_score > current_score ? MoveOutcome::Better
-                            : accepted                      ? MoveOutcome::Accepted
-                                                            : MoveOutcome::Rejected;
+                            classify(candidate_score, current_score, best_score, accepted);
                     if (accepted) {
                         current_score = candidate_score;
-                        acceptor->on_accepted(move_entities, move_entity_count);
-                        if (previewed) {
-                            if constexpr (Traits::shape == Shape::Sequence) {
-                                apply_list_move(editor, move);
-                            }
-                        }
+                        acceptor->on_accepted(entities, entity_count);
+                        if (previewed) apply_previewed(editor, move);
                     } else if (!previewed) {  // a previewed move was never applied
                         editor.begin_rollback();
                         if (op == nullptr) {
@@ -327,7 +301,7 @@ public:
                 } else {
                     editor.end_trial(false);
                 }
-                if (op != nullptr && custom) {
+                if (custom) {
                     // Resynchronize the element index with whatever lists the
                     // custom operator touched (apply and/or undo).
                     if constexpr (Traits::shape == Shape::Sequence) {
@@ -344,7 +318,7 @@ public:
 
             if (current_score > best_score) {
                 best_score = current_score;
-                best = Snapshot::take(solution);
+                Snapshot::capture(best, solution);  // reuses the snapshot's storage
                 stop.on_improvement(step);
                 steps_since_best_or_lns = 0;
                 lns_trigger = lns.unimproved_step_trigger;
@@ -381,14 +355,29 @@ private:
     // enough that the difference barely shows, and they were measured through
     // this same code so the numbers are self-consistent — but the ORDER below
     // is a priority, and raising a weight dilutes everything after it.
-    static MoveOperator<Solution>* draw_strategy(const std::vector<WeightedStrategy>& strategies,
-                                                std::mt19937_64& rng) {
-        if (strategies.empty()) return nullptr;
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
+    MoveOperator<Solution>* draw_strategy(const std::vector<WeightedStrategy>& strategies,
+                                         std::mt19937_64& rng) {
         for (const WeightedStrategy& s : strategies) {
-            if (unit(rng) < s.weight) return s.op;
+            if (unit_(rng) < s.weight) return s.op;
         }
         return nullptr;
+    }
+
+    // Whether this step asks the adaptive selector to choose between the move
+    // mix and the caller's operators (SearchSettings::custom_move_probability).
+    bool custom_operators_get_a_turn(std::mt19937_64& rng) {
+        if (move_operators_.empty()) return false;
+        const double gate = config_.search.custom_move_probability;
+        return gate >= 1.0 || (gate > 0.0 && unit_(rng) < gate);
+    }
+
+    // How a candidate fared, for the adaptive selectors.
+    static MoveOutcome classify(const Score& candidate, const Score& current, const Score& best,
+                                bool accepted) {
+        return candidate > best      ? MoveOutcome::NewBest
+               : candidate > current ? MoveOutcome::Better
+               : accepted            ? MoveOutcome::Accepted
+                                     : MoveOutcome::Rejected;
     }
 
     const Settings& config_;
@@ -401,7 +390,7 @@ private:
     // repair_, which holds a reference to it.
     ElementIndex<Solution> index_;
     // Ruin & repair, shared by the stagnation kick here and the strategies
-    // in search/ that do the same thing as an ordinary move.
+    // in moves/ and ruin_recreate/ that do the same thing as an ordinary move.
     GreedyRepair<Solution> repair_;
     std::uniform_real_distribution<double> unit_{0.0, 1.0};
 
@@ -449,14 +438,12 @@ private:
         }
     }
 
-    bool use_nearby(std::mt19937_64& rng) {
-        if (!nearby_.enabled()) return false;
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
-        return unit(rng) < config_.search.nearby.probability;
-    }
-
-    int random_of(const std::vector<int>& v, std::mt19937_64& rng) {
-        return v[rng() % v.size()];
+    // A random nearby neighbour of `e`, drawn with NeighborSettings::probability
+    // when nearby selection is configured; -1 means draw uniformly instead.
+    int nearby_pick(int e, std::mt19937_64& rng) {
+        if (!nearby_.enabled() || !(unit_(rng) < config_.search.nearby.probability)) return -1;
+        const std::vector<int>& neighbours = nearby_.of(e);
+        return neighbours.empty() ? -1 : neighbours[rng() % neighbours.size()];
     }
 
     // Uniformly draw from [0, n) except one value, without rejection. This is
@@ -464,7 +451,7 @@ private:
     // no-op. Besides wasting a score evaluation, accepted no-ops advance Late
     // Acceptance history and dilute the useful neighbourhood.
     static int random_other(int n, int excluded, std::mt19937_64& rng) {
-        int picked = static_cast<int>(rng() % static_cast<std::uint64_t>(n - 1));
+        int picked = random_index(rng, n - 1);
         if (picked >= excluded) ++picked;
         return picked;
     }
@@ -474,11 +461,10 @@ private:
     // One applied move, with what is needed to reject it and to feed the
     // acceptor's tabu memory.
     struct AppliedMove {
-        int kind = 0;  // assignment only: 0=change 1=swap (sequence moves are `list`)
-        int a = 0, b = 0, c = 0, d = 0;  // assignment: (entity, previous value) pairs
-        ListMove list;                   // sequence: the move itself
-        int entities[2] = {0, 0};
+        int entities[2] = {0, 0};  // the entities / elements the move is about
         int entity_count = 0;
+        int previous[2] = {0, 0};  // assignment: the value each entity held before
+        ListMove list;             // sequence: the move itself
     };
 
     // With nothing movable no move, built-in or custom, has a legal target, so
@@ -498,7 +484,6 @@ private:
         const int value_count = Traits::value_count(solution);
         std::uniform_int_distribution<int> entity_pick(0, entity_count - 1);
         std::uniform_int_distribution<int> value_pick(0, value_count - 1);
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
 
         int e = ls.entity_hint ? ls.entity_hint(rng) : -1;
         if (e < 0) e = entity_pick(rng);
@@ -509,30 +494,25 @@ private:
         const double total = ms.change_weight + swap_weight;
 
         AppliedMove move;
-        if (unit(rng) * total < ms.change_weight || total <= 0) {
+        move.entities[0] = e;
+        move.previous[0] = old_value;
+        if (unit_(rng) * total < ms.change_weight || total <= 0) {
+            // Change: another value for e (never its current one, when there
+            // is a choice).
             int v = ls.value_hint ? ls.value_hint(rng, e) : -1;
             if (v < 0 || (value_count > 1 && v == old_value)) {
                 if (value_count > 1 && old_value >= 0 && old_value < value_count) {
-                    v = static_cast<int>(rng() % static_cast<std::uint64_t>(value_count - 1));
-                    if (v >= old_value) ++v;
+                    v = random_other(value_count, old_value, rng);
                 } else {
                     v = value_pick(rng);
                 }
             }
             editor.assign(e, v);
-            move.kind = 0;
-            move.a = e;
-            move.b = old_value;
-            move.entities[0] = e;
             move.entity_count = 1;
         } else {
-            // Swap partner: nearby-biased when a distance meter is configured.
-            int e2;
-            if (use_nearby(rng) && !nearby_.of(e).empty()) {
-                e2 = random_of(nearby_.of(e), rng);
-            } else {
-                e2 = entity_pick(rng);
-            }
+            // Swap partner: nearby-biased when nearby selection is configured.
+            int e2 = nearby_pick(e, rng);
+            if (e2 < 0) e2 = entity_pick(rng);
             e2 = movable_entity(solution, e2, entity_pick, rng);  // no pinned swap partner
             for (int attempt = 0; attempt < 8 &&
                                   (e2 == e || Traits::value_of(solution, e2) == old_value);
@@ -553,13 +533,8 @@ private:
             editor.assign(e, old_value2);
             editor.assign(e2, old_value);
             editor.end_batch();
-            move.kind = 1;
-            move.a = e;
-            move.b = old_value;
-            move.c = e2;
-            move.d = old_value2;
-            move.entities[0] = e;
             move.entities[1] = e2;
+            move.previous[1] = old_value2;
             move.entity_count = 2;
         }
         return move;
@@ -584,12 +559,11 @@ private:
         const MoveMix& ms = ls.moves;
         const int list_count = Traits::list_count(solution);
         const int element_count = Traits::element_count(solution);
-        std::uniform_real_distribution<double> unit(0.0, 1.0);
 
         // During local search every element is assigned, so the element index
         // gives a uniformly random (list, position) in O(1).
-        int e1 = static_cast<int>(rng() % static_cast<std::uint64_t>(element_count));
-        int l1 = index_.list_of(e1), i1 = index_.position_of(e1);
+        const int e1 = random_index(rng, element_count);
+        const int l1 = index_.list_of(e1), i1 = index_.position_of(e1);
 
         // Union move selector: weighted pick among the applicable moves.
         const double w_relocate = ms.relocate_weight;
@@ -603,36 +577,31 @@ private:
         const double total =
                 w_relocate + w_swap + w_two_opt + w_or_opt + w_tail_swap + w_inter_exchange;
 
-        double dice = unit(rng) * total;
+        const double dice = unit_(rng) * total;
         AppliedMove move;
         if (dice < w_relocate || element_count < 2 || total <= 0) {
             // Relocate: move one element; the target is next to a nearby
-            // neighbor when a distance meter is configured, else uniform.
+            // neighbour when nearby selection is configured, else uniform.
             int l2, i2;
-            if (use_nearby(rng) && !nearby_.of(e1).empty()) {
-                int nb = random_of(nearby_.of(e1), rng);
+            const int nb = nearby_pick(e1, rng);
+            if (nb >= 0) {
                 l2 = index_.list_of(nb);
                 int q = index_.position_of(nb);
                 if (l2 == l1 && q > i1) --q;  // nb shifts down once e1 is out
-                i2 = q + 1;                   // insert right after the neighbor
+                i2 = q + 1;                   // insert right after the neighbour
             } else {
-                l2 = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
-                int size2 = Traits::list_size(solution, l2) - (l2 == l1 ? 1 : 0);
-                i2 = static_cast<int>(rng() % static_cast<std::uint64_t>(size2 + 1));
+                l2 = random_index(rng, list_count);
+                const int size2 = Traits::list_size(solution, l2) - (l2 == l1 ? 1 : 0);
+                i2 = random_index(rng, size2 + 1);
             }
             move.list = ListMove::segment(l1, i1, 1, l2, i2, e1);
             move.entities[0] = e1;
             move.entity_count = 1;
         } else if (dice < w_relocate + w_swap) {
             // Swap two elements (possibly across lists); nearby-biased partner.
-            int e2;
-            if (use_nearby(rng) && !nearby_.of(e1).empty()) {
-                e2 = random_of(nearby_.of(e1), rng);
-                if (e2 == e1) e2 = random_other(element_count, e1, rng);
-            } else {
-                e2 = random_other(element_count, e1, rng);
-            }
-            int l2 = index_.list_of(e2), i2 = index_.position_of(e2);
+            int e2 = nearby_pick(e1, rng);
+            if (e2 < 0 || e2 == e1) e2 = random_other(element_count, e1, rng);
+            const int l2 = index_.list_of(e2), i2 = index_.position_of(e2);
             move.list = ListMove::swap(l1, i1, l2, i2, e1, e2);
             move.entities[0] = e1;
             move.entities[1] = e2;
@@ -648,13 +617,13 @@ private:
         } else if (dice < w_relocate + w_swap + w_two_opt + w_or_opt) {
             // Or-opt: relocate a short segment (2-3 consecutive elements)
             // intact, nearby-biased like relocate.
-            int seg_len = 2 + static_cast<int>(rng() % 2);
+            int seg_len = 2 + random_index(rng, 2);
             if (seg_len > size1) seg_len = size1;
             int start = std::min(i1, size1 - seg_len);
             const int seg0 = Traits::element_at(solution, l1, start);
             int l2 = -1, i2 = 0;
-            if (use_nearby(rng) && !nearby_.of(seg0).empty()) {
-                int nb = random_of(nearby_.of(seg0), rng);
+            const int nb = nearby_pick(seg0, rng);
+            if (nb >= 0) {
                 const int nb_list = index_.list_of(nb);
                 int q = index_.position_of(nb);
                 const bool in_segment = nb_list == l1 && q >= start && q < start + seg_len;
@@ -665,9 +634,9 @@ private:
                 }
             }
             if (l2 < 0) {
-                l2 = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count));
-                int size2 = Traits::list_size(solution, l2) - (l2 == l1 ? seg_len : 0);
-                i2 = static_cast<int>(rng() % static_cast<std::uint64_t>(size2 + 1));
+                l2 = random_index(rng, list_count);
+                const int size2 = Traits::list_size(solution, l2) - (l2 == l1 ? seg_len : 0);
+                i2 = random_index(rng, size2 + 1);
             }
             move.list = ListMove::segment(l1, start, seg_len, l2, i2, seg0);
             move.entities[0] = seg0;
@@ -676,45 +645,36 @@ private:
         } else if (dice < w_relocate + w_swap + w_two_opt + w_or_opt + w_tail_swap) {
             // 2-opt* (tail swap): exchange the tails of two lists — the
             // classic inter-route move. Cut l1 right after e1's position.
-            int l2 = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count - 1));
-            if (l2 >= l1) ++l2;
-            int c1 = i1;
-            int size2 = Traits::list_size(solution, l2);
-            int c2 = static_cast<int>(rng() % static_cast<std::uint64_t>(size2 + 1));
+            const int l2 = random_other(list_count, l1, rng);
+            const int size2 = Traits::list_size(solution, l2);
+            const int c2 = random_index(rng, size2 + 1);
             move.entities[0] = e1;
             move.entities[1] = c2 < size2 ? Traits::element_at(solution, l2, c2) : e1;
             move.entity_count = 2;
-            move.list = ListMove::tail_swap(l1, c1, l2, c2);
+            move.list = ListMove::tail_swap(l1, i1, l2, c2);
         } else {
             // CROSS-exchange: swap a run starting at e1 with a run in another
             // list, the two runs sized independently. The partner list is
-            // chosen through a nearby neighbour when a distance meter is
+            // chosen through a nearby neighbour when nearby selection is
             // configured — exchanging with a spatially unrelated route is
             // almost never an improvement.
             int l2 = -1, i2 = 0;
-            if (use_nearby(rng) && !nearby_.of(e1).empty()) {
-                const int nb = random_of(nearby_.of(e1), rng);
-                if (index_.list_of(nb) >= 0 && index_.list_of(nb) != l1) {
-                    l2 = index_.list_of(nb);
-                    i2 = index_.position_of(nb);
-                }
+            const int nb = nearby_pick(e1, rng);
+            if (nb >= 0 && index_.list_of(nb) >= 0 && index_.list_of(nb) != l1) {
+                l2 = index_.list_of(nb);
+                i2 = index_.position_of(nb);
             }
             if (l2 < 0) {
-                l2 = static_cast<int>(rng() % static_cast<std::uint64_t>(list_count - 1));
-                if (l2 >= l1) ++l2;
+                l2 = random_other(list_count, l1, rng);
                 const int size2 = Traits::list_size(solution, l2);
-                i2 = size2 == 0 ? 0
-                                : static_cast<int>(rng() %
-                                                   static_cast<std::uint64_t>(size2));
+                i2 = size2 == 0 ? 0 : random_index(rng, size2);
             }
             const int size2 = Traits::list_size(solution, l2);
             const int max_segment = std::max(1, ms.cross_exchange_max_run);
             // One side may take zero elements, which degenerates to relocating
             // the other side's run — the cheap way to shorten a route.
-            int len1 = static_cast<int>(rng() %
-                                        static_cast<std::uint64_t>(max_segment + 1));
-            int len2 = static_cast<int>(rng() %
-                                        static_cast<std::uint64_t>(max_segment + 1));
+            int len1 = random_index(rng, max_segment + 1);
+            int len2 = random_index(rng, max_segment + 1);
             len1 = std::min(len1, size1 - i1);
             len2 = std::min(len2, size2 - i2);
             if (len1 <= 0 && len2 <= 0) {
@@ -731,51 +691,58 @@ private:
         return move;
     }
 
-    // Ask the objective for the score the sampled move would produce. False
-    // when it offers no preview for this move: apply it and score it instead.
-    bool preview_list_move(Editor<Solution>& editor, const AppliedMove& move,
-                         Score& out) {
-        return ListMoves<Solution>::preview(editor.objective(), move.list, out);
-    }
-
-    // Score a sampled sequence move for the step and polish loops. Returns true
+    // Draw one move of the built-in mix and score it; the step loop and the
+    // kick's polish loop both take their candidates from here. Returns true
     // when the move is NOT applied on return: its preview was served and
-    // `score` is that preview, so the caller applies the move only if it
-    // accepts it. Returns false when the move IS applied on return (the
-    // preview was declined, or ScoreChecks::Full applied it to check the preview
-    // against the applied score, throwing ScoreMismatchError on a
-    // mismatch) and `score` is the applied score; the caller undoes a
-    // rejection. One evaluate_with_preview with no undo, so every preview in
-    // the engine is verified by the same lines.
-    bool score_list_move(Editor<Solution>& editor, const AppliedMove& move,
-                       Score& score) {
-        bool applied = false;
-        score = evaluate_with_preview(
-                editor,
-                [&](Objective<Solution>&, Score& out) {
-                    return preview_list_move(editor, move, out);
-                },
-                [&] { apply_list_move(editor, move); }, [] {}, /*served=*/nullptr, &applied);
-        return !applied;  // the no-op undo left an applied move in place
+    // `score` is that preview, so the caller applies it (apply_previewed) only
+    // if it keeps it. Returns false when the move IS applied on return and
+    // `score` is the applied score; the caller undoes a rejection (undo_move).
+    //
+    // An assignment move is always applied. A sequence move is applied when
+    // the objective declines its preview, or when ScoreChecks::Full applies it
+    // to check the preview against the applied score (ScoreMismatchError on a
+    // mismatch): one evaluate_with_preview with a no-op undo, so every preview
+    // in the engine is verified by the same lines.
+    bool sample_move(Editor<Solution>& editor, std::mt19937_64& rng, AppliedMove& move,
+                     Score& score) {
+        if constexpr (Traits::shape == Shape::Assignment) {
+            move = apply_basic_move(editor, rng);
+            score = editor.score();
+            return false;
+        } else {
+            move = sample_list_move(editor, rng);
+            bool applied = false;
+            score = evaluate_with_preview(
+                    editor,
+                    [&](Objective<Solution>& objective, Score& out) {
+                        return ListMoves<Solution>::preview(objective, move.list, out);
+                    },
+                    [&] { ListMoves<Solution>::apply(editor, index_, move.list); }, [] {},
+                    /*served=*/nullptr, &applied);
+            return !applied;  // the no-op undo left an applied move in place
+        }
     }
 
-    // Apply a sampled sequence move; undo_move() inverts it.
-    void apply_list_move(Editor<Solution>& editor, const AppliedMove& move) {
-        ListMoves<Solution>::apply(editor, index_, move.list);
+    // Apply a move sample_move() only previewed.
+    void apply_previewed(Editor<Solution>& editor, const AppliedMove& move) {
+        if constexpr (Traits::shape == Shape::Sequence) {
+            ListMoves<Solution>::apply(editor, index_, move.list);
+        } else {
+            (void)editor;
+            (void)move;
+        }
     }
 
+    // Revert a move sample_move() left applied.
     void undo_move(Editor<Solution>& editor, const AppliedMove& move) {
         if constexpr (Traits::shape == Shape::Assignment) {
-            switch (move.kind) {
-                case 0:  // change
-                    editor.assign(move.a, move.b);
-                    break;
-                case 1:  // swap
-                    editor.begin_batch();
-                    editor.assign(move.a, move.b);
-                    editor.assign(move.c, move.d);
-                    editor.end_batch();
-                    break;
+            if (move.entity_count == 1) {  // change
+                editor.assign(move.entities[0], move.previous[0]);
+            } else {  // swap
+                editor.begin_batch();
+                editor.assign(move.entities[0], move.previous[0]);
+                editor.assign(move.entities[1], move.previous[1]);
+                editor.end_batch();
             }
         } else {
             ListMoves<Solution>::undo(editor, index_, move.list);
@@ -787,15 +754,14 @@ private:
     // One ruin-and-recreate kick. The result becomes the new incumbent
     // unconditionally (perturbation-style); outcomes are still classified to
     // adapt the ruin-operator weights.
-    Score lns_iteration(Editor<Solution>& editor, Score current_score,
+    Score lns_iteration(Editor<Solution>& editor, const Score& current_score,
                                const Score& best_score,
                                OperatorSelectionScheme& ruin_selector,
                                const std::vector<RuinOperator<Solution>*>& ruins,
                                OperatorContext<Solution>& operator_context,
                                std::mt19937_64& rng) {
-        Solution& solution = editor.solution();
         const RuinRecreateSettings& lns = config_.search.ruin_recreate;
-        const int n = GreedyRepair<Solution>::candidate_count(solution);
+        const int n = ruin_candidate_count(operator_context);
         std::uniform_real_distribution<double> fraction(lns.min_ruin_fraction,
                                                         lns.max_ruin_fraction);
         int ruin_count = std::clamp(static_cast<int>(fraction(rng) * n), 1,
@@ -813,39 +779,22 @@ private:
 
         // Polish the recreated solution with hill-climbing small moves so the
         // outcome classification below reflects the kick's real potential.
-        // sequence moves are previewed like the main step loop's: a rejected
-        // polish move is never applied.
         Score candidate = editor.score();
         for (std::int64_t i = 0; i < lns.polish_steps; ++i) {
             AppliedMove move;
             Score polished;
-            bool pending = false;  // scored by preview, not applied
-            if constexpr (Traits::shape == Shape::Assignment) {
-                move = apply_basic_move(editor, rng);
-                polished = editor.score();
-            } else {
-                move = sample_list_move(editor, rng);
-                pending = score_list_move(editor, move, polished);
-            }
+            const bool previewed = sample_move(editor, rng, move, polished);
             if (polished >= candidate) {
-                if constexpr (Traits::shape == Shape::Sequence) {
-                    if (pending) apply_list_move(editor, move);
-                }
+                if (previewed) apply_previewed(editor, move);
                 candidate = polished;
-            } else if (!pending) {
+            } else if (!previewed) {
                 undo_move(editor, move);
             }
         }
-        MoveOutcome outcome;
-        if (candidate > best_score) {
-            outcome = MoveOutcome::NewBest;
-        } else if (candidate > current_score) {
-            outcome = MoveOutcome::Better;
-        } else if (candidate == current_score) {
-            outcome = MoveOutcome::Accepted;
-        } else {
-            outcome = MoveOutcome::Rejected;  // kept anyway; scored for adaptation
-        }
+        // The kick is kept whatever it scored; the outcome only adapts the
+        // ruin weights ("accepted" = it held the current score).
+        const MoveOutcome outcome =
+                classify(candidate, current_score, best_score, candidate == current_score);
         ruin_selector.update(op, outcome);
         return candidate;
     }

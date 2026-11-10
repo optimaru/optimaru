@@ -15,10 +15,12 @@
 #include "optimaru/select/scheme.hpp"
 #include "optimaru/model/element_index.hpp"
 #include "optimaru/ruin_recreate/greedy_repair.hpp"
+#include "optimaru/ruin_recreate/removal_gain.hpp"
 #include "optimaru/moves/list_move.hpp"
 #include "optimaru/stop/stop_throttle.hpp"
 #include "optimaru/model/snapshot.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/portable_random.hpp"
 
 namespace optimaru {
 
@@ -294,7 +296,7 @@ public:
         } else {
             Editor<Solution>& editor = ctx.editor;
             Solution& solution = editor.solution();
-            const int n = GreedyRepair<Solution>::candidate_count(solution);
+            const int n = ruin_candidate_count(ctx);
             if (n < 2 || ruins_.empty() || !ctx.nearby.enabled()) return false;
             if (!editor.objective().has_previews()) return false;
             // An objective that says it previews but declines most moves for
@@ -322,7 +324,7 @@ public:
                                              [&](int l) { local_search_.mark_list(solution, l); });
                 const int span = max_ruin_ - min_ruin_ + 1;
                 const int ruin_count = std::clamp(
-                        min_ruin_ + static_cast<int>(rng() % static_cast<std::uint64_t>(span)), 1,
+                        min_ruin_ + random_index(rng, span), 1,
                         n - 1);
                 drawn_ruin_ = ruin_selector_.select(rng);
                 std::vector<int> ruined = ruins_[drawn_ruin_]->select_ruin_set(ctx, ruin_count, rng);

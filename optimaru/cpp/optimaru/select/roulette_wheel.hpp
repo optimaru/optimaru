@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "optimaru/select/scheme.hpp"
+#include "optimaru/portable_random.hpp"
 
 namespace optimaru {
 
@@ -39,7 +40,7 @@ public:
         // Degenerate wheel (all weights decayed to ~0, or a non-finite total):
         // fall back to uniform rather than always returning the last operator.
         if (!std::isfinite(total) || total <= 0.0) {
-            return static_cast<int>(rng() % static_cast<std::uint64_t>(weights_.size()));
+            return random_index(rng, static_cast<int>(weights_.size()));
         }
         std::uniform_real_distribution<double> pick(0.0, total);
         double r = pick(rng);

@@ -16,6 +16,7 @@
 #include "optimaru/moves/list_move.hpp"
 #include "optimaru/stop/stop_throttle.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/portable_random.hpp"
 
 namespace optimaru {
 
@@ -120,7 +121,7 @@ public:
             entities.clear();
             for (const ListMove& op : applied_) {
                 entities.push_back(op.element1);
-                if (op.kind == ListMove::Kind::SWAP) entities.push_back(op.element2);
+                if (op.kind == ListMove::Kind::Swap) entities.push_back(op.element2);
             }
             return true;
         }
@@ -142,7 +143,7 @@ private:
         int position;
     };
 
-    // A chain's operations are ListMoves of two kinds: a SEGMENT of length 1
+    // A chain's operations are ListMoves of two kinds: a Segment of length 1
     // (element1 moved from (l1, p1) to (l2, p2)) and a SWAP (element1 at
     // (l1, p1) and element2 at (l2, p2) traded places).
 
@@ -197,7 +198,7 @@ private:
     bool seed_from_source(Editor<Solution>& editor, std::mt19937_64& rng) {
         const Solution& solution = editor.solution();
         const int size = Traits::list_size(solution, source_list_);
-        const int p1 = static_cast<int>(rng() % static_cast<std::uint64_t>(size));
+        const int p1 = random_index(rng, size);
         const int e = Traits::element_at(solution, source_list_, p1);
 
         bool found = false;
@@ -243,7 +244,7 @@ private:
         int e = -1;
         int from = -1;
         for (int draw = 0; draw < 8 && (from < 0 || from == source_list_); ++draw) {
-            e = static_cast<int>(rng() % static_cast<std::uint64_t>(element_count));
+            e = random_index(rng, element_count);
             from = index_.list_of(e);
         }
         if (from < 0 || from == source_list_) return false;
@@ -347,7 +348,7 @@ private:
     // the acceptor then spends a step on.
     bool returns_seed(const ListMove& op) const {
         if (op.element1 == seed_element_ && op.l2 == seed_origin_) return true;
-        return op.kind == ListMove::Kind::SWAP && op.element2 == seed_element_ &&
+        return op.kind == ListMove::Kind::Swap && op.element2 == seed_element_ &&
                op.l1 == seed_origin_;
     }
 
