@@ -1,16 +1,12 @@
 #ifndef MS_SOLVER_HPP
 #define MS_SOLVER_HPP
 
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
 #include <utility>
-#include <vector>
 
 #include "ms/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace ms {
 
@@ -40,56 +36,31 @@ public:
     //     (room, grain) cells: -20% / -12%, and the O(1) hot-set maintenance
     //     alone cost ~28% of the move throughput.
     //   * move-mix sweeps (0.9/0.1, 0.5/0.5) and ALNS trigger sweeps
-    //     (1500, 20000): all worse than the defaults below.
-    struct Config {
-        // Wall-clock budget.
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires (termination is by time_limit).
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        // Late-acceptance history length. 0 (the default) = auto:
-        // clamp(128 * assignmentCount, 3200, 6400). Tuned on the quality bench
-        // (bench/ms_quality_bench.cpp, 10s single-thread, seeds 42..47): the
-        // medium level (attendance conflicts) dominates the objective and only
-        // a long acceptance history lets the search tunnel between the
-        // conflict-free packings, so the school-timetabling clamp(8n, 400,
-        // 3200) was far too short here (scaled:48 -26.7% objective, scaled:96
-        // -13.6% against this setting).
-        std::size_t history_length = 0;
-        std::uint64_t seed = 0;
-
-        // Independent parallel starts (the engine's multi-start): each worker
-        // receives seed + i and the full wall-clock budget; the best
-        // solution wins.
-        int parallel_solver_count = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; orders of magnitude
-        // slower).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS). Without this the LA acceptor can lock into a local
-        // optimum within milliseconds on small instances and never escape.
-        bool ruin_recreate = true;
-        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
-        double ruin_recreate_min_ruin_fraction = 0.10;
-        double ruin_recreate_max_ruin_fraction = 0.30;
-        int ruin_recreate_max_ruin_count = 60;
-        double ruin_recreate_operator_decay = 0.8;
-        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruin_recreate_polish_steps = 5000;
-
+    //     (1500, 20000): all worse than the defaults (the mix below, the
+    //     shared trigger of 5000).
+    //
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   history_length 0       clamp(128 * assignmentCount, 3200, 6400). Tuned
+    //                          on the quality bench (bench/ms_quality_bench.cpp,
+    //                          10s single-thread, seeds 42..47): the medium
+    //                          level (attendance conflicts) dominates the
+    //                          objective and only a long acceptance history
+    //                          lets the search tunnel between the conflict-free
+    //                          packings, so the school-timetabling
+    //                          clamp(8n, 400, 3200) was far too short here
+    //                          (scaled:48 -26.7% objective, scaled:96 -13.6%
+    //                          against this setting)
+    //   parallel_solver_count  one start whatever it says: runEngine() calls
+    //                          the engine's solve(), and only its
+    //                          solve_multistart() reads Settings::parallel_starts
+    //   ruin_recreate          without the kicks the LA acceptor can lock into
+    //                          a local optimum within milliseconds on small
+    //                          instances and never escape
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ORDINARY acceptor-judged move (the engine's
-        // lns.as_move_weight), in addition to the stagnation kick above: the
-        // probability per step that a small ruin+repair candidate is drawn
+        // ruin_recreate.as_move_weight), in addition to the stagnation kick:
+        // the probability per step that a small ruin+repair candidate is drawn
         // instead of a change/swap. One repair costs ~ruinCount x
         // grainRoomCount evaluations, so this must stay orders of magnitude
         // below 1 (school-timetabling's budget-share rule). Tuned on the
@@ -112,8 +83,6 @@ public:
         // scaled:96 +8.4%, demo +0.7%); at 1.0 the search loses the
         // day-crossing states it needs as stepping stones and the gain is gone.
         double day_fit_value_probability = 0.8;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
     };
 
     Solver() = default;

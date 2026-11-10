@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <random>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -55,15 +54,7 @@ namespace {
 // driven by whichever calculator the caller brought.
 void runEngine(const Solver::Config& config, MeetingSchedule& schedule,
                optimaru::Objective<MeetingSchedule>& calculator, int parallel_starts) {
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
-    engineConfig.on_new_best = config.on_new_best;
-    engineConfig.limits.time_limit = config.time_limit;
-    engineConfig.limits.target_score = config.target_score;
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
     // history_length 0 = auto-scale with the instance (see Config).
     engineConfig.search.acceptance.history_length =
             config.history_length != 0
@@ -71,17 +62,6 @@ void runEngine(const Solver::Config& config, MeetingSchedule& schedule,
                     : std::clamp<std::size_t>(128 * schedule.meetingAssignments.size(), 3200, 6400);
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
-    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
-    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
-    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
-    lns.operator_decay = config.ruin_recreate_operator_decay;
-    lns.rewards = config.ruin_recreate_rewards;
-    lns.polish_steps = config.ruin_recreate_polish_steps;
-    lns.as_move_weight = config.ruin_recreate_as_move_weight;
-    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
 
     // Guided value selection over the composite (grain x room) value range:
     // with probability day_fit_value_probability a change move draws its start
@@ -129,9 +109,7 @@ void Solver::solve(MeetingSchedule& schedule) {
         ScoreCalculator::score(schedule);
         return;
     }
-    if (config_.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
 
     MeetingSchedulingIncrementalScoreCalculator calculator;
     runEngine(config_, schedule, calculator, std::max(1, config_.parallel_solver_count));
@@ -143,9 +121,7 @@ void Solver::solve(MeetingSchedule& schedule) {
 void Solver::solve(MeetingSchedule& schedule,
                    optimaru::DecomposedObjective<MeetingSchedule>& calculator) {
     ScoreCalculator::prepare(schedule);
-    if (config_.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
     if (!schedule.meetingAssignments.empty() && schedule.grainRoomCount() != 0) {
         // Single-start: the caller-owned calculator cannot be cloned, so the
         // multi-start workers would have nothing to score with.
