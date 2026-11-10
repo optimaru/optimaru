@@ -24,10 +24,6 @@ optimaru = { path = "../../..", editable = true }
 [tool.setuptools.packages.find]
 include = ["quadratic_assignment_cpsat*"]
 
-[tool.ruff]
-line-length = 120
-[tool.ruff.lint]
-extend-select = ["I"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 [build-system]

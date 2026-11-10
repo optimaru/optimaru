@@ -1,0 +1,20 @@
+# Optional. `pre-commit install` runs CI's lint checks on the files of each commit,
+# with the tools uv.lock pins (`uv sync` installs them with the dev group).
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --no-sync ruff check --fix
+        language: system
+        types_or: [python, pyi, jupyter]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --no-sync ruff format
+        language: system
+        types_or: [python, pyi]
+      - id: clang-format
+        name: clang-format
+        entry: uv run --no-sync clang-format -i
+        language: system
+        types_or: [c++]

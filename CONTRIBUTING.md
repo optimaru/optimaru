@@ -99,6 +99,17 @@ them correct and as fast as before.
   release.
 - New source files start with the SPDX header
   (`python3 scripts/check_license_headers.py` checks it).
+- Format before you push; CI's `lint` job checks all three:
+
+  ```sh
+  uv run ruff format . && uv run ruff check --fix .                 # Python
+  git ls-files '*.cpp' '*.hpp' | xargs uv run clang-format -i       # C++ (.clang-format)
+  ```
+
+  `uv sync` installs both tools at the versions `uv.lock` pins, and
+  `pre-commit install` runs them on every commit if you use
+  [pre-commit](https://pre-commit.com). Guides (`*.md`) and notebooks keep
+  their hand layout: the formatter skips them.
 
 By contributing you agree that your contribution is licensed under the
 [Apache License 2.0](LICENSE).

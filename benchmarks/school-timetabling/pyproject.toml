@@ -13,14 +13,3 @@ dependencies = [
 [tool.uv]
 # A collection of scripts, not installed as a package (uv run only manages the venv).
 package = false
-
-[tool.ruff]
-line-length = 120
-
-[tool.ruff.lint]
-ignore = ["E741"]
-extend-select = ["I"]
-
-[tool.ruff.lint.isort]
-# Script modules in the same directory (so isort does not mistake them for third-party).
-known-first-party = ["cpsat_quickstart", "evaluate", "gen_canonical", "run_bench"]
