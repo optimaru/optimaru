@@ -35,8 +35,12 @@ def test_the_shared_fields_exist_and_copy(use_case):
         assert hasattr(config, name), name
     config.random_seed = 123
     config.full_assert = True
+    config.step_count_limit = 7
+    config.unimproved_step_count_limit = 5
+    config.spent_limit_seconds = 1.5
     clone = copy.copy(config)
     assert (clone.random_seed, clone.full_assert) == (123, True)
+    assert (clone.step_count_limit, clone.unimproved_step_count_limit, clone.spent_limit_seconds) == (7, 5, 1.5)
 
 
 @pytest.mark.parametrize("use_case", optimaru.__all__)
@@ -53,6 +57,7 @@ def test_the_shared_fields_refuse_the_same_values_with_the_same_words(use_case):
             config.late_acceptance_size = 0
     else:
         config.late_acceptance_size = 0
+        assert config.late_acceptance_size == 0
         with pytest.raises(ValueError, match=r"late_acceptance_size must be >= 0 \(0 = auto\)"):
             config.late_acceptance_size = -1
     if hasattr(config, "ruin_recreate_rewards"):

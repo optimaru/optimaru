@@ -17,7 +17,10 @@
     `assembly_line_balancing`, `knapsack`, `max_cut`, `quadratic_assignment`
     and `semiconductor_scheduling` wrote the result into that model. It now
     returns a new solved model and leaves the one passed in as it was, as the
-    other use cases do: write `model = uc.solve(model)`.
+    other use cases do: write `model = uc.solve(model)`. Code that keeps
+    reading the model it passed in does not fail, it reads the unsolved
+    values. (`calculate_score(model)` still fills in the score fields of the
+    model it is given.)
   - *New:* `solve()` in `bin_packing`, `conference_scheduling`,
     `facility_location`, `food_packaging`, `maintenance_scheduling` and
     `sports_league_scheduling` also takes the use case's pydantic problem
