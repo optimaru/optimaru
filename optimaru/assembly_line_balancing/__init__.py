@@ -153,7 +153,7 @@ def solve(
     constraint at its default weight::
 
         from optimaru.assembly_line_balancing.constraints import get_constraints
-        alb.solve(problem, constraints=get_constraints())
+        solved = alb.solve(problem, constraints=get_constraints())
     """
     # A copy: the keyword overrides below must not leak into the caller's config.
     cfg = copy.copy(config) if config is not None else SolverConfig()
@@ -176,7 +176,9 @@ def solve(
     else:
         Solver(cfg).solve_with_constraints(core, constraints)
     if isinstance(problem, AssemblyLineBalancingProblemModel):
-        # A model is not solved in place: the caller's stays the problem it was.
+        # A model is not solved in place: the caller's stays the problem it was. A copy
+        # updated from the core, not from_core(): the copy keeps the model's own fields
+        # and their order, which the core does not carry.
         solved = problem.model_copy(deep=True)
         solved._update_from_core(core)
         return solved

@@ -134,7 +134,8 @@ def solve(
     """High-level API that solves a bed allocation problem and returns it in the same shape.
 
     ``plan`` is a `_core.BedPlan` (solved in place and returned) or a
-    `models.BedPlanModel` (converted to the engine shape, solved, and returned as a new model, the one passed in left as it was; needs pydantic).
+    `models.BedPlanModel` (converted to the engine shape, solved, and returned as a new
+    model, the one passed in left as it was; needs pydantic).
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine default
     30 s budget). Explicit keyword arguments override config.

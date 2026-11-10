@@ -12,9 +12,9 @@ A constraint list reads one way: one class call per constraint::
         KnapsackCapacityCost, MandatoryItemsCost, SelectedValueCost, get_constraints,
     )
 
-    knapsack.solve(problem, constraints=get_constraints())                       # defaults as-is
-    knapsack.solve(problem, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
-    knapsack.solve(problem, constraints=[                                        # picked
+    solved = knapsack.solve(problem, constraints=get_constraints())  # defaults as-is
+    solved = knapsack.solve(problem, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
+    solved = knapsack.solve(problem, constraints=[  # picked
         KnapsackCapacityCost(), MandatoryItemsCost(), SelectedValueCost(),
     ])
 
@@ -49,7 +49,7 @@ The same constraint may be picked several times; each pick is scored on its own 
 its own knobs (its level included) and the picks add up. The resource overflow plus its
 square beyond 10 units::
 
-    knapsack.solve(problem, constraints=[
+    solved = knapsack.solve(problem, constraints=[
         KnapsackCapacityCost(),
         ResourceCapacityCost(),
         ResourceCapacityCost(exponent=2, offset=10),

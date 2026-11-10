@@ -194,7 +194,9 @@ def solve(
     else:
         Solver(cfg).solve_with_constraints(core, constraints)
     if isinstance(problem, MaxCutProblemModel):
-        # A model is not solved in place: the caller's stays the problem it was.
+        # A model is not solved in place: the caller's stays the problem it was. A copy
+        # updated from the core, not from_core(): the copy keeps the model's own fields
+        # and their order, which the core does not carry.
         solved = problem.model_copy(deep=True)
         solved._update_from_core(core)
         return solved

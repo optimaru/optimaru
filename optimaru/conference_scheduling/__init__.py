@@ -92,7 +92,7 @@ def solve(
     config: SolverConfig | None = None,
     constraints=None,
 ) -> _Problem:
-    """High-level API that solves a schedule in place and returns it.
+    """High-level API that solves a schedule and returns it in the same shape.
 
     ``schedule`` is a `ConferenceSchedule` or a `models.ConferenceScheduleModel` (converted, solved, and
     returned as a new model; the one passed in is left as it was).

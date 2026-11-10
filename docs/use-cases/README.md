@@ -64,7 +64,9 @@ It returns the solved problem, and the score is on it.
   `solve` returns a new, solved model with its score fields (`score_hard`,
   `score_soft`, and one per further level the use case has). The model you
   passed stays the problem it was, so it can be solved again or handed to
-  `with_initial_solution(problem, solved)`.
+  `with_initial_solution(problem, solved)`. (`calculate_score(model)`, where a
+  use case accepts a model there, is the one call that writes into it: it fills
+  in the model's score fields.)
 
 Four use cases model a whole request (input, time limit, seed) in pydantic
 instead of the problem alone: employee scheduling, order picking, pickup &

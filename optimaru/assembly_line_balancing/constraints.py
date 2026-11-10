@@ -12,9 +12,9 @@ A constraint list reads one way: one class call per constraint::
         StationCapacityCost, UsedStationsCost, WorkloadImbalanceCost, get_constraints,
     )
 
-    alb.solve(problem, constraints=get_constraints())                       # the defaults as-is
-    alb.solve(problem, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
-    alb.solve(problem, constraints=[StationCapacityCost(), UsedStationsCost()])   # picked
+    solved = alb.solve(problem, constraints=get_constraints())  # the defaults as-is
+    solved = alb.solve(problem, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+    solved = alb.solve(problem, constraints=[StationCapacityCost(), UsedStationsCost()])   # picked
 
 Only listed constraints are scored — leave one out and its term disappears from
 the score. (The module also carries ready-made default instances:
@@ -50,7 +50,7 @@ The same constraint may be picked several times; each pick is scored on its own 
 its own knobs (its level included) and the picks add up. Every used station costs 1, and each one beyond
 the fourth 10 on top::
 
-    alb.solve(problem, constraints=[
+    solved = alb.solve(problem, constraints=[
         *get_constraints(),
         UsedStationsCost(weight=10, offset=4),
     ])
