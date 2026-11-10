@@ -353,6 +353,14 @@ def run_case(
     }
 
 
+def _write(path: Path, results: list[dict]) -> None:
+    """Rewrite `--out` with what has finished, so an interrupted sweep keeps its results."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + ".part")
+    partial.write_text(json.dumps(results, indent=2))
+    partial.replace(path)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -378,6 +386,12 @@ def main(argv: list[str] | None = None) -> int:
         dest="as_json",
         help="print the results as JSON (progress goes to stderr)",
     )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="write the results as JSON here after every instance, so an interrupted run keeps them",
+    )
     args = parser.parse_args(argv)
     if args.all and args.instance:
         parser.error("--all and --instance are mutually exclusive")
@@ -389,17 +403,20 @@ def main(argv: list[str] | None = None) -> int:
     def log(line: str) -> None:
         print(line, file=sys.stderr if args.as_json else sys.stdout, flush=True)
 
-    results = [
-        run_case(
-            instance,
-            seconds=args.seconds,
-            seed=args.seed,
-            workers=args.workers,
-            backends=backends,
-            log=log,
+    results = []
+    for instance in instances:
+        results.append(
+            run_case(
+                instance,
+                seconds=args.seconds,
+                seed=args.seed,
+                workers=args.workers,
+                backends=backends,
+                log=log,
+            )
         )
-        for instance in instances
-    ]
+        if args.out is not None:
+            _write(args.out, results)
     if args.as_json:
         print(json.dumps(results, indent=2))
     return 0

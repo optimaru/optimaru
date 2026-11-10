@@ -16,21 +16,21 @@ taken as the result.
 | [bin-packing](bin-packing) | OR-Tools CP-SAT | Falkenauer u/t (OR-Library), three per class |
 | [quadratic-assignment](quadratic-assignment) | OR-Tools CP-SAT | QAPLIB, 30–50 facilities (33, engine only) + generated |
 | [assembly-line-balancing](assembly-line-balancing) | OR-Tools CP-SAT | SALBP-1 (Otto et al.), five per data set |
-| [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated |
-| [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | demo instance |
-| [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated) |
-| [facility-location](facility-location) | OR-Tools CP-SAT | generated |
-| [flight-crew-scheduling](flight-crew-scheduling) | OR-Tools CP-SAT | generated |
-| [food-packaging](food-packaging) | OR-Tools CP-SAT | demo instance |
-| [knapsack](knapsack) | OR-Tools CP-SAT | generated |
-| [maintenance-scheduling](maintenance-scheduling) | OR-Tools CP-SAT | demo instances (small, large) |
-| [max-cut](max-cut) | OR-Tools CP-SAT | generated |
-| [meeting-scheduling](meeting-scheduling) | OR-Tools CP-SAT | demo instance |
-| [order-picking](order-picking) | OR-Tools CP-SAT | generated |
-| [semiconductor-scheduling](semiconductor-scheduling) | OR-Tools CP-SAT | generated |
-| [sports-league-scheduling](sports-league-scheduling) | OR-Tools CP-SAT | demo instance |
-| [task-assigning](task-assigning) | OR-Tools CP-SAT | demo instance |
-| [tournament-scheduling](tournament-scheduling) | OR-Tools CP-SAT | generated |
+| [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated, 6 sizes |
+| [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | the demo conference + generated, 2 to 5 days |
+| [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated), 6 sizes |
+| [facility-location](facility-location) | OR-Tools CP-SAT | generated, 6 sizes |
+| [flight-crew-scheduling](flight-crew-scheduling) | OR-Tools CP-SAT | generated, 6 sizes |
+| [food-packaging](food-packaging) | OR-Tools CP-SAT | the demo plant at 5 sizes |
+| [knapsack](knapsack) | OR-Tools CP-SAT | generated, 50 to 5000 items |
+| [maintenance-scheduling](maintenance-scheduling) | OR-Tools CP-SAT | the two demo instances + generated |
+| [max-cut](max-cut) | OR-Tools CP-SAT | generated, 30 to 800 vertices |
+| [meeting-scheduling](meeting-scheduling) | OR-Tools CP-SAT | the demo instance + generated |
+| [order-picking](order-picking) | OR-Tools CP-SAT | generated, 5 sizes |
+| [semiconductor-scheduling](semiconductor-scheduling) | OR-Tools CP-SAT | generated, 6 to 48 lots |
+| [sports-league-scheduling](sports-league-scheduling) | OR-Tools CP-SAT | the demo league + generated, 6 to 18 teams |
+| [task-assigning](task-assigning) | OR-Tools CP-SAT | the demo instance + generated |
+| [tournament-scheduling](tournament-scheduling) | OR-Tools CP-SAT | generated, 6 sizes |
 
 The CP-SAT models come from
 [external-solver](https://github.com/optimaru/external-solver), installed from
@@ -68,6 +68,35 @@ on hard, and on medium where it counts toward the hard score (task assigning),
 with the engine's message, when the objective is built: hard 0 must mean no
 violation. Each benchmark's README (or `cpsat/README.md`) lists its own
 limits, including the plugins that refuse an offset.
+
+Every comparison runs a ladder of instances of growing size. The smallest are
+ones both solvers finish; on the largest the exact model often returns nothing
+within the budget, which the results show as "no solution in time". Where a
+use case ships a demo instance it is one rung, and the others come from a
+seeded generator in its `benchmark.py`. `--instance NAME` (repeatable) picks rungs,
+and `--solver engine` or `--solver cp-sat` runs one solver only: the JSON of
+the two runs adds up to the comparison, which lets the single-threaded engine
+runs and the CP-SAT runs be measured side by side.
+
+A CP-SAT run gets the budget as its time limit, which CP-SAT counts from the
+start of the search, so building the model comes on top. The comparison runner
+stops the run as a whole, model construction included, 60 s past the budget
+(`--cpsat-grace`; 90 s of wall clock at a 30 s budget). A run stopped there,
+and a run whose search ends without a solution, is reported as "no solution
+in time". The public-instance runners have no such stop.
+
+Where the score levels of an instance do not fit one 64-bit objective, the
+reference model minimises them one after another, hard first, and gives each
+level an equal share of the time that is left (`ObjectiveBuilder.solve` in
+external-solver); a first level that finds no solution in its share ends the
+run without one. Food packaging and tournament scheduling are solved this way
+on every instance of their ladders, conference scheduling, meeting scheduling
+and task assigning on every instance but the smallest. A row where that early
+end is the whole result is not published: a rung is left out of the ladder
+when the first level finds a solution once it has the whole budget (task
+assigning above 120 tasks, the 4-line plant of food packaging; see their
+`benchmark.py`), and stays when it does not (the demo plant of food packaging,
+the 16-meeting instance of meeting scheduling).
 
 The `<slug>-compare` commands in the READMEs use `--seconds 10` for a quick
 check, and the public-instance runners show their own budgets. Every results

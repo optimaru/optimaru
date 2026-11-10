@@ -30,14 +30,15 @@ are vehicles / distance.
 
 | Requests | engine | CP-SAT |
 | --- | --- | --- |
+| 25 | 9 / 1,665.3 | **8 / 1,636.5** |
 | 50 | **14 / 3,440.2** | incomplete (leaves stops unserved) |
 | 100 | **24 / 6,172.1** | no solution in time |
 | 200 | **40 / 11,321.7** | no solution in time |
-| 400 | 54 / 22,224.5 | not run |
+| 400 | 55 / 22,236.5 | not run |
 
 CP-SAT is not run at 400 requests: its model takes minutes and gigabytes to build (at 400 requests it was still being built after 10 minutes at 11 GB, 2026-10-29).
 
 The Li & Lim results are in [`cpsat/PUBLIC_BENCHMARKS.md`](cpsat/PUBLIC_BENCHMARKS.md).
 
-Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->

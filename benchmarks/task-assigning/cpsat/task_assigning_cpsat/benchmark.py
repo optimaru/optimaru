@@ -7,6 +7,7 @@ Run: `uv run python -m task_assigning_cpsat.benchmark --seconds 10`.
 
 from __future__ import annotations
 
+import random
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -25,14 +26,98 @@ def self_report(problem: Any) -> None:
     return None
 
 
+SKILLS = [
+    "Problem Solving",
+    "Team Building",
+    "Business Storytelling",
+    "Risk Management",
+    "Creative Thinking",
+    "Strategic Planning",
+]
+AFFINITIES = ["NONE", "LOW", "MEDIUM", "HIGH"]
+PRIORITIES = ["MINOR"] * 5 + ["MAJOR"] * 3 + ["CRITICAL"] * 2
+
+
+def _generate(task_count: int, employee_count: int, customer_count: int, seed: int) -> Any:
+    """A seeded instance in the shape of the demo data: employees with two or three of six
+    skills and an affinity to every customer, task types that need one or two skills some
+    employee has together, and tasks of mixed priority."""
+    from optimaru.task_assigning.models import (
+        CustomerModel,
+        EmployeeModel,
+        TaskAssigningSolutionModel,
+        TaskModel,
+        TaskTypeModel,
+    )
+
+    rng = random.Random(seed)
+    customers = [CustomerModel(id=str(index + 1), name=f"Customer {index + 1}") for index in range(customer_count)]
+    employees = [
+        EmployeeModel(
+            id=str(index + 1),
+            full_name=f"Employee {index + 1}",
+            # Every skill is somebody's first skill, so no skill goes uncovered.
+            skills=[SKILLS[index % len(SKILLS)], *rng.sample(SKILLS, rng.randint(1, 2))],
+            customer_to_affinity={customer.id: rng.choice(AFFINITIES) for customer in customers},
+        )
+        for index in range(employee_count)
+    ]
+    for employee in employees:
+        employee.skills = list(dict.fromkeys(employee.skills))
+    task_types = []
+    for index in range(4 + task_count // 60):
+        # The skills of a task type are skills one employee has, so somebody can do it.
+        able = rng.choice(employees).skills
+        task_types.append(
+            TaskTypeModel(
+                code=f"T{index + 1}",
+                title=f"Task type {index + 1}",
+                base_duration=rng.randint(30, 90),
+                required_skills=rng.sample(able, min(len(able), rng.randint(1, 2))),
+            )
+        )
+    counts = dict.fromkeys((task_type.code for task_type in task_types), 0)
+    tasks = []
+    for index in range(task_count):
+        code = rng.choice(task_types).code
+        counts[code] += 1
+        tasks.append(
+            TaskModel(
+                id=str(index + 1),
+                task_type_code=code,
+                index_in_task_type=counts[code],
+                customer_id=rng.choice(customers).id,
+                priority=rng.choice(PRIORITIES),
+            )
+        )
+    return TaskAssigningSolutionModel(
+        task_types=task_types, customers=customers, tasks=tasks, employees=employees
+    ).to_core()
+
+
 def instances() -> dict[str, Callable[[], Any]]:
     from optimaru.task_assigning import demo
 
-    return {"demo": lambda: demo.generate_demo_data().to_core()}
+    return {
+        "small": lambda: _generate(12, 4, 3, seed=1),
+        # The demo data: 28 tasks, 8 employees, 4 customers.
+        "demo": lambda: demo.generate_demo_data().to_core(),
+        "medium": lambda: _generate(60, 12, 6, seed=2),
+        "large": lambda: _generate(120, 20, 8, seed=3),
+        # No larger rung: the reference model solves this use case one score level at a
+        # time, a third of the budget each, and ends without a solution when the first
+        # level finds none in its share. At 240 tasks / 32 employees / 12 customers
+        # (`_generate(240, 32, 12, seed=4)`) that is what a 30 s run does, although the
+        # first level succeeds when it has the whole 30 s: a row that would show the
+        # split, not the solver.
+    }
 
 
 def describe(problem: Any) -> str:
-    return "demo instance"
+    from optimaru.task_assigning.models import TaskAssigningSolutionModel
+
+    model = TaskAssigningSolutionModel.from_core(problem)
+    return f"{len(model.tasks)} tasks / {len(model.employees)} employees / {len(model.customers)} customers"
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:

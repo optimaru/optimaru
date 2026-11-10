@@ -18,6 +18,11 @@ uv run semiconductor-scheduling-compare --seconds 10 --workers 8   # engine vs C
 The engine runs single-threaded; CP-SAT gets `--workers` search workers and
 its time includes model construction.
 
+The engine's result on the larger instances varies between runs of the same
+build: four 30 s runs of the 18-lot instance gave soft -839, -842, -881 and
+-894 (the 6- and 12-lot instances repeat to the digit). Read a margin of a few
+percent in the table below as noise.
+
 <!-- results:start -->
 ## Results
 
@@ -27,6 +32,10 @@ Every cell is the score of that solver's final solution under the use case's own
 | --- | --- | --- | --- |
 | lots6 | 6 lots / 6 machines | **0hard/-163soft** | **0hard/-163soft** |
 | lots12 | 12 lots / 6 machines | 0hard/-413soft | **0hard/-411soft** |
+| lots18 | 18 lots / 6 machines | **0hard/-839soft** | 0hard/-857soft |
+| lots24 | 24 lots / 6 machines | **0hard/-2142soft** | 0hard/-2338soft |
+| lots36 | 36 lots / 6 machines | **0hard/-10563soft** | 0hard/-12165soft |
+| lots48 | 48 lots / 6 machines | **0hard/-24279soft** | 0hard/-26101soft |
 
-Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
 <!-- results:end -->

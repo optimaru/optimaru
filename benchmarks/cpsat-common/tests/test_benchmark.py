@@ -44,6 +44,27 @@ def test_local_runner_compares_one_case(monkeypatch, capsys) -> None:
     assert payload[0]["runs"][1]["score"] == [0, 2.0]
 
 
+def test_one_solver_alone_gives_its_run_of_the_comparison(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        benchmark,
+        "score_solution",
+        lambda package, problem: benchmark.Score((0, float(problem.value)), ("hard", "soft")),
+    )
+
+    runs = {}
+    for solver in ("engine", "cp-sat", "both"):
+        argv = ["--json", "--seconds", "0.01", "--seed", "3", "--workers", "2", "--solver", solver]
+        assert benchmark.run_cli(FakeCase, argv) == 0
+        (result,) = json.loads(capsys.readouterr().out)
+        # Every result says what it was given, whichever solvers ran.
+        assert (result["size"], result["budget"], result["seed"], result["workers"]) == ("one item", 0.01, 3, 2)
+        runs[solver] = [(run["solver"], run["score"]) for run in result["runs"]]
+
+    assert runs["engine"] == [("engine", [0, 1.0])]
+    assert runs["cp-sat"] == [("cp-sat", [0, 2.0])]
+    assert runs["both"] == runs["engine"] + runs["cp-sat"]
+
+
 def test_a_failed_instance_fails_the_run(capsys) -> None:
     class Broken(FakeCase):
         @staticmethod

@@ -31,9 +31,12 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
+| small | 20 jobs / 2 projects / 7 res | **0hard/0medium/-10soft** | **0hard/0medium/-10soft** |
 | demo | 24 jobs / 2 projects / 7 res | **0hard/0medium/-7soft** | **0hard/0medium/-7soft** |
 | medium | 72 jobs / 4 projects / 13 res | **0hard/-9medium/-20soft** | **0hard/-9medium/-20soft** |
-| large | 156 jobs / 6 projects / 19 res | **0hard/-1medium/-35soft** | 0hard/-1605medium/-597soft |
+| medium-2 | 72 jobs / 4 projects / 13 res | **0hard/0medium/-18soft** | **0hard/0medium/-18soft** |
+| large | 156 jobs / 6 projects / 19 res | **0hard/-1medium/-35soft** | 0hard/-1medium/-55soft |
+| xlarge | 300 jobs / 10 projects / 31 res | **0hard/-11medium/-61soft** | — (no solution in time) |
 
-Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
 <!-- results:end -->

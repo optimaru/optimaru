@@ -182,6 +182,10 @@ def _check_vrp(what: str, data: dict, args: argparse.Namespace) -> None:
     seconds = data["protocol"]["seconds"]
     if seconds != args.seconds:
         raise SystemExit(f"{what}: run with {seconds:g} s, not --seconds {args.seconds:g}")
+    only = data["protocol"].get("only")
+    if only:
+        # The tables and the bucket means read as the whole series.
+        raise SystemExit(f"{what}: a run of chosen instances ({', '.join(only)}) is not published as the series")
 
 
 def _footer(args: argparse.Namespace, seed: int, *, workers: bool = True) -> str:
@@ -314,7 +318,8 @@ def vrp_block(set_x: dict | None, set_a: dict | None, args: argparse.Namespace) 
         "",
         (
             "Gap to the best-known solution; every route is re-verified by the harness. Lower is better; "
-            "the best value is bold. A mean gap counts the complete runs only (complete runs / runs)."
+            "the best complete run is bold (a run that leaves a customer out has no gap). A mean gap counts "
+            "the complete runs only (complete runs / runs)."
         ),
     ]
     for title, data in (("CVRPLIB Set X", set_x), ("CVRPLIB Set A (Augerat)", set_a)):
@@ -343,6 +348,9 @@ def vrp_block(set_x: dict | None, set_a: dict | None, args: argparse.Namespace) 
             )
         lines += ["", *_vrp_table(by_instance)]
     protocol = (set_x or set_a)["protocol"]
+    seeds = {data["protocol"]["seed"] for data in (set_x, set_a) if data is not None}
+    if len(seeds) > 1:
+        raise SystemExit(f"vehicle-routing: Set X and Set A were run with different seeds {sorted(seeds)}")
     lines += [
         "",
         f"Measured {args.date} on {args.machine}, {protocol['seconds']:g} s per run, seed "
@@ -379,7 +387,8 @@ def _pdp_cell(run: dict | None) -> tuple[dict, str]:
 
 def _pdp_cells(case: dict) -> tuple[dict[str, dict], dict[str, str]]:
     runs = _runs(case)
-    pairs = {key: _pdp_cell(runs[solver]) for solver, key in SOLVERS.items() if solver in runs}
+    # A backend the case was not run with is "not run", as in the other tables.
+    pairs = {key: _pdp_cell(runs.get(solver)) for solver, key in SOLVERS.items()}
     return {key: cell for key, (cell, _) in pairs.items()}, {key: text for key, (_, text) in pairs.items()}
 
 
@@ -464,8 +473,8 @@ def pdp_synthetic_block(cases: list[dict]) -> str:
     for case in cases:
         cells, texts = _pdp_cells(case)
         texts = _bold(cells, texts)
-        lines.append(f"| {case['requests']} | {texts['engine']} | {texts.get('ortools', 'not run')} |")
-        if "ortools" not in cells:
+        lines.append(f"| {case['requests']} | {texts['engine']} | {texts['ortools']} |")
+        if cells["ortools"].get("status") == "not run":
             engine_only.append(str(case["requests"]))
     if engine_only:
         measured = " (at 400 requests it was still being built after 10 minutes at 11 GB, 2026-10-29)"
@@ -489,7 +498,8 @@ def _count_cells(result: dict, field: str) -> tuple[dict[str, dict], dict[str, s
             cells[key], texts[key] = {"value": None, "status": "not run"}, "not run (size cap)"
         elif run.get(field) is None or run.get("feasible") is False:
             kind = "no solution" if run.get(field) is None else "infeasible"
-            cells[key], texts[key] = {"value": None, "status": kind}, f"{kind} in time"
+            text = "no solution in time" if kind == "no solution" else kind
+            cells[key], texts[key] = {"value": None, "status": kind}, text
         else:
             cells[key], texts[key] = {"value": run[field]}, _number(run[field])
     return cells, texts
@@ -766,8 +776,6 @@ def vrp_dataset(slug: str, data: dict) -> dict:
     command = "uv run python -m vrp_benchmark --series {} --seconds {:g}".format(series, data["protocol"]["seconds"])
     if series == "x":
         command += " --catalog-source mirror"
-    # A run of chosen instances reproduces with the same choice, not as the whole series.
-    command += "".join(f" --only {name}" for name in data["protocol"].get("only") or [])
     return _dataset(slug, "vehicle-routing", "public", "routing", "vehicle-routing", command, [section])
 
 

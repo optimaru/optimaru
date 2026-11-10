@@ -291,18 +291,22 @@ def test_sample_and_size_cap_in_the_prose_come_from_the_results() -> None:
     assert "--instance u120_00 --instance u120_04 --instance t60_00" in publish.bpp_dataset(uneven, 30)["command"]
 
 
-def test_a_routing_file_run_with_another_budget_is_refused_and_a_partial_run_says_so() -> None:
-    data = {
-        "protocol": {"series": "x", "seconds": 10.0, "seed": 0, "only": ["X-n101-k25"]},
-        "results": [_vrp("X-n101-k25", "engine", 100, 1.0), _vrp("X-n101-k25", "ortools", 100, 2.0)],
-    }
+def test_a_routing_file_of_another_budget_seed_or_of_chosen_instances_is_refused() -> None:
+    def series(name, seconds=30.0, seed=0, only=None):
+        return {
+            "protocol": {"series": name, "seconds": seconds, "seed": seed, "only": only},
+            "results": [_vrp("X-n101-k25", "engine", 100, 1.0), _vrp("X-n101-k25", "ortools", 100, 2.0)],
+        }
+
+    publish._check_vrp("vehicle-routing (Set X)", series("x"), ARGS)
     with pytest.raises(SystemExit, match="10 s, not --seconds 30"):
-        publish._check_vrp("vehicle-routing (Set X)", data, ARGS)
-    data["protocol"]["seconds"] = 30.0
-    publish._check_vrp("vehicle-routing (Set X)", data, ARGS)
-    assert publish.vrp_dataset("cvrplib-x", data)["command"].endswith("--catalog-source mirror --only X-n101-k25")
-    data["protocol"]["only"] = None
-    assert publish.vrp_dataset("cvrplib-x", data)["command"].endswith("--catalog-source mirror")
+        publish._check_vrp("vehicle-routing (Set X)", series("x", seconds=10.0), ARGS)
+    # A run of --only instances would read as the whole series in the tables and bucket means.
+    with pytest.raises(SystemExit, match="chosen instances \\(X-n101-k25\\) is not published"):
+        publish._check_vrp("vehicle-routing (Set X)", series("x", only=["X-n101-k25"]), ARGS)
+    assert "seed 0, single-threaded" in publish.vrp_block(series("x"), series("a"), ARGS)
+    with pytest.raises(SystemExit, match="different seeds"):
+        publish.vrp_block(series("x"), series("a", seed=3), ARGS)
 
 
 def test_the_footer_states_the_seed_the_results_record() -> None:
@@ -323,3 +327,12 @@ def test_a_run_whose_score_disagrees_with_the_scorer_is_not_published() -> None:
     result = {"instance": "Pat1", "tasks": 32, "resources": 4, "critical_path": 20, "runs": [run]}
     with pytest.raises(SystemExit, match="Pat1: a run cannot be published"):
         publish._count_cells(result, "makespan")
+
+
+def test_a_pickup_delivery_file_of_one_backend_publishes_the_other_as_not_run() -> None:
+    cases = [_pdp("lc101", 10, 53, (2, 155.4))]
+    cases[0]["runs"] = [{"solver": "cp-sat", "vehicles": 2, "distance": 155.4, "status": ""}]
+    block = publish.pdp_li_lim_block(cases, ARGS)
+    assert "| lc101 | first 10 of 53 requests | not run | 2 / 155.4 |" in block
+    row = publish.pdp_li_lim_dataset(cases, 30)["sections"][0]["rows"][0]
+    assert row["cells"]["engine"] == {"value": None, "status": "not run"} and row["best"] == []

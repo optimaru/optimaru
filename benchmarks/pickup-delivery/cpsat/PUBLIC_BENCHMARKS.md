@@ -38,8 +38,9 @@ uv run pickup-delivery-public-bench --all --seconds 30 --backend engine
 
 `--instance` and `--requests` repeat; `--requests 0` takes every pair of the
 source file, `--all` runs every instance of the archive (whole, unless
-`--requests` says otherwise), and `--json` prints the results as JSON (progress
-goes to stderr). A run records its outcome (`ok`, `no solution`, `incomplete`,
+`--requests` says otherwise), `--json` prints the results as JSON (progress
+goes to stderr), and `--out FILE` rewrites FILE with the results after every
+instance, so an interrupted sweep keeps what it measured. A run records its outcome (`ok`, `no solution`, `incomplete`,
 `infeasible`) and the budget, seed and workers it was given. The engine always runs
 single-threaded; `--workers` is CP-SAT's. The CP-SAT circuit model grows
 quadratically per vehicle, so a whole instance (about 50 requests, 25 vehicles)

@@ -2,7 +2,7 @@ from knapsack_cpsat import benchmark
 
 
 def test_comparison_runner_owns_its_instances() -> None:
-    assert set(benchmark.instances()) == {"n50", "n200", "n1000"}
+    assert list(benchmark.instances()) == ["n50", "n100", "n200", "n500", "n1000", "n2000", "n5000"]
     assert callable(benchmark.solve_engine)
     assert callable(benchmark.solve_cpsat)
 

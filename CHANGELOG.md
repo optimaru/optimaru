@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- **More instances in every engine-vs-CP-SAT comparison.** Each of the 17
+  comparisons on generated or demo instances now runs a ladder of four to
+  seven instances of growing size, 97 in all (was 40), and every results
+  block is measured again. The smallest rungs are ones both solvers finish;
+  on the largest the exact model often returns nothing within the budget,
+  and the tables say so. `benchmarks/README.md` now states how a CP-SAT run
+  is timed: the 60 s stop past the budget, and the level-by-level solve of
+  the models whose score does not fit one 64-bit objective.
+  - Conference scheduling, maintenance scheduling, meeting scheduling, sports
+    league scheduling and task assigning had only their demo data. Their
+    `benchmark.py` has a seeded generator in the shape of that data, and the
+    demo instance stays as one rung. Food packaging runs its demo generator at
+    five sizes.
+  - The comparison runner takes `--solver engine` or `--solver cp-sat`. The JSON
+    of the two runs adds up to the comparison, so the single-threaded engine
+    runs and the CP-SAT runs can be measured side by side. Every result records
+    its seed and workers.
+  - `pickup-delivery-public-bench` and `project-job-public-bench` take `--out
+    FILE` and rewrite it after every instance, so an interrupted sweep keeps
+    what it measured.
+  - The publisher refuses a routing file that was run on chosen instances
+    (`--only`) or whose two series used different seeds, and publishes a
+    pickup-delivery file of one backend with the other as not run.
+  - The SALBP details workbook must name its columns: a missing header is an
+    error, no longer a fallback to fixed columns.
 - **A parallel start that reaches the target stops the others.** With
   `parallel_solver_count` above 1 and a target (`stop_at_first_feasible`, `best_score_limit`),
   each start used to stop on its own, so `solve()` returned only when the slowest start had

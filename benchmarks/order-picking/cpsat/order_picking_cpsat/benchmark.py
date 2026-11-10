@@ -75,8 +75,11 @@ def _build(order_count: int, trolley_count: int, seed: int) -> Any:
 
 def instances() -> dict[str, Callable[[], Any]]:
     return {
+        "tiny": lambda: _build(4, 1, seed=2),
         "small": lambda: _build(8, 2, seed=0),
         "medium": lambda: _build(20, 4, seed=1),
+        "large": lambda: _build(40, 8, seed=3),
+        "xlarge": lambda: _build(80, 16, seed=4),
     }
 
 

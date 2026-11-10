@@ -2,7 +2,7 @@ from max_cut_cpsat import benchmark
 
 
 def test_comparison_runner_owns_its_instances() -> None:
-    assert set(benchmark.instances()) == {"g30", "g80", "g200"}
+    assert list(benchmark.instances()) == ["g30", "g50", "g80", "g120", "g200", "g400", "g800"]
     assert callable(benchmark.solve_engine)
     assert callable(benchmark.solve_cpsat)
 

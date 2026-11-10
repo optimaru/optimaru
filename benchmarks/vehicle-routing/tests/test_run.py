@@ -166,6 +166,10 @@ def test_the_free_fleet_leaves_room_for_the_set_x_solution_closest_to_it() -> No
     # files, 2026-11-10). A smaller margin has to stay above that.
     assert free_fleet((17067,), 125) == 181
     assert free_fleet((17067,), 125) > 155
+    # (total demand, capacity, routes of the best-known solution) of instances whose
+    # best-known solution has more routes than the -kN of their name.
+    for demand, capacity, routes in ((3068, 144, 23), (15974, 267, 61), (67057, 1816, 38), (20743, 138, 157)):
+        assert free_fleet((demand,), capacity) > routes
 
 
 def test_limit_per_bucket_goes_with_a_set_x_sample_only() -> None:

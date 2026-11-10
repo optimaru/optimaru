@@ -68,6 +68,10 @@ class InstanceResult:
     caveat: str = ""
 
 
+#: The solvers of a comparison, in the order of its columns.
+SOLVERS = ("engine", "cp-sat")
+
+
 class BenchmarkCase(Protocol):
     NAME: str
     PACKAGE: str
@@ -197,25 +201,34 @@ def run_instance(
     seed: int,
     workers: int,
     deadline: float | None = None,
+    solvers: Sequence[str] = SOLVERS,
 ) -> InstanceResult:
+    """Solve one instance with each of `solvers` and re-score the answers.
+
+    The two solvers never share state, so a run of one solver alone gives the run
+    it would have in a comparison; that lets the single-threaded engine runs and
+    the CP-SAT runs of a long list be measured side by side on separate cores.
+    """
     engine_problem = factory()
-    started = time.perf_counter()
-    case.solve_engine(engine_problem, seconds, seed)
-    engine_elapsed = time.perf_counter() - started
-    engine_run = SolverRun(
-        "engine",
-        score_solution(case.PACKAGE, engine_problem),
-        engine_elapsed,
-        self_report=_self_report(case, engine_problem),
-    )
-
-    # Only an importable case module can be rebuilt in a child process.
-    if deadline is not None and getattr(case, "__spec__", None) is not None:
-        cpsat_run = _solve_cpsat_bounded(case, instance, seconds, seed, workers, deadline)
-    else:
-        cpsat_run = _solve_cpsat(case, factory(), seconds, seed, workers)
-
-    runs = [engine_run, cpsat_run]
+    runs = []
+    if "engine" in solvers:
+        started = time.perf_counter()
+        case.solve_engine(engine_problem, seconds, seed)
+        engine_elapsed = time.perf_counter() - started
+        runs.append(
+            SolverRun(
+                "engine",
+                score_solution(case.PACKAGE, engine_problem),
+                engine_elapsed,
+                self_report=_self_report(case, engine_problem),
+            )
+        )
+    if "cp-sat" in solvers:
+        # Only an importable case module can be rebuilt in a child process.
+        if deadline is not None and getattr(case, "__spec__", None) is not None:
+            runs.append(_solve_cpsat_bounded(case, instance, seconds, seed, workers, deadline))
+        else:
+            runs.append(_solve_cpsat(case, factory(), seconds, seed, workers))
 
     return InstanceResult(
         case=case.NAME,
@@ -341,9 +354,17 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
         help="seconds past the budget before a CP-SAT run (model build included) "
         "is stopped and reported as no solution in time",
     )
+    parser.add_argument(
+        "--solver",
+        choices=(*SOLVERS, "both"),
+        default="both",
+        help="run one solver only; the JSON of an engine-only and a cp-sat-only run of the "
+        "same instances add up to a comparison",
+    )
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--markdown", action="store_true")
     args = parser.parse_args(argv)
+    solvers = SOLVERS if args.solver == "both" else (args.solver,)
 
     wanted = set(args.instance) if args.instance else None
     results: list[dict] = []
@@ -353,19 +374,22 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
         if not args.as_json:
             print(f"running {case.NAME}/{name} ...", file=sys.stderr)
         try:
-            results.append(
-                _as_dict(
-                    run_instance(
-                        case,
-                        name,
-                        factory,
-                        args.seconds,
-                        args.seed,
-                        args.workers,
-                        args.seconds + args.cpsat_grace,
-                    )
+            result = _as_dict(
+                run_instance(
+                    case,
+                    name,
+                    factory,
+                    args.seconds,
+                    args.seed,
+                    args.workers,
+                    args.seconds + args.cpsat_grace,
+                    solvers,
                 )
             )
+            # What the run was given, so a table can state it and a publisher can check it.
+            result["seed"] = args.seed
+            result["workers"] = args.workers
+            results.append(result)
         except Exception:  # noqa: BLE001 - one broken instance should still yield a report.
             results.append(
                 {

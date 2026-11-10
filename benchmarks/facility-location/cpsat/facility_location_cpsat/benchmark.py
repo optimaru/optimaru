@@ -74,10 +74,14 @@ def _build(
 
 def instances() -> dict[str, Callable[[], Any]]:
     return {
+        "small": lambda: _build(15, 30, 2250, 450, seed=3),
         # The demo's scale.
         "demo": lambda: _build(30, 60, 4500, 900, seed=0),
         "medium": lambda: _build(50, 200, 15_000, 3_000, seed=1),
+        # The medium scale again from another seed.
+        "medium-2": lambda: _build(50, 200, 15_000, 3_000, seed=4),
         "large": lambda: _build(80, 600, 45_000, 9_000, seed=2),
+        "xlarge": lambda: _build(120, 1200, 90_000, 18_000, seed=5),
     }
 
 

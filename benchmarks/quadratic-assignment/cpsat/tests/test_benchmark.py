@@ -3,7 +3,15 @@ from quadratic_assignment_cpsat import benchmark
 
 
 def test_comparison_runner_owns_its_instances() -> None:
-    assert set(benchmark.instances()) == {"plant6", "random8", "random10"}
+    assert list(benchmark.instances()) == [
+        "plant6",
+        "random8",
+        "random10",
+        "random12",
+        "random14",
+        "random16",
+        "random20",
+    ]
     assert callable(benchmark.solve_engine)
     assert callable(benchmark.solve_cpsat)
 

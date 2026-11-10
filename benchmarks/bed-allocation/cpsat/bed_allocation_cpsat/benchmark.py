@@ -129,9 +129,13 @@ def _build(room_count: int, last_day: int, seed: int) -> Any:
 
 def instances() -> dict[str, Callable[[], Any]]:
     return {
+        "small": lambda: _build(5, 13, seed=3),
         "demo": lambda: _build(10, 27, seed=0),
         "medium": lambda: _build(24, 27, seed=1),
+        # The medium scale again from another seed.
+        "medium-2": lambda: _build(24, 27, seed=4),
         "large": lambda: _build(48, 41, seed=2),
+        "xlarge": lambda: _build(80, 55, seed=5),
     }
 
 

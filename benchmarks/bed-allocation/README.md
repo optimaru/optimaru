@@ -31,9 +31,12 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
+| small | 20 stays / 6 beds / 5 rooms | 0hard/0medium/-3628soft | **0hard/0medium/-3580soft** |
 | demo | 77 stays / 13 beds / 10 rooms | 0hard/0medium/-6954soft | **0hard/0medium/-6640soft** |
-| medium | 183 stays / 30 beds / 24 rooms | **0hard/0medium/-13686soft** | 0hard/0medium/-21254soft |
+| medium | 183 stays / 30 beds / 24 rooms | **0hard/0medium/-13686soft** | 0hard/0medium/-21972soft |
+| medium-2 | 180 stays / 30 beds / 24 rooms | **0hard/0medium/-16052soft** | 0hard/0medium/-24896soft |
 | large | 551 stays / 61 beds / 48 rooms | **0hard/0medium/-34556soft** | — (no solution in time) |
+| xlarge | 1233 stays / 104 beds / 80 rooms | **0hard/0medium/-35096soft** | — (no solution in time) |
 
-Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
 <!-- results:end -->

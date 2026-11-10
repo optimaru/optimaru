@@ -65,7 +65,14 @@ def _build(lot_count: int, seed: int) -> Any:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {"lots6": lambda: _build(6, seed=0), "lots12": lambda: _build(12, seed=1)}
+    return {
+        "lots6": lambda: _build(6, seed=0),
+        "lots12": lambda: _build(12, seed=1),
+        "lots18": lambda: _build(18, seed=2),
+        "lots24": lambda: _build(24, seed=3),
+        "lots36": lambda: _build(36, seed=4),
+        "lots48": lambda: _build(48, seed=5),
+    }
 
 
 def describe(problem: Any) -> str:

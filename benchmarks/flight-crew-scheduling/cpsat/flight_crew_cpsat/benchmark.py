@@ -137,10 +137,14 @@ def _build(count_days: int, count_flights: int, seed: int) -> Any:
 
 def instances() -> dict[str, Callable[[], Any]]:
     return {
+        "small": lambda: _build(3, 8, seed=3),
         # The demo's scale: 6 airports, 5 days, 14 flights.
         "demo": lambda: _build(5, 14, seed=0),
         "medium": lambda: _build(7, 28, seed=1),
+        # The medium scale again from another seed.
+        "medium-2": lambda: _build(7, 28, seed=4),
         "large": lambda: _build(10, 56, seed=2),
+        "xlarge": lambda: _build(14, 112, seed=5),
     }
 
 

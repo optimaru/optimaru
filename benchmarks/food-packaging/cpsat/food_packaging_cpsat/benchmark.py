@@ -25,14 +25,35 @@ def self_report(problem: Any) -> None:
     return None
 
 
-def instances() -> dict[str, Callable[[], Any]]:
-    from optimaru import food_packaging
+def _plant(line_count: int, job_count: int) -> Callable[[], Any]:
+    """The demo generator (deterministic, seed 37) at another scale."""
 
-    return {"demo": lambda: food_packaging.generate_demo_data()}
+    def build() -> Any:
+        from optimaru import food_packaging
+
+        return food_packaging.generate_demo_data(line_count, job_count)
+
+    return build
+
+
+def instances() -> dict[str, Callable[[], Any]]:
+    return {
+        "lines2": _plant(2, 20),
+        "lines3": _plant(3, 40),
+        # No `_plant(4, 60)`: the reference model solves this use case one score level at
+        # a time, a third of the budget each, and ends without a solution when the first
+        # level finds none in its share. On that plant the first level takes about 17 s,
+        # so a 30 s run ends after 10 s with nothing: a row that would show the split,
+        # not the solver. (On the demo plant the first level finds nothing in 30 s either.)
+        # The demo plant: `generate_demo_data()` with its own defaults.
+        "demo": _plant(5, 100),
+        "lines8": _plant(8, 200),
+        "lines10": _plant(10, 300),
+    }
 
 
 def describe(problem: Any) -> str:
-    return "demo plant (5 lines, 100 jobs)"
+    return f"{len(problem.lines)} lines / {len(problem.jobs)} jobs"
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
