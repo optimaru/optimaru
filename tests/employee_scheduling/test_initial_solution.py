@@ -6,11 +6,9 @@ import time
 
 import pytest
 
-pytest.importorskip("pydantic")
-
-import optimaru.employee_scheduling as es  # noqa: E402
-from optimaru.employee_scheduling.demo import generate_demo_data  # noqa: E402
-from optimaru.employee_scheduling.models import (  # noqa: E402
+import optimaru.employee_scheduling as es
+from optimaru.employee_scheduling.demo import generate_demo_data
+from optimaru.employee_scheduling.models import (
     ScheduleSolution,
     ShiftAssignmentModel,
     SolverSettings,

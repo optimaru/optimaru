@@ -5,6 +5,8 @@ The raw costs come from `constraint_costs()` (summed over the units of each
 constraint), the per-constraint surface.
 """
 
+import pytest
+
 import optimaru.meeting_scheduling as ms
 from optimaru.meeting_scheduling.constraints import get_constraints, score
 
@@ -133,8 +135,5 @@ def test_duplicate_assignment_rejected():
     meetings = [ms.Meeting("0", duration_in_grains=4)]
     assignments = [ms.MeetingAssignment("0", 0), ms.MeetingAssignment("1", 0)]
     s = ms.MeetingSchedule(people, grains, rooms, meetings, assignments)
-    try:
+    with pytest.raises(ValueError):
         ms.calculate_score(s)
-        raise AssertionError("duplicate assignment was not rejected")
-    except ValueError:
-        pass

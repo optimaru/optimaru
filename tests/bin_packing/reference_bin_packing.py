@@ -42,14 +42,6 @@ ENGINE_NAME = {
     "minimize_bins": "used_bins_cost",
 }
 
-#: The reference defaults: name -> (hard, weight field). Every weight field defaults to 1.
-REFERENCE_LEVELS = {
-    "bin_capacity": (True, "capacity_weight"),
-    "minimize_bins": (False, "used_bin_weight"),
-    "color_compatibility": (True, "color_weight"),
-    "item_conflicts": (True, "conflict_weight"),
-}
-
 
 def _items(problem: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return list(problem["items"])
@@ -174,12 +166,6 @@ def score(
 def default_score(problem: Mapping[str, Any]) -> tuple[int, float]:
     """The score at the default weights."""
     return score(constraint_costs(problem))
-
-
-def compact(assignments: Sequence[int]) -> list[int]:
-    """Relabel bins by first appearance in item order."""
-    remap: dict[int, int] = {}
-    return [remap.setdefault(bin_index, len(remap)) for bin_index in assignments]
 
 
 def descending_order(weights: Sequence[int]) -> list[int]:

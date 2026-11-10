@@ -211,7 +211,7 @@ def test_seeded_runs_are_reproducible():
 
 
 def test_pydantic_models_round_trip():
-    models = pytest.importorskip("optimaru.order_picking.models")
+    from optimaru.order_picking import models
 
     request = models.OrderPickingRequest(
         timelimit=1.0,
@@ -268,7 +268,7 @@ def test_pydantic_models_round_trip():
 
 
 def test_duplicate_ids_rejected():
-    models = pytest.importorskip("optimaru.order_picking.models")
+    from optimaru.order_picking import models
     loc = models.LocationModel(column="A", shelving_row=1, side="LEFT", row=0)
     with pytest.raises(ValueError, match="duplicate"):
         models.OrderPickingRequest(

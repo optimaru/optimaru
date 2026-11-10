@@ -2,8 +2,6 @@
 
 import pytest
 
-pytest.importorskip("pydantic")
-
 import optimaru.conference_scheduling as cs
 from optimaru.conference_scheduling.models import ConferenceScheduleModel
 

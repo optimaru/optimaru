@@ -2,8 +2,6 @@
 
 import pytest
 
-pytest.importorskip("pydantic")
-
 import optimaru.tournament_scheduling as ts
 from optimaru.tournament_scheduling.models import TournamentScheduleModel, demo_data
 

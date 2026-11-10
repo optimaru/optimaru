@@ -17,8 +17,8 @@ from .fab_random import instance
 WEB_DEMO = Path(__file__).parent / "data" / "web-demo.json"
 
 
-def _web_demo() -> dict | None:
-    return json.loads(WEB_DEMO.read_text()) if WEB_DEMO.exists() else None
+def _web_demo() -> dict:
+    return json.loads(WEB_DEMO.read_text())
 
 
 @pytest.mark.parametrize("seed", range(40))
@@ -37,8 +37,6 @@ def test_round_trip_is_lossless(seed):
 
 def test_round_trip_of_the_web_demo_and_of_a_scored_schedule():
     data = _web_demo()
-    if data is None:
-        pytest.skip("web demo sample not available")
     model = SemiconductorScheduleModel.model_validate(data)
     assert SemiconductorScheduleModel.from_core(model.to_core()) == model
     core = model.to_core()

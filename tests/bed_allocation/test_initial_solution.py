@@ -2,8 +2,6 @@
 
 import pytest
 
-pytest.importorskip("pydantic")
-
 import optimaru.bed_allocation as ba
 from optimaru.bed_allocation.demo import generate_demo_data
 from optimaru.bed_allocation.models import BedPlanModel

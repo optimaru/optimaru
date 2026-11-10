@@ -2,8 +2,6 @@
 
 import pytest
 
-pytest.importorskip("pydantic")
-
 import optimaru.project_job_scheduling as pj
 from optimaru.project_job_scheduling.demo import generate_demo_data
 from optimaru.project_job_scheduling.models import ProjectJobScheduleModel

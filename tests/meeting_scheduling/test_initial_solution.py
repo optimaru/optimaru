@@ -2,8 +2,6 @@
 
 import pytest
 
-pytest.importorskip("pydantic")
-
 import optimaru.meeting_scheduling as ms
 from optimaru.meeting_scheduling.models import MeetingScheduleModel, demo_data
 
