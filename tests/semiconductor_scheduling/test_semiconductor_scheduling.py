@@ -278,7 +278,10 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
 def test_inputs_of_the_wrong_type_are_refused():
     import pytest
 
+    import optimaru.semiconductor_scheduling as package
+
     with pytest.raises(TypeError, match="SemiconductorSchedule or a models.SemiconductorScheduleModel"):
         solve_fab({"lots": []})
-    with pytest.raises(TypeError):
-        fab_costs([])
+    for refuses in (fab_costs, fab_items, package.calculate_score):
+        with pytest.raises(TypeError):
+            refuses([])
