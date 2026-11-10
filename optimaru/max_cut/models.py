@@ -19,6 +19,13 @@ from pydantic import BaseModel, Field, model_validator
 from .._models import StrictModel
 from . import _core
 
+__all__ = [
+    "EdgeModel",
+    "MaxCutProblemModel",
+    "VertexPairModel",
+    "with_initial_solution",
+]
+
 
 class EdgeModel(StrictModel):
     source: str

@@ -52,11 +52,11 @@ __all__ = [
     "TournamentSchedule",
     "UnavailabilityPenalty",
     "calculate_score",
-    "solve",
-    "unfairness",
-    "list_constraints",
     "constraint_costs",
     "constraint_info",
+    "list_constraints",
+    "solve",
+    "unfairness",
     "with_initial_solution",
 ]
 

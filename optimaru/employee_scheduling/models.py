@@ -69,21 +69,21 @@ from . import _core
 from . import constraints as _specs
 
 __all__ = [
-    "WorkerModel",
-    "ShiftModel",
-    "SolverSettings",
-    "SchedulingInput",
-    "ScheduleRequest",
-    "ShiftAssignmentModel",
-    "RuleTotal",
-    "ScheduleSolution",
+    "RULE_MODELS",
     "Rule",
     "RuleBase",
-    "RULE_MODELS",
-    "rule_model",
+    "RuleTotal",
+    "ScheduleRequest",
+    "ScheduleSolution",
+    "SchedulingInput",
+    "ShiftAssignmentModel",
+    "ShiftModel",
+    "SolverSettings",
+    "WorkerModel",
     "default_rules",
-    "to_schedule",
+    "rule_model",
     "solve_request",
+    "to_schedule",
     "with_initial_solution",
 ]
 

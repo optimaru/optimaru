@@ -65,16 +65,16 @@ from .._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
-    "Level",
-    "Score",
-    "score",
+    "DistanceFromFacilityCost",
     "FacilityCapacityCost",
     "FacilitySetupCost",
-    "DistanceFromFacilityCost",
+    "Level",
+    "Score",
+    "distance_from_facility_cost",
     "facility_capacity_cost",
     "facility_setup_cost",
-    "distance_from_facility_cost",
     "get_constraints",
+    "score",
 ]
 
 

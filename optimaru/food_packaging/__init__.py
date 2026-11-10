@@ -85,11 +85,11 @@ __all__ = [
     "SolverConfig",
     "assign_missing_operators",
     "calculate_score",
-    "generate_demo_data",
-    "list_constraints",
     "constraint_costs",
     "constraint_info",
+    "generate_demo_data",
     "improve_operator_assignment",
+    "list_constraints",
     "solve",
     "with_initial_solution",
 ]

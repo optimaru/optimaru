@@ -65,13 +65,13 @@ __all__ = [
     "build_demo_data",
     "calculate_distance",
     "calculate_score",
+    "constraint_costs",
+    "constraint_info",
     "distance_to_travel",
+    "list_constraints",
     "solve",
     "update_shadow_variables",
     "with_initial_solution",
-    "list_constraints",
-    "constraint_costs",
-    "constraint_info",
 ]
 
 

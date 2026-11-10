@@ -63,22 +63,22 @@ from .._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
-    "Level",
-    "Score",
-    "score",
-    "RequiredSkillCost",
-    "FlightConflictCost",
-    "TransferBetweenTwoFlightsCost",
     "EmployeeUnavailabilityCost",
     "FirstAssignmentNotDepartingFromHomeCost",
+    "FlightConflictCost",
     "LastAssignmentNotArrivingAtHomeCost",
-    "required_skill_cost",
-    "flight_conflict_cost",
-    "transfer_between_two_flights_cost",
+    "Level",
+    "RequiredSkillCost",
+    "Score",
+    "TransferBetweenTwoFlightsCost",
     "employee_unavailability_cost",
     "first_assignment_not_departing_from_home_cost",
-    "last_assignment_not_arriving_at_home_cost",
+    "flight_conflict_cost",
     "get_constraints",
+    "last_assignment_not_arriving_at_home_cost",
+    "required_skill_cost",
+    "score",
+    "transfer_between_two_flights_cost",
 ]
 
 

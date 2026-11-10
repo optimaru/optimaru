@@ -73,11 +73,11 @@ __all__ = [
     "TaskAssigningSolution",
     "TaskType",
     "calculate_score",
-    "solve",
-    "with_initial_solution",
-    "list_constraints",
     "constraint_costs",
     "constraint_info",
+    "list_constraints",
+    "solve",
+    "with_initial_solution",
 ]
 
 

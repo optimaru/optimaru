@@ -20,6 +20,12 @@ from pydantic import BaseModel, Field, model_validator
 from .._models import StrictModel
 from . import _core
 
+__all__ = [
+    "ForbiddenAssignmentModel",
+    "QuadraticAssignmentProblemModel",
+    "with_initial_solution",
+]
+
 
 class ForbiddenAssignmentModel(StrictModel):
     facility: str

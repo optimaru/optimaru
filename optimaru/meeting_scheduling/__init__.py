@@ -58,10 +58,10 @@ __all__ = [
     "SolverConfig",
     "TimeGrain",
     "calculate_score",
-    "constraint_info",
-    "list_constraints",
     "constraint_costs",
+    "constraint_info",
     "demo_data",
+    "list_constraints",
     "solve",
     "with_initial_solution",
 ]

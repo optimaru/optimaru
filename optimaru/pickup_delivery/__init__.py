@@ -64,10 +64,10 @@ __all__ = [
     "Vehicle",
     "build_random_instance",
     "calculate_score",
-    "solve",
-    "list_constraints",
     "constraint_costs",
     "constraint_info",
+    "list_constraints",
+    "solve",
     "solve_request",
     "with_initial_solution",
 ]

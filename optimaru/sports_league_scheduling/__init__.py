@@ -53,10 +53,10 @@ __all__ = [
     "SolverConfig",
     "Team",
     "calculate_score",
-    "list_constraints",
     "constraint_costs",
     "constraint_info",
     "demo_schedule",
+    "list_constraints",
     "solve",
     "with_initial_solution",
 ]

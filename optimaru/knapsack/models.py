@@ -19,6 +19,13 @@ from pydantic import BaseModel, Field, model_validator
 from .._models import StrictModel
 from . import _core
 
+__all__ = [
+    "ItemModel",
+    "KnapsackProblemModel",
+    "SelectionGroupModel",
+    "with_initial_solution",
+]
+
 
 class ItemModel(StrictModel):
     id: str = Field(min_length=1)

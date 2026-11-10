@@ -363,8 +363,8 @@ class MyRuleCost(Constraint):
 
 Then add a module-level default instance (`my_rule_cost = MyRuleCost()`), put
 that instance into `_DEFAULTS` at the same position as in `defaultConstraints()`,
-and add both names to `__all__`. The spec declares no defaults: they come from
-`constraint_info()`. Callers can now write
+and add both names to `__all__`, which every module keeps sorted. The spec
+declares no defaults: they come from `constraint_info()`. Callers can now write
 `solve_with_constraints(plan, get_constraints([..., MyRuleCost(weight=5, level="hard")]))`.
 
 ### 6. Tests
