@@ -20,7 +20,7 @@ JSON-friendly in/out (snake_case fields, PascalCase classes):
     print(solution.score)           # "0hard/0medium/-...soft"
 
 Times are integer seconds from a common day start; locations are
-(latitude, longitude) pairs. Requires the optional ``pydantic`` dependency.
+(latitude, longitude) pairs.
 """
 
 from typing import Any
@@ -29,6 +29,7 @@ from pydantic import Field, model_validator
 
 from .._models import StrictModel, apply_solver_parameters
 from . import _core
+from .constraints import get_constraints
 
 __all__ = [
     "RoutePlanRequest",
@@ -272,8 +273,6 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
         solver.solve(plan)
     else:
         if constraints is None:
-            from .constraints import get_constraints
-
             constraints = get_constraints()
         solver.solve_with_constraints(plan, constraints)
 

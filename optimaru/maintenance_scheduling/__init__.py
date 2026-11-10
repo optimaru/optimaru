@@ -6,8 +6,7 @@ decisions (crew, start date) are composite-encoded into one engine assignment-sh
     crew_date = start_date_index * crew_count + crew_index   # -1 == unassigned
 
 Dates are exchanged as epoch days (days since 1970-01-01).
-The pydantic mirror (`optimaru.maintenance_scheduling.models`, optional dependency) converts to
-and from `datetime.date`.
+The pydantic mirror (`optimaru.maintenance_scheduling.models`) converts to and from `datetime.date`.
 
 Constraints, at the default weights:
   hard 1. crew_conflict_cost          -overlapping days per overlapping job pair on the same crew
@@ -48,6 +47,7 @@ from ._core import (
     list_constraints,
     plus_business_days,
 )
+from .models import MaintenanceScheduleModel, with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -66,16 +66,6 @@ __all__ = [
     "solve",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`. Lazy import: pydantic is an optional dependency.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 # solve() returns what it was given: the compiled problem, or its pydantic model.
@@ -129,10 +119,6 @@ def solve(
     if isinstance(schedule, MaintenanceSchedule):
         solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
-
-    # pydantic model (lazy import: pydantic is an optional dependency).
-    from .models import MaintenanceScheduleModel
-
     if isinstance(schedule, MaintenanceScheduleModel):
         core = schedule.to_core()
         solve_in_place(Solver(cfg), core, constraints)

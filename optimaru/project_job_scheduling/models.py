@@ -18,7 +18,6 @@ Allocations must be 1:1 with jobs.
 `allocations[i].execution_mode_id` None means uninitialized (delay must be None
 too); the solver decides (mode, delay). SOURCE/SINK allocations are always
 pinned, and when passed uninitialized the solver fixes them to (first mode, delay 0).
-`pydantic` is an optional dependency (`pip install optimaru.project_job_scheduling[models]`).
 """
 
 from pydantic import Field, model_validator

@@ -53,6 +53,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .models import AssignmentModel, SemiconductorScheduleModel, with_initial_solution
 
 __all__ = [
     "AcceptorType",
@@ -84,8 +85,6 @@ def _core_of(problem):
     """(engine object, the model to write back into or None)."""
     if isinstance(problem, _core.SemiconductorSchedule):
         return problem, None
-    from .models import SemiconductorScheduleModel
-
     if isinstance(problem, SemiconductorScheduleModel):
         return problem.to_core(), problem
     raise TypeError(
@@ -103,8 +102,6 @@ def _write_scores(model, core) -> None:
 
 
 def _assignment_models(core, assignments):
-    from .models import AssignmentModel
-
     machines = core.machines
     lots = core.lots
     return [
@@ -118,16 +115,6 @@ def _assignment_models(core, assignments):
         )
         for item in assignments
     ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 # solve() returns what it was given: the compiled problem, or its pydantic model.

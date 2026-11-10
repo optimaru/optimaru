@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .._models import StrictModel
+from . import _core
 
 __all__ = [
     "AssignmentModel",
@@ -220,8 +221,6 @@ class SemiconductorScheduleModel(StrictModel):
         pins, assignments (batch ids included) and warm_start are passed on. The totals and
         scores are not: the engine recomputes them. Times beyond the engine's int64 range raise
         ValueError; a derived time or cost that overflows int64 later raises OverflowError."""
-        from . import _core
-
         machine_index = {machine.id: index for index, machine in enumerate(self.machines)}
         resource_index = {resource.id: index for index, resource in enumerate(self.auxiliary_resources)}
         operation_index = {

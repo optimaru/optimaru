@@ -18,7 +18,7 @@ the raw per-constraint costs::
 `solve` accepts both a `_core.MeetingSchedule` (solved in place and returned) and the
 pydantic mirror `models.MeetingScheduleModel` (converted, solved, and returned as a new model; the
 one passed in is left as it was).
-The pydantic mirror (for serialization) is in `optimaru.meeting_scheduling.models` (optional dependency).
+The pydantic mirror (for serialization) is in `optimaru.meeting_scheduling.models`.
 """
 
 from typing import TypeVar
@@ -43,6 +43,7 @@ from ._core import (
     demo_data,
     list_constraints,
 )
+from .models import MeetingScheduleModel, with_initial_solution
 
 __all__ = [
     "GRAIN_LENGTH_IN_MINUTES",
@@ -65,16 +66,6 @@ __all__ = [
     "solve",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`. Lazy import: pydantic is an optional dependency.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 # solve() returns what it was given: the compiled problem, or its pydantic model.
@@ -131,10 +122,6 @@ def solve(
     if isinstance(schedule, MeetingSchedule):
         solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
-
-    # pydantic mirror (lazy import: optional dependency).
-    from .models import MeetingScheduleModel
-
     if isinstance(schedule, MeetingScheduleModel):
         core = schedule.to_core()
         solve_in_place(Solver(cfg), core, constraints)

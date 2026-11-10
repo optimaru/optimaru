@@ -1,8 +1,6 @@
 """Starting a solve from an earlier solution."""
 
 import json
-import subprocess
-import sys
 
 import pytest
 
@@ -163,9 +161,3 @@ def test_the_package_exports_it():
     seeded = ta.with_initial_solution(problem(), seed_of(NOT_GREEDY))
 
     assert assignment(solve(seeded)) == NOT_GREEDY
-
-
-def test_the_package_still_imports_without_pydantic():
-    code = "import sys; sys.modules['pydantic'] = None; import optimaru.task_assigning; optimaru.task_assigning.Solver"
-
-    subprocess.run([sys.executable, "-c", code], check=True)

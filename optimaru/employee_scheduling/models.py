@@ -37,8 +37,7 @@ instance with its own knobs, and the instances add up); an empty rule list is
 refused, as `get_constraints()` refuses it.
 
 Times are integer minutes from day 0, 00:00 (see `optimaru.employee_scheduling.minutes`);
-dates are day indices. Requires the optional `pydantic` dependency
-(`pip install es-scheduling[models]`).
+dates are day indices.
 
 A solve can start from an earlier result: `with_initial_solution(request,
 solution)` returns a new request whose `ShiftModel.worker` fields carry that

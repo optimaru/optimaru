@@ -12,9 +12,9 @@ the names the rule factory accepts. `solve(schedule, ...)` solves a schedule in
 place and returns it; `make_random_roster`, `summary` and `to_dataframe` are
 pure-Python conveniences.
 
-The JSON-friendly request/solution layer is `optimaru.employee_scheduling.models` (optional
-pydantic dependency); `optimaru.employee_scheduling.demo.generate_demo_data` builds a sample
-request and `with_initial_solution` restarts a solve from an earlier result.
+The JSON-friendly request/solution layer is `optimaru.employee_scheduling.models` (pydantic);
+`optimaru.employee_scheduling.demo.generate_demo_data` builds a sample request and
+`with_initial_solution` restarts a solve from an earlier result.
 """
 
 from .._solve import solver_config
@@ -70,6 +70,7 @@ from .constraints import (
     WorkerPairingCost,
 )
 from .helpers import list_constraints, make_random_roster, summary, to_dataframe
+from .models import with_initial_solution
 
 __all__ = [
     "CONSTRAINT_NAMES",
@@ -179,13 +180,3 @@ def solve(
         calculator = constraints if isinstance(constraints, DecomposedCalculator) else DecomposedCalculator(constraints)
         Solver(cfg).solve(schedule, calculator)
     return schedule
-
-
-def __getattr__(name):
-    # Resolved on first use: pydantic is an optional dependency, and the C++
-    # API above has to stay importable without it.
-    if name == "with_initial_solution":
-        from .models import with_initial_solution
-
-        return with_initial_solution
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

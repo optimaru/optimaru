@@ -15,7 +15,6 @@ The engine conversion (`to_core`) turns references into indices::
 The assignment lives on the employee side: `employees[i].tasks` is
 the ordered list of task ids that employee performs. The task side carries the computed
 `start_time` (None when unassigned).
-`pydantic` is an optional dependency (`pip install task_assigning[models]`).
 """
 
 from pydantic import Field, model_validator

@@ -10,8 +10,6 @@ human-readable (crew_id, start_date) pair instead of the composite crew_date, an
     model = MaintenanceScheduleModel.from_core(schedule)  # engine -> pydantic
     clone = MaintenanceScheduleModel.model_validate_json(model.model_dump_json())
     schedule2 = clone.to_core()                           # pydantic -> engine
-
-`pydantic` is an optional dependency (`pip install maintenance_scheduling[models]`).
 """
 
 from datetime import date, timedelta

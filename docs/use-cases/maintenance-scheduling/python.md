@@ -60,7 +60,7 @@ cannot be hard, because hard 0 must mean no violation; use clip=True (a threshol
 another level`. On soft it is allowed.
 
 Dates are epoch day integers (days since 1970-01-01). To work with `datetime.date`,
-use the pydantic mirror (optional dependency `pydantic`):
+use the pydantic mirror:
 
 ```python
 from optimaru.maintenance_scheduling.models import MaintenanceScheduleModel

@@ -61,6 +61,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .models import solve_request, with_initial_solution
 
 __all__ = [
     "AcceptorType",
@@ -131,21 +132,3 @@ def solve(
     )
     solve_in_place(Solver(cfg), plan, constraints)
     return plan
-
-
-def solve_request(request, *, constraints=None):
-    """Solve a `models.RoutePlanRequest` end-to-end; see `models.solve_request`."""
-    # Lazy import: pydantic is an optional dependency.
-    from . import models
-
-    return models.solve_request(request, constraints=constraints)
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)

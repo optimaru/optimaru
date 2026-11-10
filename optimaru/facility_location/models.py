@@ -9,8 +9,6 @@ to store or transfer the engine shape as-is (debug dumps, regression snapshots,
     model = FacilityLocationProblemModel.from_core(problem)  # engine -> pydantic
     clone = FacilityLocationProblemModel.model_validate_json(model.model_dump_json())
     problem2 = clone.to_core()                               # pydantic -> engine
-
-`pydantic` is an optional dependency (`pip install facility_location[models]`).
 """
 
 from pydantic import Field, model_validator

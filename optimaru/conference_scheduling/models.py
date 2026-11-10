@@ -9,8 +9,6 @@ snapshots, ...)::
     model = ConferenceScheduleModel.from_core(schedule)  # engine -> pydantic
     clone = ConferenceScheduleModel.model_validate_json(model.model_dump_json())
     schedule2 = clone.to_core()                          # pydantic -> engine
-
-`pydantic` is an optional dependency (`pip install conference-scheduling[models]`).
 """
 
 from pydantic import Field, model_validator

@@ -12,8 +12,6 @@ start_production_date_time / end_date_time are result-only fields
     model = PackagingScheduleModel.from_core(schedule)  # engine -> pydantic
     clone = PackagingScheduleModel.model_validate_json(model.model_dump_json())
     schedule2 = clone.to_core()                         # pydantic -> engine
-
-`pydantic` is an optional dependency (`pip install food_packaging[models]`).
 """
 
 from datetime import date, datetime, timedelta

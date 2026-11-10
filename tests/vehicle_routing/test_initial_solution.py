@@ -2,8 +2,6 @@
 
 import json
 import re
-import subprocess
-import sys
 
 import pytest
 
@@ -152,14 +150,6 @@ def test_the_package_exports_the_solve_entry_points():
     seeded = vehicle_routing.with_initial_solution(problem(), solution_of(NOT_GREEDY))
 
     assert routes(vehicle_routing.solve_request(seeded)) == NOT_GREEDY
-
-
-def test_the_package_still_imports_without_pydantic():
-    code = (
-        "import sys; sys.modules['pydantic'] = None; import optimaru.vehicle_routing; optimaru.vehicle_routing.Solver"
-    )
-
-    subprocess.run([sys.executable, "-c", code], check=True)
 
 
 def test_stop_at_first_feasible_request_sets_the_hard_only_limit(monkeypatch):

@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from .._models import StrictModel, apply_solver_parameters
 from . import _core
+from .constraints import get_constraints
 
 __all__ = [
     "DeliveryModel",
@@ -342,8 +343,6 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
         solver.solve(plan)
     else:
         if constraints is None:
-            from .constraints import get_constraints
-
             constraints = get_constraints()
         solver.solve_with_constraints(plan, constraints)
 

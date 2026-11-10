@@ -20,8 +20,7 @@ per-constraint surface), and
 re-weight constraints with `solve(..., constraints=...)` (see
 `optimaru.conference_scheduling.constraints`).
 
-The pydantic mirror (for serialization) is in `optimaru.conference_scheduling.models`
-(optional dependency).
+The pydantic mirror (for serialization) is in `optimaru.conference_scheduling.models`.
 """
 
 from typing import TypeVar
@@ -44,6 +43,7 @@ from ._core import (
     prepare,
 )
 from .demo import demo_conference
+from .models import ConferenceScheduleModel, with_initial_solution
 
 __all__ = [
     "ConferenceSchedule",
@@ -64,16 +64,6 @@ __all__ = [
     "solve",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`. Lazy import: pydantic is an optional dependency.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 # solve() returns what it was given: the compiled problem, or its pydantic model.
@@ -131,10 +121,6 @@ def solve(
     if isinstance(schedule, ConferenceSchedule):
         solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
-
-    # pydantic model (lazy import: pydantic is an optional dependency).
-    from .models import ConferenceScheduleModel
-
     if isinstance(schedule, ConferenceScheduleModel):
         core = schedule.to_core()
         solve_in_place(Solver(cfg), core, constraints)

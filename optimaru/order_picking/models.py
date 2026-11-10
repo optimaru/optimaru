@@ -24,7 +24,6 @@ JSON-friendly in/out (snake_case fields, PascalCase classes), same pattern as
 
 A shelving is addressed by column letter A..E + shelving row 1..3
 (the id "(A,1)"), a side (LEFT/RIGHT) and a row 0..10 within the shelving.
-Requires the optional ``pydantic`` dependency.
 """
 
 from typing import Any, Literal, cast

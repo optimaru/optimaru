@@ -64,7 +64,7 @@ print(solution.score)             # e.g. 0hard/-8652soft
 print(solution.routes())          # {trolley id: [pick task id, ...]}
 ```
 
-JSON in/out is `optimaru.order_picking.models` (pydantic v2, optional dependency):
+JSON in/out is `optimaru.order_picking.models` (pydantic v2):
 
 ```python
 from optimaru.order_picking.models import OrderPickingRequest, solve_request
