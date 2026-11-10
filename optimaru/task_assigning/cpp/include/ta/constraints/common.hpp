@@ -34,7 +34,7 @@ namespace ta
 // members) as the engine's contract requires. The LIST path re-costs a
 // touched list whole, so no delta contract is needed.
 //
-// Score levels: this use case scores four Bendable levels (1 hard, 3 soft).
+// Score levels: this use case scores four score levels (1 hard, 3 soft).
 // The components score on the engine's three levels and the domain folds
 // them into Score (domain.hpp, kMediumFold and toEngineScore):
 //   hard[0] requiredSkillCost         Level::Hard,   weight 1

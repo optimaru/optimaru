@@ -10,7 +10,7 @@ namespace ta
 // penalizes the SQUARE of its end time, which is what pushes work off the
 // busiest employee instead of merely shortening the total. Raw cost per
 // employee = (end time of the last task)^2 in minutes^2, so 0 = an employee
-// without tasks (it ends at 0). The Bendable soft[1] level: the default
+// without tasks (it ends at 0). The soft[1] level: the default
 // weight 10^7 carries it above the priority end times (soft[2]) on the one
 // soft level, the packing the Score adapter decodes (domain.hpp).
 //

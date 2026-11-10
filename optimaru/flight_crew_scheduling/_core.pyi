@@ -24,7 +24,7 @@ from collections.abc import Callable, Iterable
 from typing import Any, Literal, NamedTuple
 
 class Score:
-    """HardSoft score. `hard` is the weighted violation sum (0 == feasible); `soft` is
+    """Two-level score (hard, soft). `hard` is the weighted violation sum (0 == feasible); `soft` is
     the objective. Lexicographic comparison (hard first). Less negative is better."""
     @property
     def hard(self) -> int: ...

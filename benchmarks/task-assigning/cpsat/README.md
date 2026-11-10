@@ -12,13 +12,13 @@ Each plugin subclasses the `optimaru.task_assigning.constraints` spec of the sam
 weights come from `task_assigning.constraint_info()`, so `catalog()` equals the
 engine catalog. The objective uses the engine's three levels
 `("hard", "medium", "soft")`: `required_skill_cost` hard, `unassigned_tasks_cost`
-medium (the Bendable soft[0]), the rest soft, with `squared_makespan_cost` at its
-engine default weight 10^7 so the Bendable soft[1] stays above soft[2]. The
+medium (the soft[0]), the rest soft, with `squared_makespan_cost` at its
+engine default weight 10^7 so the soft[1] stays above soft[2]. The
 returned model splits the soft level back into `score_soft1` / `score_soft2` the
 way the engine's Score adapter does. `level="hard"`, `"medium"` or `"soft"` (or a
 `Level`) moves any pick onto that level with its weight in units of it, as in the
 engine: `level="soft"` demotes a hard or medium term to soft, and `level="medium"`
-puts a hard or soft term on the Bendable soft[0], below hard. Not supported on
+puts a hard or soft term on the soft[0], below hard. Not supported on
 CP-SAT: `exponent != 1` and non-integer weights.
 
 **Repeats, `offset` and `clip`.** A constraint may be picked several times (as

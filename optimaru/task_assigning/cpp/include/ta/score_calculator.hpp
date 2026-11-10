@@ -8,7 +8,7 @@ namespace ta
 {
 
 // Full-recompute reference for the six constraints: walks every employee's
-// task list, recomputes the derived task fields and sums the four Bendable
+// task list, recomputes the derived task fields and sums the four score
 // levels. It is the correctness
 // oracle for the incremental calculator (checked in the tests and under
 // ScoreChecks::ScoreChecks::Full) and the authoritative final scoring.
@@ -20,7 +20,7 @@ public:
     // before reading Task::employee / Task::startTime whenever lists change.
     static void updateShadowVariables(TaskAssigningSolution &solution);
 
-    // Recomputes the derived fields, then the Bendable score, storing it in
+    // Recomputes the derived fields, then the four-level score, storing it in
     // solution.score and returning it. Constraints (all penalties, at the
     // components' default weights):
     //   hard[0]  requiredSkillCost        missing skill count per task

@@ -48,7 +48,7 @@ while keeping them assigned — so unassigned (soft0) is always 0 in the final s
 ## Score mapping (four levels, [1]hard/[3]soft -> engine Score)
 
 This use case scores four levels, one hard and three soft (`hard[0]`, `soft[0]`, `soft[1]`,
-`soft[2]` — the "Bendable" levels below); the engine only
+`soft[2]`); the engine only
 has `Score(int64 hard, double soft)`, and its constraints score on three levels
 (hard, medium, soft). The mapping rule (`optimaru/task_assigning/cpp/include/ta/domain.hpp`):
 
@@ -83,7 +83,7 @@ Outside that range:
 
 ## Constraints (6)
 
-| Bendable level | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
+| Score level | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|---|
 | hard[0] | `required_skill_cost` | `RequiredSkillCost` | hard | 1 | required task skills the employee lacks |
 | soft[1] | `squared_makespan_cost` | `SquaredMakespanCost` | soft | 10^7 | endTime^2 per employee (shortens late finishers first) |

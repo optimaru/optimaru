@@ -8,7 +8,7 @@ indices the employee performs back to back. A task in no list is unassigned.
 The derived values `Task.employee` (-1 == unassigned) / `Task.start_time` (-1 == unassigned)
 are recomputed from the lists by `calculate_score` / `Solver.solve`.
 
-Score convention (four Bendable levels, [1]hard/[3]soft; all penalties),
+Score convention (four score levels, [1]hard/[3]soft; all penalties),
 at the default weights (constraint_info()):
   hard[0]  required_skill_cost                   required skills the employee lacks (hard, 1)
   soft[0]  unassigned_tasks_cost                 1 per unassigned task (medium, 1)
@@ -30,7 +30,7 @@ from enum import Enum
 from typing import Any, Literal, NamedTuple
 
 class Score:
-    """BendableScore [1]hard/[3]soft. hard 0 == feasible (unassigned is soft0).
+    """Four-level score, [1]hard/[3]soft. hard 0 == feasible (unassigned is soft0).
     Lexicographic comparison (hard > soft0 > soft1 > soft2)."""
     @property
     def hard(self) -> int: ...
@@ -148,7 +148,7 @@ class TaskAssigningSolution:
         """Bulk-write the task lists per employee (validates length/range/duplicates)."""
 
 def calculate_score(solution: TaskAssigningSolution) -> Score:
-    """Full recompute of the Bendable score at the default weights (recomputes the derived task fields +
+    """Full recompute of the four-level score at the default weights (recomputes the derived task fields +
     stores solution.score)."""
 
 class SolverConfig:

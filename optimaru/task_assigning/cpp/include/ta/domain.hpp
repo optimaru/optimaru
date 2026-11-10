@@ -25,7 +25,7 @@ using Minutes = std::int64_t;
 constexpr Minutes kNullTime = -1;  // startTime of an unassigned task
 
 // ---------------------------------------------------------------------------
-// Score  (four Bendable levels: [1]hard/[3]soft)
+// Score  (four score levels: [1]hard/[3]soft)
 // ---------------------------------------------------------------------------
 // This use case scores four levels, 1 hard and 3 soft:
 //   hard[0]  requiredSkillCost          (missing skill count)
@@ -97,7 +97,7 @@ struct Score
                && soft2 == o.soft2;
     }
 
-    // BendableScore.str() style: [0]hard/[0/-3725/-77]soft
+    // Printed as: [0]hard/[0/-3725/-77]soft
     std::string str() const
     {
         return "[" + std::to_string(hard) + "]hard/[" + std::to_string(soft0)

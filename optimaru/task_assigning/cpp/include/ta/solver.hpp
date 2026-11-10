@@ -94,8 +94,8 @@ public:
     // assembly here. The same search applies — cheapest-insertion
     // construction, late-acceptance local search over the LIST moves and
     // ALNS kicks. Weights come from the assembly, NOT from the
-    // Bendable defaults. The final solution.score is computed by THIS
-    // calculator (decoded back into the Bendable levels) and the calculator
+    // default weights. The final solution.score is computed by THIS
+    // calculator (decoded back into the score levels) and the calculator
     // is left primed on the final solution, so constraint_totals() explains
     // exactly that score. Single-start: the caller-owned calculator cannot be
     // cloned, so parallelSolverCount is ignored.

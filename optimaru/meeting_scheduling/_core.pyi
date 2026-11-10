@@ -41,7 +41,7 @@ MEDIUM_SCALE: float
 GRAIN_LENGTH_IN_MINUTES: int
 
 class Score:
-    """HardSoft score. `hard` is the integer violation sum (0 == feasible); `soft`
+    """Two-level score (hard, soft). `hard` is the integer violation sum (0 == feasible); `soft`
     is the folded medium/soft objective. Lexicographic comparison (hard first)."""
     @property
     def hard(self) -> int: ...

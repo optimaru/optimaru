@@ -137,7 +137,7 @@ def minutes(day: int, hour: int = 0, minute: int = 0) -> int:
     """Minutes from day 0 00:00 — the time unit used by `Shift.start`/`end`."""
 
 class Score:
-    """HardSoft score. `hard` is an integer violation total (0 == feasible);
+    """Two-level score (hard, soft). `hard` is an integer violation total (0 == feasible);
     `soft` carries the objective, including fractional terms such as the
     load-balancing unfairness. Compared lexicographically (hard first)."""
     @property

@@ -28,9 +28,9 @@ cmake -B build -DOPTIMARU_USE_CASES=task_assigning && cmake --build build -j
 ctest --test-dir build
 ```
 
-## Constraints (BendableScore [1]hard/[3]soft on the engine's hard / medium / soft levels)
+## Constraints (Four-level score, [1]hard/[3]soft on the engine's hard / medium / soft levels)
 
-| Constraint (Python name) | C++ component | Bendable level | Default level | Default weight | Raw cost (0 = no violation) |
+| Constraint (Python name) | C++ component | Score level | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|---|
 | `required_skill_cost` | `RequiredSkillCost` | hard[0] | hard | 1 | per employee: required skills of its tasks' types it lacks |
 | `squared_makespan_cost` | `SquaredMakespanCost` | soft[1] | soft | 10^7 | per employee: (end of its last task)^2, minutes^2 |
@@ -54,8 +54,8 @@ engine.hard = hard * 10^9 + medium     # medium = soft0: MediumFold::belowHard(1
 engine.soft = soft                     # = soft1 * 10^7 + soft2 at the default weights
 ```
 
-The medium level (`unassigned_tasks_cost`, Bendable soft[0]) folds **below** hard, so one
-missing skill outweighs any number of unassigned tasks below 10^9. The Bendable soft[1]
+The medium level (`unassigned_tasks_cost`, soft[0]) folds **below** hard, so one
+missing skill outweighs any number of unassigned tasks below 10^9. The soft[1]
 and soft[2] share the engine's soft level; `squared_makespan_cost`'s default weight 10^7
 is what keeps soft[1] above soft[2] (the `Score` adapter decodes `soft1 = soft / 10^7`,
 `soft2 = soft % 10^7`). Every weight is in units of its level: `RequiredSkillCost(weight=3)`
@@ -74,10 +74,10 @@ weight is **1**: the 10^9 between a missing skill and an unassigned task is the 
 medium fold, not part of a weight. An explicit weight on `required_skill_cost`, or on a
 constraint made hard with `level="hard"`, is in hard units (one hard unit = 10^9 engine
 units: `RequiredSkillCost(weight=1)` is 10^9 engine units per missing skill, and
-`CriticalPriorityTaskEndTimeCost(level="hard")` lands in the Bendable hard level);
+`CriticalPriorityTaskEndTimeCost(level="hard")` lands in the hard level);
 `RequiredSkillCost(level="soft")` is 1 soft unit per missing skill, and
 `UnassignedTasksCost(level="soft")` one soft unit per task. CP-SAT scores on the same three
-levels (`("hard", "medium", "soft")`): the Bendable soft[1]-over-soft[2] order is carried by
+levels (`("hard", "medium", "soft")`): the soft[1]-over-soft[2] order is carried by
 `squared_makespan_cost`'s default weight 10^7 on the one soft level, as in the engine, and
 a pick moved to soft lands on the soft level there too. The folded CP-SAT objective does
 not fit one int64 for the demo, so CP-SAT optimizes the three levels one after another

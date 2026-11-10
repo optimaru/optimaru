@@ -62,7 +62,7 @@ def list_constraints() -> list[str]:
     """The canonical constraint names, in catalog order (= canon.CONSTRAINT_NAMES)."""
 
 class Score:
-    """HardSoft score. `hard` is the integer violation sum (0 == feasible);
+    """Two-level score (hard, soft). `hard` is the integer violation sum (0 == feasible);
     `soft` is the objective. Compared lexicographically (hard first)."""
     @property
     def hard(self) -> int: ...

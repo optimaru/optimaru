@@ -40,7 +40,7 @@ long calculateDistanceMeters(const CartesianCoordinate &from,
     double dZ = from.z - to.z;
     double r = std::sqrt((dX * dX) + (dY * dY) + (dZ * dZ));
     return roundToLong(HaversineDrivingTimeCalculator::TWICE_EARTH_RADIUS_IN_M
-                     * std::asin(r));
+                       * std::asin(r));
 }
 
 }  // namespace

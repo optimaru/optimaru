@@ -13,7 +13,7 @@ Derived values (recomputed by `calculate_score`/`Solver.solve`):
     duration         == base_duration x affinity multiplier (HIGH 1 / MEDIUM 2 /
                         LOW 3 / NONE 4)
 
-Score convention (four Bendable levels, [1]hard/[3]soft; all penalties),
+Score convention (four score levels, [1]hard/[3]soft; all penalties),
 at the default weights:
   hard[0]  required_skill_cost          required skills the employee lacks
   soft[0]  unassigned_tasks_cost        1 per unassigned task (the medium level)

@@ -9,7 +9,7 @@ namespace ta
 // Soft, weight 4: criticalPriorityTaskEndTimeCost — the end time of every
 // CRITICAL task, weighed four times as heavily as a minor one. Raw cost per
 // employee = the summed end times (minutes) of its CRITICAL tasks, so 0 = the
-// employee does no CRITICAL task. The Bendable soft[2] level.
+// employee does no CRITICAL task. The soft[2] level.
 struct CriticalPriorityTaskEndTimeCost final : PriorityTaskEndTimeCostBase
 {
     static constexpr double kDefaultWeight = 4.0;

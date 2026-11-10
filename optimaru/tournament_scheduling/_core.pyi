@@ -26,7 +26,7 @@ from typing import Any, Literal, NamedTuple
 MEDIUM_SCALE: float
 
 class Score:
-    """HardSoft score. `hard` is the integer violation sum (0 == feasible); `soft`
+    """Two-level score (hard, soft). `hard` is the integer violation sum (0 == feasible); `soft`
     is the folded medium/soft objective. Lexicographic comparison (hard first)."""
     @property
     def hard(self) -> int: ...

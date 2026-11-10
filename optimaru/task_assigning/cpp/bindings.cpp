@@ -269,7 +269,7 @@ PYBIND11_MODULE(_core, m)
     m.def("calculate_score",
           &ScoreCalculator::score,
           py::arg("solution"),
-          "Full recompute of the Bendable score at the default weights "
+          "Full recompute of the four-level score at the default weights "
           "(recomputes the derived task fields and stores solution.score).");
 
     optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))

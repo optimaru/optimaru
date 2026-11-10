@@ -99,7 +99,7 @@ class EmployeeModel(_Model):
 
 class TaskAssigningSolutionModel(_Model):
     """Pydantic mirror of the solution. score_* are read-only results, kept as separate fields
-    (the four Bendable levels, [1]hard/[3]soft)."""
+    (the four score levels, [1]hard/[3]soft)."""
 
     task_types: list[TaskTypeModel]
     customers: list[CustomerModel]
