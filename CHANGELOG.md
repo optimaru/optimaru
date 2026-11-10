@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- **Benchmarks on whole public data sets.** The public-instance harnesses now run
+  whole sets or stated samples instead of a few instances, and every results
+  block is measured again on 0.4.1: CVRPLIB Set X (all 100) and Augerat's Set A
+  (all 27), the Li & Lim PDPTW set (all 56, beside the best-known solutions),
+  RG30 Pat1–Pat5, Falkenauer bin packing (three per class), QAPLIB (the 33
+  instances with 30 to 50 facilities) and SALBP-1 (five per data set).
+  `scripts/publish_benchmarks.py` writes those tables and one homepage entry per
+  data set. What changed in the harnesses:
+  - *Vehicle routing.* Set X does not fix the fleet, and the best-known solutions
+    of 22 of its instances use more routes than the `-kN` of their name, which the
+    harness used as the fleet. Every backend now gets a fleet that cannot bind on
+    Set X (30% above the capacity lower bound, plus three); Set A keeps `-kN`.
+    `--series a` runs Set A and `--only NAME` picks instances of a series.
+  - *Pickup and delivery.* One Li & Lim unit is ten seconds instead of one, so
+    travel is rounded to a tenth of a unit and a request of the `lr` and `lrc`
+    classes can no longer be left out for free (their 10-unit service time was
+    under a whole service minute). `--instance`, `--requests` and `--synthetic`
+    repeat, `--all` runs the archive, `--json` prints the results, and the engine
+    runs single-threaded whatever `--workers` says, as the READMEs stated.
+  - *Project scheduling.* The RG30 archive is checked by the SHA-256 of its five
+    instance files: the archive itself is rebuilt upstream, and the pinned archive
+    checksum no longer matched. `--all`, a repeatable `--instance` and `--json`
+    are new, and the engine runs single-threaded there too.
+  - *Quadratic assignment.* `--all` stopped at `kra30a`: the harness re-scores
+    each QAPLIB reference permutation and read every solution file as the
+    facility of each location, while four files list the location of each
+    facility. Both readings are tried, and the reference is what the permutation
+    scores (`kra32`'s file states 88900, its permutation scores 88700).
+  - *Bin packing.* `--sample-per-class N` picks N evenly spread instances of each
+    Falkenauer class.
+  - *Assembly line balancing.* The best-known values of the medium (n=50) data
+    sets were read from the wrong columns of their details workbook, which has
+    one more column; the columns are now found by their headers.
 - **Meeting scheduling: `parallel_solver_count` runs that many starts.** It was ignored: the
   solver set the engine's start count and then called the engine's single-start entry point,
   so `solve(..., parallel_solver_count=4)` searched once, on one thread. It now runs the

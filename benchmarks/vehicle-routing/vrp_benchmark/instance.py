@@ -79,13 +79,31 @@ def _rounded_euclidean(a: tuple[int, int], b: tuple[int, int]) -> int:
     return math.floor(math.dist(a, b) + 0.5)
 
 
+def free_fleet(demands: tuple[int, ...], capacity: int) -> int:
+    """The vehicles a plan may use on a set that does not fix the fleet.
+
+    Set X leaves the number of routes open: the `-kN` of a name is the fewest
+    vehicles that can carry the demand, and the best-known solutions of 22 of
+    its 100 instances use more. Every backend therefore gets a fleet that
+    cannot bind, 30% above the capacity lower bound plus three vehicles, and
+    is free to leave vehicles unused.
+    """
+    return math.ceil(1.3 * sum(demands) / capacity) + 3
+
+
 def parse_instance(
     text: str,
     *,
     best_known_distance: int | None = None,
     proven_optimal: bool | None = None,
+    fixed_fleet: bool = True,
 ) -> CvrpInstance:
-    """Parse a CVRPLIB EUC_2D instance with depot node 1."""
+    """Parse a CVRPLIB EUC_2D instance with depot node 1.
+
+    The fleet is the `-kN` of the instance name (the classical sets, such as
+    Augerat's, fix the number of routes), or `free_fleet()` with
+    `fixed_fleet=False` (Set X).
+    """
     headers: dict[str, str] = {}
     sections: dict[str, list[str]] = {}
     section: str | None = None
@@ -127,10 +145,11 @@ def parse_instance(
         raise ValueError(f"instance name does not carry the fleet size: {name}")
     optimum_match = re.search(r"Optimal value:\s*(\d+)", headers.get("COMMENT", ""))
     comment_optimum = int(optimum_match.group(1)) if optimum_match else None
+    capacity = int(headers["CAPACITY"])
     return CvrpInstance(
         name=name,
-        vehicle_count=int(vehicle_match.group(1)),
-        capacity=int(headers["CAPACITY"]),
+        vehicle_count=(int(vehicle_match.group(1)) if fixed_fleet else free_fleet(demands, capacity)),
+        capacity=capacity,
         coordinates=coordinates,
         demands=demands,
         distances=distances,

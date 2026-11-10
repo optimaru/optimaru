@@ -24,32 +24,21 @@ its time includes model construction.
 <!-- results:start -->
 ## Results
 
-Each plan is re-verified independently: every request served, pickup before dropoff on the
-same vehicle, capacity and every time window. Distance is the integral Li & Lim round-trip
-metric; lower is better.
-
 **Synthetic Li & Lim-shaped instances** (`--synthetic N`, seed 0): customers in a 100 x 100
-square, half in six clusters, service time 90, one vehicle per three requests.
+square, half in six clusters, service time 90, one vehicle per three requests. Cells are
+vehicles / distance.
 
-| Requests | engine (vehicles / distance) | CP-SAT (vehicles / distance) |
+| Requests | engine | CP-SAT |
 | --- | --- | --- |
-| 50 | **13 / 3,446** | incomplete — its routes leave stops uncovered (0hard/-141medium/-254soft) |
-| 100 | **24 / 6,045** | no solution in 30 s |
-| 200 | **43 / 11,300** | no solution in 30 s |
-| 400 | **83 / 21,617** | not run — the model was still being built after 10 min at 11 GB (2026-10-29) |
+| 50 | **14 / 3,440.2** | incomplete (leaves stops unserved) |
+| 100 | **24 / 6,172.1** | no solution in time |
+| 200 | **40 / 11,321.7** | no solution in time |
+| 400 | 54 / 22,224.5 | not run |
 
-**Li & Lim `lc101`**, first 10 of 53 requests (the public runner's default):
+CP-SAT is not run at 400 requests: at that size its model was still being
+built after 10 minutes at 11 GB (2026-10-29).
 
-| Solver | Vehicles | Distance | Time |
-| --- | --- | --- | --- |
-| engine | 2 | **156.000** | 30.0 s |
-| CP-SAT | 2 | **156.000** | 3.2 s |
+The Li & Lim results are in [`cpsat/PUBLIC_BENCHMARKS.md`](cpsat/PUBLIC_BENCHMARKS.md).
 
-At 10 requests both reach the same plan and CP-SAT proves it first; the exact model stops
-scaling by 50–100 requests.
-
-Measured 2026-11-04 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance (the 400-request
-row from 2026-10-29, not re-run). The
-engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction.
-Single runs — a snapshot, not a statistical study.
+Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->

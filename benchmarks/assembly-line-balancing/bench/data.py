@@ -112,11 +112,20 @@ def parse_xlsx_best_known(payload: bytes) -> dict[str, int]:
             values[_column(cell.get("r", ""))] = raw.strip()
         rows.append(values)
 
-    # The official workbook uses B for the stem and I for the best feasible upper
-    # bound. Column G can contain an interval when optimality is still unknown.
+    # The second row names the columns. The stem is under `<Filename>` and the
+    # best feasible solution under `<Upper bound on the number of stations>`:
+    # B and I in most workbooks, C and J in the medium one, which has a
+    # permutation column before the file name. The `<No of stations in optimum>`
+    # column can contain an interval when optimality is still unknown.
+    header = rows[1] if len(rows) > 1 else {}
+    name_column = next((column for column, text in header.items() if text.lower() == "<filename>"), 1)
+    best_column = next(
+        (column for column, text in header.items() if text.lower().startswith("<upper bound on the number")),
+        8,
+    )
     result = {}
     for row in rows[2:]:
-        name, best_known = row.get(1), row.get(8)
+        name, best_known = row.get(name_column), row.get(best_column)
         if name and best_known:
             result[name.lower()] = int(float(best_known))
     return result

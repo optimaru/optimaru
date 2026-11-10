@@ -3,7 +3,7 @@ import argparse
 import pytest
 
 from vrp_benchmark import solvers
-from vrp_benchmark.instance import parse_instance, rescore
+from vrp_benchmark.instance import free_fleet, parse_instance, rescore
 from vrp_benchmark.run import (
     SIZE_BUCKETS,
     BenchmarkResult,
@@ -47,6 +47,18 @@ def test_parse_instance() -> None:
     assert instance.best_known_distance == OPTIMUM
     assert instance.proven_optimal
     assert instance.distances[0][1] == 5
+
+
+def test_a_set_without_a_fixed_fleet_gets_one_that_cannot_bind() -> None:
+    fixed = parse_instance(SAMPLE)
+    free = parse_instance(SAMPLE, fixed_fleet=False)
+    # Demand 6 at capacity 3: two vehicles at least; 30% more, rounded up, plus three.
+    assert free_fleet(fixed.demands, fixed.capacity) == free.vehicle_count == 6
+    assert fixed.vehicle_count == 2
+    # One customer per route is a legal plan there, and it is not with the fixed fleet.
+    assert rescore(free, [[1], [2], [3]]).feasible
+    with pytest.raises(ValueError):
+        rescore(fixed, [[1], [2], [3]])
 
 
 def test_rescore_counts_round_trips_and_flags_overload() -> None:
@@ -123,3 +135,25 @@ def test_markdown_summary_explains_missing_gaps() -> None:
     table = markdown_summary(results, rows, backends, args)
     row = next(line for line in table.splitlines() if line.startswith("| X-n101"))
     assert row == "| X-n101-k25 | 100 | 1.50% | 3 unassigned |"
+
+
+def test_only_needs_a_series_and_known_names() -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--only", "A-n32-k5"])
+    assert exit_info.value.code == 2
+    with pytest.raises(SystemExit, match="not in this series: X-n101-k25"):
+        main(["--series", "a", "--only", "X-n101-k25"])
+
+
+def test_markdown_summary_of_set_a_has_no_bucket_table() -> None:
+    results = [
+        BenchmarkResult("engine", "A-n33-k6", 32, 6, 742, 0.0, 0, 1.0, ""),
+        BenchmarkResult("engine", "A-n33-k5", 32, 5, 661, 0.0, 0, 1.0, ""),
+        BenchmarkResult("engine", "A-n32-k5", 31, 5, 790, 0.77, 0, 1.0, ""),
+    ]
+    args = argparse.Namespace(seconds=1, seed=0, series="a")
+    table = markdown_summary(results, [], ("engine",), args)
+    assert table.startswith("## CVRPLIB Set A (Augerat): engine")
+    assert "every instance of the set" in table and "Bucket" not in table
+    rows = [line for line in table.splitlines() if line.startswith("| A-")]
+    assert rows == ["| A-n32-k5 | 31 | 0.77% |", "| A-n33-k5 | 32 | 0.00% |", "| A-n33-k6 | 32 | 0.00% |"]

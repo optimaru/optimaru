@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
+import json
 import math
 import random
+import sys
 import time
 import urllib.request
 import zipfile
@@ -42,11 +44,44 @@ ARCHIVE_URL = "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc4
 ARCHIVE_SHA256 = "d106694e9e18cebc32b63c322e1000620238392c1b9d98d92de82ef7e4b43cd9"
 ARCHIVE_PREFIX = "pdp_100/"
 DEFAULT_INSTANCE = "lc101"
-# Li & Lim uses continuous Euclidean distance while both local solver
-# contracts are integral. Nearest-unit travel is the shared comparison metric;
-# the independently printed objective therefore is a documented projection,
-# not a claim of bit-identical floating-point distance to the published results.
-DISTANCE_SCALE = 1
+# Li & Lim uses continuous Euclidean distance and abstract time units, while
+# both local solver contracts count whole seconds. One Li & Lim unit is taken
+# as ten seconds: travel is rounded to a tenth of a unit, and the 10-unit
+# service time of the lr and lrc classes becomes 100 seconds. The unassigned
+# penalty counts whole service minutes, so at one second per unit leaving such
+# a request out would cost nothing. A larger scale (60) pushes the CP-SAT
+# objective of the full lc instances past int64, where the reference model
+# stops solving all levels in one pass. The printed distance is therefore a
+# documented projection, not a claim of bit-identical floating-point distance
+# to the published results.
+DISTANCE_SCALE = 10
+# Best-known solutions of the 100-customer set as listed on SINTEF's TOP page
+# (https://www.sintef.no/projectweb/top/pdptw/100-customers/, read 2026-11-10):
+# (vehicles, distance). They rank by fewest vehicles first, then distance, and
+# their distances are unrounded, so they are a reference, not this harness's
+# objective (every request served, then least distance).
+BEST_KNOWN = {
+    "lc101": (10, 828.94), "lc102": (10, 828.94), "lc103": (9, 1035.35),
+    "lc104": (9, 860.01), "lc105": (10, 828.94), "lc106": (10, 828.94),
+    "lc107": (10, 828.94), "lc108": (10, 826.44), "lc109": (9, 1000.60),
+    "lc201": (3, 591.56), "lc202": (3, 591.56), "lc203": (3, 591.17),
+    "lc204": (3, 590.60), "lc205": (3, 588.88), "lc206": (3, 588.49),
+    "lc207": (3, 588.29), "lc208": (3, 588.32),
+    "lr101": (19, 1650.80), "lr102": (17, 1487.57), "lr103": (13, 1292.68),
+    "lr104": (9, 1013.39), "lr105": (14, 1377.11), "lr106": (12, 1252.62),
+    "lr107": (10, 1111.31), "lr108": (9, 968.97), "lr109": (11, 1208.96),
+    "lr110": (10, 1159.35), "lr111": (10, 1108.90), "lr112": (9, 1003.77),
+    "lr201": (4, 1253.23), "lr202": (3, 1197.67), "lr203": (3, 949.40),
+    "lr204": (2, 849.05), "lr205": (3, 1054.02), "lr206": (3, 931.63),
+    "lr207": (2, 903.06), "lr208": (2, 734.85), "lr209": (3, 930.59),
+    "lr210": (3, 964.22), "lr211": (2, 911.52),
+    "lrc101": (14, 1708.80), "lrc102": (12, 1558.07), "lrc103": (11, 1258.74),
+    "lrc104": (10, 1128.40), "lrc105": (13, 1637.62), "lrc106": (11, 1424.73),
+    "lrc107": (11, 1230.14), "lrc108": (10, 1147.43),
+    "lrc201": (4, 1406.94), "lrc202": (3, 1374.27), "lrc203": (3, 1089.07),
+    "lrc204": (3, 818.66), "lrc205": (4, 1302.20), "lrc206": (3, 1159.03),
+    "lrc207": (3, 1062.05), "lrc208": (3, 852.76),
+}  # fmt: skip
 ENGINE_CONSTRAINTS = [
     vehicle_capacity_cost,
     max_end_time_cost,
@@ -160,8 +195,7 @@ def synthetic_instance(request_count: int, seed: int = 0) -> PdptwInstance:
 
     depot = Node(0, 50, 50, 0, 0, horizon, 0, 0, 0)
     nodes: list[Node] = []
-    # Li & Lim lc service time; the unassigned penalty counts whole service
-    # minutes, so a short service would make dropping a request free.
+    # The Li & Lim lc service time.
     service, width = 90, 150
     for index in range(request_count):
         pickup_id, dropoff_id = 2 * index + 1, 2 * index + 2
@@ -191,18 +225,21 @@ def synthetic_instance(request_count: int, seed: int = 0) -> PdptwInstance:
     return PdptwInstance(f"synthetic-{request_count}-s{seed}", vehicles, 200, depot, tuple(nodes))
 
 
+def instance_names(cache_dir: Path) -> list[str]:
+    """Every instance of the archive, in name order."""
+    with zipfile.ZipFile(io.BytesIO(_download(cache_dir))) as archive:
+        return sorted(
+            Path(item).stem for item in archive.namelist() if item.startswith(ARCHIVE_PREFIX) and item.endswith(".txt")
+        )
+
+
 def load_instance(name: str, cache_dir: Path) -> PdptwInstance:
     with zipfile.ZipFile(io.BytesIO(_download(cache_dir))) as archive:
         member = f"{ARCHIVE_PREFIX}{name}.txt"
         try:
             return parse_instance(archive.read(member).decode(), name=name)
         except KeyError as exc:
-            available = sorted(
-                Path(item).stem
-                for item in archive.namelist()
-                if item.startswith(ARCHIVE_PREFIX) and item.endswith(".txt")
-            )
-            raise ValueError(f"unknown instance {name!r}; available: {', '.join(available)}") from exc
+            raise ValueError(f"unknown instance {name!r}; available: {', '.join(instance_names(cache_dir))}") from exc
 
 
 def _distance(left: Node, right: Node) -> int:
@@ -327,71 +364,167 @@ def rescore(
 def _run(backend: str, request: PdpRequest):
     started = time.perf_counter()
     if backend == "engine":
-        solution = solve_engine_request(request, constraints=ENGINE_CONSTRAINTS)
+        # The engine always runs single-threaded; `--workers` is CP-SAT's.
+        solution = solve_engine_request(
+            request.model_copy(update={"num_workers": 1}),
+            constraints=ENGINE_CONSTRAINTS,
+        )
     else:
         solution = solve_cpsat_request(request, constraints=CPSAT_CONSTRAINTS)
     return solution, time.perf_counter() - started
 
 
+SOLVER_NAMES = {"engine": "engine", "cpsat": "cp-sat"}
+
+
+def run_case(
+    instance: PdptwInstance,
+    request_limit: int | None,
+    *,
+    seconds: float,
+    seed: int,
+    workers: int,
+    backends: tuple[str, ...],
+    log=print,
+) -> dict:
+    """Solve one instance with every backend and re-verify each plan.
+
+    A run without a usable plan keeps ``vehicles`` and ``distance`` at None and
+    says why in ``status``: ``no solution: ...`` (the solver returned nothing in
+    time) or ``rejected: ...`` (the plan is incomplete or breaks a rule).
+    """
+    request, selected = make_request(
+        instance,
+        seconds=seconds,
+        seed=seed,
+        workers=workers,
+        request_limit=request_limit,
+    )
+    log(
+        f"{instance.name}: {len(selected)}/{len(instance.requests)} requests, "
+        f"{len(request.model_input.vehicles)} vehicles, capacity {instance.capacity}"
+    )
+    runs = []
+    for backend in backends:
+        run = {
+            "solver": SOLVER_NAMES[backend],
+            "vehicles": None,
+            "distance": None,
+            "seconds": None,
+            "score": None,
+            "status": "",
+        }
+        runs.append(run)
+        started = time.perf_counter()
+        try:
+            solution, elapsed = _run(backend, request)
+        except RuntimeError as exc:  # e.g. CP-SAT found no solution in time
+            run["seconds"] = time.perf_counter() - started
+            run["status"] = f"no solution: {exc}"
+            log(f"{backend:6} no solution: {exc}")
+            continue
+        run["seconds"] = elapsed
+        run["score"] = str(solution.score)
+        try:
+            used, distance = rescore(instance, selected, solution.routes)
+        except ValueError as exc:  # incomplete or rule-breaking plan
+            run["status"] = f"rejected: {exc}"
+            log(f"{backend:6} rejected: {exc} elapsed={elapsed:.2f}s score={solution.score}")
+            continue
+        if solution.total_driving_seconds != distance:
+            raise ValueError("solver report and independent distance disagree")
+        run["vehicles"] = used
+        run["distance"] = distance / DISTANCE_SCALE
+        log(
+            f"{backend:6} used={used} distance={distance / DISTANCE_SCALE:.3f} "
+            f"elapsed={elapsed:.2f}s score={solution.score}"
+        )
+    # The published best-known solution covers the whole instance only.
+    reference = BEST_KNOWN.get(instance.name) if len(selected) == len(instance.requests) else None
+    return {
+        "instance": instance.name,
+        "requests": len(selected),
+        "total_requests": len(instance.requests),
+        "vehicles": len(request.model_input.vehicles),
+        "capacity": instance.capacity,
+        "best_known": (None if reference is None else {"vehicles": reference[0], "distance": reference[1]}),
+        "runs": runs,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--instance", default=DEFAULT_INSTANCE)
+    parser.add_argument(
+        "--instance",
+        action="append",
+        default=None,
+        help=f"Li & Lim instance stem; repeat to select several (default {DEFAULT_INSTANCE})",
+    )
+    parser.add_argument("--all", action="store_true", help="run every instance of the archive")
     parser.add_argument("--seconds", type=float, default=10.0)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="CP-SAT search workers; the engine always runs single-threaded",
+    )
     parser.add_argument(
         "--requests",
         type=int,
-        default=10,
-        help="request pairs from the official instance; use 0 for the full file",
+        action="append",
+        default=None,
+        help="request pairs taken from each official instance (default 10); repeat for "
+        "several sizes; use 0 for the full file",
     )
     parser.add_argument(
         "--synthetic",
         type=int,
-        default=0,
+        action="append",
+        default=None,
         metavar="N",
-        help="solve a seeded synthetic instance with N requests instead (all of them)",
+        help="solve a seeded synthetic instance with N requests instead (all of them); repeat for several sizes",
     )
     parser.add_argument("--backend", choices=("engine", "cpsat", "both"), default="both")
     parser.add_argument("--cache-dir", type=Path, default=Path(__file__).with_name(".cache"))
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="print the results as JSON (progress goes to stderr)",
+    )
     args = parser.parse_args(argv)
+    if sum(bool(choice) for choice in (args.all, args.instance, args.synthetic)) > 1:
+        parser.error("--all, --instance and --synthetic are mutually exclusive")
 
+    cases: list[tuple[PdptwInstance, int | None]]
     if args.synthetic:
-        instance = synthetic_instance(args.synthetic, args.seed)
-        limit = None
+        cases = [(synthetic_instance(count, args.seed), None) for count in args.synthetic]
     else:
-        instance = load_instance(args.instance, args.cache_dir)
-        limit = args.requests or None
-    request, selected = make_request(
-        instance,
-        seconds=args.seconds,
-        seed=args.seed,
-        workers=args.workers,
-        request_limit=limit,
-    )
-    print(
-        f"{instance.name}: {len(selected)}/{len(instance.requests)} requests, "
-        f"{len(request.model_input.vehicles)} vehicles, capacity {instance.capacity}"
-    )
-    print("objective: assign every request, then minimize integral distance")
+        names = instance_names(args.cache_dir) if args.all else (args.instance or [DEFAULT_INSTANCE])
+        cases = [
+            (load_instance(name, args.cache_dir), limit or None) for name in names for limit in (args.requests or [10])
+        ]
     backends = ("engine", "cpsat") if args.backend == "both" else (args.backend,)
-    for backend in backends:
-        try:
-            solution, elapsed = _run(backend, request)
-        except RuntimeError as exc:  # e.g. CP-SAT found no solution in time
-            print(f"{backend:6} no solution: {exc}")
-            continue
-        try:
-            used, distance = rescore(instance, selected, solution.routes)
-        except ValueError as exc:  # incomplete or rule-breaking plan
-            print(f"{backend:6} rejected: {exc} elapsed={elapsed:.2f}s score={solution.score}")
-            continue
-        if solution.total_driving_seconds != distance:
-            raise ValueError("solver report and independent distance disagree")
-        print(
-            f"{backend:6} used={used} distance={distance / DISTANCE_SCALE:.3f} "
-            f"elapsed={elapsed:.2f}s score={solution.score}"
+
+    def log(line: str) -> None:
+        print(line, file=sys.stderr if args.as_json else sys.stdout, flush=True)
+
+    log(f"objective: assign every request, then minimize distance (rounded to 1/{DISTANCE_SCALE} of a unit)")
+    results = [
+        run_case(
+            instance,
+            limit,
+            seconds=args.seconds,
+            seed=args.seed,
+            workers=args.workers,
+            backends=backends,
+            log=log,
         )
+        for instance, limit in cases
+    ]
+    if args.as_json:
+        print(json.dumps(results, indent=2))
     return 0
 
 

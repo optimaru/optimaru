@@ -28,5 +28,5 @@ Every cell is the score of that solver's final solution under the use case's own
 | small | 14 jobs / 3 crews / 40 dates | 0hard/-5139soft | **0hard/-3133soft** |
 | large | 48 jobs / 5 crews / 80 dates | **0hard/-259soft** | — (no solution in time) |
 
-Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — treat small differences as noise.
+Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
 <!-- results:end -->
