@@ -18,6 +18,13 @@ CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 The engine runs single-threaded; CP-SAT gets `--workers` search
 workers and its time includes model construction.
 
+The ladder has no 4-line plant. The CP-SAT model of this use case is solved one
+score level at a time, and on that plant a 30 s run ends without a solution
+after the first level's 10 s, although that level succeeds in about 17 s. Such
+a row would show the time split and not the solver, so it is left out; on the
+demo plant the first level finds nothing in 30 s either, and that row stays
+([how a CP-SAT run is timed](../README.md#how-a-cp-sat-run-is-timed)).
+
 <!-- results:start -->
 ## Results
 

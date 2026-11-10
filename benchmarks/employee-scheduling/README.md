@@ -19,6 +19,10 @@ The instances are `optimaru.employee_scheduling.demo.generate_demo_data` at fixe
 engine runs single-threaded; CP-SAT gets `--workers` search workers and its time
 includes model construction.
 
+The largest instance has 80 workers. At 96 CP-SAT rejects the model
+(`MODEL_INVALID`: the squared-load objective leaves int64), which is a limit of
+the model and not a search result, so the ladder stops below it.
+
 <!-- results:start -->
 ## Results
 

@@ -1096,7 +1096,9 @@ def _load(results: Path, name: str):
 
 
 #: What a result says about its instance and its run, apart from the runs themselves and
-#: from `workers`, which is CP-SAT's alone (the engine runs single-threaded).
+#: from `workers`, which is CP-SAT's alone (the engine runs single-threaded). `size` is the
+#: harness's description of the instance each run built for itself, so a generator has to
+#: build the same instance every time for two files to join.
 _SAME_IN_BOTH_RUNS = ("case", "instance", "size", "budget", "seed", "exact", "caveat")
 
 

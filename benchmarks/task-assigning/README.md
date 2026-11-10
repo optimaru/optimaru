@@ -18,6 +18,12 @@ CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 The engine runs single-threaded; CP-SAT gets `--workers` search
 workers and its time includes model construction.
 
+The ladder stops at 120 tasks. The CP-SAT model of this use case is solved one
+score level at a time, and at 240 tasks a 30 s run ends without a solution
+after the first level's 10 s, although that level succeeds with the whole 30 s.
+Such a row would show the time split and not the solver, so it is left out
+([how a CP-SAT run is timed](../README.md#how-a-cp-sat-run-is-timed)).
+
 <!-- results:start -->
 ## Results
 

@@ -70,6 +70,8 @@ with the engine's message, when the objective is built: hard 0 must mean no
 violation. Each benchmark's README (or `cpsat/README.md`) lists its own
 limits, including the plugins that refuse an offset.
 
+## Instances of the generated comparisons
+
 Every comparison runs a ladder of instances of growing size. The smallest are
 ones both solvers finish; on the largest the exact model often returns nothing
 within the budget, which the results show as "no solution in time". Where a
@@ -81,6 +83,8 @@ The publisher joins the JSON of the two runs (`compare/<slug>.engine.json` and
 `compare/<slug>.cp-sat.json`) into the comparison after checking that they are
 of the same instances, budget and seed; it refuses a comparison that lacks a
 run of either solver.
+
+## How a CP-SAT run is timed
 
 A CP-SAT run gets the budget as its time limit, which CP-SAT counts from the
 start of the search, so building the model comes on top. The comparison runner
