@@ -37,6 +37,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
       - name: Install ruff and clang-format (no extension build)
         run: uv sync --python 3.14 --only-group lint
       - name: Python lint
@@ -44,7 +46,7 @@ jobs:
       - name: Python format
         run: uv run --no-sync ruff format --check .
       - name: C++ format
-        run: git ls-files '*.cpp' '*.hpp' | xargs uv run --no-sync clang-format --dry-run --Werror
+        run: git ls-files -z '*.cpp' '*.hpp' | xargs -0 uv run --no-sync clang-format --dry-run --Werror
 
   # The release path, which wheels.yml only exercises on a version bump: the sdist
   # must carry every source, and a wheel built from it must import.
