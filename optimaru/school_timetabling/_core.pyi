@@ -151,10 +151,12 @@ class SolverConfig:
     unimproved_step_count_limit: int
     """Step limit since the last new best; 0 disables it."""
     random_seed: int
-    """0 is a non-deterministic seed; any other value is reproducible."""
+    """0 is a non-deterministic seed; any other value is reproducible (with several starts
+    and a target that is reached, the start that reaches it first can differ between runs)."""
     parallel_solver_count: int
     """Independent parallel starts (engine multi-start): worker i gets
-    random_seed+i and the full budget; the best solution wins. Default 1."""
+    random_seed+i and the full budget; the best solution wins. A start that reaches
+    `best_score_limit` stops the others. Default 1."""
     late_acceptance_size: int
     """Late-acceptance queue length. 0 (default) = auto: clamp(8 * lesson count, 400,
     3200)."""

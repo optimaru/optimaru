@@ -181,7 +181,7 @@ void Solver::solve(ConferenceSchedule& schedule) {
         best = engine.solve(schedule, calculator);
         stepOffset += lastStep + 1;
         if (best >= config_.target_score) break;
-        // A sibling parallel worker failed: no further segments.
+        // A sibling start failed or reached the target: no further segments.
         if (config_.stop_flag && config_.stop_flag->load()) break;
     }
 

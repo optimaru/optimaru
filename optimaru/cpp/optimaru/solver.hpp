@@ -144,6 +144,11 @@ public:
     // copies of the solution (seeds seed + i), keeping the best.
     // make_objective() is invoked once per start, on the calling thread.
     // Solution must be copy-constructible and copy-assignable.
+    // A start that reaches Limits::target_score ends the run: the other
+    // starts stop at their next step and hand over their best so far, and
+    // the best of all starts wins (the lowest start on ties). Which start
+    // gets there first depends on the threads, so with a reachable target
+    // two runs with the same seed can return different solutions.
     // Exception-safe: an exception thrown inside a start (a raising
     // on_new_best callback, a ScoreChecks::Full score corruption, bad_alloc) is
     // caught on its worker thread, the other starts are told to stop at
@@ -174,8 +179,8 @@ public:
         objectives.reserve(starts);
         for (int i = 0; i < starts; ++i) objectives.push_back(make_objective());
 
-        // Raised by the first start that fails; every start checks it once a
-        // step (StopCondition's stop flag).
+        // Raised by the first start that fails or reaches the target; every
+        // start checks it once a step (StopCondition's stop flag).
         auto stop = std::make_shared<std::atomic<bool>>(false);
         std::mutex failure_mutex;
         std::exception_ptr first_failure;
@@ -194,6 +199,7 @@ public:
                         thread_solver.share_stop_flag(stop_requested_);
                         thread_solver.run_stop_ = stop;
                         scores[i] = thread_solver.solve(copies[i], *objectives[i]);
+                        if (scores[i] >= config_.limits.target_score) stop->store(true);
                     } catch (...) {
                         {
                             std::lock_guard<std::mutex> lock(failure_mutex);

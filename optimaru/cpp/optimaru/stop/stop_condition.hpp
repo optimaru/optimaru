@@ -18,7 +18,8 @@ namespace optimaru {
 // search step; it stops the search as soon as ANY of these holds:
 //
 //   - request_stop() was called on the solver, or a run-scoped stop flag was
-//     raised (a multi-start run raises it when one start fails);
+//     raised (a multi-start run raises it when one start fails or reaches
+//     the target);
 //   - Limits::time_limit of wall time has passed (always set);
 //   - Limits::stall_time_limit has passed since the last new best (0 = off);
 //   - Limits::step_limit steps were taken (0 = off);

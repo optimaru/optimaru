@@ -785,7 +785,8 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
     // strict improvement is applied: two equal repairs could undo each other
     // until the step limit.
     if (Clock::now() >= deadline) return;
-    // A sibling parallel worker failed (see Config::stop_flag): skip the repair.
+    // The run is over (see Config::stop_flag: a sibling start failed, or one
+    // reached the target): skip the repair.
     if (config.stop_flag && config.stop_flag->load()) return;
     optimaru::Editor<EmployeeSchedule> editor(schedule, calculator);
     Score current = editor.score();

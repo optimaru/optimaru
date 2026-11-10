@@ -368,10 +368,12 @@ class SolverConfig:
     unimproved_step_count_limit: int
     """Steps since last best-score improvement; 0 disables it."""
     random_seed: int
-    """Seed of the search; the same seed reproduces the same search."""
+    """Seed of the search; the same seed reproduces the same search (with several starts
+    and a target that is reached, the start that reaches it first can differ between runs)."""
     parallel_solver_count: int
-    """Independent parallel starts (seed + i each); the best final score wins.
-    Ignored when a calculator is passed to `Solver.solve`."""
+    """Independent parallel starts (seed + i each); the best final score wins. A start that
+    reaches `best_score_limit` stops the others. Ignored when a calculator is passed to
+    `Solver.solve`."""
     full_assert: bool
     """Re-verify every incremental score against a full recompute after every
     move (a debugging aid; much slower)."""

@@ -103,6 +103,17 @@ protected:
     std::int64_t conflictCount_ = 0;
 };
 
+// One hard point worse than the truth: a start that searches with this
+// objective never reaches a feasible target.
+class HandicappedCalculator final : public TaskAssignmentCalculator {
+public:
+    Score score() override {
+        Score handicapped = TaskAssignmentCalculator::score();
+        --handicapped.hard;
+        return handicapped;
+    }
+};
+
 // Deliberately wrong: forgets the conflict bookkeeping on insert. ScoreChecks::Full
 // must catch this as score corruption.
 class CorruptedCalculator final : public TaskAssignmentCalculator {
@@ -316,6 +327,32 @@ void testMultiStartAndFfd(const Score& optimum) {
         Score result = solver.solve_multistart(
                 s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
         check(result == optimum && fullScore(s) == optimum, "multi-start (4 threads) optimum");
+    }
+    {  // A start that reaches the target ends the run. Start 0 can reach the
+        // optimum; starts 1 and 2 search with a handicapped objective and
+        // never do, so on their own they would run out the 30 s. Their scores
+        // are on the handicapped scale, always below start 0's, so start 0
+        // is also the one the comparison picks.
+        TaskAssignment s = buildTaskInstance();
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::seconds(30);
+        config.limits.target_score = optimum;
+        config.parallel_starts = 3;
+        config.search.acceptance.rule = optimaru::AcceptanceRule::SimulatedAnnealing;
+        config.search.acceptance.start_temperature = {2, 50.0};
+        optimaru::Solver<TaskAssignment> solver(config);
+        int made = 0;
+        const auto start = std::chrono::steady_clock::now();
+        const Score result =
+                solver.solve_multistart(s, [&made]() -> std::unique_ptr<TaskAssignmentCalculator> {
+                    if (made++ == 0) return std::make_unique<TaskAssignmentCalculator>();
+                    return std::make_unique<HandicappedCalculator>();
+                });
+        const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        check(seconds < 10.0, "multi-start: a start that reaches the target stops the others");
+        check(result == optimum && fullScore(s) == optimum,
+              "multi-start: the start that reached the target is the one returned");
     }
     {  // A start that throws (here: a raising on_new_best, as a Python callback
         // that raises does): caught on its thread, the siblings stop, and the
@@ -2168,6 +2205,49 @@ void testSolverConfig() {
               "solve_parallel_starts: the best score wins, the lowest start on ties");
         check(config.seed == 40 && config.parallel_solver_count == 4 && !config.stop_flag,
               "solve_parallel_starts leaves the caller's Config as it was");
+    }
+    {  // A start that reaches the target ends the run: the others stop and
+        // hand over their best so far, and the best of all still wins.
+        ToyConfig config;
+        config.parallel_solver_count = 3;
+        config.target_score = Score{0, -10.0};
+        ToyProblem problem;
+        std::atomic<int> stopped{0};
+        const auto began = std::chrono::steady_clock::now();
+        optimaru::solve_parallel_starts(
+                config, problem, [&stopped](const ToyConfig& start, ToyProblem& candidate, int i) {
+                    candidate.solved_by = i;
+                    if (i == 1) {  // at the target straight away
+                        candidate.score = Score{0, -10.0};
+                        return;
+                    }
+                    if (waitForStop(start)) ++stopped;
+                    // What these two had when they were stopped: start 2 beyond
+                    // the target, start 0 short of it.
+                    candidate.score = Score{0, i == 2 ? -5.0 : -20.0};
+                });
+        const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+        check(stopped.load() == 2 && seconds < 10.0,
+              "solve_parallel_starts: a start that reaches the target stops the others");
+        check(problem.solved_by == 2 && problem.score == Score{0, -5.0},
+              "solve_parallel_starts: the best of all starts wins, not the first at the target");
+    }
+    {  // No start reaches the target: nobody is stopped, each runs to its end.
+        ToyConfig config;
+        config.parallel_solver_count = 3;
+        config.target_score = Score{0, 0.0};
+        ToyProblem problem;
+        std::atomic<int> stopped{0};
+        optimaru::solve_parallel_starts(
+                config, problem, [&stopped](const ToyConfig& start, ToyProblem& candidate, int i) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(20 * (3 - i)));
+                    if (start.stop_flag->load()) ++stopped;
+                    candidate.score = Score{0, -1.0 - i};
+                    candidate.solved_by = i;
+                });
+        check(stopped.load() == 0 && problem.solved_by == 0,
+              "solve_parallel_starts: a target no start reaches stops nobody");
     }
     {  // One start (anything below two): no copy, no thread, the Config as it is.
         for (const int count : {1, 0, -3}) {
