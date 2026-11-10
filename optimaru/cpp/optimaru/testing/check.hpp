@@ -12,6 +12,9 @@ namespace optimaru::testing {
 // The check() of the C++ test binaries: one PASS / FAIL line per expectation
 // and a count of the failures, which main() turns into the exit code. A test
 // binary is one program, so one counter serves all of its files.
+//
+// For this repository's tests. It ships with the engine headers because the
+// tests include those, but it is not part of the engine's API.
 inline int failures = 0;
 
 inline void check(bool ok, const std::string& label) {

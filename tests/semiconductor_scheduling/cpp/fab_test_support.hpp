@@ -27,6 +27,8 @@ using namespace fab;
 
 inline int failures = 0;
 
+// Not optimaru/testing/check.hpp on purpose: these tests loop over thousands
+// of expectations, so this check() prints the failures only.
 inline void check(bool condition, const std::string& what) {
     if (!condition) {
         ++failures;
