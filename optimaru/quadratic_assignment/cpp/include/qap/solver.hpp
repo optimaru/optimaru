@@ -1,15 +1,12 @@
 #ifndef QAP_SOLVER_HPP
 #define QAP_SOLVER_HPP
 
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
 #include <utility>
 
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/solver_config.hpp"
 #include "qap/domain.hpp"
 
 namespace qap {
@@ -29,25 +26,17 @@ namespace qap {
 // state is checked to be a bijection (std::logic_error otherwise).
 class Solver {
 public:
-    struct Config {
-        // Wall-clock budget. 0 stops before the first step: the solve then
-        // returns its start (the identity, or the seed) unchanged.
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires.
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion (so
-        // step_limit = 0 means "no step limit", not "no search").
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        // The local-search acceptor. Late acceptance by default; the history
-        // length 0 (the default) = auto: clamp(8 * facility count, 400, 3200).
+    // The limits, the seed, the parallel starts and the callback are the
+    // shared ones of optimaru/solver_config.hpp; there are no ruin & recreate
+    // knobs (see above). Here:
+    //   time_limit 0           the solve returns its start (the identity, or
+    //                          the seed) unchanged
+    //   history_length 0       clamp(8 * facility count, 400, 3200)
+    //   parallel_solver_count  the engine's multi-start; ignored by the
+    //                          constraint-assembly overload
+    struct Config : optimaru::SolverConfigBase<Score> {
+        // The local-search acceptor. Late acceptance by default.
         optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::LateAcceptance;
-        std::size_t history_length = 0;
         int tabu_tenure = 7;  // ENTITY_TABU
         // SIMULATED_ANNEALING's starting temperature (hard, soft). (0, 0), the
         // default, = auto: hard 0, soft = simulated_annealing_temperature_fraction
@@ -57,19 +46,6 @@ public:
         // limit, or over step_limit when that is further along.
         Score start_temperature{0, 0.0};
         double simulated_annealing_temperature_fraction = 0.01;
-        std::uint64_t seed = 0;
-
-        // Independent parallel starts (the engine's multi-start): worker i
-        // searches its own copy of the start with seed + i and the full
-        // budget; the best score wins. Ignored by the constraint-assembly
-        // overload.
-        int parallel_solver_count = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; much slower).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
     };
 
     Solver() = default;

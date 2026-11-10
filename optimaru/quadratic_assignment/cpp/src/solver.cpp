@@ -26,16 +26,8 @@ namespace {
 // start is a complete permutation.
 optimaru::Settings engineConfigOf(const Solver::Config& config,
                                   const QuadraticAssignmentProblem& problem, int starts) {
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.parallel_starts = starts;
-    engineConfig.on_new_best = config.on_new_best;
-    engineConfig.limits.time_limit = config.time_limit;
-    engineConfig.limits.target_score = config.target_score;
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
 
     auto& acceptor = engineConfig.search.acceptance;
     acceptor.rule = config.rule;
@@ -61,6 +53,7 @@ optimaru::Settings engineConfigOf(const Solver::Config& config,
 }
 
 void requireConfig(const Solver::Config& config) {
+    optimaru::check_config(config);
     if (config.parallel_solver_count <= 0)
         throw std::invalid_argument("parallel_solver_count must be positive");
     if (config.tabu_tenure < 0) throw std::invalid_argument("entityTabuSize must be >= 0");
