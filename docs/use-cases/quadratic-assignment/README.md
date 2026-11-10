@@ -319,4 +319,9 @@ uv run --project cpsat python -m bench.run_bench \
 ```
 
 The report shows the raw objective and gap to the QAPLIB best-known solution.
+That best-known value is what the instance's QAPLIB reference permutation
+scores under the same evaluator, read as the facility of each location or as
+the location of each facility, whichever the solution file uses; an instance
+without a solution file in the archive has no gap. `--all` runs the 33
+instances with 30 to 50 facilities.
 The checked-in local snapshot is [`bench/RESULTS.md`](../../../benchmarks/quadratic-assignment/bench/RESULTS.md).
