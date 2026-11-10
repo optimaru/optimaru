@@ -14,6 +14,12 @@
   gone: everything imports `optimaru.<use case>`. `setup.py` finds the use cases
   and their sources itself. The installed package and its
   API do not change.
+- **License.** A new `THIRD-PARTY-LICENSES` file ships in the wheels and the
+  sdist. It carries the notices and license texts of the C++ runtime libraries
+  that the wheel repair tools bundle into the musllinux wheels (libstdc++ and
+  libgcc, GPL-3.0-or-later with the GCC Runtime Library Exception) and the
+  Windows wheels (the Microsoft Visual C++ runtime). The 0.4.0 wheels bundle the
+  same libraries without it.
 - **Builds.** One `uv sync` at the root builds every extension in place, and
   one CMake project (`cmake -B build`) builds the engine and every use case's
   C++ tests. `OPTIMARU_USE_CASES` narrows either build to some use cases.

@@ -1,6 +1,6 @@
 # sdist for the `optimaru` Python distribution: the Python package, the engine
 # headers and, per use case, the bindings and C++ sources its extension compiles.
-include LICENSE NOTICE pyproject.toml setup.py docs/pypi.md
+include LICENSE NOTICE THIRD-PARTY-LICENSES pyproject.toml setup.py docs/pypi.md
 recursive-include optimaru *.py *.pyi py.typed
 recursive-include optimaru/cpp *.hpp *.h *.inl
 recursive-include optimaru/*/cpp/include *.hpp *.h *.inl
