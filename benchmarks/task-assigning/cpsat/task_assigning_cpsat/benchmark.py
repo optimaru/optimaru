@@ -26,9 +26,9 @@ def self_report(problem: Any) -> None:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    import task_assigning.demo
+    from optimaru.task_assigning import demo
 
-    return {"demo": lambda: task_assigning.demo.generate_demo_data().to_core()}
+    return {"demo": lambda: demo.generate_demo_data().to_core()}
 
 
 def describe(problem: Any) -> str:

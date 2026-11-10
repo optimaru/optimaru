@@ -26,9 +26,9 @@ def self_report(problem: Any) -> None:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    import meeting_scheduling.models
+    from optimaru.meeting_scheduling import models
 
-    return {"demo": lambda: meeting_scheduling.models.demo_data().to_core()}
+    return {"demo": lambda: models.demo_data().to_core()}
 
 
 def describe(problem: Any) -> str:
@@ -36,7 +36,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import meeting_scheduling.models
+    from optimaru import meeting_scheduling
 
     meeting_scheduling.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 
