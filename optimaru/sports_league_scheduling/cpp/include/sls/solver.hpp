@@ -1,19 +1,12 @@
 #ifndef SLS_SOLVER_HPP
 #define SLS_SOLVER_HPP
 
-#include <atomic>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
 #include <utility>
-#include <vector>
 
 #include "sls/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace sls {
 
@@ -24,48 +17,13 @@ namespace sls {
 // moves and adaptive ruin-and-recreate (ALNS) enabled.
 class Solver {
 public:
-    struct Config {
-        // Wall-clock budget (30s by default).
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires (termination is by time_limit).
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        // Late-acceptance history length. 0 (the default) = auto:
-        // clamp(32 * matchCount, 400, 3200) — every bench instance from the
-        // 182-match demo up wants the 3200 ceiling, and the small-instance
-        // multiplier only matters below ~100 matches.
-        std::size_t history_length = 0;
-        std::uint64_t seed = 0;
-
-        // Independent parallel starts (the engine's multi-start): each worker
-        // receives seed + i and the full wall-clock budget; the best
-        // solution wins.
-        int parallel_solver_count = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; orders of magnitude
-        // slower).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS). Without this the LA acceptor can lock into a local
-        // optimum within milliseconds on small instances and never escape.
-        bool ruin_recreate = true;
-        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
-        double ruin_recreate_min_ruin_fraction = 0.10;
-        double ruin_recreate_max_ruin_fraction = 0.30;
-        int ruin_recreate_max_ruin_count = 60;
-        double ruin_recreate_operator_decay = 0.8;
-        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruin_recreate_polish_steps = 5000;
-
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   history_length 0  clamp(32 * matchCount, 400, 3200) — every bench
+    //                     instance from the 182-match demo up wants the 3200
+    //                     ceiling, and the small-instance multiplier only
+    //                     matters below ~100 matches
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
         double swap_weight = 0.25;
@@ -88,13 +46,6 @@ public:
         // The guidance stands down while the solution is infeasible (see
         // SportsLeagueIncrementalScoreCalculator::costliestMatch).
         int costliest_match_sample = 4;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
-        // Set by solve() on each parallel worker's copy, not by a caller (and
-        // not bound to Python): the first worker that fails raises it, and the
-        // other workers' engines stop at their next step instead of running out
-        // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;
