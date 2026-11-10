@@ -415,6 +415,7 @@ def test_the_two_solver_runs_of_a_use_case_are_joined_into_its_comparison(tmp_pa
         ([_half("cp-sat", "a", seed=2), _half("cp-sat", "b")], "a differs in seed"),
         ([_half("cp-sat", "a"), _half("cp-sat", "b", size="4 jobs")], "b differs in size"),
         ([_half("cp-sat", "a"), _half("cp-sat", "b", budget=10.0)], "b differs in budget"),
+        ([_half("cp-sat", "a", case="another-case"), _half("cp-sat", "b")], "a differs in case"),
         ([_half("engine", "a"), _half("cp-sat", "b")], "a in the cp-sat file is not a run of cp-sat alone"),
         ([_half("cp-sat", "a"), {"instance": "b", "error": "Traceback"}], "b failed in one of the two runs"),
     ],

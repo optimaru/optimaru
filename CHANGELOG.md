@@ -4,7 +4,7 @@
 
 - **More instances in every engine-vs-CP-SAT comparison.** Each of the 17
   comparisons on generated or demo instances now runs a ladder of four to
-  seven instances of growing size, 97 in all (was 40), and every results
+  seven instances of growing size, 97 in all (was 38), and every results
   block is measured again. The smallest rungs are ones both solvers finish;
   on the largest the exact model often returns nothing within the budget,
   and the tables say so. `benchmarks/README.md` now states how a CP-SAT run

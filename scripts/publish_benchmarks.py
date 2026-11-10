@@ -1097,7 +1097,7 @@ def _load(results: Path, name: str):
 
 #: What a result says about its instance and its run, apart from the runs themselves and
 #: from `workers`, which is CP-SAT's alone (the engine runs single-threaded).
-_SAME_IN_BOTH_RUNS = ("instance", "size", "budget", "seed", "exact", "caveat")
+_SAME_IN_BOTH_RUNS = ("case", "instance", "size", "budget", "seed", "exact", "caveat")
 
 
 def join_solver_runs(slug: str, engine: list[dict], cpsat: list[dict]) -> list[dict]:

@@ -125,9 +125,11 @@ twelve performance cores, with builds and other work kept to the efficiency
 cores (`taskpolicy -b` on macOS). In the generated comparisons that means the
 engine's runs and CP-SAT's were made at the same time, not one after the other.
 
-How far a number repeats differs by use case. The 38 instances measured on two
-days gave the same engine score both times, while CP-SAT's differed on 8 (eight
-workers under a time limit), and the engine's own result varies by a few percent
-on the larger semiconductor instances (see that README). Read a small margin in
-any table as noise.
+How far a number repeats differs by use case. The 38 instances of the earlier
+generated ladders were measured on two days: the engine's score was the same
+both times on all of them, and CP-SAT's differed on 8 (eight workers under a
+time limit). The engine's own result does move elsewhere: on the 400-request
+synthetic pickup-delivery instance (54 vehicles one day, 55 the other) and by
+a few percent on the larger semiconductor instances (see that README). Read a
+small margin in any table as noise.
 

@@ -45,6 +45,7 @@ def instances() -> dict[str, Callable[[], Any]]:
         # level finds none in its share. On that plant the first level takes about 17 s,
         # so a 30 s run ends after 10 s with nothing: a row that would show the split,
         # not the solver. (On the demo plant the first level finds nothing in 30 s either.)
+        #
         # The demo plant: `generate_demo_data()` with its own defaults.
         "demo": _plant(5, 100),
         "lines8": _plant(8, 200),
