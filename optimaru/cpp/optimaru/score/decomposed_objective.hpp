@@ -117,8 +117,7 @@ inline double weighted_cost(double weight, double cost, double exponent) {
     if (weight == 0.0) return 0.0;
     return weight * shape_cost(cost, exponent);
 }
-inline double weighted_cost(double weight, double cost, double exponent, double offset,
-                           bool clip) {
+inline double weighted_cost(double weight, double cost, double exponent, double offset, bool clip) {
     if (weight == 0.0) return 0.0;
     return weight * shape_cost(cost, exponent, offset, clip);
 }
@@ -241,7 +240,8 @@ struct ConstraintMetadata {
 
     bool is_hard() const { return level == Level::Hard; }
 
-    ConstraintMetadata(std::string constraint_name, double constraint_weight, Level constraint_level)
+    ConstraintMetadata(std::string constraint_name, double constraint_weight,
+                       Level constraint_level)
         : name(std::move(constraint_name)),
           weight(constraint_weight),
           level(constraint_level),
@@ -289,7 +289,8 @@ struct ConstraintMetadata {
     }
     void set_exponent(double new_exponent) {
         if (!std::isfinite(new_exponent) || new_exponent <= 0.0) {
-            throw std::invalid_argument("Constraint '" + name + "' exponent must be finite and > 0");
+            throw std::invalid_argument("Constraint '" + name +
+                                        "' exponent must be finite and > 0");
         }
         exponent = new_exponent;
     }
@@ -390,7 +391,7 @@ struct UnitConstraint : ConstraintMetadata {
     // which holds whenever cost() is a sum of per-member and per-pair terms.
     virtual bool supports_delta() const { return false; }
     virtual double delta_cost(const Solution& /*solution*/, int /*unit*/,
-                             const std::vector<int>& /*members*/, int /*entity*/) const {
+                              const std::vector<int>& /*members*/, int /*entity*/) const {
         return 0.0;
     }
 
@@ -413,8 +414,7 @@ struct UnitConstraint : ConstraintMetadata {
     // written-out list, which is exactly what the applied path computes.
     virtual bool supports_piecewise_preview() const { return false; }
     virtual bool piecewise_cost(const Solution& /*solution*/, int /*unit*/,
-                               const ListPiece* /*pieces*/, int /*count*/,
-                               double& /*out*/) const {
+                                const ListPiece* /*pieces*/, int /*count*/, double& /*out*/) const {
         return false;
     }
 
@@ -497,14 +497,14 @@ struct GlobalConstraint : ConstraintMetadata {
     virtual void reset(const Solution& solution,
                        const std::vector<std::vector<int>>& members_per_unit) = 0;
     virtual void on_unit_changed(const Solution& solution, int unit,
-                               const std::vector<int>& members) = 0;
+                                 const std::vector<int>& members) = 0;
     // Optional assignment-variable fast path. When enabled, the objective sends
     // every join/leave directly (including inside a composite batch), avoiding
     // a full-unit diff/copy for global aggregates that can update in O(1).
     virtual bool supports_member_change() const { return false; }
     virtual void on_member_changed(const Solution& solution, int unit,
-                                 const std::vector<int>& members, int /*entity*/,
-                                 bool /*joined*/) {
+                                   const std::vector<int>& members, int /*entity*/,
+                                   bool /*joined*/) {
         on_unit_changed(solution, unit, members);
     }
     virtual double cost() const = 0;
@@ -523,7 +523,7 @@ struct GlobalConstraint : ConstraintMetadata {
     // does not switches the whole assembly back to apply/score/undo.
     virtual bool supports_preview() const { return false; }
     virtual double preview_cost(const Solution& /*solution*/, const PreviewedUnit* /*changes*/,
-                               int /*count*/) const {
+                                int /*count*/) const {
         return cost();
     }
     // The piecewise form of the same answer (see UnitConstraint::
@@ -532,8 +532,8 @@ struct GlobalConstraint : ConstraintMetadata {
     // to preview_cost() on the materialized members for this one call.
     virtual bool supports_piecewise_preview() const { return false; }
     virtual bool piecewise_preview_cost(const Solution& /*solution*/,
-                                      const PreviewedUnit* /*changes*/, int /*count*/,
-                                      double& /*out*/) const {
+                                        const PreviewedUnit* /*changes*/, int /*count*/,
+                                        double& /*out*/) const {
         return false;
     }
 
@@ -554,7 +554,7 @@ struct GlobalConstraint : ConstraintMetadata {
 // total is NOT multiplied by the domain's medium fold.
 struct ConstraintTotal {
     std::string name;
-    double cost;  // weighted, sign as defined above (positive = penalizing)
+    double cost;   // weighted, sign as defined above (positive = penalizing)
     bool is_hard;  // level == Level::Hard
     Level level = Level::Soft;
     std::string label;  // ConstraintMetadata::label (empty = none)
@@ -612,7 +612,7 @@ public:
         cache_soft_.assign(cells, 0.0);
         delta_capable_.resize(unit_constraints_.size());
         for (auto& [key, context] : shared_contexts_) {
-            (void) key;
+            (void)key;
             context->begin_reset();
         }
         // Preview capabilities, sampled once like the dispatch metadata. A
@@ -651,10 +651,9 @@ public:
                 unit_change_globals_.push_back(pointer);
             }
             global_score_.push_back({pointer, pointer->weight, pointer->exponent,
-                                    pointer->level == Level::Hard,
-                                    pointer->level == Level::Medium,
-                                    pointer->supports_piecewise_preview(), pointer->offset,
-                                    pointer->clip});
+                                     pointer->level == Level::Hard, pointer->level == Level::Medium,
+                                     pointer->supports_piecewise_preview(), pointer->offset,
+                                     pointer->clip});
         }
         delta_group_ptrs_.clear();
         for (const auto& group : delta_groups_) delta_group_ptrs_.push_back(group.get());
@@ -706,25 +705,25 @@ public:
             (void)entity_index;
             return;
         } else {
-        const int new_unit = Traits::value_of(*solution_, entity_index);
-        if (new_unit == pending_old_unit_) return;
-        if (pending_old_unit_ >= 0) {
-            // Swap-remove via the tracked position (member order carries no
-            // meaning for assignment units).
-            std::vector<int>& m = members_[pending_old_unit_];
-            const int pos = entity_pos_[entity_index];
-            const int last = m.back();
-            m[pos] = last;
-            entity_pos_[last] = pos;
-            m.pop_back();
-            entity_pos_[entity_index] = -1;
-            touch_unit_member_changed(pending_old_unit_, entity_index, /*joined=*/false);
-        }
-        if (new_unit >= 0) {
-            entity_pos_[entity_index] = static_cast<int>(members_[new_unit].size());
-            members_[new_unit].push_back(entity_index);
-            touch_unit_member_changed(new_unit, entity_index, /*joined=*/true);
-        }
+            const int new_unit = Traits::value_of(*solution_, entity_index);
+            if (new_unit == pending_old_unit_) return;
+            if (pending_old_unit_ >= 0) {
+                // Swap-remove via the tracked position (member order carries no
+                // meaning for assignment units).
+                std::vector<int>& m = members_[pending_old_unit_];
+                const int pos = entity_pos_[entity_index];
+                const int last = m.back();
+                m[pos] = last;
+                entity_pos_[last] = pos;
+                m.pop_back();
+                entity_pos_[entity_index] = -1;
+                touch_unit_member_changed(pending_old_unit_, entity_index, /*joined=*/false);
+            }
+            if (new_unit >= 0) {
+                entity_pos_[entity_index] = static_cast<int>(members_[new_unit].size());
+                members_[new_unit].push_back(entity_index);
+                touch_unit_member_changed(new_unit, entity_index, /*joined=*/true);
+            }
         }
     }
 
@@ -786,7 +785,8 @@ public:
                             static_cast<std::size_t>(unit) * unit_constraints_.size();
                     const UnitDispatchEntry* const end = dispatch_end(unit);
                     begin_share_pass();
-                    for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
+                    for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end;
+                         ++entry) {
                         if (!is_full_recost(entry->kind)) continue;
                         save_unit_for_trial(unit);
                         apply_raw(unit, *entry, base + entry->c, raw_cost(*entry, unit, members));
@@ -857,7 +857,7 @@ public:
     // preview contract; an assembly with a global that lacks it declines
     // every preview (see GlobalConstraint::supports_preview).
     bool preview_segment_move(int from_list, int start, int len, int to_list, int insert_at,
-                            Score& out) override {
+                              Score& out) override {
         if (!previews_served() || len <= 0) return false;
         const int from_size = static_cast<int>(members_[from_list].size());
         const ListPiece segment{from_list, start, start + len, false};
@@ -935,8 +935,7 @@ public:
         out = preview_score(runs, 2);
         return true;
     }
-    bool preview_exchange(int l1, int p1, int len1, int l2, int p2, int len2,
-                         Score& out) override {
+    bool preview_exchange(int l1, int p1, int len1, int l2, int p2, int len2, Score& out) override {
         if (!previews_served() || l1 == l2) return false;
         const int size1 = static_cast<int>(members_[l1].size());
         const int size2 = static_cast<int>(members_[l2].size());
@@ -989,7 +988,7 @@ public:
             const SampledKnobs knobs = global_knobs(g);
             totals.push_back({global.name,
                               weighted_cost(knobs.weight, global.cost(), knobs.exponent,
-                                           knobs.offset, knobs.clip),
+                                            knobs.offset, knobs.clip),
                               knobs.level == Level::Hard, knobs.level, global.label});
         }
         return totals;
@@ -1026,12 +1025,12 @@ public:
     // does at reset.
     struct ConstraintCosts {
         std::string name;
-        double weight;   // the weight in effect (sampled at the last reset)
+        double weight;  // the weight in effect (sampled at the last reset)
         double exponent;
-        bool is_hard;     // level == Level::Hard
+        bool is_hard;  // level == Level::Hard
         bool is_global;
         std::vector<double> unit_costs;
-        Level level;     // the level in effect (sampled at the last reset)
+        Level level;  // the level in effect (sampled at the last reset)
         bool reward;
         bool level_flippable;
         std::string label;  // ConstraintMetadata::label (empty = none)
@@ -1058,13 +1057,24 @@ public:
                 costs.push_back(cache_raw_[static_cast<std::size_t>(u) * C + c]);
             }
             const SampledKnobs knobs = unit_knobs(c);
-            ConstraintCosts entry{constraint.name, knobs.weight, knobs.exponent,
-                                  knobs.level == Level::Hard, false, std::move(costs),
-                                  knobs.level, constraint.reward,
-                                  constraint.level_flippable, constraint.label,
-                                  constraint.default_weight, constraint.default_level,
-                                  knobs.offset, knobs.clip, false, {}};
-            entry.signed_cost = solution_ != nullptr && constraint.raw_cost_can_be_negative(*solution_);
+            ConstraintCosts entry{constraint.name,
+                                  knobs.weight,
+                                  knobs.exponent,
+                                  knobs.level == Level::Hard,
+                                  false,
+                                  std::move(costs),
+                                  knobs.level,
+                                  constraint.reward,
+                                  constraint.level_flippable,
+                                  constraint.label,
+                                  constraint.default_weight,
+                                  constraint.default_level,
+                                  knobs.offset,
+                                  knobs.clip,
+                                  false,
+                                  {}};
+            entry.signed_cost =
+                    solution_ != nullptr && constraint.raw_cost_can_be_negative(*solution_);
             if (const std::vector<int>* scope = constraint.scoped_units()) {
                 entry.scoped = true;
                 for (int u : *scope) {
@@ -1079,11 +1089,22 @@ public:
         for (std::size_t g = 0; g < global_constraints_.size(); ++g) {
             const GlobalConstraint<Solution>& global = *global_constraints_[g];
             const SampledKnobs knobs = global_knobs(g);
-            ConstraintCosts entry{global.name, knobs.weight, knobs.exponent,
-                                  knobs.level == Level::Hard, true, {global.cost()}, knobs.level,
-                                  global.reward, global.level_flippable, global.label,
-                                  global.default_weight, global.default_level, knobs.offset,
-                                  knobs.clip, false, {}};
+            ConstraintCosts entry{global.name,
+                                  knobs.weight,
+                                  knobs.exponent,
+                                  knobs.level == Level::Hard,
+                                  true,
+                                  {global.cost()},
+                                  knobs.level,
+                                  global.reward,
+                                  global.level_flippable,
+                                  global.label,
+                                  global.default_weight,
+                                  global.default_level,
+                                  knobs.offset,
+                                  knobs.clip,
+                                  false,
+                                  {}};
             entry.signed_cost = solution_ != nullptr && global.raw_cost_can_be_negative(*solution_);
             out.push_back(std::move(entry));
         }
@@ -1204,7 +1225,7 @@ private:
             penalty = hard.saturated();
         } else if constexpr (kMediumFold.kind == MediumFold::Kind::BelowHard) {
             penalty = fold_below_hard_saturating(hard, medium,
-                                              static_cast<std::int64_t>(kMediumFold.unit));
+                                                 static_cast<std::int64_t>(kMediumFold.unit));
         } else {
             (void)medium;
             penalty = hard.saturated();
@@ -1299,9 +1320,11 @@ private:
         return value;
     }
     // cost() of one entry's component on a unit, through its share class.
-    double raw_cost(const UnitDispatchEntry& entry, int unit, const std::vector<int>& members) const {
+    double raw_cost(const UnitDispatchEntry& entry, int unit,
+                    const std::vector<int>& members) const {
         if (!is_shared(entry.kind)) return entry.constraint->cost(*solution_, unit, members);
-        return shared_value(entry, [&] { return entry.constraint->cost(*solution_, unit, members); });
+        return shared_value(entry,
+                            [&] { return entry.constraint->cost(*solution_, unit, members); });
     }
 
     // The share class of every unit constraint: the index of the earliest
@@ -1366,7 +1389,8 @@ private:
         }
         for (std::size_t c = 0; c < C; ++c) {
             if (class_size[share_class_[c]] < 2) continue;
-            metas[c].kind = metas[c].kind == kVirtualDelta ? kSharedVirtualDelta : kSharedFullRecost;
+            metas[c].kind =
+                    metas[c].kind == kVirtualDelta ? kSharedVirtualDelta : kSharedFullRecost;
         }
     }
 
@@ -1403,7 +1427,7 @@ private:
     double unit_contribution(const UnitDispatchEntry& entry, double raw) const {
         if (!entry.shifted) return weighted_cost(entry.weight, raw, entry.exponent);
         return weighted_cost(entry.weight, raw, entry.exponent, unit_offset_[entry.c],
-                            unit_clip_[entry.c] != 0);
+                             unit_clip_[entry.c] != 0);
     }
 
     // Compiles the per-unit dispatch table: one contiguous, pre-classified
@@ -1451,9 +1475,9 @@ private:
             if (!delta_capable_[c]) {
                 meta.kind = kFullRecost;
             } else if (grouped_delta_[c]) {
-                meta.kind = direct_grouped_hard_delta_[c] ? kGroupedHardInt
+                meta.kind = direct_grouped_hard_delta_[c]              ? kGroupedHardInt
                             : exact_raw && !integral_grouped_delta_[c] ? kFullRecost
-                                                                    : kGroupedApply;
+                                                                       : kGroupedApply;
             } else {
                 meta.kind = exact_raw ? kFullRecost : kVirtualDelta;
             }
@@ -1541,8 +1565,7 @@ private:
             if (inserted) {
                 auto group = unit_constraints_[c]->create_delta_group();
                 if (!group) {
-                    throw std::logic_error("Delta group '" + std::string(key) +
-                                           "' has no factory");
+                    throw std::logic_error("Delta group '" + std::string(key) + "' has no factory");
                 }
                 candidates.push_back(std::move(group));
             }
@@ -1660,10 +1683,9 @@ private:
                     // two additions are defined.
                     const double weighted = entry->weight * (sign * grouped_deltas[entry->c]);
                     long long& cell = cache_hard[base + entry->c];
-                    if (!(std::fabs(static_cast<double>(cell) + weighted) <
-                          kMaxHardContribution)) {
+                    if (!(std::fabs(static_cast<double>(cell) + weighted) < kMaxHardContribution)) {
                         throw_contribution_overflow(entry->constraint->name,
-                                                  static_cast<double>(cell) + weighted, true);
+                                                    static_cast<double>(cell) + weighted, true);
                     }
                     const long long score_delta = static_cast<long long>(weighted);
                     cell += score_delta;
@@ -1674,8 +1696,7 @@ private:
                     // Branchless like the hard case: re-applying an unchanged
                     // raw folds an exact 0.0 into the soft total.
                     const std::size_t idx = base + entry->c;
-                    apply_raw(unit, *entry, idx,
-                             cache_raw_[idx] + sign * grouped_deltas[entry->c]);
+                    apply_raw(unit, *entry, idx, cache_raw_[idx] + sign * grouped_deltas[entry->c]);
                     break;
                 }
                 case kVirtualDelta: {
@@ -1689,7 +1710,7 @@ private:
                     if (batch_depth_ == 0 && !rollback_active_) {
                         save_unit_for_trial(unit);
                         apply_raw(unit, *entry, base + entry->c,
-                                 entry->constraint->cost(*solution_, unit, m));
+                                  entry->constraint->cost(*solution_, unit, m));
                     }
                     break;
                 case kSharedVirtualDelta: {
@@ -1837,7 +1858,7 @@ private:
                 double raw;
                 if (!piecewise_[entry.c] ||
                     !entry.constraint->piecewise_cost(*solution_, unit, runs[i].pieces,
-                                                     runs[i].count, raw)) {
+                                                      runs[i].count, raw)) {
                     materialize_run(i);  // this run only: the other may stay piecewise
                     raw = entry.constraint->cost(*solution_, unit, *changes[i].members);
                 }
@@ -1847,9 +1868,10 @@ private:
             for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
                 if (entry->weight == 0.0) continue;  // contributes nothing, see reset
                 const std::size_t idx = base + entry->c;
-                const double raw = is_shared(entry->kind)
-                                           ? shared_value(*entry, [&] { return candidate_raw(*entry); })
-                                           : candidate_raw(*entry);
+                const double raw =
+                        is_shared(entry->kind)
+                                ? shared_value(*entry, [&] { return candidate_raw(*entry); })
+                                : candidate_raw(*entry);
                 const double value = unit_contribution(*entry, raw);
                 const std::string& name = entry->constraint->name;
                 if (entry->is_hard) {
@@ -1942,11 +1964,14 @@ private:
         return c < unit_knobs_.size() ? unit_knobs_[c] : live_knobs(*unit_constraints_[c]);
     }
     SampledKnobs global_knobs(std::size_t g) const {
-        if (g >= global_score_.size() || global_score_[g].constraint != global_constraints_[g].get()) {
+        if (g >= global_score_.size() ||
+            global_score_[g].constraint != global_constraints_[g].get()) {
             return live_knobs(*global_constraints_[g]);
         }
         const GlobalScoreEntry& entry = global_score_[g];
-        const Level level = entry.is_hard ? Level::Hard : entry.is_medium ? Level::Medium : Level::Soft;
+        const Level level = entry.is_hard     ? Level::Hard
+                            : entry.is_medium ? Level::Medium
+                                              : Level::Soft;
         return {entry.weight, entry.exponent, level, entry.offset, entry.clip};
     }
 
@@ -1962,13 +1987,13 @@ private:
     std::vector<std::unique_ptr<UnitConstraintDeltaGroup<Solution>>> delta_groups_;
     std::vector<UnitConstraintDeltaGroup<Solution>*> delta_group_ptrs_;  // dense view
     std::vector<UnitDispatchEntry> dispatch_;  // per unit: compiled entries, contiguous
-    std::vector<std::size_t> dispatch_start_;   // unit -> [start, end) into dispatch_
-    std::vector<char> delta_capable_;  // supports_delta() per unit constraint, cached at reset
-    std::vector<double> unit_offset_;  // per unit constraint: offset, sampled at reset
-    std::vector<char> unit_clip_;      // per unit constraint: clip, sampled at reset
+    std::vector<std::size_t> dispatch_start_;  // unit -> [start, end) into dispatch_
+    std::vector<char> delta_capable_;       // supports_delta() per unit constraint, cached at reset
+    std::vector<double> unit_offset_;       // per unit constraint: offset, sampled at reset
+    std::vector<char> unit_clip_;           // per unit constraint: clip, sampled at reset
     std::vector<SampledKnobs> unit_knobs_;  // per unit constraint: every knob, sampled at reset
-    std::vector<char> piecewise_;     // supports_piecewise_preview() per unit constraint
-    std::vector<char> grouped_delta_;  // delta is supplied by a compiled structural group
+    std::vector<char> piecewise_;           // supports_piecewise_preview() per unit constraint
+    std::vector<char> grouped_delta_;       // delta is supplied by a compiled structural group
     std::vector<char> direct_grouped_hard_delta_;
     std::vector<char> integral_grouped_delta_;  // in a group with has_integral_raw_deltas()
     std::vector<double> grouped_delta_buffer_;
@@ -1986,18 +2011,19 @@ private:
     Solution* solution_ = nullptr;
     int unit_count_ = 0;
     int pending_old_unit_ = -1;
-    std::vector<std::vector<int>> members_;  // per unit: entities (assignment) / elements (sequence)
+    std::vector<std::vector<int>>
+            members_;  // per unit: entities (assignment) / elements (sequence)
     mutable std::vector<int> preview_scratch_[2];  // sequence previews: candidate contents
-    std::vector<int> entity_pos_;             // assignment: index of entity in its unit's members
-    std::vector<double> cache_raw_;           // per (unit, constraint), raw (pre-weight/shape)
-    std::vector<long long> cache_hard_;       // per (unit, constraint), weighted + rounded
-    std::vector<double> cache_soft_;          // per (unit, constraint), weighted
-    HardTotal hard_units_;                    // exact, never wraps (levels.hpp)
-    double medium_units_ = 0.0;               // medium penalties, BEFORE the fold
+    std::vector<int> entity_pos_;        // assignment: index of entity in its unit's members
+    std::vector<double> cache_raw_;      // per (unit, constraint), raw (pre-weight/shape)
+    std::vector<long long> cache_hard_;  // per (unit, constraint), weighted + rounded
+    std::vector<double> cache_soft_;     // per (unit, constraint), weighted
+    HardTotal hard_units_;               // exact, never wraps (levels.hpp)
+    double medium_units_ = 0.0;          // medium penalties, BEFORE the fold
     double soft_units_ = 0.0;
-    std::vector<HardTotal> unit_hard_;        // per unit: weighted hard total (> 0 when penalizing)
-    std::vector<int> penalized_;             // units with unit_hard_ > 0 (unordered)
-    std::vector<int> penalized_pos_;          // index in penalized_, or -1
+    std::vector<HardTotal> unit_hard_;  // per unit: weighted hard total (> 0 when penalizing)
+    std::vector<int> penalized_;        // units with unit_hard_ > 0 (unordered)
+    std::vector<int> penalized_pos_;    // index in penalized_, or -1
     int batch_depth_ = 0;
     std::vector<char> dirty_units_;
     std::vector<int> dirty_unit_list_;

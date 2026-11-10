@@ -5,8 +5,7 @@
 
 #include "alb/domain.hpp"
 
-namespace alb
-{
+namespace alb {
 
 // The domain-side construction the Solver runs before the engine — identical
 // to the pure-Python reference's construction
@@ -19,7 +18,7 @@ namespace alb
 // code-point order). A duplicate arc counts once per copy. Throws
 // std::invalid_argument("precedence graph must be acyclic") when some tasks
 // remain but none is ready (a cycle, a self-arc included).
-std::vector<int> topologicalOrder(const AssemblyLineBalancingProblem &problem);
+std::vector<int> topologicalOrder(const AssemblyLineBalancingProblem& problem);
 
 // First fit along `order`: tasks already assigned (station >= 0) are seeds and
 // keep their station; the others go, in order, onto a station pointer that
@@ -27,7 +26,7 @@ std::vector<int> topologicalOrder(const AssemblyLineBalancingProblem &problem);
 // would push it beyond the cycle time, and a seed pushes it up to its own
 // station. Finally every unseeded task with a fixed_station is overwritten to
 // it (without updating the loads). Writes Task::station; does not prepare.
-void constructStations(AssemblyLineBalancingProblem &problem, const std::vector<int> &order);
+void constructStations(AssemblyLineBalancingProblem& problem, const std::vector<int>& order);
 
 }  // namespace alb
 

@@ -11,8 +11,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace ks
-{
+namespace ks {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -41,8 +40,7 @@ constexpr int kSelected = 1;
 // One additional capacity dimension (the model's resource_capacities entry).
 // Kept as a list in declaration order: that order is the constraint's term
 // order, and a dict would come through pybind11 as a sorted std::map.
-struct Resource
-{
+struct Resource {
     std::string id;
     std::int64_t capacity = 0;
 };
@@ -52,8 +50,7 @@ struct Resource
 // ---------------------------------------------------------------------------
 // `selected` is the single assignment decision variable: 1 = selected, 0 = not
 // selected, -1 = undecided (counted as not selected).
-struct Item
-{
+struct Item {
     std::string id;
     std::int64_t weight = 1;
     std::int64_t value = 0;
@@ -75,23 +72,18 @@ struct Item
 // ---------------------------------------------------------------------------
 // Between minSelected and maxSelected of `items` (distinct item indices) must
 // be selected. No maxSelected = every item of the group may be.
-struct SelectionGroup
-{
+struct SelectionGroup {
     std::string id;
     std::vector<int> items;
     int minSelected = 0;
     std::optional<int> maxSelected;
 
-    int effectiveMax() const
-    {
-        return maxSelected ? *maxSelected : static_cast<int>(items.size());
-    }
+    int effectiveMax() const { return maxSelected ? *maxSelected : static_cast<int>(items.size()); }
 };
 
 // One (item, required item) pair, in items order and then requiredItems
 // order: the term order of itemDependencyCost.
-struct Dependency
-{
+struct Dependency {
     int item;
     int required;
 };
@@ -99,8 +91,7 @@ struct Dependency
 // ---------------------------------------------------------------------------
 // KnapsackProblem  (solution)
 // ---------------------------------------------------------------------------
-struct KnapsackProblem
-{
+struct KnapsackProblem {
     std::int64_t capacity = 0;  // maximum total selected weight
     std::vector<Item> items;
     std::vector<Resource> resources;
@@ -141,35 +132,27 @@ struct KnapsackProblem
 
     int itemCount() const { return static_cast<int>(items.size()); }
 
-    std::int64_t totalWeight() const
-    {
+    std::int64_t totalWeight() const {
         std::int64_t total = 0;
-        for (const Item &item : items)
-        {
-            if (item.isSelected())
-                total += item.weight;
+        for (const Item& item : items) {
+            if (item.isSelected()) total += item.weight;
         }
         return total;
     }
 
-    std::int64_t totalValue() const
-    {
+    std::int64_t totalValue() const {
         std::int64_t total = 0;
-        for (const Item &item : items)
-        {
-            if (item.isSelected())
-                total += item.value;
+        for (const Item& item : items) {
+            if (item.isSelected()) total += item.value;
         }
         return total;
     }
 
     // The decision variable of every item, in item order (-1 / 0 / 1).
-    std::vector<int> assignment() const
-    {
+    std::vector<int> assignment() const {
         std::vector<int> out;
         out.reserve(items.size());
-        for (const Item &item : items)
-            out.push_back(item.selected);
+        for (const Item& item : items) out.push_back(item.selected);
         return out;
     }
 };
@@ -182,23 +165,15 @@ struct KnapsackProblem
 // 1 = selected}. With two values the engine's change move is a flip and its
 // swap move trades a selected item for an unselected one.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<ks::KnapsackProblem>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const ks::KnapsackProblem &problem)
-    {
-        return problem.itemCount();
-    }
-    static int value_count(const ks::KnapsackProblem & /*problem*/) { return 2; }
-    static int value_of(const ks::KnapsackProblem &problem, int itemIndex)
-    {
+template <>
+struct optimaru::SolutionTraits<ks::KnapsackProblem> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const ks::KnapsackProblem& problem) { return problem.itemCount(); }
+    static int value_count(const ks::KnapsackProblem& /*problem*/) { return 2; }
+    static int value_of(const ks::KnapsackProblem& problem, int itemIndex) {
         return problem.items[itemIndex].selected;
     }
-    static void assign(ks::KnapsackProblem &problem,
-                            int itemIndex,
-                            int value)
-    {
+    static void assign(ks::KnapsackProblem& problem, int itemIndex, int value) {
         problem.items[itemIndex].selected = value;
     }
 };

@@ -11,8 +11,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace pjs
-{
+namespace pjs {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -86,21 +85,18 @@ namespace pjs
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<ProjectJobSchedule>;
+using DecomposedCalculator = optimaru::DecomposedObjective<ProjectJobSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<ProjectJobSchedule>;
 using PjsUnitConstraint = optimaru::UnitConstraint<ProjectJobSchedule>;
 using PjsGlobalConstraint = optimaru::GlobalConstraint<ProjectJobSchedule>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const ProjectJobSchedule &schedule)
-{
-    if (!schedule.prepared)
-    {
-        throw std::logic_error("pjs constraints require "
-                               "ScoreCalculator::prepare(schedule) first");
+inline void requirePrepared(const ProjectJobSchedule& schedule) {
+    if (!schedule.prepared) {
+        throw std::logic_error(
+                "pjs constraints require "
+                "ScoreCalculator::prepare(schedule) first");
     }
 }
 
@@ -108,23 +104,18 @@ inline void requirePrepared(const ProjectJobSchedule &schedule)
 // into the solution's derived fields, so a component can derive the chain from
 // the assigned values alone (the engine hands components a const solution,
 // and on this path nothing else refreshes the derived fields).
-inline void computeDates(const ProjectJobSchedule &schedule,
-                         std::vector<int> &startDate,
-                         std::vector<int> &endDate)
-{
+inline void computeDates(const ProjectJobSchedule& schedule, std::vector<int>& startDate,
+                         std::vector<int>& endDate) {
     const int count = schedule.allocationCount();
     startDate.assign(count, 0);
     endDate.assign(count, 0);
-    for (int a : schedule.topologicalOrder)
-    {
-        const Allocation &allocation = schedule.allocations[a];
+    for (int a : schedule.topologicalOrder) {
+        const Allocation& allocation = schedule.allocations[a];
         int doneDate = 0;
-        for (int p : allocation.predecessorAllocations)
-            doneDate = std::max(doneDate, endDate[p]);
+        for (int p : allocation.predecessorAllocations) doneDate = std::max(doneDate, endDate[p]);
         const int value = allocation.modeDelay;
         const int delay = value < 0 ? 0 : schedule.delayOfValue(value);
-        const int duration
-            = value < 0 ? 0 : schedule.executionModeOf(a, value).duration;
+        const int duration = value < 0 ? 0 : schedule.executionModeOf(a, value).duration;
         startDate[a] = doneDate + delay;
         endDate[a] = startDate[a] + duration;
     }
@@ -138,41 +129,32 @@ inline void computeDates(const ProjectJobSchedule &schedule,
 // Shared base of all four rules: the subclass writes `evaluate` against the
 // derived date chain, and this base takes care of invalidation and of
 // recomputing the chain at most once per score.
-struct ScheduleAggregateConstraint : PjsGlobalConstraint
-{
+struct ScheduleAggregateConstraint : PjsGlobalConstraint {
     using PjsGlobalConstraint::PjsGlobalConstraint;
 
     // The component's penalty units over the whole schedule. `startDate` /
     // `endDate` are the derived chain, empty when needsDates() is false.
-    virtual double evaluate(const ProjectJobSchedule &schedule,
-                            const std::vector<int> &startDate,
-                            const std::vector<int> &endDate) const = 0;
+    virtual double evaluate(const ProjectJobSchedule& schedule, const std::vector<int>& startDate,
+                            const std::vector<int>& endDate) const = 0;
 
     // Rules that read only the assigned execution modes (not when they run)
     // opt out of the date chain and skip that pass entirely.
     virtual bool needsDates() const { return true; }
 
-    void
-    reset(const ProjectJobSchedule &schedule,
-          const std::vector<std::vector<int>> & /*members_per_unit*/) override
-    {
+    void reset(const ProjectJobSchedule& schedule,
+               const std::vector<std::vector<int>>& /*members_per_unit*/) override {
         detail::requirePrepared(schedule);
         schedule_ = &schedule;
         dirty_ = true;
     }
-    void on_unit_changed(const ProjectJobSchedule &schedule,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
+    void on_unit_changed(const ProjectJobSchedule& schedule, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
         schedule_ = &schedule;
         dirty_ = true;
     }
-    double cost() const override
-    {
-        if (dirty_)
-        {
-            if (needsDates())
-                detail::computeDates(*schedule_, startDate_, endDate_);
+    double cost() const override {
+        if (dirty_) {
+            if (needsDates()) detail::computeDates(*schedule_, startDate_, endDate_);
             value_ = evaluate(*schedule_, startDate_, endDate_);
             dirty_ = false;
         }
@@ -180,7 +162,7 @@ struct ScheduleAggregateConstraint : PjsGlobalConstraint
     }
 
 private:
-    const ProjectJobSchedule *schedule_ = nullptr;
+    const ProjectJobSchedule* schedule_ = nullptr;
     mutable std::vector<int> startDate_;
     mutable std::vector<int> endDate_;
     mutable double value_ = 0.0;

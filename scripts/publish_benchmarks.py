@@ -101,9 +101,7 @@ def _replace_block(path: Path, body: str) -> None:
         text.index("<!-- results:start -->"),
         text.index("<!-- results:end -->"),
     )
-    path.write_text(
-        text[:start] + "<!-- results:start -->\n" + body.strip() + "\n" + text[end:]
-    )
+    path.write_text(text[:start] + "<!-- results:start -->\n" + body.strip() + "\n" + text[end:])
 
 
 def _readme_of(slug: str) -> Path:
@@ -142,9 +140,7 @@ def compare_block(results: list[dict], footer: str) -> str:
             else:
                 text = run["score_text"]
                 cells.append(f"**{text}**" if solver in best else text)
-        lines.append(
-            f"| {result['instance']} | {result['size']} | {cells[0]} | {cells[1]} |"
-        )
+        lines.append(f"| {result['instance']} | {result['size']} | {cells[0]} | {cells[1]} |")
         if result.get("caveat") and result["caveat"] not in caveats:
             caveats.append(result["caveat"])
     lines += ["", footer]
@@ -169,14 +165,9 @@ def vrp_block(data: dict, footer: str) -> str:
     ]
     for instance, runs in by_instance.items():
         cells = {name: _vrp_cell(runs.get(name)) for name in ("engine", "ortools")}
-        values = {
-            name: value for name, (value, _) in cells.items() if value is not None
-        }
+        values = {name: value for name, (value, _) in cells.items() if value is not None}
         top = min(values.values()) if values else None
-        texts = [
-            f"**{text}**" if value is not None and value == top else text
-            for value, text in cells.values()
-        ]
+        texts = [f"**{text}**" if value is not None and value == top else text for value, text in cells.values()]
         customers = next(iter(runs.values()))["customer_count"]
         lines.append(f"| {instance} | {customers} | {texts[0]} | {texts[1]} |")
     lines += ["", footer]
@@ -206,9 +197,7 @@ def _penalty(value: float) -> float:
 
 def planning_row(slug: str, result: dict, labels: dict, sizes: dict) -> dict:
     runs = _runs(result)
-    scored = {
-        solver: run for solver, run in runs.items() if run.get("score") is not None
-    }
+    scored = {solver: run for solver, run in runs.items() if run.get("score") is not None}
     names = next(iter(scored.values()))["score_names"] if scored else ["soft"]
     # The deciding level: the first one the solvers differ on; on a full tie, the objective
     # (last) level; with one solution only, its first non-zero level.
@@ -251,16 +240,10 @@ def routing_rows(data: dict) -> list[dict]:
         )
         value, _ = _vrp_cell(row)
         entry.setdefault("cells", {})[row["backend"]] = (
-            {"value": round(value, 2)}
-            if value is not None
-            else {"value": None, "status": "incomplete"}
+            {"value": round(value, 2)} if value is not None else {"value": None, "status": "incomplete"}
         )
     for entry in rows.values():
-        values = {
-            name: cell["value"]
-            for name, cell in entry["cells"].items()
-            if cell["value"] is not None
-        }
+        values = {name: cell["value"] for name, cell in entry["cells"].items() if cell["value"] is not None}
         top = min(values.values()) if values else None
         entry["best"] = [name for name, value in values.items() if value == top]
     return list(rows.values())
@@ -269,18 +252,10 @@ def routing_rows(data: dict) -> list[dict]:
 def timetabling_rows(extra: list[dict]) -> list[dict]:
     rows = []
     for row in extra:
-        cells = {
-            name: {"value": row[name]}
-            for name in ("engine", "ortools")
-            if row.get(name) is not None
-        }
+        cells = {name: {"value": row[name]} for name in ("engine", "ortools") if row.get(name) is not None}
         for name in ("engine", "ortools"):
             cells.setdefault(name, {"value": None, "status": "no solution"})
-        values = {
-            name: cell["value"]
-            for name, cell in cells.items()
-            if cell["value"] is not None
-        }
+        values = {name: cell["value"] for name, cell in cells.items() if cell["value"] is not None}
         top = min(values.values()) if values else None
         rows.append(
             {
@@ -295,9 +270,7 @@ def timetabling_rows(extra: list[dict]) -> list[dict]:
 def _current_planning(path: Path) -> list[dict]:
     text = path.read_text()
     start = text.index("= [", text.index("export const planning")) + 2
-    return json.loads(
-        text[start : text.index("export const routing")].rstrip().rstrip(";")
-    )
+    return json.loads(text[start : text.index("export const routing")].rstrip().rstrip(";"))
 
 
 def _header(path: Path) -> str:
@@ -346,10 +319,7 @@ def main() -> None:
     parser.add_argument("--homepage", type=Path, default=None)
     args = parser.parse_args()
 
-    compare = {
-        path.stem: json.loads(path.read_text())
-        for path in sorted((args.results / "compare").glob("*.json"))
-    }
+    compare = {path.stem: json.loads(path.read_text()) for path in sorted((args.results / "compare").glob("*.json"))}
     footer = (
         f"Measured {args.date} on {args.machine}, {args.seconds:g} s per solver and instance, seed 1. "
         f"The engine runs single-threaded; CP-SAT uses {args.workers} workers and its time includes model "
@@ -382,9 +352,7 @@ def main() -> None:
         ]
         meta = {
             "date": args.date,
-            "seconds": int(args.seconds)
-            if float(args.seconds).is_integer()
-            else args.seconds,
+            "seconds": int(args.seconds) if float(args.seconds).is_integer() else args.seconds,
             "ortools": args.ortools,
             "machine": {"en": args.machine, "ko": args.machine_ko},
         }

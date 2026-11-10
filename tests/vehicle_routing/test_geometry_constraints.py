@@ -12,9 +12,7 @@ EARTH_RADIUS = 6_371_000.0
 
 def _plan(points, *, depot=(0.0, 0.0), max_route_radius_meters=0.0):
     locations = [vrp.Location(*depot), *(vrp.Location(*point) for point in points)]
-    visits = [
-        vrp.Visit(str(i), str(i), i + 1, 1, 0, 100_000, 0) for i in range(len(points))
-    ]
+    visits = [vrp.Visit(str(i), str(i), i + 1, 1, 0, 100_000, 0) for i in range(len(points))]
     vehicle = vrp.Vehicle("V", 100, 0, max_route_radius_meters=max_route_radius_meters)
     vehicle.visit_indices = list(range(len(points)))
     plan = vrp.VehicleRoutePlan("geometry", locations, [vehicle], visits)
@@ -36,9 +34,7 @@ def test_two_points_and_collinear_middle_use_half_the_endpoint_distance():
     # around 0.00° and 0.02° therefore has radius R * radians(0.01°).
     expected = EARTH_RADIUS * math.radians(0.01)
     assert _cost(_plan([(0.0, 0.0), (0.0, 0.02)])) == pytest.approx(expected)
-    assert _cost(_plan([(0.0, 0.0), (0.0, 0.01), (0.0, 0.02)])) == pytest.approx(
-        expected
-    )
+    assert _cost(_plan([(0.0, 0.0), (0.0, 0.01), (0.0, 0.02)])) == pytest.approx(expected)
 
 
 def test_right_triangle_uses_half_its_hypotenuse():

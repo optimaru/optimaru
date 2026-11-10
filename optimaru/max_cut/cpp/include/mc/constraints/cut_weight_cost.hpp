@@ -6,8 +6,7 @@
 
 #include "mc/constraints/common.hpp"
 
-namespace mc
-{
+namespace mc {
 
 // Soft, weight 1, a REWARD: cutWeightCost — the objective. Raw cost =
 // -(total weight of the edges whose endpoints are on different sides), one
@@ -21,57 +20,42 @@ namespace mc
 // Keeps its own copy of the sides; a join or leave of vertex e walks e's CSR
 // adjacency, O(degree): an edge (e, w) is cut while both are assigned and on
 // different sides.
-struct CutWeightCost final : detail::MemberChangeConstraint
-{
+struct CutWeightCost final : detail::MemberChangeConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit CutWeightCost(double weight = kDefaultWeight)
-        : detail::MemberChangeConstraint("cutWeightCost", weight, kDefaultLevel)
-    {
+        : detail::MemberChangeConstraint("cutWeightCost", weight, kDefaultLevel) {
         reward = true;  // raw cost <= 0; level='hard' refused everywhere
         level_flippable = false;
     }
 
-    void reset(const MaxCutProblem &problem, const std::vector<std::vector<int>> &members_per_unit) override
-    {
+    void reset(const MaxCutProblem& problem,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(problem);
         side_.assign(problem.vertexIds.size(), kUnassigned);
-        for (int s = 0; s < static_cast<int>(members_per_unit.size()); ++s)
-        {
-            for (int v : members_per_unit[s])
-                side_[v] = s;
+        for (int s = 0; s < static_cast<int>(members_per_unit.size()); ++s) {
+            for (int v : members_per_unit[s]) side_[v] = s;
         }
         cut_ = 0;
-        for (const Edge &edge : problem.edges)
-        {
+        for (const Edge& edge : problem.edges) {
             const int a = side_[edge.source];
             const int b = side_[edge.target];
-            if (a >= 0 && b >= 0 && a != b)
-                cut_ += edge.weight;
+            if (a >= 0 && b >= 0 && a != b) cut_ += edge.weight;
         }
     }
 
-    void on_member_changed(const MaxCutProblem &problem,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int vertex,
-                         bool joined) override
-    {
+    void on_member_changed(const MaxCutProblem& problem, int unit,
+                           const std::vector<int>& /*members*/, int vertex, bool joined) override {
         std::int64_t across = 0;  // weight of e's edges to the other side
-        for (int k = problem.adjStart[vertex]; k < problem.adjStart[vertex + 1]; ++k)
-        {
+        for (int k = problem.adjStart[vertex]; k < problem.adjStart[vertex + 1]; ++k) {
             const int other = side_[problem.adjVertex[k]];
-            if (other >= 0 && other != unit)
-                across += problem.adjWeight[k];
+            if (other >= 0 && other != unit) across += problem.adjWeight[k];
         }
-        if (joined)
-        {
+        if (joined) {
             cut_ += across;
             side_[vertex] = unit;
-        }
-        else
-        {
+        } else {
             cut_ -= across;
             side_[vertex] = kUnassigned;
         }

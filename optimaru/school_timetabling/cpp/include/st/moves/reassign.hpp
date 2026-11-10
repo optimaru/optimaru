@@ -10,8 +10,7 @@
 
 #include "st/moves/unassign.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // Moved verbatim out of canonical_solver.cpp — one operator per file, the
 // domain-side counterpart of the engine's ruin_recreate/ layout.
@@ -35,86 +34,60 @@ namespace st::canon
 // consecutive run on one day — because blockAdjacencyCost prices a half-placed
 // block as a violation, so putting one member back alone would never survive.
 template <typename HotSource>
-class ReassignMove final : public optimaru::MoveOperator<Timetable>
-{
+class ReassignMove final : public optimaru::MoveOperator<Timetable> {
 public:
-    ReassignMove(std::shared_ptr<std::vector<std::vector<int>>> allowedSlots,
-                 int candidateCount)
-        : allowedSlots_(std::move(allowedSlots)),
-          candidateCount_(std::max(1, candidateCount))
-    {
-    }
+    ReassignMove(std::shared_ptr<std::vector<std::vector<int>>> allowedSlots, int candidateCount)
+        : allowedSlots_(std::move(allowedSlots)), candidateCount_(std::max(1, candidateCount)) {}
 
-    const char *name() const override { return "reassign"; }
+    const char* name() const override { return "reassign"; }
 
-    bool apply(optimaru::OperatorContext<Timetable> &ctx,
-               std::mt19937_64 &rng,
-               std::vector<int> &entities) override
-    {
-        Timetable &table = ctx.editor.solution();
+    bool apply(optimaru::OperatorContext<Timetable>& ctx, std::mt19937_64& rng,
+               std::vector<int>& entities) override {
+        Timetable& table = ctx.editor.solution();
         const int lesson = seedUnassigned(table, rng);
-        if (lesson < 0)
-            return false;
+        if (lesson < 0) return false;
 
         const int group = table.lessons[lesson].blockGroup;
         bool found = false;
         Score bestScore;
         std::vector<std::pair<int, int>> best;
         std::vector<std::pair<int, int>> candidate;
-        for (int attempt = 0;
-             attempt < candidateCount_ * 3 && !enough(found, attempt);
-             ++attempt)
-        {
-            if (!drawPlacement(table, group, lesson, rng, candidate))
-                continue;
+        for (int attempt = 0; attempt < candidateCount_ * 3 && !enough(found, attempt); ++attempt) {
+            if (!drawPlacement(table, group, lesson, rng, candidate)) continue;
             apply(ctx, candidate);
             const Score score = ctx.editor.score();
             revert(ctx, candidate);
-            if (!found || score > bestScore)
-            {
+            if (!found || score > bestScore) {
                 found = true;
                 bestScore = score;
                 best = candidate;
             }
         }
-        if (!found)
-            return false;
+        if (!found) return false;
 
         apply(ctx, best);
         last_ = best;
-        for (const auto &[member, _] : best)
-            entities.push_back(member);
+        for (const auto& [member, _] : best) entities.push_back(member);
         return true;
     }
 
-    void undo_last(optimaru::OperatorContext<Timetable> &ctx) override
-    {
-        revert(ctx, last_);
-    }
+    void undo_last(optimaru::OperatorContext<Timetable>& ctx) override { revert(ctx, last_); }
 
 private:
-    bool enough(bool found, int attempt) const
-    {
-        return found && attempt >= candidateCount_;
-    }
+    bool enough(bool found, int attempt) const { return found && attempt >= candidateCount_; }
 
     // An unassigned, movable lesson. The cursor walks the lesson vector so a
     // bounded probe finds one without scanning the whole timetable; when
     // almost everything is placed the probes simply come up empty and the
     // operator yields its turn (cheap).
-    int seedUnassigned(const Timetable &table, std::mt19937_64 &rng)
-    {
+    int seedUnassigned(const Timetable& table, std::mt19937_64& rng) {
         const int lessonCount = static_cast<int>(table.lessons.size());
-        if (lessonCount == 0)
-            return -1;
-        cursor_
-            = static_cast<int>(rng() % static_cast<std::uint64_t>(lessonCount));
+        if (lessonCount == 0) return -1;
+        cursor_ = static_cast<int>(rng() % static_cast<std::uint64_t>(lessonCount));
         const int probes = std::min(lessonCount, 64);
-        for (int i = 0; i < probes; ++i)
-        {
+        for (int i = 0; i < probes; ++i) {
             const int lesson = (cursor_ + i) % lessonCount;
-            if (table.lessons[lesson].slot < 0 && !table.lessons[lesson].pinned)
-                return lesson;
+            if (table.lessons[lesson].slot < 0 && !table.lessons[lesson].pinned) return lesson;
         }
         return -1;
     }
@@ -122,64 +95,46 @@ private:
     // One candidate placement: (lesson, slot) pairs. A loose lesson takes one
     // allowed slot; a block group takes a consecutive run on one day, which
     // is the only shape blockAdjacencyCost accepts.
-    bool drawPlacement(const Timetable &table,
-                       int group,
-                       int lesson,
-                       std::mt19937_64 &rng,
-                       std::vector<std::pair<int, int>> &out) const
-    {
+    bool drawPlacement(const Timetable& table, int group, int lesson, std::mt19937_64& rng,
+                       std::vector<std::pair<int, int>>& out) const {
         out.clear();
-        if (group < 0)
-        {
-            const std::vector<int> &slots = (*allowedSlots_)[lesson];
-            if (slots.empty())
-                return false;
+        if (group < 0) {
+            const std::vector<int>& slots = (*allowedSlots_)[lesson];
+            if (slots.empty()) return false;
             out.emplace_back(lesson, slots[rng() % slots.size()]);
             return true;
         }
 
-        const std::vector<int> &members = table.blockMembers[group];
+        const std::vector<int>& members = table.blockMembers[group];
         const int size = static_cast<int>(members.size());
-        if (size == 0 || table.maxPeriod < size)
-            return false;
-        for (int member : members)
-        {
+        if (size == 0 || table.maxPeriod < size) return false;
+        for (int member : members) {
             if (table.lessons[member].pinned || table.lessons[member].slot >= 0)
                 return false;  // the group is not fully out: leave it alone
         }
-        const int day = static_cast<int>(
-            rng() % static_cast<std::uint64_t>(std::max(1, table.dayCount)));
-        const int start
-            = 1
-              + static_cast<int>(rng()
-                                 % static_cast<std::uint64_t>(
-                                     std::max(1, table.maxPeriod - size + 1)));
-        for (int i = 0; i < size; ++i)
-        {
+        const int day =
+                static_cast<int>(rng() % static_cast<std::uint64_t>(std::max(1, table.dayCount)));
+        const int start = 1 + static_cast<int>(rng() % static_cast<std::uint64_t>(std::max(
+                                                               1, table.maxPeriod - size + 1)));
+        for (int i = 0; i < size; ++i) {
             const int slot = table.slotAt(day, start + i);
-            if (slot < 0
-                || !Timetable::slotAllowed(table.lessons[members[i]], slot))
-                return false;
+            if (slot < 0 || !Timetable::slotAllowed(table.lessons[members[i]], slot)) return false;
             out.emplace_back(members[i], slot);
         }
         return true;
     }
 
-    static void apply(optimaru::OperatorContext<Timetable> &ctx,
-                      const std::vector<std::pair<int, int>> &placement)
-    {
+    static void apply(optimaru::OperatorContext<Timetable>& ctx,
+                      const std::vector<std::pair<int, int>>& placement) {
         ctx.editor.begin_batch();
-        for (const auto &[member, slot] : placement)
-            ctx.editor.assign(member, slot);
+        for (const auto& [member, slot] : placement) ctx.editor.assign(member, slot);
         ctx.editor.end_batch();
     }
 
-    static void revert(optimaru::OperatorContext<Timetable> &ctx,
-                       const std::vector<std::pair<int, int>> &placement)
-    {
+    static void revert(optimaru::OperatorContext<Timetable>& ctx,
+                       const std::vector<std::pair<int, int>>& placement) {
         ctx.editor.begin_batch();
-        for (const auto &[member, _] : placement)
-            ctx.editor.assign(member, -1);
+        for (const auto& [member, _] : placement) ctx.editor.assign(member, -1);
         ctx.editor.end_batch();
     }
 

@@ -3,8 +3,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from optimaru import bin_packing
 from bench import quality
+from optimaru import bin_packing
 from optimaru.bin_packing.models import BinPackingProblemModel
 
 

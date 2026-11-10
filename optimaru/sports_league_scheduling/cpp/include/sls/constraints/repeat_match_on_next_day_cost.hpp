@@ -3,8 +3,7 @@
 
 #include "sls/constraints/common.hpp"
 
-namespace sls
-{
+namespace sls {
 
 // Hard, weight 1: repeatMatchOnNextDayCost — a match whose REVERSED fixture is
 // played on the very next round index. Raw cost (one global total) = the
@@ -25,106 +24,79 @@ namespace sls
 //     reverse is that pair.
 // Both are evaluated against the pre-state on a join and the post-state on a
 // leave, so the aggregate is exactly reversible.
-struct RepeatMatchOnNextDayCost final : SlsGlobalConstraint
-{
+struct RepeatMatchOnNextDayCost final : SlsGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit RepeatMatchOnNextDayCost(double weight = kDefaultWeight)
-        : SlsGlobalConstraint("repeatMatchOnNextDayCost", weight, kDefaultLevel)
-    {
-    }
+        : SlsGlobalConstraint("repeatMatchOnNextDayCost", weight, kDefaultLevel) {}
 
     bool supports_member_change() const override { return true; }
-    void on_unit_changed(const LeagueSchedule & /*schedule*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
-        throw std::logic_error(name
-                               + ": onUnitChanged is unreachable "
-                                 "(member-change fast path)");
+    void on_unit_changed(const LeagueSchedule& /*schedule*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
+        throw std::logic_error(name +
+                               ": onUnitChanged is unreachable "
+                               "(member-change fast path)");
     }
 
-    void reset(const LeagueSchedule &schedule,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+    void reset(const LeagueSchedule& schedule,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(schedule);
         indexCount_ = schedule.maxRoundIndex + 1;
-        const std::size_t cells
-            = static_cast<std::size_t>(schedule.pairCount) * indexCount_;
+        const std::size_t cells = static_cast<std::size_t>(schedule.pairCount) * indexCount_;
         pairAt_.assign(cells, 0);
         reverseAt_.assign(cells, 0);
         total_ = 0;
-        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
-        {
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit) {
             const int index = schedule.roundIndexOf(static_cast<int>(unit));
             for (int matchIndex : members_per_unit[unit])
                 apply(schedule, matchIndex, index, /*joined=*/true);
         }
     }
 
-    void on_member_changed(const LeagueSchedule &schedule,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int entity,
-                         bool joined) override
-    {
+    void on_member_changed(const LeagueSchedule& schedule, int unit,
+                           const std::vector<int>& /*members*/, int entity, bool joined) override {
         apply(schedule, entity, schedule.roundIndexOf(unit), joined);
     }
 
     double cost() const override { return static_cast<double>(total_); }
 
 private:
-    void apply(const LeagueSchedule &schedule,
-               int matchIndex,
-               int index,
-               bool joined)
-    {
-        const Match &match = schedule.matches[matchIndex];
+    void apply(const LeagueSchedule& schedule, int matchIndex, int index, bool joined) {
+        const Match& match = schedule.matches[matchIndex];
         const int pair = match.pairId;
         const int reverse = match.reversePairId;
-        if (joined)
-        {
+        if (joined) {
             total_ += ownIndicator(reverse, index);
             total_ += crossings(pair, index);
-            if (pair >= 0)
-                ++pairAt_[cell(pair, index)];
-            if (reverse >= 0)
-                ++reverseAt_[cell(reverse, index)];
+            if (pair >= 0) ++pairAt_[cell(pair, index)];
+            if (reverse >= 0) ++reverseAt_[cell(reverse, index)];
             return;
         }
-        if (pair >= 0)
-            --pairAt_[cell(pair, index)];
-        if (reverse >= 0)
-            --reverseAt_[cell(reverse, index)];
+        if (pair >= 0) --pairAt_[cell(pair, index)];
+        if (reverse >= 0) --reverseAt_[cell(reverse, index)];
         total_ -= ownIndicator(reverse, index);
         total_ -= crossings(pair, index);
     }
 
     // 1 when the reversed fixture is present on the next round index.
-    std::int64_t ownIndicator(int reversePair, int index) const
-    {
-        if (reversePair < 0 || index + 1 >= indexCount_)
-            return 0;
+    std::int64_t ownIndicator(int reversePair, int index) const {
+        if (reversePair < 0 || index + 1 >= indexCount_) return 0;
         return pairAt_[cell(reversePair, index + 1)] > 0 ? 1 : 0;
     }
 
     // How many matches on the PREVIOUS index flip their indicator because
     // this match's pair count on `index` crosses 0 <-> 1.
-    std::int64_t crossings(int pair, int index) const
-    {
-        if (pair < 0 || index - 1 < 0)
-            return 0;
+    std::int64_t crossings(int pair, int index) const {
+        if (pair < 0 || index - 1 < 0) return 0;
         // On a join the counter has not been incremented yet, on a leave it
         // has already been decremented, so "currently zero" is the crossing
         // condition in both directions.
-        if (pairAt_[cell(pair, index)] != 0)
-            return 0;
+        if (pairAt_[cell(pair, index)] != 0) return 0;
         return reverseAt_[cell(pair, index - 1)];
     }
 
-    std::size_t cell(int pair, int index) const
-    {
+    std::size_t cell(int pair, int index) const {
         return static_cast<std::size_t>(pair) * indexCount_ + index;
     }
 

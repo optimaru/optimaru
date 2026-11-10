@@ -7,8 +7,7 @@
 #include "ba/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace ba
-{
+namespace ba {
 
 // The bed-allocation implementation of the engine's
 // optimaru::Objective.
@@ -36,17 +35,15 @@ namespace ba
 // engine soft level by toEngineScore). The full-recompute reference is
 // ScoreCalculator::score (checked in the tests and under
 // ScoreChecks::ScoreChecks::Full).
-class BedAllocationIncrementalScoreCalculator final
-    : public optimaru::Objective<BedPlan>
-{
+class BedAllocationIncrementalScoreCalculator final : public optimaru::Objective<BedPlan> {
 public:
-    void rebuild(BedPlan &solution) override;
+    void rebuild(BedPlan& solution) override;
     void before_assign(int stayIndex) override;
     void after_assign(int stayIndex) override;
     optimaru::Score score() override;
 
 private:
-    BedPlan *plan_ = nullptr;
+    BedPlan* plan_ = nullptr;
     std::vector<int> assign_;  // assigned value per stay (-1 uninitialized)
 
     // Per-(stay, room) single-stay impact table, rebuilt by

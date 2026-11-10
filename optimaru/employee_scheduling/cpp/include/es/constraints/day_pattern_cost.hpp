@@ -10,8 +10,8 @@ struct DayPatternProjectionContext final : optimaru::SharedConstraintContext {
     static constexpr std::int16_t WILDCARD = -2;
     static constexpr std::int16_t NEVER = -3;
     static constexpr std::int16_t MULTIPLE = -4;
-    static constexpr std::int16_t WORK = -5;         // token: any worked day (not OFF)
-    static constexpr std::int16_t NOT_LOCATION = -6; // token "!x": worked day not at location x
+    static constexpr std::int16_t WORK = -5;          // token: any worked day (not OFF)
+    static constexpr std::int16_t NOT_LOCATION = -6;  // token "!x": worked day not at location x
 
     void prepare(const EmployeeSchedule& schedule) {
         if (preparedGeneration == generation) return;
@@ -74,8 +74,7 @@ struct DayPatternCost final : EsUnitConstraint {
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit DayPatternCost(double weight = kDefaultWeight, std::string pattern = {})
-        : EsUnitConstraint("dayPatternCost", weight, kDefaultLevel),
-          context_(&localContext_) {
+        : EsUnitConstraint("dayPatternCost", weight, kDefaultLevel), context_(&localContext_) {
         label = "Day pattern[" + pattern + "]";  // display only; never a lookup key
         std::size_t start = 0;
         while (start <= pattern.size()) {
@@ -116,14 +115,12 @@ struct DayPatternCost final : EsUnitConstraint {
                                                            : it->second;
             } else {
                 const auto it = context_->codeOf.find(tokens_[i]);
-                tokenCode_[i] = it == context_->codeOf.end()
-                                        ? DayPatternProjectionContext::NEVER
-                                        : it->second;
+                tokenCode_[i] = it == context_->codeOf.end() ? DayPatternProjectionContext::NEVER
+                                                             : it->second;
             }
         }
     }
-    double cost(const EmployeeSchedule&, int unit,
-                const std::vector<int>& members) const override {
+    double cost(const EmployeeSchedule&, int unit, const std::vector<int>& members) const override {
         const std::vector<std::int16_t>& dayLocation = context_->project(unit, members);
         const std::int32_t plen = static_cast<std::int32_t>(tokenCode_.size());
         double c = 0;

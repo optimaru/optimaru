@@ -37,14 +37,12 @@ namespace optimaru {
 template <typename Solution>
 class WeightedObjective final : public Objective<Solution> {
 public:
-    void add(std::unique_ptr<Objective<Solution>> component,
-             std::string name = "", std::int64_t hard_weight = 1,
-             double soft_weight = 1.0) {
+    void add(std::unique_ptr<Objective<Solution>> component, std::string name = "",
+             std::int64_t hard_weight = 1, double soft_weight = 1.0) {
         if (name.empty()) {
             name = "constraint " + std::to_string(components_.size());
         }
-        components_.push_back(
-                {std::move(component), std::move(name), hard_weight, soft_weight});
+        components_.push_back({std::move(component), std::move(name), hard_weight, soft_weight});
     }
 
     void rebuild(Solution& solution) override {

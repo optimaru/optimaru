@@ -25,9 +25,7 @@ CPSAT_CAVEAT = (
 TEAM_NAMES = ["Maarten", "Geoffrey", "Lukas", "Chris", "Fred", "Radek", "Maciej"]
 
 
-def _build(
-    day_count: int, per_day: int, penalty_count: int, team_names: list[str]
-) -> Any:
+def _build(day_count: int, per_day: int, penalty_count: int, team_names: list[str]) -> Any:
     """A tournament with `penalty_count` distinct (team, day) unavailabilities
     drawn from a seeded ``random.Random`` (the same instance on every run)."""
     import optimaru.tournament_scheduling as ts
@@ -103,6 +101,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.tournament_scheduling import solve
+
     from optimaru.tournament_scheduling.models import TournamentScheduleModel
 
     solved = solve(

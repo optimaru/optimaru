@@ -5,8 +5,7 @@
 
 #include "op/domain.hpp"
 
-namespace op
-{
+namespace op {
 
 // Per-constraint penalty totals of one full recompute (all counted positive;
 // toScore() applies the signs), one per constraint.
@@ -18,8 +17,7 @@ namespace op
 // (order, trolley) pair count for orderSplitByTrolleyCost. Used by the tests
 // to assert each constraint against hand-computed cases, and by
 // the demo output; Python reads the raw costs from constraint_costs() instead.
-struct ConstraintTotals
-{
+struct ConstraintTotals {
     // Hard: sum over trolleys of max(0, requiredBuckets - bucketCount) where
     // requiredBuckets = sum over orders on the trolley of
     // ceil(orderVolumeOnTrolley / bucketCapacity) — buckets are not shared
@@ -37,12 +35,11 @@ struct ConstraintTotals
     // (1000 = OrderSplitByTrolleyCost::kDefaultWeight).
     std::int64_t orderSplitByTrolleyCost = 0;
 
-    Score toScore() const
-    {
+    Score toScore() const {
         return {-trolleyCapacityCost,
-                static_cast<double>(-(distanceFromPreviousPickTaskCost
-                                      + distanceFromLastPickTaskToPathOriginCost
-                                      + orderSplitByTrolleyCost))};
+                static_cast<double>(-(distanceFromPreviousPickTaskCost +
+                                      distanceFromLastPickTaskToPathOriginCost +
+                                      orderSplitByTrolleyCost))};
     }
 };
 
@@ -59,28 +56,26 @@ struct ConstraintTotals
 //
 // Unassigned pick tasks (present in no trolley's list) contribute nothing:
 // the construction heuristic scores partially initialized solutions.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // Recomputes every pick task's derived fields (trolleyIndex,
     // previousPickTask, nextPickTask) from the current trolley pick lists.
     // Tasks in no list get -1 for all three.
-    static void updateShadowVariables(OrderPickingSolution &solution);
+    static void updateShadowVariables(OrderPickingSolution& solution);
 
     // Refreshes the derived fields, then computes the per-constraint
     // totals (at the default weights) by reading them.
-    static ConstraintTotals calculateTotals(OrderPickingSolution &solution);
+    static ConstraintTotals calculateTotals(OrderPickingSolution& solution);
 
     // calculateTotals folded into the Score, stored in solution.score
     // and returned.
-    static Score score(OrderPickingSolution &solution);
+    static Score score(OrderPickingSolution& solution);
 
     // Buckets needed for one order's volume on one trolley:
     // ceil(orderVolume / bucketVolume) — buckets are not shared across
     // orders.
     static std::int64_t calculateOrderRequiredBuckets(std::int64_t orderVolume,
-                                                      std::int64_t bucketVolume)
-    {
+                                                      std::int64_t bucketVolume) {
         return (orderVolume + (bucketVolume - 1)) / bucketVolume;
     }
 };

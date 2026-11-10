@@ -25,20 +25,16 @@
 
 using namespace op;
 
-namespace
-{
+namespace {
 
 int failures = 0;
 
-void check(bool ok, const std::string &label)
-{
+void check(bool ok, const std::string& label) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-WarehouseLocation loc(char column, int shelvingRow1Based, Side side, int row)
-{
+WarehouseLocation loc(char column, int shelvingRow1Based, Side side, int row) {
     WarehouseLocation location;
     location.column = column - 'A';
     location.shelvingRow = shelvingRow1Based - 1;
@@ -50,11 +46,9 @@ WarehouseLocation loc(char column, int shelvingRow1Based, Side side, int row)
 // -------------------------------------------------------------------------
 // (a) Warehouse distances: hand-computed cases.
 // -------------------------------------------------------------------------
-void verifyWarehouseDistances()
-{
+void verifyWarehouseDistances() {
     std::printf("== (a) Warehouse calculateDistance ==\n");
-    struct Case
-    {
+    struct Case {
         WarehouseLocation start;
         WarehouseLocation end;
         int expected;
@@ -62,71 +56,63 @@ void verifyWarehouseDistances()
     const Side L = Side::LEFT;
     const Side R = Side::RIGHT;
     const std::vector<Case> cases = {
-        // same shelving
-        {loc('B', 3, L, 1), loc('B', 3, L, 1), 0},
-        {loc('B', 3, L, 1), loc('B', 3, R, 1), 4},
-        {loc('B', 3, L, 5), loc('B', 3, L, 5), 0},
-        {loc('B', 3, L, 1), loc('B', 3, L, 10), 9},
-        {loc('B', 3, L, 1), loc('B', 3, L, 5), 4},
-        {loc('B', 3, R, 10), loc('B', 3, R, 10), 0},
-        {loc('B', 3, R, 2), loc('B', 3, R, 2), 0},
-        {loc('B', 3, R, 2), loc('B', 3, R, 8), 6},
-        {loc('B', 3, R, 10), loc('B', 3, R, 1), 9},
-        {loc('B', 3, R, 9), loc('B', 3, R, 1), 8},
-        {loc('B', 3, L, 2), loc('B', 3, R, 4), 8},
-        {loc('B', 3, L, 8), loc('B', 3, R, 7), 7},
-        // neighbor shelvings on the same warehouse row
-        {loc('C', 2, L, 1), loc('D', 2, R, 3), 11},
-        {loc('C', 2, L, 1), loc('D', 2, L, 3), 9},
-        {loc('C', 2, R, 1), loc('D', 2, L, 3), 5},
-        {loc('C', 2, R, 1), loc('D', 2, R, 3), 9},
-        {loc('C', 2, L, 8), loc('D', 2, R, 9), 10},
-        {loc('C', 2, L, 8), loc('D', 2, L, 9), 8},
-        {loc('C', 2, R, 8), loc('D', 2, L, 9), 4},
-        {loc('C', 2, R, 8), loc('D', 2, R, 9), 8},
-        // non-neighbor shelvings on the same warehouse row
-        {loc('C', 3, L, 1), loc('E', 3, R, 3), 16},
-        {loc('C', 3, L, 1), loc('E', 3, L, 3), 14},
-        {loc('C', 3, R, 1), loc('E', 3, L, 3), 12},
-        {loc('C', 3, R, 1), loc('E', 3, R, 3), 14},
-        {loc('C', 3, L, 9), loc('E', 3, R, 8), 15},
-        {loc('C', 3, L, 9), loc('E', 3, L, 8), 13},
-        {loc('C', 3, R, 9), loc('E', 3, L, 8), 11},
-        {loc('C', 3, R, 9), loc('E', 3, R, 8), 13},
-        // shelvings on different warehouse rows
-        {loc('C', 1, L, 1), loc('E', 3, R, 3), 40},
-        {loc('C', 1, L, 1), loc('E', 3, L, 3), 38},
-        {loc('C', 1, R, 1), loc('E', 3, L, 3), 36},
-        {loc('C', 1, R, 1), loc('E', 3, R, 3), 38},
-        {loc('B', 2, L, 9), loc('B', 3, R, 8), 14},
-        {loc('B', 2, L, 9), loc('B', 3, L, 8), 12},
-        {loc('B', 2, R, 9), loc('B', 3, L, 8), 14},
-        {loc('B', 2, R, 12), loc('B', 3, R, 11), 12},
+            // same shelving
+            {loc('B', 3, L, 1), loc('B', 3, L, 1), 0},
+            {loc('B', 3, L, 1), loc('B', 3, R, 1), 4},
+            {loc('B', 3, L, 5), loc('B', 3, L, 5), 0},
+            {loc('B', 3, L, 1), loc('B', 3, L, 10), 9},
+            {loc('B', 3, L, 1), loc('B', 3, L, 5), 4},
+            {loc('B', 3, R, 10), loc('B', 3, R, 10), 0},
+            {loc('B', 3, R, 2), loc('B', 3, R, 2), 0},
+            {loc('B', 3, R, 2), loc('B', 3, R, 8), 6},
+            {loc('B', 3, R, 10), loc('B', 3, R, 1), 9},
+            {loc('B', 3, R, 9), loc('B', 3, R, 1), 8},
+            {loc('B', 3, L, 2), loc('B', 3, R, 4), 8},
+            {loc('B', 3, L, 8), loc('B', 3, R, 7), 7},
+            // neighbor shelvings on the same warehouse row
+            {loc('C', 2, L, 1), loc('D', 2, R, 3), 11},
+            {loc('C', 2, L, 1), loc('D', 2, L, 3), 9},
+            {loc('C', 2, R, 1), loc('D', 2, L, 3), 5},
+            {loc('C', 2, R, 1), loc('D', 2, R, 3), 9},
+            {loc('C', 2, L, 8), loc('D', 2, R, 9), 10},
+            {loc('C', 2, L, 8), loc('D', 2, L, 9), 8},
+            {loc('C', 2, R, 8), loc('D', 2, L, 9), 4},
+            {loc('C', 2, R, 8), loc('D', 2, R, 9), 8},
+            // non-neighbor shelvings on the same warehouse row
+            {loc('C', 3, L, 1), loc('E', 3, R, 3), 16},
+            {loc('C', 3, L, 1), loc('E', 3, L, 3), 14},
+            {loc('C', 3, R, 1), loc('E', 3, L, 3), 12},
+            {loc('C', 3, R, 1), loc('E', 3, R, 3), 14},
+            {loc('C', 3, L, 9), loc('E', 3, R, 8), 15},
+            {loc('C', 3, L, 9), loc('E', 3, L, 8), 13},
+            {loc('C', 3, R, 9), loc('E', 3, L, 8), 11},
+            {loc('C', 3, R, 9), loc('E', 3, R, 8), 13},
+            // shelvings on different warehouse rows
+            {loc('C', 1, L, 1), loc('E', 3, R, 3), 40},
+            {loc('C', 1, L, 1), loc('E', 3, L, 3), 38},
+            {loc('C', 1, R, 1), loc('E', 3, L, 3), 36},
+            {loc('C', 1, R, 1), loc('E', 3, R, 3), 38},
+            {loc('B', 2, L, 9), loc('B', 3, R, 8), 14},
+            {loc('B', 2, L, 9), loc('B', 3, L, 8), 12},
+            {loc('B', 2, R, 9), loc('B', 3, L, 8), 14},
+            {loc('B', 2, R, 12), loc('B', 3, R, 11), 12},
     };
     bool allOk = true;
-    for (const Case &c : cases)
-    {
+    for (const Case& c : cases) {
         const int forward = calculateDistance(c.start, c.end);
         const int backward = calculateDistance(c.end, c.start);
-        if (forward != c.expected || backward != c.expected)
-        {
+        if (forward != c.expected || backward != c.expected) {
             allOk = false;
-            std::printf("    distance %s(%d,%d) <-> %s(%d,%d): got %d/%d, "
-                        "expected %d\n",
-                        c.start.shelvingId().c_str(),
-                        static_cast<int>(c.start.side),
-                        c.start.row,
-                        c.end.shelvingId().c_str(),
-                        static_cast<int>(c.end.side),
-                        c.end.row,
-                        forward,
-                        backward,
-                        c.expected);
+            std::printf(
+                    "    distance %s(%d,%d) <-> %s(%d,%d): got %d/%d, "
+                    "expected %d\n",
+                    c.start.shelvingId().c_str(), static_cast<int>(c.start.side), c.start.row,
+                    c.end.shelvingId().c_str(), static_cast<int>(c.end.side), c.end.row, forward,
+                    backward, c.expected);
         }
     }
     check(allOk,
-          "all " + std::to_string(cases.size())
-              + " warehouse distances match (both directions)");
+          "all " + std::to_string(cases.size()) + " warehouse distances match (both directions)");
 }
 
 // -------------------------------------------------------------------------
@@ -135,11 +121,8 @@ void verifyWarehouseDistances()
 
 // Appends a pick task of `order` with `volume` at `location`; returns its
 // index.
-int addPick(OrderPickingSolution &s,
-            int orderIndex,
-            int volume,
-            const WarehouseLocation &location)
-{
+int addPick(OrderPickingSolution& s, int orderIndex, int volume,
+            const WarehouseLocation& location) {
     PickTask task;
     task.id = "p" + std::to_string(s.pickTasks.size());
     task.orderIndex = orderIndex;
@@ -149,11 +132,8 @@ int addPick(OrderPickingSolution &s,
     return static_cast<int>(s.pickTasks.size()) - 1;
 }
 
-int addTrolley(OrderPickingSolution &s,
-               int bucketCount,
-               int bucketCapacity,
-               const WarehouseLocation &location)
-{
+int addTrolley(OrderPickingSolution& s, int bucketCount, int bucketCapacity,
+               const WarehouseLocation& location) {
     Trolley trolley;
     trolley.id = "t" + std::to_string(s.trolleys.size());
     trolley.bucketCount = bucketCount;
@@ -163,8 +143,7 @@ int addTrolley(OrderPickingSolution &s,
     return static_cast<int>(s.trolleys.size()) - 1;
 }
 
-void verifyConstraints()
-{
+void verifyConstraints() {
     std::printf("== (b) Verifying each constraint in isolation ==\n");
     const WarehouseLocation origin = loc('A', 1, Side::LEFT, 0);
 
@@ -178,23 +157,18 @@ void verifyConstraints()
         const int t1 = addTrolley(s, 2, 5, origin);
         const int t2 = addTrolley(s, 2, 10, origin);
         for (int volume : {4, 5})
-            s.trolleys[t1].pickTaskIndices.push_back(
-                addPick(s, 0, volume, origin));
+            s.trolleys[t1].pickTaskIndices.push_back(addPick(s, 0, volume, origin));
         for (int volume : {4, 1})
-            s.trolleys[t1].pickTaskIndices.push_back(
-                addPick(s, 1, volume, origin));
+            s.trolleys[t1].pickTaskIndices.push_back(addPick(s, 1, volume, origin));
         for (int volume : {9, 8})
-            s.trolleys[t2].pickTaskIndices.push_back(
-                addPick(s, 0, volume, origin));
+            s.trolleys[t2].pickTaskIndices.push_back(addPick(s, 0, volume, origin));
         for (int volume : {8, 6, 10, 9})
-            s.trolleys[t2].pickTaskIndices.push_back(
-                addPick(s, 1, volume, origin));
+            s.trolleys[t2].pickTaskIndices.push_back(addPick(s, 1, volume, origin));
         const ConstraintTotals totals = ScoreCalculator::calculateTotals(s);
-        check(totals.trolleyCapacityCost == 5,
-              "trolleyCapacityCost penalizes by 5 (got "
-                  + std::to_string(totals.trolleyCapacityCost) + ")");
-        check(totals.toScore().hard == -5,
-              "bucket shortage lands on the hard level");
+        check(totals.trolleyCapacityCost == 5, "trolleyCapacityCost penalizes by 5 (got " +
+                                                       std::to_string(totals.trolleyCapacityCost) +
+                                                       ")");
+        check(totals.toScore().hard == -5, "bucket shortage lands on the hard level");
     }
 
     // distanceFromPreviousPickTaskCost: previous at (E,1) RIGHT 3,
@@ -210,9 +184,8 @@ void verifyConstraints()
         s.trolleys[t].pickTaskIndices.push_back(addPick(s, 0, 1, current));
         const ConstraintTotals totals = ScoreCalculator::calculateTotals(s);
         check(totals.distanceFromPreviousPickTaskCost == 34,
-              "distanceFromPreviousPickTaskCost penalizes by 34 (got "
-                  + std::to_string(totals.distanceFromPreviousPickTaskCost)
-                  + ")");
+              "distanceFromPreviousPickTaskCost penalizes by 34 (got " +
+                      std::to_string(totals.distanceFromPreviousPickTaskCost) + ")");
     }
 
     // distanceFromLastPickTaskToPathOriginCost: last pick at (D,2) LEFT
@@ -223,15 +196,12 @@ void verifyConstraints()
         s.orders = {{"order1"}};
         const WarehouseLocation last = loc('D', 2, Side::LEFT, 0);
         const int t = addTrolley(s, 1, 100, origin);
-        for (int i = 0; i < 3; ++i)
-            s.trolleys[t].pickTaskIndices.push_back(addPick(s, 0, 1, last));
+        for (int i = 0; i < 3; ++i) s.trolleys[t].pickTaskIndices.push_back(addPick(s, 0, 1, last));
         const ConstraintTotals totals = ScoreCalculator::calculateTotals(s);
         check(totals.distanceFromLastPickTaskToPathOriginCost == 28,
               "distanceFromLastPickTaskToPathOriginCost penalizes by 28 "
-              "(got "
-                  + std::to_string(
-                      totals.distanceFromLastPickTaskToPathOriginCost)
-                  + ")");
+              "(got " +
+                      std::to_string(totals.distanceFromLastPickTaskToPathOriginCost) + ")");
         // Sanity on the whole route: origin->last 28, two zero-length legs,
         // return 28.
         check(totals.distanceFromPreviousPickTaskCost == 28,
@@ -256,8 +226,8 @@ void verifyConstraints()
             s.trolleys[t4].pickTaskIndices.push_back(addPick(s, 1, 1, origin));
         const ConstraintTotals totals = ScoreCalculator::calculateTotals(s);
         check(totals.orderSplitByTrolleyCost == 4000,
-              "orderSplitByTrolleyCost penalizes by 4 * 1000 (got "
-                  + std::to_string(totals.orderSplitByTrolleyCost) + ")");
+              "orderSplitByTrolleyCost penalizes by 4 * 1000 (got " +
+                      std::to_string(totals.orderSplitByTrolleyCost) + ")");
     }
 
     // Unassigned pick tasks contribute nothing.
@@ -267,16 +237,14 @@ void verifyConstraints()
         addTrolley(s, 1, 1, origin);
         addPick(s, 0, 1000, loc('E', 3, Side::RIGHT, 9));  // in no list
         const Score score = ScoreCalculator::score(s);
-        check(score.hard == 0 && score.soft == 0.0,
-              "unassigned pick task contributes nothing");
+        check(score.hard == 0 && score.soft == 0.0, "unassigned pick task contributes nothing");
     }
 }
 
 // -------------------------------------------------------------------------
 // (c) Derived fields re-derived from the lists.
 // -------------------------------------------------------------------------
-void verifyShadowVariables()
-{
+void verifyShadowVariables() {
     std::printf("== (c) Derived fields (trolley / previous / next) ==\n");
     const WarehouseLocation origin = loc('A', 1, Side::LEFT, 0);
     OrderPickingSolution s;
@@ -289,29 +257,25 @@ void verifyShadowVariables()
     const int d = addPick(s, 0, 1, origin);  // stays unassigned
     s.trolleys[t1].pickTaskIndices = {a, b, c};
     ScoreCalculator::updateShadowVariables(s);
-    check(s.pickTasks[a].trolleyIndex == t1 && s.pickTasks[b].trolleyIndex == t1
-              && s.pickTasks[c].trolleyIndex == t1,
+    check(s.pickTasks[a].trolleyIndex == t1 && s.pickTasks[b].trolleyIndex == t1 &&
+                  s.pickTasks[c].trolleyIndex == t1,
           "trolley index set for assigned picks");
-    check(s.pickTasks[a].previousPickTask == -1
-              && s.pickTasks[b].previousPickTask == a
-              && s.pickTasks[c].previousPickTask == b,
+    check(s.pickTasks[a].previousPickTask == -1 && s.pickTasks[b].previousPickTask == a &&
+                  s.pickTasks[c].previousPickTask == b,
           "previous pick follows the list order");
-    check(s.pickTasks[a].nextPickTask == b && s.pickTasks[b].nextPickTask == c
-              && s.pickTasks[c].nextPickTask == -1,
+    check(s.pickTasks[a].nextPickTask == b && s.pickTasks[b].nextPickTask == c &&
+                  s.pickTasks[c].nextPickTask == -1,
           "next pick follows the list order (last has none)");
-    check(s.pickTasks[c].isLast() && !s.pickTasks[b].isLast(),
-          "isLast() == (nextPickTask == -1)");
-    check(s.pickTasks[d].trolleyIndex == -1
-              && s.pickTasks[d].previousPickTask == -1
-              && s.pickTasks[d].nextPickTask == -1,
+    check(s.pickTasks[c].isLast() && !s.pickTasks[b].isLast(), "isLast() == (nextPickTask == -1)");
+    check(s.pickTasks[d].trolleyIndex == -1 && s.pickTasks[d].previousPickTask == -1 &&
+                  s.pickTasks[d].nextPickTask == -1,
           "unassigned pick keeps -1 in every derived field");
     // Moving the chain to the other trolley re-derives everything.
     s.trolleys[t1].pickTaskIndices.clear();
     s.trolleys[t2].pickTaskIndices = {c, a};
     ScoreCalculator::updateShadowVariables(s);
-    check(s.pickTasks[c].trolleyIndex == t2 && s.pickTasks[a].trolleyIndex == t2
-              && s.pickTasks[a].previousPickTask == c
-              && s.pickTasks[b].trolleyIndex == -1,
+    check(s.pickTasks[c].trolleyIndex == t2 && s.pickTasks[a].trolleyIndex == t2 &&
+                  s.pickTasks[a].previousPickTask == c && s.pickTasks[b].trolleyIndex == -1,
           "derived fields re-derived after the lists changed");
 }
 
@@ -319,8 +283,7 @@ void verifyShadowVariables()
 // (d) Incremental score == full recompute across a random walk of list
 // mutations, driven through the Editor protocol.
 // -------------------------------------------------------------------------
-void verifyIncrementalAgainstFull()
-{
+void verifyIncrementalAgainstFull() {
     std::printf("== (d) Incremental == full recompute (random walk) ==\n");
     OrderPickingSolution s = buildDemoData();
     const int taskCount = static_cast<int>(s.pickTasks.size());
@@ -330,93 +293,72 @@ void verifyIncrementalAgainstFull()
     optimaru::Editor<OrderPickingSolution> editor(s, calculator);
 
     std::mt19937_64 rng(42);
-    auto randomInt = [&rng](int bound)
-    { return static_cast<int>(rng() % static_cast<std::uint64_t>(bound)); };
+    auto randomInt = [&rng](int bound) {
+        return static_cast<int>(rng() % static_cast<std::uint64_t>(bound));
+    };
 
     // position[e] = (trolley, position) or (-1, -1) when unassigned.
-    auto findElement = [&s](int element) -> std::pair<int, int>
-    {
-        for (int t = 0; t < static_cast<int>(s.trolleys.size()); ++t)
-        {
-            const auto &list = s.trolleys[t].pickTaskIndices;
+    auto findElement = [&s](int element) -> std::pair<int, int> {
+        for (int t = 0; t < static_cast<int>(s.trolleys.size()); ++t) {
+            const auto& list = s.trolleys[t].pickTaskIndices;
             for (int p = 0; p < static_cast<int>(list.size()); ++p)
-                if (list[p] == element)
-                    return {t, p};
+                if (list[p] == element) return {t, p};
         }
         return {-1, -1};
     };
 
     int mismatches = 0;
     const int iterations = 1500;
-    for (int i = 0; i < iterations; ++i)
-    {
+    for (int i = 0; i < iterations; ++i) {
         const int op = randomInt(100);
-        if (op < 70)
-        {
+        if (op < 70) {
             // Relocate (or first-assign) a random element.
             const int element = randomInt(taskCount);
             const auto [t, p] = findElement(element);
-            if (t != -1)
-                editor.remove(t, p);
+            if (t != -1) editor.remove(t, p);
             const int target = randomInt(trolleyCount);
-            const int position = randomInt(
-                static_cast<int>(s.trolleys[target].pickTaskIndices.size())
-                + 1);
+            const int position =
+                    randomInt(static_cast<int>(s.trolleys[target].pickTaskIndices.size()) + 1);
             editor.insert(target, position, element);
-        }
-        else if (op < 85)
-        {
+        } else if (op < 85) {
             // Reverse a random segment.
             const int t = randomInt(trolleyCount);
-            const int size
-                = static_cast<int>(s.trolleys[t].pickTaskIndices.size());
-            if (size < 2)
-                continue;
+            const int size = static_cast<int>(s.trolleys[t].pickTaskIndices.size());
+            if (size < 2) continue;
             int first = randomInt(size);
             int last = randomInt(size);
-            if (first > last)
-                std::swap(first, last);
-            if (first == last)
-                continue;
+            if (first > last) std::swap(first, last);
+            if (first == last) continue;
             editor.reverse(t, first, last);
-        }
-        else
-        {
+        } else {
             // Unassign a random assigned element (partial solutions must
             // score correctly too — the construction heuristic relies on it).
             const int element = randomInt(taskCount);
             const auto [t, p] = findElement(element);
-            if (t == -1)
-                continue;
+            if (t == -1) continue;
             editor.remove(t, p);
         }
 
         const Score incremental = editor.score();
         OrderPickingSolution copy = s;
         const Score full = ScoreCalculator::score(copy);
-        if (incremental.hard != full.hard
-            || std::fabs(incremental.soft - full.soft) > 1e-9)
-        {
-            if (++mismatches <= 3)
-            {
-                std::printf("    mismatch after op %d: incremental=%s "
-                            "full=%s\n",
-                            i,
-                            incremental.str().c_str(),
-                            full.str().c_str());
+        if (incremental.hard != full.hard || std::fabs(incremental.soft - full.soft) > 1e-9) {
+            if (++mismatches <= 3) {
+                std::printf(
+                        "    mismatch after op %d: incremental=%s "
+                        "full=%s\n",
+                        i, incremental.str().c_str(), full.str().c_str());
             }
         }
     }
     check(mismatches == 0,
-          std::to_string(iterations)
-              + " random list mutations: incremental == full recompute");
+          std::to_string(iterations) + " random list mutations: incremental == full recompute");
 }
 
 // -------------------------------------------------------------------------
 // (e) Demo-data reproduction invariants.
 // -------------------------------------------------------------------------
-void verifyDemoData()
-{
+void verifyDemoData() {
     std::printf("== (e) Demo data ==\n");
     OrderPickingSolution s = buildDemoData();
     check(s.trolleys.size() == 5, "5 trolleys");
@@ -424,53 +366,38 @@ void verifyDemoData()
     check(demoMaxProductSize() == 50 * 20 * 20,
           "max product volume is the toilet tissue (20000 cm3)");
     bool valid = !s.pickTasks.empty();
-    for (const PickTask &task : s.pickTasks)
-    {
-        valid = valid && task.volume > 0 && task.volume <= demoMaxProductSize()
-                && task.orderIndex >= 0
-                && task.orderIndex < static_cast<int>(s.orders.size())
-                && task.location.column >= 0
-                && task.location.column < Warehouse::COLUMN_COUNT
-                && task.location.shelvingRow >= 0
-                && task.location.shelvingRow < Warehouse::ROW_COUNT
-                && task.location.row >= 1
-                && task.location.row <= Warehouse::SHELVING_ROWS_SIZE;
+    for (const PickTask& task : s.pickTasks) {
+        valid = valid && task.volume > 0 && task.volume <= demoMaxProductSize() &&
+                task.orderIndex >= 0 && task.orderIndex < static_cast<int>(s.orders.size()) &&
+                task.location.column >= 0 && task.location.column < Warehouse::COLUMN_COUNT &&
+                task.location.shelvingRow >= 0 &&
+                task.location.shelvingRow < Warehouse::ROW_COUNT && task.location.row >= 1 &&
+                task.location.row <= Warehouse::SHELVING_ROWS_SIZE;
     }
-    check(valid,
-          "every pick task has a demo product volume and a valid location ("
-              + std::to_string(s.pickTasks.size()) + " picks)");
-    for (const Trolley &trolley : s.trolleys)
-    {
-        valid = valid && trolley.bucketCount == 4
-                && trolley.bucketCapacity == 60 * 40 * 20
-                && trolley.location.shelvingId() == "(A,1)"
-                && trolley.location.side == Side::LEFT
-                && trolley.location.row == 0;
+    check(valid, "every pick task has a demo product volume and a valid location (" +
+                         std::to_string(s.pickTasks.size()) + " picks)");
+    for (const Trolley& trolley : s.trolleys) {
+        valid = valid && trolley.bucketCount == 4 && trolley.bucketCapacity == 60 * 40 * 20 &&
+                trolley.location.shelvingId() == "(A,1)" && trolley.location.side == Side::LEFT &&
+                trolley.location.row == 0;
     }
     check(valid, "trolleys: 4 buckets x 48000 cm3, parked at (A,1) LEFT 0");
 
     OrderPickingSolution again = buildDemoData();
     bool same = again.pickTasks.size() == s.pickTasks.size();
-    for (std::size_t i = 0; same && i < s.pickTasks.size(); ++i)
-    {
-        same
-            = again.pickTasks[i].id == s.pickTasks[i].id
-              && again.pickTasks[i].volume == s.pickTasks[i].volume
-              && again.pickTasks[i].location.shelvingId()
-                     == s.pickTasks[i].location.shelvingId()
-              && again.pickTasks[i].location.side
-                     == s.pickTasks[i].location.side
-              && again.pickTasks[i].location.row == s.pickTasks[i].location.row;
+    for (std::size_t i = 0; same && i < s.pickTasks.size(); ++i) {
+        same = again.pickTasks[i].id == s.pickTasks[i].id &&
+               again.pickTasks[i].volume == s.pickTasks[i].volume &&
+               again.pickTasks[i].location.shelvingId() == s.pickTasks[i].location.shelvingId() &&
+               again.pickTasks[i].location.side == s.pickTasks[i].location.side &&
+               again.pickTasks[i].location.row == s.pickTasks[i].location.row;
     }
     check(same, "generation is deterministic (seed 37)");
 
     bool throws = false;
-    try
-    {
+    try {
         buildDemoData(5, 4, /*bucketCapacity too small*/ 100, 8, 37);
-    }
-    catch (const std::invalid_argument &)
-    {
+    } catch (const std::invalid_argument&) {
         throws = true;
     }
     check(throws, "bucketCapacity below the max product size is rejected");
@@ -479,8 +406,7 @@ void verifyDemoData()
 // -------------------------------------------------------------------------
 // (f) Solving: ScoreChecks::Full consistency + feasibility on the demo instance.
 // -------------------------------------------------------------------------
-void verifySolve()
-{
+void verifySolve() {
     std::printf("== (f) Solve: FULL_ASSERT + feasibility ==\n");
 
     // ScoreChecks::Full: every move's incremental score re-verified against a full
@@ -496,12 +422,9 @@ void verifySolve()
         config.ruinRecreatePolishSteps = 50;
         config.seed = 1;
         bool threw = false;
-        try
-        {
+        try {
             Solver(config).solve(s);
-        }
-        catch (const optimaru::ScoreMismatchError &)
-        {
+        } catch (const optimaru::ScoreMismatchError&) {
             threw = true;
         }
         check(!threw, "2s solve under FULL_ASSERT (incremental never drifts)");
@@ -518,37 +441,28 @@ void verifySolve()
         Solver(config).solve(s);
 
         std::vector<int> seen(s.pickTasks.size(), 0);
-        for (const Trolley &trolley : s.trolleys)
-            for (int pickIndex : trolley.pickTaskIndices)
-                ++seen[pickIndex];
+        for (const Trolley& trolley : s.trolleys)
+            for (int pickIndex : trolley.pickTaskIndices) ++seen[pickIndex];
         bool conserved = true;
-        for (int count : seen)
-            conserved = conserved && count == 1;
+        for (int count : seen) conserved = conserved && count == 1;
         check(conserved, "every pick task assigned exactly once");
-        check(s.score.feasible(),
-              "feasible (hard 0) reached, score " + s.score.str());
+        check(s.score.feasible(), "feasible (hard 0) reached, score " + s.score.str());
 
         OrderPickingSolution copy = s;
         const Score recomputed = ScoreCalculator::score(copy);
-        check(s.score.hard == recomputed.hard
-                  && std::fabs(s.score.soft - recomputed.soft) < 1e-9,
+        check(s.score.hard == recomputed.hard && std::fabs(s.score.soft - recomputed.soft) < 1e-9,
               "returned score matches a from-scratch recompute");
 
         // The final derived fields describe the final routes.
         bool shadowsOk = true;
-        for (int t = 0; t < static_cast<int>(s.trolleys.size()); ++t)
-        {
-            const auto &list = s.trolleys[t].pickTaskIndices;
-            for (int p = 0; p < static_cast<int>(list.size()); ++p)
-            {
-                const PickTask &task = s.pickTasks[list[p]];
-                shadowsOk
-                    = shadowsOk && task.trolleyIndex == t
-                      && task.previousPickTask == (p > 0 ? list[p - 1] : -1)
-                      && task.nextPickTask
-                             == (p + 1 < static_cast<int>(list.size())
-                                     ? list[p + 1]
-                                     : -1);
+        for (int t = 0; t < static_cast<int>(s.trolleys.size()); ++t) {
+            const auto& list = s.trolleys[t].pickTaskIndices;
+            for (int p = 0; p < static_cast<int>(list.size()); ++p) {
+                const PickTask& task = s.pickTasks[list[p]];
+                shadowsOk = shadowsOk && task.trolleyIndex == t &&
+                            task.previousPickTask == (p > 0 ? list[p - 1] : -1) &&
+                            task.nextPickTask ==
+                                    (p + 1 < static_cast<int>(list.size()) ? list[p + 1] : -1);
             }
         }
         check(shadowsOk, "derived fields consistent on the final solution");
@@ -557,8 +471,7 @@ void verifySolve()
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyWarehouseDistances();
     verifyConstraints();
     verifyShadowVariables();
@@ -566,8 +479,7 @@ int main()
     verifyDemoData();
     verifySolve();
 
-    if (failures > 0)
-    {
+    if (failures > 0) {
         std::printf("\n%d check(s) FAILED\n", failures);
         return 1;
     }

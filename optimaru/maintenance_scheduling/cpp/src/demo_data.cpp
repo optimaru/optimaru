@@ -9,60 +9,33 @@
 #include <random>
 #include "optimaru/portable_random.hpp"
 
-namespace mnt
-{
+namespace mnt {
 
-namespace
-{
+namespace {
 
 // Seeded, platform-independent draws (see optimaru/portable_random.hpp).
 using DemoRandom = optimaru::PortableRandom;
 
-const char *const kJobAreaNames[] = {"Downtown",
-                                     "Uptown",
-                                     "Park",
-                                     "Airport",
-                                     "Bay",
-                                     "Hill",
-                                     "Forest",
-                                     "Station",
-                                     "Hospital",
-                                     "Harbor",
-                                     "Market",
-                                     "Fort",
-                                     "Beach",
-                                     "Garden",
-                                     "River",
-                                     "Springs",
-                                     "Tower",
-                                     "Mountain"};
+const char* const kJobAreaNames[] = {"Downtown", "Uptown", "Park",    "Airport",  "Bay",
+                                     "Hill",     "Forest", "Station", "Hospital", "Harbor",
+                                     "Market",   "Fort",   "Beach",   "Garden",   "River",
+                                     "Springs",  "Tower",  "Mountain"};
 
-const char *const kJobTargetNames[] = {"Street",
-                                       "Bridge",
-                                       "Tunnel",
-                                       "Highway",
-                                       "Boulevard",
-                                       "Avenue",
-                                       "Square",
-                                       "Plaza"};
-constexpr int kJobTargetNameCount
-    = static_cast<int>(sizeof(kJobTargetNames) / sizeof(kJobTargetNames[0]));
+const char* const kJobTargetNames[] = {"Street",    "Bridge", "Tunnel", "Highway",
+                                       "Boulevard", "Avenue", "Square", "Plaza"};
+constexpr int kJobTargetNameCount =
+        static_cast<int>(sizeof(kJobTargetNames) / sizeof(kJobTargetNames[0]));
 
 }  // namespace
 
-std::int64_t todayEpochDay()
-{
-    return static_cast<std::int64_t>(std::time(nullptr)) / 86400;
-}
+std::int64_t todayEpochDay() { return static_cast<std::int64_t>(std::time(nullptr)) / 86400; }
 
-std::int64_t nextMonday(std::int64_t epochDay)
-{
+std::int64_t nextMonday(std::int64_t epochDay) {
     const int offset = (7 - weekdayOf(epochDay)) % 7;
     return epochDay + (offset == 0 ? 7 : offset);
 }
 
-std::string formatDate(std::int64_t epochDay)
-{
+std::string formatDate(std::int64_t epochDay) {
     // Howard Hinnant's civil_from_days.
     std::int64_t z = epochDay + 719468;
     const std::int64_t era = (z >= 0 ? z : z - 146096) / 146097;
@@ -74,24 +47,18 @@ std::string formatDate(std::int64_t epochDay)
     const unsigned d = doy - (153 * mp + 2) / 5 + 1;
     const unsigned m = mp < 10 ? mp + 3 : mp - 9;
     char buf[16];
-    std::snprintf(buf,
-                  sizeof(buf),
-                  "%04lld-%02u-%02u",
-                  static_cast<long long>(y + (m <= 2 ? 1 : 0)),
-                  m,
-                  d);
+    std::snprintf(buf, sizeof(buf), "%04lld-%02u-%02u",
+                  static_cast<long long>(y + (m <= 2 ? 1 : 0)), m, d);
     return buf;
 }
 
-MaintenanceSchedule generateDemoData(DemoData demoData, std::int64_t fromDate)
-{
+MaintenanceSchedule generateDemoData(DemoData demoData, std::int64_t fromDate) {
     MaintenanceSchedule schedule;
 
     schedule.crews.push_back({"1", "Alpha crew"});
     schedule.crews.push_back({"2", "Beta crew"});
     schedule.crews.push_back({"3", "Gamma crew"});
-    if (demoData == DemoData::LARGE)
-    {
+    if (demoData == DemoData::LARGE) {
         schedule.crews.push_back({"4", "Delta crew"});
         schedule.crews.push_back({"5", "Epsilon crew"});
     }
@@ -106,25 +73,19 @@ MaintenanceSchedule generateDemoData(DemoData demoData, std::int64_t fromDate)
     const int jobAreaTargetLimit = std::min(kJobTargetNameCount, crewCount * 2);
 
     DemoRandom random(17);
-    for (int i = 0; i < jobListSize; ++i)
-    {
+    for (int i = 0; i < jobListSize; ++i) {
         const std::string jobArea = kJobAreaNames[i / jobAreaTargetLimit];
         const std::string jobTarget = kJobTargetNames[i % jobAreaTargetLimit];
         // 1 day to 2 workweeks (1 workweek on average).
         const int durationInDays = 1 + random.next_int(10);
-        const int minMaxBetweenWorkdays
-            = durationInDays + 5  // at least 5 days of flexibility
-              + random.next_int(workdayTotal - (durationInDays + 5));
-        const int minWorkdayOffset
-            = random.next_int(workdayTotal - minMaxBetweenWorkdays + 1);
-        const int minIdealEndBetweenWorkdays
-            = minMaxBetweenWorkdays - 1 - random.next_int(4);
-        const std::int64_t minStartDate
-            = plusBusinessDays(fromDate, minWorkdayOffset);
-        const std::int64_t maxEndDate
-            = plusBusinessDays(minStartDate, minMaxBetweenWorkdays);
-        const std::int64_t idealEndDate
-            = plusBusinessDays(minStartDate, minIdealEndBetweenWorkdays);
+        const int minMaxBetweenWorkdays = durationInDays + 5  // at least 5 days of flexibility
+                                          + random.next_int(workdayTotal - (durationInDays + 5));
+        const int minWorkdayOffset = random.next_int(workdayTotal - minMaxBetweenWorkdays + 1);
+        const int minIdealEndBetweenWorkdays = minMaxBetweenWorkdays - 1 - random.next_int(4);
+        const std::int64_t minStartDate = plusBusinessDays(fromDate, minWorkdayOffset);
+        const std::int64_t maxEndDate = plusBusinessDays(minStartDate, minMaxBetweenWorkdays);
+        const std::int64_t idealEndDate =
+                plusBusinessDays(minStartDate, minIdealEndBetweenWorkdays);
 
         Job job;
         job.id = std::to_string(i);
@@ -134,8 +95,7 @@ MaintenanceSchedule generateDemoData(DemoData demoData, std::int64_t fromDate)
         job.maxEndDate = maxEndDate;
         job.idealEndDate = idealEndDate;
         job.tags.push_back(jobArea);
-        if (random.next_double() < 0.1)
-            job.tags.push_back("Subway");
+        if (random.next_double() < 0.1) job.tags.push_back("Subway");
         schedule.jobs.push_back(std::move(job));
     }
     return schedule;

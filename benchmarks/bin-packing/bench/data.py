@@ -33,22 +33,15 @@ def _download(name: str, cache_dir: Path) -> Path:
     expected = ORLIB_BPP_SHA256[name]
     destination = cache_dir / "orlib-binpack" / name
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if (
-        destination.exists()
-        and hashlib.sha256(destination.read_bytes()).hexdigest() == expected
-    ):
+    if destination.exists() and hashlib.sha256(destination.read_bytes()).hexdigest() == expected:
         return destination
     url = ORLIB_BASE_URL + name
-    request = urllib.request.Request(
-        url, headers={"User-Agent": "optimaru-benchmark/1.0"}
-    )
+    request = urllib.request.Request(url, headers={"User-Agent": "optimaru-benchmark/1.0"})
     with urllib.request.urlopen(request, timeout=120) as response:
         payload = response.read()
     actual = hashlib.sha256(payload).hexdigest()
     if actual != expected:
-        raise ValueError(
-            f"checksum mismatch for {url}: expected {expected}, got {actual}"
-        )
+        raise ValueError(f"checksum mismatch for {url}: expected {expected}, got {actual}")
     destination.write_bytes(payload)
     return destination
 
@@ -91,11 +84,7 @@ def parse_orlib_bpp(payload: str) -> dict[str, OrlibInstance]:
     if cursor != len(tokens):
         raise ValueError("trailing data after the last OR-Library bin-packing problem")
 
-    digits = max(
-        -value.as_tuple().exponent
-        for _, capacity, weights, _ in raw
-        for value in (capacity, *weights)
-    )
+    digits = max(-value.as_tuple().exponent for _, capacity, weights, _ in raw for value in (capacity, *weights))
     scale = 10 ** max(digits, 0)
 
     def scaled(value: Decimal) -> int:
@@ -109,8 +98,7 @@ def parse_orlib_bpp(payload: str) -> dict[str, OrlibInstance]:
             problem=BinPackingProblemModel(
                 bin_capacity=scaled(capacity),
                 items=[
-                    ItemModel(id=f"item-{index + 1}", weight=scaled(weight))
-                    for index, weight in enumerate(weights)
+                    ItemModel(id=f"item-{index + 1}", weight=scaled(weight)) for index, weight in enumerate(weights)
                 ],
             ),
             best_known_bins=best_known,

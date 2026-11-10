@@ -7,8 +7,7 @@
 #include "pdp/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
 // ---------------------------------------------------------------------------
 // PdpIncrementalScoreCalculator
@@ -38,11 +37,9 @@ namespace pdp
 // many nodes stay unassigned across several score evaluations. Both read as
 // "half-assigned request", which is exactly what the reference implementation
 // reports for the same state — so ScoreChecks::Full agrees at every step.
-class PdpIncrementalScoreCalculator final
-    : public optimaru::Objective<PdpRoutePlan>
-{
+class PdpIncrementalScoreCalculator final : public optimaru::Objective<PdpRoutePlan> {
 public:
-    void rebuild(PdpRoutePlan &solution) override;
+    void rebuild(PdpRoutePlan& solution) override;
     void before_list_edit(int listIndex) override;
     void after_list_edit(int listIndex) override;
     optimaru::Score score() override;
@@ -51,11 +48,9 @@ public:
     Score current_score() const;
 
 private:
-    struct RouteTerms
-    {
-        std::int64_t capacityExcess
-            = 0;  // hard: summed over-capacity along the route
-        std::int64_t lateness = 0;  // hard: whole minutes past maxEndTime
+    struct RouteTerms {
+        std::int64_t capacityExcess = 0;  // hard: summed over-capacity along the route
+        std::int64_t lateness = 0;        // hard: whole minutes past maxEndTime
         // soft: seconds, home -> stops (-> home if returnToDepot)
         std::int64_t driving = 0;
     };
@@ -72,7 +67,7 @@ private:
     void markDelivery(int deliveryIndex);
     void flushDeliveries();
 
-    PdpRoutePlan *plan_ = nullptr;
+    PdpRoutePlan* plan_ = nullptr;
     int vehicleCount_ = 0;
 
     std::vector<RouteTerms> terms_;  // per vehicle
@@ -85,8 +80,7 @@ private:
     std::vector<int> nodePos_;
 
     // The vehicle serving a node, or -1 when it is pooled or in no list.
-    int routeOf(int nodeIndex) const
-    {
+    int routeOf(int nodeIndex) const {
         const int list = nodeList_[static_cast<std::size_t>(nodeIndex)];
         return (list >= 0 && list < vehicleCount_) ? list : -1;
     }

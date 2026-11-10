@@ -9,8 +9,7 @@
 #include "optimaru/score/score.hpp"
 #include "optimaru/score/levels.hpp"
 
-namespace ts
-{
+namespace ts {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -39,15 +38,13 @@ using Score = optimaru::Score;
 
 // The medium -> soft folding offset (see the Score comment above).
 constexpr double kMediumScale = 1e6;
-constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::into_soft(kMediumScale);
+constexpr optimaru::MediumFold kMediumFold = optimaru::MediumFold::into_soft(kMediumScale);
 
 // ---------------------------------------------------------------------------
 // Team  (problem fact, identified by its index in TournamentSchedule::
 // teams — the value range of the decision variable)
 // ---------------------------------------------------------------------------
-struct Team
-{
+struct Team {
     std::string name;
 };
 
@@ -56,8 +53,7 @@ struct Team
 // ---------------------------------------------------------------------------
 // A Day only carries dateIndex; assignments and penalties
 // reference days by index into TournamentSchedule::days.
-struct Day
-{
+struct Day {
     int dateIndex = 0;
 };
 
@@ -67,8 +63,7 @@ struct Day
 // "team cannot play on day": one hard point of teamUnavailabilityCost per
 // fact whose (team, day) cell holds at least one assignment (per fact, not
 // per assignment).
-struct UnavailabilityPenalty
-{
+struct UnavailabilityPenalty {
     int team = 0;  // index into teams
     int day = 0;   // index into days
 };
@@ -79,8 +74,7 @@ struct UnavailabilityPenalty
 // One match slot on a day; the solver assigns which team fills it. `team` is
 // the only decision variable (-1 == unassigned). `id` must be unique
 // (teamConflictCost counts each unordered pair of assignments once).
-struct TeamAssignment
-{
+struct TeamAssignment {
     std::int64_t id = 0;
     int day = 0;         // index into days (problem fact)
     int indexInDay = 0;  // informational
@@ -95,8 +89,7 @@ struct TeamAssignment
 // ---------------------------------------------------------------------------
 // TournamentSchedule  (the problem and its solution)
 // ---------------------------------------------------------------------------
-struct TournamentSchedule
-{
+struct TournamentSchedule {
     std::vector<Team> teams;
     std::vector<Day> days;
     std::vector<UnavailabilityPenalty> unavailabilityPenalties;
@@ -116,29 +109,20 @@ struct TournamentSchedule
 // decision variable is TeamAssignment::team, the value range is the teams
 // list (TournamentSchedule::teams).
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<ts::TournamentSchedule>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const ts::TournamentSchedule &s)
-    {
+template <>
+struct optimaru::SolutionTraits<ts::TournamentSchedule> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const ts::TournamentSchedule& s) {
         return static_cast<int>(s.teamAssignments.size());
     }
-    static int value_count(const ts::TournamentSchedule &s)
-    {
-        return s.teamCount();
-    }
-    static int value_of(const ts::TournamentSchedule &s, int assignmentIndex)
-    {
+    static int value_count(const ts::TournamentSchedule& s) { return s.teamCount(); }
+    static int value_of(const ts::TournamentSchedule& s, int assignmentIndex) {
         return s.teamAssignments[assignmentIndex].team;
     }
-    static void
-    assign(ts::TournamentSchedule &s, int assignmentIndex, int team)
-    {
+    static void assign(ts::TournamentSchedule& s, int assignmentIndex, int team) {
         s.teamAssignments[assignmentIndex].team = team;
     }
-    static bool is_pinned(const ts::TournamentSchedule &s, int assignmentIndex)
-    {
+    static bool is_pinned(const ts::TournamentSchedule& s, int assignmentIndex) {
         return s.teamAssignments[assignmentIndex].pinned;
     }
 };
@@ -148,8 +132,8 @@ template <> struct optimaru::SolutionTraits<ts::TournamentSchedule>
 // ---------------------------------------------------------------------------
 // The decomposed calculator folds its medium accumulator with the domain's
 // kMediumFold (see the Score adapter above): engine soft = soft + medium * 1e6.
-template <> struct optimaru::MediumFoldOf<ts::TournamentSchedule>
-{
+template <>
+struct optimaru::MediumFoldOf<ts::TournamentSchedule> {
     static constexpr optimaru::MediumFold value = ts::kMediumFold;
 };
 

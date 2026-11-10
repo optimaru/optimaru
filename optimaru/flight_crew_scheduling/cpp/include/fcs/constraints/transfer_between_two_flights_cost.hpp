@@ -3,8 +3,7 @@
 
 #include "fcs/constraints/common.hpp"
 
-namespace fcs
-{
+namespace fcs {
 
 // Hard, weight 1: transferBetweenTwoFlightsCost — an employee's flight
 // arrives at one airport and their next departure leaves from another, so
@@ -17,18 +16,13 @@ namespace fcs
 // assignment sharing its departure time with another never starts a pair,
 // while ties on the later side all count — which is why this goes through
 // itineraryStats instead of a hand-rolled adjacency walk.
-struct TransferBetweenTwoFlightsCost final : ItineraryConstraint
-{
+struct TransferBetweenTwoFlightsCost final : ItineraryConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit TransferBetweenTwoFlightsCost(double weight = kDefaultWeight)
-        : ItineraryConstraint(
-            "transferBetweenTwoFlightsCost", weight, kDefaultLevel)
-    {
-    }
-    std::int64_t select(const ItineraryStats &stats) const override
-    {
+        : ItineraryConstraint("transferBetweenTwoFlightsCost", weight, kDefaultLevel) {}
+    std::int64_t select(const ItineraryStats& stats) const override {
         return stats.transferMismatches;
     }
 };

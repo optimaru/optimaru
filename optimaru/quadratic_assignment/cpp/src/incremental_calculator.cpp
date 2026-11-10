@@ -9,25 +9,22 @@
 #include "qap/constraints/pinned_assignments_cost.hpp"
 #include "qap/score_calculator.hpp"
 
-namespace qap
-{
+namespace qap {
 
-namespace
-{
+namespace {
 
 // The same constants the components and ScoreCalculator read (integral; see
 // score_calculator.cpp).
 constexpr auto kPinnedWeight = static_cast<std::int64_t>(PinnedAssignmentsCost::kDefaultWeight);
-constexpr auto kForbiddenWeight = static_cast<std::int64_t>(ForbiddenAssignmentsCost::kDefaultWeight);
+constexpr auto kForbiddenWeight =
+        static_cast<std::int64_t>(ForbiddenAssignmentsCost::kDefaultWeight);
 constexpr auto kCapacityWeight = static_cast<std::int64_t>(LocationCapacityCost::kDefaultWeight);
 constexpr auto kAssignmentWeight = static_cast<std::int64_t>(AssignmentCost::kDefaultWeight);
 constexpr auto kFlowWeight = static_cast<std::int64_t>(FlowDistanceCost::kDefaultWeight);
 
 }  // namespace
 
-void QuadraticAssignmentIncrementalScoreCalculator::rebuild(
-    QuadraticAssignmentProblem &solution)
-{
+void QuadraticAssignmentIncrementalScoreCalculator::rebuild(QuadraticAssignmentProblem& solution) {
     ScoreCalculator::prepare(solution);
     problem_ = &solution;
     const int n = solution.n;
@@ -41,55 +38,45 @@ void QuadraticAssignmentIncrementalScoreCalculator::rebuild(
     // Every fixed location starts violated (nothing stands anywhere yet);
     // each insert of its facility there repairs it.
     pinned_ = static_cast<std::int64_t>(solution.fixedLocations.size());
-    for (int f = 0; f < n; ++f)
-    {
+    for (int f = 0; f < n; ++f) {
         const int l = solution.facilities[f].location;
-        if (l >= 0)
-            insert(f, l);
+        if (l >= 0) insert(f, l);
     }
 }
 
-std::int64_t QuadraticAssignmentIncrementalScoreCalculator::capacityPenalty(int location) const
-{
-    if (!problem_->hasCapacity[location])
-        return 0;
+std::int64_t QuadraticAssignmentIncrementalScoreCalculator::capacityPenalty(int location) const {
+    if (!problem_->hasCapacity[location]) return 0;
     const std::int64_t over = load_[location] - problem_->capacityOf[location];
     return over > 0 ? over : 0;
 }
 
-std::int64_t QuadraticAssignmentIncrementalScoreCalculator::flowContribution(int facility, int location) const
-{
-    const QuadraticAssignmentProblem &p = *problem_;
+std::int64_t QuadraticAssignmentIncrementalScoreCalculator::flowContribution(int facility,
+                                                                             int location) const {
+    const QuadraticAssignmentProblem& p = *problem_;
     const int n = p.n;
-    const std::int64_t *flowRow = p.flow.data() + static_cast<std::size_t>(facility) * n;
-    const std::int64_t *distanceRow = p.distance.data() + static_cast<std::size_t>(location) * n;
+    const std::int64_t* flowRow = p.flow.data() + static_cast<std::size_t>(facility) * n;
+    const std::int64_t* distanceRow = p.distance.data() + static_cast<std::size_t>(location) * n;
     std::int64_t sum = flowRow[facility] * distanceRow[location];
-    for (int other = 0; other < n; ++other)
-    {
+    for (int other = 0; other < n; ++other) {
         const int at = location_[other];
-        if (other == facility || at < 0)
-            continue;
-        sum += flowRow[other] * distanceRow[at]
-               + p.flow[static_cast<std::size_t>(other) * n + facility]
-                     * p.distance[static_cast<std::size_t>(at) * n + location];
+        if (other == facility || at < 0) continue;
+        sum += flowRow[other] * distanceRow[at] +
+               p.flow[static_cast<std::size_t>(other) * n + facility] *
+                       p.distance[static_cast<std::size_t>(at) * n + location];
     }
     return sum;
 }
 
 // Adds facility `facility` at `location`.
-void QuadraticAssignmentIncrementalScoreCalculator::insert(int facility, int location)
-{
-    const QuadraticAssignmentProblem &p = *problem_;
+void QuadraticAssignmentIncrementalScoreCalculator::insert(int facility, int location) {
+    const QuadraticAssignmentProblem& p = *problem_;
     location_[facility] = location;
     // hard 1: a pin of this facility on this location is now kept.
-    for (int pinned : p.fixedLocationsOf[facility])
-    {
-        if (pinned == location)
-            --pinned_;
+    for (int pinned : p.fixedLocationsOf[facility]) {
+        if (pinned == location) --pinned_;
     }
     // hard 2
-    if (p.isForbidden(facility, location))
-        ++forbidden_;
+    if (p.isForbidden(facility, location)) ++forbidden_;
     // hard 3: replace this location's penalty term.
     overCapacity_ -= capacityPenalty(location);
     load_[location] += p.demandOf[facility];
@@ -102,49 +89,40 @@ void QuadraticAssignmentIncrementalScoreCalculator::insert(int facility, int loc
 }
 
 // Exact mirror of insert.
-void QuadraticAssignmentIncrementalScoreCalculator::retract(int facility, int location)
-{
-    const QuadraticAssignmentProblem &p = *problem_;
+void QuadraticAssignmentIncrementalScoreCalculator::retract(int facility, int location) {
+    const QuadraticAssignmentProblem& p = *problem_;
     flow_ -= flowContribution(facility, location);
     direct_ -= p.directCostOf(facility, location);
     overCapacity_ -= capacityPenalty(location);
     load_[location] -= p.demandOf[facility];
     overCapacity_ += capacityPenalty(location);
-    if (p.isForbidden(facility, location))
-        --forbidden_;
-    for (int pinned : p.fixedLocationsOf[facility])
-    {
-        if (pinned == location)
-            ++pinned_;
+    if (p.isForbidden(facility, location)) --forbidden_;
+    for (int pinned : p.fixedLocationsOf[facility]) {
+        if (pinned == location) ++pinned_;
     }
     location_[facility] = -1;
 }
 
-void QuadraticAssignmentIncrementalScoreCalculator::before_assign(int facilityIndex)
-{
+void QuadraticAssignmentIncrementalScoreCalculator::before_assign(int facilityIndex) {
     const int old = location_[facilityIndex];
-    if (old >= 0)
-        retract(facilityIndex, old);  // unassigned: nothing to retract
+    if (old >= 0) retract(facilityIndex, old);  // unassigned: nothing to retract
 }
 
-void QuadraticAssignmentIncrementalScoreCalculator::after_assign(int facilityIndex)
-{
+void QuadraticAssignmentIncrementalScoreCalculator::after_assign(int facilityIndex) {
     const int now = problem_->facilities[facilityIndex].location;  // the new value
-    if (now >= 0)
-        insert(facilityIndex, now);  // now unassigned: nothing to insert
+    if (now >= 0) insert(facilityIndex, now);  // now unassigned: nothing to insert
 }
 
-Score QuadraticAssignmentIncrementalScoreCalculator::score()
-{
+Score QuadraticAssignmentIncrementalScoreCalculator::score() {
     Score score;
-    score.hard = -(kPinnedWeight * pinned_ + kForbiddenWeight * forbidden_ + kCapacityWeight * overCapacity_);
+    score.hard = -(kPinnedWeight * pinned_ + kForbiddenWeight * forbidden_ +
+                   kCapacityWeight * overCapacity_);
     // Negate in integer space so a zero penalty prints as 0, not -0.
     score.soft = static_cast<double>(-(kAssignmentWeight * direct_ + kFlowWeight * flow_));
     return score;
 }
 
-ScoreCalculator::RawCosts QuadraticAssignmentIncrementalScoreCalculator::rawCosts() const
-{
+ScoreCalculator::RawCosts QuadraticAssignmentIncrementalScoreCalculator::rawCosts() const {
     ScoreCalculator::RawCosts raw;
     raw.pinnedAssignmentsCost = pinned_;
     raw.forbiddenAssignmentsCost = forbidden_;

@@ -15,8 +15,7 @@ struct MinConsecutiveDaysCost final : DayPresenceConstraint {
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit MinConsecutiveDaysCost(double weight = kDefaultWeight, int value = 2)
-        : DayPresenceConstraint("minConsecutiveDaysCost", weight, kDefaultLevel),
-          value_(value) {}
+        : DayPresenceConstraint("minConsecutiveDaysCost", weight, kDefaultLevel), value_(value) {}
     double runCost(std::int32_t len, bool touchesEnd) const override {
         if (touchesEnd) return 0.0;  // C: a run cut by the horizon end may continue past it
         return len < value_ ? static_cast<double>(value_ - len) : 0.0;

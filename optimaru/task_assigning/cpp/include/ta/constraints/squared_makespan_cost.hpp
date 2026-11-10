@@ -3,8 +3,7 @@
 
 #include "ta/constraints/common.hpp"
 
-namespace ta
-{
+namespace ta {
 
 // Soft, weight kMakespanUnit (10^7): squaredMakespanCost — every employee
 // penalizes the SQUARE of its end time, which is what pushes work off the
@@ -17,21 +16,15 @@ namespace ta
 // The squaring lives in cost() rather than in `exponent` on purpose: the
 // exponent shapes each unit's raw cost before the weight; here the square is
 // the constraint's own definition, so a caller can still shape it further.
-struct SquaredMakespanCost final : TaUnitConstraint
-{
+struct SquaredMakespanCost final : TaUnitConstraint {
     static constexpr double kDefaultWeight = static_cast<double>(kMakespanUnit);
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit SquaredMakespanCost(double weight = kDefaultWeight)
-        : TaUnitConstraint("squaredMakespanCost", weight, kDefaultLevel)
-    {
-    }
-    double cost(const TaskAssigningSolution &solution,
-                int unit,
-                const std::vector<int> &members) const override
-    {
-        const Minutes endTime
-            = detail::walkChain(solution, unit, members, [](int, Minutes) {});
+        : TaUnitConstraint("squaredMakespanCost", weight, kDefaultLevel) {}
+    double cost(const TaskAssigningSolution& solution, int unit,
+                const std::vector<int>& members) const override {
+        const Minutes endTime = detail::walkChain(solution, unit, members, [](int, Minutes) {});
         return static_cast<double>(endTime * endTime);
     }
 };

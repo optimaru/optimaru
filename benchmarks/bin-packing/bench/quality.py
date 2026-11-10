@@ -45,9 +45,7 @@ REVIEW_SEEDS = {"sq1": 20261031, "g11": 11, "g22": 22, "g33": 33}
 BASELINE_BINS = {"sq1": 44, "g11": 43, "g22": 45, "g33": 43}
 
 
-def review_instance(
-    seed: int, *, count: int = 120, conflicts: int = 10, coloured: bool = True
-) -> dict:
+def review_instance(seed: int, *, count: int = 120, conflicts: int = 10, coloured: bool = True) -> dict:
     """The review recipe: weights 10..60 on capacity 100, about 40% of the items in one
     of 4 colours, `conflicts` random pairs. ``coloured=False`` draws the same numbers and
     drops the colours and conflicts (the plain twin)."""
@@ -72,9 +70,7 @@ def review_instance(
     return {"bin_capacity": 100, "items": items, "conflicts": pairs}
 
 
-def uniform_instance(
-    count: int, capacity: int, low: int, high: int, seed: int, colors: int = 0
-) -> dict:
+def uniform_instance(count: int, capacity: int, low: int, high: int, seed: int, colors: int = 0) -> dict:
     """The recipe of ``bin_packing_cpsat.benchmark`` (Falkenauer-style "u" weights;
     with `colors`, every third item coloured and count // 10 conflict pairs)."""
     rng = random.Random(seed)
@@ -102,10 +98,7 @@ def triplet_instance(count: int, seed: int) -> dict:
         second = rng.randint(250, (1000 - first) // 2)
         weights += [first, second, 1000 - first - second]
     rng.shuffle(weights)
-    items = [
-        {"id": f"T{index:04d}", "weight": weight}
-        for index, weight in enumerate(weights)
-    ]
+    items = [{"id": f"T{index:04d}", "weight": weight} for index, weight in enumerate(weights)]
     return {"bin_capacity": 1000, "items": items, "conflicts": []}
 
 
@@ -117,8 +110,7 @@ def web_demo(copies: int = 1) -> dict:
     for copy in range(copies):
         items += [{**item, "id": f"{item['id']}_{copy}"} for item in demo["items"]]
         pairs += [
-            {"first": f"{pair['first']}_{copy}", "second": f"{pair['second']}_{copy}"}
-            for pair in demo["conflicts"]
+            {"first": f"{pair['first']}_{copy}", "second": f"{pair['second']}_{copy}"} for pair in demo["conflicts"]
         ]
     return {"bin_capacity": demo["bin_capacity"], "items": items, "conflicts": pairs}
 
@@ -137,16 +129,10 @@ def instances(extra: bool = False) -> dict[str, Callable[[], dict]]:
         built["review-250"] = lambda: review_instance(4242, count=250, conflicts=25)
         built["web-demo"] = web_demo
         built["web-demo-x6"] = lambda: web_demo(6)
-        built["bench-small"] = lambda: uniform_instance(
-            12, 100, 20, 60, seed=0, colors=3
-        )
-        built["bench-medium"] = lambda: uniform_instance(
-            30, 150, 20, 100, seed=1, colors=4
-        )
+        built["bench-small"] = lambda: uniform_instance(12, 100, 20, 60, seed=0, colors=3)
+        built["bench-medium"] = lambda: uniform_instance(30, 150, 20, 100, seed=1, colors=4)
         built["bench-large"] = lambda: uniform_instance(60, 150, 20, 100, seed=2)
-        built["u500-coloured"] = lambda: uniform_instance(
-            500, 150, 20, 100, seed=7, colors=4
-        )
+        built["u500-coloured"] = lambda: uniform_instance(500, 150, 20, 100, seed=7, colors=4)
         built["u250"] = lambda: uniform_instance(250, 150, 20, 100, seed=3)
         built["u500"] = lambda: uniform_instance(500, 150, 20, 100, seed=4)
         built["u1000"] = lambda: uniform_instance(1000, 150, 20, 100, seed=5)
@@ -155,17 +141,13 @@ def instances(extra: bool = False) -> dict[str, Callable[[], dict]]:
 
 
 def lower_bound(data: dict) -> int:
-    return math.ceil(
-        sum(item["weight"] for item in data["items"]) / data["bin_capacity"]
-    )
+    return math.ceil(sum(item["weight"] for item in data["items"]) / data["bin_capacity"])
 
 
 def run(data: dict, seconds: float, seed: int) -> dict:
     core = BinPackingProblemModel.model_validate(data).to_core()
     started = time.perf_counter()
-    score = bin_packing.solve(
-        core, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1
-    ).score
+    score = bin_packing.solve(core, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1).score
     costs = bin_packing.constraint_costs(core)
     return {
         "seed": seed,
@@ -179,9 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--seconds", type=float, default=2.0)
     parser.add_argument("--seeds", default="1,2,3", help="comma-separated random seeds")
-    parser.add_argument(
-        "--extra", action="store_true", help="also the instances beyond the review set"
-    )
+    parser.add_argument("--extra", action="store_true", help="also the instances beyond the review set")
     parser.add_argument(
         "--check",
         action="store_true",
@@ -208,22 +188,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.as_json:
         print(json.dumps(results, indent=2))
     else:
-        print(
-            f"Generated instances - {args.seconds:g}s per run, one thread, seeds {args.seeds}"
-        )
-        print(
-            f"{'instance':<17} {'items':>5} {'LB':>4} {'base':>6}  bins per seed (* = hard < 0)"
-        )
+        print(f"Generated instances - {args.seconds:g}s per run, one thread, seeds {args.seeds}")
+        print(f"{'instance':<17} {'items':>5} {'LB':>4} {'base':>6}  bins per seed (* = hard < 0)")
         for result in results:
-            bins = ", ".join(
-                f"{r['bins']}{'*' if r['hard'] < 0 else ''}" for r in result["runs"]
-            )
-            reference = (
-                result["baseline_bins"] if result["baseline_bins"] is not None else "-"
-            )
-            print(
-                f"{result['instance']:<17} {result['items']:>5} {result['lower_bound']:>4} {reference!s:>6}  {bins}"
-            )
+            bins = ", ".join(f"{r['bins']}{'*' if r['hard'] < 0 else ''}" for r in result["runs"])
+            reference = result["baseline_bins"] if result["baseline_bins"] is not None else "-"
+            print(f"{result['instance']:<17} {result['items']:>5} {result['lower_bound']:>4} {reference!s:>6}  {bins}")
 
     failed = []
     if args.check:
@@ -232,13 +202,8 @@ def main(argv: list[str] | None = None) -> int:
                 where = f"{result['instance']} seed {r['seed']}"
                 if r["hard"] < 0:
                     failed.append(f"{where}: infeasible ({r['hard']}hard)")
-                elif (
-                    result["baseline_bins"] is not None
-                    and r["bins"] > result["baseline_bins"]
-                ):
-                    failed.append(
-                        f"{where}: {r['bins']} bins, the baseline used {result['baseline_bins']}"
-                    )
+                elif result["baseline_bins"] is not None and r["bins"] > result["baseline_bins"]:
+                    failed.append(f"{where}: {r['bins']} bins, the baseline used {result['baseline_bins']}")
     for line in failed:
         print("FAIL", line, file=sys.stderr)
     return 1 if failed else 0

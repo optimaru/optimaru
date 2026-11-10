@@ -21,8 +21,7 @@
 #include "mc/constraints/partition_size_bounds_cost.hpp"
 #include "mc/constraints/same_partition_pairs_cost.hpp"
 
-namespace mc
-{
+namespace mc {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -52,8 +51,7 @@ namespace mc
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<FixedPartitionCost>();
     assembly.emplace<SamePartitionPairsCost>();
@@ -64,8 +62,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

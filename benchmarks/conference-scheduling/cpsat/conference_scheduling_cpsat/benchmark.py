@@ -42,9 +42,9 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from optimaru.conference_scheduling.models import ConferenceScheduleModel
-
     from external_solver.conference_scheduling import solve
+
+    from optimaru.conference_scheduling.models import ConferenceScheduleModel
 
     solved = solve(
         ConferenceScheduleModel.from_core(problem),

@@ -63,8 +63,8 @@ class EjectionChain final : public MoveOperator<Solution> {
     using Traits = SolutionTraits<Solution>;
 
 public:
-    EjectionChain(ElementIndex<Solution>& index, const Neighborhoods& nearby,
-                  int source_list, int max_steps, int candidate_lists, std::int64_t max_evaluations)
+    EjectionChain(ElementIndex<Solution>& index, const Neighborhoods& nearby, int source_list,
+                  int max_steps, int candidate_lists, std::int64_t max_evaluations)
         : index_(index),
           nearby_(nearby),
           source_list_(source_list),
@@ -97,7 +97,7 @@ public:
             const bool from_source =
                     has_source(solution) && std::uniform_int_distribution<int>(0, 1)(rng) == 0;
             const bool seeded = from_source ? seed_from_source(editor, rng)
-                                           : seed_infeasible_relocate(editor, rng, start);
+                                            : seed_infeasible_relocate(editor, rng, start);
             if (!seeded) return false;
             seed_element_ = applied_.front().element1;
             seed_origin_ = applied_.front().l1;
@@ -235,7 +235,7 @@ private:
     // hard constraint and would improve soft score — the move the
     // feasibility wall hides. Declines when there is none.
     bool seed_infeasible_relocate(Editor<Solution>& editor, std::mt19937_64& rng,
-                                const Score& start) {
+                                  const Score& start) {
         const Solution& solution = editor.solution();
         const int element_count = Traits::element_count(solution);
         if (element_count < 2) return false;
@@ -329,8 +329,7 @@ private:
                     for (int nb : nearby_.of(e)) {
                         if (evaluations_ >= max_evaluations_) break;
                         const int list = index_.list_of(nb);
-                        if (std::find(lists_.begin(), lists_.end(), list) == lists_.end())
-                            continue;
+                        if (std::find(lists_.begin(), lists_.end(), list) == lists_.end()) continue;
                         consider(ListMove::swap(a, p1, list, index_.position_of(nb), e, nb));
                     }
                 }

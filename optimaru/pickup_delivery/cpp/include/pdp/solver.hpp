@@ -17,8 +17,7 @@
 #include "optimaru/settings.hpp"
 #include "optimaru/select/schemes.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
 // ---------------------------------------------------------------------------
 // Solver
@@ -39,16 +38,14 @@ namespace pdp
 //
 // Both join the engine's adaptive selection alongside the built-ins, so their
 // weight is learned rather than fixed.
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // --- termination ---
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<std::int64_t>::max()};
+                           std::numeric_limits<std::int64_t>::max(),
+                           std::numeric_limits<std::int64_t>::max()};
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;
         std::int64_t stall_step_limit = 0;
@@ -62,8 +59,7 @@ public:
         bool pairConstructionHeuristic = true;
 
         // --- acceptance ---
-        optimaru::AcceptanceRule rule
-            = optimaru::AcceptanceRule::LateAcceptance;
+        optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::LateAcceptance;
         std::size_t history_length = 0;  // 0 = auto
         double recordToRecordStartGap = 0.02;
         double recordToRecordEndGap = 0.0;
@@ -113,8 +109,8 @@ public:
         int descent_max_sweeps = 4;
         double route_elimination_weight = 0.0;
         int route_elimination_max_size = 12;
-        optimaru::SelectionScheme ruinRecreateSelectionType
-            = optimaru::SelectionScheme::RouletteWheel;
+        optimaru::SelectionScheme ruinRecreateSelectionType =
+                optimaru::SelectionScheme::RouletteWheel;
         double ruinRecreateOperatorDecay = 0.8;
         std::vector<double> ruinRecreateRewards{3.0, 2.0, 1.0, 0.5};
         std::int64_t ruinRecreateSelectionSegmentLength = 100;
@@ -134,11 +130,10 @@ public:
         // --- engine ---
         std::uint64_t seed = 0;
         int parallelSolverCount = 1;
-        optimaru::ScoreChecks score_checks
-            = optimaru::ScoreChecks::Off;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
         // Called with each new best score, in the same levels as the final
         // plan.score of the solve() overload in use.
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
@@ -151,7 +146,7 @@ public:
 
     // Solves in place: mutates plan.vehicles[*].nodeIndices and
     // plan.unassignedNodeIndices, and stores the best score in plan.score.
-    void solve(PdpRoutePlan &plan);
+    void solve(PdpRoutePlan& plan);
 
     // Solves with a caller-assembled plugin calculator (see
     // pdp/constraints.hpp): pick components and weights, then pass the
@@ -164,8 +159,7 @@ public:
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
     // so parallelSolverCount is ignored.
-    void solve(PdpRoutePlan &plan,
-               optimaru::DecomposedObjective<PdpRoutePlan> &calculator);
+    void solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePlan>& calculator);
 
 private:
     Config config_;

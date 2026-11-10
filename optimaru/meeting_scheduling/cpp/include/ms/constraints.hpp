@@ -27,8 +27,7 @@
 #include "ms/constraints/room_change_cost.hpp"
 #include "ms/constraints/room_conflict_cost.hpp"
 
-namespace ms
-{
+namespace ms {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -51,8 +50,7 @@ namespace ms
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<RoomConflictCost>();
     assembly.emplace<OvertimeCost>();
@@ -69,8 +67,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

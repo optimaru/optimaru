@@ -25,41 +25,25 @@
 
 using namespace fl;
 
-namespace
-{
+namespace {
 
 int failures = 0;
 
-void check(bool ok, const std::string &label)
-{
+void check(bool ok, const std::string& label) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-void checkScore(const std::string &label,
-                const Score &actual,
-                long expectedHard,
-                double expectedSoft)
-{
-    const bool ok = (actual.hard == expectedHard
-                     && std::fabs(actual.soft - expectedSoft) < 1e-9);
-    std::printf("  [%s] %-42s got=%s expected=%ldhard/%gsoft\n",
-                ok ? "PASS" : "FAIL",
-                label.c_str(),
-                actual.str().c_str(),
-                expectedHard,
-                expectedSoft);
-    if (!ok)
-        ++failures;
+void checkScore(const std::string& label, const Score& actual, long expectedHard,
+                double expectedSoft) {
+    const bool ok = (actual.hard == expectedHard && std::fabs(actual.soft - expectedSoft) < 1e-9);
+    std::printf("  [%s] %-42s got=%s expected=%ldhard/%gsoft\n", ok ? "PASS" : "FAIL",
+                label.c_str(), actual.str().c_str(), expectedHard, expectedSoft);
+    if (!ok) ++failures;
 }
 
-void addFacility(FacilityLocationProblem &problem,
-                 double latitude,
-                 double longitude,
-                 std::int64_t setupCost,
-                 std::int64_t capacity)
-{
+void addFacility(FacilityLocationProblem& problem, double latitude, double longitude,
+                 std::int64_t setupCost, std::int64_t capacity) {
     Facility facility;
     facility.id = "F" + std::to_string(problem.facilities.size());
     facility.location = {latitude, longitude};
@@ -68,12 +52,8 @@ void addFacility(FacilityLocationProblem &problem,
     problem.facilities.push_back(facility);
 }
 
-void addConsumer(FacilityLocationProblem &problem,
-                 double latitude,
-                 double longitude,
-                 std::int64_t demand,
-                 int facility = -1)
-{
+void addConsumer(FacilityLocationProblem& problem, double latitude, double longitude,
+                 std::int64_t demand, int facility = -1) {
     Consumer consumer;
     consumer.id = "C" + std::to_string(problem.consumers.size());
     consumer.location = {latitude, longitude};
@@ -88,8 +68,7 @@ void addConsumer(FacilityLocationProblem &problem,
 // meter distances are unambiguous: 0.25 deg = 27750 m, and the (0.75, 1.0)
 // right triangle gives 1.25 deg = 138750 m.
 // -------------------------------------------------------------------------
-void verifyConstraints()
-{
+void verifyConstraints() {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
     // hard 1: facilityCapacityCost — demand 30 on capacity 20 -> -10.
@@ -98,20 +77,14 @@ void verifyConstraints()
         addFacility(p, 0, 0, /*setupCost*/ 0, /*capacity*/ 20);
         addConsumer(p, 0, 0, /*demand*/ 15, /*facility*/ 0);
         addConsumer(p, 0, 0, /*demand*/ 15, /*facility*/ 0);
-        checkScore("facilityCapacityCost overflow",
-                   ScoreCalculator::score(p),
-                   -10,
-                   0);
+        checkScore("facilityCapacityCost overflow", ScoreCalculator::score(p), -10, 0);
     }
     // hard 1: demand within capacity costs nothing.
     {
         FacilityLocationProblem p;
         addFacility(p, 0, 0, 0, 20);
         addConsumer(p, 0, 0, 15, 0);
-        checkScore("facilityCapacityCost within (zero)",
-                   ScoreCalculator::score(p),
-                   0,
-                   0);
+        checkScore("facilityCapacityCost within (zero)", ScoreCalculator::score(p), 0, 0);
     }
     // hard 1: a facility no consumer
     // uses is never penalized — even with a pathological negative capacity.
@@ -120,20 +93,14 @@ void verifyConstraints()
         addFacility(p, 0, 0, 0, -5);  // unused
         addFacility(p, 0, 0, 0, 20);
         addConsumer(p, 0, 0, 15, 1);
-        checkScore("facilityCapacityCost ignores unused",
-                   ScoreCalculator::score(p),
-                   0,
-                   0);
+        checkScore("facilityCapacityCost ignores unused", ScoreCalculator::score(p), 0, 0);
     }
     // soft 2: facilitySetupCost — one used facility, weight 2.
     {
         FacilityLocationProblem p;
         addFacility(p, 0, 0, /*setupCost*/ 1000, /*capacity*/ 100);
         addConsumer(p, 0, 0, 1, 0);
-        checkScore("setupCost used once",
-                   ScoreCalculator::score(p),
-                   0,
-                   -2000);
+        checkScore("setupCost used once", ScoreCalculator::score(p), 0, -2000);
     }
     // soft 2: a second consumer on the same facility adds no setup cost.
     {
@@ -141,10 +108,7 @@ void verifyConstraints()
         addFacility(p, 0, 0, 1000, 100);
         addConsumer(p, 0, 0, 1, 0);
         addConsumer(p, 0, 0, 1, 0);
-        checkScore("setupCost not repeated",
-                   ScoreCalculator::score(p),
-                   0,
-                   -2000);
+        checkScore("setupCost not repeated", ScoreCalculator::score(p), 0, -2000);
     }
     // soft 2: every used facility pays its own setup cost.
     {
@@ -153,10 +117,7 @@ void verifyConstraints()
         addFacility(p, 0, 0, 500, 100);
         addConsumer(p, 0, 0, 1, 0);
         addConsumer(p, 0, 0, 1, 1);
-        checkScore("setupCost per used facility",
-                   ScoreCalculator::score(p),
-                   0,
-                   -3000);
+        checkScore("setupCost per used facility", ScoreCalculator::score(p), 0, -3000);
     }
     // soft 2: an unused facility costs no setup, however expensive.
     {
@@ -164,50 +125,35 @@ void verifyConstraints()
         addFacility(p, 0, 0, /*setupCost*/ 5000, /*capacity*/ 100);  // unused
         addFacility(p, 0, 0, /*setupCost*/ 0, /*capacity*/ 100);
         addConsumer(p, 0, 0, 1, 1);
-        checkScore("setupCost unused facility (zero)",
-                   ScoreCalculator::score(p),
-                   0,
-                   0);
+        checkScore("setupCost unused facility (zero)", ScoreCalculator::score(p), 0, 0);
     }
     // soft 3: distanceFromFacilityCost — 0.25 deg = 27750 m, weight 6.
     {
         FacilityLocationProblem p;
         addFacility(p, 0, 0, 0, 100);
         addConsumer(p, 0, 0.25, 1, 0);
-        checkScore("distance 0.25 deg x weight 6",
-                   ScoreCalculator::score(p),
-                   0,
-                   -166500);
+        checkScore("distance 0.25 deg x weight 6", ScoreCalculator::score(p), 0, -166500);
     }
     // soft 3: Euclidean composition — (0.75, 1.0) -> 1.25 deg = 138750 m.
     {
         FacilityLocationProblem p;
         addFacility(p, 0, 0, 0, 100);
         addConsumer(p, 0.75, 1.0, 1, 0);
-        checkScore("distance 3-4-5 triangle",
-                   ScoreCalculator::score(p),
-                   0,
-                   -832500);
+        checkScore("distance 3-4-5 triangle", ScoreCalculator::score(p), 0, -832500);
     }
     // soft 3: a consumer standing on its facility costs no distance.
     {
         FacilityLocationProblem p;
         addFacility(p, 0.5, 0.5, 0, 100);
         addConsumer(p, 0.5, 0.5, 1, 0);
-        checkScore("distance on the facility (zero)",
-                   ScoreCalculator::score(p),
-                   0,
-                   0);
+        checkScore("distance on the facility (zero)", ScoreCalculator::score(p), 0, 0);
     }
     // Unassigned consumers contribute nothing (no setup, distance, demand).
     {
         FacilityLocationProblem p;
         addFacility(p, 0, 0, 1000, 5);
         addConsumer(p, 0, 0.25, 10);  // unassigned
-        checkScore("unassigned contributes nothing",
-                   ScoreCalculator::score(p),
-                   0,
-                   0);
+        checkScore("unassigned contributes nothing", ScoreCalculator::score(p), 0, 0);
     }
     // All three constraints at once, hand-computed:
     //   A(setup 100, cap 10) serves demand 8 + 7 -> hard -5
@@ -229,12 +175,9 @@ void verifyConstraints()
 // Random mid-size instance for the incremental cross-check and the solves.
 // Total capacity `slack` times the total demand, spread evenly.
 // -------------------------------------------------------------------------
-FacilityLocationProblem buildRandomInstance(int facilityCount,
-                                            int consumerCount,
-                                            std::uint64_t seed,
-                                            std::int64_t demandEach = 15,
-                                            std::int64_t slack = 5)
-{
+FacilityLocationProblem buildRandomInstance(int facilityCount, int consumerCount,
+                                            std::uint64_t seed, std::int64_t demandEach = 15,
+                                            std::int64_t slack = 5) {
     std::mt19937_64 rng(seed);
     std::uniform_real_distribution<double> latitudes(51.44, 51.56);
     std::uniform_real_distribution<double> longitudes(-0.16, -0.01);
@@ -243,18 +186,11 @@ FacilityLocationProblem buildRandomInstance(int facilityCount,
     FacilityLocationProblem problem;
     problem.southWestCorner = {51.44, -0.16};
     problem.northEastCorner = {51.56, -0.01};
-    const std::int64_t capacityEach
-        = slack * demandEach * consumerCount / facilityCount;
-    for (int f = 0; f < facilityCount; ++f)
-    {
-        addFacility(problem,
-                    latitudes(rng),
-                    longitudes(rng),
-                    setupCosts(rng),
-                    capacityEach);
+    const std::int64_t capacityEach = slack * demandEach * consumerCount / facilityCount;
+    for (int f = 0; f < facilityCount; ++f) {
+        addFacility(problem, latitudes(rng), longitudes(rng), setupCosts(rng), capacityEach);
     }
-    for (int c = 0; c < consumerCount; ++c)
-    {
+    for (int c = 0; c < consumerCount; ++c) {
         addConsumer(problem, latitudes(rng), longitudes(rng), demandEach);
     }
     return problem;
@@ -266,15 +202,13 @@ FacilityLocationProblem buildRandomInstance(int facilityCount,
 // the before/set/after hook contract is exercised exactly like in the
 // engine.
 // -------------------------------------------------------------------------
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (b) Verifying incremental scoring == full recompute ==\n");
-    FacilityLocationProblem p
-        = buildRandomInstance(/*facilities*/ 8,
-                              /*consumers*/ 40,
-                              /*seed*/ 7,
-                              /*demandEach*/ 15,
-                              /*slack*/ 1);  // tight: over-capacity happens
+    FacilityLocationProblem p = buildRandomInstance(/*facilities*/ 8,
+                                                    /*consumers*/ 40,
+                                                    /*seed*/ 7,
+                                                    /*demandEach*/ 15,
+                                                    /*slack*/ 1);  // tight: over-capacity happens
 
     FacilityLocationIncrementalScoreCalculator calc;
     optimaru::Editor<FacilityLocationProblem> editor(p, calc);
@@ -287,20 +221,14 @@ void verifyIncremental()
 
     int mismatches = 0;
     const int steps = 3000;
-    for (int step = 0; step < steps; ++step)
-    {
-        if (unit(rng) < 0.75)
-        {
+    for (int step = 0; step < steps; ++step) {
+        if (unit(rng) < 0.75) {
             // ChangeMove; 10% of the time to unassigned (-1), like the
             // construction heuristic's starting state.
             const int consumer = static_cast<int>(rng() % consumerCount);
-            const int value = (unit(rng) < 0.10)
-                                  ? -1
-                                  : static_cast<int>(rng() % value_count);
+            const int value = (unit(rng) < 0.10) ? -1 : static_cast<int>(rng() % value_count);
             editor.assign(consumer, value);
-        }
-        else
-        {
+        } else {
             // SwapMove.
             const int a = static_cast<int>(rng() % consumerCount);
             const int b = static_cast<int>(rng() % consumerCount);
@@ -310,27 +238,19 @@ void verifyIncremental()
             editor.assign(b, va);
         }
         // Full recompute on the same assignment.
-        for (int i = 0; i < consumerCount; ++i)
-        {
+        for (int i = 0; i < consumerCount; ++i) {
             shadow.consumers[i].facility = p.consumers[i].facility;
         }
         const Score full = ScoreCalculator::score(shadow);
         const Score incremental = editor.score();
-        if (full.hard != incremental.hard
-            || std::fabs(full.soft - incremental.soft) > 1e-9)
-        {
-            if (++mismatches <= 3)
-            {
-                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                            step,
-                            incremental.str().c_str(),
-                            full.str().c_str());
+        if (full.hard != incremental.hard || std::fabs(full.soft - incremental.soft) > 1e-9) {
+            if (++mismatches <= 3) {
+                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
     }
-    check(mismatches == 0,
-          std::to_string(steps)
-              + " random moves, incremental == full recompute");
+    check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
     std::printf("\n");
 }
 
@@ -339,8 +259,7 @@ void verifyIncremental()
 // against a full reset + recompute after every single move and throws
 // ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (c) FULL_ASSERT solve ==\n");
     FacilityLocationProblem p = buildRandomInstance(/*facilities*/ 6,
                                                     /*consumers*/ 20,
@@ -358,23 +277,18 @@ void verifyFullAssertSolve()
 
     bool corrupted = false;
     Score final{};
-    try
-    {
+    try {
         Solver solver(config);
         solver.solve(p);
         final = p.score;
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
-    if (!corrupted)
-    {
+    if (!corrupted) {
         const Score recomputed = ScoreCalculator::score(p);
-        check(final.hard == recomputed.hard
-                  && std::fabs(final.soft - recomputed.soft) < 1e-9,
+        check(final.hard == recomputed.hard && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
     }
     std::printf("\n");
@@ -385,8 +299,7 @@ void verifyFullAssertSolve()
 // capacity, 60 consumers x 15 demand) must reach 0hard with every consumer
 // assigned, well inside a few seconds.
 // -------------------------------------------------------------------------
-void verifyDemoScaleSolve()
-{
+void verifyDemoScaleSolve() {
     std::printf("== (d) Demo-scale solve reaches 0hard ==\n");
     FacilityLocationProblem p = buildRandomInstance(/*facilities*/ 30,
                                                     /*consumers*/ 60,
@@ -401,16 +314,13 @@ void verifyDemoScaleSolve()
     solver.solve(p);
 
     bool allAssigned = true;
-    for (const Consumer &consumer : p.consumers)
-    {
-        if (!consumer.isAssigned())
-            allAssigned = false;
+    for (const Consumer& consumer : p.consumers) {
+        if (!consumer.isAssigned()) allAssigned = false;
     }
     check(allAssigned, "every consumer assigned after the solve");
     check(p.score.hard == 0, "demo-scale instance reaches 0hard");
     const Score recomputed = ScoreCalculator::score(p);
-    check(p.score.hard == recomputed.hard
-              && std::fabs(p.score.soft - recomputed.soft) < 1e-9,
+    check(p.score.hard == recomputed.hard && std::fabs(p.score.soft - recomputed.soft) < 1e-9,
           "solver-reported score == full recompute");
     std::printf("\n");
 }
@@ -421,8 +331,7 @@ void verifyDemoScaleSolve()
 // the registered CloseFacilityMove), so this guards that the winning copy is
 // returned intact and its reported score is the real one.
 // -------------------------------------------------------------------------
-void verifyParallelSolve()
-{
+void verifyParallelSolve() {
     std::printf("== (e) Parallel multi-start solve ==\n");
     FacilityLocationProblem p = buildRandomInstance(/*facilities*/ 20,
                                                     /*consumers*/ 40,
@@ -438,32 +347,27 @@ void verifyParallelSolve()
     solver.solve(p);
 
     bool allAssigned = true;
-    for (const Consumer &consumer : p.consumers)
-    {
-        if (!consumer.isAssigned())
-            allAssigned = false;
+    for (const Consumer& consumer : p.consumers) {
+        if (!consumer.isAssigned()) allAssigned = false;
     }
     check(allAssigned, "every consumer assigned after the parallel solve");
     check(p.score.hard == 0, "parallel solve reaches 0hard");
     const Score recomputed = ScoreCalculator::score(p);
-    check(p.score.hard == recomputed.hard
-              && std::fabs(p.score.soft - recomputed.soft) < 1e-9,
+    check(p.score.hard == recomputed.hard && std::fabs(p.score.soft - recomputed.soft) < 1e-9,
           "winning worker's score == full recompute");
     std::printf("\n");
 }
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyConstraints();
     verifyIncremental();
     verifyFullAssertSolve();
     verifyDemoScaleSolve();
     verifyParallelSolve();
 
-    if (failures == 0)
-    {
+    if (failures == 0) {
         std::printf("All facility-location checks PASSED.\n");
         return 0;
     }

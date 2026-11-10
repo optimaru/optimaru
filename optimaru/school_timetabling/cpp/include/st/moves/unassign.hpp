@@ -8,8 +8,7 @@
 
 #include "st/moves/smart_class_swap.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // Moved verbatim out of canonical_solver.cpp — one operator per file, the
 // domain-side counterpart of the engine's ruin_recreate/ layout.
@@ -31,27 +30,21 @@ namespace st::canon
 // 10000 against soft terms of 1~30) is what makes the search put it back as
 // soon as a conflict-free slot opens up.
 template <typename HotSource>
-class UnassignMove final : public optimaru::MoveOperator<Timetable>
-{
+class UnassignMove final : public optimaru::MoveOperator<Timetable> {
 public:
-    explicit UnassignMove(const HotSource *hotSource) : hotSource_(hotSource) {}
+    explicit UnassignMove(const HotSource* hotSource) : hotSource_(hotSource) {}
 
-    const char *name() const override { return "unassign"; }
+    const char* name() const override { return "unassign"; }
 
-    bool apply(optimaru::OperatorContext<Timetable> &ctx,
-               std::mt19937_64 &rng,
-               std::vector<int> &entities) override
-    {
-        Timetable &table = ctx.editor.solution();
+    bool apply(optimaru::OperatorContext<Timetable>& ctx, std::mt19937_64& rng,
+               std::vector<int>& entities) override {
+        Timetable& table = ctx.editor.solution();
         const int lessonCount = static_cast<int>(table.lessons.size());
         int a = hotSource_->hotLesson(rng);
-        for (int attempt = 0; attempt < 8 && !removable(table, a); ++attempt)
-        {
-            a = static_cast<int>(rng()
-                                 % static_cast<std::uint64_t>(lessonCount));
+        for (int attempt = 0; attempt < 8 && !removable(table, a); ++attempt) {
+            a = static_cast<int>(rng() % static_cast<std::uint64_t>(lessonCount));
         }
-        if (!removable(table, a))
-            return false;
+        if (!removable(table, a)) return false;
 
         // A block (consecutive periods) leaves as a whole or not at all: half a
         // block is not a block, and blockAdjacencyCost prices it as such.
@@ -59,50 +52,39 @@ public:
         // block lessons at all.
         last_.clear();
         const int group = table.lessons[a].blockGroup;
-        if (group < 0)
-        {
+        if (group < 0) {
             last_.emplace_back(a, table.lessons[a].slot);
-        }
-        else
-        {
-            for (int member : table.blockMembers[group])
-            {
+        } else {
+            for (int member : table.blockMembers[group]) {
                 if (table.lessons[member].pinned)
                     return false;  // pinned member: the group cannot leave
                 if (table.lessons[member].slot >= 0)
                     last_.emplace_back(member, table.lessons[member].slot);
             }
-            if (last_.empty())
-                return false;
+            if (last_.empty()) return false;
         }
 
         ctx.editor.begin_batch();
-        for (const auto &[lesson, _] : last_)
-            ctx.editor.assign(lesson, -1);
+        for (const auto& [lesson, _] : last_) ctx.editor.assign(lesson, -1);
         ctx.editor.end_batch();
-        for (const auto &[lesson, _] : last_)
-            entities.push_back(lesson);
+        for (const auto& [lesson, _] : last_) entities.push_back(lesson);
         return true;
     }
 
-    void undo_last(optimaru::OperatorContext<Timetable> &ctx) override
-    {
+    void undo_last(optimaru::OperatorContext<Timetable>& ctx) override {
         ctx.editor.begin_batch();
-        for (const auto &[lesson, slot] : last_)
-            ctx.editor.assign(lesson, slot);
+        for (const auto& [lesson, slot] : last_) ctx.editor.assign(lesson, slot);
         ctx.editor.end_batch();
     }
 
 private:
     // Pinned lessons are fixed slots and never move; an already
     // unassigned lesson has nothing to remove.
-    static bool removable(const Timetable &table, int lesson)
-    {
-        return lesson >= 0 && !table.lessons[lesson].pinned
-               && table.lessons[lesson].slot >= 0;
+    static bool removable(const Timetable& table, int lesson) {
+        return lesson >= 0 && !table.lessons[lesson].pinned && table.lessons[lesson].slot >= 0;
     }
 
-    const HotSource *hotSource_;
+    const HotSource* hotSource_;
     std::vector<std::pair<int, int>> last_;  // (lesson, slot before the drop)
 };
 

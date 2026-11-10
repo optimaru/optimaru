@@ -161,9 +161,7 @@ def list_constraints() -> list[str]:
     partition_size_bounds_cost, partition_imbalance_cost, cut_weight_cost. The same
     names optimaru.max_cut.constraints uses."""
 
-def constraint_costs(
-    problem: MaxCutProblem, constraints: Iterable[Any] | None = ...
-) -> dict[str, dict[str, Any]]:
+def constraint_costs(problem: MaxCutProblem, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight/exponent/offset/level:
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "global": bool, "level": "hard" | "soft",

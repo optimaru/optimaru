@@ -136,7 +136,9 @@ def _teachers() -> tuple[Teacher, ...]:
             # Teaches at another school on Fridays, so unavailable all day.
             unavailable=frozenset(TimeSlot(day=Weekday.FRI, period=p) for p in range(1, 7)),
         ),
-        Teacher(id="T13", name="Shin (Art)", subject_ids=frozenset({"ART"}), preferred_free_days=frozenset({Weekday.FRI})),
+        Teacher(
+            id="T13", name="Shin (Art)", subject_ids=frozenset({"ART"}), preferred_free_days=frozenset({Weekday.FRI})
+        ),
         Teacher(id="T14", name="Oh (Technology)", subject_ids=frozenset({"TECH"})),
         Teacher(id="T15", name="Moon (Home economics)", subject_ids=frozenset({"TECH"})),
     )

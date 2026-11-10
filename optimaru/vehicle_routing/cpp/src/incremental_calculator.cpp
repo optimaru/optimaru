@@ -12,11 +12,9 @@
 #include "vrp/constraints/unassigned_visits_cost.hpp"
 #include "vrp/constraints/vehicle_capacity_cost.hpp"
 
-namespace vrp
-{
+namespace vrp {
 
-namespace
-{
+namespace {
 
 // The same constants the components and ScoreCalculator read (integral; see
 // score_calculator.cpp).
@@ -28,43 +26,38 @@ constexpr auto kTravelWeight = static_cast<std::int64_t>(TravelTimeCost::kDefaul
 // The Score of the four raw totals at those weights; every score and preview
 // below goes through it.
 inline Score weightedScore(std::int64_t overload, std::int64_t lateness, std::int64_t unassigned,
-                           std::int64_t driving)
-{
+                           std::int64_t driving) {
     return Score{-(kCapacityWeight * overload + kTimeWindowWeight * lateness),
                  -kUnassignedWeight * unassigned, -kTravelWeight * driving};
 }
 
 }  // namespace
 
-void VehicleRoutingIncrementalScoreCalculator::rebuild(
-    VehicleRoutePlan &solution)
-{
+void VehicleRoutingIncrementalScoreCalculator::rebuild(VehicleRoutePlan& solution) {
     plan_ = &solution;
     vehicleCount_ = static_cast<int>(plan_->vehicles.size());
 
     terms_.assign(static_cast<std::size_t>(vehicleCount_), RouteTerms{});
     caches_.assign(static_cast<std::size_t>(vehicleCount_) + 1, ListCache{});
     Seconds earliestDeparture = std::numeric_limits<Seconds>::max();
-    for (const Vehicle &vehicle : plan_->vehicles)
+    for (const Vehicle& vehicle : plan_->vehicles)
         earliestDeparture = std::min(earliestDeparture, vehicle.departureTime);
     noWaiting_ = true;
-    for (const Visit &visit : plan_->visits)
+    for (const Visit& visit : plan_->visits)
         noWaiting_ = noWaiting_ && visit.minStartTime <= earliestDeparture;
     overloadTotal_ = 0;
     latenessTotal_ = 0;
     drivingTotal_ = 0;
 
-    for (int v = 0; v < vehicleCount_; ++v)
-    {
+    for (int v = 0; v < vehicleCount_; ++v) {
         terms_[static_cast<std::size_t>(v)] = evaluateRoute(v);
-        const RouteTerms &t = terms_[static_cast<std::size_t>(v)];
+        const RouteTerms& t = terms_[static_cast<std::size_t>(v)];
         overloadTotal_ += t.overload;
         latenessTotal_ += t.lateness;
         drivingTotal_ += t.driving;
     }
     unassignedTotal_ = unassignedMinutes();
-    for (int l = 0; l <= vehicleCount_; ++l)
-    {
+    for (int l = 0; l <= vehicleCount_; ++l) {
         if (noWaiting_)
             rebuildCache(l);
         else
@@ -72,31 +65,26 @@ void VehicleRoutingIncrementalScoreCalculator::rebuild(
     }
 }
 
-void VehicleRoutingIncrementalScoreCalculator::before_list_edit(int listIndex)
-{
-    if (listIndex >= vehicleCount_)
-    {
+void VehicleRoutingIncrementalScoreCalculator::before_list_edit(int listIndex) {
+    if (listIndex >= vehicleCount_) {
         // The unassigned pool: its whole contribution is the medium penalty.
         unassignedTotal_ = 0;
         return;
     }
-    const RouteTerms &t = terms_[static_cast<std::size_t>(listIndex)];
+    const RouteTerms& t = terms_[static_cast<std::size_t>(listIndex)];
     overloadTotal_ -= t.overload;
     latenessTotal_ -= t.lateness;
     drivingTotal_ -= t.driving;
 }
 
-void VehicleRoutingIncrementalScoreCalculator::after_list_edit(int listIndex)
-{
+void VehicleRoutingIncrementalScoreCalculator::after_list_edit(int listIndex) {
     // The cache only serves previews; without them it would be pure overhead.
-    if (noWaiting_)
-        rebuildCache(listIndex);
-    if (listIndex >= vehicleCount_)
-    {
+    if (noWaiting_) rebuildCache(listIndex);
+    if (listIndex >= vehicleCount_) {
         // The pool's penalty is the last prefix sum when the cache is live.
         unassignedTotal_ = noWaiting_
-                               ? caches_[static_cast<std::size_t>(listIndex)].cumPenalty.back()
-                               : unassignedMinutes();
+                                   ? caches_[static_cast<std::size_t>(listIndex)].cumPenalty.back()
+                                   : unassignedMinutes();
         return;
     }
     RouteTerms t = termsFromCache(listIndex);
@@ -109,32 +97,27 @@ void VehicleRoutingIncrementalScoreCalculator::after_list_edit(int listIndex)
 // One walk of the route derives all three per-vehicle terms: arrival times
 // propagate forward, so capacity, lateness and travel time come out together.
 VehicleRoutingIncrementalScoreCalculator::RouteTerms
-VehicleRoutingIncrementalScoreCalculator::evaluateRoute(int vehicleIndex) const
-{
-    return evaluateElements(
-        vehicleIndex, plan_->vehicles[static_cast<std::size_t>(vehicleIndex)].visitIndices);
+VehicleRoutingIncrementalScoreCalculator::evaluateRoute(int vehicleIndex) const {
+    return evaluateElements(vehicleIndex,
+                            plan_->vehicles[static_cast<std::size_t>(vehicleIndex)].visitIndices);
 }
 
 VehicleRoutingIncrementalScoreCalculator::RouteTerms
 VehicleRoutingIncrementalScoreCalculator::evaluateElements(int vehicleIndex,
-                                                           const std::vector<int> &elements) const
-{
-    const Vehicle &vehicle = plan_->vehicles[static_cast<std::size_t>(vehicleIndex)];
+                                                           const std::vector<int>& elements) const {
+    const Vehicle& vehicle = plan_->vehicles[static_cast<std::size_t>(vehicleIndex)];
     RouteTerms terms;
-    if (elements.empty())
-        return terms;
+    if (elements.empty()) return terms;
 
     std::int64_t totalDemand = 0;
     Seconds previousDeparture = vehicle.departureTime;
     int previousLocation = vehicle.homeLocationIndex;
 
-    for (int visitIndex : elements)
-    {
-        const Visit &visit = plan_->visits[static_cast<std::size_t>(visitIndex)];
+    for (int visitIndex : elements) {
+        const Visit& visit = plan_->visits[static_cast<std::size_t>(visitIndex)];
         totalDemand += visit.demand;
 
-        const Seconds drive
-            = plan_->drivingTime(previousLocation, visit.locationIndex);
+        const Seconds drive = plan_->drivingTime(previousLocation, visit.locationIndex);
         terms.driving += drive;
 
         const Seconds arrival = previousDeparture + drive;
@@ -144,57 +127,47 @@ VehicleRoutingIncrementalScoreCalculator::evaluateElements(int vehicleIndex,
         if (serviceFinished > visit.maxEndTime)
             terms.lateness += ceilToMinutes(serviceFinished - visit.maxEndTime);
 
-        previousDeparture
-            = std::max(arrival, visit.minStartTime) + visit.serviceDuration;
+        previousDeparture = std::max(arrival, visit.minStartTime) + visit.serviceDuration;
         previousLocation = visit.locationIndex;
     }
     terms.driving += vehicle.homeLeg(plan_->drivingSeconds, previousLocation);
 
-    if (totalDemand > vehicle.capacity)
-        terms.overload = totalDemand - vehicle.capacity;
+    if (totalDemand > vehicle.capacity) terms.overload = totalDemand - vehicle.capacity;
     return terms;
 }
 
 // The cache already holds the route's load, service and driving totals; the
 // full walk is only needed when some visit can actually finish late.
 VehicleRoutingIncrementalScoreCalculator::RouteTerms
-VehicleRoutingIncrementalScoreCalculator::termsFromCache(int vehicleIndex) const
-{
-    const Vehicle &vehicle = plan_->vehicles[static_cast<std::size_t>(vehicleIndex)];
-    const ListCache &c = caches_[static_cast<std::size_t>(vehicleIndex)];
+VehicleRoutingIncrementalScoreCalculator::termsFromCache(int vehicleIndex) const {
+    const Vehicle& vehicle = plan_->vehicles[static_cast<std::size_t>(vehicleIndex)];
+    const ListCache& c = caches_[static_cast<std::size_t>(vehicleIndex)];
     const std::size_t size = vehicle.visitIndices.size();
-    if (size == 0)
-        return RouteTerms{};
+    if (size == 0) return RouteTerms{};
     if (!noWaiting_)  // no cache without previews
         return evaluateRoute(vehicleIndex);
     RouteTerms terms;
-    const int lastLocation
-        = plan_->visits[static_cast<std::size_t>(vehicle.visitIndices[size - 1])].locationIndex;
+    const int lastLocation =
+            plan_->visits[static_cast<std::size_t>(vehicle.visitIndices[size - 1])].locationIndex;
     terms.driving = c.cumDist[size] + vehicle.homeLeg(plan_->drivingSeconds, lastLocation);
     terms.overload = std::max<std::int64_t>(0, c.cumLoad[size] - vehicle.capacity);
     terms.lateness = c.lateness;
     return terms;
 }
 
-std::int64_t VehicleRoutingIncrementalScoreCalculator::unassignedMinutes() const
-{
+std::int64_t VehicleRoutingIncrementalScoreCalculator::unassignedMinutes() const {
     std::int64_t total = 0;
-    for (int visitIndex : plan_->unassignedVisitIndices)
-    {
-        total += plan_->visits[static_cast<std::size_t>(visitIndex)]
-                     .unassignedPenalty();
+    for (int visitIndex : plan_->unassignedVisitIndices) {
+        total += plan_->visits[static_cast<std::size_t>(visitIndex)].unassignedPenalty();
     }
     return total;
 }
 
-Score VehicleRoutingIncrementalScoreCalculator::current_score() const
-{
+Score VehicleRoutingIncrementalScoreCalculator::current_score() const {
     return weightedScore(overloadTotal_, latenessTotal_, unassignedTotal_, drivingTotal_);
 }
 
-optimaru::Score
-VehicleRoutingIncrementalScoreCalculator::score()
-{
+optimaru::Score VehicleRoutingIncrementalScoreCalculator::score() {
     return toEngineScore(current_score());
 }
 
@@ -202,13 +175,12 @@ VehicleRoutingIncrementalScoreCalculator::score()
 // Move previews
 // ---------------------------------------------------------------------------
 
-void VehicleRoutingIncrementalScoreCalculator::rebuildCache(int listIndex)
-{
+void VehicleRoutingIncrementalScoreCalculator::rebuildCache(int listIndex) {
     const bool pool = listIndex >= vehicleCount_;
-    const std::vector<int> &elements
-        = pool ? plan_->unassignedVisitIndices
-               : plan_->vehicles[static_cast<std::size_t>(listIndex)].visitIndices;
-    ListCache &cache = caches_[static_cast<std::size_t>(listIndex)];
+    const std::vector<int>& elements =
+            pool ? plan_->unassignedVisitIndices
+                 : plan_->vehicles[static_cast<std::size_t>(listIndex)].visitIndices;
+    ListCache& cache = caches_[static_cast<std::size_t>(listIndex)];
     const std::size_t n = elements.size();
     cache.cumLoad.assign(n + 1, 0);
     cache.cumService.assign(n + 1, 0);
@@ -218,54 +190,47 @@ void VehicleRoutingIncrementalScoreCalculator::rebuildCache(int listIndex)
     cache.prefixMinEnd.assign(n + 1, std::numeric_limits<Seconds>::max());
     cache.suffixMinEnd.assign(n + 1, std::numeric_limits<Seconds>::max());
     cache.lateness = 0;
-    const Seconds departure
-        = pool ? 0 : plan_->vehicles[static_cast<std::size_t>(listIndex)].departureTime;
-    int previousLocation
-        = pool ? -1 : plan_->vehicles[static_cast<std::size_t>(listIndex)].homeLocationIndex;
-    for (std::size_t k = 0; k < n; ++k)
-    {
-        const Visit &visit = plan_->visits[static_cast<std::size_t>(elements[k])];
+    const Seconds departure =
+            pool ? 0 : plan_->vehicles[static_cast<std::size_t>(listIndex)].departureTime;
+    int previousLocation =
+            pool ? -1 : plan_->vehicles[static_cast<std::size_t>(listIndex)].homeLocationIndex;
+    for (std::size_t k = 0; k < n; ++k) {
+        const Visit& visit = plan_->visits[static_cast<std::size_t>(elements[k])];
         cache.cumLoad[k + 1] = cache.cumLoad[k] + visit.demand;
         cache.cumService[k + 1] = cache.cumService[k] + visit.serviceDuration;
         cache.cumPenalty[k + 1] = cache.cumPenalty[k] + visit.unassignedPenalty();
-        cache.cumDist[k + 1]
-            = cache.cumDist[k]
-              + (previousLocation < 0
-                     ? 0
-                     : plan_->drivingTime(previousLocation, visit.locationIndex));
-        cache.cumRevDist[k + 1]
-            = cache.cumRevDist[k]
-              + (k == 0 ? 0 : plan_->drivingTime(visit.locationIndex, previousLocation));
+        cache.cumDist[k + 1] =
+                cache.cumDist[k] +
+                (previousLocation < 0 ? 0
+                                      : plan_->drivingTime(previousLocation, visit.locationIndex));
+        cache.cumRevDist[k + 1] =
+                cache.cumRevDist[k] +
+                (k == 0 ? 0 : plan_->drivingTime(visit.locationIndex, previousLocation));
         cache.prefixMinEnd[k + 1] = std::min(cache.prefixMinEnd[k], visit.maxEndTime);
-        if (!pool)
-        {
+        if (!pool) {
             // No visit ever waits (noWaiting_), so arrival = departure +
             // driving so far + service so far: the same walk evaluateRoute
             // does, folded into the cache rebuild.
-            const Seconds serviceFinished
-                = departure + cache.cumDist[k + 1] + cache.cumService[k + 1];
+            const Seconds serviceFinished =
+                    departure + cache.cumDist[k + 1] + cache.cumService[k + 1];
             if (serviceFinished > visit.maxEndTime)
                 cache.lateness += ceilToMinutes(serviceFinished - visit.maxEndTime);
         }
         previousLocation = visit.locationIndex;
     }
-    for (std::size_t k = n; k-- > 0;)
-    {
-        cache.suffixMinEnd[k]
-            = std::min(cache.suffixMinEnd[k + 1],
-                       plan_->visits[static_cast<std::size_t>(elements[k])].maxEndTime);
+    for (std::size_t k = n; k-- > 0;) {
+        cache.suffixMinEnd[k] =
+                std::min(cache.suffixMinEnd[k + 1],
+                         plan_->visits[static_cast<std::size_t>(elements[k])].maxEndTime);
     }
 }
 
-Seconds VehicleRoutingIncrementalScoreCalculator::minEndOf(const ListCache &cache,
-                                                           const std::vector<int> &elements,
+Seconds VehicleRoutingIncrementalScoreCalculator::minEndOf(const ListCache& cache,
+                                                           const std::vector<int>& elements,
                                                            std::size_t begin,
-                                                           std::size_t end) const
-{
-    if (begin == 0)
-        return cache.prefixMinEnd[end];
-    if (end == elements.size())
-        return cache.suffixMinEnd[begin];
+                                                           std::size_t end) const {
+    if (begin == 0) return cache.prefixMinEnd[end];
+    if (end == elements.size()) return cache.suffixMinEnd[begin];
     // A middle piece (an intra-route swap or Or-opt) is scanned: exact, and
     // bounded by the route length, which is what the move already costs to
     // apply when the preview declines.
@@ -275,29 +240,23 @@ Seconds VehicleRoutingIncrementalScoreCalculator::minEndOf(const ListCache &cach
     return result;
 }
 
-void VehicleRoutingIncrementalScoreCalculator::Run::insert_at(int index, const Piece &piece)
-{
+void VehicleRoutingIncrementalScoreCalculator::Run::insert_at(int index, const Piece& piece) {
     // `index` counts elements across the run; split the piece it falls in.
     assert(count + 2 <= kCapacity);  // a split adds two pieces
     int offset = 0;
-    for (int i = 0; i < count; ++i)
-    {
+    for (int i = 0; i < count; ++i) {
         const int size = pieces[i].end - pieces[i].begin;
-        if (index <= offset)
-        {
-            for (int j = count; j > i; --j)
-                pieces[j] = pieces[j - 1];
+        if (index <= offset) {
+            for (int j = count; j > i; --j) pieces[j] = pieces[j - 1];
             pieces[i] = piece;
             ++count;
             return;
         }
-        if (index < offset + size)
-        {
-            const Piece head{pieces[i].list, pieces[i].begin,
-                             pieces[i].begin + (index - offset), false};
+        if (index < offset + size) {
+            const Piece head{pieces[i].list, pieces[i].begin, pieces[i].begin + (index - offset),
+                             false};
             const Piece tail{pieces[i].list, head.end, pieces[i].end, false};
-            for (int j = count + 1; j > i + 2; --j)
-                pieces[j] = pieces[j - 2];
+            for (int j = count + 1; j > i + 2; --j) pieces[j] = pieces[j - 2];
             pieces[i] = head;
             pieces[i + 1] = piece;
             pieces[i + 2] = tail;
@@ -311,41 +270,34 @@ void VehicleRoutingIncrementalScoreCalculator::Run::insert_at(int index, const P
 
 // A plan with waiting has no prefix-sum caches: write each run out as a visit
 // sequence and walk it like evaluateRoute does. Always exact, never declines.
-bool VehicleRoutingIncrementalScoreCalculator::previewRunsByWalk(
-    const Run *runs, int runCount, optimaru::Score &out) const
-{
+bool VehicleRoutingIncrementalScoreCalculator::previewRunsByWalk(const Run* runs, int runCount,
+                                                                 optimaru::Score& out) const {
     std::int64_t overload = overloadTotal_;
     std::int64_t lateness = latenessTotal_;
     std::int64_t driving = drivingTotal_;
     std::int64_t unassigned = unassignedTotal_;
-    for (int t = 0; t < runCount; ++t)
-    {
-        const Run &run = runs[t];
+    for (int t = 0; t < runCount; ++t) {
+        const Run& run = runs[t];
         walkScratch_.clear();
-        for (int i = 0; i < run.count; ++i)
-        {
-            const Piece &piece = run.pieces[i];
-            const std::vector<int> &elements = elementsOf(piece.list);
-            if (piece.reversed)
-            {
+        for (int i = 0; i < run.count; ++i) {
+            const Piece& piece = run.pieces[i];
+            const std::vector<int>& elements = elementsOf(piece.list);
+            if (piece.reversed) {
                 for (int k = piece.end; k-- > piece.begin;)
                     walkScratch_.push_back(elements[static_cast<std::size_t>(k)]);
-            }
-            else
-            {
+            } else {
                 walkScratch_.insert(walkScratch_.end(), elements.begin() + piece.begin,
                                     elements.begin() + piece.end);
             }
         }
-        if (run.list >= vehicleCount_)
-        {
+        if (run.list >= vehicleCount_) {
             std::int64_t penalty = 0;
             for (int visitIndex : walkScratch_)
                 penalty += plan_->visits[static_cast<std::size_t>(visitIndex)].unassignedPenalty();
             unassigned += penalty - unassignedTotal_;
             continue;
         }
-        const RouteTerms &old = terms_[static_cast<std::size_t>(run.list)];
+        const RouteTerms& old = terms_[static_cast<std::size_t>(run.list)];
         const RouteTerms fresh = evaluateElements(run.list, walkScratch_);
         overload += fresh.overload - old.overload;
         lateness += fresh.lateness - old.lateness;
@@ -356,35 +308,30 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRunsByWalk(
 }
 
 // Score the solution with each run's list replaced by the run's pieces.
-bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run *runs, int runCount,
-                                                           optimaru::Score &out) const
-{
-    if (!noWaiting_)
-        return previewRunsByWalk(runs, runCount, out);
+bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run* runs, int runCount,
+                                                           optimaru::Score& out) const {
+    if (!noWaiting_) return previewRunsByWalk(runs, runCount, out);
     std::int64_t overload = overloadTotal_;
     std::int64_t lateness = latenessTotal_;
     std::int64_t driving = drivingTotal_;
     std::int64_t unassigned = unassignedTotal_;
-    for (int t = 0; t < runCount; ++t)
-    {
-        const Run &run = runs[t];
+    for (int t = 0; t < runCount; ++t) {
+        const Run& run = runs[t];
         const int list = run.list;
-        if (list >= vehicleCount_)
-        {
+        if (list >= vehicleCount_) {
             // The pool: its whole contribution is the unassigned penalty.
             std::int64_t penalty = 0;
-            for (int i = 0; i < run.count; ++i)
-            {
-                const Piece &piece = run.pieces[i];
-                const ListCache &c = caches_[static_cast<std::size_t>(piece.list)];
-                penalty += c.cumPenalty[static_cast<std::size_t>(piece.end)]
-                           - c.cumPenalty[static_cast<std::size_t>(piece.begin)];
+            for (int i = 0; i < run.count; ++i) {
+                const Piece& piece = run.pieces[i];
+                const ListCache& c = caches_[static_cast<std::size_t>(piece.list)];
+                penalty += c.cumPenalty[static_cast<std::size_t>(piece.end)] -
+                           c.cumPenalty[static_cast<std::size_t>(piece.begin)];
             }
             unassigned += penalty - caches_[static_cast<std::size_t>(list)].cumPenalty.back();
             continue;
         }
-        const Vehicle &vehicle = plan_->vehicles[static_cast<std::size_t>(list)];
-        const RouteTerms &old = terms_[static_cast<std::size_t>(list)];
+        const Vehicle& vehicle = plan_->vehicles[static_cast<std::size_t>(list)];
+        const RouteTerms& old = terms_[static_cast<std::size_t>(list)];
         overload -= old.overload;
         lateness -= old.lateness;
         driving -= old.driving;
@@ -393,13 +340,11 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run *runs, int 
         Seconds minMaxEnd = std::numeric_limits<Seconds>::max();
         int previousLocation = vehicle.homeLocationIndex;
         bool any = false;
-        for (int i = 0; i < run.count; ++i)
-        {
-            const Piece &piece = run.pieces[i];
-            if (piece.end <= piece.begin)
-                continue;
-            const ListCache &c = caches_[static_cast<std::size_t>(piece.list)];
-            const std::vector<int> &elements = elementsOf(piece.list);
+        for (int i = 0; i < run.count; ++i) {
+            const Piece& piece = run.pieces[i];
+            if (piece.end <= piece.begin) continue;
+            const ListCache& c = caches_[static_cast<std::size_t>(piece.list)];
+            const std::vector<int>& elements = elementsOf(piece.list);
             const std::size_t b = static_cast<std::size_t>(piece.begin);
             const std::size_t e = static_cast<std::size_t>(piece.end);
             load += c.cumLoad[e] - c.cumLoad[b];
@@ -407,27 +352,23 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run *runs, int 
             minMaxEnd = std::min(minMaxEnd, minEndOf(c, elements, b, e));
             const int firstElement = elements[piece.reversed ? e - 1 : b];
             const int lastElement = elements[piece.reversed ? b : e - 1];
-            const int firstLocation
-                = plan_->visits[static_cast<std::size_t>(firstElement)].locationIndex;
+            const int firstLocation =
+                    plan_->visits[static_cast<std::size_t>(firstElement)].locationIndex;
             drive += plan_->drivingTime(previousLocation, firstLocation);
             drive += piece.reversed ? c.cumRevDist[e] - c.cumRevDist[b + 1]
                                     : c.cumDist[e] - c.cumDist[b + 1];
-            previousLocation
-                = plan_->visits[static_cast<std::size_t>(lastElement)].locationIndex;
+            previousLocation = plan_->visits[static_cast<std::size_t>(lastElement)].locationIndex;
             any = true;
         }
-        if (any)
-        {
+        if (any) {
             // Lateness is exact from the sums only as "none": every arrival +
             // service ends before the earliest deadline the route's visits
             // carry. Otherwise the candidate route is walked (O(route), still
             // exact) rather than the preview declined.
             const Seconds finish = vehicle.departureTime + drive + service;
-            if (finish > minMaxEnd)
-                return previewRunsByWalk(runs, runCount, out);
+            if (finish > minMaxEnd) return previewRunsByWalk(runs, runCount, out);
             drive += vehicle.homeLeg(plan_->drivingSeconds, previousLocation);
-            if (load > vehicle.capacity)
-                overload += load - vehicle.capacity;
+            if (load > vehicle.capacity) overload += load - vehicle.capacity;
             driving += drive;
         }
     }
@@ -435,19 +376,18 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run *runs, int 
     return true;
 }
 
-bool VehicleRoutingIncrementalScoreCalculator::preview_segment_move(
-    int fromList, int start, int len, int toList, int insert_at, optimaru::Score &out)
-{
-    if (!previewsEnabled() || len <= 0)
-        return false;
+bool VehicleRoutingIncrementalScoreCalculator::preview_segment_move(int fromList, int start,
+                                                                    int len, int toList,
+                                                                    int insert_at,
+                                                                    optimaru::Score& out) {
+    if (!previewsEnabled() || len <= 0) return false;
     const int fromSize = list_size(fromList);
     const Piece segment{fromList, start, start + len, false};
     Run runs[2];
     runs[0].list = fromList;
     runs[0].add({fromList, 0, start, false});
     runs[0].add({fromList, start + len, fromSize, false});
-    if (fromList == toList)
-    {
+    if (fromList == toList) {
         runs[0].insert_at(insert_at, segment);
         return previewRuns(runs, 1, out);
     }
@@ -459,15 +399,11 @@ bool VehicleRoutingIncrementalScoreCalculator::preview_segment_move(
 }
 
 bool VehicleRoutingIncrementalScoreCalculator::preview_swap(int l1, int p1, int l2, int p2,
-                                                           optimaru::Score &out)
-{
-    if (!previewsEnabled())
-        return false;
+                                                            optimaru::Score& out) {
+    if (!previewsEnabled()) return false;
     Run runs[2];
-    if (l1 == l2)
-    {
-        if (p1 == p2)
-        {
+    if (l1 == l2) {
+        if (p1 == p2) {
             out = score();
             return true;
         }
@@ -492,10 +428,8 @@ bool VehicleRoutingIncrementalScoreCalculator::preview_swap(int l1, int p1, int 
 }
 
 bool VehicleRoutingIncrementalScoreCalculator::preview_reverse(int list, int first, int last,
-                                                              optimaru::Score &out)
-{
-    if (!previewsEnabled())
-        return false;
+                                                               optimaru::Score& out) {
+    if (!previewsEnabled()) return false;
     Run run;
     run.list = list;
     run.add({list, 0, first, false});
@@ -505,10 +439,8 @@ bool VehicleRoutingIncrementalScoreCalculator::preview_reverse(int list, int fir
 }
 
 bool VehicleRoutingIncrementalScoreCalculator::preview_tail_swap(int l1, int c1, int l2, int c2,
-                                                               optimaru::Score &out)
-{
-    if (!previewsEnabled())
-        return false;
+                                                                 optimaru::Score& out) {
+    if (!previewsEnabled()) return false;
     Run runs[2];
     runs[0].list = l1;
     runs[0].add({l1, 0, c1, false});
@@ -520,11 +452,9 @@ bool VehicleRoutingIncrementalScoreCalculator::preview_tail_swap(int l1, int c1,
 }
 
 bool VehicleRoutingIncrementalScoreCalculator::preview_exchange(int l1, int p1, int len1, int l2,
-                                                               int p2, int len2,
-                                                               optimaru::Score &out)
-{
-    if (!previewsEnabled())
-        return false;
+                                                                int p2, int len2,
+                                                                optimaru::Score& out) {
+    if (!previewsEnabled()) return false;
     Run runs[2];
     runs[0].list = l1;
     runs[0].add({l1, 0, p1, false});
@@ -539,56 +469,52 @@ bool VehicleRoutingIncrementalScoreCalculator::preview_exchange(int l1, int p1, 
 
 // Walk the route with the element in: the waiting-plan path and the fallback
 // of the cached path when the candidate route may be late.
-bool VehicleRoutingIncrementalScoreCalculator::previewInsertByWalk(
-    int list, int pos, int element, optimaru::Score &out) const
-{
+bool VehicleRoutingIncrementalScoreCalculator::previewInsertByWalk(int list, int pos, int element,
+                                                                   optimaru::Score& out) const {
     walkScratch_ = plan_->vehicles[static_cast<std::size_t>(list)].visitIndices;
     walkScratch_.insert(walkScratch_.begin() + pos, element);
-    const RouteTerms &old = terms_[static_cast<std::size_t>(list)];
+    const RouteTerms& old = terms_[static_cast<std::size_t>(list)];
     const RouteTerms fresh = evaluateElements(list, walkScratch_);
     out = toEngineScore(weightedScore(overloadTotal_ - old.overload + fresh.overload,
                                       latenessTotal_ - old.lateness + fresh.lateness,
-                                      unassignedTotal_, drivingTotal_ - old.driving + fresh.driving));
+                                      unassignedTotal_,
+                                      drivingTotal_ - old.driving + fresh.driving));
     return true;
 }
 
 bool VehicleRoutingIncrementalScoreCalculator::preview_insert(int list, int pos, int element,
-                                                             optimaru::Score &out)
-{
-    if (!previewsEnabled())
-        return false;
+                                                              optimaru::Score& out) {
+    if (!previewsEnabled()) return false;
     // The repair heuristics call this once per candidate slot, so it is the
     // hottest preview; a direct delta beats composing a three-piece run.
-    const Visit &visit = plan_->visits[static_cast<std::size_t>(element)];
-    if (list >= vehicleCount_)
-    {
+    const Visit& visit = plan_->visits[static_cast<std::size_t>(element)];
+    if (list >= vehicleCount_) {
         out = toEngineScore(weightedScore(overloadTotal_, latenessTotal_,
                                           unassignedTotal_ + visit.unassignedPenalty(),
                                           drivingTotal_));
         return true;
     }
-    const Vehicle &vehicle = plan_->vehicles[static_cast<std::size_t>(list)];
-    const std::vector<int> &elements = vehicle.visitIndices;
+    const Vehicle& vehicle = plan_->vehicles[static_cast<std::size_t>(list)];
+    const std::vector<int>& elements = vehicle.visitIndices;
     if (!noWaiting_)  // no cache on a plan with waiting
         return previewInsertByWalk(list, pos, element, out);
-    const ListCache &c = caches_[static_cast<std::size_t>(list)];
+    const ListCache& c = caches_[static_cast<std::size_t>(list)];
     const std::size_t size = elements.size();
     const std::size_t at = static_cast<std::size_t>(pos);
-    auto locationOf = [&](std::size_t k)
-    { return plan_->visits[static_cast<std::size_t>(elements[k])].locationIndex; };
+    auto locationOf = [&](std::size_t k) {
+        return plan_->visits[static_cast<std::size_t>(elements[k])].locationIndex;
+    };
     const int previousLocation = at == 0 ? vehicle.homeLocationIndex : locationOf(at - 1);
 
-    std::int64_t drive = c.cumDist[size] + plan_->drivingTime(previousLocation, visit.locationIndex);
+    std::int64_t drive =
+            c.cumDist[size] + plan_->drivingTime(previousLocation, visit.locationIndex);
     int lastLocation;
-    if (at < size)
-    {
+    if (at < size) {
         const int nextLocation = locationOf(at);
-        drive += plan_->drivingTime(visit.locationIndex, nextLocation)
-                 - plan_->drivingTime(previousLocation, nextLocation);
+        drive += plan_->drivingTime(visit.locationIndex, nextLocation) -
+                 plan_->drivingTime(previousLocation, nextLocation);
         lastLocation = locationOf(size - 1);
-    }
-    else
-    {
+    } else {
         lastLocation = visit.locationIndex;
     }
     const std::int64_t load = c.cumLoad[size] + visit.demand;
@@ -600,9 +526,9 @@ bool VehicleRoutingIncrementalScoreCalculator::preview_insert(int list, int pos,
 
     // The check above established the new route has no lateness, so the old
     // route's lateness (non-zero only for a non-metric matrix) goes too.
-    const RouteTerms &old = terms_[static_cast<std::size_t>(list)];
-    const std::int64_t overload
-        = overloadTotal_ - old.overload + std::max<std::int64_t>(0, load - vehicle.capacity);
+    const RouteTerms& old = terms_[static_cast<std::size_t>(list)];
+    const std::int64_t overload =
+            overloadTotal_ - old.overload + std::max<std::int64_t>(0, load - vehicle.capacity);
     out = toEngineScore(weightedScore(overload, latenessTotal_ - old.lateness, unassignedTotal_,
                                       drivingTotal_ - old.driving + drive));
     return true;

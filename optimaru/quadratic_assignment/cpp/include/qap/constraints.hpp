@@ -18,8 +18,7 @@
 #include "qap/constraints/location_capacity_cost.hpp"
 #include "qap/constraints/pinned_assignments_cost.hpp"
 
-namespace qap
-{
+namespace qap {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -44,8 +43,7 @@ namespace qap
 //         .soft("pinnedAssignmentsCost")
 //         .drop("assignmentCost")
 //         .into(calc);
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<PinnedAssignmentsCost>();
     assembly.emplace<ForbiddenAssignmentsCost>();
@@ -55,8 +53,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

@@ -15,8 +15,7 @@ struct MaxConsecutiveDaysCost final : DayPresenceConstraint {
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit MaxConsecutiveDaysCost(double weight = kDefaultWeight, int value = 6)
-        : DayPresenceConstraint("maxConsecutiveDaysCost", weight, kDefaultLevel),
-          value_(value) {}
+        : DayPresenceConstraint("maxConsecutiveDaysCost", weight, kDefaultLevel), value_(value) {}
     double runCost(std::int32_t len, bool /*touchesEnd*/) const override {
         return len > value_ ? static_cast<double>(len - value_) : 0.0;  // excess always counts
     }

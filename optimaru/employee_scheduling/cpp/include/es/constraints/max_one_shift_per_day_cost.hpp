@@ -31,8 +31,8 @@ struct MaxOneShiftPerDayCost final : GroupableAssignmentConstraint {
         return c;
     }
     bool supports_delta() const override { return true; }
-    double delta_cost(const EmployeeSchedule&, int /*unit*/,
-                     const std::vector<int>& members, int entity) const override {
+    double delta_cost(const EmployeeSchedule&, int /*unit*/, const std::vector<int>& members,
+                      int entity) const override {
         const std::int32_t day = day_[entity];
         double c = 0;
         for (int i : members) {

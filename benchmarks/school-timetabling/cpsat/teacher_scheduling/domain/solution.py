@@ -39,8 +39,12 @@ class Timetable(BaseModel):
     objective_value: float | None = None
     best_objective_bound: float | None = None
     wall_time_seconds: float = 0.0
-    penalties: dict[str, int] = Field(default_factory=dict, description="Violation amount per soft constraint (before weighting)")
-    notes: list[str] = Field(default_factory=list, description="Notes left by the backend (e.g. constraints dropped in a conversion)")
+    penalties: dict[str, int] = Field(
+        default_factory=dict, description="Violation amount per soft constraint (before weighting)"
+    )
+    notes: list[str] = Field(
+        default_factory=list, description="Notes left by the backend (e.g. constraints dropped in a conversion)"
+    )
 
     @property
     def is_solved(self) -> bool:

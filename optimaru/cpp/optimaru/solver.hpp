@@ -76,8 +76,7 @@ public:
 
     // Replace the configured AcceptanceRule with a custom acceptor; called
     // once per solve (and per ruin-and-recreate kick) with the current score.
-    void set_acceptor_factory(
-            std::function<std::unique_ptr<Acceptor>(const Score&)> factory) {
+    void set_acceptor_factory(std::function<std::unique_ptr<Acceptor>(const Score&)> factory) {
         acceptor_factory_ = std::move(factory);
     }
 
@@ -103,14 +102,12 @@ public:
                       "ChainObjective overload");
         require_pinned_values<Traits>(solution);
         Editor<Solution> editor(solution, objective, config_.score_checks,
-                                         derived_states_.empty() ? nullptr
-                                                                    : &derived_states_);
-        StopCondition stop(config_.limits, stop_requested_.get(),
-                                      run_stop_.get());
+                                derived_states_.empty() ? nullptr : &derived_states_);
+        StopCondition stop(config_.limits, stop_requested_.get(), run_stop_.get());
         build_nearby(solution);
         Construction<Solution>::run(editor, config_.construction);
-        LocalSearch<Solution> local_search(config_, nearby_, move_operators_,
-                                                      ruin_operators_, acceptor_factory_);
+        LocalSearch<Solution> local_search(config_, nearby_, move_operators_, ruin_operators_,
+                                           acceptor_factory_);
         return local_search.run(editor, stop);
     }
 
@@ -119,10 +116,8 @@ public:
     // through every move (see ChainView). Custom move/ruin
     // operators are not forwarded into the chained inner solve; derived
     // state and all settings (nearby, LNS, acceptors, limits) are.
-    Score solve(Solution& solution,
-                        ChainObjective<Solution>& objective) {
-        static_assert(Traits::shape == Shape::Chain,
-                      "this overload is for chain-shaped solutions");
+    Score solve(Solution& solution, ChainObjective<Solution>& objective) {
+        static_assert(Traits::shape == Shape::Chain, "this overload is for chain-shaped solutions");
         ChainView<Solution> working(solution);
         ChainObjectiveBridge<Solution> bridge(objective);
         Solver<ChainView<Solution>> inner(config_);
@@ -130,8 +125,7 @@ public:
         inner.run_stop_ = run_stop_;
         if (acceptor_factory_) inner.set_acceptor_factory(acceptor_factory_);
         for (const auto& derived : derived_states_) {
-            inner.add_derived_state(
-                    std::make_unique<ChainDerivedStateBridge<Solution>>(*derived));
+            inner.add_derived_state(std::make_unique<ChainDerivedStateBridge<Solution>>(*derived));
         }
         return inner.solve(working, bridge);
     }
@@ -184,26 +178,29 @@ public:
         auto stop = std::make_shared<std::atomic<bool>>(false);
         std::mutex failure_mutex;
         std::exception_ptr first_failure;
-        run_worker_threads(starts, *stop, [this, &copies, &scores, &objectives, &stop,
-                                         &failure_mutex, &first_failure](int i) {
-            try {
-                Settings thread_config = config_;
-                thread_config.seed = config_.seed + static_cast<std::uint64_t>(i);
-                thread_config.parallel_starts = 1;
-                if (i != 0) thread_config.on_new_best = nullptr;  // only thread 0 reports
-                Solver thread_solver(std::move(thread_config));
-                if (acceptor_factory_) thread_solver.set_acceptor_factory(acceptor_factory_);
-                thread_solver.share_stop_flag(stop_requested_);
-                thread_solver.run_stop_ = stop;
-                scores[i] = thread_solver.solve(copies[i], *objectives[i]);
-            } catch (...) {
-                {
-                    std::lock_guard<std::mutex> lock(failure_mutex);
-                    if (!first_failure) first_failure = std::current_exception();
-                }
-                stop->store(true);
-            }
-        });
+        run_worker_threads(
+                starts, *stop,
+                [this, &copies, &scores, &objectives, &stop, &failure_mutex,
+                 &first_failure](int i) {
+                    try {
+                        Settings thread_config = config_;
+                        thread_config.seed = config_.seed + static_cast<std::uint64_t>(i);
+                        thread_config.parallel_starts = 1;
+                        if (i != 0) thread_config.on_new_best = nullptr;  // only thread 0 reports
+                        Solver thread_solver(std::move(thread_config));
+                        if (acceptor_factory_)
+                            thread_solver.set_acceptor_factory(acceptor_factory_);
+                        thread_solver.share_stop_flag(stop_requested_);
+                        thread_solver.run_stop_ = stop;
+                        scores[i] = thread_solver.solve(copies[i], *objectives[i]);
+                    } catch (...) {
+                        {
+                            std::lock_guard<std::mutex> lock(failure_mutex);
+                            if (!first_failure) first_failure = std::current_exception();
+                        }
+                        stop->store(true);
+                    }
+                });
         if (first_failure) std::rethrow_exception(first_failure);
 
         int best_index = 0;
@@ -226,8 +223,7 @@ private:
     std::vector<std::unique_ptr<DerivedState<Solution>>> derived_states_;
     std::function<std::unique_ptr<Acceptor>(const Score&)> acceptor_factory_;
     // shared_ptr so the solver object stays movable.
-    std::shared_ptr<std::atomic<bool>> stop_requested_ =
-            std::make_shared<std::atomic<bool>>(false);
+    std::shared_ptr<std::atomic<bool>> stop_requested_ = std::make_shared<std::atomic<bool>>(false);
     // Run-scoped stop of one multi-start start (null outside solve_multistart).
     std::shared_ptr<std::atomic<bool>> run_stop_;
 

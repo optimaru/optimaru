@@ -12,8 +12,7 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 
-namespace mc
-{
+namespace mc {
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/: it
 // builds the start partition (see solve()), wires up the
@@ -30,11 +29,9 @@ namespace mc
 // descent off, whatever the Config says; with fewer than two movable vertices
 // it skips the search. A seed of the wrong size keeps that size (and its hard
 // penalty); so does the default start when fixed vertices unbalance it.
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget. 0 stops before the first step: the solve then
         // returns the start partition unchanged (scored).
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
@@ -42,7 +39,7 @@ public:
         // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires.
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<double>::infinity()};
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion (so
         // step_limit = 0 means "no step limit", not "no search").
         std::chrono::milliseconds stall_time_limit{0};
@@ -94,7 +91,7 @@ public:
         // exact-size mode.
         double descent_weight = 0.0;
 
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
     };
 
     Solver() = default;
@@ -110,7 +107,7 @@ public:
     // has one, else (index % 2). With warmStart the given sides are kept (a
     // seed that contradicts a fixed side is kept too: the vertex is pinned,
     // so it keeps the hard penalty). An empty graph is scored, not searched.
-    void solve(MaxCutProblem &problem);
+    void solve(MaxCutProblem& problem);
 
     // Solves with a caller-assembled plugin calculator (see
     // mc/constraints.hpp): pick components and weights, then pass the
@@ -119,7 +116,7 @@ public:
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
     // so parallelSolverCount is ignored.
-    void solve(MaxCutProblem &problem, optimaru::DecomposedObjective<MaxCutProblem> &calculator);
+    void solve(MaxCutProblem& problem, optimaru::DecomposedObjective<MaxCutProblem>& calculator);
 
 private:
     Config config_;

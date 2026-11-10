@@ -18,7 +18,8 @@ struct TargetDaysOffCost final : EsUnitConstraint {
     explicit TargetDaysOffCost(double weight = kDefaultWeight, std::vector<int> targetDays = {},
                                int minCount = 0)
         : EsUnitConstraint("targetDaysOffCost", weight, kDefaultLevel),
-          target_(std::move(targetDays)), min_(minCount) {
+          target_(std::move(targetDays)),
+          min_(minCount) {
         label = "Target days off[>=" + std::to_string(min_) + "]";  // display only
     }
     void on_reset(const EmployeeSchedule& s) override {
@@ -31,13 +32,19 @@ struct TargetDaysOffCost final : EsUnitConstraint {
         isTarget_.assign(horizon_, 0);
         nTarget_ = 0;
         for (int d : target_)
-            if (d >= 0 && d < horizon_ && !isTarget_[d]) { isTarget_[d] = 1; ++nTarget_; }
+            if (d >= 0 && d < horizon_ && !isTarget_[d]) {
+                isTarget_[d] = 1;
+                ++nTarget_;
+            }
         work_.assign(horizon_, 0);
     }
     double cost(const EmployeeSchedule&, int, const std::vector<int>& members) const override {
         int workedTargets = 0;
         for (int i : members)
-            if (isTarget_[day_[i]] && !work_[day_[i]]) { work_[day_[i]] = 1; ++workedTargets; }
+            if (isTarget_[day_[i]] && !work_[day_[i]]) {
+                work_[day_[i]] = 1;
+                ++workedTargets;
+            }
         const int off = nTarget_ - workedTargets;
         double c = off < min_ ? static_cast<double>(min_ - off) : 0.0;
         for (int i : members) work_[day_[i]] = 0;

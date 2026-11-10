@@ -50,9 +50,7 @@ def job(name: str, *, pinned: bool = False) -> JobModel:
 
 
 def product(name: str, other: str) -> ProductModel:
-    return ProductModel(
-        id=name, name=name, cleaning_durations={name: timedelta(0), other: timedelta(minutes=30)}
-    )
+    return ProductModel(id=name, name=name, cleaning_durations={name: timedelta(0), other: timedelta(minutes=30)})
 
 
 def problem(*, pinned=(), lines=None) -> PackagingScheduleModel:

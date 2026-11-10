@@ -75,9 +75,9 @@ from dataclasses import dataclass, fields
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from ortools.sat.python import cp_model
+
 from optimaru.school_timetabling import constraint_info as _engine_constraint_info
 from optimaru.school_timetabling import constraints as domain
-
 from teacher_scheduling.solver import constraints as hard_impl
 from teacher_scheduling.solver import objective
 from teacher_scheduling.solver.config import ObjectiveWeights

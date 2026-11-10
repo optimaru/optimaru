@@ -3,8 +3,7 @@
 
 #include "sls/constraints/common.hpp"
 
-namespace sls
-{
+namespace sls {
 
 // Soft, weight 1: awayToHomeHopCost — a team visiting on one round index and
 // hosting on the next travels back home. The pair is (m1 on index i, m2 on
@@ -12,36 +11,26 @@ namespace sls
 // match's own dist(m1.home, m1.away) — it depends only on m1, so as the LATER
 // match a candidate contributes the earlier one's distance instead of its
 // own. Raw cost (one global total) = the summed km; 0 = no such hop.
-struct AwayToHomeHopCost final : RoundIndexPairConstraint
-{
+struct AwayToHomeHopCost final : RoundIndexPairConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit AwayToHomeHopCost(double weight = kDefaultWeight)
-        : RoundIndexPairConstraint("awayToHomeHopCost", weight, kDefaultLevel)
-    {
-    }
+        : RoundIndexPairConstraint("awayToHomeHopCost", weight, kDefaultLevel) {}
 
 protected:
-    std::int64_t marginal(const LeagueSchedule &schedule,
-                          int matchIndex,
-                          int index) const override
-    {
-        const Match &match = schedule.matches[matchIndex];
+    std::int64_t marginal(const LeagueSchedule& schedule, int matchIndex,
+                          int index) const override {
+        const Match& match = schedule.matches[matchIndex];
         std::int64_t kilometres = 0;
-        const std::int64_t own
-            = schedule.distance(match.homeTeam, match.awayTeam);
-        for (int later : at(index + 1))
-        {
-            if (schedule.matches[later].homeTeam == match.awayTeam)
-                kilometres += own;
+        const std::int64_t own = schedule.distance(match.homeTeam, match.awayTeam);
+        for (int later : at(index + 1)) {
+            if (schedule.matches[later].homeTeam == match.awayTeam) kilometres += own;
         }
-        for (int earlier : at(index - 1))
-        {
-            const Match &previous = schedule.matches[earlier];
+        for (int earlier : at(index - 1)) {
+            const Match& previous = schedule.matches[earlier];
             if (match.homeTeam == previous.awayTeam)
-                kilometres
-                    += schedule.distance(previous.homeTeam, previous.awayTeam);
+                kilometres += schedule.distance(previous.homeTeam, previous.awayTeam);
         }
         return kilometres;
     }

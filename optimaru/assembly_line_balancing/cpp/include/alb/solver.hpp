@@ -14,8 +14,7 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 
-namespace alb
-{
+namespace alb {
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/: it
 // runs the domain construction (a first fit, see
@@ -24,11 +23,9 @@ namespace alb
 // and value recommender, and delegates the search to
 // optimaru::Solver<AssemblyLineBalancingProblem> (late acceptance + adaptive
 // ruin-and-recreate on top of the built-in change / swap moves).
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget. 0 stops before the first step: the solve then
         // returns the construction (or a complete seed) unchanged.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
@@ -36,7 +33,7 @@ public:
         // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires.
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<double>::infinity()};
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion (so
         // step_limit = 0 means "no step limit", not "no search").
         std::chrono::milliseconds stall_time_limit{0};
@@ -101,7 +98,7 @@ public:
         // move can cross.
         bool closeStationMoves = true;
 
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
@@ -117,7 +114,7 @@ public:
     // stations and problem.score (a full recompute), and resets
     // problem.warmStart to false. Throws std::invalid_argument on invalid
     // facts or a cyclic precedence graph.
-    void solve(AssemblyLineBalancingProblem &problem);
+    void solve(AssemblyLineBalancingProblem& problem);
 
     // Solves with a caller-assembled plugin calculator (see
     // alb/constraints.hpp): pick components and weights, then pass the
@@ -126,8 +123,8 @@ public:
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
     // so parallelSolverCount is ignored.
-    void solve(AssemblyLineBalancingProblem &problem,
-               optimaru::DecomposedObjective<AssemblyLineBalancingProblem> &calculator);
+    void solve(AssemblyLineBalancingProblem& problem,
+               optimaru::DecomposedObjective<AssemblyLineBalancingProblem>& calculator);
 
 private:
     Config config_;

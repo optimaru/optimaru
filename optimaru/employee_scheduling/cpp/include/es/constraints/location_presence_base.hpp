@@ -30,10 +30,10 @@ struct LocationPresenceBase : EsUnitConstraint {
 protected:
     std::string loc_;
     std::vector<std::int32_t> day_;
-    std::vector<char> match_;              // shift -> matches target location
-    mutable std::vector<char> present_;    // scratch: day has the target location
-    mutable std::vector<char> work_;       // scratch: day has any work
-    mutable std::vector<char> pin_;        // scratch: the matching shift on the day is pinned
+    std::vector<char> match_;            // shift -> matches target location
+    mutable std::vector<char> present_;  // scratch: day has the target location
+    mutable std::vector<char> work_;     // scratch: day has any work
+    mutable std::vector<char> pin_;      // scratch: the matching shift on the day is pinned
     std::int32_t horizon_ = 0;
 };
 

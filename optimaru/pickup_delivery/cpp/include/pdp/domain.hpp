@@ -12,8 +12,7 @@
 #include "optimaru/score/score.hpp"
 #include "optimaru/score/levels.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
 // ---------------------------------------------------------------------------
 // Pickup and Delivery Problem with Time Windows (PDPTW)
@@ -48,47 +47,39 @@ constexpr Seconds NULL_TIME = -1;
 // keeps a separate medium accumulator. A medium constraint's weight is
 // therefore in medium units (unassignedRequestsCost: 1), never 10^9.
 constexpr std::int64_t kMediumUnit = 1000000000LL;  // 10^9
-constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
+constexpr optimaru::MediumFold kMediumFold =
+        optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
 
-struct Score
-{
+struct Score {
     std::int64_t hard = 0;
     std::int64_t medium = 0;
     std::int64_t soft = 0;
 
     bool feasible() const { return hard >= 0; }
 
-    bool operator<(const Score &o) const
-    {
-        if (hard != o.hard)
-            return hard < o.hard;
-        if (medium != o.medium)
-            return medium < o.medium;
+    bool operator<(const Score& o) const {
+        if (hard != o.hard) return hard < o.hard;
+        if (medium != o.medium) return medium < o.medium;
         return soft < o.soft;
     }
-    bool operator>(const Score &o) const { return o < *this; }
-    bool operator<=(const Score &o) const { return !(o < *this); }
-    bool operator>=(const Score &o) const { return !(*this < o); }
-    bool operator==(const Score &o) const
-    {
+    bool operator>(const Score& o) const { return o < *this; }
+    bool operator<=(const Score& o) const { return !(o < *this); }
+    bool operator>=(const Score& o) const { return !(*this < o); }
+    bool operator==(const Score& o) const {
         return hard == o.hard && medium == o.medium && soft == o.soft;
     }
 
-    std::string str() const
-    {
-        return std::to_string(hard) + "hard/" + std::to_string(medium)
-               + "medium/" + std::to_string(soft) + "soft";
+    std::string str() const {
+        return std::to_string(hard) + "hard/" + std::to_string(medium) + "medium/" +
+               std::to_string(soft) + "soft";
     }
 };
 
-inline optimaru::Score toEngineScore(const Score &s)
-{
+inline optimaru::Score toEngineScore(const Score& s) {
     // soft + medium * 10^9: exact for the integral levels of this domain
     // (|engine soft| < 2^53), i.e. the old `medium * kMediumUnit + soft`.
-    return kMediumFold.to_engine(s.hard,
-                                static_cast<double>(s.medium),
-                                static_cast<double>(s.soft));
+    return kMediumFold.to_engine(s.hard, static_cast<double>(s.medium),
+                                 static_cast<double>(s.soft));
 }
 
 // A best-score LIMIT (Solver::Config::target_score) in engine terms.
@@ -100,21 +91,18 @@ inline optimaru::Score toEngineScore(const Score &s)
 // low enough soft score never reaches. Any other limit folds as a score.
 constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
 
-inline optimaru::Score toEngineScoreLimit(const Score &limit)
-{
+inline optimaru::Score toEngineScoreLimit(const Score& limit) {
     if (limit.medium == kNoLevelFloor || limit.soft == kNoLevelFloor)
         return {limit.hard, -std::numeric_limits<double>::infinity()};
     return toEngineScore(limit);
 }
 
-inline Score fromEngineScore(const optimaru::Score &e)
-{
+inline Score fromEngineScore(const optimaru::Score& e) {
     const auto combined = optimaru::round_score_level(e.soft, "soft");
     return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
 }
 
-struct Location
-{
+struct Location {
     double latitude = 0.0;
     double longitude = 0.0;
     int index = -1;
@@ -126,8 +114,7 @@ struct Location
 // The list *elements* are nodes, not requests: the engine's list variable
 // holds a sequence of stops. `deliveryIndex` links a node back to the request
 // it belongs to, and `pickup` says which half it is.
-struct Node
-{
+struct Node {
     std::string id;
     int locationIndex = -1;
     Seconds minStartTime = 0;  // time window open
@@ -149,8 +136,7 @@ struct Node
 // dropoff, so the binding capacity check is on the running load *between* the
 // two, not on the route total (a vehicle can serve far more than its capacity
 // over a day as long as it never carries too much at once).
-struct Delivery
-{
+struct Delivery {
     std::string id;
     int pickupNodeIndex = -1;
     int dropoffNodeIndex = -1;
@@ -165,8 +151,7 @@ struct Delivery
 // ---------------------------------------------------------------------------
 // Vehicle
 // ---------------------------------------------------------------------------
-struct Vehicle
-{
+struct Vehicle {
     std::string id;
     int capacity = 0;
     int homeLocationIndex = -1;
@@ -192,21 +177,18 @@ struct Vehicle
     // The driving seconds from the last stop back home, or 0 for an open
     // route. Every scoring path charges the closing leg through this one
     // helper so the monolithic, incremental and plugin costs cannot drift.
-    Seconds homeLeg(const std::vector<std::vector<Seconds>> &drivingSeconds,
-                    int lastLocation) const
-    {
-        return returnToDepot
-                   ? drivingSeconds[static_cast<std::size_t>(lastLocation)]
-                                   [static_cast<std::size_t>(homeLocationIndex)]
-                   : 0;
+    Seconds homeLeg(const std::vector<std::vector<Seconds>>& drivingSeconds,
+                    int lastLocation) const {
+        return returnToDepot ? drivingSeconds[static_cast<std::size_t>(lastLocation)]
+                                             [static_cast<std::size_t>(homeLocationIndex)]
+                             : 0;
     }
 };
 
 // ---------------------------------------------------------------------------
 // PdpRoutePlan  (the solution)
 // ---------------------------------------------------------------------------
-struct PdpRoutePlan
-{
+struct PdpRoutePlan {
     std::string name;
     std::vector<Location> locations;
     std::vector<Vehicle> vehicles;
@@ -224,34 +206,26 @@ struct PdpRoutePlan
 
     Score score;
 
-    Seconds drivingTime(int fromLocation, int toLocation) const
-    {
+    Seconds drivingTime(int fromLocation, int toLocation) const {
         return drivingSeconds[fromLocation][toLocation];
     }
 
     // The partner node of a pickup/dropoff.
-    int partnerOf(int nodeIndex) const
-    {
-        const Node &node = nodes[static_cast<std::size_t>(nodeIndex)];
-        const Delivery &delivery
-            = deliveries[static_cast<std::size_t>(node.deliveryIndex)];
-        return node.pickup ? delivery.dropoffNodeIndex
-                           : delivery.pickupNodeIndex;
+    int partnerOf(int nodeIndex) const {
+        const Node& node = nodes[static_cast<std::size_t>(nodeIndex)];
+        const Delivery& delivery = deliveries[static_cast<std::size_t>(node.deliveryIndex)];
+        return node.pickup ? delivery.dropoffNodeIndex : delivery.pickupNodeIndex;
     }
 
-    void rebuildUnassignedPool()
-    {
+    void rebuildUnassignedPool() {
         std::vector<char> routed(nodes.size(), 0);
-        for (const Vehicle &vehicle : vehicles)
-        {
+        for (const Vehicle& vehicle : vehicles) {
             for (int nodeIndex : vehicle.nodeIndices)
                 routed[static_cast<std::size_t>(nodeIndex)] = 1;
         }
         unassignedNodeIndices.clear();
-        for (std::size_t i = 0; i < nodes.size(); ++i)
-        {
-            if (!routed[i])
-                unassignedNodeIndices.push_back(static_cast<int>(i));
+        for (std::size_t i = 0; i < nodes.size(); ++i) {
+            if (!routed[i]) unassignedNodeIndices.push_back(static_cast<int>(i));
         }
     }
 };
@@ -263,66 +237,48 @@ struct PdpRoutePlan
 // ---------------------------------------------------------------------------
 // Same shape as vehicle-routing's: vehicles are the list owners, nodes are the
 // elements, and list index vehicles.size() is the virtual unassigned pool.
-template <> struct optimaru::SolutionTraits<pdp::PdpRoutePlan>
-{
+template <>
+struct optimaru::SolutionTraits<pdp::PdpRoutePlan> {
     static constexpr optimaru::Shape shape = optimaru::Shape::Sequence;
 
-    static int unassigned_list(const pdp::PdpRoutePlan &s)
-    {
+    static int unassigned_list(const pdp::PdpRoutePlan& s) {
         return static_cast<int>(s.vehicles.size());
     }
 
-    static int list_count(const pdp::PdpRoutePlan &s)
-    {
+    static int list_count(const pdp::PdpRoutePlan& s) {
         return static_cast<int>(s.vehicles.size()) + 1;
     }
-    static int element_count(const pdp::PdpRoutePlan &s)
-    {
+    static int element_count(const pdp::PdpRoutePlan& s) {
         return static_cast<int>(s.nodes.size());
     }
 
-    static std::vector<int> &list_of(pdp::PdpRoutePlan &s, int listIndex)
-    {
-        return listIndex == unassigned_list(s)
-                   ? s.unassignedNodeIndices
-                   : s.vehicles[listIndex].nodeIndices;
+    static std::vector<int>& list_of(pdp::PdpRoutePlan& s, int listIndex) {
+        return listIndex == unassigned_list(s) ? s.unassignedNodeIndices
+                                               : s.vehicles[listIndex].nodeIndices;
     }
-    static const std::vector<int> &list_of(const pdp::PdpRoutePlan &s,
-                                          int listIndex)
-    {
-        return listIndex == unassigned_list(s)
-                   ? s.unassignedNodeIndices
-                   : s.vehicles[listIndex].nodeIndices;
+    static const std::vector<int>& list_of(const pdp::PdpRoutePlan& s, int listIndex) {
+        return listIndex == unassigned_list(s) ? s.unassignedNodeIndices
+                                               : s.vehicles[listIndex].nodeIndices;
     }
 
-    static int list_size(const pdp::PdpRoutePlan &s, int listIndex)
-    {
+    static int list_size(const pdp::PdpRoutePlan& s, int listIndex) {
         return static_cast<int>(list_of(s, listIndex).size());
     }
-    static int
-    element_at(const pdp::PdpRoutePlan &s, int listIndex, int position)
-    {
+    static int element_at(const pdp::PdpRoutePlan& s, int listIndex, int position) {
         return list_of(s, listIndex)[static_cast<std::size_t>(position)];
     }
-    static void insert_element(pdp::PdpRoutePlan &s,
-                              int listIndex,
-                              int position,
-                              int element)
-    {
-        std::vector<int> &list = list_of(s, listIndex);
+    static void insert_element(pdp::PdpRoutePlan& s, int listIndex, int position, int element) {
+        std::vector<int>& list = list_of(s, listIndex);
         list.insert(list.begin() + position, element);
     }
-    static int remove_element(pdp::PdpRoutePlan &s, int listIndex, int position)
-    {
-        std::vector<int> &list = list_of(s, listIndex);
+    static int remove_element(pdp::PdpRoutePlan& s, int listIndex, int position) {
+        std::vector<int>& list = list_of(s, listIndex);
         const int element = list[static_cast<std::size_t>(position)];
         list.erase(list.begin() + position);
         return element;
     }
-    static void
-    reverse_segment(pdp::PdpRoutePlan &s, int listIndex, int first, int last)
-    {
-        std::vector<int> &list = list_of(s, listIndex);
+    static void reverse_segment(pdp::PdpRoutePlan& s, int listIndex, int first, int last) {
+        std::vector<int>& list = list_of(s, listIndex);
         std::reverse(list.begin() + first, list.begin() + last + 1);
     }
 };
@@ -332,8 +288,8 @@ template <> struct optimaru::SolutionTraits<pdp::PdpRoutePlan>
 // ---------------------------------------------------------------------------
 // The decomposed calculator folds its medium accumulator with the domain's
 // kMediumFold (see the Score adapter above).
-template <> struct optimaru::MediumFoldOf<pdp::PdpRoutePlan>
-{
+template <>
+struct optimaru::MediumFoldOf<pdp::PdpRoutePlan> {
     static constexpr optimaru::MediumFold value = pdp::kMediumFold;
 };
 

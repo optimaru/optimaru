@@ -8,8 +8,7 @@
 #include "fab/domain.hpp"
 #include "fab/score_terms.hpp"
 
-namespace fab
-{
+namespace fab {
 
 // ---------------------------------------------------------------------------
 // ScheduleEvaluator — the incremental raw costs of a schedule
@@ -33,15 +32,14 @@ namespace fab
 // Equal to rawCostsOf(decode(values)) — or of the seed — by construction:
 // the unit formulas are the same and a unit is re-costed whenever anything it
 // reads changed. The tests check it on random move sequences.
-class ScheduleEvaluator
-{
+class ScheduleEvaluator {
 public:
-    void reset(const SemiconductorSchedule &schedule);
+    void reset(const SemiconductorSchedule& schedule);
     // `row`'s decision value is changing (or has changed): before or after
     // the write, any number of times.
     void markChanged(int row);
     void markAllChanged();
-    const RawTotals &totals();
+    const RawTotals& totals();
 
     // Steps decoded since reset (diagnostics: the incremental saving).
     std::int64_t decodedSteps() const { return decodedSteps_; }
@@ -54,7 +52,7 @@ private:
     void markMachineDirty(int machine);
     void recost();
 
-    const SemiconductorSchedule *schedule_ = nullptr;
+    const SemiconductorSchedule* schedule_ = nullptr;
     bool dataMode_ = true;
     RawTotals dataTotals_{};
     RawTotals seedTotals_{};
@@ -81,16 +79,14 @@ private:
 
     // unit caches (raw, per term)
     std::vector<std::int64_t> rowEligibility_, rowPreference_;
-    struct LotCache
-    {
+    struct LotCache {
         std::int64_t precedence = 0, maxQueue = 0, minQueue = 0, transport = 0;
         std::int64_t maxCycle = 0, tardiness = 0, cycle = 0;
         bool completed = false;
         Time completion = 0;
     };
     std::vector<LotCache> lot_;
-    struct MachineCache
-    {
+    struct MachineCache {
         std::int64_t capacity = 0, batchCapacity = 0, familyConflict = 0, setup = 0;
         std::int64_t unavailability = 0, minBatch = 0, load = 0;
     };
@@ -101,7 +97,8 @@ private:
 
     // dirty units
     std::vector<char> dirtyRow_, dirtyLot_, dirtyMachine_, dirtyResource_, dirtyPin_, dirtyGroup_;
-    std::vector<int> dirtyRows_, dirtyLots_, dirtyMachines_, dirtyResources_, dirtyPins_, dirtyGroups_;
+    std::vector<int> dirtyRows_, dirtyLots_, dirtyMachines_, dirtyResources_, dirtyPins_,
+            dirtyGroups_;
     bool dirtyMakespan_ = false;
 
     // scratch

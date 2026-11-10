@@ -58,8 +58,9 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from optimaru.assembly_line_balancing.models import AssemblyLineBalancingProblemModel
     from external_solver.assembly_line_balancing import solve
+
+    from optimaru.assembly_line_balancing.models import AssemblyLineBalancingProblemModel
 
     solved = solve(
         AssemblyLineBalancingProblemModel.from_core(problem),

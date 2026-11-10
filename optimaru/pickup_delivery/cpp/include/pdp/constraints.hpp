@@ -35,8 +35,7 @@
 #include "pdp/constraints/vehicle_fixed_cost.hpp"
 #include "pdp/constraints/vehicle_max_end_time_cost.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -82,8 +81,7 @@ namespace pdp
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<PairedRequestCost>();
     assembly.emplace<SameVehicleCost>();
@@ -108,8 +106,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

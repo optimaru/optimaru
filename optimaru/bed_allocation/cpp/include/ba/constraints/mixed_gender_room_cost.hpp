@@ -5,8 +5,7 @@
 
 #include "ba/constraints/common.hpp"
 
-namespace ba
-{
+namespace ba {
 
 // Hard, weight 1000: mixedGenderRoomCost — a male and a female patient in
 // one SAME_GENDER room on the same night. Raw cost (one global total) = the
@@ -17,49 +16,34 @@ namespace ba
 // and a room holds several beds. It maintains the occupant list of every
 // SAME_GENDER room and folds the marginal pair sum on each join/leave, which
 // is exactly reversible and therefore safe on the member-change fast path.
-struct MixedGenderRoomCost final : MemberChangeGlobalConstraint
-{
+struct MixedGenderRoomCost final : MemberChangeGlobalConstraint {
     static constexpr double kDefaultWeight = 1000.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit MixedGenderRoomCost(double weight = kDefaultWeight)
-        : MemberChangeGlobalConstraint("mixedGenderRoomCost",
-                                       weight,
-                                       kDefaultLevel)
-    {
-    }
+        : MemberChangeGlobalConstraint("mixedGenderRoomCost", weight, kDefaultLevel) {}
 
-    void reset(const BedPlan &plan,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+    void reset(const BedPlan& plan,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(plan);
         occupants_.assign(plan.rooms.size(), {});
         total_ = 0;
-        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
-        {
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit) {
             const int room = roomOfSameGenderBed(plan, static_cast<int>(unit));
-            if (room < 0)
-                continue;
-            for (int stayIndex : members_per_unit[unit])
-            {
+            if (room < 0) continue;
+            for (int stayIndex : members_per_unit[unit]) {
                 total_ += pairNights(plan, occupants_[room], stayIndex);
                 occupants_[room].push_back(stayIndex);
             }
         }
     }
 
-    void on_member_changed(const BedPlan &plan,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int entity,
-                         bool joined) override
-    {
+    void on_member_changed(const BedPlan& plan, int unit, const std::vector<int>& /*members*/,
+                           int entity, bool joined) override {
         const int room = roomOfSameGenderBed(plan, unit);
-        if (room < 0)
-            return;
-        std::vector<int> &occupants = occupants_[room];
-        if (joined)
-        {
+        if (room < 0) return;
+        std::vector<int>& occupants = occupants_[room];
+        if (joined) {
             total_ += pairNights(plan, occupants, entity);
             occupants.push_back(entity);
             return;
@@ -67,8 +51,7 @@ struct MixedGenderRoomCost final : MemberChangeGlobalConstraint
         // Swap-remove first, so the marginal sum sees exactly the OTHER
         // occupants — the mirror image of the join above.
         const auto it = std::find(occupants.begin(), occupants.end(), entity);
-        if (it == occupants.end())
-            return;
+        if (it == occupants.end()) return;
         *it = occupants.back();
         occupants.pop_back();
         total_ -= pairNights(plan, occupants, entity);
@@ -79,27 +62,19 @@ struct MixedGenderRoomCost final : MemberChangeGlobalConstraint
 private:
     // The room of `value` when that bed stands in a SAME_GENDER room, else -1
     // (the sentinel and every other limitation are silent here).
-    static int roomOfSameGenderBed(const BedPlan &plan, int value)
-    {
-        if (!detail::isRealBed(plan, value))
-            return -1;
+    static int roomOfSameGenderBed(const BedPlan& plan, int value) {
+        if (!detail::isRealBed(plan, value)) return -1;
         const int room = plan.beds[value].room;
-        return plan.rooms[room].genderLimitation
-                       == GenderLimitation::SAME_GENDER
-                   ? room
-                   : -1;
+        return plan.rooms[room].genderLimitation == GenderLimitation::SAME_GENDER ? room : -1;
     }
 
     // Shared nights between `stayIndex` and every mixed-gender occupant.
-    static std::int64_t pairNights(const BedPlan &plan,
-                                   const std::vector<int> &occupants,
-                                   int stayIndex)
-    {
-        const Stay &stay = plan.stays[stayIndex];
+    static std::int64_t pairNights(const BedPlan& plan, const std::vector<int>& occupants,
+                                   int stayIndex) {
+        const Stay& stay = plan.stays[stayIndex];
         std::int64_t nights = 0;
-        for (int other : occupants)
-        {
-            const Stay &occupant = plan.stays[other];
+        for (int other : occupants) {
+            const Stay& occupant = plan.stays[other];
             if (occupant.patientGender != stay.patientGender)
                 nights += stay.sameNightCount(occupant);
         }

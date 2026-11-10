@@ -5,8 +5,7 @@
 
 #include "fp/domain.hpp"
 
-namespace fp
-{
+namespace fp {
 
 // Per-constraint raw penalty magnitudes of one full recompute (all >= 0; the
 // score negates them), for the C++ tests. Each member is named after its
@@ -15,13 +14,12 @@ namespace fp
 // constraint_costs() reports per name. toScore() applies each component's
 // kDefaultWeight (score_calculator.cpp). Not bound to Python:
 // constraint_costs() is the one per-constraint surface there.
-struct ConstraintBreakdown
-{
+struct ConstraintBreakdown {
     std::int64_t maxEndTimeCost = 0;                // hard, minutes late
     std::int64_t operatorCleaningConflictCost = 0;  // hard, overlap minutes
     std::int64_t afterIdealEndTimeCost = 0;         // medium, minutes late
-    std::int64_t unassignedJobsCost = 0;  // medium, unassigned minutes
-    std::int64_t squaredMakespanCost = 0;  // soft, sum of makespan^2
+    std::int64_t unassignedJobsCost = 0;            // medium, unassigned minutes
+    std::int64_t squaredMakespanCost = 0;           // soft, sum of makespan^2
 
     // The hard/medium/soft score at the components' kDefaultWeight (all
     // integral, so the levels are exact int64).
@@ -53,8 +51,7 @@ struct ConstraintBreakdown
 //   soft   5. squaredMakespanCost          last job of each line:
 //                                          -minutes(end - line start)^2
 // minStartTime and priority are data fields that no constraint reads.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // Builds the engine view (pinning translation) and validates the
     // instance. Throws std::invalid_argument on: a job in two lists, a
@@ -62,21 +59,21 @@ public:
     // a bad product index, or a wrong-sized cleanup matrix. Pinned jobs in
     // no list are moved into the unassigned pool (they must stay
     // unassigned). Idempotent per solution.
-    static void prepare(PackagingSchedule &schedule);
+    static void prepare(PackagingSchedule& schedule);
 
     // Recomputes every job's derived fields (lineIndex,
     // startCleaningDateTime, startProductionDateTime, endDateTime) from the
     // current lists. Throws std::invalid_argument when a needed cleanup
     // entry is missing.
-    static void updateShadowVariables(PackagingSchedule &schedule);
+    static void updateShadowVariables(PackagingSchedule& schedule);
 
     // updateShadowVariables + the five constraints; stores the score in
     // schedule.score and returns it.
-    static Score score(PackagingSchedule &schedule);
+    static Score score(PackagingSchedule& schedule);
 
     // Same recompute, split per constraint (raw magnitudes; see toScore()).
     // C++ only (tests); Python reads constraint_costs() instead.
-    static ConstraintBreakdown analyze(PackagingSchedule &schedule);
+    static ConstraintBreakdown analyze(PackagingSchedule& schedule);
 };
 
 }  // namespace fp

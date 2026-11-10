@@ -269,6 +269,7 @@ def test_pydantic_models_round_trip():
 
 def test_duplicate_ids_rejected():
     from optimaru.order_picking import models
+
     loc = models.LocationModel(column="A", shelving_row=1, side="LEFT", row=0)
     with pytest.raises(ValueError, match="duplicate"):
         models.OrderPickingRequest(

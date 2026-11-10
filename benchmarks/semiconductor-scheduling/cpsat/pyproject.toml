@@ -5,7 +5,7 @@ description = "Exact CP-SAT backend for semiconductor fab scheduling"
 requires-python = ">=3.11,<4.0"
 dependencies = ["external-solver", "cpsat-plugins>=0.1.0", "optimaru", "ortools>=9.10", "pydantic>=2.5"]
 [dependency-groups]
-dev = ["pytest", "ruff"]
+dev = ["pytest"]
 [project.scripts]
 semiconductor-scheduling-compare = "semiconductor_scheduling_cpsat.benchmark:main"
 
@@ -20,10 +20,6 @@ cpsat-plugins = { path = "../../cpsat-common", editable = true }
 optimaru = { path = "../../..", editable = true }
 [tool.setuptools.packages.find]
 include = ["semiconductor_scheduling_cpsat*"]
-[tool.ruff]
-line-length = 120
-[tool.ruff.lint]
-extend-select = ["I"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 [build-system]

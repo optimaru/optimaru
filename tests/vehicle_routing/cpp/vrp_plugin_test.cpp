@@ -253,8 +253,8 @@ void verifyConstraintTotals() {
         else
             soft += total.cost;
     }
-    check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
-                  && std::fabs(-soft - score.soft) < 1e-3,
+    check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9 &&
+                  std::fabs(-soft - score.soft) < 1e-3,
           "per-constraint totals sum to the reported score");
     check(calculator.constraint_totals().size() == componentCount,
           "one total per assembled component");
@@ -321,8 +321,8 @@ void verifyPreviews() {
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
         optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
-        const optimaru::testing::PreviewParity parity =
-                optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/5, /*trials=*/3000);
+        const optimaru::testing::PreviewParity parity = optimaru::testing::run_preview_parity(
+                editor, calculator, /*seed=*/5, /*trials=*/3000);
         std::printf("    %d moves checked, %d previewed, %d declined\n", parity.checked,
                     parity.previewed, parity.declined);
         check(parity.all_equal() && parity.previewed > 1000 && parity.declined == 0,
@@ -340,8 +340,8 @@ void verifyPreviews() {
         }
         assembly.into(calculator);
         optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
-        const optimaru::testing::PreviewParity parity =
-                optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/6, /*trials=*/2000);
+        const optimaru::testing::PreviewParity parity = optimaru::testing::run_preview_parity(
+                editor, calculator, /*seed=*/6, /*trials=*/2000);
         check(parity.all_equal() && parity.previewed > 500 && parity.declined == 0,
               "assembly with route policies: every preview equal to the applied score");
         for (Vehicle& vehicle : plan.vehicles) {
@@ -355,8 +355,8 @@ void verifyPreviews() {
         addDefaultConstraints(calculator);
         calculator.emplace<PreviewlessGlobal>();
         optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
-        const optimaru::testing::PreviewParity parity =
-                optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/7, /*trials=*/300);
+        const optimaru::testing::PreviewParity parity = optimaru::testing::run_preview_parity(
+                editor, calculator, /*seed=*/7, /*trials=*/300);
         check(parity.previewed == 0 && parity.declined > 0,
               "a global without the preview contract switches previews off");
     }
@@ -398,9 +398,11 @@ void verifyPiecewiseByHand() {
 
     // Vehicle 0 would hold: its own [0,2) forward, vehicle 1's [1,4) reversed,
     // pool visit 9, the detached visit 11, then its own [3,5).
-    const optimaru::ListPiece pieces[] = {
-            {0, 0, 2, false}, {1, 1, 4, true}, {pool, 0, 1, false}, {-1, 11, 12, false},
-            {0, 3, 5, false}};
+    const optimaru::ListPiece pieces[] = {{0, 0, 2, false},
+                                          {1, 1, 4, true},
+                                          {pool, 0, 1, false},
+                                          {-1, 11, 12, false},
+                                          {0, 3, 5, false}};
     const std::vector<int> written = {0, 1, 8, 7, 6, 9, 11, 3, 4};
     const auto& constraints = calculator.unit_constraint_list();
     int compared = 0;
@@ -430,8 +432,10 @@ void verifyPiecewiseByHand() {
         const bool answered = g->piecewise_preview_cost(plan, changes, 1, piecewise);
         std::int64_t expected = 0;
         for (const Visit& visit : plan.visits) expected += visit.unassignedPenalty();
-        for (int v : written) expected -= plan.visits[static_cast<std::size_t>(v)].unassignedPenalty();
-        for (int v : members1) expected -= plan.visits[static_cast<std::size_t>(v)].unassignedPenalty();
+        for (int v : written)
+            expected -= plan.visits[static_cast<std::size_t>(v)].unassignedPenalty();
+        for (int v : members1)
+            expected -= plan.visits[static_cast<std::size_t>(v)].unassignedPenalty();
         check(answered && piecewise == static_cast<double>(expected),
               g->name + ": piecewise answer equals the hand-counted unrouted penalty");
     }
@@ -599,63 +603,78 @@ void verifyRawCostsByHand() {
     const auto park = [](VehicleRoutePlan& p) { p.vehicles[0].visitIndices.clear(); };
 
     // Demand 4 x 3 = 12 on capacity 10 -> 2.
-    byHand("vehicleCapacityCost", keep, {2.0, 0.0, 0.0},
-           [](VehicleRoutePlan& p) { p.vehicles[0].capacity = 12; }, none);
+    byHand(
+            "vehicleCapacityCost", keep, {2.0, 0.0, 0.0},
+            [](VehicleRoutePlan& p) { p.vehicles[0].capacity = 12; }, none);
     // Visit 2 finishes at 480 against 400 (80 s -> 2 min), visit 3 at 640
     // against 580 (60 s -> 1 min).
-    byHand("maxEndTimeCost",
-           [](VehicleRoutePlan& p) {
-               p.visits[2].maxEndTime = 400;
-               p.visits[3].maxEndTime = 580;
-           },
-           {3.0, 0.0, 0.0}, [](VehicleRoutePlan& p) { p.visits[3].maxEndTime = 640; }, none);
+    byHand(
+            "maxEndTimeCost",
+            [](VehicleRoutePlan& p) {
+                p.visits[2].maxEndTime = 400;
+                p.visits[3].maxEndTime = 580;
+            },
+            {3.0, 0.0, 0.0}, [](VehicleRoutePlan& p) { p.visits[3].maxEndTime = 640; }, none);
     // 4 legs of 100 s, open; returnToDepot adds visit 3 -> home = 400 s.
     byHand("travelTimeCost", keep, {400.0, 0.0, 0.0}, park, none);
-    byHand("travelTimeCost", [](VehicleRoutePlan& p) { p.vehicles[0].returnToDepot = true; },
-           {800.0, 0.0, 0.0},
-           [](VehicleRoutePlan& p) {
-               p.vehicles[0].returnToDepot = true;
-               p.vehicles[0].visitIndices.clear();  // a parked vehicle drives 0
-           },
-           none);
-    byHand("maxTravelTimeCost", [](VehicleRoutePlan& p) { p.vehicles[0].maxTravelTime = 300; },
-           {100.0, 0.0, 0.0}, [](VehicleRoutePlan& p) { p.vehicles[0].maxTravelTime = 400; },
-           none);
-    byHand("maxRouteDurationCost",
-           [](VehicleRoutePlan& p) { p.vehicles[0].maxRouteDuration = 600; }, {40.0, 0.0, 0.0},
-           [](VehicleRoutePlan& p) { p.vehicles[0].maxRouteDuration = 640; }, none);
-    byHand("vehicleMaxEndTimeCost", [](VehicleRoutePlan& p) { p.vehicles[0].maxEndTime = 600; },
-           {40.0, 0.0, 0.0}, [](VehicleRoutePlan& p) { p.vehicles[0].maxEndTime = 640; }, none);
-    byHand("maxStopsCost", [](VehicleRoutePlan& p) { p.vehicles[0].maxStops = 3; },
-           {1.0, 0.0, 0.0}, [](VehicleRoutePlan& p) { p.vehicles[0].maxStops = 4; }, none);
+    byHand(
+            "travelTimeCost", [](VehicleRoutePlan& p) { p.vehicles[0].returnToDepot = true; },
+            {800.0, 0.0, 0.0},
+            [](VehicleRoutePlan& p) {
+                p.vehicles[0].returnToDepot = true;
+                p.vehicles[0].visitIndices.clear();  // a parked vehicle drives 0
+            },
+            none);
+    byHand(
+            "maxTravelTimeCost", [](VehicleRoutePlan& p) { p.vehicles[0].maxTravelTime = 300; },
+            {100.0, 0.0, 0.0}, [](VehicleRoutePlan& p) { p.vehicles[0].maxTravelTime = 400; },
+            none);
+    byHand(
+            "maxRouteDurationCost",
+            [](VehicleRoutePlan& p) { p.vehicles[0].maxRouteDuration = 600; }, {40.0, 0.0, 0.0},
+            [](VehicleRoutePlan& p) { p.vehicles[0].maxRouteDuration = 640; }, none);
+    byHand(
+            "vehicleMaxEndTimeCost", [](VehicleRoutePlan& p) { p.vehicles[0].maxEndTime = 600; },
+            {40.0, 0.0, 0.0}, [](VehicleRoutePlan& p) { p.vehicles[0].maxEndTime = 640; }, none);
+    byHand(
+            "maxStopsCost", [](VehicleRoutePlan& p) { p.vehicles[0].maxStops = 3; },
+            {1.0, 0.0, 0.0}, [](VehicleRoutePlan& p) { p.vehicles[0].maxStops = 4; }, none);
     // The farthest visit (3, at location 4) is 4 steps from home.
-    byHand("maxRouteRadiusCost",
-           [&](VehicleRoutePlan& p) { p.vehicles[0].maxRouteRadiusMeters = 4 * meterPerStep - 25.0; },
-           {25.0, 0.0, 0.0},
-           [&](VehicleRoutePlan& p) { p.vehicles[0].maxRouteRadiusMeters = 4 * meterPerStep + 1.0; },
-           none);
+    byHand(
+            "maxRouteRadiusCost",
+            [&](VehicleRoutePlan& p) {
+                p.vehicles[0].maxRouteRadiusMeters = 4 * meterPerStep - 25.0;
+            },
+            {25.0, 0.0, 0.0},
+            [&](VehicleRoutePlan& p) {
+                p.vehicles[0].maxRouteRadiusMeters = 4 * meterPerStep + 1.0;
+            },
+            none);
     // Four visits on one line, 3 steps from the first to the last: radius 1.5.
-    byHand("enclosingCircleRadiusCost", keep, {1.5 * meterPerStep, 0.0, 0.0},
-           [](VehicleRoutePlan& p) { p.vehicles[0].visitIndices = {0}; }, none);
+    byHand(
+            "enclosingCircleRadiusCost", keep, {1.5 * meterPerStep, 0.0, 0.0},
+            [](VehicleRoutePlan& p) { p.vehicles[0].visitIndices = {0}; }, none);
     // Target 16 * 1.0 against 12 delivered; 16 * 0.75 = 12 is exactly met.
-    byHand("minCapacityUtilizationCost",
-           [](VehicleRoutePlan& p) {
-               p.vehicles[0].capacity = 16;
-               p.vehicles[0].minLoadRatio = 1.0;
-           },
-           {4.0, 0.0, 0.0},
-           [](VehicleRoutePlan& p) {
-               p.vehicles[0].capacity = 16;
-               p.vehicles[0].minLoadRatio = 0.75;
-           },
-           none);
+    byHand(
+            "minCapacityUtilizationCost",
+            [](VehicleRoutePlan& p) {
+                p.vehicles[0].capacity = 16;
+                p.vehicles[0].minLoadRatio = 1.0;
+            },
+            {4.0, 0.0, 0.0},
+            [](VehicleRoutePlan& p) {
+                p.vehicles[0].capacity = 16;
+                p.vehicles[0].minLoadRatio = 0.75;
+            },
+            none);
     byHand("routeDurationCost", keep, {640.0, 0.0, 0.0}, park, none);
     // 100 + 260 + 420 + 580.
     byHand("latencyCost", keep, {1360.0, 0.0, 0.0}, park, none);
-    byHand("vehicleFixedCost", [](VehicleRoutePlan& p) { p.vehicles[0].fixedCost = 50.0; },
-           {50.0, 0.0, 0.0},
-           [](VehicleRoutePlan& p) { p.vehicles[1].fixedCost = 50.0; },  // vehicle 1 stays unused
-           none);
+    byHand(
+            "vehicleFixedCost", [](VehicleRoutePlan& p) { p.vehicles[0].fixedCost = 50.0; },
+            {50.0, 0.0, 0.0},
+            [](VehicleRoutePlan& p) { p.vehicles[1].fixedCost = 50.0; },  // vehicle 1 stays unused
+            none);
     // Visits 2 and 3 unrouted: 1 automatic minute + 90 explicit minutes.
     byHand("unassignedVisitsCost",
            [](VehicleRoutePlan& p) {
@@ -672,10 +691,10 @@ void verifyRawCostsByHand() {
 template <typename Component>
 bool rowIs(const optimaru::ConstraintInfo& row, const char* name, optimaru::Level level,
            double weight, bool is_global) {
-    return row.name == name && row.default_level == Component::kDefaultLevel
-           && row.default_weight == Component::kDefaultWeight && row.default_level == level
-           && row.default_weight == weight && row.level_flippable && !row.reward
-           && row.is_global == is_global && row.default_enabled == (weight > 0.0);
+    return row.name == name && row.default_level == Component::kDefaultLevel &&
+           row.default_weight == Component::kDefaultWeight && row.default_level == level &&
+           row.default_weight == weight && row.level_flippable && !row.reward &&
+           row.is_global == is_global && row.default_enabled == (weight > 0.0);
 }
 
 void verifyCatalog() {
@@ -686,27 +705,27 @@ void verifyCatalog() {
     if (rows.size() != 14) return;
     // Unit constraints first, then the global, in emplace order: the
     // list_constraints() order.
-    check(rowIs<VehicleCapacityCost>(rows[0], "vehicleCapacityCost", Level::Hard, 1.0, false)
-                  && rowIs<MaxEndTimeCost>(rows[1], "maxEndTimeCost", Level::Hard, 1.0, false)
-                  && rowIs<TravelTimeCost>(rows[2], "travelTimeCost", Level::Soft, 1.0, false)
-                  && rowIs<MaxTravelTimeCost>(rows[3], "maxTravelTimeCost", Level::Hard, 1.0, false)
-                  && rowIs<MaxRouteDurationCost>(rows[4], "maxRouteDurationCost", Level::Hard, 1.0,
-                                                 false)
-                  && rowIs<VehicleMaxEndTimeCost>(rows[5], "vehicleMaxEndTimeCost", Level::Hard,
-                                                  1.0, false)
-                  && rowIs<MaxStopsCost>(rows[6], "maxStopsCost", Level::Hard, 1.0, false)
-                  && rowIs<MaxRouteRadiusCost>(rows[7], "maxRouteRadiusCost", Level::Hard, 1.0,
-                                               false)
-                  && rowIs<EnclosingCircleRadiusCost>(rows[8], "enclosingCircleRadiusCost",
-                                                      Level::Soft, 0.0, false)
-                  && rowIs<MinCapacityUtilizationCost>(rows[9], "minCapacityUtilizationCost",
-                                                       Level::Soft, 1.0, false)
-                  && rowIs<RouteDurationCost>(rows[10], "routeDurationCost", Level::Soft, 0.0,
-                                              false)
-                  && rowIs<LatencyCost>(rows[11], "latencyCost", Level::Soft, 0.0, false)
-                  && rowIs<VehicleFixedCost>(rows[12], "vehicleFixedCost", Level::Soft, 1.0, false)
-                  && rowIs<UnassignedVisitsCost>(rows[13], "unassignedVisitsCost", Level::Medium,
-                                                 1.0, true),
+    check(rowIs<VehicleCapacityCost>(rows[0], "vehicleCapacityCost", Level::Hard, 1.0, false) &&
+                  rowIs<MaxEndTimeCost>(rows[1], "maxEndTimeCost", Level::Hard, 1.0, false) &&
+                  rowIs<TravelTimeCost>(rows[2], "travelTimeCost", Level::Soft, 1.0, false) &&
+                  rowIs<MaxTravelTimeCost>(rows[3], "maxTravelTimeCost", Level::Hard, 1.0, false) &&
+                  rowIs<MaxRouteDurationCost>(rows[4], "maxRouteDurationCost", Level::Hard, 1.0,
+                                              false) &&
+                  rowIs<VehicleMaxEndTimeCost>(rows[5], "vehicleMaxEndTimeCost", Level::Hard, 1.0,
+                                               false) &&
+                  rowIs<MaxStopsCost>(rows[6], "maxStopsCost", Level::Hard, 1.0, false) &&
+                  rowIs<MaxRouteRadiusCost>(rows[7], "maxRouteRadiusCost", Level::Hard, 1.0,
+                                            false) &&
+                  rowIs<EnclosingCircleRadiusCost>(rows[8], "enclosingCircleRadiusCost",
+                                                   Level::Soft, 0.0, false) &&
+                  rowIs<MinCapacityUtilizationCost>(rows[9], "minCapacityUtilizationCost",
+                                                    Level::Soft, 1.0, false) &&
+                  rowIs<RouteDurationCost>(rows[10], "routeDurationCost", Level::Soft, 0.0,
+                                           false) &&
+                  rowIs<LatencyCost>(rows[11], "latencyCost", Level::Soft, 0.0, false) &&
+                  rowIs<VehicleFixedCost>(rows[12], "vehicleFixedCost", Level::Soft, 1.0, false) &&
+                  rowIs<UnassignedVisitsCost>(rows[13], "unassignedVisitsCost", Level::Medium, 1.0,
+                                              true),
           "info() == the components' kDefaultWeight / kDefaultLevel");
     std::printf("\n");
 }
@@ -714,8 +733,8 @@ void verifyCatalog() {
 // -------------------------------------------------------------------------
 // (l) The medium level: unassignedVisitsCost.
 // -------------------------------------------------------------------------
-optimaru::DecomposedObjective<VehicleRoutePlan>::LevelScores levelsWith(
-        ConstraintAssembly assembly, VehicleRoutePlan& plan) {
+optimaru::DecomposedObjective<VehicleRoutePlan>::LevelScores levelsWith(ConstraintAssembly assembly,
+                                                                        VehicleRoutePlan& plan) {
     DecomposedCalculator calculator;
     std::move(assembly).into(calculator);
     calculator.rebuild(plan);
@@ -741,8 +760,8 @@ void verifyMediumLevel() {
         const optimaru::Score engine = calculator.score();
         check(engine.hard == 0 && engine.soft == -200.0 - 2.0 * static_cast<double>(kMediumUnit),
               "default: medium folded into soft x 10^9");
-        check(engine.hard == toEngineScore(monolithic).hard
-                      && engine.soft == toEngineScore(monolithic).soft,
+        check(engine.hard == toEngineScore(monolithic).hard &&
+                      engine.soft == toEngineScore(monolithic).soft,
               "default: the fold equals the monolithic Score adapter");
         const auto levels = calculator.level_scores();
         check(levels.hard == 0 && levels.medium == -2.0 && levels.soft == -200.0,
@@ -759,7 +778,8 @@ void verifyMediumLevel() {
               "soft(): one soft unit per raw minute, outside the fold");
     }
     {
-        const auto levels = levelsWith(defaultConstraints().weight("unassignedVisitsCost", 3), plan);
+        const auto levels =
+                levelsWith(defaultConstraints().weight("unassignedVisitsCost", 3), plan);
         check(levels.hard == 0 && levels.medium == -6.0 && levels.soft == -200.0,
               "weight 3 stays in medium units");
     }
@@ -829,16 +849,16 @@ void verifyMediumIncremental() {
             if (incremental.hard != full.hard || std::fabs(incremental.soft - full.soft) > 1e-6)
                 ++mismatches;
         }
-        check(mismatches == 0, "unassignedVisitsCost " + variant.first
-                                       + ": 600 random list moves, incremental == full recompute");
+        check(mismatches == 0, "unassignedVisitsCost " + variant.first +
+                                       ": 600 random list moves, incremental == full recompute");
         if (variant.first != "hard" && variant.first != "soft")
             check(mediumSteps > 0, variant.first + ": the walk visits medium states");
 
-        const optimaru::testing::PreviewParity parity =
-                optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/9, /*trials=*/1500);
+        const optimaru::testing::PreviewParity parity = optimaru::testing::run_preview_parity(
+                editor, calculator, /*seed=*/9, /*trials=*/1500);
         check(parity.all_equal() && parity.declined == 0 && parity.previewed > 500,
-              "unassignedVisitsCost " + variant.first
-                      + ": every preview served and equal to the applied score");
+              "unassignedVisitsCost " + variant.first +
+                      ": every preview served and equal to the applied score");
     }
     std::printf("\n");
 }
@@ -875,11 +895,10 @@ void verifyPluginCallbackLevels() {
     bool improving = true;
     for (std::size_t i = 1; i < reports.size(); ++i)
         improving = improving && toEngineScore(reports[i - 1]) < toEngineScore(reports[i]);
-    check(improving, std::to_string(reports.size())
-                             + " reports, strictly improving once folded into the engine score");
+    check(improving, std::to_string(reports.size()) +
+                             " reports, strictly improving once folded into the engine score");
     std::printf("\n");
 }
-
 
 // -------------------------------------------------------------------------
 // (n) Repeated components and offsets. A repeat is a fresh copy of a
@@ -922,28 +941,28 @@ ConstraintAssembly repeatedAssembly() {
     assembly.offset("travelTimeCost", 3000.0).clip("travelTimeCost", false);
     assembly.offset("unassignedVisitsCost", 1.0);
     assembly.add_instances(std::move(copyOf("travelTimeCost")
-                                            .weight("travelTimeCost", 0.001)
-                                            .exponent("travelTimeCost", 2.0)
-                                            .offset("travelTimeCost", 2000.0)));
+                                             .weight("travelTimeCost", 0.001)
+                                             .exponent("travelTimeCost", 2.0)
+                                             .offset("travelTimeCost", 2000.0)));
     // The literal capacity copy sits on soft: hard refuses the literal
     // formula with an offset (hard 0 must mean no violation).
     assembly.add_instances(std::move(copyOf("vehicleCapacityCost")
-                                            .soft("vehicleCapacityCost")
-                                            .weight("vehicleCapacityCost", 2.0)
-                                            .offset("vehicleCapacityCost", 1.0)
-                                            .clip("vehicleCapacityCost", false)));
+                                             .soft("vehicleCapacityCost")
+                                             .weight("vehicleCapacityCost", 2.0)
+                                             .offset("vehicleCapacityCost", 1.0)
+                                             .clip("vehicleCapacityCost", false)));
     assembly.add_instances(std::move(copyOf("vehicleCapacityCost")
-                                            .weight("vehicleCapacityCost", 2.0)
-                                            .offset("vehicleCapacityCost", 1.0)));
+                                             .weight("vehicleCapacityCost", 2.0)
+                                             .offset("vehicleCapacityCost", 1.0)));
     assembly.add_instances(std::move(copyOf("unassignedVisitsCost")
-                                            .weight("unassignedVisitsCost", 2.0)
-                                            .offset("unassignedVisitsCost", 3.0)
-                                            .clip("unassignedVisitsCost", false)));
+                                             .weight("unassignedVisitsCost", 2.0)
+                                             .offset("unassignedVisitsCost", 3.0)
+                                             .clip("unassignedVisitsCost", false)));
     assembly.add_instances(std::move(copyOf("maxEndTimeCost").offset("maxEndTimeCost", -2.0)));
     assembly.add_instances(std::move(copyOf("latencyCost")
-                                            .weight("latencyCost", 0.01)
-                                            .offset("latencyCost", 5000.0)
-                                            .clip("latencyCost", false)));
+                                             .weight("latencyCost", 0.01)
+                                             .offset("latencyCost", 5000.0)
+                                             .clip("latencyCost", false)));
     return assembly;
 }
 
@@ -952,8 +971,9 @@ void verifyRepeatsAndOffsets() {
     {
         VehicleRoutePlan plan = repeatInstance();
         ConstraintAssembly assembly = copyOf("travelTimeCost");
-        assembly.add_instances(std::move(
-                copyOf("travelTimeCost").weight("travelTimeCost", 0.5).exponent("travelTimeCost", 2.0)));
+        assembly.add_instances(std::move(copyOf("travelTimeCost")
+                                                 .weight("travelTimeCost", 0.5)
+                                                 .exponent("travelTimeCost", 2.0)));
         DecomposedCalculator calculator;
         assembly.into(calculator);
         calculator.rebuild(plan);
@@ -961,14 +981,14 @@ void verifyRepeatsAndOffsets() {
         check(score.hard == 0 && score.soft == -(600.0 + 0.5 * (200.0 * 200.0 + 400.0 * 400.0)),
               "travel + 0.5 x travel^2 per vehicle: -(600 + 100000) soft");
         const auto entries = calculator.constraint_costs();
-        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
-                      && entries[0].unit_costs == std::vector<double>{200.0, 400.0, 0.0, 0.0}
-                      && entries[1].weight == 0.5 && entries[1].exponent == 2.0
-                      && entries[1].default_weight == 1.0,
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs &&
+                      entries[0].unit_costs == std::vector<double>{200.0, 400.0, 0.0, 0.0} &&
+                      entries[1].weight == 0.5 && entries[1].exponent == 2.0 &&
+                      entries[1].default_weight == 1.0,
               "two instances, the same raw costs, each with its own knobs");
-        check(entries.size() == 2 && entries[0].scoped && entries[1].scoped
-                      && entries[0].units == std::vector<int>{0, 1, 2}
-                      && entries[1].units == std::vector<int>{0, 1, 2},
+        check(entries.size() == 2 && entries[0].scoped && entries[1].scoped &&
+                      entries[0].units == std::vector<int>{0, 1, 2} &&
+                      entries[1].units == std::vector<int>{0, 1, 2},
               "a per-vehicle component evaluates the three vehicles, not the pool");
     }
     {
@@ -1028,8 +1048,9 @@ void verifyRepeatsAndOffsets() {
         // The medium instances add up: 5 + 2 x 5.
         const auto twice = levelsOf(
                 std::move(copyOf("unassignedVisitsCost")
-                                  .add_instances(std::move(copyOf("unassignedVisitsCost")
-                                                                  .weight("unassignedVisitsCost", 2.0)))),
+                                  .add_instances(
+                                          std::move(copyOf("unassignedVisitsCost")
+                                                            .weight("unassignedVisitsCost", 2.0)))),
                 repeatInstance());
         check(twice.medium == -15.0, "a repeated medium pick: -5 - 10 medium");
     }
@@ -1050,38 +1071,38 @@ void verifyRepeatsAndOffsets() {
             return std::string();
         };
         auto refusal = [](const std::string& name) {
-            return "Constraint '" + name
-                   + "' cannot use clip=false with a non-zero offset on a level that counts toward "
-                     "the hard score (hard 0 must mean no violation)";
+            return "Constraint '" + name +
+                   "' cannot use clip=false with a non-zero offset on a level that counts toward "
+                   "the hard score (hard 0 must mean no violation)";
         };
         check(resetRefusal(copyOf("vehicleCapacityCost")
                                    .offset("vehicleCapacityCost", 2.5)
-                                   .clip("vehicleCapacityCost", false))
-                              == refusal("vehicleCapacityCost")
-                      && resetRefusal(copyOf("vehicleCapacityCost")
-                                              .clip("vehicleCapacityCost", false)
-                                              .offset("vehicleCapacityCost", -2.5))
-                                 == refusal("vehicleCapacityCost"),
+                                   .clip("vehicleCapacityCost", false)) ==
+                              refusal("vehicleCapacityCost") &&
+                      resetRefusal(copyOf("vehicleCapacityCost")
+                                           .clip("vehicleCapacityCost", false)
+                                           .offset("vehicleCapacityCost", -2.5)) ==
+                              refusal("vehicleCapacityCost"),
               "capacity literal offset +-2.5 on hard (its default): refused at reset");
         check(resetRefusal(copyOf("travelTimeCost")
                                    .offset("travelTimeCost", 300.0)
                                    .clip("travelTimeCost", false)
-                                   .hard("travelTimeCost"))
-                      == refusal("travelTimeCost"),
+                                   .hard("travelTimeCost")) == refusal("travelTimeCost"),
               "travel literal offset moved to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("vehicleCapacityCost");
         repeated.add_instances(std::move(copyOf("vehicleCapacityCost")
-                                                .offset("vehicleCapacityCost", 1.0)
-                                                .clip("vehicleCapacityCost", false)));
+                                                 .offset("vehicleCapacityCost", 1.0)
+                                                 .clip("vehicleCapacityCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("vehicleCapacityCost"),
               "a repeated capacity instance with the literal offset on hard: refused at reset");
-        check(resetRefusal(copyOf("vehicleCapacityCost").offset("vehicleCapacityCost", 2.5)).empty()
-                      && resetRefusal(copyOf("vehicleCapacityCost").clip("vehicleCapacityCost", false))
-                                 .empty()
-                      && resetRefusal(copyOf("unassignedVisitsCost")
-                                              .offset("unassignedVisitsCost", 8.0)
-                                              .clip("unassignedVisitsCost", false))
-                                 .empty(),
+        check(resetRefusal(copyOf("vehicleCapacityCost").offset("vehicleCapacityCost", 2.5))
+                              .empty() &&
+                      resetRefusal(copyOf("vehicleCapacityCost").clip("vehicleCapacityCost", false))
+                              .empty() &&
+                      resetRefusal(copyOf("unassignedVisitsCost")
+                                           .offset("unassignedVisitsCost", 8.0)
+                                           .clip("unassignedVisitsCost", false))
+                              .empty(),
               "allowed: a threshold offset or clip=false with offset 0 on hard, the literal "
               "offset on the into-soft medium");
     }
@@ -1121,9 +1142,9 @@ void verifyRepeatsAndOffsets() {
             if (!optimaru::scores_agree(incremental, full)) ++mismatches;
         }
         std::printf("    largest soft drift %.3g\n", drift);
-        check(mismatches == 0, std::to_string(steps)
-                                       + " random list moves with repeated, shifted components: "
-                                         "incremental == fresh");
+        check(mismatches == 0, std::to_string(steps) +
+                                       " random list moves with repeated, shifted components: "
+                                       "incremental == fresh");
     }
     {
         // Every preview == the applied score, re-checked under ScoreChecks::Full.
@@ -1133,14 +1154,13 @@ void verifyRepeatsAndOffsets() {
         plan.rebuildUnassignedPool();
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
-        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator,
-                                                           optimaru::ScoreChecks::Full);
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator, optimaru::ScoreChecks::Full);
         editor.score();
         optimaru::testing::PreviewParity parity;
         bool corrupted = false;
         try {
             parity = optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/13,
-                                                         /*trials=*/3000);
+                                                           /*trials=*/3000);
         } catch (const optimaru::ScoreMismatchError& error) {
             corrupted = true;
             std::printf("    %s\n", error.what());
@@ -1174,9 +1194,9 @@ void verifyRepeatsAndOffsets() {
         // plan.score rounds each level on its own (the fractional weights
         // leave fractions), exactly as the solver's levelScore does.
         const auto levels = levelsWith(repeatedAssembly(), plan);
-        check(!corrupted && plan.score.hard == levels.hard
-                      && plan.score.medium == optimaru::round_score_level(levels.medium, "medium")
-                      && plan.score.soft == optimaru::round_score_level(levels.soft, "soft"),
+        check(!corrupted && plan.score.hard == levels.hard &&
+                      plan.score.medium == optimaru::round_score_level(levels.medium, "medium") &&
+                      plan.score.soft == optimaru::round_score_level(levels.soft, "soft"),
               "the reported levels == a fresh recompute of the same assembly");
     }
     std::printf("\n");
@@ -1201,9 +1221,9 @@ ConstraintAssembly negativeThresholdAssembly() {
     assembly.weight("routeDurationCost", 0.001).offset("routeDurationCost", -60.0);
     assembly.offset("unassignedVisitsCost", -1.0);
     assembly.add_instances(std::move(copyOf("travelTimeCost")
-                                            .weight("travelTimeCost", 1e-4)
-                                            .exponent("travelTimeCost", 2.0)
-                                            .offset("travelTimeCost", -30.0)));
+                                             .weight("travelTimeCost", 1e-4)
+                                             .exponent("travelTimeCost", 2.0)
+                                             .offset("travelTimeCost", -30.0)));
     return assembly;
 }
 
@@ -1216,14 +1236,13 @@ void verifyNegativeThresholds() {
         plan.rebuildUnassignedPool();
         DecomposedCalculator calculator;
         negativeThresholdAssembly().into(calculator);
-        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator,
-                                                           optimaru::ScoreChecks::Full);
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator, optimaru::ScoreChecks::Full);
         editor.score();
         optimaru::testing::PreviewParity parity;
         bool corrupted = false;
         try {
             parity = optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/71,
-                                                         /*trials=*/3000);
+                                                           /*trials=*/3000);
         } catch (const optimaru::ScoreMismatchError& error) {
             corrupted = true;
             std::printf("    %s\n", error.what());
@@ -1266,9 +1285,9 @@ void verifyNegativeThresholds() {
         negativeThresholdAssembly().into(calculator);
         Solver(config).solve(plan, calculator);
         const auto levels = levelsWith(negativeThresholdAssembly(), plan);
-        check(plan.score.hard == levels.hard
-                      && plan.score.medium == optimaru::round_score_level(levels.medium, "medium")
-                      && plan.score.soft == optimaru::round_score_level(levels.soft, "soft"),
+        check(plan.score.hard == levels.hard &&
+                      plan.score.medium == optimaru::round_score_level(levels.medium, "medium") &&
+                      plan.score.soft == optimaru::round_score_level(levels.soft, "soft"),
               "20000 steps: plan.score == a fresh recompute of the same assembly");
         check(!reports.empty() && reports.back() == plan.score,
               "the last onNewBest report (incremental) == plan.score (fresh)");

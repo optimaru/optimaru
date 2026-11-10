@@ -96,11 +96,9 @@ private:
 // Bridges the user's ChainObjective into the inner sequence
 // solve: list hooks become chain hooks carrying the chain's contents.
 template <typename Domain>
-class ChainObjectiveBridge final
-    : public Objective<ChainView<Domain>> {
+class ChainObjectiveBridge final : public Objective<ChainView<Domain>> {
 public:
-    explicit ChainObjectiveBridge(ChainObjective<Domain>& inner)
-        : inner_(inner) {}
+    explicit ChainObjectiveBridge(ChainObjective<Domain>& inner) : inner_(inner) {}
 
     void rebuild(ChainView<Domain>& s) override {
         inner_.rebuild(*s.domain, s.lists);
@@ -125,9 +123,7 @@ class ChainDerivedStateBridge final : public DerivedState<ChainView<Domain>> {
 public:
     explicit ChainDerivedStateBridge(DerivedState<Domain>& inner) : inner_(inner) {}
 
-    void rebuild(ChainView<Domain>& s) override {
-        inner_.rebuild(*s.domain);
-    }
+    void rebuild(ChainView<Domain>& s) override { inner_.rebuild(*s.domain); }
     void after_list_edit(ChainView<Domain>& s, int l) override {
         inner_.after_list_edit(*s.domain, l);
     }

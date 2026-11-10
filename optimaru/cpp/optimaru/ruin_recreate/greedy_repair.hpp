@@ -71,8 +71,7 @@ public:
         if constexpr (Traits::shape == Shape::Assignment) {  // never ruin a pinned entity
             ruined.erase(std::remove_if(ruined.begin(), ruined.end(),
                                         [&](int e) {
-                                            return entity_is_pinned<Traits>(
-                                                    editor.solution(), e);
+                                            return entity_is_pinned<Traits>(editor.solution(), e);
                                         }),
                          ruined.end());
         }
@@ -96,8 +95,7 @@ public:
             // Sized once; only the entries flagged last time are cleared, so
             // a ruin costs O(ruined) rather than O(elements) here.
             from_excluded_.resize(
-                    static_cast<std::size_t>(Traits::element_count(editor.solution())),
-                    0);
+                    static_cast<std::size_t>(Traits::element_count(editor.solution())), 0);
             for (int e : flagged_) from_excluded_[static_cast<std::size_t>(e)] = 0;
             flagged_.clear();
             for (int e : ruined) {
@@ -124,8 +122,8 @@ public:
     // Reassign everything in `ruined`. exclude_list (sequence shape, -1 = none) is
     // off limits for every placement, which is how route elimination keeps the
     // list it just emptied from being refilled with what it just lost.
-    void recreate(Editor<Solution>& editor, std::vector<int> ruined,
-                  std::mt19937_64& rng, int exclude_list = -1) {
+    void recreate(Editor<Solution>& editor, std::vector<int> ruined, std::mt19937_64& rng,
+                  int exclude_list = -1) {
         Solution& solution = editor.solution();
         std::shuffle(ruined.begin(), ruined.end(), rng);
         if constexpr (Traits::shape == Shape::Assignment) {
@@ -146,10 +144,10 @@ public:
     // (recreate() lifts it for an element the ruin took out of that list).
     // Returns the list the element landed on.
     int insert_cheapest(Editor<Solution>& editor, int element, std::mt19937_64& rng,
-                       int exclude_list, int unassigned_list) {
+                        int exclude_list, int unassigned_list) {
         RegretEntry entry;
         evaluate_placements(editor, element, 1, config_.blink_rate, rng, exclude_list,
-                           unassigned_list, entry);
+                            unassigned_list, entry);
         if (!entry.evaluated) {
             // Nothing was scored, so best_list/best_position mean nothing. The
             // element still has to land somewhere — leaving it unassigned
@@ -221,8 +219,8 @@ private:
     // A cheaper anchor (a bounded sample of positions, or remembering where the
     // ruined neighbours sat before they were removed) is the open question;
     // enumerating everything is not the answer.
-    void collect_candidates(const Solution& solution, int e, int exclude_list,
-                           int unassigned_list, std::vector<Placement>& out) {
+    void collect_candidates(const Solution& solution, int e, int exclude_list, int unassigned_list,
+                            std::vector<Placement>& out) {
         out.clear();
         const int list_count = Traits::list_count(solution);
         if (nearby_.enabled()) {
@@ -243,7 +241,7 @@ private:
     }
 
     static void collect_every_position(const Solution& solution, int list_count, int exclude_list,
-                                     int unassigned_list, std::vector<Placement>& out) {
+                                       int unassigned_list, std::vector<Placement>& out) {
         for (int l = 0; l < list_count; ++l) {
             if (l == exclude_list || l == unassigned_list) continue;
             const int size = Traits::list_size(solution, l);
@@ -257,8 +255,8 @@ private:
     // repair is not deterministically greedy and repeated kicks on the same
     // hole explore different rebuilds.
     void evaluate_placements(Editor<Solution>& editor, int e, int k, double blink_rate,
-                            std::mt19937_64& rng, int exclude_list, int unassigned_list,
-                            RegretEntry& entry) {
+                             std::mt19937_64& rng, int exclude_list, int unassigned_list,
+                             RegretEntry& entry) {
         Solution& solution = editor.solution();
         collect_candidates(solution, e, exclude_list, unassigned_list, candidate_scratch_);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -321,8 +319,8 @@ private:
     // best placement was in L need re-evaluating — that turns the naive
     // O(pending^2) regret sweep into roughly one full pass plus a few
     // per-round refreshes.
-    void recreate_list(Editor<Solution>& editor, std::vector<int> ruined,
-                      std::mt19937_64& rng, int exclude_list) {
+    void recreate_list(Editor<Solution>& editor, std::vector<int> ruined, std::mt19937_64& rng,
+                       int exclude_list) {
         const int k = config_.regret_k;
         if (k < 2) {
             for (int e : ruined) {
@@ -341,9 +339,8 @@ private:
             for (std::size_t i = 0; i < pending; ++i) {
                 if (placed_[i]) continue;
                 if (!regret_entries_[i].evaluated) {
-                    evaluate_placements(editor, ruined[i], k, config_.blink_rate, rng,
-                                       exclude_list, excluded_list_for(ruined[i]),
-                                       regret_entries_[i]);
+                    evaluate_placements(editor, ruined[i], k, config_.blink_rate, rng, exclude_list,
+                                        excluded_list_for(ruined[i]), regret_entries_[i]);
                 }
                 if (choice == pending || more_urgent(regret_entries_[i], regret_entries_[choice])) {
                     choice = i;
@@ -359,10 +356,10 @@ private:
             if (regret_entries_[choice].evaluated) {
                 winner_list = regret_entries_[choice].best_list;
                 index_.insert_at(editor, winner_list, regret_entries_[choice].best_position,
-                                ruined[choice]);
+                                 ruined[choice]);
             } else {
                 winner_list = insert_cheapest(editor, ruined[choice], rng, exclude_list,
-                                            excluded_list_for(ruined[choice]));
+                                              excluded_list_for(ruined[choice]));
                 if (winner_list < 0) {
                     // Every list excluded: a caller's configuration error, and
                     // silently losing the element would corrupt the solution.

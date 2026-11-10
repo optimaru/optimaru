@@ -3,8 +3,7 @@
 
 #include "fcs/constraints/common.hpp"
 
-namespace fcs
-{
+namespace fcs {
 
 // Hard, weight 10: flightConflictCost — one point per pair of the same
 // employee's assignments whose flights overlap in time (aStart < bEnd &&
@@ -15,35 +14,22 @@ namespace fcs
 // A plain sum over the pairs inside one itinerary, so the exact delta of one
 // assignment joining or leaving is its overlap count against the other
 // members.
-struct FlightConflictCost final : ItineraryConstraint
-{
+struct FlightConflictCost final : ItineraryConstraint {
     static constexpr double kDefaultWeight = 10.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit FlightConflictCost(double weight = kDefaultWeight)
-        : ItineraryConstraint("flightConflictCost", weight, kDefaultLevel)
-    {
-    }
-    std::int64_t select(const ItineraryStats &stats) const override
-    {
-        return stats.conflictPairs;
-    }
+        : ItineraryConstraint("flightConflictCost", weight, kDefaultLevel) {}
+    std::int64_t select(const ItineraryStats& stats) const override { return stats.conflictPairs; }
     bool supports_delta() const override { return true; }
-    double delta_cost(const FlightCrewSchedule &schedule,
-                     int /*unit*/,
-                     const std::vector<int> &members,
-                     int entity) const override
-    {
+    double delta_cost(const FlightCrewSchedule& schedule, int /*unit*/,
+                      const std::vector<int>& members, int entity) const override {
         const Minutes start = schedule.departureOf(entity);
         const Minutes end = schedule.arrivalOf(entity);
         std::int64_t overlaps = 0;
-        for (int other : members)
-        {
-            if (other == entity)
-                continue;
-            if (start < schedule.arrivalOf(other)
-                && schedule.departureOf(other) < end)
-                ++overlaps;
+        for (int other : members) {
+            if (other == entity) continue;
+            if (start < schedule.arrivalOf(other) && schedule.departureOf(other) < end) ++overlaps;
         }
         return static_cast<double>(overlaps);
     }

@@ -21,9 +21,7 @@ def _schedule(pin):
         fc.Flight("KE003", 0, 33 * HOUR, 1, 35 * HOUR),
         fc.Flight("KE004", 1, 37 * HOUR, 0, 39 * HOUR),
     ]
-    assignments = [
-        fc.FlightAssignment(f"a{i}", i, required_skill="Pilot", employee=2, pinned=pin(i)) for i in range(4)
-    ]
+    assignments = [fc.FlightAssignment(f"a{i}", i, required_skill="Pilot", employee=2, pinned=pin(i)) for i in range(4)]
     return fc.FlightCrewSchedule(airports, employees, flights, assignments)
 
 

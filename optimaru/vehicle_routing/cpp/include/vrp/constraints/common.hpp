@@ -179,9 +179,8 @@ inline double haversineMeters(const Location& a, const Location& b) {
     const double lat2 = b.latitude * pi / 180.0;
     const double dlat = lat2 - lat1;
     const double dlon = (b.longitude - a.longitude) * pi / 180.0;
-    const double h = std::sin(dlat / 2.0) * std::sin(dlat / 2.0)
-                     + std::cos(lat1) * std::cos(lat2)
-                           * std::sin(dlon / 2.0) * std::sin(dlon / 2.0);
+    const double h = std::sin(dlat / 2.0) * std::sin(dlat / 2.0) +
+                     std::cos(lat1) * std::cos(lat2) * std::sin(dlon / 2.0) * std::sin(dlon / 2.0);
     return 2.0 * earthRadius * std::asin(std::sqrt(std::min(1.0, h)));
 }
 

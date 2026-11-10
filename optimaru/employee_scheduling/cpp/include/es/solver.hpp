@@ -28,7 +28,7 @@ public:
         // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires (termination is by time_limit).
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<double>::infinity()};
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;

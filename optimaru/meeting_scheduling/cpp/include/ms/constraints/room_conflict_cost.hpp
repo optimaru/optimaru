@@ -3,45 +3,35 @@
 
 #include "ms/constraints/common.hpp"
 
-namespace ms
-{
+namespace ms {
 
 // Hard, weight 1: roomConflictCost — two meetings in the same room at the
 // same time. Raw cost (global) = the grains each pair of meetings sharing a
 // room overlap, summed over the pairs; 0 = no room is double-booked.
-struct RoomConflictCost final : AssignmentPairConstraint
-{
+struct RoomConflictCost final : AssignmentPairConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit RoomConflictCost(double weight = kDefaultWeight)
-        : AssignmentPairConstraint("roomConflictCost", weight, kDefaultLevel)
-    {
-    }
+        : AssignmentPairConstraint("roomConflictCost", weight, kDefaultLevel) {}
 
 protected:
-    std::int64_t marginal(const MeetingSchedule &schedule,
-                          int assignmentIndex,
-                          int unit) const override
-    {
+    std::int64_t marginal(const MeetingSchedule& schedule, int assignmentIndex,
+                          int unit) const override {
         int start = 0;
         int end = 0;
         detail::spanOf(schedule, unit, assignmentIndex, start, end);
         const int room = schedule.roomIndexOf(unit);
         std::int64_t grains = 0;
         const int count = static_cast<int>(schedule.meetingAssignments.size());
-        for (int other = 0; other < count; ++other)
-        {
+        for (int other = 0; other < count; ++other) {
             const int otherUnit = placedUnit(other);
-            if (other == assignmentIndex || otherUnit < 0)
-                continue;
-            if (schedule.roomIndexOf(otherUnit) != room)
-                continue;
+            if (other == assignmentIndex || otherUnit < 0) continue;
+            if (schedule.roomIndexOf(otherUnit) != room) continue;
             int otherStart = 0;
             int otherEnd = 0;
             detail::spanOf(schedule, otherUnit, other, otherStart, otherEnd);
-            grains += ScoreCalculator::overlapGrains(
-                start, end, otherStart, otherEnd);
+            grains += ScoreCalculator::overlapGrains(start, end, otherStart, otherEnd);
         }
         return grains;
     }

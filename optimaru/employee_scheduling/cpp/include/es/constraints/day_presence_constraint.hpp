@@ -54,9 +54,9 @@ struct DayPresenceConstraint : EsUnitConstraint {
     virtual double runCost(std::int32_t len, bool touchesEnd) const = 0;
 
 protected:
-    std::vector<std::int32_t> day_;       // shift -> start day
-    mutable std::vector<char> worked_;    // scratch, always zeroed after use
-    mutable std::vector<char> pinned_;    // scratch: day sits on a pinned shift
+    std::vector<std::int32_t> day_;     // shift -> start day
+    mutable std::vector<char> worked_;  // scratch, always zeroed after use
+    mutable std::vector<char> pinned_;  // scratch: day sits on a pinned shift
     std::int32_t horizon_ = 0;
 };
 

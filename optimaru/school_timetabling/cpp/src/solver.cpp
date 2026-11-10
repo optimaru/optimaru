@@ -11,21 +11,16 @@
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
 
-namespace st
-{
+namespace st {
 
-void Solver::solve(Timetable &table)
-{
+void Solver::solve(Timetable& table) {
     ScoreCalculator::prepare(table);  // intern ids / build slot adjacency
-    if (table.lessons.empty() || table.slotRoomCount() == 0)
-    {
+    if (table.lessons.empty() || table.slotRoomCount() == 0) {
         ScoreCalculator::score(table);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4)
-    {
-        throw std::invalid_argument(
-            "ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruinRecreateRewards.size() != 4) {
+        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
     }
 
     optimaru::Settings engineConfig;
@@ -35,21 +30,17 @@ void Solver::solve(Timetable &table)
     engineConfig.on_new_best = config_.on_new_best;
     engineConfig.limits.time_limit = config_.time_limit;
     engineConfig.limits.target_score = config_.target_score;
-    engineConfig.limits.stall_time_limit
-        = config_.stall_time_limit;
+    engineConfig.limits.stall_time_limit = config_.stall_time_limit;
     engineConfig.limits.step_limit = config_.step_limit;
-    engineConfig.limits.stall_step_limit
-        = config_.stall_step_limit;
+    engineConfig.limits.stall_step_limit = config_.stall_step_limit;
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length
-        = config_.history_length != 0
-              ? config_.history_length
-              : std::clamp<std::size_t>(8 * table.lessons.size(), 400, 3200);
-    engineConfig.search.moves.change_weight
-        = config_.change_weight;
-    engineConfig.search.moves.swap_weight
-        = config_.swap_weight;
-    auto &lns = engineConfig.search.ruin_recreate;
+    engineConfig.search.acceptance.history_length =
+            config_.history_length != 0
+                    ? config_.history_length
+                    : std::clamp<std::size_t>(8 * table.lessons.size(), 400, 3200);
+    engineConfig.search.moves.change_weight = config_.change_weight;
+    engineConfig.search.moves.swap_weight = config_.swap_weight;
+    auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config_.ruin_recreate;
     lns.unimproved_step_trigger = config_.ruinRecreateUnimprovedStepTrigger;
     lns.min_ruin_fraction = config_.ruinRecreateMinRuinFraction;
@@ -60,13 +51,10 @@ void Solver::solve(Timetable &table)
     lns.polish_steps = config_.ruinRecreatePolishSteps;
     // AUTO as-move weight (negative sentinel): budget-share 0.2 inside the
     // measured [900, 1300]-cell pay-off window, off outside it (see Config).
-    if (config_.ruinRecreateAsMoveWeight < 0.0)
-    {
+    if (config_.ruinRecreateAsMoveWeight < 0.0) {
         const int cells = table.slotRoomCount();
         lns.as_move_weight = (cells >= 900 && cells <= 1300) ? 0.2 / cells : 0.0;
-    }
-    else
-    {
+    } else {
         lns.as_move_weight = config_.ruinRecreateAsMoveWeight;
     }
     lns.as_move_max_ruin = config_.ruinRecreateAsMoveMaxRuin;
@@ -75,24 +63,20 @@ void Solver::solve(Timetable &table)
 
     // Same-group nearby neighborhoods (see Config::sameGroupNearby): the
     // groupId is interned by prepare().
-    if (config_.sameGroupNearby)
-    {
+    if (config_.sameGroupNearby) {
         auto groupOf = std::make_shared<std::vector<int>>();
         groupOf->reserve(table.lessons.size());
         std::vector<std::size_t> groupSize(std::max(1, table.groupCount), 0);
-        for (const Lesson &lesson : table.lessons)
-        {
+        for (const Lesson& lesson : table.lessons) {
             groupOf->push_back(lesson.groupId);
             ++groupSize[lesson.groupId];
         }
-        const std::size_t maxGroupSize
-            = *std::max_element(groupSize.begin(), groupSize.end());
-        engineConfig.search.nearby.distance = [groupOf](int a, int b)
-        { return (*groupOf)[a] == (*groupOf)[b] ? 0.0 : 1.0; };
-        engineConfig.search.nearby.size
-            = std::max(1, static_cast<int>(maxGroupSize) - 1);
-        engineConfig.search.nearby.probability
-            = config_.sameGroupNearbyProbability;
+        const std::size_t maxGroupSize = *std::max_element(groupSize.begin(), groupSize.end());
+        engineConfig.search.nearby.distance = [groupOf](int a, int b) {
+            return (*groupOf)[a] == (*groupOf)[b] ? 0.0 : 1.0;
+        };
+        engineConfig.search.nearby.size = std::max(1, static_cast<int>(maxGroupSize) - 1);
+        engineConfig.search.nearby.probability = config_.sameGroupNearbyProbability;
     }
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks),
@@ -100,15 +84,9 @@ void Solver::solve(Timetable &table)
     // own calculator instance (the calculators are stateful); the shared
     // nearby meter above is a pure read of the classOf table, so it is safe
     // across the multi-start threads.
-    auto engine
-        = optimaru::Solver<Timetable>(std::move(engineConfig));
+    auto engine = optimaru::Solver<Timetable>(std::move(engineConfig));
     engine.solve_multistart(
-        table,
-        []
-        {
-            return std::make_unique<
-                SchoolTimetablingIncrementalScoreCalculator>();
-        });
+            table, [] { return std::make_unique<SchoolTimetablingIncrementalScoreCalculator>(); });
 
     // The authoritative final score: a full recompute on the best solution.
     table.score = ScoreCalculator::score(table);

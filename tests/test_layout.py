@@ -8,7 +8,10 @@ them misses a new use case, its C++ or Python tests silently stop running in CI.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
+
+import pytest
 
 import optimaru
 
@@ -55,3 +58,19 @@ def test_every_use_case_has_a_guide_and_a_benchmark():
         slug = name.replace("_", "-")
         assert (ROOT / "docs" / "use-cases" / slug / "README.md").is_file(), slug
         assert (ROOT / "benchmarks" / slug).is_dir(), slug
+
+
+def test_ruff_is_configured_in_one_place():
+    """The root pyproject.toml configures ruff for every directory, the benchmark projects
+    included, so an import sorts the same way wherever ruff runs from."""
+    tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
+    if tracked.returncode != 0:
+        pytest.skip("not a git checkout")
+    strays = []
+    for name in tracked.stdout.splitlines():
+        path = ROOT / name
+        if path.name in ("ruff.toml", ".ruff.toml"):
+            strays.append(name)
+        elif path.name == "pyproject.toml" and path.parent != ROOT and "[tool.ruff" in path.read_text():
+            strays.append(name)
+    assert not strays, f"ruff is configured in the root pyproject.toml only: {strays}"

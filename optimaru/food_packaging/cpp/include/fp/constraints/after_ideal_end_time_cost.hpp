@@ -3,8 +3,7 @@
 
 #include "fp/constraints/common.hpp"
 
-namespace fp
-{
+namespace fp {
 
 // Medium, weight 1: afterIdealEndTimeCost — the minutes a job runs past the
 // time it should ideally be done by (Job::idealEndTime). Raw cost per line =
@@ -19,33 +18,21 @@ namespace fp
 // fold, so the component carries no 10^10 factor. hard() makes it 1 hard per
 // minute, soft() 1 soft per minute (outside the fold), and an explicit weight
 // is in units of the level in effect (medium by default).
-struct AfterIdealEndTimeCost final : detail::PerLineConstraint
-{
+struct AfterIdealEndTimeCost final : detail::PerLineConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
 
     explicit AfterIdealEndTimeCost(double weight = kDefaultWeight)
-        : detail::PerLineConstraint("afterIdealEndTimeCost", weight, kDefaultLevel)
-    {
-    }
-    double cost(const PackagingSchedule &schedule,
-                int unit,
-                const std::vector<int> & /*members*/) const override
-    {
-        if (detail::isPool(schedule, unit))
-            return 0.0;
+        : detail::PerLineConstraint("afterIdealEndTimeCost", weight, kDefaultLevel) {}
+    double cost(const PackagingSchedule& schedule, int unit,
+                const std::vector<int>& /*members*/) const override {
+        if (detail::isPool(schedule, unit)) return 0.0;
         std::int64_t late = 0;
-        detail::walkChain(schedule,
-                          unit,
-                          detail::jobsOfUnit(schedule, unit),
-                          [&](int jobIndex,
-                              Minutes /*startCleaning*/,
-                              Minutes /*startProduction*/,
-                              Minutes end)
-                          {
-                              const Job &job = schedule.jobs[jobIndex];
-                              if (job.idealEndTime < end)
-                                  late += end - job.idealEndTime;
+        detail::walkChain(schedule, unit, detail::jobsOfUnit(schedule, unit),
+                          [&](int jobIndex, Minutes /*startCleaning*/, Minutes /*startProduction*/,
+                              Minutes end) {
+                              const Job& job = schedule.jobs[jobIndex];
+                              if (job.idealEndTime < end) late += end - job.idealEndTime;
                           });
         return static_cast<double>(late);
     }

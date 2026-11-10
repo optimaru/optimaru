@@ -102,12 +102,8 @@ class RoutingInput(_Model):
                 raise ValueError(f"duplicate {kind} ids")
         if self.driving_seconds is not None:
             size = len(self.vehicles) + len(self.visits)
-            if len(self.driving_seconds) != size or any(
-                len(row) != size for row in self.driving_seconds
-            ):
-                raise ValueError(
-                    "driving_seconds must be a square matrix over vehicles then visits"
-                )
+            if len(self.driving_seconds) != size or any(len(row) != size for row in self.driving_seconds):
+                raise ValueError("driving_seconds must be a square matrix over vehicles then visits")
             if any(value < 0 for row in self.driving_seconds for value in row):
                 raise ValueError("driving_seconds values must be non-negative")
         self._check_initial_routes()
@@ -209,14 +205,10 @@ def to_plan(model_input: RoutingInput) -> "_core.VehicleRoutePlan":
         vehicle.visit_indices = [visit_index[visit_id] for visit_id in model.initial_route]
     # The pool stays empty on purpose. The constraints= path does not clear it,
     # so a visit parked there would be skipped by construction and stay unrouted.
-    return _core.VehicleRoutePlan(
-        "plan", locations, vehicles, visits, model_input.driving_seconds
-    )
+    return _core.VehicleRoutePlan("plan", locations, vehicles, visits, model_input.driving_seconds)
 
 
-def vehicle_metrics(
-    plan: "_core.VehicleRoutePlan", routes: dict[str, list[VisitStop]]
-) -> dict[str, VehicleMetrics]:
+def vehicle_metrics(plan: "_core.VehicleRoutePlan", routes: dict[str, list[VisitStop]]) -> dict[str, VehicleMetrics]:
     """Post-process finished routes into per-vehicle figures.
 
     Works for any backend: it only needs the stop order and the arrival times
@@ -236,9 +228,7 @@ def vehicle_metrics(
             driving += plan.driving_time(previous, visit.location_index)
             waiting += max(0, visit.min_start_time - stop.arrival_time)
             service += visit.service_duration
-            departure = (
-                max(stop.arrival_time, visit.min_start_time) + visit.service_duration
-            )
+            departure = max(stop.arrival_time, visit.min_start_time) + visit.service_duration
             previous = visit.location_index
         if stops and vehicle.return_to_depot:
             leg = plan.driving_time(previous, vehicle.home_location_index)
@@ -347,14 +337,8 @@ def _apply_solver_parameters(config, parameters: dict[str, Any]) -> None:
             "parallel_solver_count",
             "on_new_best",
         }:
-            raise ValueError(
-                f"solver parameter {name!r} is controlled by the solve request"
-            )
-        if (
-            name.startswith("_")
-            or not hasattr(config, name)
-            or callable(getattr(config, name))
-        ):
+            raise ValueError(f"solver parameter {name!r} is controlled by the solve request")
+        if name.startswith("_") or not hasattr(config, name) or callable(getattr(config, name)):
             raise ValueError(f"unknown solver parameter: {name}")
         if value is None:
             continue

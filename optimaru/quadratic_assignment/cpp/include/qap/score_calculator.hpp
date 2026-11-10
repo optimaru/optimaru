@@ -6,8 +6,7 @@
 
 #include "qap/domain.hpp"
 
-namespace qap
-{
+namespace qap {
 
 // The quadratic-assignment cost function as one monolithic full recompute —
 // the reference the incremental calculator is checked against (in the tests
@@ -25,13 +24,11 @@ namespace qap
 //   soft 5. flowDistanceCost           summed flows[a][b] * distances[loc a][loc b]
 // Unassigned facilities (location == -1) contribute nothing (only a fixed
 // location they should stand at counts).
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // Raw totals of the five constraints (unweighted, unshaped), in catalog
     // order.
-    struct RawCosts
-    {
+    struct RawCosts {
         std::int64_t pinnedAssignmentsCost = 0;
         std::int64_t forbiddenAssignmentsCost = 0;
         std::int64_t locationCapacityCost = 0;
@@ -40,10 +37,10 @@ public:
     };
 
     // Full recompute at the default weights; also stores problem.score.
-    static Score score(QuadraticAssignmentProblem &problem);
+    static Score score(QuadraticAssignmentProblem& problem);
 
     // The raw totals the score is made of (prepares the problem).
-    static RawCosts rawCosts(QuadraticAssignmentProblem &problem);
+    static RawCosts rawCosts(QuadraticAssignmentProblem& problem);
 
     // Validates the facts and builds the flat caches (flow / distance /
     // direct matrices, demand and capacity per index, the fixed and forbidden
@@ -54,7 +51,7 @@ public:
     // fixed twice, a negative demand or capacity, a facility location out of
     // range; std::overflow_error when the objective magnitudes could
     // overflow int64.
-    static void prepare(QuadraticAssignmentProblem &problem);
+    static void prepare(QuadraticAssignmentProblem& problem);
 };
 
 }  // namespace qap

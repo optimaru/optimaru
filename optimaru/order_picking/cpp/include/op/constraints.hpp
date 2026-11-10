@@ -18,8 +18,7 @@
 #include "op/constraints/order_split_by_trolley_cost.hpp"
 #include "op/constraints/trolley_capacity_cost.hpp"
 
-namespace op
-{
+namespace op {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -48,8 +47,7 @@ namespace op
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<TrolleyCapacityCost>();
     assembly.emplace<DistanceFromPreviousPickTaskCost>();
@@ -58,8 +56,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

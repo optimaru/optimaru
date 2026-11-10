@@ -10,8 +10,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace fl
-{
+namespace fl {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -59,22 +58,18 @@ namespace fl
 // Every component requires ScoreCalculator::prepare(problem) to have run
 // (the solve() overload and the monolithic path both call it).
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<FacilityLocationProblem>;
-using ConstraintAssembly
-    = optimaru::ConstraintAssembly<FacilityLocationProblem>;
+using DecomposedCalculator = optimaru::DecomposedObjective<FacilityLocationProblem>;
+using ConstraintAssembly = optimaru::ConstraintAssembly<FacilityLocationProblem>;
 using FlUnitConstraint = optimaru::UnitConstraint<FacilityLocationProblem>;
 using FlGlobalConstraint = optimaru::GlobalConstraint<FacilityLocationProblem>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const FacilityLocationProblem &problem)
-{
-    if (!problem.prepared)
-    {
-        throw std::logic_error("fl constraints require "
-                               "ScoreCalculator::prepare(problem) first");
+inline void requirePrepared(const FacilityLocationProblem& problem) {
+    if (!problem.prepared) {
+        throw std::logic_error(
+                "fl constraints require "
+                "ScoreCalculator::prepare(problem) first");
     }
 }
 

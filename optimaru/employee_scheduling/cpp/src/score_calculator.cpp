@@ -28,7 +28,8 @@ static_assert(RequiredSkillCost::kDefaultWeight == 1.0 &&
                       EmployeeUnavailabilityCost::kDefaultWeight == 1.0 &&
                       ShiftOverlapCost::kDefaultWeight == 1.0 &&
                       MaxOneShiftPerDayCost::kDefaultWeight == 1.0 &&
-                      MinRestCost::kDefaultWeight == 1.0 && UndesiredDayCost::kDefaultWeight == 1.0 &&
+                      MinRestCost::kDefaultWeight == 1.0 &&
+                      UndesiredDayCost::kDefaultWeight == 1.0 &&
                       DesiredDayCost::kDefaultWeight == 1.0 &&
                       ShiftCountImbalanceCost::kDefaultWeight == 1.0,
               "the monolithic calculator assumes weight 1 for every default constraint");
@@ -49,8 +50,8 @@ void ScoreCalculator::prepare(EmployeeSchedule& schedule) {
         // The rules index per-day tables by these day numbers without a check.
         if (sh.start < 0 || sh.end <= sh.start || dayOf(sh.end) > MAX_DAY) {
             throw std::invalid_argument("shift '" + sh.id + "': need 0 <= start < end up to day " +
-                                        std::to_string(MAX_DAY) + ", got start=" +
-                                        std::to_string(sh.start) +
+                                        std::to_string(MAX_DAY) +
+                                        ", got start=" + std::to_string(sh.start) +
                                         ", end=" + std::to_string(sh.end));
         }
         // Every calculator indexes the employee list by this without a check.
@@ -113,13 +114,13 @@ std::int64_t ScoreCalculator::shiftHardPenalty(const Employee& emp, const Shift&
     std::int64_t p = 0;
     if (shift.requiredSkillBit != 0 && (emp.skillMask & shift.requiredSkillBit) == 0)
         p += 1;  // requiredSkillCost (bit 0 == no requirement)
-    p += overlapWithDates(shift, emp.unavailableDates);         // employeeUnavailabilityCost
+    p += overlapWithDates(shift, emp.unavailableDates);  // employeeUnavailabilityCost
     return p;
 }
 
 std::int64_t ScoreCalculator::shiftSoftDelta(const Employee& emp, const Shift& shift) {
-    return overlapWithDates(shift, emp.desiredDates)         // desiredDayCost (reward)
-           - overlapWithDates(shift, emp.undesiredDates);    // undesiredDayCost (penalty)
+    return overlapWithDates(shift, emp.desiredDates)       // desiredDayCost (reward)
+           - overlapWithDates(shift, emp.undesiredDates);  // undesiredDayCost (penalty)
 }
 
 std::int64_t ScoreCalculator::pairHardPenalty(const Shift& a, const Shift& b) {
@@ -139,7 +140,8 @@ std::int64_t ScoreCalculator::pairHardPenalty(const Shift& a, const Shift& b) {
     return p;
 }
 
-double ScoreCalculator::unfairnessFromAggregates(long sumOfLoads, long sumOfSquares, int itemCount) {
+double ScoreCalculator::unfairnessFromAggregates(long sumOfLoads, long sumOfSquares,
+                                                 int itemCount) {
     if (itemCount == 0) return 0.0;
     // ssd = sum(load^2) - sum(load)^2 / n  (identical to the n==1 special case).
     double ssd = static_cast<double>(sumOfSquares) -
@@ -174,10 +176,9 @@ double ScoreCalculator::unfairnessFromAggregates(long sumOfLoads, long sumOfSqua
     const double scaled = root * factor;
     const double lower = std::floor(scaled);
     const double fraction = scaled - lower;
-    const double rounded = fraction > 0.5 ||
-                                   (fraction == 0.5 && std::fmod(lower, 2.0) != 0.0)
-                           ? lower + 1.0
-                           : lower;
+    const double rounded = fraction > 0.5 || (fraction == 0.5 && std::fmod(lower, 2.0) != 0.0)
+                                   ? lower + 1.0
+                                   : lower;
     return rounded / factor;
 }
 

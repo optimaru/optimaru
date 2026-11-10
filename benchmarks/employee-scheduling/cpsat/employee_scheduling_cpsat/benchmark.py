@@ -37,9 +37,7 @@ class Roster(ScheduleRequest):
 def _build(seed: int, workers: int, days: int) -> Roster:
     from optimaru.employee_scheduling.demo import generate_demo_data
 
-    return Roster.model_validate(
-        generate_demo_data(seed=seed, workers=workers, days=days).model_dump()
-    )
+    return Roster.model_validate(generate_demo_data(seed=seed, workers=workers, days=days).model_dump())
 
 
 def instances() -> dict[str, Callable[[], Roster]]:

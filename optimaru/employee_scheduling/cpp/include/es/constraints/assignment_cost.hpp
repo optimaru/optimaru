@@ -19,7 +19,8 @@ struct AssignmentCost final : EsUnitConstraint {
     explicit AssignmentCost(double weight = kDefaultWeight, double costPerHour = 0.0,
                             double costPerShift = 0.0, CostMatrix matrix = {})
         : EsUnitConstraint("assignmentCost", weight, kDefaultLevel),
-          costPerHour_(costPerHour), costPerShift_(costPerShift),
+          costPerHour_(costPerHour),
+          costPerShift_(costPerShift),
           matrix_(std::move(matrix)) {}
     void on_reset(const EmployeeSchedule& s) override {
         shiftCount_ = static_cast<int>(s.shifts.size());
@@ -42,8 +43,7 @@ struct AssignmentCost final : EsUnitConstraint {
             }
         }
     }
-    double cost(const EmployeeSchedule&, int unit,
-                const std::vector<int>& members) const override {
+    double cost(const EmployeeSchedule&, int unit, const std::vector<int>& members) const override {
         const double* row = table_.data() + static_cast<std::size_t>(unit) * shiftCount_;
         double c = 0;
         for (int i : members) c += row[i];
@@ -51,7 +51,7 @@ struct AssignmentCost final : EsUnitConstraint {
     }
     bool supports_delta() const override { return true; }
     double delta_cost(const EmployeeSchedule&, int unit, const std::vector<int>&,
-                     int entity) const override {
+                      int entity) const override {
         return table_[static_cast<std::size_t>(unit) * shiftCount_ + entity];
     }
 

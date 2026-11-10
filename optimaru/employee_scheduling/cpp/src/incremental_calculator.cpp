@@ -6,8 +6,7 @@
 
 namespace es {
 
-void EmployeeSchedulingIncrementalScoreCalculator::rebuild(
-        EmployeeSchedule& solution) {
+void EmployeeSchedulingIncrementalScoreCalculator::rebuild(EmployeeSchedule& solution) {
     ScoreCalculator::prepare(solution);
     sched_ = &solution;
     n_ = static_cast<int>(solution.employees.size());
@@ -31,8 +30,8 @@ void EmployeeSchedulingIncrementalScoreCalculator::rebuild(
         pairPenalty_.assign(cells, 0);
         for (int a = 0; a < shiftCount_; ++a) {
             for (int b = a + 1; b < shiftCount_; ++b) {
-                const std::int64_t penalty = ScoreCalculator::pairHardPenalty(
-                        solution.shifts[a], solution.shifts[b]);
+                const std::int64_t penalty =
+                        ScoreCalculator::pairHardPenalty(solution.shifts[a], solution.shifts[b]);
                 pairPenalty_[pairOffset(a, b)] = penalty;
                 pairPenalty_[pairOffset(b, a)] = penalty;
             }
@@ -63,8 +62,7 @@ void EmployeeSchedulingIncrementalScoreCalculator::rebuild(
         // +2 days of slack: one for the sub-day remainders of both starts,
         // one more because dayOf() truncates toward zero (a negative start
         // sits up to a full extra day below startDay * MINUTES_PER_DAY).
-        const int window = 2 + static_cast<int>((maxDuration +
-                                                 ScoreCalculator::MIN_REST_MINUTES) /
+        const int window = 2 + static_cast<int>((maxDuration + ScoreCalculator::MIN_REST_MINUTES) /
                                                 MINUTES_PER_DAY);
         // Bucketing only pays when the flat per-employee list is clearly
         // longer than the windowed scan (per-bucket iteration and the constant-time
@@ -74,9 +72,8 @@ void EmployeeSchedulingIncrementalScoreCalculator::rebuild(
         // at about a dozen shifts per employee, bucketing wins clearly at 25.
         const double spe = n_ > 0 ? static_cast<double>(shiftCount_) / n_ : 0.0;
         const int buckets = 2 * window + 1;
-        const bool worthIt =
-                spanDays <= 4096 && n_ > 0 &&
-                spe > buckets * (1.0 + spe / static_cast<double>(spanDays)) + 4.0;
+        const bool worthIt = spanDays <= 4096 && n_ > 0 &&
+                             spe > buckets * (1.0 + spe / static_cast<double>(spanDays)) + 4.0;
         if (worthIt) {
             minDay_ = minDay;
             dayCount_ = static_cast<int>(spanDays);
@@ -143,8 +140,10 @@ void EmployeeSchedulingIncrementalScoreCalculator::set_penalized(int e, bool on)
     }
 }
 
-void EmployeeSchedulingIncrementalScoreCalculator::contributionOf(
-        int e, const std::vector<int>& list, std::int64_t& penalty, std::int64_t& soft) const {
+void EmployeeSchedulingIncrementalScoreCalculator::contributionOf(int e,
+                                                                  const std::vector<int>& list,
+                                                                  std::int64_t& penalty,
+                                                                  std::int64_t& soft) const {
     penalty = 0;
     soft = 0;
     for (std::size_t a = 0; a < list.size(); ++a) {
@@ -159,17 +158,15 @@ void EmployeeSchedulingIncrementalScoreCalculator::contributionOf(
 }
 
 void EmployeeSchedulingIncrementalScoreCalculator::bucketInsert(int e, int s) {
-    std::vector<int>& bucket =
-            byDay_[static_cast<std::size_t>(e) * dayCount_ +
-                   (sched_->shifts[s].startDay - minDay_)];
+    std::vector<int>& bucket = byDay_[static_cast<std::size_t>(e) * dayCount_ +
+                                      (sched_->shifts[s].startDay - minDay_)];
     bucketPos_[s] = static_cast<int>(bucket.size());
     bucket.push_back(s);
 }
 
 void EmployeeSchedulingIncrementalScoreCalculator::bucketRemove(int e, int s) {
-    std::vector<int>& bucket =
-            byDay_[static_cast<std::size_t>(e) * dayCount_ +
-                   (sched_->shifts[s].startDay - minDay_)];
+    std::vector<int>& bucket = byDay_[static_cast<std::size_t>(e) * dayCount_ +
+                                      (sched_->shifts[s].startDay - minDay_)];
     const int pos = bucketPos_[s];
     const int last = bucket.back();
     bucket[static_cast<std::size_t>(pos)] = last;
@@ -178,8 +175,8 @@ void EmployeeSchedulingIncrementalScoreCalculator::bucketRemove(int e, int s) {
     bucketPos_[s] = -1;
 }
 
-void EmployeeSchedulingIncrementalScoreCalculator::marginalOf(
-        int e, int s, std::int64_t& penalty, std::int64_t& soft) const {
+void EmployeeSchedulingIncrementalScoreCalculator::marginalOf(int e, int s, std::int64_t& penalty,
+                                                              std::int64_t& soft) const {
     const std::size_t offset = employeeShiftOffset(e, s);
     penalty = shiftTerms_[offset].penalty;
     soft = shiftTerms_[offset].soft;
@@ -268,17 +265,15 @@ void EmployeeSchedulingIncrementalScoreCalculator::after_assign(int shiftIndex) 
 
 Score EmployeeSchedulingIncrementalScoreCalculator::score() {
     double unfairness;
-    if (balSum_ == shiftCount_ && balSumSq_ >= 0
-        && static_cast<std::size_t>(balSumSq_) < unfairnessBySumSq_.size()) {
+    if (balSum_ == shiftCount_ && balSumSq_ >= 0 &&
+        static_cast<std::size_t>(balSumSq_) < unfairnessBySumSq_.size()) {
         double& cached = unfairnessBySumSq_[static_cast<std::size_t>(balSumSq_)];
         if (cached < 0.0)
             cached = ScoreCalculator::unfairnessFromAggregates(balSum_, balSumSq_, n_);
         unfairness = cached;
     } else {
-        if (!unfairnessCached_ || cachedBalSum_ != balSum_
-            || cachedBalSumSq_ != balSumSq_) {
-            cachedUnfairness_ =
-                    ScoreCalculator::unfairnessFromAggregates(balSum_, balSumSq_, n_);
+        if (!unfairnessCached_ || cachedBalSum_ != balSum_ || cachedBalSumSq_ != balSumSq_) {
+            cachedUnfairness_ = ScoreCalculator::unfairnessFromAggregates(balSum_, balSumSq_, n_);
             cachedBalSum_ = balSum_;
             cachedBalSumSq_ = balSumSq_;
             unfairnessCached_ = true;

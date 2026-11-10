@@ -9,8 +9,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace mnt
-{
+namespace mnt {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -34,28 +33,19 @@ using Score = optimaru::Score;
 constexpr std::int64_t kNoDate = std::numeric_limits<std::int64_t>::min();
 
 // 0 = Monday .. 6 = Sunday (1970-01-01 is a Thursday, weekday 3).
-inline int weekdayOf(std::int64_t epochDay)
-{
-    return static_cast<int>(((epochDay % 7) + 10) % 7);
-}
+inline int weekdayOf(std::int64_t epochDay) { return static_cast<int>(((epochDay % 7) + 10) % 7); }
 
-inline bool isWeekend(std::int64_t epochDay)
-{
-    return weekdayOf(epochDay) >= 5;
-}
+inline bool isWeekend(std::int64_t epochDay) { return weekdayOf(epochDay) >= 5; }
 
 // plusBusinessDays: walk forward from
 // startDate counting only non-weekend days; the result is the EXCLUSIVE end
 // date after `businessDays` working days (it may land on a Saturday).
 // businessDays == 0 -> startDate.
-inline std::int64_t plusBusinessDays(std::int64_t startDate, int businessDays)
-{
+inline std::int64_t plusBusinessDays(std::int64_t startDate, int businessDays) {
     std::int64_t result = startDate;
     int addedDays = 0;
-    while (addedDays < businessDays)
-    {
-        if (!isWeekend(result))
-            ++addedDays;
+    while (addedDays < businessDays) {
+        if (!isWeekend(result)) ++addedDays;
         ++result;
     }
     return result;
@@ -64,8 +54,7 @@ inline std::int64_t plusBusinessDays(std::int64_t startDate, int businessDays)
 // ---------------------------------------------------------------------------
 // Crew  (problem fact, the crew half of the value range)
 // ---------------------------------------------------------------------------
-struct Crew
-{
+struct Crew {
     std::string id;
     std::string name;
 };
@@ -83,8 +72,7 @@ struct Crew
 // unassigned. The derived endDate is a pure
 // function of (startDate, durationInDays) and is precomputed per (duration,
 // startDateIndex) by ScoreCalculator::prepare.
-struct Job
-{
+struct Job {
     std::string id;
     std::string name;
     int durationInDays = 1;  // business days, weekends skipped
@@ -109,8 +97,7 @@ struct Job
 // MaintenanceSchedule  (the problem and its solution)
 // ---------------------------------------------------------------------------
 // The work calendar is the [fromDate, toDate) pair.
-struct MaintenanceSchedule
-{
+struct MaintenanceSchedule {
     std::int64_t fromDate = 0;  // inclusive
     std::int64_t toDate = 0;    // exclusive
 
@@ -141,19 +128,16 @@ struct MaintenanceSchedule
     int crewCount() const { return static_cast<int>(crews.size()); }
     int dateCount() const { return static_cast<int>(startDates.size()); }
     int crewDateCount() const { return dateCount() * crewCount(); }
-    int crewDateOf(int startDateIndex, int crewIndex) const
-    {
+    int crewDateOf(int startDateIndex, int crewIndex) const {
         return startDateIndex * crewCount() + crewIndex;
     }
     int dateIndexOf(int crewDate) const { return crewDate / crewCount(); }
     int crewIndexOf(int crewDate) const { return crewDate % crewCount(); }
 
     // endDate lookup (valid after prepare).
-    std::int64_t endDateFor(int durationInDays, int startDateIndex) const
-    {
-        return endDateByDur[static_cast<std::size_t>(durationInDays)
-                                * dateCount()
-                            + startDateIndex];
+    std::int64_t endDateFor(int durationInDays, int startDateIndex) const {
+        return endDateByDur[static_cast<std::size_t>(durationInDays) * dateCount() +
+                            startDateIndex];
     }
 };
 
@@ -164,29 +148,20 @@ struct MaintenanceSchedule
 // engine): entities are jobs, the decision variable is
 // Job::crewDate, the value range is the (startDate x crew) grid.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<mnt::MaintenanceSchedule>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const mnt::MaintenanceSchedule &s)
-    {
+template <>
+struct optimaru::SolutionTraits<mnt::MaintenanceSchedule> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const mnt::MaintenanceSchedule& s) {
         return static_cast<int>(s.jobs.size());
     }
-    static int value_count(const mnt::MaintenanceSchedule &s)
-    {
-        return s.crewDateCount();
-    }
-    static int value_of(const mnt::MaintenanceSchedule &s, int jobIndex)
-    {
+    static int value_count(const mnt::MaintenanceSchedule& s) { return s.crewDateCount(); }
+    static int value_of(const mnt::MaintenanceSchedule& s, int jobIndex) {
         return s.jobs[jobIndex].crewDate;
     }
-    static void
-    assign(mnt::MaintenanceSchedule &s, int jobIndex, int crewDate)
-    {
+    static void assign(mnt::MaintenanceSchedule& s, int jobIndex, int crewDate) {
         s.jobs[jobIndex].crewDate = crewDate;
     }
-    static bool is_pinned(const mnt::MaintenanceSchedule &s, int jobIndex)
-    {
+    static bool is_pinned(const mnt::MaintenanceSchedule& s, int jobIndex) {
         return s.jobs[jobIndex].pinned;
     }
 };

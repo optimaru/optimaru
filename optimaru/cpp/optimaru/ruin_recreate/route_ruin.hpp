@@ -38,7 +38,7 @@ public:
     const char* name() const override { return "routeRuin"; }
 
     std::vector<int> select_ruin_set(OperatorContext<Solution>& ctx, int ruin_count,
-                                   std::mt19937_64& rng) override {
+                                     std::mt19937_64& rng) override {
         if constexpr (Traits::shape != Shape::Sequence) {
             return fallback_.select_ruin_set(ctx, ruin_count, rng);
         } else {

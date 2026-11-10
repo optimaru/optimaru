@@ -5,16 +5,13 @@
 #include "ts/constraints.hpp"
 #include "ts/score_calculator.hpp"
 
-namespace ts
-{
+namespace ts {
 
 // The monolithic incremental score is the default assembly
 // (ts/constraints.hpp): the components' kDefaultWeight constants, checked to
 // be integral and on the level they are summed into.
 
-void TournamentSchedulingIncrementalScoreCalculator::rebuild(
-    TournamentSchedule &solution)
-{
+void TournamentSchedulingIncrementalScoreCalculator::rebuild(TournamentSchedule& solution) {
     schedule_ = &solution;
     teamCount_ = solution.teamCount();
     dayCount_ = solution.dayCount();
@@ -35,44 +32,33 @@ void TournamentSchedulingIncrementalScoreCalculator::rebuild(
     confSumSq_ = 0;
     confN_ = 0;
 
-    for (const UnavailabilityPenalty &penalty :
-         solution.unavailabilityPenalties)
-    {
+    for (const UnavailabilityPenalty& penalty : solution.unavailabilityPenalties) {
         ++penaltyCnt_[cellOffset(penalty.team, penalty.day)];
     }
 
-    const int assignmentCount
-        = static_cast<int>(solution.teamAssignments.size());
-    for (int i = 0; i < assignmentCount; ++i)
-    {
+    const int assignmentCount = static_cast<int>(solution.teamAssignments.size());
+    for (int i = 0; i < assignmentCount; ++i) {
         const int team = solution.teamAssignments[i].team;
-        if (team >= 0)
-            insert(i, team);
+        if (team >= 0) insert(i, team);
     }
 }
 
-void TournamentSchedulingIncrementalScoreCalculator::addConfrontations(
-    int t1, int t2, std::int64_t delta)
-{
-    if (t1 > t2)
-    {
+void TournamentSchedulingIncrementalScoreCalculator::addConfrontations(int t1, int t2,
+                                                                       std::int64_t delta) {
+    if (t1 > t2) {
         const int tmp = t1;
         t1 = t2;
         t2 = tmp;
     }
-    std::int64_t &count = confCnt_[pairOffset(t1, t2)];
-    if (count == 0 && delta > 0)
-        ++confN_;
+    std::int64_t& count = confCnt_[pairOffset(t1, t2)];
+    if (count == 0 && delta > 0) ++confN_;
     confSum_ += delta;
     confSumSq_ += (count + delta) * (count + delta) - count * count;
     count += delta;
-    if (count == 0 && delta < 0)
-        --confN_;
+    if (count == 0 && delta < 0) --confN_;
 }
 
-void TournamentSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
-                                                            int team)
-{
+void TournamentSchedulingIncrementalScoreCalculator::insert(int assignmentIndex, int team) {
     const int day = schedule_->teamAssignments[assignmentIndex].day;
     const std::size_t cell = cellOffset(team, day);
 
@@ -82,26 +68,21 @@ void TournamentSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
     pairSum_ += c;
     // hard 2 (teamUnavailabilityCost): the cell's occupancy crosses 0 -> 1:
     // its penalty facts hit.
-    if (c == 0)
-        unavailHit_ += penaltyCnt_[cell];
+    if (c == 0) unavailHit_ += penaltyCnt_[cell];
 
     // soft 4 (confrontationCountImbalanceCost): one new confrontation with
     // every other team's assignment on this day (same-team pairs are
     // excluded).
-    for (int u = 0; u < teamCount_; ++u)
-    {
-        if (u == team)
-            continue;
+    for (int u = 0; u < teamCount_; ++u) {
+        if (u == team) continue;
         const int k = cellCnt_[cellOffset(u, day)];
-        if (k > 0)
-            addConfrontations(team, u, k);
+        if (k > 0) addConfrontations(team, u, k);
     }
     ++cellCnt_[cell];
 
     // medium 3 (assignmentCountImbalanceCost): the team's load grows by 1.
     const std::int64_t load = teamLoad_[team];
-    if (load == 0)
-        ++balN_;
+    if (load == 0) ++balN_;
     balSum_ += 1;
     balSumSq_ += 2 * load + 1;
     ++teamLoad_[team];
@@ -109,65 +90,49 @@ void TournamentSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
     assign_[assignmentIndex] = team;
 }
 
-void TournamentSchedulingIncrementalScoreCalculator::retract(
-    int assignmentIndex, int team)
-{
+void TournamentSchedulingIncrementalScoreCalculator::retract(int assignmentIndex, int team) {
     const int day = schedule_->teamAssignments[assignmentIndex].day;
     const std::size_t cell = cellOffset(team, day);
 
     --cellCnt_[cell];
     const int c = cellCnt_[cell];
     pairSum_ -= c;
-    if (c == 0)
-        unavailHit_ -= penaltyCnt_[cell];
+    if (c == 0) unavailHit_ -= penaltyCnt_[cell];
 
-    for (int u = 0; u < teamCount_; ++u)
-    {
-        if (u == team)
-            continue;
+    for (int u = 0; u < teamCount_; ++u) {
+        if (u == team) continue;
         const int k = cellCnt_[cellOffset(u, day)];
-        if (k > 0)
-            addConfrontations(team, u, -k);
+        if (k > 0) addConfrontations(team, u, -k);
     }
 
     const std::int64_t load = teamLoad_[team];
     balSum_ -= 1;
     balSumSq_ += (load - 1) * (load - 1) - load * load;
     --teamLoad_[team];
-    if (teamLoad_[team] == 0)
-        --balN_;
+    if (teamLoad_[team] == 0) --balN_;
 
     assign_[assignmentIndex] = -1;
 }
 
-void TournamentSchedulingIncrementalScoreCalculator::before_assign(
-    int assignmentIndex)
-{
+void TournamentSchedulingIncrementalScoreCalculator::before_assign(int assignmentIndex) {
     const int team = assign_[assignmentIndex];
-    if (team >= 0)
-        retract(assignmentIndex, team);
+    if (team >= 0) retract(assignmentIndex, team);
 }
 
-void TournamentSchedulingIncrementalScoreCalculator::after_assign(
-    int assignmentIndex)
-{
+void TournamentSchedulingIncrementalScoreCalculator::after_assign(int assignmentIndex) {
     const int team = schedule_->teamAssignments[assignmentIndex].team;
-    if (team >= 0)
-        insert(assignmentIndex, team);
+    if (team >= 0) insert(assignmentIndex, team);
 }
 
-Score TournamentSchedulingIncrementalScoreCalculator::score()
-{
+Score TournamentSchedulingIncrementalScoreCalculator::score() {
     Score score;
-    score.hard = -(kHardWeight<TeamConflictCost> * pairSum_
-                   + kHardWeight<TeamUnavailabilityCost> * unavailHit_);
+    score.hard = -(kHardWeight<TeamConflictCost> * pairSum_ +
+                   kHardWeight<TeamUnavailabilityCost> * unavailHit_);
     score.soft = ScoreCalculator::combinedSoft(
-        static_cast<double>(kMediumWeight<AssignmentCountImbalanceCost>)
-            * ScoreCalculator::unfairnessFromAggregates(
-                balSum_, balSumSq_, balN_),
-        static_cast<double>(kSoftWeight<ConfrontationCountImbalanceCost>)
-            * ScoreCalculator::unfairnessFromAggregates(
-                confSum_, confSumSq_, confN_));
+            static_cast<double>(kMediumWeight<AssignmentCountImbalanceCost>) *
+                    ScoreCalculator::unfairnessFromAggregates(balSum_, balSumSq_, balN_),
+            static_cast<double>(kSoftWeight<ConfrontationCountImbalanceCost>) *
+                    ScoreCalculator::unfairnessFromAggregates(confSum_, confSumSq_, confN_));
     return score;
 }
 

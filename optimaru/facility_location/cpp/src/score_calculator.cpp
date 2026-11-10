@@ -9,52 +9,42 @@
 #include "fl/constraints/facility_capacity_cost.hpp"
 #include "fl/constraints/facility_setup_cost.hpp"
 
-namespace fl
-{
+namespace fl {
 
-namespace
-{
+namespace {
 
 // The monolithic score is the default assembly, so it reads the same
 // constants the components carry. Integral, so the soft level is computed
 // exactly, in int64.
-constexpr auto kCapacityWeight
-    = static_cast<std::int64_t>(FacilityCapacityCost::kDefaultWeight);
-constexpr auto kSetupWeight
-    = static_cast<std::int64_t>(FacilitySetupCost::kDefaultWeight);
-constexpr auto kDistanceWeight
-    = static_cast<std::int64_t>(DistanceFromFacilityCost::kDefaultWeight);
-static_assert(kCapacityWeight == FacilityCapacityCost::kDefaultWeight
-                  && kSetupWeight == FacilitySetupCost::kDefaultWeight
-                  && kDistanceWeight == DistanceFromFacilityCost::kDefaultWeight,
+constexpr auto kCapacityWeight = static_cast<std::int64_t>(FacilityCapacityCost::kDefaultWeight);
+constexpr auto kSetupWeight = static_cast<std::int64_t>(FacilitySetupCost::kDefaultWeight);
+constexpr auto kDistanceWeight =
+        static_cast<std::int64_t>(DistanceFromFacilityCost::kDefaultWeight);
+static_assert(kCapacityWeight == FacilityCapacityCost::kDefaultWeight &&
+                      kSetupWeight == FacilitySetupCost::kDefaultWeight &&
+                      kDistanceWeight == DistanceFromFacilityCost::kDefaultWeight,
               "the monolithic calculator assumes integral default weights");
 
 }  // namespace
 
-void ScoreCalculator::prepare(FacilityLocationProblem &problem)
-{
-    if (problem.prepared)
-        return;
+void ScoreCalculator::prepare(FacilityLocationProblem& problem) {
+    if (problem.prepared) return;
 
     const int facilityCount = problem.facilityCount();
-    problem.distanceMeters.assign(
-        static_cast<std::size_t>(problem.consumerCount()) * facilityCount, 0);
-    for (int c = 0; c < problem.consumerCount(); ++c)
-    {
-        const Location &consumerLocation = problem.consumers[c].location;
-        for (int f = 0; f < facilityCount; ++f)
-        {
-            problem
-                .distanceMeters[static_cast<std::size_t>(c) * facilityCount + f]
-                = problem.facilities[f].location.distanceTo(consumerLocation);
+    problem.distanceMeters.assign(static_cast<std::size_t>(problem.consumerCount()) * facilityCount,
+                                  0);
+    for (int c = 0; c < problem.consumerCount(); ++c) {
+        const Location& consumerLocation = problem.consumers[c].location;
+        for (int f = 0; f < facilityCount; ++f) {
+            problem.distanceMeters[static_cast<std::size_t>(c) * facilityCount + f] =
+                    problem.facilities[f].location.distanceTo(consumerLocation);
         }
     }
 
     problem.prepared = true;
 }
 
-Score ScoreCalculator::score(FacilityLocationProblem &problem)
-{
+Score ScoreCalculator::score(FacilityLocationProblem& problem) {
     prepare(problem);
 
     // Per-facility aggregates of the assigned consumers.
@@ -62,11 +52,9 @@ Score ScoreCalculator::score(FacilityLocationProblem &problem)
     std::vector<int> consumerCnt(problem.facilities.size(), 0);
 
     std::int64_t distance = 0;  // soft 3 (unweighted meters)
-    for (int c = 0; c < problem.consumerCount(); ++c)
-    {
-        const Consumer &consumer = problem.consumers[c];
-        if (!consumer.isAssigned())
-            continue;  // unassigned: contributes nothing
+    for (int c = 0; c < problem.consumerCount(); ++c) {
+        const Consumer& consumer = problem.consumers[c];
+        if (!consumer.isAssigned()) continue;  // unassigned: contributes nothing
         usedDemand[consumer.facility] += consumer.demand;
         ++consumerCnt[consumer.facility];
         distance += problem.distanceOf(c, consumer.facility);
@@ -77,20 +65,16 @@ Score ScoreCalculator::score(FacilityLocationProblem &problem)
     std::int64_t overCapacity = 0;
     // soft 2: facilitySetupCost — each used facility once (unweighted).
     std::int64_t setupCost = 0;
-    for (std::size_t f = 0; f < problem.facilities.size(); ++f)
-    {
-        if (consumerCnt[f] == 0)
-            continue;
-        overCapacity += std::max<std::int64_t>(
-            0, usedDemand[f] - problem.facilities[f].capacity);
+    for (std::size_t f = 0; f < problem.facilities.size(); ++f) {
+        if (consumerCnt[f] == 0) continue;
+        overCapacity += std::max<std::int64_t>(0, usedDemand[f] - problem.facilities[f].capacity);
         setupCost += problem.facilities[f].setupCost;
     }
 
     Score score;
     score.hard = -kCapacityWeight * overCapacity;
     // Negate in integer space so a zero penalty prints as 0, not -0.
-    score.soft = static_cast<double>(
-        -(kSetupWeight * setupCost + kDistanceWeight * distance));
+    score.soft = static_cast<double>(-(kSetupWeight * setupCost + kDistanceWeight * distance));
     problem.score = score;
     return score;
 }

@@ -22,55 +22,43 @@ namespace py = pybind11;
 using namespace sls;
 namespace opy = optimaru::python;
 
-PYBIND11_MODULE(_core, m)
-{
-    m.doc() = "Sports league scheduling — optimaru engine-backed C++ wrapper "
-              "exposed to Python";
+PYBIND11_MODULE(_core, m) {
+    m.doc() =
+            "Sports league scheduling — optimaru engine-backed C++ wrapper "
+            "exposed to Python";
 
     py::class_<Score>(m, "Score", py::module_local())
-        .def_readonly("hard", &Score::hard)
-        .def_readonly("soft", &Score::soft)
-        .def("is_feasible", &Score::feasible)
-        .def("__str__", &Score::str)
-        .def("__repr__",
-             [](const Score &s) { return "<Score " + s.str() + ">"; });
+            .def_readonly("hard", &Score::hard)
+            .def_readonly("soft", &Score::soft)
+            .def("is_feasible", &Score::feasible)
+            .def("__str__", &Score::str)
+            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
 
     py::class_<Team>(m, "Team", py::module_local())
-        .def(py::init(
-                 [](std::string id, std::string name)
-                 {
+            .def(py::init([](std::string id, std::string name) {
                      Team t;
                      t.id = std::move(id);
                      t.name = std::move(name);
                      return t;
                  }),
-             py::arg("id"),
-             py::arg("name") = "")
-        .def_readwrite("id", &Team::id)
-        .def_readwrite("name", &Team::name);
+                 py::arg("id"), py::arg("name") = "")
+            .def_readwrite("id", &Team::id)
+            .def_readwrite("name", &Team::name);
 
     py::class_<Round>(m, "Round", py::module_local())
-        .def(py::init(
-                 [](int index, bool weekendOrHoliday)
-                 {
+            .def(py::init([](int index, bool weekendOrHoliday) {
                      Round r;
                      r.index = index;
                      r.weekendOrHoliday = weekendOrHoliday;
                      return r;
                  }),
-             py::arg("index"),
-             py::arg("weekend_or_holiday") = false)
-        .def_readwrite("index", &Round::index)
-        .def_readwrite("weekend_or_holiday", &Round::weekendOrHoliday);
+                 py::arg("index"), py::arg("weekend_or_holiday") = false)
+            .def_readwrite("index", &Round::index)
+            .def_readwrite("weekend_or_holiday", &Round::weekendOrHoliday);
 
     py::class_<Match>(m, "Match", py::module_local())
-        .def(py::init(
-                 [](std::string id,
-                    int homeTeam,
-                    int awayTeam,
-                    bool classicMatch,
-                    int round)
-                 {
+            .def(py::init([](std::string id, int homeTeam, int awayTeam, bool classicMatch,
+                             int round) {
                      Match match;
                      match.id = std::move(id);
                      match.homeTeam = homeTeam;
@@ -79,24 +67,18 @@ PYBIND11_MODULE(_core, m)
                      match.round = round;
                      return match;
                  }),
-             py::arg("id"),
-             py::arg("home_team"),
-             py::arg("away_team"),
-             py::arg("classic_match") = false,
-             py::arg("round") = -1)
-        .def_readwrite("id", &Match::id)
-        .def_readwrite("home_team", &Match::homeTeam)
-        .def_readwrite("away_team", &Match::awayTeam)
-        .def_readwrite("classic_match", &Match::classicMatch)
-        .def_readwrite("round", &Match::round);
+                 py::arg("id"), py::arg("home_team"), py::arg("away_team"),
+                 py::arg("classic_match") = false, py::arg("round") = -1)
+            .def_readwrite("id", &Match::id)
+            .def_readwrite("home_team", &Match::homeTeam)
+            .def_readwrite("away_team", &Match::awayTeam)
+            .def_readwrite("classic_match", &Match::classicMatch)
+            .def_readwrite("round", &Match::round);
 
     py::class_<LeagueSchedule>(m, "LeagueSchedule", py::module_local())
-        .def(py::init(
-                 [](std::vector<Team> teams,
-                    std::vector<Round> rounds,
-                    std::vector<Match> matches,
-                    std::vector<std::vector<int>> distanceToTeam)
-                 {
+            .def(py::init([](std::vector<Team> teams, std::vector<Round> rounds,
+                             std::vector<Match> matches,
+                             std::vector<std::vector<int>> distanceToTeam) {
                      LeagueSchedule s;
                      s.teams = std::move(teams);
                      s.rounds = std::move(rounds);
@@ -104,121 +86,103 @@ PYBIND11_MODULE(_core, m)
                      s.distanceToTeam = std::move(distanceToTeam);
                      return s;
                  }),
-             py::arg("teams"),
-             py::arg("rounds"),
-             py::arg("matches"),
-             py::arg("distance_to_team") = std::vector<std::vector<int>>{})
-        // NOTE: element access on these list attributes returns copies (the
-        // pybind11 std::vector value conversion); use set_assignment for
-        // bulk round writes.
-        .def_readwrite("teams", &LeagueSchedule::teams)
-        .def_readwrite("rounds", &LeagueSchedule::rounds)
-        .def_readwrite("matches", &LeagueSchedule::matches)
-        .def_readwrite("distance_to_team", &LeagueSchedule::distanceToTeam)
-        .def_readonly("score", &LeagueSchedule::score)
-        .def("team_count", &LeagueSchedule::teamCount)
-        .def("round_count", &LeagueSchedule::roundCount)
-        .def("match_count", &LeagueSchedule::matchCount)
-        // Convenience: the current round (value) per match (the solution).
-        .def("assignment",
-             [](const LeagueSchedule &s)
-             {
-                 std::vector<int> a;
-                 a.reserve(s.matches.size());
-                 for (const Match &match : s.matches)
-                     a.push_back(match.round);
-                 return a;
-             })
-        // Bulk write of the decision variable (match access via .matches
-        // returns copies, so per-match writes would be lost).
-        .def(
-            "set_assignment",
-            [](LeagueSchedule &s, const std::vector<int> &a)
-            {
-                if (a.size() != s.matches.size())
-                    throw py::value_error(
-                        "assignment length must equal the match count");
-                for (std::size_t i = 0; i < a.size(); ++i)
-                    s.matches[i].round = a[i];
-            },
-            py::arg("assignment"));
+                 py::arg("teams"), py::arg("rounds"), py::arg("matches"),
+                 py::arg("distance_to_team") = std::vector<std::vector<int>>{})
+            // NOTE: element access on these list attributes returns copies (the
+            // pybind11 std::vector value conversion); use set_assignment for
+            // bulk round writes.
+            .def_readwrite("teams", &LeagueSchedule::teams)
+            .def_readwrite("rounds", &LeagueSchedule::rounds)
+            .def_readwrite("matches", &LeagueSchedule::matches)
+            .def_readwrite("distance_to_team", &LeagueSchedule::distanceToTeam)
+            .def_readonly("score", &LeagueSchedule::score)
+            .def("team_count", &LeagueSchedule::teamCount)
+            .def("round_count", &LeagueSchedule::roundCount)
+            .def("match_count", &LeagueSchedule::matchCount)
+            // Convenience: the current round (value) per match (the solution).
+            .def("assignment",
+                 [](const LeagueSchedule& s) {
+                     std::vector<int> a;
+                     a.reserve(s.matches.size());
+                     for (const Match& match : s.matches) a.push_back(match.round);
+                     return a;
+                 })
+            // Bulk write of the decision variable (match access via .matches
+            // returns copies, so per-match writes would be lost).
+            .def(
+                    "set_assignment",
+                    [](LeagueSchedule& s, const std::vector<int>& a) {
+                        if (a.size() != s.matches.size())
+                            throw py::value_error("assignment length must equal the match count");
+                        for (std::size_t i = 0; i < a.size(); ++i) s.matches[i].round = a[i];
+                    },
+                    py::arg("assignment"));
 
-    m.def("calculate_score",
-          &ScoreCalculator::score,
-          py::arg("schedule"),
+    m.def("calculate_score", &ScoreCalculator::score, py::arg("schedule"),
           "Full recompute of the score (also stores schedule.score).");
     // constraint_costs() is the only per-constraint surface.
 
-    optimaru::python::bind_solver_config(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
-        .def(py::init<>())
-        .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-        .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                       &Solver::Config::ruinRecreateUnimprovedStepTrigger)
-        .def_readwrite("ruin_recreate_min_ruin_fraction",
-                       &Solver::Config::ruinRecreateMinRuinFraction)
-        .def_readwrite("ruin_recreate_max_ruin_fraction",
-                       &Solver::Config::ruinRecreateMaxRuinFraction)
-        .def_readwrite("ruin_recreate_max_ruin_count",
-                       &Solver::Config::ruinRecreateMaxRuinCount)
-        .def_readwrite("ruin_recreate_operator_decay",
-                       &Solver::Config::ruinRecreateOperatorDecay)
-        .def_readwrite("ruin_recreate_polish_steps",
-                       &Solver::Config::ruinRecreatePolishSteps)
-        .def_readwrite("change_move_weight", &Solver::Config::change_weight)
-        .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
-        // Nearby selection over matches sharing a team (0 = auto: 4 * teams;
-        // negative disables it) and how often a swap partner is drawn from it.
-        .def_readwrite("nearby_size", &Solver::Config::nearbySize)
-        .def_readwrite("nearby_probability", &Solver::Config::nearbyProbability)
-        // Tournament size of the travel-guided entity selection (1 = uniform).
-        .def_readwrite("costliest_match_sample",
-                       &Solver::Config::costliestMatchSample)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-        // stops at the first feasible solution.
-        .def_property(
-            "best_score_limit",
-            [](const Solver::Config &c)
-            {
-                return py::make_tuple(c.target_score.hard,
-                                      c.target_score.soft);
-            },
-            [](Solver::Config &c, std::pair<std::int64_t, double> hs)
-            { c.target_score = Score{hs.first, hs.second}; })
-        // Callback fired on every new best solution: on_new_best(step, score).
-        // The pybind11 wrapper re-acquires the GIL, so it is safe from the
-        // engine's multi-start worker threads too.
-        .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+    optimaru::python::bind_solver_config(
+            py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
+            .def(py::init<>())
+            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
+            .def_readwrite("ruin_recreate_unimproved_step_trigger",
+                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+            .def_readwrite("ruin_recreate_min_ruin_fraction",
+                           &Solver::Config::ruinRecreateMinRuinFraction)
+            .def_readwrite("ruin_recreate_max_ruin_fraction",
+                           &Solver::Config::ruinRecreateMaxRuinFraction)
+            .def_readwrite("ruin_recreate_max_ruin_count",
+                           &Solver::Config::ruinRecreateMaxRuinCount)
+            .def_readwrite("ruin_recreate_operator_decay",
+                           &Solver::Config::ruinRecreateOperatorDecay)
+            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+            .def_readwrite("change_move_weight", &Solver::Config::change_weight)
+            .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
+            // Nearby selection over matches sharing a team (0 = auto: 4 * teams;
+            // negative disables it) and how often a swap partner is drawn from it.
+            .def_readwrite("nearby_size", &Solver::Config::nearbySize)
+            .def_readwrite("nearby_probability", &Solver::Config::nearbyProbability)
+            // Tournament size of the travel-guided entity selection (1 = uniform).
+            .def_readwrite("costliest_match_sample", &Solver::Config::costliestMatchSample)
+            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
+            // stops at the first feasible solution.
+            .def_property(
+                    "best_score_limit",
+                    [](const Solver::Config& c) {
+                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
+                    },
+                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
+                        c.target_score = Score{hs.first, hs.second};
+                    })
+            // Callback fired on every new best solution: on_new_best(step, score).
+            // The pybind11 wrapper re-acquires the GIL, so it is safe from the
+            // engine's multi-start worker threads too.
+            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
 
     py::class_<Solver>(m, "Solver", py::module_local())
-        .def(py::init<>())
-        .def(py::init<Solver::Config>(), py::arg("config"))
-        // Solves in place: sets match.round and schedule.score. The GIL is
-        // released so parallel multi-start workers can fire on_new_best.
-        .def("solve",
-             py::overload_cast<LeagueSchedule &>(&Solver::solve),
-             py::arg("schedule"),
-             py::call_guard<py::gil_scoped_release>())
-        // Same solve, scored by a caller-chosen constraint set (see
-        // optimaru.sports_league_scheduling.constraints). The picks replace the defaults; None
-        // keeps them. A name may be picked several times: every pick is its
-        // own instance (a fresh copy of the default component) with its own
-        // knobs.
-        .def(
-            "solve_with_constraints",
-            [](Solver &solver,
-               LeagueSchedule &schedule,
-               const py::object &constraints)
-            {
-                ScoreCalculator::prepare(schedule);
-                DecomposedCalculator calculator;
-                opy::apply_constraints([] { return defaultConstraints(); },
-                                       constraints)
-                    .into(calculator);
-                py::gil_scoped_release release;
-                solver.solve(schedule, calculator);
-            },
-            py::arg("schedule"),
-            py::arg("constraints") = py::none());
+            .def(py::init<>())
+            .def(py::init<Solver::Config>(), py::arg("config"))
+            // Solves in place: sets match.round and schedule.score. The GIL is
+            // released so parallel multi-start workers can fire on_new_best.
+            .def("solve", py::overload_cast<LeagueSchedule&>(&Solver::solve), py::arg("schedule"),
+                 py::call_guard<py::gil_scoped_release>())
+            // Same solve, scored by a caller-chosen constraint set (see
+            // optimaru.sports_league_scheduling.constraints). The picks replace the defaults; None
+            // keeps them. A name may be picked several times: every pick is its
+            // own instance (a fresh copy of the default component) with its own
+            // knobs.
+            .def(
+                    "solve_with_constraints",
+                    [](Solver& solver, LeagueSchedule& schedule, const py::object& constraints) {
+                        ScoreCalculator::prepare(schedule);
+                        DecomposedCalculator calculator;
+                        opy::apply_constraints([] { return defaultConstraints(); }, constraints)
+                                .into(calculator);
+                        py::gil_scoped_release release;
+                        solver.solve(schedule, calculator);
+                    },
+                    py::arg("schedule"), py::arg("constraints") = py::none());
 
     // The raw per-unit costs of an assembly on `schedule` — the input
     // optimaru.sports_league_scheduling.constraints.score() turns into a score. Scoring once is
@@ -227,28 +191,24 @@ PYBIND11_MODULE(_core, m)
     // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
     // of a name keyed "<name>#<k>".
     m.def(
-        "constraint_costs",
-        [](LeagueSchedule &schedule, const py::object &constraints)
-        {
-            ScoreCalculator::prepare(schedule);
-            DecomposedCalculator calculator;
-            opy::apply_constraints([] { return defaultConstraints(); },
-                                   constraints)
-                .into(calculator);
-            return opy::constraint_costs(calculator, schedule);
-        },
-        py::arg("schedule"),
-        py::arg("constraints") = py::none(),
-        "Raw per-unit cost of every constraint, before "
-        "weight/exponent/offset/level.");
+            "constraint_costs",
+            [](LeagueSchedule& schedule, const py::object& constraints) {
+                ScoreCalculator::prepare(schedule);
+                DecomposedCalculator calculator;
+                opy::apply_constraints([] { return defaultConstraints(); }, constraints)
+                        .into(calculator);
+                return opy::constraint_costs(calculator, schedule);
+            },
+            py::arg("schedule"), py::arg("constraints") = py::none(),
+            "Raw per-unit cost of every constraint, before "
+            "weight/exponent/offset/level.");
 
     // The constraint names this domain scores, in default-assembly order
     // (unit constraints first, then the globals) — the keys of
     // constraint_costs().
     m.def(
-        "list_constraints",
-        [] { return opy::constraint_names(defaultConstraints()); },
-        "Constraint names available to optimaru.sports_league_scheduling.constraints.");
+            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
+            "Constraint names available to optimaru.sports_league_scheduling.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,

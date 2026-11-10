@@ -35,8 +35,7 @@
 #include "fab/constraints/pinned_assignments_cost.hpp"
 #include "fab/constraints/weighted_tardiness_cost.hpp"
 
-namespace fab
-{
+namespace fab {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -75,8 +74,7 @@ namespace fab
 //         .soft("maxQueueTimeCost")
 //         .drop("makespanCost")
 //         .into(calc);
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<MachineEligibilityCost>();
     assembly.emplace<LotRoutePrecedenceCost>();
@@ -101,8 +99,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

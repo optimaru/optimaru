@@ -155,7 +155,9 @@ def test_the_package_exports_the_solve_entry_points():
 
 
 def test_the_package_still_imports_without_pydantic():
-    code = "import sys; sys.modules['pydantic'] = None; import optimaru.vehicle_routing; optimaru.vehicle_routing.Solver"
+    code = (
+        "import sys; sys.modules['pydantic'] = None; import optimaru.vehicle_routing; optimaru.vehicle_routing.Solver"
+    )
 
     subprocess.run([sys.executable, "-c", code], check=True)
 

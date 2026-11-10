@@ -55,9 +55,7 @@ def small_plan():
     visits = []
     for i, (lat, lon) in enumerate(visit_coords):
         locations.append(vrp.Location(lat, lon))
-        visits.append(
-            vrp.Visit(f"C{i}", f"Customer {i}", 2 + i, 2, 8 * 3600, 20 * 3600, 600)
-        )
+        visits.append(vrp.Visit(f"C{i}", f"Customer {i}", 2 + i, 2, 8 * 3600, 20 * 3600, 600))
     vehicles = [
         vrp.Vehicle("V1", 6, 0, departure_time=7 * 3600),
         vrp.Vehicle("V2", 6, 1, departure_time=7 * 3600),
@@ -244,9 +242,7 @@ def test_default_instance_carries_no_overrides():
     """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     for spec in get_constraints():
         assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
-        assert (
-            getattr(specs, spec.name) is spec
-        )  # the instance is named after the constraint
+        assert getattr(specs, spec.name) is spec  # the instance is named after the constraint
     # The opt-in objectives pass no explicit weight=0: the C++ default is 0.
     assert specs.enclosing_circle_radius_cost.weight is None
 
@@ -324,10 +320,7 @@ def test_constraint_info_reports_the_cpp_defaults():
     """The defaults live in C++ only; constraint_info() reads them off the default assembly."""
     rows = vrp.constraint_info()
     assert [row.name for row in rows] == vrp.list_constraints()
-    assert [
-        (row.name, row.default_level, row.default_weight, row.default_enabled)
-        for row in rows
-    ] == EXPECTED_INFO
+    assert [(row.name, row.default_level, row.default_weight, row.default_enabled) for row in rows] == EXPECTED_INFO
     # Every constraint is flippable and none is a reward.
     assert all(row.level_flippable and not row.reward for row in rows)
 
@@ -387,10 +380,7 @@ def _half_served_plan():
 
 def test_weight_none_means_the_component_default():
     """weight=None scores exactly like the explicit C++ default weights."""
-    explicit = [
-        type(spec)(weight=weight)
-        for spec, (_, _, weight, _) in zip(get_constraints(), EXPECTED_INFO)
-    ]
+    explicit = [type(spec)(weight=weight) for spec, (_, _, weight, _) in zip(get_constraints(), EXPECTED_INFO)]
     plan = _half_served_plan()
     raw = vrp.constraint_costs(plan)
     assert score(raw) == score(raw, explicit)
@@ -404,9 +394,7 @@ def test_the_medium_level_folds_into_soft():
     monolithic = vrp.calculate_score(plan)
     assert (monolithic.hard, monolithic.medium) == (0, -30)
     assert score(raw) == (0, monolithic.soft - 30 * MEDIUM_UNIT)
-    others = [
-        spec for spec in get_constraints() if spec.name != "unassigned_visits_cost"
-    ]
+    others = [spec for spec in get_constraints() if spec.name != "unassigned_visits_cost"]
     assert score(raw, [*others, UnassignedVisitsCost(level="hard")]) == (
         -30,
         monolithic.soft,
@@ -479,9 +467,7 @@ def test_on_new_best_reports_the_levels_of_the_final_score():
     cfg = vrp.SolverConfig()
     cfg.spent_limit_seconds = 0.4
     cfg.random_seed = 7
-    cfg.on_new_best = lambda _step, best: reports.append(
-        (best.hard, best.medium, best.soft)
-    )
+    cfg.on_new_best = lambda _step, best: reports.append((best.hard, best.medium, best.soft))
     vrp.Solver(cfg).solve_with_constraints(plan, picks)
     final = (plan.score.hard, plan.score.medium, plan.score.soft)
     assert final[2] <= -MEDIUM_UNIT
@@ -505,15 +491,9 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(
-        name="travel_time_cost", weight=-2.0, level=None, exponent=1.0
-    )
-    flat = SimpleNamespace(
-        name="travel_time_cost", weight=None, level=None, exponent=0.0
-    )
-    unbounded = SimpleNamespace(
-        name="travel_time_cost", weight=None, level=None, exponent=1.0, offset=float("inf")
-    )
+    negative = SimpleNamespace(name="travel_time_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="travel_time_cost", weight=None, level=None, exponent=0.0)
+    unbounded = SimpleNamespace(name="travel_time_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
     for pick, message in (
         (negative, "weight must be finite and >= 0"),
         (flat, "exponent must be finite and > 0"),
@@ -539,22 +519,16 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(
-        name="unassigned_visits_cost", weight=None, level=None, exponent=1.0
-    )
+    pick = SimpleNamespace(name="unassigned_visits_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
-    with pytest.raises(
-        TypeError, match=f"constraint 'unassigned_visits_cost': {re.escape(message)}"
-    ):
+    with pytest.raises(TypeError, match=f"constraint 'unassigned_visits_cost': {re.escape(message)}"):
         solve([pick])
     with pytest.raises(TypeError, match=re.escape(message)):
         UnassignedVisitsCost(**knobs)
 
 
-@pytest.mark.parametrize(
-    "spec_class", [EnclosingCircleRadiusCost, RouteDurationCost, LatencyCost]
-)
+@pytest.mark.parametrize("spec_class", [EnclosingCircleRadiusCost, RouteDurationCost, LatencyCost])
 def test_the_weight_zero_objectives_are_opt_in(spec_class):
     """Weight 0 by default: listed and measured, but they move no score until weighted."""
     plan = small_plan()
@@ -565,9 +539,7 @@ def test_the_weight_zero_objectives_are_opt_in(spec_class):
     name = spec_class.name
     assert sum(raw[name]["costs"]) > 0
     assert score(raw, [getattr(specs, name)]) == (0, 0.0)
-    assert score(raw, [spec_class(weight=1)]).soft == pytest.approx(
-        -sum(raw[name]["costs"])
-    )
+    assert score(raw, [spec_class(weight=1)]).soft == pytest.approx(-sum(raw[name]["costs"]))
 
 
 def test_on_new_best_with_two_workers_neither_hangs_nor_aborts():
@@ -964,8 +936,7 @@ def _random_plan(visit_count=40, vehicle_count=5, seed=11, min_load_ratio=0.0):
     and with a min_load_ratio a real-valued utilization shortfall (capacity 24 x ratio)."""
     rng = random.Random(seed)
     locations = [
-        vrp.Location(37.55 + rng.uniform(-0.02, 0.02), 126.98 + rng.uniform(-0.02, 0.02))
-        for _ in range(vehicle_count)
+        vrp.Location(37.55 + rng.uniform(-0.02, 0.02), 126.98 + rng.uniform(-0.02, 0.02)) for _ in range(vehicle_count)
     ]
     visits = []
     for i in range(visit_count):

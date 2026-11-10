@@ -148,9 +148,7 @@ def test_picking_a_subset_drops_the_other_terms():
     baseline = solve(get_constraints()).score
     assert baseline.soft < 0
 
-    without_travel = solve(
-        [vehicle_capacity_cost, paired_request_cost, same_vehicle_cost]
-    ).score
+    without_travel = solve([vehicle_capacity_cost, paired_request_cost, same_vehicle_cost]).score
     assert without_travel.soft == 0
 
 
@@ -248,9 +246,7 @@ def test_default_instance_carries_no_overrides():
     """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     for spec in get_constraints():
         assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
-        assert (
-            getattr(specs, spec.name) is spec
-        )  # the instance is named after the constraint
+        assert getattr(specs, spec.name) is spec  # the instance is named after the constraint
     # The opt-in objectives pass no explicit weight=0: the C++ default is 0.
     assert specs.enclosing_circle_radius_cost.weight is None
 
@@ -313,16 +309,10 @@ def test_score_rejects_an_unknown_constraint_name():
 def order_age_input(order_times: list[int]) -> pdp.models.PdpInput:
     """One vehicle at 0, and requests whose stops are all at the same place, 100 s away."""
     size = 1 + 2 * len(order_times)
-    seconds = [
-        [0 if i == j or (i and j) else 100 for j in range(size)] for i in range(size)
-    ]
-    stop = lambda name: pdp.models.StopModel(
-        id=name, location=(37.5, 127.0), max_end_time=10**6, service_duration=10
-    )
+    seconds = [[0 if i == j or (i and j) else 100 for j in range(size)] for i in range(size)]
+    stop = lambda name: pdp.models.StopModel(id=name, location=(37.5, 127.0), max_end_time=10**6, service_duration=10)
     return pdp.models.PdpInput(
-        vehicles=[
-            pdp.models.VehicleModel(id="v", capacity=5, home=(37.5, 127.0), max_stops=0)
-        ],
+        vehicles=[pdp.models.VehicleModel(id="v", capacity=5, home=(37.5, 127.0), max_stops=0)],
         deliveries=[
             pdp.models.DeliveryModel(
                 id=f"r{i}",
@@ -352,9 +342,7 @@ def test_order_age_measures_each_dropoff_from_its_order():
 
 def test_order_age_ignores_where_the_pickups_fall():
     # Only the dropoffs' finish times differ from a plain sum of arrivals.
-    together = order_age_cost(
-        order_age_input([0, 0]), [0, 2, 1, 3]
-    )  # finish at 130, 140
+    together = order_age_cost(order_age_input([0, 0]), [0, 2, 1, 3])  # finish at 130, 140
     assert together == 130**2 + 140**2
 
 
@@ -372,9 +360,7 @@ def test_an_unassigned_request_is_charged_more_the_older_it_is():
 def test_solving_for_order_age_serves_the_oldest_order_first():
     model_input = order_age_input([0, -2000])
     replaced = {"travel_time_cost", "squared_order_age_cost"}
-    constraints = [
-        c for c in pdp.constraints.get_constraints() if c.name not in replaced
-    ]
+    constraints = [c for c in pdp.constraints.get_constraints() if c.name not in replaced]
     constraints.append(pdp.constraints.SquaredOrderAgeCost(weight=1))
     request = pdp.models.PdpRequest(model_input=model_input, timelimit=0.3)
 
@@ -421,10 +407,7 @@ def test_constraint_info_reports_the_cpp_defaults():
     """The defaults live in C++ only; constraint_info() reads them off the default assembly."""
     rows = pdp.constraint_info()
     assert [row.name for row in rows] == pdp.list_constraints()
-    assert [
-        (row.name, row.default_level, row.default_weight, row.default_enabled)
-        for row in rows
-    ] == EXPECTED_INFO
+    assert [(row.name, row.default_level, row.default_weight, row.default_enabled) for row in rows] == EXPECTED_INFO
     # Every constraint is flippable in the engine (the coupling rules are structural
     # on the CP-SAT path only) and none is a reward.
     assert all(row.level_flippable and not row.reward for row in rows)
@@ -485,10 +468,7 @@ def _half_served_plan():
 
 def test_weight_none_means_the_component_default():
     """weight=None scores exactly like the explicit C++ default weights."""
-    explicit = [
-        type(spec)(weight=weight)
-        for spec, (_, _, weight, _) in zip(get_constraints(), EXPECTED_INFO)
-    ]
+    explicit = [type(spec)(weight=weight) for spec, (_, _, weight, _) in zip(get_constraints(), EXPECTED_INFO)]
     plan = _half_served_plan()
     raw = pdp.constraint_costs(plan)
     assert score(raw) == score(raw, explicit)
@@ -502,9 +482,7 @@ def test_the_medium_level_folds_into_soft():
     monolithic = pdp.calculate_score(plan)
     assert (monolithic.hard, monolithic.medium) == (0, -10)
     assert score(raw) == (0, monolithic.soft - 10 * MEDIUM_UNIT)
-    others = [
-        spec for spec in get_constraints() if spec.name != "unassigned_requests_cost"
-    ]
+    others = [spec for spec in get_constraints() if spec.name != "unassigned_requests_cost"]
     assert score(raw, [*others, UnassignedRequestsCost(level="hard")]) == (
         -10,
         monolithic.soft,
@@ -546,9 +524,7 @@ def _solve_reporting(run):
     cfg = pdp.SolverConfig()
     cfg.spent_limit_seconds = 0.4
     cfg.random_seed = 1
-    cfg.on_new_best = lambda _step, best: reported.append(
-        (best.hard, best.medium, best.soft)
-    )
+    cfg.on_new_best = lambda _step, best: reported.append((best.hard, best.medium, best.soft))
     run(pdp.Solver(cfg), plan)
     return plan, reported
 
@@ -567,9 +543,7 @@ def test_the_plugin_solve_reports_each_level_unfolded():
         UnassignedRequestsCost(level="soft", weight=MEDIUM_UNIT),
         TravelTimeCost(weight=weight),
     ]
-    plan, reported = _solve_reporting(
-        lambda solver, plan: solver.solve_with_constraints(plan, picks)
-    )
+    plan, reported = _solve_reporting(lambda solver, plan: solver.solve_with_constraints(plan, picks))
     raw = pdp.constraint_costs(plan)
     travel = sum(raw["travel_time_cost"]["costs"])
     unrouted = sum(raw["unassigned_requests_cost"]["costs"])
@@ -616,15 +590,9 @@ def test_specs_validate_their_knobs(kwargs, error):
 
 def test_core_refuses_invalid_knobs_from_duck_typed_picks():
     """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(
-        name="travel_time_cost", weight=-2.0, level=None, exponent=1.0
-    )
-    flat = SimpleNamespace(
-        name="travel_time_cost", weight=None, level=None, exponent=0.0
-    )
-    unbounded = SimpleNamespace(
-        name="travel_time_cost", weight=None, level=None, exponent=1.0, offset=float("inf")
-    )
+    negative = SimpleNamespace(name="travel_time_cost", weight=-2.0, level=None, exponent=1.0)
+    flat = SimpleNamespace(name="travel_time_cost", weight=None, level=None, exponent=0.0)
+    unbounded = SimpleNamespace(name="travel_time_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
     for pick, message in (
         (negative, "weight must be finite and >= 0"),
         (flat, "exponent must be finite and > 0"),
@@ -650,14 +618,10 @@ def test_core_refuses_invalid_knobs_from_duck_typed_picks():
 )
 def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
     """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(
-        name="unassigned_requests_cost", weight=None, level=None, exponent=1.0
-    )
+    pick = SimpleNamespace(name="unassigned_requests_cost", weight=None, level=None, exponent=1.0)
     for key, value in knobs.items():
         setattr(pick, key, value)
-    with pytest.raises(
-        TypeError, match=f"constraint 'unassigned_requests_cost': {re.escape(message)}"
-    ):
+    with pytest.raises(TypeError, match=f"constraint 'unassigned_requests_cost': {re.escape(message)}"):
         solve([pick])
     with pytest.raises(TypeError, match=re.escape(message)):
         UnassignedRequestsCost(**knobs)
@@ -669,9 +633,7 @@ def test_squared_order_age_is_opt_in():
     raw = pdp.constraint_costs(plan)
     assert sum(raw["squared_order_age_cost"]["costs"]) > 0
     assert score(raw, [specs.squared_order_age_cost]) == (0, 0.0)
-    assert score(raw, [SquaredOrderAgeCost(weight=1)]).soft == -sum(
-        raw["squared_order_age_cost"]["costs"]
-    )
+    assert score(raw, [SquaredOrderAgeCost(weight=1)]).soft == -sum(raw["squared_order_age_cost"]["costs"])
 
 
 def test_on_new_best_with_two_workers_neither_hangs_nor_aborts():
@@ -759,7 +721,9 @@ def _hand_input():
             for name, route in routes.items()
         ],
         deliveries=[
-            pdp.models.DeliveryModel(id=f"r{i}", demand=4, pickup=stop(f"p{i}", f"r{i}"), dropoff=stop(f"d{i}", f"r{i}"))
+            pdp.models.DeliveryModel(
+                id=f"r{i}", demand=4, pickup=stop(f"p{i}", f"r{i}"), dropoff=stop(f"d{i}", f"r{i}")
+            )
             for i in (1, 2, 3)
         ],
         driving_seconds=[[abs(HAND_PLACES[p] - HAND_PLACES[q]) for q in order] for p in order],

@@ -5,22 +5,20 @@
 
 #include "ms/domain.hpp"
 
-namespace ms
-{
+namespace ms {
 
 // Per-constraint violation totals (raw, unweighted, counted positive).
 // Each member is named after its constraint's registry name
 // (ms/constraints/<subject>_cost.hpp). Used by the monolithic score, the C++
-// tests (hand-computed per-constraint cases) and the demo output; Python reads the same per-constraint values
-// through constraint_costs().
-struct Breakdown
-{
+// tests (hand-computed per-constraint cases) and the demo output; Python reads the same
+// per-constraint values through constraint_costs().
+struct Breakdown {
     // Hard.
-    std::int64_t roomConflictCost = 0;  // overlap grains per room pair
-    std::int64_t overtimeCost = 0;      // sum of lastTimeGrainIndex
+    std::int64_t roomConflictCost = 0;                // overlap grains per room pair
+    std::int64_t overtimeCost = 0;                    // sum of lastTimeGrainIndex
     std::int64_t requiredAttendanceConflictCost = 0;  // shared-required grains
-    std::int64_t roomCapacityCost = 0;  // requiredCapacity - capacity
-    std::int64_t dayCrossingCost = 0;   // meetings crossing a day border
+    std::int64_t roomCapacityCost = 0;                // requiredCapacity - capacity
+    std::int64_t dayCrossingCost = 0;                 // meetings crossing a day border
 
     // Medium (folded into soft via kMediumFold).
     std::int64_t requiredAndPreferredAttendanceConflictCost = 0;
@@ -75,46 +73,39 @@ struct Breakdown
 // construction heuristic scores partially initialized solutions. (With the
 // composite encoding a meeting has both its grain and its room or neither,
 // so there is no half-assigned state to score.)
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
-    static Score score(MeetingSchedule &schedule);
+    static Score score(MeetingSchedule& schedule);
 
     // --- shared building blocks (also used by the plugin components) ---
 
     // Overlap of two grain-index
     // intervals [start, end) (start inclusive, end exclusive).
-    static std::int64_t
-    overlapGrains(int start1, int end1, int start2, int end2)
-    {
+    static std::int64_t overlapGrains(int start1, int end1, int start2, int end2) {
         const int lo = start1 > start2 ? start1 : start2;
         const int hi = end1 < end2 ? end1 : end2;
         return hi > lo ? hi - lo : 0;
     }
 
     // Orders TimeGrains by dayOfYear, then startingMinuteOfDay.
-    static int compareTimeGrains(const TimeGrain &a, const TimeGrain &b)
-    {
-        if (a.dayOfYear != b.dayOfYear)
-            return a.dayOfYear < b.dayOfYear ? -1 : 1;
+    static int compareTimeGrains(const TimeGrain& a, const TimeGrain& b) {
+        if (a.dayOfYear != b.dayOfYear) return a.dayOfYear < b.dayOfYear ? -1 : 1;
         if (a.startingMinuteOfDay != b.startingMinuteOfDay)
             return a.startingMinuteOfDay < b.startingMinuteOfDay ? -1 : 1;
         return 0;
     }
 
     // Full per-constraint recompute (runs prepare() first).
-    static Breakdown computeBreakdown(MeetingSchedule &schedule);
+    static Breakdown computeBreakdown(MeetingSchedule& schedule);
 
     // Assembles the engine score from a breakdown, folding medium into soft
     // with the domain's kMediumFold (engine soft = soft + medium * 1e6,
     // exact for these integral totals: the old
     // -(medium * kMediumScale + soft)).
-    static Score toScore(const Breakdown &breakdown)
-    {
-        return kMediumFold.to_engine(
-            -breakdown.hardTotal(),
-            -static_cast<double>(breakdown.mediumTotal()),
-            -static_cast<double>(breakdown.softTotal()));
+    static Score toScore(const Breakdown& breakdown) {
+        return kMediumFold.to_engine(-breakdown.hardTotal(),
+                                     -static_cast<double>(breakdown.mediumTotal()),
+                                     -static_cast<double>(breakdown.softTotal()));
     }
 
     // Builds the derived tables on MeetingSchedule (grain occupancy span,
@@ -123,7 +114,7 @@ public:
     // Must run before scoring; score/solve call it. Throws
     // std::invalid_argument on a malformed instance (bad indices, duration
     // < 1, or two assignments sharing one meeting).
-    static void prepare(MeetingSchedule &schedule);
+    static void prepare(MeetingSchedule& schedule);
 };
 
 }  // namespace ms

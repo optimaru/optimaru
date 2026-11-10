@@ -8,8 +8,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace cs
-{
+namespace cs {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -29,8 +28,7 @@ using Score = optimaru::Score;
 // whose day boundaries fall on multiples of 1440 (e.g. minutes since the
 // conference's first midnight). Day-of assertions ("same day", makespan day
 // spans) are startMinute / 1440.
-struct Timeslot
-{
+struct Timeslot {
     std::string id;
     std::int64_t startMinute = 0;
     std::int64_t endMinute = 0;
@@ -39,17 +37,13 @@ struct Timeslot
     std::vector<int> talkTypes;
     std::vector<std::string> tags;
 
-    int durationInMinutes() const
-    {
-        return static_cast<int>(endMinute - startMinute);
-    }
+    int durationInMinutes() const { return static_cast<int>(endMinute - startMinute); }
 };
 
 // ---------------------------------------------------------------------------
 // Room  (problem fact, the other half of the decision value)
 // ---------------------------------------------------------------------------
-struct Room
-{
+struct Room {
     std::string id;
     std::string name;
     int capacity = 0;
@@ -63,8 +57,7 @@ struct Room
 // ---------------------------------------------------------------------------
 // Speaker  (problem fact)
 // ---------------------------------------------------------------------------
-struct Speaker
-{
+struct Speaker {
     std::string id;
     std::string name;
     // Timeslot indices where the speaker is unavailable (hard).
@@ -88,8 +81,7 @@ struct Speaker
 //   slotRoom = timeslotIndex * roomCount + roomIndex
 // -1 means unassigned (no timeslot and no room). Decoding helpers
 // live on ConferenceSchedule, which knows roomCount.
-struct Talk
-{
+struct Talk {
     std::string code;
     std::string title;
     int talkType = 0;           // index into ConferenceSchedule::talkTypes
@@ -123,8 +115,7 @@ struct Talk
 
 // Interned (sorted, deduplicated) tag-id mirrors of the eight preference tag
 // sets shared by Talk and Speaker. Filled by ScoreCalculator::prepare.
-struct PreferenceTagIds
-{
+struct PreferenceTagIds {
     std::vector<int> requiredTimeslot;
     std::vector<int> preferredTimeslot;
     std::vector<int> prohibitedTimeslot;
@@ -138,8 +129,7 @@ struct PreferenceTagIds
 // ---------------------------------------------------------------------------
 // ConferenceSchedule  (solution)
 // ---------------------------------------------------------------------------
-struct ConferenceSchedule
-{
+struct ConferenceSchedule {
     std::string name;
     std::vector<std::string> talkTypes;  // e.g. {"Breakout", "Lab"}
     std::vector<Timeslot> timeslots;
@@ -191,8 +181,7 @@ struct ConferenceSchedule
     int roomCount() const { return static_cast<int>(rooms.size()); }
     int talkCount() const { return static_cast<int>(talks.size()); }
     int slotRoomCount() const { return timeslotCount() * roomCount(); }
-    int slotRoomOf(int timeslotIndex, int roomIndex) const
-    {
+    int slotRoomOf(int timeslotIndex, int roomIndex) const {
         return timeslotIndex * roomCount() + roomIndex;
     }
     int timeslotIndexOf(int slotRoom) const { return slotRoom / roomCount(); }
@@ -211,29 +200,20 @@ struct ConferenceSchedule
 // talkTypeIncompatibilityCost instead (see cs/score_calculator.hpp) and biases
 // the search toward compatible values (see cs/solver.hpp).
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<cs::ConferenceSchedule>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const cs::ConferenceSchedule &s)
-    {
+template <>
+struct optimaru::SolutionTraits<cs::ConferenceSchedule> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const cs::ConferenceSchedule& s) {
         return static_cast<int>(s.talks.size());
     }
-    static int value_count(const cs::ConferenceSchedule &s)
-    {
-        return s.slotRoomCount();
-    }
-    static int value_of(const cs::ConferenceSchedule &s, int talkIndex)
-    {
+    static int value_count(const cs::ConferenceSchedule& s) { return s.slotRoomCount(); }
+    static int value_of(const cs::ConferenceSchedule& s, int talkIndex) {
         return s.talks[talkIndex].slotRoom;
     }
-    static void
-    assign(cs::ConferenceSchedule &s, int talkIndex, int slotRoom)
-    {
+    static void assign(cs::ConferenceSchedule& s, int talkIndex, int slotRoom) {
         s.talks[talkIndex].slotRoom = slotRoom;
     }
-    static bool is_pinned(const cs::ConferenceSchedule &s, int talkIndex)
-    {
+    static bool is_pinned(const cs::ConferenceSchedule& s, int talkIndex) {
         return s.talks[talkIndex].pinned;
     }
 };

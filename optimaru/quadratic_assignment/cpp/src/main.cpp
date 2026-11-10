@@ -15,13 +15,12 @@
 
 using namespace qap;
 
-namespace
-{
+namespace {
 
-QuadraticAssignmentProblem plantLayout()
-{
+QuadraticAssignmentProblem plantLayout() {
     QuadraticAssignmentProblem problem;
-    const std::vector<std::string> facilities{"Assembly", "Warehouse", "Paint", "Inspection", "Packing", "Office"};
+    const std::vector<std::string> facilities{"Assembly",   "Warehouse", "Paint",
+                                              "Inspection", "Packing",   "Office"};
     const std::vector<std::int64_t> demands{8, 7, 6, 4, 5, 2};
     const std::vector<std::string> locations{"North", "East", "South", "West", "Center", "Annex"};
     const std::vector<std::int64_t> capacities{8, 8, 8, 8, 8, 2};
@@ -38,22 +37,18 @@ QuadraticAssignmentProblem plantLayout()
     return problem;
 }
 
-QuadraticAssignmentProblem randomInstance(int n, std::uint64_t seed)
-{
+QuadraticAssignmentProblem randomInstance(int n, std::uint64_t seed) {
     std::mt19937_64 rng(seed);
     std::uniform_int_distribution<int> value(0, 9);
     QuadraticAssignmentProblem problem;
-    for (int i = 0; i < n; ++i)
-    {
+    for (int i = 0; i < n; ++i) {
         problem.facilities.push_back({"F" + std::to_string(i), std::nullopt, -1});
         problem.locations.push_back({"L" + std::to_string(i), std::nullopt});
     }
     problem.flows.assign(n, std::vector<std::int64_t>(n, 0));
     problem.distances.assign(n, std::vector<std::int64_t>(n, 0));
-    for (int a = 0; a < n; ++a)
-    {
-        for (int b = a + 1; b < n; ++b)
-        {
+    for (int a = 0; a < n; ++a) {
+        for (int b = a + 1; b < n; ++b) {
             problem.flows[a][b] = problem.flows[b][a] = value(rng);
             problem.distances[a][b] = problem.distances[b][a] = 1 + value(rng);
         }
@@ -61,31 +56,31 @@ QuadraticAssignmentProblem randomInstance(int n, std::uint64_t seed)
     return problem;
 }
 
-bool run(const char *title, QuadraticAssignmentProblem problem, int seconds)
-{
+bool run(const char* title, QuadraticAssignmentProblem problem, int seconds) {
     ScoreCalculator::score(problem);
     std::printf("== %s (n=%d, %d s) ==\n", title, problem.facilityCount(), seconds);
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = 42;
-    config.on_new_best = [](std::int64_t step, const Score &score)
-    { std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step), score.str().c_str()); };
+    config.on_new_best = [](std::int64_t step, const Score& score) {
+        std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step),
+                    score.str().c_str());
+    };
     Solver(config).solve(problem);
-    std::printf("  final score: %s  total cost %lld  bijection=%s\n",
-                problem.score->str().c_str(),
+    std::printf("  final score: %s  total cost %lld  bijection=%s\n", problem.score->str().c_str(),
                 static_cast<long long>(problem.totalCost()),
                 problem.isBijection() ? "true" : "false");
     const std::vector<int> assignment = problem.assignment();
     for (int l = 0; l < problem.locationCount() && l < 8; ++l)
-        std::printf("    %-8s <- %s\n", problem.locations[l].id.c_str(), problem.facilities[assignment[l]].id.c_str());
+        std::printf("    %-8s <- %s\n", problem.locations[l].id.c_str(),
+                    problem.facilities[assignment[l]].id.c_str());
     std::printf("\n");
     return problem.isBijection() && problem.score->feasible();
 }
 
 }  // namespace
 
-int main(int argc, char **argv)
-{
+int main(int argc, char** argv) {
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 2;
     bool ok = run("plant layout", plantLayout(), seconds);
     ok = run("random symmetric instance", randomInstance(25, 7), seconds) && ok;

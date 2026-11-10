@@ -3,26 +3,20 @@
 
 #include "cs/constraints/common.hpp"
 
-namespace cs
-{
+namespace cs {
 
 // Soft, weight 20: speakerUndesiredRoomTagsCost — a room tag a speaker would
 // rather avoid and the assigned room carries.
 // Raw cost (one global total) = the sum of undesired tags the room carries x
 // the timeslot's duration, per speaker of each talk; 0 = no violation (no
 // speaker sits in a room with a tag they would rather avoid).
-struct SpeakerUndesiredRoomTagsCost final : BreakdownConstraint
-{
+struct SpeakerUndesiredRoomTagsCost final : BreakdownConstraint {
     static constexpr double kDefaultWeight = 20.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit SpeakerUndesiredRoomTagsCost(double weight = kDefaultWeight)
-        : BreakdownConstraint(
-              "speakerUndesiredRoomTagsCost", weight, kDefaultLevel)
-    {
-    }
-    std::int64_t select(const Breakdown &breakdown) const override
-    {
+        : BreakdownConstraint("speakerUndesiredRoomTagsCost", weight, kDefaultLevel) {}
+    std::int64_t select(const Breakdown& breakdown) const override {
         return breakdown.speakerUndesiredRoomTagsCost;
     }
 };

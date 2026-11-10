@@ -12,8 +12,7 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 
-namespace ks
-{
+namespace ks {
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/: it
 // runs the domain construction (the greedy of construction.hpp), wires up the
@@ -22,11 +21,9 @@ namespace ks
 // moves (a change move is a flip, a swap move trades a selected item for an
 // unselected one), with the engine's adaptive ruin-and-recreate (ALNS) on
 // stagnation.
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget. 0 stops before the first step: the solve then
         // returns the construction (or a complete seed) unchanged.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
@@ -34,7 +31,7 @@ public:
         // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires.
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<double>::infinity()};
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion (so
         // step_limit = 0 means "no step limit", not "no search").
         std::chrono::milliseconds stall_time_limit{0};
@@ -96,7 +93,7 @@ public:
         double nearbyProbability = 0.0;
         int nearbySize = 20;
 
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
     };
 
     Solver() = default;
@@ -106,7 +103,7 @@ public:
     // greedy; with problem.warmStart only the undecided items), searches,
     // writes the best selection and problem.score (a full recompute), and
     // resets problem.warmStart to false.
-    void solve(KnapsackProblem &problem);
+    void solve(KnapsackProblem& problem);
 
     // Solves with a caller-assembled plugin calculator (see
     // ks/constraints.hpp): pick components and weights, then pass the
@@ -115,8 +112,8 @@ public:
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
     // so parallelSolverCount is ignored.
-    void solve(KnapsackProblem &problem,
-               optimaru::DecomposedObjective<KnapsackProblem> &calculator);
+    void solve(KnapsackProblem& problem,
+               optimaru::DecomposedObjective<KnapsackProblem>& calculator);
 
 private:
     Config config_;

@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest", "ruff"]
+dev = ["pytest"]
 
 [project.scripts]
 bin-packing-compare = "bin_packing_cpsat.benchmark:main"
@@ -29,12 +29,6 @@ cpsat-plugins = { path = "../../cpsat-common", editable = true }
 
 [tool.setuptools]
 packages = ["bin_packing_cpsat"]
-
-[tool.ruff]
-line-length = 120
-
-[tool.ruff.lint]
-extend-select = ["I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -52,60 +52,46 @@
 
 using namespace bp;
 
-namespace
-{
+namespace {
 
 int failures = 0;
 
-void check(bool ok, const std::string &label)
-{
+void check(bool ok, const std::string& label) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-bool sameScore(const Score &a, const Score &b)
-{
+bool sameScore(const Score& a, const Score& b) {
     return a.hard == b.hard && std::fabs(a.soft - b.soft) < 1e-9;
 }
 
 // Both monolithic calculators must agree with the hand calculation.
-void checkScore(const std::string &label,
-                BinPackingProblem problem,
-                long expectedHard,
-                double expectedSoft)
-{
+void checkScore(const std::string& label, BinPackingProblem problem, long expectedHard,
+                double expectedSoft) {
     const Score full = ScoreCalculator::score(problem);
     BinPackingIncrementalScoreCalculator incremental;
     incremental.rebuild(problem);
     const Score inc = incremental.score();
-    const bool ok = full.hard == expectedHard && std::fabs(full.soft - expectedSoft) < 1e-9
-                    && sameScore(full, inc);
+    const bool ok = full.hard == expectedHard && std::fabs(full.soft - expectedSoft) < 1e-9 &&
+                    sameScore(full, inc);
     std::printf("  [%s] %-58s full=%s incremental=%s expected=%ldhard/%gsoft\n",
-                ok ? "PASS" : "FAIL",
-                label.c_str(),
-                full.str().c_str(),
-                inc.str().c_str(),
-                expectedHard,
-                expectedSoft);
-    if (!ok)
-        ++failures;
+                ok ? "PASS" : "FAIL", label.c_str(), full.str().c_str(), inc.str().c_str(),
+                expectedHard, expectedSoft);
+    if (!ok) ++failures;
 }
 
-Item makeItem(const std::string &id, std::int64_t weight, int bin = -1, const char *color = nullptr)
-{
+Item makeItem(const std::string& id, std::int64_t weight, int bin = -1,
+              const char* color = nullptr) {
     Item item;
     item.id = id;
     item.weight = weight;
     item.bin = bin;
-    if (color != nullptr)
-        item.color = std::string(color);
+    if (color != nullptr) item.color = std::string(color);
     return item;
 }
 
 // C = 10, A8 B7 C3 D2 (the hand-calculation fixture).
-BinPackingProblem abcd(const std::vector<int> &bins)
-{
+BinPackingProblem abcd(const std::vector<int>& bins) {
     BinPackingProblem p;
     p.binCapacity = 10;
     p.items = {makeItem("A", 8), makeItem("B", 7), makeItem("C", 3), makeItem("D", 2)};
@@ -113,13 +99,12 @@ BinPackingProblem abcd(const std::vector<int> &bins)
     return p;
 }
 
-std::vector<int> binsOf(const BinPackingProblem &p) { return p.assignment(); }
+std::vector<int> binsOf(const BinPackingProblem& p) { return p.assignment(); }
 
 // -------------------------------------------------------------------------
 // (a) hand-calculated positive and zero cases
 // -------------------------------------------------------------------------
-void verifyConstraintsByHand()
-{
+void verifyConstraintsByHand() {
     std::printf("== (a) hand-calculated constraint scores ==\n");
 
     // binCapacityCost: {A8, B7} = 15 on capacity 10 -> 5; {C3, D2} -> 0.
@@ -138,7 +123,8 @@ void verifyConstraintsByHand()
     {
         BinPackingProblem p;
         p.binCapacity = 100;
-        p.items = {makeItem("A", 3, 0, "red"), makeItem("B", 4, 0, "red"), makeItem("C", 5, 0, "blue")};
+        p.items = {makeItem("A", 3, 0, "red"), makeItem("B", 4, 0, "red"),
+                   makeItem("C", 5, 0, "blue")};
         checkScore("colorConflictCost positive: red red blue -> 1", p, -1, -1.0);
         p.items[1].bin = 1;
         checkScore("colorConflictCost zero: the reds split", p, 0, -2.0);
@@ -146,15 +132,11 @@ void verifyConstraintsByHand()
     {
         BinPackingProblem p;
         p.binCapacity = 100;
-        p.items = {makeItem("R1", 1, 0, "red"),
-                   makeItem("R2", 1, 0, "red"),
-                   makeItem("R3", 1, 0, "red"),
-                   makeItem("B1", 1, 0, "blue"),
-                   makeItem("B2", 1, 0, "blue"),
-                   makeItem("X", 1, 0)};
+        p.items = {makeItem("R1", 1, 0, "red"),  makeItem("R2", 1, 0, "red"),
+                   makeItem("R3", 1, 0, "red"),  makeItem("B1", 1, 0, "blue"),
+                   makeItem("B2", 1, 0, "blue"), makeItem("X", 1, 0)};
         checkScore("colorConflictCost positive: red x3 + blue x2 -> 2 + 1", p, -3, -1.0);
-        for (Item &item : p.items)
-            item.color.reset();
+        for (Item& item : p.items) item.color.reset();
         checkScore("colorConflictCost zero: no colours", p, 0, -1.0);
     }
 
@@ -180,25 +162,20 @@ void verifyConstraintsByHand()
 // -------------------------------------------------------------------------
 // (b) incremental == full recompute over a random walk
 // -------------------------------------------------------------------------
-BinPackingProblem randomInstance(int n, std::uint64_t seed, int colors, int conflicts)
-{
+BinPackingProblem randomInstance(int n, std::uint64_t seed, int colors, int conflicts) {
     std::mt19937_64 rng(seed);
     BinPackingProblem p;
     p.binCapacity = 20;
-    for (int i = 0; i < n; ++i)
-    {
+    for (int i = 0; i < n; ++i) {
         Item item = makeItem("i" + std::to_string(i), 1 + static_cast<std::int64_t>(rng() % 12));
-        if (colors > 0 && rng() % 3 != 0)
-            item.color = "c" + std::to_string(rng() % colors);
+        if (colors > 0 && rng() % 3 != 0) item.color = "c" + std::to_string(rng() % colors);
         item.bin = static_cast<int>(rng() % n);
         p.items.push_back(item);
     }
-    for (int k = 0; k < conflicts; ++k)
-    {
+    for (int k = 0; k < conflicts; ++k) {
         const int a = static_cast<int>(rng() % n);
         int b = static_cast<int>(rng() % (n - 1));
-        if (b >= a)
-            ++b;
+        if (b >= a) ++b;
         p.conflicts.emplace_back("i" + std::to_string(a), "i" + std::to_string(b));
         if (k % 5 == 0)  // duplicated and reversed listings count too
             p.conflicts.emplace_back("i" + std::to_string(b), "i" + std::to_string(a));
@@ -207,19 +184,17 @@ BinPackingProblem randomInstance(int n, std::uint64_t seed, int colors, int conf
 }
 
 // The four raw totals as a list, in catalog order.
-std::vector<std::int64_t> asList(const RawCosts &raw)
-{
+std::vector<std::int64_t> asList(const RawCosts& raw) {
     return {raw.binCapacity, raw.colorConflict, raw.itemConflict, raw.usedBins};
 }
 
-const char *const kConstraintNames[] = {"binCapacityCost", "colorConflictCost", "itemConflictCost",
+const char* const kConstraintNames[] = {"binCapacityCost", "colorConflictCost", "itemConflictCost",
                                         "usedBinsCost"};
 
 // One walk: after every move the incremental score AND each constraint's
 // running raw total must equal the full recompute's, and every constraint
 // must be non-zero at some point (so none of the four is compared at 0 only).
-void walkIncremental(std::size_t maxFlatColorCells, const std::string &label)
-{
+void walkIncremental(std::size_t maxFlatColorCells, const std::string& label) {
     BinPackingProblem p = randomInstance(30, 7, 4, 25);
     BinPackingIncrementalScoreCalculator calc(maxFlatColorCells);
     optimaru::Editor<BinPackingProblem> editor(p, calc);
@@ -234,18 +209,14 @@ void walkIncremental(std::size_t maxFlatColorCells, const std::string &label)
     int costMismatches = 0;
     int nonZero[4] = {0, 0, 0, 0};
     const int steps = 5000;
-    for (int step = 0; step < steps; ++step)
-    {
+    for (int step = 0; step < steps; ++step) {
         const double r = unit(rng);
-        if (r < 0.6)
-        {
+        if (r < 0.6) {
             // ChangeMove; 10% of the time to unassigned (-1).
             const int item = static_cast<int>(rng() % n);
             const int bin = unit(rng) < 0.10 ? -1 : static_cast<int>(rng() % 6);
             editor.assign(item, bin);
-        }
-        else if (r < 0.9)
-        {
+        } else if (r < 0.9) {
             const int a = static_cast<int>(rng() % n);
             const int b = static_cast<int>(rng() % n);
             const int va = p.items[a].bin;
@@ -254,60 +225,49 @@ void walkIncremental(std::size_t maxFlatColorCells, const std::string &label)
             editor.assign(a, vb);
             editor.assign(b, va);
             editor.end_batch();
-        }
-        else
-        {
+        } else {
             // Move a whole bin's items to another bin (EmptyBinMove's shape).
             const int from = static_cast<int>(rng() % 6);
             const int to = static_cast<int>(rng() % 6);
             editor.begin_batch();
-            for (int i = 0; i < n; ++i)
-            {
-                if (p.items[i].bin == from)
-                    editor.assign(i, to);
+            for (int i = 0; i < n; ++i) {
+                if (p.items[i].bin == from) editor.assign(i, to);
             }
             editor.end_batch();
         }
         shadow.setAssignment(p.assignment());
         const Score full = ScoreCalculator::score(shadow);
         const Score incremental = editor.score();
-        if (!sameScore(full, incremental) && ++mismatches <= 3)
-        {
-            std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                        step,
-                        incremental.str().c_str(),
-                        full.str().c_str());
+        if (!sameScore(full, incremental) && ++mismatches <= 3) {
+            std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                        incremental.str().c_str(), full.str().c_str());
         }
         const std::vector<std::int64_t> expected = asList(ScoreCalculator::rawCosts(shadow));
         const std::vector<std::int64_t> running = asList(calc.totals());
-        for (int c = 0; c < 4; ++c)
-        {
-            if (running[c] != expected[c] && ++costMismatches <= 3)
-            {
-                std::printf("  COST MISMATCH @step %d: %s incremental=%lld full=%lld\n",
-                            step,
-                            kConstraintNames[c],
-                            static_cast<long long>(running[c]),
+        for (int c = 0; c < 4; ++c) {
+            if (running[c] != expected[c] && ++costMismatches <= 3) {
+                std::printf("  COST MISMATCH @step %d: %s incremental=%lld full=%lld\n", step,
+                            kConstraintNames[c], static_cast<long long>(running[c]),
                             static_cast<long long>(expected[c]));
             }
-            if (expected[c] != 0)
-                ++nonZero[c];
+            if (expected[c] != 0) ++nonZero[c];
         }
     }
-    check(mismatches == 0, label + ": " + std::to_string(steps) + " random moves, incremental == full recompute");
-    check(costMismatches == 0, label + ": every constraint's raw total == the full recompute's after each move");
-    for (int c = 0; c < 4; ++c)
-    {
-        check(nonZero[c] > 0,
-              label + ": " + kConstraintNames[c] + " non-zero at " + std::to_string(nonZero[c]) + " of "
-                  + std::to_string(steps) + " steps");
+    check(mismatches == 0,
+          label + ": " + std::to_string(steps) + " random moves, incremental == full recompute");
+    check(costMismatches == 0,
+          label + ": every constraint's raw total == the full recompute's after each move");
+    for (int c = 0; c < 4; ++c) {
+        check(nonZero[c] > 0, label + ": " + kConstraintNames[c] + " non-zero at " +
+                                      std::to_string(nonZero[c]) + " of " + std::to_string(steps) +
+                                      " steps");
     }
 }
 
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (b) incremental scoring == full recompute, per constraint ==\n");
-    walkIncremental(BinPackingIncrementalScoreCalculator::kDefaultMaxFlatColorCells, "flat colour counts");
+    walkIncremental(BinPackingIncrementalScoreCalculator::kDefaultMaxFlatColorCells,
+                    "flat colour counts");
     walkIncremental(0, "hash-map colour counts");
     std::printf("\n");
 }
@@ -315,15 +275,13 @@ void verifyIncremental()
 // -------------------------------------------------------------------------
 // (c) construction == best fit decreasing
 // -------------------------------------------------------------------------
-std::vector<int> constructed(BinPackingProblem p)
-{
+std::vector<int> constructed(BinPackingProblem p) {
     ScoreCalculator::prepare(p);
     constructBins(p, descendingOrder(p));
     return binsOf(p);
 }
 
-void verifyConstruction()
-{
+void verifyConstruction() {
     std::printf("== (c) construction ==\n");
     check(constructed(abcd({-1, -1, -1, -1})) == std::vector<int>{0, 1, 1, 0},
           "plain: A:0 B:1 C:1 D:0");
@@ -337,18 +295,18 @@ void verifyConstruction()
         BinPackingProblem p;
         p.binCapacity = 5;
         p.items = {makeItem("A", 2, 1), makeItem("B", 9)};
-        check(constructed(p) == std::vector<int>{1, 0}, "seed {A:1}, B fits nowhere: B:0, inside 0..n-1");
+        check(constructed(p) == std::vector<int>{1, 0},
+              "seed {A:1}, B fits nowhere: B:0, inside 0..n-1");
     }
     {
         BinPackingProblem p = abcd({-1, -1, -1, -1});
         p.items[3].weight = 8;  // A8 B7 C3 D8: ties between A and D
         std::mt19937_64 rng(5);
         bool tiesOnly = true;
-        for (int trial = 0; trial < 20; ++trial)
-        {
+        for (int trial = 0; trial < 20; ++trial) {
             const std::vector<int> order = tieShuffledOrder(p, rng);
-            tiesOnly &= order.size() == 4 && order[2] == 1 && order[3] == 2
-                        && ((order[0] == 0 && order[1] == 3) || (order[0] == 3 && order[1] == 0));
+            tiesOnly &= order.size() == 4 && order[2] == 1 && order[3] == 2 &&
+                        ((order[0] == 0 && order[1] == 3) || (order[0] == 3 && order[1] == 0));
         }
         check(tiesOnly, "tieShuffledOrder only shuffles items of equal weight");
     }
@@ -358,15 +316,13 @@ void verifyConstruction()
 // -------------------------------------------------------------------------
 // (d) zero budget and warm start
 // -------------------------------------------------------------------------
-Solver::Config zeroBudget()
-{
+Solver::Config zeroBudget() {
     Solver::Config config;
     config.time_limit = std::chrono::milliseconds(0);
     return config;
 }
 
-void verifyZeroBudgetAndWarmStart()
-{
+void verifyZeroBudgetAndWarmStart() {
     std::printf("== (d) zero budget, warm start ==\n");
     {
         BinPackingProblem p = abcd({0, 1, 2, 2});
@@ -380,7 +336,8 @@ void verifyZeroBudgetAndWarmStart()
         BinPackingProblem p = abcd({3, 1, 1, 3});
         p.warmStart = true;
         Solver(zeroBudget()).solve(p);
-        check(binsOf(p) == std::vector<int>{3, 1, 1, 3}, "gapped seed keeps its gaps with zero budget");
+        check(binsOf(p) == std::vector<int>{3, 1, 1, 3},
+              "gapped seed keeps its gaps with zero budget");
     }
     {
         BinPackingProblem p = abcd({0, 0, 0, 0});
@@ -392,7 +349,8 @@ void verifyZeroBudgetAndWarmStart()
     {
         BinPackingProblem p = abcd({0, 0, 0, 0});  // warmStart false: ignored
         Solver(zeroBudget()).solve(p);
-        check(binsOf(p) == std::vector<int>{0, 1, 1, 0}, "plain zero-budget solve = the construction");
+        check(binsOf(p) == std::vector<int>{0, 1, 1, 0},
+              "plain zero-budget solve = the construction");
     }
     {
         Solver::Config config;
@@ -400,11 +358,9 @@ void verifyZeroBudgetAndWarmStart()
         config.step_limit = 2000;
         config.seed = 5;
         BinPackingProblem fresh = randomInstance(16, 3, 3, 6);
-        for (Item &item : fresh.items)
-            item.bin = -1;
+        for (Item& item : fresh.items) item.bin = -1;
         BinPackingProblem preset = fresh;
-        for (Item &item : preset.items)
-            item.bin = 0;
+        for (Item& item : preset.items) item.bin = 0;
         Solver(config).solve(fresh);
         Solver(config).solve(preset);
         check(binsOf(fresh) == binsOf(preset) && sameScore(fresh.score, preset.score),
@@ -415,7 +371,8 @@ void verifyZeroBudgetAndWarmStart()
         p.binCapacity = 10;
         p.warmStart = true;
         Solver(zeroBudget()).solve(p);
-        check(!p.warmStart && sameScore(p.score, Score{}), "no items: 0hard/0soft, warmStart cleared");
+        check(!p.warmStart && sameScore(p.score, Score{}),
+              "no items: 0hard/0soft, warmStart cleared");
     }
     std::printf("\n");
 }
@@ -423,12 +380,10 @@ void verifyZeroBudgetAndWarmStart()
 // -------------------------------------------------------------------------
 // (e) ScoreChecks::Full
 // -------------------------------------------------------------------------
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (e) FULL_ASSERT solve ==\n");
     BinPackingProblem p = randomInstance(18, 11, 3, 8);
-    for (Item &item : p.items)
-        item.bin = -1;
+    for (Item& item : p.items) item.bin = -1;
     Solver::Config config;
     config.time_limit = std::chrono::seconds(2);
     config.seed = 3;
@@ -438,22 +393,19 @@ void verifyFullAssertSolve()
     config.ruinRecreatePolishSteps = 100;
     config.ruinRecreateAsMoveWeight = 0.05;
     bool corrupted = false;
-    try
-    {
+    try {
         Solver(config).solve(p);
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
-    if (!corrupted)
-    {
+    if (!corrupted) {
         const Score reported = p.score;
         check(sameScore(reported, ScoreCalculator::score(p)),
               "solver-reported score == full recompute");
-        check(std::all_of(p.items.begin(), p.items.end(), [](const Item &item) { return item.bin >= 0; }),
+        check(std::all_of(p.items.begin(), p.items.end(),
+                          [](const Item& item) { return item.bin >= 0; }),
               "every item assigned");
     }
     std::printf("\n");
@@ -462,45 +414,40 @@ void verifyFullAssertSolve()
 // -------------------------------------------------------------------------
 // (f) the samples reach the lower bound
 // -------------------------------------------------------------------------
-BinPackingProblem twentyItems(bool colored)
-{
+BinPackingProblem twentyItems(bool colored) {
     const std::int64_t weights[] = {48, 30, 19, 36, 36, 27, 42, 42, 42, 42,
                                     42, 42, 24, 24, 51, 49, 55, 45, 33, 17};
-    const char *colors[] = {"red", "blue", "green", "yellow", nullptr, nullptr, "red",
-                            "blue", "green", "yellow", nullptr, nullptr, nullptr, nullptr,
-                            "red", "blue", nullptr, nullptr, nullptr, nullptr};
+    const char* colors[] = {"red",  "blue",  "green",  "yellow", nullptr, nullptr, "red",
+                            "blue", "green", "yellow", nullptr,  nullptr, nullptr, nullptr,
+                            "red",  "blue",  nullptr,  nullptr,  nullptr, nullptr};
     BinPackingProblem p;
     p.binCapacity = 100;
-    for (int i = 0; i < 20; ++i)
-    {
+    for (int i = 0; i < 20; ++i) {
         char id[8];
         std::snprintf(id, sizeof(id), "I%02d", i + 1);
         p.items.push_back(makeItem(id, weights[i], -1, colored ? colors[i] : nullptr));
     }
-    if (colored)
-        p.conflicts = {{"I01", "I16"}, {"I07", "I18"}, {"I10", "I19"}};
+    if (colored) p.conflicts = {{"I01", "I16"}, {"I07", "I18"}, {"I10", "I19"}};
     return p;
 }
 
-void verifySamples()
-{
+void verifySamples() {
     std::printf("== (f) samples reach the 8-bin lower bound ==\n");
-    for (bool colored : {false, true})
-    {
+    for (bool colored : {false, true}) {
         BinPackingProblem p = twentyItems(colored);
         std::int64_t total = 0;
-        for (const Item &item : p.items)
-            total += item.weight;
+        for (const Item& item : p.items) total += item.weight;
         Solver::Config config;
         config.time_limit = std::chrono::seconds(5);
         config.target_score = Score{0, -8.0};
         config.seed = 7;
         Solver(config).solve(p);
         check(total == 746 && p.score.hard == 0 && p.binsUsed() == 8 && p.score.soft == -8.0,
-              std::string(colored ? "web demo (colours + conflicts)" : "20 weights, capacity 100")
-                  + ": 0hard/-8soft, 8 bins (got " + p.score.str() + ")");
+              std::string(colored ? "web demo (colours + conflicts)" : "20 weights, capacity 100") +
+                      ": 0hard/-8soft, 8 bins (got " + p.score.str() + ")");
         const std::vector<std::int64_t> loads = p.binLoads();
-        check(loads.size() == 8 && std::all_of(loads.begin(), loads.end(), [](std::int64_t l) { return l > 0; }),
+        check(loads.size() == 8 &&
+                      std::all_of(loads.begin(), loads.end(), [](std::int64_t l) { return l > 0; }),
               "bin_loads has no gaps after the search (compacted)");
     }
     std::printf("\n");
@@ -509,8 +456,7 @@ void verifySamples()
 // -------------------------------------------------------------------------
 // (g) parallel multi-start
 // -------------------------------------------------------------------------
-void verifyParallel()
-{
+void verifyParallel() {
     std::printf("== (g) parallel multi-start ==\n");
     BinPackingProblem p = twentyItems(true);
     Solver::Config config;
@@ -520,7 +466,8 @@ void verifyParallel()
     Solver(config).solve(p);
     const Score reported = p.score;
     check(sameScore(reported, ScoreCalculator::score(p)), "best worker's score == full recompute");
-    check(std::all_of(p.items.begin(), p.items.end(), [](const Item &item) { return item.bin >= 0; }),
+    check(std::all_of(p.items.begin(), p.items.end(),
+                      [](const Item& item) { return item.bin >= 0; }),
           "every item assigned");
     std::printf("\n");
 }
@@ -528,8 +475,7 @@ void verifyParallel()
 // -------------------------------------------------------------------------
 // (h) compaction
 // -------------------------------------------------------------------------
-void verifyCompaction()
-{
+void verifyCompaction() {
     std::printf("== (h) compaction ==\n");
     BinPackingProblem p = randomInstance(20, 21, 3, 10);
     const Score before = ScoreCalculator::score(p);
@@ -539,10 +485,8 @@ void verifyCompaction()
     int expected = 0;
     bool contiguous = true;
     std::vector<char> seen(p.items.size(), 0);
-    for (const Item &item : p.items)
-    {
-        if (!seen[item.bin])
-        {
+    for (const Item& item : p.items) {
+        if (!seen[item.bin]) {
             contiguous &= item.bin == expected++;
             seen[item.bin] = 1;
         }
@@ -554,99 +498,87 @@ void verifyCompaction()
 // -------------------------------------------------------------------------
 // (i) the fact checks
 // -------------------------------------------------------------------------
-bool throwsInvalid(const std::function<void()> &action, const std::string &needle)
-{
-    try
-    {
+bool throwsInvalid(const std::function<void()>& action, const std::string& needle) {
+    try {
         action();
-    }
-    catch (const std::invalid_argument &e)
-    {
+    } catch (const std::invalid_argument& e) {
         return std::string(e.what()).find(needle) != std::string::npos;
     }
     return false;
 }
 
-void verifyChecks()
-{
+void verifyChecks() {
     std::printf("== (i) fact checks ==\n");
     check(throwsInvalid(
-              []
-              {
-                  BinPackingProblem p = abcd({-1, -1, -1, -1});
-                  p.binCapacity = 0;
-                  Solver(zeroBudget()).solve(p);
-              },
-              "bin_capacity must be positive"),
+                  [] {
+                      BinPackingProblem p = abcd({-1, -1, -1, -1});
+                      p.binCapacity = 0;
+                      Solver(zeroBudget()).solve(p);
+                  },
+                  "bin_capacity must be positive"),
           "solve refuses binCapacity <= 0");
     check(throwsInvalid(
-              []
-              {
-                  BinPackingProblem p = abcd({0, 0, 1, -1});
-                  p.binCapacity = -3;
-                  ScoreCalculator::score(p);
-              },
-              "bin_capacity must be positive"),
+                  [] {
+                      BinPackingProblem p = abcd({0, 0, 1, -1});
+                      p.binCapacity = -3;
+                      ScoreCalculator::score(p);
+                  },
+                  "bin_capacity must be positive"),
           "scoring refuses binCapacity <= 0");
     check(throwsInvalid(
-              []
-              {
-                  BinPackingProblem p = abcd({0, 0, 1, 1});
-                  ScoreCalculator::prepare(p);
-                  p.binCapacity = 0;  // edited after the lookups were built
-                  BinPackingIncrementalScoreCalculator incremental;
-                  incremental.rebuild(p);
-              },
-              "bin_capacity must be positive"),
+                  [] {
+                      BinPackingProblem p = abcd({0, 0, 1, 1});
+                      ScoreCalculator::prepare(p);
+                      p.binCapacity = 0;  // edited after the lookups were built
+                      BinPackingIncrementalScoreCalculator incremental;
+                      incremental.rebuild(p);
+                  },
+                  "bin_capacity must be positive"),
           "a capacity edited after prepare() is refused too");
     check(throwsInvalid(
-              []
-              {
-                  BinPackingProblem p = abcd({-1, -1, -1, -1});
-                  p.items[1].id = "A";
-                  ScoreCalculator::score(p);
-              },
-              "item ids must be unique"),
+                  [] {
+                      BinPackingProblem p = abcd({-1, -1, -1, -1});
+                      p.items[1].id = "A";
+                      ScoreCalculator::score(p);
+                  },
+                  "item ids must be unique"),
           "a repeated id is refused");
     check(throwsInvalid(
-              []
-              {
-                  BinPackingProblem p = abcd({-1, -1, -1, -1});
-                  p.items[1].weight = 0;
-                  ScoreCalculator::score(p);
-              },
-              "item weights must be positive"),
+                  [] {
+                      BinPackingProblem p = abcd({-1, -1, -1, -1});
+                      p.items[1].weight = 0;
+                      ScoreCalculator::score(p);
+                  },
+                  "item weights must be positive"),
           "a weight <= 0 is refused");
     check(throwsInvalid(
-              []
-              {
-                  BinPackingProblem p = abcd({-1, -1, -1, -1});
-                  p.conflicts = {{"A", "Z"}};
-                  ScoreCalculator::score(p);
-              },
-              "conflict endpoints"),
+                  [] {
+                      BinPackingProblem p = abcd({-1, -1, -1, -1});
+                      p.conflicts = {{"A", "Z"}};
+                      ScoreCalculator::score(p);
+                  },
+                  "conflict endpoints"),
           "an unknown conflict endpoint is refused");
     check(throwsInvalid(
-              []
-              {
-                  BinPackingProblem p = abcd({-1, -1, -1, -1});
-                  p.conflicts = {{"A", "A"}};
-                  ScoreCalculator::score(p);
-              },
-              "conflict endpoints"),
+                  [] {
+                      BinPackingProblem p = abcd({-1, -1, -1, -1});
+                      p.conflicts = {{"A", "A"}};
+                      ScoreCalculator::score(p);
+                  },
+                  "conflict endpoints"),
           "a self pair is refused");
     check(throwsInvalid(
-              []
-              {
-                  BinPackingProblem p = abcd({0, 0, 0, 4});
-                  ScoreCalculator::score(p);
-              },
-              "item 'D' has bin 4, outside -1..3"),
+                  [] {
+                      BinPackingProblem p = abcd({0, 0, 0, 4});
+                      ScoreCalculator::score(p);
+                  },
+                  "item 'D' has bin 4, outside -1..3"),
           "a bin outside -1..n-1 is refused");
     {
         BinPackingProblem p = abcd({0, 0, 0, 7});  // a plain solve ignores the bins
         Solver(zeroBudget()).solve(p);
-        check(binsOf(p) == std::vector<int>{0, 1, 1, 0}, "a plain solve ignores out-of-range input bins");
+        check(binsOf(p) == std::vector<int>{0, 1, 1, 0},
+              "a plain solve ignores out-of-range input bins");
     }
     std::printf("\n");
 }
@@ -656,14 +588,11 @@ void verifyChecks()
 // -------------------------------------------------------------------------
 // One step of the engine's move protocol around a MoveOperator: begin the
 // evaluation, apply, score, then keep it or roll it back with undo_last.
-struct MoveDriver
-{
-    explicit MoveDriver(optimaru::Editor<BinPackingProblem> &editor)
-        : ctx{editor, nearby, noLists, noLists}
-    {
-    }
+struct MoveDriver {
+    explicit MoveDriver(optimaru::Editor<BinPackingProblem>& editor)
+        : ctx{editor, nearby, noLists, noLists} {}
     optimaru::Neighborhoods nearby;  // empty: no distance meter
-    std::vector<int> noLists;              // Assignment: no element index
+    std::vector<int> noLists;        // Assignment: no element index
     optimaru::OperatorContext<BinPackingProblem> ctx;
     std::vector<int> entities;
 };
@@ -671,8 +600,7 @@ struct MoveDriver
 // C = 10. bin 0 = A4 (the lightest), bin 1 = B3 C2, bin 2 = D5; A conflicts
 // with B and with D. A fits by capacity into bin 1 and bin 2 (room 1 each),
 // but each holds one of its conflict partners.
-BinPackingProblem conflictedTriple()
-{
+BinPackingProblem conflictedTriple() {
     BinPackingProblem p;
     p.binCapacity = 10;
     p.items = {makeItem("A", 4, 0), makeItem("B", 3, 1), makeItem("C", 2, 1), makeItem("D", 5, 2)};
@@ -681,15 +609,13 @@ BinPackingProblem conflictedTriple()
     return p;
 }
 
-void verifyMacroMovesByHand()
-{
+void verifyMacroMovesByHand() {
     {
         // C = 10: bin 0 = A3 red (the lightest), bin 1 = B5 red + C2,
         // bin 2 = D4. EmptyBinMove takes the best fit by capacity, bin 1
         // (room 0), and lands A on B's colour; RepackMove skips bin 1 and
         // takes bin 2 (room 3).
-        auto build = []
-        {
+        auto build = [] {
             BinPackingProblem p;
             p.binCapacity = 10;
             p.items = {makeItem("A", 3, 0, "red"), makeItem("B", 5, 1, "red"), makeItem("C", 2, 1),
@@ -703,8 +629,9 @@ void verifyMacroMovesByHand()
         MoveDriver driver(editor);
         std::mt19937_64 rng(1);
         EmptyBinMove empty(1);
-        check(empty.apply(driver.ctx, rng, driver.entities) && binsOf(p) == std::vector<int>{1, 1, 1, 2}
-                  && sameScore(editor.score(), Score{-1, -2.0}),
+        check(empty.apply(driver.ctx, rng, driver.entities) &&
+                      binsOf(p) == std::vector<int>{1, 1, 1, 2} &&
+                      sameScore(editor.score(), Score{-1, -2.0}),
               "EmptyBinMove (capacity only): A joins red B in bin 1 -> -1hard/-2soft");
 
         BinPackingProblem q = build();
@@ -712,11 +639,13 @@ void verifyMacroMovesByHand()
         optimaru::Editor<BinPackingProblem> director2(q, calc2);
         MoveDriver driver2(director2);
         RepackMove repack(1, 0);
-        check(repack.apply(driver2.ctx, rng, driver2.entities) && binsOf(q) == std::vector<int>{2, 1, 1, 2}
-                  && sameScore(director2.score(), Score{0, -2.0}),
+        check(repack.apply(driver2.ctx, rng, driver2.entities) &&
+                      binsOf(q) == std::vector<int>{2, 1, 1, 2} &&
+                      sameScore(director2.score(), Score{0, -2.0}),
               "RepackMove (partners 0): A goes to bin 2, clear of red B -> 0hard/-2soft");
         repack.undo_last(driver2.ctx);
-        check(binsOf(q) == std::vector<int>{0, 1, 1, 2} && sameScore(director2.score(), Score{0, -3.0}),
+        check(binsOf(q) == std::vector<int>{0, 1, 1, 2} &&
+                      sameScore(director2.score(), Score{0, -3.0}),
               "RepackMove undo restores the three bins");
     }
     {
@@ -734,18 +663,17 @@ void verifyMacroMovesByHand()
         MoveDriver driver(editor);
         std::mt19937_64 rng(5);
         RepackMove alone(1, 0);
-        check(!alone.apply(driver.ctx, rng, driver.entities) && binsOf(p) == std::vector<int>{0, 1, 1, 2},
+        check(!alone.apply(driver.ctx, rng, driver.entities) &&
+                      binsOf(p) == std::vector<int>{0, 1, 1, 2},
               "RepackMove (partners 0): no clash-free bin for A -> no move");
 
         RepackMove withPartner(1, 1);
         int viaBin1 = 0;
         int viaBin2 = 0;
         bool resultsOk = true;
-        for (int attempt = 0; attempt < 40; ++attempt)
-        {
+        for (int attempt = 0; attempt < 40; ++attempt) {
             driver.entities.clear();
-            if (!withPartner.apply(driver.ctx, rng, driver.entities))
-            {
+            if (!withPartner.apply(driver.ctx, rng, driver.entities)) {
                 resultsOk = false;
                 continue;
             }
@@ -758,20 +686,21 @@ void verifyMacroMovesByHand()
                 resultsOk = false;
             resultsOk = resultsOk && sameScore(editor.score(), Score{0, -2.0});
             withPartner.undo_last(driver.ctx);
-            resultsOk = resultsOk && binsOf(p) == std::vector<int>{0, 1, 1, 2}
-                        && sameScore(editor.score(), Score{0, -3.0});
+            resultsOk = resultsOk && binsOf(p) == std::vector<int>{0, 1, 1, 2} &&
+                        sameScore(editor.score(), Score{0, -3.0});
         }
         check(viaBin1 > 0 && viaBin2 > 0 && resultsOk,
-              "RepackMove (1 partner): empties bin 0 at 0hard/-2soft with either partner (bin 1 "
-                  + std::to_string(viaBin1) + "x, bin 2 " + std::to_string(viaBin2) + "x); undo restores");
+              "RepackMove (1 partner): empties bin 0 at 0hard/-2soft with either partner (bin 1 " +
+                      std::to_string(viaBin1) + "x, bin 2 " + std::to_string(viaBin2) +
+                      "x); undo restores");
 
         BinPackingProblem e = conflictedTriple();
         BinPackingIncrementalScoreCalculator calc2;
         optimaru::Editor<BinPackingProblem> director2(e, calc2);
         MoveDriver driver2(director2);
         EmptyBinMove empty(1);
-        check(empty.apply(driver2.ctx, rng, driver2.entities) && binsOf(e) == std::vector<int>{1, 1, 1, 2}
-                  && director2.score().hard == -1,
+        check(empty.apply(driver2.ctx, rng, driver2.entities) &&
+                      binsOf(e) == std::vector<int>{1, 1, 1, 2} && director2.score().hard == -1,
               "EmptyBinMove on the same state: A next to its partner B -> -1hard");
     }
 }
@@ -782,11 +711,8 @@ void verifyMacroMovesByHand()
 // calculator reset in between; ScoreChecks::Full lets the editor check every
 // score itself (a ScoreMismatchError fails the walk).
 template <typename Move>
-void walkMacroMove(Move &move,
-                   const std::string &label,
-                   optimaru::ScoreChecks mode,
-                   bool requireHardNoWorse)
-{
+void walkMacroMove(Move& move, const std::string& label, optimaru::ScoreChecks mode,
+                   bool requireHardNoWorse) {
     BinPackingProblem p = randomInstance(40, 41, 5, 30);
     BinPackingIncrementalScoreCalculator calc;
     optimaru::Editor<BinPackingProblem> editor(p, calc, mode);
@@ -796,12 +722,11 @@ void walkMacroMove(Move &move,
     std::mt19937_64 rng(97);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
 
-    auto agrees = [&]() -> bool
-    {
+    auto agrees = [&]() -> bool {
         shadow.setAssignment(p.assignment());
         const Score full = ScoreCalculator::score(shadow);
-        return sameScore(editor.score(), full)
-               && asList(calc.totals()) == asList(ScoreCalculator::rawCosts(shadow));
+        return sameScore(editor.score(), full) &&
+               asList(calc.totals()) == asList(ScoreCalculator::rawCosts(shadow));
     };
 
     int applied = 0;
@@ -812,79 +737,64 @@ void walkMacroMove(Move &move,
     int hardWorse = 0;
     int infeasibleStarts = 0;
     bool corrupted = false;
-    try
-    {
-        for (int step = 0; step < 6000; ++step)
-        {
-            if (unit(rng) < 0.5)
-            {
+    try {
+        for (int step = 0; step < 6000; ++step) {
+            if (unit(rng) < 0.5) {
                 const int item = static_cast<int>(rng() % n);
                 editor.assign(item, static_cast<int>(rng() % n));
-                if (!agrees())
-                    ++mismatches;
+                if (!agrees()) ++mismatches;
                 continue;
             }
             const std::vector<int> before = p.assignment();
             const Score beforeScore = editor.score();
             const bool allBinsUsed = p.binsUsed() == n;
-            if (beforeScore.hard < 0)
-                ++infeasibleStarts;
+            if (beforeScore.hard < 0) ++infeasibleStarts;
             driver.entities.clear();
             editor.begin_trial();
-            if (!move.apply(driver.ctx, rng, driver.entities))
-            {
+            if (!move.apply(driver.ctx, rng, driver.entities)) {
                 editor.end_trial(false);
                 if (p.assignment() != before)
                     ++badUndo;  // a declined move must leave everything as it was
                 continue;
             }
             ++applied;
-            if (!agrees())
-                ++mismatches;
+            if (!agrees()) ++mismatches;
             const Score afterScore = editor.score();
             if (requireHardNoWorse && !allBinsUsed && afterScore.hard < beforeScore.hard)
                 ++hardWorse;
             const bool keep = unit(rng) < 0.5;
-            if (!keep)
-            {
+            if (!keep) {
                 editor.begin_rollback();
                 move.undo_last(driver.ctx);
                 ++undone;
-            }
-            else
-            {
+            } else {
                 ++kept;
             }
             editor.end_trial(keep);
-            if (!agrees())
-                ++mismatches;
-            if (!keep && p.assignment() != before)
-                ++badUndo;
+            if (!agrees()) ++mismatches;
+            if (!keep && p.assignment() != before) ++badUndo;
         }
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted && mismatches == 0,
-          label + ": " + std::to_string(applied) + " applied (" + std::to_string(kept) + " kept, "
-              + std::to_string(undone) + " undone), incremental == full recompute and every raw total");
+          label + ": " + std::to_string(applied) + " applied (" + std::to_string(kept) + " kept, " +
+                  std::to_string(undone) +
+                  " undone), incremental == full recompute and every raw total");
     check(applied > 1000 && kept > 300 && undone > 300 && infeasibleStarts > 100,
-          label + ": the walk applies and undoes the move often, from infeasible states too ("
-              + std::to_string(infeasibleStarts) + ")");
-    check(badUndo == 0, label + ": undo (and a declined move) leaves the assignment exactly as it was");
-    if (requireHardNoWorse)
-        check(hardWorse == 0, label + ": never adds a hard violation");
+          label + ": the walk applies and undoes the move often, from infeasible states too (" +
+                  std::to_string(infeasibleStarts) + ")");
+    check(badUndo == 0,
+          label + ": undo (and a declined move) leaves the assignment exactly as it was");
+    if (requireHardNoWorse) check(hardWorse == 0, label + ": never adds a hard violation");
 }
 
-void verifyMacroMoves()
-{
+void verifyMacroMoves() {
     std::printf("== (j) macro moves ==\n");
     verifyMacroMovesByHand();
     for (const optimaru::ScoreChecks mode :
-         {optimaru::ScoreChecks::Off, optimaru::ScoreChecks::Full})
-    {
+         {optimaru::ScoreChecks::Off, optimaru::ScoreChecks::Full}) {
         const std::string tag = mode == optimaru::ScoreChecks::Full ? " [FULL_ASSERT]" : "";
         EmptyBinMove empty(3);
         walkMacroMove(empty, "EmptyBinMove" + tag, mode, false);
@@ -898,8 +808,7 @@ void verifyMacroMoves()
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyConstraintsByHand();
     verifyIncremental();
     verifyConstruction();
@@ -910,8 +819,7 @@ int main()
     verifyCompaction();
     verifyChecks();
     verifyMacroMoves();
-    if (failures != 0)
-    {
+    if (failures != 0) {
         std::printf("%d check(s) FAILED\n", failures);
         return 1;
     }

@@ -42,9 +42,9 @@ void check(bool ok, const std::string& label) {
 // worker. Soft: -cost[task][worker].
 struct TaskAssignment {
     int workerCount = 0;
-    std::vector<std::vector<long>> cost;            // [task][worker]
-    std::vector<std::pair<int, int>> conflicts;     // task pairs
-    std::vector<int> assignment;                    // decision variable; -1 = unassigned
+    std::vector<std::vector<long>> cost;         // [task][worker]
+    std::vector<std::pair<int, int>> conflicts;  // task pairs
+    std::vector<int> assignment;                 // decision variable; -1 = unassigned
 };
 
 }  // namespace
@@ -52,7 +52,9 @@ struct TaskAssignment {
 template <>
 struct optimaru::SolutionTraits<TaskAssignment> {
     static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
-    static int entity_count(const TaskAssignment& s) { return static_cast<int>(s.assignment.size()); }
+    static int entity_count(const TaskAssignment& s) {
+        return static_cast<int>(s.assignment.size());
+    }
     static int value_count(const TaskAssignment& s) { return s.workerCount; }
     static int value_of(const TaskAssignment& s, int e) { return s.assignment[e]; }
     static void assign(TaskAssignment& s, int e, int v) { s.assignment[e] = v; }
@@ -84,9 +86,7 @@ public:
     void before_assign(int t) override { applyDelta(t, -1); }
     void after_assign(int t) override { applyDelta(t, +1); }
 
-    Score score() override {
-        return {-conflictCount_, -static_cast<double>(costSum_)};
-    }
+    Score score() override { return {-conflictCount_, -static_cast<double>(costSum_)}; }
 
 protected:
     void applyDelta(int t, int sign) {
@@ -120,8 +120,7 @@ TaskAssignment buildTaskInstance() {
     TaskAssignment s;
     s.workerCount = 4;
     s.cost = {
-        {7, 3, 9, 4}, {2, 8, 5, 6}, {6, 4, 3, 8},
-        {5, 9, 2, 7}, {8, 2, 6, 3}, {4, 6, 7, 2},
+            {7, 3, 9, 4}, {2, 8, 5, 6}, {6, 4, 3, 8}, {5, 9, 2, 7}, {8, 2, 6, 3}, {4, 6, 7, 2},
     };
     s.conflicts = {{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {0, 5}};
     s.assignment.assign(6, -1);
@@ -168,12 +167,12 @@ void testAcceptors(const Score& separableOptimum, const Score& optimum) {
         const char* name;
     };
     const Case cases[] = {
-        {optimaru::AcceptanceRule::HillClimbing, "hill climbing"},
-        {optimaru::AcceptanceRule::LateAcceptance, "late acceptance"},
-        {optimaru::AcceptanceRule::EntityTabu, "entity tabu"},
-        {optimaru::AcceptanceRule::SimulatedAnnealing, "simulated annealing"},
-        {optimaru::AcceptanceRule::GreatDeluge, "great deluge"},
-        {optimaru::AcceptanceRule::StepCountingHillClimbing, "step counting hill climbing"},
+            {optimaru::AcceptanceRule::HillClimbing, "hill climbing"},
+            {optimaru::AcceptanceRule::LateAcceptance, "late acceptance"},
+            {optimaru::AcceptanceRule::EntityTabu, "entity tabu"},
+            {optimaru::AcceptanceRule::SimulatedAnnealing, "simulated annealing"},
+            {optimaru::AcceptanceRule::GreatDeluge, "great deluge"},
+            {optimaru::AcceptanceRule::StepCountingHillClimbing, "step counting hill climbing"},
     };
     // On the separable (local-optimum-free) instance every acceptor must find
     // the exact optimum.
@@ -216,7 +215,7 @@ void testTerminations(const Score& optimum) {
     std::printf("== assignment: terminations ==\n");
     using Clock = std::chrono::steady_clock;
 
-    {   // stepLimit fires long before the 30s time_limit.
+    {  // stepLimit fires long before the 30s time_limit.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);
@@ -227,7 +226,7 @@ void testTerminations(const Score& optimum) {
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
         check(sec < 5.0, "stepLimit terminates early (" + std::to_string(sec) + "s)");
     }
-    {   // target_score = optimum stops as soon as it is reached (SA is used
+    {  // target_score = optimum stops as soon as it is reached (SA is used
         // because it reliably reaches the conflicted instance's optimum).
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
@@ -242,7 +241,7 @@ void testTerminations(const Score& optimum) {
         check(result == optimum && sec < 5.0,
               "bestScoreLimit terminates early (" + std::to_string(sec) + "s)");
     }
-    {   // stall_time_limit: the toy optimum is found almost instantly, so
+    {  // stall_time_limit: the toy optimum is found almost instantly, so
         // 200ms without improvement ends the solve well before 30s.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
@@ -254,7 +253,7 @@ void testTerminations(const Score& optimum) {
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
         check(sec < 5.0, "stall_time_limit terminates early (" + std::to_string(sec) + "s)");
     }
-    {   // The cooling gradient follows a step limit when it is further along
+    {  // The cooling gradient follows a step limit when it is further along
         // than the wall clock (simulated annealing on a step-limited run).
         optimaru::Limits termination;
         termination.time_limit = std::chrono::seconds(30);
@@ -272,7 +271,7 @@ void testTerminations(const Score& optimum) {
 
 void testEnvironmentMode() {
     std::printf("== assignment: ScoreChecks::Full score-corruption detection ==\n");
-    {   // A correct calculator survives ScoreChecks::Full.
+    {  // A correct calculator survives ScoreChecks::Full.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(10);
@@ -287,7 +286,7 @@ void testEnvironmentMode() {
         }
         check(!threw, "correct objective passes ScoreChecks::Full");
     }
-    {   // A buggy calculator is caught.
+    {  // A buggy calculator is caught.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(10);
@@ -306,7 +305,7 @@ void testEnvironmentMode() {
 
 void testMultiStartAndFfd(const Score& optimum) {
     std::printf("== assignment: multi-start + FFD ordering ==\n");
-    {   // 4 SA threads on the conflicted instance; the best start must win.
+    {  // 4 SA threads on the conflicted instance; the best start must win.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(10);
@@ -319,7 +318,7 @@ void testMultiStartAndFfd(const Score& optimum) {
                 s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
         check(result == optimum && fullScore(s) == optimum, "multi-start (4 threads) optimum");
     }
-    {   // A start that throws (here: a raising on_new_best, as a Python callback
+    {  // A start that throws (here: a raising on_new_best, as a Python callback
         // that raises does): caught on its thread, the siblings stop, and the
         // exception comes out of solve_multistart on the calling thread
         // instead of std::terminate.
@@ -328,9 +327,7 @@ void testMultiStartAndFfd(const Score& optimum) {
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);
         config.parallel_starts = 3;
-        config.on_new_best = [](std::int64_t, const Score&) {
-            throw std::runtime_error("boom");
-        };
+        config.on_new_best = [](std::int64_t, const Score&) { throw std::runtime_error("boom"); };
         optimaru::Solver<TaskAssignment> solver(config);
         const auto start = std::chrono::steady_clock::now();
         std::string caught;
@@ -343,9 +340,10 @@ void testMultiStartAndFfd(const Score& optimum) {
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
         check(caught == "boom", "multi-start rethrows a start's exception on the calling thread");
         check(seconds < 10.0, "the other starts stop once one fails (no 30 s wait)");
-        check(s.assignment == before.assignment, "a failed multi-start leaves the solution as it was");
+        check(s.assignment == before.assignment,
+              "a failed multi-start leaves the solution as it was");
     }
-    {   // A thread that cannot be created (std::system_error, here injected
+    {  // A thread that cannot be created (std::system_error, here injected
         // through the test seam before start 1): the start already running
         // is stopped and joined, and the error comes out of solve_multistart
         // instead of std::terminate (a joinable std::thread destroyed).
@@ -357,8 +355,9 @@ void testMultiStartAndFfd(const Score& optimum) {
         optimaru::Solver<TaskAssignment> solver(config);
         optimaru::worker_thread_start_hook = [](int index) {
             if (index == 1) {
-                throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again),
-                                        "injected thread creation failure");
+                throw std::system_error(
+                        std::make_error_code(std::errc::resource_unavailable_try_again),
+                        "injected thread creation failure");
             }
         };
         const auto start = std::chrono::steady_clock::now();
@@ -376,12 +375,13 @@ void testMultiStartAndFfd(const Score& optimum) {
         check(s.assignment == before.assignment,
               "a multi-start that could not start leaves the solution as it was");
     }
-    {   // run_worker_threads itself: the failure on the very first thread, and
+    {  // run_worker_threads itself: the failure on the very first thread, and
         // on a later one, with the workers that did start all joined.
         std::atomic<bool> stop{false};
         std::atomic<int> ran{0};
         optimaru::worker_thread_start_hook = [](int index) {
-            if (index == 2) throw std::system_error(std::make_error_code(std::errc::not_enough_memory));
+            if (index == 2)
+                throw std::system_error(std::make_error_code(std::errc::not_enough_memory));
         };
         bool caught = false;
         try {
@@ -393,10 +393,12 @@ void testMultiStartAndFfd(const Score& optimum) {
             caught = true;
         }
         check(caught && stop.load() && ran.load() == 2,
-              "run_worker_threads: a failure at thread 2 sets stop, joins threads 0 and 1, rethrows");
+              "run_worker_threads: a failure at thread 2 sets stop, joins threads 0 and 1, "
+              "rethrows");
         stop.store(false);
         optimaru::worker_thread_start_hook = [](int) {
-            throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
+            throw std::system_error(
+                    std::make_error_code(std::errc::resource_unavailable_try_again));
         };
         caught = false;
         try {
@@ -408,11 +410,12 @@ void testMultiStartAndFfd(const Score& optimum) {
         optimaru::worker_thread_start_hook = nullptr;
         stop.store(false);
         std::vector<int> seen(5, 0);
-        optimaru::run_worker_threads(5, stop, [&seen](int i) { seen[static_cast<std::size_t>(i)] = i + 1; });
+        optimaru::run_worker_threads(5, stop,
+                                     [&seen](int i) { seen[static_cast<std::size_t>(i)] = i + 1; });
         check(seen == std::vector<int>({1, 2, 3, 4, 5}) && !stop.load(),
               "runWorkerThreads runs work(i) once per index and joins them all");
     }
-    {   // request_stop() reaches every start.
+    {  // request_stop() reaches every start.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);
@@ -425,7 +428,7 @@ void testMultiStartAndFfd(const Score& optimum) {
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
         check(seconds < 10.0, "request_stop() stops every multi-start start");
     }
-    {   // First Fit Decreasing: initialize high-cost tasks first.
+    {  // First Fit Decreasing: initialize high-cost tasks first.
         TaskAssignment s = buildSeparableInstance();
         auto rowMax = [&s](int t) {
             return static_cast<double>(*std::max_element(s.cost[t].begin(), s.cost[t].end()));
@@ -449,8 +452,8 @@ void testMultiStartAndFfd(const Score& optimum) {
 namespace {
 
 struct TspSolution {
-    std::vector<std::pair<double, double>> city;    // coordinates per element id
-    std::vector<std::vector<int>> routes;           // the list decision variable
+    std::vector<std::pair<double, double>> city;  // coordinates per element id
+    std::vector<std::vector<int>> routes;         // the list decision variable
 };
 
 }  // namespace
@@ -460,7 +463,9 @@ struct optimaru::SolutionTraits<TspSolution> {
     static constexpr optimaru::Shape shape = optimaru::Shape::Sequence;
     static int list_count(const TspSolution& s) { return static_cast<int>(s.routes.size()); }
     static int element_count(const TspSolution& s) { return static_cast<int>(s.city.size()); }
-    static int list_size(const TspSolution& s, int l) { return static_cast<int>(s.routes[l].size()); }
+    static int list_size(const TspSolution& s, int l) {
+        return static_cast<int>(s.routes[l].size());
+    }
     static int element_at(const TspSolution& s, int l, int p) { return s.routes[l][p]; }
     static void insert_element(TspSolution& s, int l, int p, int e) {
         s.routes[l].insert(s.routes[l].begin() + p, e);
@@ -538,7 +543,7 @@ double bruteForceTspOptimum(const TspSolution& s) {
 void testListVariable() {
     std::printf("== sequence: TSP construction + local search ==\n");
     const double optimum = bruteForceTspOptimum(buildTsp(1));
-    {   // Single route: cheapest-insertion CH + LS must find the optimal tour.
+    {  // Single route: cheapest-insertion CH + LS must find the optimal tour.
         TspSolution s = buildTsp(1);
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(10);
@@ -552,7 +557,7 @@ void testListVariable() {
         check(std::fabs(routeLength(s, s.routes[0]) - optimum) < 1e-9,
               "returned tour really has the optimal length");
     }
-    {   // Two routes under ScoreChecks::Full: exercises relocate/swap/2-opt across
+    {  // Two routes under ScoreChecks::Full: exercises relocate/swap/2-opt across
         // lists with every step verified against a full recompute.
         TspSolution s = buildTsp(2);
         optimaru::Settings config;
@@ -571,7 +576,8 @@ void testListVariable() {
         for (const auto& r : s.routes) all.insert(all.end(), r.begin(), r.end());
         std::sort(all.begin(), all.end());
         bool conserved = all.size() == s.city.size();
-        for (std::size_t i = 0; conserved && i < all.size(); ++i) conserved = (all[i] == static_cast<int>(i));
+        for (std::size_t i = 0; conserved && i < all.size(); ++i)
+            conserved = (all[i] == static_cast<int>(i));
         double recomputed = routeLength(s, s.routes[0]) + routeLength(s, s.routes[1]);
         check(!threw, "list moves pass ScoreChecks::Full (2 routes)");
         check(conserved, "every element assigned exactly once after solving");
@@ -662,7 +668,8 @@ PinnedTasks solvePinned(std::vector<int> assignment, std::vector<char> pinned, i
     config.search.ruin_recreate.unimproved_step_trigger = 20;
     config.search.ruin_recreate.as_move_weight = 0.1;
     optimaru::Solver<PinnedTasks> solver(config);
-    if (customCalls != nullptr) solver.add_move_operator(std::make_unique<AnyTaskMove>(*customCalls));
+    if (customCalls != nullptr)
+        solver.add_move_operator(std::make_unique<AnyTaskMove>(*customCalls));
     PinnedTasksCalculator calculator;
     solver.solve(s, calculator);
     return s;
@@ -695,7 +702,8 @@ void testPinnedEntities() {
     };
     PinnedTasksCalculator reportingCalculator;
     optimaru::Solver<PinnedTasks>(reporting).solve(reported, reportingCalculator);
-    check(softScores == std::vector<double>{-33.0}, "all pinned: on_new_best reports the score once");
+    check(softScores == std::vector<double>{-33.0},
+          "all pinned: on_new_best reports the score once");
 
     std::vector<char> allButOne(high.size(), 1);
     allButOne[3] = 0;
@@ -737,9 +745,8 @@ void testPinnedEntities() {
 
     PinnedTasks managed{6, pinnedUnassigned, allButOne};
     PinnedTasksCalculator managedCalculator;
-    check(refusesPinnedWithoutValue([&] {
-              optimaru::solve_in_background({}, managed, managedCalculator);
-          }),
+    check(refusesPinnedWithoutValue(
+                  [&] { optimaru::solve_in_background({}, managed, managedCalculator); }),
           "solve_in_background refuses it on the calling thread");
 
     PinnedTasks noValues{0, pinnedUnassigned, allButOne};
@@ -762,8 +769,8 @@ void testRouletteWheelSelector() {
     std::mt19937_64 rng(1);
     int picks[3] = {0, 0, 0};
     for (int i = 0; i < 3000; ++i) ++picks[selector.select(rng)];
-    check(picks[1] > 2500, "rewarded operator dominates selection (" +
-                                   std::to_string(picks[1]) + "/3000)");
+    check(picks[1] > 2500,
+          "rewarded operator dominates selection (" + std::to_string(picks[1]) + "/3000)");
 }
 
 class CountingMove final : public optimaru::MoveOperator<TaskAssignment> {
@@ -888,8 +895,7 @@ void testNearbyAndLnsOnRandomTsp() {
     double boosted = solveWith(true);
     std::printf("    plain LS (400k steps) tour = %.3f, nearby+LNS (200k steps) tour = %.3f\n",
                 plain, boosted);
-    check(boosted < plain - 1e-9,
-          "nearby+LNS beats plain LS with half the outer step budget");
+    check(boosted < plain - 1e-9, "nearby+LNS beats plain LS with half the outer step budget");
 
     // Consistency: 2 routes with nearby + LNS under ScoreChecks::Full, plus element
     // conservation (ruin/recreate must not lose or duplicate visits).
@@ -902,7 +908,8 @@ void testNearbyAndLnsOnRandomTsp() {
     config.search.nearby.distance = [ref](int a, int b) { return dist(ref, a, b); };
     config.search.ruin_recreate.enabled = true;
     config.search.ruin_recreate.unimproved_step_trigger = 100;
-    config.search.ruin_recreate.polish_steps = 50;  // keep ScoreChecks::Full (full recompute per move) fast
+    config.search.ruin_recreate.polish_steps =
+            50;  // keep ScoreChecks::Full (full recompute per move) fast
     config.score_checks = optimaru::ScoreChecks::Full;
     TspCalculator calculator;
     bool threw = false;
@@ -931,9 +938,9 @@ namespace {
 
 struct ShadowTsp {
     std::vector<std::pair<double, double>> city;
-    std::vector<double> dueTime;            // problem fact per city
-    std::vector<std::vector<int>> routes;   // genuine list variables
-    std::vector<double> arrival;            // SHADOW: distance from route start
+    std::vector<double> dueTime;           // problem fact per city
+    std::vector<std::vector<int>> routes;  // genuine list variables
+    std::vector<double> arrival;           // SHADOW: distance from route start
 };
 
 }  // namespace
@@ -1040,7 +1047,7 @@ ShadowTsp buildShadowTsp() {
 
 void testShadowVariables() {
     std::printf("== Shadow variables (VariableListener) ==\n");
-    {   // Full solve (moves + LNS + best-restore) under ScoreChecks::Full: shadows
+    {  // Full solve (moves + LNS + best-restore) under ScoreChecks::Full: shadows
         // must stay consistent through every mutation path.
         ShadowTsp s = buildShadowTsp();
         optimaru::Settings config;
@@ -1081,7 +1088,7 @@ void testShadowVariables() {
                       std::fabs(recomputed.soft - result.soft) < 1e-6,
               "returned shadows and score match a from-scratch recompute");
     }
-    {   // A listener that forgets to update the shadow is caught as corruption.
+    {  // A listener that forgets to update the shadow is caught as corruption.
         ShadowTsp s = buildShadowTsp();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);
@@ -1108,9 +1115,9 @@ void testShadowVariables() {
 namespace {
 
 struct ChainedVrp {
-    std::vector<std::pair<double, double>> depot;   // anchor coordinates
-    std::vector<std::pair<double, double>> visit;   // entity coordinates
-    std::vector<int> previous;                      // chained decision variable
+    std::vector<std::pair<double, double>> depot;  // anchor coordinates
+    std::vector<std::pair<double, double>> visit;  // entity coordinates
+    std::vector<int> previous;                     // chained decision variable
 };
 
 }  // namespace
@@ -1141,11 +1148,9 @@ double chainCost(const ChainedVrp& s, int anchor, const std::vector<int>& chain)
     return cost;
 }
 
-class ChainDistanceCalculator final
-    : public optimaru::ChainObjective<ChainedVrp> {
+class ChainDistanceCalculator final : public optimaru::ChainObjective<ChainedVrp> {
 public:
-    void rebuild(ChainedVrp& s,
-                              const std::vector<std::vector<int>>& chains) override {
+    void rebuild(ChainedVrp& s, const std::vector<std::vector<int>>& chains) override {
         perChain_.assign(chains.size(), 0.0);
         total_ = 0;
         for (std::size_t a = 0; a < chains.size(); ++a) {
@@ -1203,7 +1208,7 @@ void testChainedVariables() {
     config.seed = 9;
     config.search.moves.or_opt_weight = 0.15;
     config.search.moves.tail_swap_weight = 0.15;
-        config.search.moves.cross_exchange_weight = 0.15;
+    config.search.moves.cross_exchange_weight = 0.15;
     config.search.ruin_recreate.enabled = true;
     config.search.ruin_recreate.unimproved_step_trigger = 100;
     config.search.ruin_recreate.polish_steps = 50;
@@ -1273,8 +1278,7 @@ private:
     long cost_ = 0;
 };
 
-class TaskConflictComponent final
-    : public optimaru::Objective<TaskAssignment> {
+class TaskConflictComponent final : public optimaru::Objective<TaskAssignment> {
 public:
     void rebuild(TaskAssignment& solution) override {
         sched_ = &solution;
@@ -1311,7 +1315,7 @@ private:
 
 void testExpandedMoves() {
     std::printf("== Moves: Or-opt + tail swap (2-opt*) ==\n");
-    {   // 2 routes with the full move mix under ScoreChecks::Full + conservation.
+    {  // 2 routes with the full move mix under ScoreChecks::Full + conservation.
         TspSolution s = buildRandomTsp(2, 24);
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);
@@ -1338,7 +1342,7 @@ void testExpandedMoves() {
         check(!threw, "Or-opt + tail swap pass ScoreChecks::Full (2 routes)");
         check(conserved, "elements conserved with the expanded move mix");
     }
-    {   // Single route: expanded mix still reaches the brute-force optimum
+    {  // Single route: expanded mix still reaches the brute-force optimum
         // (tail swap auto-disables with one list).
         TspSolution s = buildTsp(1);
         const double optimum = bruteForceTspOptimum(buildTsp(1));
@@ -1365,12 +1369,10 @@ void testScoreAnalysis(const Score& optimum) {
     composite.add(std::make_unique<TaskConflictComponent>(), "task conflict");
     composite.add(std::make_unique<TaskCostComponent>(), "task cost");
 
-    optimaru::ScoreBreakdown analysis =
-            optimaru::explain_score(s, composite);
+    optimaru::ScoreBreakdown analysis = optimaru::explain_score(s, composite);
     Score expected = fullScore(s);
     check(analysis.score == expected, "analysis total matches the full recompute");
-    check(analysis.constraints.size() == 2 &&
-                  analysis.constraints[0].name == "task conflict" &&
+    check(analysis.constraints.size() == 2 && analysis.constraints[0].name == "task conflict" &&
                   analysis.constraints[0].score == Score{expected.hard, 0.0} &&
                   analysis.constraints[1].name == "task cost" &&
                   analysis.constraints[1].score == Score{0, expected.soft},
@@ -1401,8 +1403,8 @@ void testScoreAnalysis(const Score& optimum) {
 struct TaConflict final : optimaru::UnitConstraint<TaskAssignment> {
     std::vector<std::vector<char>> adj;
     TaConflict(const TaskAssignment& s, double weight)
-            : UnitConstraint("conflict", weight, optimaru::Level::Hard),
-              adj(s.assignment.size(), std::vector<char>(s.assignment.size(), 0)) {
+        : UnitConstraint("conflict", weight, optimaru::Level::Hard),
+          adj(s.assignment.size(), std::vector<char>(s.assignment.size(), 0)) {
         for (auto [a, b] : s.conflicts) adj[a][b] = adj[b][a] = 1;
     }
     double cost(const TaskAssignment&, int, const std::vector<int>& members) const override {
@@ -1416,7 +1418,7 @@ struct TaConflict final : optimaru::UnitConstraint<TaskAssignment> {
     }
     bool supports_delta() const override { return true; }
     double delta_cost(const TaskAssignment&, int, const std::vector<int>& members,
-                     int entity) const override {
+                      int entity) const override {
         double c = 0;
         for (int t : members) {
             if (t != entity && adj[entity][t]) c += 1;
@@ -1428,26 +1430,24 @@ struct TaConflict final : optimaru::UnitConstraint<TaskAssignment> {
 template <bool WithDelta>
 struct TaCost final : optimaru::UnitConstraint<TaskAssignment> {
     explicit TaCost(double weight, double exp = 1.0)
-            : UnitConstraint(WithDelta ? "cost" : "cost (no delta)", weight,
-                             optimaru::Level::Soft) {
+        : UnitConstraint(WithDelta ? "cost" : "cost (no delta)", weight, optimaru::Level::Soft) {
         exponent = exp;
     }
-    double cost(const TaskAssignment& s, int unit,
-                const std::vector<int>& members) const override {
+    double cost(const TaskAssignment& s, int unit, const std::vector<int>& members) const override {
         double c = 0;
         for (int t : members) c += static_cast<double>(s.cost[t][unit]);
         return c;
     }
     bool supports_delta() const override { return WithDelta; }
     double delta_cost(const TaskAssignment& s, int unit, const std::vector<int>&,
-                     int entity) const override {
+                      int entity) const override {
         return static_cast<double>(s.cost[entity][unit]);
     }
 };
 
 struct TaBalance final : optimaru::GlobalConstraint<TaskAssignment> {
     explicit TaBalance(double weight)
-            : GlobalConstraint("balance", weight, optimaru::Level::Soft) {}
+        : GlobalConstraint("balance", weight, optimaru::Level::Soft) {}
     std::vector<long> counts;
     void reset(const TaskAssignment&,
                const std::vector<std::vector<int>>& members_per_unit) override {
@@ -1455,12 +1455,12 @@ struct TaBalance final : optimaru::GlobalConstraint<TaskAssignment> {
         for (const auto& m : members_per_unit) counts.push_back(static_cast<long>(m.size()));
     }
     void on_unit_changed(const TaskAssignment&, int unit,
-                       const std::vector<int>& members) override {
+                         const std::vector<int>& members) override {
         counts[unit] = static_cast<long>(members.size());
     }
     bool supports_member_change() const override { return true; }
-    void on_member_changed(const TaskAssignment& s, int unit,
-                         const std::vector<int>& members, int, bool) override {
+    void on_member_changed(const TaskAssignment& s, int unit, const std::vector<int>& members, int,
+                           bool) override {
         on_unit_changed(s, unit, members);
     }
     double cost() const override {
@@ -1607,12 +1607,13 @@ struct TspLongestRoute final : optimaru::GlobalConstraint<TspSolution> {
     double cost() const override { return *std::max_element(lengths_.begin(), lengths_.end()); }
     bool supports_preview() const override { return previews_; }
     double preview_cost(const TspSolution& s, const optimaru::PreviewedUnit* changes,
-                       int count) const override {
+                        int count) const override {
         double longest = 0.0;
         for (std::size_t u = 0; u < lengths_.size(); ++u) {
             double length = lengths_[u];
             for (int i = 0; i < count; ++i)
-                if (changes[i].unit == static_cast<int>(u)) length = routeLength(s, *changes[i].members);
+                if (changes[i].unit == static_cast<int>(u))
+                    length = routeLength(s, *changes[i].members);
             longest = std::max(longest, length);
         }
         return longest;
@@ -1627,7 +1628,8 @@ struct TspLongestRoute final : optimaru::GlobalConstraint<TspSolution> {
 // so a preview is O(pieces) instead of a walk of the candidate route.
 struct TspSumsContext final : optimaru::SharedConstraintContext {
     const TspSolution* solution = nullptr;
-    std::vector<std::vector<double>> cumDist, cumRevDist;  // internal legs, index k = first k cities
+    std::vector<std::vector<double>> cumDist,
+            cumRevDist;  // internal legs, index k = first k cities
     int refreshes = 0;
 
     void prepare(const TspSolution& s) {
@@ -1661,11 +1663,16 @@ struct TspSumsContext final : optimaru::SharedConstraintContext {
             if (piece.detached()) {
                 head = tail = piece.begin;
             } else {
-                const std::vector<int>& route = solution->routes[static_cast<std::size_t>(piece.list)];
-                head = route[static_cast<std::size_t>(piece.reversed ? piece.end - 1 : piece.begin)];
-                tail = route[static_cast<std::size_t>(piece.reversed ? piece.begin : piece.end - 1)];
-                const std::vector<double>& sums = piece.reversed ? cumRevDist[piece.list] : cumDist[piece.list];
-                total += sums[static_cast<std::size_t>(piece.end)] - sums[static_cast<std::size_t>(piece.begin + 1)];
+                const std::vector<int>& route =
+                        solution->routes[static_cast<std::size_t>(piece.list)];
+                head = route[static_cast<std::size_t>(piece.reversed ? piece.end - 1
+                                                                     : piece.begin)];
+                tail = route[static_cast<std::size_t>(piece.reversed ? piece.begin
+                                                                     : piece.end - 1)];
+                const std::vector<double>& sums =
+                        piece.reversed ? cumRevDist[piece.list] : cumDist[piece.list];
+                total += sums[static_cast<std::size_t>(piece.end)] -
+                         sums[static_cast<std::size_t>(piece.begin + 1)];
             }
             if (previous >= 0) total += dist(*solution, previous, head);
             if (first < 0) first = head;
@@ -1695,7 +1702,7 @@ struct TspRouteLengthSums final : optimaru::UnitConstraint<TspSolution> {
     }
     bool supports_piecewise_preview() const override { return piecewise_; }
     bool piecewise_cost(const TspSolution&, int, const optimaru::ListPiece* pieces, int count,
-                       double& out) const override {
+                        double& out) const override {
         ++piecewiseCalls;
         out = sums_->lengthOf(pieces, count);
         return true;
@@ -1726,15 +1733,15 @@ struct TspLongestRouteSums final : optimaru::GlobalConstraint<TspSolution> {
     double cost() const override { return *std::max_element(lengths_.begin(), lengths_.end()); }
     bool supports_preview() const override { return true; }
     double preview_cost(const TspSolution& s, const optimaru::PreviewedUnit* changes,
-                       int count) const override {
+                        int count) const override {
         ++materializedCalls;
         return longest(changes, count, [&](const optimaru::PreviewedUnit& c) {
             return routeLength(s, *c.members);
         });
     }
     bool supports_piecewise_preview() const override { return true; }
-    bool piecewise_preview_cost(const TspSolution&, const optimaru::PreviewedUnit* changes, int count,
-                              double& out) const override {
+    bool piecewise_preview_cost(const TspSolution&, const optimaru::PreviewedUnit* changes,
+                                int count, double& out) const override {
         ++piecewiseCalls;
         out = longest(changes, count, [&](const optimaru::PreviewedUnit& c) {
             return sums_->lengthOf(c.pieces, c.piece_count);
@@ -1779,7 +1786,8 @@ void testDecomposedPiecewisePreviews() {
         calculator.add(std::move(globalOwned));
         optimaru::Editor<TspSolution> editor(s, calculator);
         Run result;
-        result.parity = optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/23, 3000);
+        result.parity =
+                optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/23, 3000);
         result.costCalls = unit->costCalls;
         result.piecewiseUnit = unit->piecewiseCalls;
         result.piecewiseGlobal = global->piecewiseCalls;
@@ -1789,11 +1797,12 @@ void testDecomposedPiecewisePreviews() {
     {
         const Run on = run(true);
         const Run off = run(false);
-        std::printf("    %d moves checked, %d previewed, %d declined; %d piecewise unit answers, "
-                    "%d piecewise global answers, %d materialized global answers; cost() calls "
-                    "%d piecewise vs %d materialized\n",
-                    on.parity.checked, on.parity.previewed, on.parity.declined, on.piecewiseUnit,
-                    on.piecewiseGlobal, on.materializedGlobal, on.costCalls, off.costCalls);
+        std::printf(
+                "    %d moves checked, %d previewed, %d declined; %d piecewise unit answers, "
+                "%d piecewise global answers, %d materialized global answers; cost() calls "
+                "%d piecewise vs %d materialized\n",
+                on.parity.checked, on.parity.previewed, on.parity.declined, on.piecewiseUnit,
+                on.piecewiseGlobal, on.materializedGlobal, on.costCalls, off.costCalls);
         check(on.parity.all_equal() && on.parity.declined == 0 && on.parity.previewed > 1500,
               "piecewise unit + piecewise global: every preview equals the applied score");
         check(on.piecewiseUnit >= on.parity.previewed &&
@@ -1829,7 +1838,8 @@ void testDecomposedPiecewisePreviews() {
         optimaru::Editor<TspSolution> editor(s, calculator);
         const optimaru::testing::PreviewParity parity =
                 optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/29, 2000);
-        check(parity.all_equal() && parity.declined == 0 && unit->piecewiseCalls >= parity.previewed,
+        check(parity.all_equal() && parity.declined == 0 &&
+                      unit->piecewiseCalls >= parity.previewed,
               "piecewise unit + materializing global: every preview equals the applied score");
     }
 }
@@ -1947,9 +1957,7 @@ void testConstraintAssembly() {
     // A name held several times: its name alone does not say which instance,
     // so every by-name edit and lookup throws instead of touching the first
     // and leaving the others in the score.
-    auto repeated = [&] {
-        return defaults().add_instance(std::make_unique<TaConflict>(s, 3.0));
-    };
+    auto repeated = [&] { return defaults().add_instance(std::make_unique<TaConflict>(s, 3.0)); };
     check(repeated().size() == 4 && repeated().instance_count("conflict") == 2 &&
                   repeated().instance_count("cost") == 1 && repeated().instance_count("nope") == 0,
           "instance_count() counts the instances of a name");
@@ -1979,7 +1987,8 @@ void testConstraintAssembly() {
     // The instance overloads say which one (from 0, in the order added).
     check(repeated().find("conflict", 0)->weight == 2.0 &&
                   repeated().find("conflict", 1)->weight == 3.0 &&
-                  repeated().find("conflict", 2) == nullptr && repeated().find("nope", 0) == nullptr,
+                  repeated().find("conflict", 2) == nullptr &&
+                  repeated().find("nope", 0) == nullptr,
           "find(name, instance) reads one instance, nullptr past the last");
     check(scoreOf(repeated().weight("conflict", 1, 0.0)) == scoreOf(defaults()),
           "weight(name, 1, 0) takes the second instance out of the score");
@@ -2031,7 +2040,7 @@ void testConstraintAssembly() {
 void testBackgroundSolveAndLimits() {
     std::printf("== background solve + stall_step_limit ==\n");
     using Clock = std::chrono::steady_clock;
-    {   // stall_step_limit fires long before the 30s time_limit.
+    {  // stall_step_limit fires long before the 30s time_limit.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);
@@ -2040,10 +2049,9 @@ void testBackgroundSolveAndLimits() {
         TaskAssignmentCalculator calculator;
         optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
-        check(sec < 5.0,
-              "stall_step_limit terminates early (" + std::to_string(sec) + "s)");
+        check(sec < 5.0, "stall_step_limit terminates early (" + std::to_string(sec) + "s)");
     }
-    {   // solve_in_background: request_stop stops a 30s solve quickly.
+    {  // solve_in_background: request_stop stops a 30s solve quickly.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);
@@ -2056,10 +2064,11 @@ void testBackgroundSolveAndLimits() {
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
         bool done = job.status() == optimaru::SolveStatus::Idle;
         check(wasActive && done && sec < 5.0,
-              "BackgroundSolve reports status and request_stop stops in " + std::to_string(sec) + "s");
+              "BackgroundSolve reports status and request_stop stops in " + std::to_string(sec) +
+                      "s");
         check(final == fullScore(s), "job's final best score matches the returned solution");
     }
-    {   // Assigning a new job over a running one stops and joins the old one
+    {  // Assigning a new job over a running one stops and joins the old one
         // first, so the Solver its thread is running is never freed under it.
         TaskAssignment s1 = buildTaskInstance();
         TaskAssignment s2 = buildTaskInstance();
@@ -2072,11 +2081,10 @@ void testBackgroundSolveAndLimits() {
         job.request_stop();
         job.wait();
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
-        check(sec < 5.0,
-              "assigning over a running BackgroundSolve stops the old solve (" +
-                      std::to_string(sec) + "s)");
+        check(sec < 5.0, "assigning over a running BackgroundSolve stops the old solve (" +
+                                 std::to_string(sec) + "s)");
     }
-    {   // An exception inside the background solve reaches wait() instead of
+    {  // An exception inside the background solve reaches wait() instead of
         // terminating the process.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;

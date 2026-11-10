@@ -48,26 +48,21 @@
 using namespace ks;
 using namespace ks_test;
 
-namespace
-{
+namespace {
 
 // Scores `problem`'s current selection with a freshly reset assembly.
-Score scoreWith(DecomposedCalculator &calculator, KnapsackProblem &problem)
-{
+Score scoreWith(DecomposedCalculator& calculator, KnapsackProblem& problem) {
     ScoreCalculator::prepare(problem);
     calculator.rebuild(problem);
     return calculator.score();
 }
 
 // One raw total per assembled component, in assembly order.
-std::vector<double> rawTotals(const DecomposedCalculator &calculator)
-{
+std::vector<double> rawTotals(const DecomposedCalculator& calculator) {
     std::vector<double> totals;
-    for (const auto &entry : calculator.constraint_costs())
-    {
+    for (const auto& entry : calculator.constraint_costs()) {
         double sum = 0.0;
-        for (double cost : entry.unit_costs)
-            sum += cost;
+        for (double cost : entry.unit_costs) sum += cost;
         totals.push_back(sum);
     }
     return totals;
@@ -75,53 +70,55 @@ std::vector<double> rawTotals(const DecomposedCalculator &calculator)
 
 // The raw totals the default assembly must report for `raw` (the monolith's
 // full recompute), in catalog order; the reward's raw cost is -value.
-std::vector<double> expectedTotals(const RawCosts &raw)
-{
-    return {static_cast<double>(raw.capacityOverflow),  static_cast<double>(raw.resourceOverflow),
-            static_cast<double>(raw.missingMandatory),  static_cast<double>(raw.chosenForbidden),
-            static_cast<double>(raw.groupViolation),    static_cast<double>(raw.unmetDependencies),
+std::vector<double> expectedTotals(const RawCosts& raw) {
+    return {static_cast<double>(raw.capacityOverflow),
+            static_cast<double>(raw.resourceOverflow),
+            static_cast<double>(raw.missingMandatory),
+            static_cast<double>(raw.chosenForbidden),
+            static_cast<double>(raw.groupViolation),
+            static_cast<double>(raw.unmetDependencies),
             -static_cast<double>(raw.value)};
 }
 
-const char *const kCatalogNames[] = {"knapsackCapacityCost",     "resourceCapacityCost", "mandatoryItemsCost",
-                                     "forbiddenItemsCost",       "selectionGroupBoundsCost",
-                                     "itemDependencyCost",       "selectedValueCost"};
+const char* const kCatalogNames[] = {"knapsackCapacityCost",     "resourceCapacityCost",
+                                     "mandatoryItemsCost",       "forbiddenItemsCost",
+                                     "selectionGroupBoundsCost", "itemDependencyCost",
+                                     "selectedValueCost"};
 
 // -------------------------------------------------------------------------
 // (a) The default assembly == the monolithic full recompute.
 // -------------------------------------------------------------------------
-void verifyAssemblyParity()
-{
+void verifyAssemblyParity() {
     std::printf("== (a) Default assembly == monolithic score ==\n");
     int mismatches = 0;
     int costMismatches = 0;
     const int rounds = 500;
-    for (int round = 0; round < rounds; ++round)
-    {
+    for (int round = 0; round < rounds; ++round) {
         KnapsackProblem p = randomInstance(5 + round % 25, 1000 + round, 0.1);
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
         const Score plugin = scoreWith(calculator, p);
         const Score monolithic = ScoreCalculator::score(p);
-        if (!(plugin == monolithic) && ++mismatches <= 3)
-        {
+        if (!(plugin == monolithic) && ++mismatches <= 3) {
             std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n", round,
                         plugin.str().c_str(), monolithic.str().c_str());
         }
-        if (rawTotals(calculator) != expectedTotals(ScoreCalculator::rawCosts(p)) && ++costMismatches <= 3)
+        if (rawTotals(calculator) != expectedTotals(ScoreCalculator::rawCosts(p)) &&
+            ++costMismatches <= 3)
             std::printf("  RAW COST MISMATCH @round %d\n", round);
     }
-    check(mismatches == 0, std::to_string(rounds) + " random instances score identically (bit for bit)");
+    check(mismatches == 0,
+          std::to_string(rounds) + " random instances score identically (bit for bit)");
     check(costMismatches == 0,
-          std::to_string(rounds) + " random instances: every raw total == ScoreCalculator::rawCosts");
+          std::to_string(rounds) +
+                  " random instances: every raw total == ScoreCalculator::rawCosts");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
 // (b) Incremental == full recompute across a random walk, per constraint.
 // -------------------------------------------------------------------------
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (b) Plugin incremental == full recompute, per constraint ==\n");
     KnapsackProblem p = randomInstance(40, 7, 0.1);
     ScoreCalculator::prepare(p);
@@ -137,16 +134,12 @@ void verifyIncremental()
     int costMismatches = 0;
     int nonZero[7] = {0, 0, 0, 0, 0, 0, 0};
     const int steps = 3000;
-    for (int step = 0; step < steps; ++step)
-    {
-        if (unit(rng) < 0.6)
-        {
+    for (int step = 0; step < steps; ++step) {
+        if (unit(rng) < 0.6) {
             const int item = static_cast<int>(rng() % n);
             const int value = unit(rng) < 0.15 ? kUndecided : static_cast<int>(rng() % 2);
             editor.assign(item, value);
-        }
-        else
-        {
+        } else {
             editor.begin_batch();
             const int a = static_cast<int>(rng() % n);
             const int b = static_cast<int>(rng() % n);
@@ -155,35 +148,31 @@ void verifyIncremental()
             editor.assign(b, va);
             editor.end_batch();
         }
-        for (int i = 0; i < n; ++i)
-            shadow.items[i].selected = p.items[i].selected;
+        for (int i = 0; i < n; ++i) shadow.items[i].selected = p.items[i].selected;
         const Score full = ScoreCalculator::score(shadow);
         const Score incremental = editor.score();
-        if (!(full == incremental) && ++mismatches <= 3)
-        {
+        if (!(full == incremental) && ++mismatches <= 3) {
             std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
                         incremental.str().c_str(), full.str().c_str());
         }
         const std::vector<double> expected = expectedTotals(ScoreCalculator::rawCosts(shadow));
         const std::vector<double> running = rawTotals(calculator);
-        for (int c = 0; c < 7; ++c)
-        {
-            if (running[c] != expected[c] && ++costMismatches <= 3)
-            {
+        for (int c = 0; c < 7; ++c) {
+            if (running[c] != expected[c] && ++costMismatches <= 3) {
                 std::printf("  RAW COST MISMATCH @step %d %s: incremental=%g full=%g\n", step,
                             kCatalogNames[c], running[c], expected[c]);
             }
-            if (expected[c] != 0.0)
-                ++nonZero[c];
+            if (expected[c] != 0.0) ++nonZero[c];
         }
     }
-    check(mismatches == 0, std::to_string(steps) + " random moves, incremental score == full recompute");
+    check(mismatches == 0,
+          std::to_string(steps) + " random moves, incremental score == full recompute");
     check(costMismatches == 0,
-          std::to_string(steps) + " random moves, every constraint's incremental raw total == full recompute");
-    for (int c = 0; c < 7; ++c)
-    {
-        check(nonZero[c] > 0, std::string(kCatalogNames[c]) + " is non-zero on " + std::to_string(nonZero[c])
-                                  + " of the walk's states");
+          std::to_string(steps) +
+                  " random moves, every constraint's incremental raw total == full recompute");
+    for (int c = 0; c < 7; ++c) {
+        check(nonZero[c] > 0, std::string(kCatalogNames[c]) + " is non-zero on " +
+                                      std::to_string(nonZero[c]) + " of the walk's states");
     }
     std::printf("\n");
 }
@@ -191,8 +180,7 @@ void verifyIncremental()
 // -------------------------------------------------------------------------
 // (c) Partial assemblies.
 // -------------------------------------------------------------------------
-void verifyPartialAssemblies()
-{
+void verifyPartialAssemblies() {
     std::printf("== (c) Partial assemblies ==\n");
     KnapsackProblem p = extendedInstance();
     select(p, {0});  // five hard terms of 1, value 5
@@ -202,20 +190,21 @@ void verifyPartialAssemblies()
         const Score score = scoreWith(calculator, p);
         check(score.hard == -5 && score.soft == 5.0, "full assembly: -5hard / 5soft");
     }
-    const char *hardNames[] = {"resourceCapacityCost", "mandatoryItemsCost", "forbiddenItemsCost",
+    const char* hardNames[] = {"resourceCapacityCost", "mandatoryItemsCost", "forbiddenItemsCost",
                                "selectionGroupBoundsCost", "itemDependencyCost"};
-    for (const char *name : hardNames)
-    {
+    for (const char* name : hardNames) {
         DecomposedCalculator calculator;
         defaultConstraints().drop(name).into(calculator);
         const Score score = scoreWith(calculator, p);
-        check(score.hard == -4 && score.soft == 5.0, std::string("without ") + name + ": exactly its 1 disappears");
+        check(score.hard == -4 && score.soft == 5.0,
+              std::string("without ") + name + ": exactly its 1 disappears");
     }
     {
         DecomposedCalculator calculator;
         defaultConstraints().drop("selectedValueCost").into(calculator);
         const Score score = scoreWith(calculator, p);
-        check(score.hard == -5 && score.soft == 0.0, "without selectedValueCost: the reward disappears");
+        check(score.hard == -5 && score.soft == 0.0,
+              "without selectedValueCost: the reward disappears");
     }
     std::printf("\n");
 }
@@ -223,8 +212,7 @@ void verifyPartialAssemblies()
 // -------------------------------------------------------------------------
 // (d) Overrides.
 // -------------------------------------------------------------------------
-void verifyOverrides()
-{
+void verifyOverrides() {
     std::printf("== (d) Weight / level / exponent overrides ==\n");
     // Two resources over by 2 and 3, A + B + C overweight by 5 (cap 10, 15).
     KnapsackProblem p = basicInstance();
@@ -236,28 +224,42 @@ void verifyOverrides()
     select(p, {0, 1});  // weight 10 fits; r1 over 2, r2 over 3; mandatory C x3 missing
     {
         DecomposedCalculator calculator;
-        defaultConstraints().soft("resourceCapacityCost").weight("resourceCapacityCost", 3).into(calculator);
+        defaultConstraints()
+                .soft("resourceCapacityCost")
+                .weight("resourceCapacityCost", 3)
+                .into(calculator);
         const Score score = scoreWith(calculator, p);
         check(score.hard == -3 && score.soft == 16.0 - 15.0,
               "resourceCapacityCost soft at weight 3: 3 * 5 soft, only mandatory stays hard");
     }
     {
         DecomposedCalculator calculator;
-        defaultConstraints().only({"resourceCapacityCost"}).exponent("resourceCapacityCost", 2).into(calculator);
+        defaultConstraints()
+                .only({"resourceCapacityCost"})
+                .exponent("resourceCapacityCost", 2)
+                .into(calculator);
         const Score score = scoreWith(calculator, p);
-        check(score.hard == -25, "resourceCapacityCost exponent 2 shapes the total: (2 + 3)^2 = 25");
+        check(score.hard == -25,
+              "resourceCapacityCost exponent 2 shapes the total: (2 + 3)^2 = 25");
     }
     {
         DecomposedCalculator calculator;
-        defaultConstraints().only({"mandatoryItemsCost"}).exponent("mandatoryItemsCost", 2).into(calculator);
+        defaultConstraints()
+                .only({"mandatoryItemsCost"})
+                .exponent("mandatoryItemsCost", 2)
+                .into(calculator);
         const Score score = scoreWith(calculator, p);
         check(score.hard == -9, "mandatoryItemsCost exponent 2: 3 misses -> 9");
     }
     {
         DecomposedCalculator calculator;
-        defaultConstraints().only({"selectedValueCost"}).exponent("selectedValueCost", 2).into(calculator);
+        defaultConstraints()
+                .only({"selectedValueCost"})
+                .exponent("selectedValueCost", 2)
+                .into(calculator);
         const Score score = scoreWith(calculator, p);
-        check(score.hard == 0 && score.soft == 256.0, "selectedValueCost exponent 2: +16^2 = 256 soft");
+        check(score.hard == 0 && score.soft == 256.0,
+              "selectedValueCost exponent 2: +16^2 = 256 soft");
     }
     {
         // Weight 0.5 on two hard constraints with 1 each: each rounds on its
@@ -266,12 +268,13 @@ void verifyOverrides()
         select(q, {0});
         DecomposedCalculator calculator;
         defaultConstraints()
-            .only({"mandatoryItemsCost", "forbiddenItemsCost"})
-            .weight("mandatoryItemsCost", 0.5)
-            .weight("forbiddenItemsCost", 0.5)
-            .into(calculator);
+                .only({"mandatoryItemsCost", "forbiddenItemsCost"})
+                .weight("mandatoryItemsCost", 0.5)
+                .weight("forbiddenItemsCost", 0.5)
+                .into(calculator);
         const Score score = scoreWith(calculator, q);
-        check(score.hard == -2, "two hard constraints at weight 0.5: hard rounds per constraint (-2)");
+        check(score.hard == -2,
+              "two hard constraints at weight 0.5: hard rounds per constraint (-2)");
     }
     {
         DecomposedCalculator calculator;
@@ -280,7 +283,8 @@ void verifyOverrides()
         p.mandatoryItems.clear();
         p.resources.clear();
         const Score score = scoreWith(calculator, p);
-        check(score.hard == 0 && score.soft == 24.0 - 5.0, "knapsackCapacityCost made soft: 5 over -> 5 soft");
+        check(score.hard == 0 && score.soft == 24.0 - 5.0,
+              "knapsackCapacityCost made soft: 5 over -> 5 soft");
     }
     std::printf("\n");
 }
@@ -288,8 +292,7 @@ void verifyOverrides()
 // -------------------------------------------------------------------------
 // (e) constraint_totals() explains the score.
 // -------------------------------------------------------------------------
-void verifyConstraintTotals()
-{
+void verifyConstraintTotals() {
     std::printf("== (e) constraintTotals() explains the score ==\n");
     KnapsackProblem p = randomInstance(30, 13);
     DecomposedCalculator calculator;
@@ -297,13 +300,14 @@ void verifyConstraintTotals()
     const Score score = scoreWith(calculator, p);
     double hard = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
+    for (const optimaru::ConstraintTotal& total : calculator.constraint_totals())
         (total.is_hard ? hard : soft) += total.cost;
-    check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9 && std::fabs(-soft - score.soft) < 1e-9,
+    check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9 &&
+                  std::fabs(-soft - score.soft) < 1e-9,
           "per-constraint totals sum to the reported score");
     check(calculator.constraint_totals().size() == 7, "one total per assembled component");
     bool oneEach = true;
-    for (const auto &entry : calculator.constraint_costs())
+    for (const auto& entry : calculator.constraint_costs())
         oneEach = oneEach && entry.is_global && entry.unit_costs.size() == 1;
     check(oneEach, "constraintCosts(): every component is global with one raw total");
     std::printf("\n");
@@ -312,8 +316,7 @@ void verifyConstraintTotals()
 // -------------------------------------------------------------------------
 // (f) ScoreChecks::Full solve on the plugin path.
 // -------------------------------------------------------------------------
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (f) FULL_ASSERT plugin solve ==\n");
     KnapsackProblem p = randomInstance(30, 11);
     Solver::Config config;
@@ -326,18 +329,14 @@ void verifyFullAssertSolve()
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
     bool corrupted = false;
-    try
-    {
+    try {
         Solver(config).solve(p, calculator);
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "FULL_ASSERT plugin solve without score corruption");
-    if (!corrupted)
-    {
+    if (!corrupted) {
         KnapsackProblem rescored = p;
         check(sameScore(p.score, ScoreCalculator::score(rescored)),
               "plugin-reported score == monolithic full recompute");
@@ -348,8 +347,7 @@ void verifyFullAssertSolve()
 // -------------------------------------------------------------------------
 // (g) The assembly builder.
 // -------------------------------------------------------------------------
-void verifyAssemblyBuilder()
-{
+void verifyAssemblyBuilder() {
     std::printf("== (g) defaultConstraints() builder ==\n");
     KnapsackProblem p = randomInstance(25, 17);
     DecomposedCalculator byHand;
@@ -366,22 +364,20 @@ void verifyAssemblyBuilder()
     const Score expected = scoreWith(byHand, p);
     DecomposedCalculator built;
     defaultConstraints()
-        .weight("resourceCapacityCost", 4)
-        .soft("forbiddenItemsCost")
-        .drop("itemDependencyCost")
-        .into(built);
-    check(sameScore(scoreWith(built, p), expected), "named edits == the same assembly listed by hand");
+            .weight("resourceCapacityCost", 4)
+            .soft("forbiddenItemsCost")
+            .drop("itemDependencyCost")
+            .into(built);
+    check(sameScore(scoreWith(built, p), expected),
+          "named edits == the same assembly listed by hand");
     DecomposedCalculator plain;
     defaultConstraints().into(plain);
     check(sameScore(scoreWith(plain, p), ScoreCalculator::score(p)),
           "defaultConstraints() alone == the monolithic score");
     bool threw = false;
-    try
-    {
+    try {
         defaultConstraints().weight("knapsackCapacityCosts", 4);
-    }
-    catch (const std::invalid_argument &)
-    {
+    } catch (const std::invalid_argument&) {
         threw = true;
     }
     check(threw, "a misspelled constraint name throws instead of doing nothing");
@@ -391,46 +387,51 @@ void verifyAssemblyBuilder()
 // -------------------------------------------------------------------------
 // (h) Raw costs by hand, read through constraint_costs().
 // -------------------------------------------------------------------------
-std::vector<double> rawCosts(KnapsackProblem &problem, const std::string &name)
-{
+std::vector<double> rawCosts(KnapsackProblem& problem, const std::string& name) {
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
     scoreWith(calculator, problem);
-    for (const auto &entry : calculator.constraint_costs())
-    {
-        if (entry.name == name)
-            return entry.unit_costs;
+    for (const auto& entry : calculator.constraint_costs()) {
+        if (entry.name == name) return entry.unit_costs;
     }
     return {};
 }
 
 using Costs = std::vector<double>;
 
-void verifyRawCostsByHand()
-{
+void verifyRawCostsByHand() {
     std::printf("== (h) Raw costs by hand, positive and zero ==\n");
     {
         KnapsackProblem p = basicInstance();
         select(p, {0, 2});  // 11 on 10
-        check(rawCosts(p, "knapsackCapacityCost") == Costs{1.0}, "knapsackCapacityCost: [1] (A+C, 11 on 10)");
-        check(rawCosts(p, "selectedValueCost") == Costs{-17.0}, "selectedValueCost: [-17] (the reward, A+C)");
+        check(rawCosts(p, "knapsackCapacityCost") == Costs{1.0},
+              "knapsackCapacityCost: [1] (A+C, 11 on 10)");
+        check(rawCosts(p, "selectedValueCost") == Costs{-17.0},
+              "selectedValueCost: [-17] (the reward, A+C)");
         select(p, {0, 1});  // exactly 10
-        check(rawCosts(p, "knapsackCapacityCost") == Costs{0.0}, "knapsackCapacityCost: [0] at exactly 10");
+        check(rawCosts(p, "knapsackCapacityCost") == Costs{0.0},
+              "knapsackCapacityCost: [0] at exactly 10");
         select(p, {});
-        check(rawCosts(p, "selectedValueCost") == Costs{0.0}, "selectedValueCost: [0] with nothing selected");
+        check(rawCosts(p, "selectedValueCost") == Costs{0.0},
+              "selectedValueCost: [0] with nothing selected");
     }
     {
         KnapsackProblem p = extendedInstance();
         select(p, {0});
-        check(rawCosts(p, "resourceCapacityCost") == Costs{1.0}, "resourceCapacityCost: [1] (labor 3 on 2)");
-        check(rawCosts(p, "mandatoryItemsCost") == Costs{1.0}, "mandatoryItemsCost: [1] (C left out)");
-        check(rawCosts(p, "forbiddenItemsCost") == Costs{1.0}, "forbiddenItemsCost: [1] (A selected)");
-        check(rawCosts(p, "selectionGroupBoundsCost") == Costs{1.0}, "selectionGroupBoundsCost: [1] (1 of min 2)");
-        check(rawCosts(p, "itemDependencyCost") == Costs{1.0}, "itemDependencyCost: [1] (A without B)");
+        check(rawCosts(p, "resourceCapacityCost") == Costs{1.0},
+              "resourceCapacityCost: [1] (labor 3 on 2)");
+        check(rawCosts(p, "mandatoryItemsCost") == Costs{1.0},
+              "mandatoryItemsCost: [1] (C left out)");
+        check(rawCosts(p, "forbiddenItemsCost") == Costs{1.0},
+              "forbiddenItemsCost: [1] (A selected)");
+        check(rawCosts(p, "selectionGroupBoundsCost") == Costs{1.0},
+              "selectionGroupBoundsCost: [1] (1 of min 2)");
+        check(rawCosts(p, "itemDependencyCost") == Costs{1.0},
+              "itemDependencyCost: [1] (A without B)");
         select(p, {1, 2});
-        for (const char *name : {"resourceCapacityCost", "mandatoryItemsCost", "forbiddenItemsCost",
-                                 "selectionGroupBoundsCost", "itemDependencyCost", "knapsackCapacityCost"})
-        {
+        for (const char* name :
+             {"resourceCapacityCost", "mandatoryItemsCost", "forbiddenItemsCost",
+              "selectionGroupBoundsCost", "itemDependencyCost", "knapsackCapacityCost"}) {
             check(rawCosts(p, name) == Costs{0.0}, std::string(name) + ": [0] on {B, C}");
         }
     }
@@ -442,20 +443,26 @@ void verifyRawCostsByHand()
         p.forbiddenItems = {1, 1, 1};
         p.items[0].requiredItems = {1, 1, 0};
         select(p, {0, 1});
-        check(rawCosts(p, "mandatoryItemsCost") == Costs{2.0}, "mandatoryItemsCost: [2] for [C, C]");
-        check(rawCosts(p, "forbiddenItemsCost") == Costs{3.0}, "forbiddenItemsCost: [3] for [B, B, B]");
-        check(rawCosts(p, "itemDependencyCost") == Costs{0.0}, "itemDependencyCost: [0], B selected, A->A never");
+        check(rawCosts(p, "mandatoryItemsCost") == Costs{2.0},
+              "mandatoryItemsCost: [2] for [C, C]");
+        check(rawCosts(p, "forbiddenItemsCost") == Costs{3.0},
+              "forbiddenItemsCost: [3] for [B, B, B]");
+        check(rawCosts(p, "itemDependencyCost") == Costs{0.0},
+              "itemDependencyCost: [0], B selected, A->A never");
         select(p, {0});
-        check(rawCosts(p, "itemDependencyCost") == Costs{2.0}, "itemDependencyCost: [2] for requires [B, B]");
+        check(rawCosts(p, "itemDependencyCost") == Costs{2.0},
+              "itemDependencyCost: [2] for requires [B, B]");
     }
     {
         // Group excess, no maximum = no excess.
         KnapsackProblem p = basicInstance();
         p.selectionGroups.push_back({"g", {0, 1, 2}, 0, 1});
         select(p, {0, 1, 2});
-        check(rawCosts(p, "selectionGroupBoundsCost") == Costs{2.0}, "selectionGroupBoundsCost: [2] (3 of max 1)");
+        check(rawCosts(p, "selectionGroupBoundsCost") == Costs{2.0},
+              "selectionGroupBoundsCost: [2] (3 of max 1)");
         p.selectionGroups[0].maxSelected.reset();
-        check(rawCosts(p, "selectionGroupBoundsCost") == Costs{0.0}, "selectionGroupBoundsCost: [0] without a max");
+        check(rawCosts(p, "selectionGroupBoundsCost") == Costs{0.0},
+              "selectionGroupBoundsCost: [0] without a max");
     }
     std::printf("\n");
 }
@@ -463,42 +470,38 @@ void verifyRawCostsByHand()
 // -------------------------------------------------------------------------
 // (i) The catalog and the reward guards.
 // -------------------------------------------------------------------------
-bool throwsInvalid(const std::function<void()> &edit)
-{
-    try
-    {
+bool throwsInvalid(const std::function<void()>& edit) {
+    try {
         edit();
-    }
-    catch (const std::invalid_argument &)
-    {
+    } catch (const std::invalid_argument&) {
         return true;
     }
     return false;
 }
 
 template <typename Component>
-bool rowIs(const optimaru::ConstraintInfo &row, const char *name, optimaru::Level level, double weight,
-           bool reward = false)
-{
-    return row.name == name && row.default_level == Component::kDefaultLevel
-           && row.default_weight == Component::kDefaultWeight && row.default_level == level
-           && row.default_weight == weight && row.level_flippable == !reward && row.reward == reward
-           && row.is_global && row.default_enabled;
+bool rowIs(const optimaru::ConstraintInfo& row, const char* name, optimaru::Level level,
+           double weight, bool reward = false) {
+    return row.name == name && row.default_level == Component::kDefaultLevel &&
+           row.default_weight == Component::kDefaultWeight && row.default_level == level &&
+           row.default_weight == weight && row.level_flippable == !reward && row.reward == reward &&
+           row.is_global && row.default_enabled;
 }
 
-void verifyCatalog()
-{
+void verifyCatalog() {
     std::printf("== (i) Catalog and guards ==\n");
     using optimaru::Level;
     const auto rows = defaultConstraints().info();
-    check(rows.size() == 7
-              && rowIs<KnapsackCapacityCost>(rows[0], "knapsackCapacityCost", Level::Hard, 1.0)
-              && rowIs<ResourceCapacityCost>(rows[1], "resourceCapacityCost", Level::Hard, 1.0)
-              && rowIs<MandatoryItemsCost>(rows[2], "mandatoryItemsCost", Level::Hard, 1.0)
-              && rowIs<ForbiddenItemsCost>(rows[3], "forbiddenItemsCost", Level::Hard, 1.0)
-              && rowIs<SelectionGroupBoundsCost>(rows[4], "selectionGroupBoundsCost", Level::Hard, 1.0)
-              && rowIs<ItemDependencyCost>(rows[5], "itemDependencyCost", Level::Hard, 1.0)
-              && rowIs<SelectedValueCost>(rows[6], "selectedValueCost", Level::Soft, 1.0, /*reward=*/true),
+    check(rows.size() == 7 &&
+                  rowIs<KnapsackCapacityCost>(rows[0], "knapsackCapacityCost", Level::Hard, 1.0) &&
+                  rowIs<ResourceCapacityCost>(rows[1], "resourceCapacityCost", Level::Hard, 1.0) &&
+                  rowIs<MandatoryItemsCost>(rows[2], "mandatoryItemsCost", Level::Hard, 1.0) &&
+                  rowIs<ForbiddenItemsCost>(rows[3], "forbiddenItemsCost", Level::Hard, 1.0) &&
+                  rowIs<SelectionGroupBoundsCost>(rows[4], "selectionGroupBoundsCost", Level::Hard,
+                                                  1.0) &&
+                  rowIs<ItemDependencyCost>(rows[5], "itemDependencyCost", Level::Hard, 1.0) &&
+                  rowIs<SelectedValueCost>(rows[6], "selectedValueCost", Level::Soft, 1.0,
+                                           /*reward=*/true),
           "info() == the components' constants, in catalog order");
     check(throwsInvalid([] { defaultConstraints().hard("selectedValueCost"); }),
           "hard() on the selectedValueCost reward throws");
@@ -519,12 +522,9 @@ void verifyCatalog()
         DecomposedCalculator calculator;
         defaultConstraints().level("forbiddenItemsCost", Level::Medium).into(calculator);
         bool threw = false;
-        try
-        {
+        try {
             calculator.rebuild(p);
-        }
-        catch (const std::logic_error &)
-        {
+        } catch (const std::logic_error&) {
             threw = true;
         }
         check(threw, "a medium constraint is refused at reset (no medium fold)");
@@ -535,12 +535,9 @@ void verifyCatalog()
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
         bool threw = false;
-        try
-        {
+        try {
             calculator.rebuild(p);
-        }
-        catch (const std::logic_error &)
-        {
+        } catch (const std::logic_error&) {
             threw = true;
         }
         check(threw, "an unprepared problem is refused");
@@ -555,8 +552,7 @@ void verifyCatalog()
 // build it from a pick list. Every knapsack constraint is global, so the
 // offset shapes each instance's single total.
 // -------------------------------------------------------------------------
-ConstraintAssembly copyOf(const std::string &name)
-{
+ConstraintAssembly copyOf(const std::string& name) {
     ConstraintAssembly copy = defaultConstraints();
     copy.only({name});
     return copy;
@@ -565,8 +561,7 @@ ConstraintAssembly copyOf(const std::string &name)
 // The (d) instance: A + B selected (weight 10 fits), resource overflow
 // 2 + 3 = 5, mandatory C missing three times, value 9 + 7 = 16; the
 // capacity, forbidden, group and dependency totals are 0.
-KnapsackProblem shiftedInstance()
-{
+KnapsackProblem shiftedInstance() {
     KnapsackProblem p = basicInstance();
     p.resources.push_back({"r1", 1});
     p.resources.push_back({"r2", 0});
@@ -577,8 +572,7 @@ KnapsackProblem shiftedInstance()
     return p;
 }
 
-Score scoreOf(ConstraintAssembly assembly, KnapsackProblem p)
-{
+Score scoreOf(ConstraintAssembly assembly, KnapsackProblem p) {
     DecomposedCalculator calculator;
     assembly.into(calculator);
     return scoreWith(calculator, p);
@@ -589,58 +583,61 @@ Score scoreOf(ConstraintAssembly assembly, KnapsackProblem p)
 // hard weight). Hard refuses the literal formula with an offset, so the
 // literal copies of the hard penalties sit on soft, next to a hard threshold
 // copy with the same knobs.
-ConstraintAssembly repeatedAssembly()
-{
+ConstraintAssembly repeatedAssembly() {
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("resourceCapacityCost", 3.0);
     assembly.offset("selectedValueCost", 40.0).clip("selectedValueCost", false);
     assembly.add_instances(std::move(copyOf("resourceCapacityCost")
-                                        .weight("resourceCapacityCost", 0.5)
-                                        .exponent("resourceCapacityCost", 2.0)));
-    assembly.add_instances(std::move(
-        copyOf("knapsackCapacityCost").weight("knapsackCapacityCost", 2.0).offset("knapsackCapacityCost", 5.0)));
+                                             .weight("resourceCapacityCost", 0.5)
+                                             .exponent("resourceCapacityCost", 2.0)));
     assembly.add_instances(std::move(copyOf("knapsackCapacityCost")
-                                        .soft("knapsackCapacityCost")
-                                        .weight("knapsackCapacityCost", 2.0)
-                                        .offset("knapsackCapacityCost", 5.0)
-                                        .clip("knapsackCapacityCost", false)));
-    assembly.add_instances(std::move(copyOf("mandatoryItemsCost").offset("mandatoryItemsCost", -1.0)));
-    assembly.add_instances(std::move(
-        copyOf("forbiddenItemsCost").weight("forbiddenItemsCost", 1.5).offset("forbiddenItemsCost", -0.5)));
+                                             .weight("knapsackCapacityCost", 2.0)
+                                             .offset("knapsackCapacityCost", 5.0)));
+    assembly.add_instances(std::move(copyOf("knapsackCapacityCost")
+                                             .soft("knapsackCapacityCost")
+                                             .weight("knapsackCapacityCost", 2.0)
+                                             .offset("knapsackCapacityCost", 5.0)
+                                             .clip("knapsackCapacityCost", false)));
+    assembly.add_instances(
+            std::move(copyOf("mandatoryItemsCost").offset("mandatoryItemsCost", -1.0)));
     assembly.add_instances(std::move(copyOf("forbiddenItemsCost")
-                                        .soft("forbiddenItemsCost")
-                                        .weight("forbiddenItemsCost", 1.5)
-                                        .offset("forbiddenItemsCost", -0.5)
-                                        .clip("forbiddenItemsCost", false)));
+                                             .weight("forbiddenItemsCost", 1.5)
+                                             .offset("forbiddenItemsCost", -0.5)));
+    assembly.add_instances(std::move(copyOf("forbiddenItemsCost")
+                                             .soft("forbiddenItemsCost")
+                                             .weight("forbiddenItemsCost", 1.5)
+                                             .offset("forbiddenItemsCost", -0.5)
+                                             .clip("forbiddenItemsCost", false)));
     assembly.add_instances(std::move(copyOf("selectionGroupBoundsCost")
-                                        .exponent("selectionGroupBoundsCost", 3.0)
-                                        .offset("selectionGroupBoundsCost", 1.0)));
+                                             .exponent("selectionGroupBoundsCost", 3.0)
+                                             .offset("selectionGroupBoundsCost", 1.0)));
     assembly.add_instances(std::move(copyOf("itemDependencyCost").soft("itemDependencyCost")));
     assembly.add_instances(std::move(copyOf("selectedValueCost")
-                                        .weight("selectedValueCost", 0.25)
-                                        .exponent("selectedValueCost", 2.0)
-                                        .offset("selectedValueCost", 10.0)));
+                                             .weight("selectedValueCost", 0.25)
+                                             .exponent("selectedValueCost", 2.0)
+                                             .offset("selectedValueCost", 10.0)));
     return assembly;
 }
 
-void verifyRepeatsAndOffsets()
-{
+void verifyRepeatsAndOffsets() {
     std::printf("== (j) Repeated components, offset / clip ==\n");
     {
         // mandatory x 1 + 2 x mandatory^2: 3 + 2 x 9 = 21 hard.
         ConstraintAssembly assembly = copyOf("mandatoryItemsCost");
         assembly.add_instances(std::move(copyOf("mandatoryItemsCost")
-                                            .weight("mandatoryItemsCost", 2.0)
-                                            .exponent("mandatoryItemsCost", 2.0)));
+                                                 .weight("mandatoryItemsCost", 2.0)
+                                                 .exponent("mandatoryItemsCost", 2.0)));
         KnapsackProblem p = shiftedInstance();
         DecomposedCalculator calculator;
         assembly.into(calculator);
         const Score score = scoreWith(calculator, p);
-        check(score.hard == -21 && score.soft == 0.0, "mandatory + 2 x mandatory^2: -(3 + 18) hard");
+        check(score.hard == -21 && score.soft == 0.0,
+              "mandatory + 2 x mandatory^2: -(3 + 18) hard");
         const auto entries = calculator.constraint_costs();
-        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
-                  && entries[0].unit_costs == Costs{3.0} && entries[1].weight == 2.0 && entries[1].exponent == 2.0
-                  && entries[1].default_weight == 1.0 && entries[0].name == entries[1].name,
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs &&
+                      entries[0].unit_costs == Costs{3.0} && entries[1].weight == 2.0 &&
+                      entries[1].exponent == 2.0 && entries[1].default_weight == 1.0 &&
+                      entries[0].name == entries[1].name,
               "two instances, the same raw total, each with its own knobs");
     }
     {
@@ -648,99 +645,104 @@ void verifyRepeatsAndOffsets()
         // next to a soft repeat, 2 x (3 - 1) beyond its offset.
         ConstraintAssembly assembly = copyOf("mandatoryItemsCost");
         assembly.add_instances(std::move(copyOf("mandatoryItemsCost")
-                                            .soft("mandatoryItemsCost")
-                                            .weight("mandatoryItemsCost", 2.0)
-                                            .offset("mandatoryItemsCost", 1.0)));
+                                                 .soft("mandatoryItemsCost")
+                                                 .weight("mandatoryItemsCost", 2.0)
+                                                 .offset("mandatoryItemsCost", 1.0)));
         KnapsackProblem p = shiftedInstance();
         DecomposedCalculator calculator;
         assembly.into(calculator);
         check(sameScore(scoreWith(calculator, p), Score{-3, -4.0}),
               "hard mandatory + a soft repeat beyond 1: -3 hard / -4 soft");
         const auto entries = calculator.constraint_costs();
-        check(entries.size() == 2 && entries[0].level == optimaru::Level::Hard
-                  && entries[1].level == optimaru::Level::Soft && entries[1].default_level == optimaru::Level::Hard,
+        check(entries.size() == 2 && entries[0].level == optimaru::Level::Hard &&
+                      entries[1].level == optimaru::Level::Soft &&
+                      entries[1].default_level == optimaru::Level::Hard,
               "the repeat reports its own level, the default stays hard");
     }
     {
         // Identical picks count twice; the reward too.
         ConstraintAssembly assembly = copyOf("selectedValueCost");
         assembly.add_instances(copyOf("selectedValueCost"));
-        check(scoreOf(std::move(assembly), shiftedInstance()).soft == 32.0, "the reward picked twice: +2 x 16");
+        check(scoreOf(std::move(assembly), shiftedInstance()).soft == 32.0,
+              "the reward picked twice: +2 x 16");
     }
     {
         const KnapsackProblem p = shiftedInstance();
-        check(scoreOf(copyOf("resourceCapacityCost").offset("resourceCapacityCost", 2.0), p).hard == -3,
+        check(scoreOf(copyOf("resourceCapacityCost").offset("resourceCapacityCost", 2.0), p).hard ==
+                      -3,
               "threshold offset 2 on the resource total 5: -3");
-        check(scoreOf(copyOf("resourceCapacityCost").offset("resourceCapacityCost", 7.0), p).hard == 0,
+        check(scoreOf(copyOf("resourceCapacityCost").offset("resourceCapacityCost", 7.0), p).hard ==
+                      0,
               "threshold offset 7 on 5: 0");
         // The six penalties are hard by default, which refuses the literal
         // formula with an offset, so its numbers are checked on soft (not
         // rounded).
         check(sameScore(scoreOf(copyOf("resourceCapacityCost")
-                                    .soft("resourceCapacityCost")
-                                    .offset("resourceCapacityCost", 7.0)
-                                    .clip("resourceCapacityCost", false),
+                                        .soft("resourceCapacityCost")
+                                        .offset("resourceCapacityCost", 7.0)
+                                        .clip("resourceCapacityCost", false),
                                 p),
                         Score{0, 2.0}),
               "soft literal offset 7 on 5: (5 - 7) = -2, a reward of 2");
         check(scoreOf(copyOf("resourceCapacityCost")
-                          .offset("resourceCapacityCost", 2.0)
-                          .exponent("resourceCapacityCost", 3.0),
+                              .offset("resourceCapacityCost", 2.0)
+                              .exponent("resourceCapacityCost", 3.0),
                       p)
-                      .hard
-                  == -27,
+                              .hard == -27,
               "threshold offset 2, exponent 3: (5 - 2)^3 = 27");
         check(sameScore(scoreOf(copyOf("knapsackCapacityCost")
-                                    .soft("knapsackCapacityCost")
-                                    .offset("knapsackCapacityCost", 4.0)
-                                    .clip("knapsackCapacityCost", false),
+                                        .soft("knapsackCapacityCost")
+                                        .offset("knapsackCapacityCost", 4.0)
+                                        .clip("knapsackCapacityCost", false),
                                 p),
                         Score{0, 4.0}),
               "soft literal offset 4 on a raw 0 (the selection fits): charged, -4 -> +4");
-        check(scoreOf(copyOf("knapsackCapacityCost").offset("knapsackCapacityCost", -1.0), p).hard == 0,
+        check(scoreOf(copyOf("knapsackCapacityCost").offset("knapsackCapacityCost", -1.0), p)
+                              .hard == 0,
               "a negative threshold offset leaves a raw 0 at 0");
         check(sameScore(scoreOf(copyOf("knapsackCapacityCost")
-                                    .soft("knapsackCapacityCost")
-                                    .offset("knapsackCapacityCost", -1.0)
-                                    .clip("knapsackCapacityCost", false),
+                                        .soft("knapsackCapacityCost")
+                                        .offset("knapsackCapacityCost", -1.0)
+                                        .clip("knapsackCapacityCost", false),
                                 p),
                         Score{0, -1.0}),
               "a negative soft literal offset charges a raw 0: 0 + 1");
-        check(scoreOf(copyOf("mandatoryItemsCost").offset("mandatoryItemsCost", -1.0), p).hard == -4,
+        check(scoreOf(copyOf("mandatoryItemsCost").offset("mandatoryItemsCost", -1.0), p).hard ==
+                      -4,
               "a negative threshold offset adds to a non-zero total: 3 + 1");
-        check(scoreOf(copyOf("mandatoryItemsCost").weight("mandatoryItemsCost", 3.0).offset("mandatoryItemsCost", 0.5),
+        check(scoreOf(copyOf("mandatoryItemsCost")
+                              .weight("mandatoryItemsCost", 3.0)
+                              .offset("mandatoryItemsCost", 0.5),
                       p)
-                      .hard
-                  == -8,
+                              .hard == -8,
               "a hard threshold offset rounds the total: 3 x (3 - 0.5) = 7.5 -> 8");
         check(sameScore(scoreOf(copyOf("knapsackCapacityCost")
-                                    .soft("knapsackCapacityCost")
-                                    .weight("knapsackCapacityCost", 3.0)
-                                    .offset("knapsackCapacityCost", 0.5)
-                                    .clip("knapsackCapacityCost", false),
+                                        .soft("knapsackCapacityCost")
+                                        .weight("knapsackCapacityCost", 3.0)
+                                        .offset("knapsackCapacityCost", 0.5)
+                                        .clip("knapsackCapacityCost", false),
                                 p),
                         Score{0, 1.5}),
               "a soft literal offset is not rounded: 3 x (0 - 0.5) = -1.5, +1.5");
         check(scoreOf(copyOf("selectedValueCost").offset("selectedValueCost", 10.0), p).soft == 6.0,
               "the reward with a threshold offset 10: only the 16 - 10 beyond it, +6");
         check(scoreOf(copyOf("selectedValueCost")
-                          .offset("selectedValueCost", 10.0)
-                          .clip("selectedValueCost", false),
+                              .offset("selectedValueCost", 10.0)
+                              .clip("selectedValueCost", false),
                       p)
-                      .soft
-                  == 26.0,
+                              .soft == 26.0,
               "the reward with a literal offset 10: -16 - 10 = -26, +26");
         DecomposedCalculator calculator;
         copyOf("resourceCapacityCost")
-            .soft("resourceCapacityCost")
-            .offset("resourceCapacityCost", 2.5)
-            .clip("resourceCapacityCost", false)
-            .into(calculator);
+                .soft("resourceCapacityCost")
+                .offset("resourceCapacityCost", 2.5)
+                .clip("resourceCapacityCost", false)
+                .into(calculator);
         KnapsackProblem q = shiftedInstance();
         scoreWith(calculator, q);
         const auto entries = calculator.constraint_costs();
-        check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip && !entries[0].scoped
-                  && entries[0].unit_costs == Costs{5.0},
+        check(entries.size() == 1 && entries[0].offset == 2.5 && !entries[0].clip &&
+                      !entries[0].scoped && entries[0].unit_costs == Costs{5.0},
               "constraintCosts() reports the offset and clip, the raw total unshaped");
     }
     {
@@ -749,54 +751,54 @@ void verifyRepeatsAndOffsets()
         // fitting capacity total would score +5 hard and cancel the resource
         // overflow 5 (an infeasible selection at hard 0), and -1 would charge
         // a selection without a violation.
-        auto refusal = [](const std::string &name) {
-            return "Constraint '" + name
-                   + "' cannot use clip=false with a non-zero offset on a level that counts "
-                     "toward the hard score (hard 0 must mean no violation)";
+        auto refusal = [](const std::string& name) {
+            return "Constraint '" + name +
+                   "' cannot use clip=false with a non-zero offset on a level that counts "
+                   "toward the hard score (hard 0 must mean no violation)";
         };
         auto resetRefusal = [](ConstraintAssembly assembly) {
-            try
-            {
+            try {
                 scoreOf(std::move(assembly), shiftedInstance());
-            }
-            catch (const std::logic_error &error)
-            {
+            } catch (const std::logic_error& error) {
                 return std::string(error.what());
             }
             return std::string();
         };
         check(resetRefusal(copyOf("knapsackCapacityCost")
-                               .offset("knapsackCapacityCost", 5.0)
-                               .clip("knapsackCapacityCost", false))
-                      == refusal("knapsackCapacityCost")
-                  && resetRefusal(copyOf("knapsackCapacityCost")
-                                      .clip("knapsackCapacityCost", false)
-                                      .offset("knapsackCapacityCost", -1.0))
-                         == refusal("knapsackCapacityCost"),
+                                   .offset("knapsackCapacityCost", 5.0)
+                                   .clip("knapsackCapacityCost", false)) ==
+                              refusal("knapsackCapacityCost") &&
+                      resetRefusal(copyOf("knapsackCapacityCost")
+                                           .clip("knapsackCapacityCost", false)
+                                           .offset("knapsackCapacityCost", -1.0)) ==
+                              refusal("knapsackCapacityCost"),
               "capacity literal offset +5 / -1 on its default hard: refused at reset");
         check(resetRefusal(copyOf("itemDependencyCost")
-                               .soft("itemDependencyCost")
-                               .offset("itemDependencyCost", 2.0)
-                               .clip("itemDependencyCost", false)
-                               .hard("itemDependencyCost"))
-                  == refusal("itemDependencyCost"),
+                                   .soft("itemDependencyCost")
+                                   .offset("itemDependencyCost", 2.0)
+                                   .clip("itemDependencyCost", false)
+                                   .hard("itemDependencyCost")) == refusal("itemDependencyCost"),
               "dependency literal offset moved back to hard afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("resourceCapacityCost");
-        repeated.add_instances(std::move(
-            copyOf("resourceCapacityCost").offset("resourceCapacityCost", 7.0).clip("resourceCapacityCost", false)));
+        repeated.add_instances(std::move(copyOf("resourceCapacityCost")
+                                                 .offset("resourceCapacityCost", 7.0)
+                                                 .clip("resourceCapacityCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("resourceCapacityCost"),
               "a hard literal repeat next to the default: refused at reset");
-        check(resetRefusal(copyOf("knapsackCapacityCost").offset("knapsackCapacityCost", 5.0)).empty()
-                  && resetRefusal(copyOf("knapsackCapacityCost").clip("knapsackCapacityCost", false)).empty()
-                  && resetRefusal(copyOf("knapsackCapacityCost")
-                                      .offset("knapsackCapacityCost", 5.0)
-                                      .clip("knapsackCapacityCost", false)
-                                      .soft("knapsackCapacityCost"))
-                         .empty()
-                  && resetRefusal(copyOf("selectedValueCost")
-                                      .offset("selectedValueCost", 10.0)
-                                      .clip("selectedValueCost", false))
-                         .empty(),
+        check(resetRefusal(copyOf("knapsackCapacityCost").offset("knapsackCapacityCost", 5.0))
+                              .empty() &&
+                      resetRefusal(
+                              copyOf("knapsackCapacityCost").clip("knapsackCapacityCost", false))
+                              .empty() &&
+                      resetRefusal(copyOf("knapsackCapacityCost")
+                                           .offset("knapsackCapacityCost", 5.0)
+                                           .clip("knapsackCapacityCost", false)
+                                           .soft("knapsackCapacityCost"))
+                              .empty() &&
+                      resetRefusal(copyOf("selectedValueCost")
+                                           .offset("selectedValueCost", 10.0)
+                                           .clip("selectedValueCost", false))
+                              .empty(),
               "a threshold offset or clip=false with offset 0 on hard, the literal offset on soft "
               "and on the soft reward are allowed");
     }
@@ -813,15 +815,11 @@ void verifyRepeatsAndOffsets()
         int mismatches = 0;
         double drift = 0.0;
         const int steps = 3000;
-        for (int step = 0; step < steps; ++step)
-        {
-            if (unit(rng) < 0.6)
-            {
+        for (int step = 0; step < steps; ++step) {
+            if (unit(rng) < 0.6) {
                 const int item = static_cast<int>(rng() % n);
                 editor.assign(item, unit(rng) < 0.15 ? kUndecided : static_cast<int>(rng() % 2));
-            }
-            else
-            {
+            } else {
                 editor.begin_batch();
                 const int a = static_cast<int>(rng() % n);
                 const int b = static_cast<int>(rng() % n);
@@ -836,16 +834,15 @@ void verifyRepeatsAndOffsets()
             const Score full = scoreWith(fresh, shadow);
             const Score incremental = editor.score();
             drift = std::max(drift, std::fabs(full.soft - incremental.soft));
-            if (!optimaru::scores_agree(incremental, full) && ++mismatches <= 3)
-            {
+            if (!optimaru::scores_agree(incremental, full) && ++mismatches <= 3) {
                 std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
                             incremental.str().c_str(), full.str().c_str());
             }
         }
         std::printf("    largest soft drift %.3g\n", drift);
-        check(mismatches == 0,
-              std::to_string(steps)
-                  + " random moves with repeated, shifted components on both levels: incremental == fresh");
+        check(mismatches == 0, std::to_string(steps) +
+                                       " random moves with repeated, shifted components on both "
+                                       "levels: incremental == fresh");
     }
     {
         KnapsackProblem p = randomInstance(30, 11);
@@ -859,12 +856,9 @@ void verifyRepeatsAndOffsets()
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
         bool corrupted = false;
-        try
-        {
+        try {
             Solver(config).solve(p, calculator);
-        }
-        catch (const optimaru::ScoreMismatchError &e)
-        {
+        } catch (const optimaru::ScoreMismatchError& e) {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
         }
@@ -879,8 +873,7 @@ void verifyRepeatsAndOffsets()
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyAssemblyParity();
     verifyIncremental();
     verifyPartialAssemblies();
@@ -891,8 +884,7 @@ int main()
     verifyRawCostsByHand();
     verifyCatalog();
     verifyRepeatsAndOffsets();
-    if (failures)
-    {
+    if (failures) {
         std::printf("%d check(s) FAILED\n", failures);
         return 1;
     }

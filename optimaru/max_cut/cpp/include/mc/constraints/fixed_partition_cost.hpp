@@ -5,8 +5,7 @@
 
 #include "mc/constraints/common.hpp"
 
-namespace mc
-{
+namespace mc {
 
 // Hard, weight 1: fixedPartitionCost — fixed vertices (fixedSide >= 0) that
 // sit on the other side. Raw cost per side u = the members v of side u with
@@ -15,41 +14,30 @@ namespace mc
 // side. The engine never moves a
 // pinned (fixed) vertex, so during search it stays 0; only a warm-start seed
 // that contradicts fixed_partition makes it positive. Per-member delta: O(1).
-struct FixedPartitionCost final : McUnitConstraint
-{
+struct FixedPartitionCost final : McUnitConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit FixedPartitionCost(double weight = kDefaultWeight)
-        : McUnitConstraint("fixedPartitionCost", weight, kDefaultLevel)
-    {
-    }
+        : McUnitConstraint("fixedPartitionCost", weight, kDefaultLevel) {}
 
-    void on_reset(const MaxCutProblem &problem) override
-    {
-        detail::requirePrepared(problem);
-    }
+    void on_reset(const MaxCutProblem& problem) override { detail::requirePrepared(problem); }
 
-    double cost(const MaxCutProblem &problem, int unit, const std::vector<int> &members) const override
-    {
+    double cost(const MaxCutProblem& problem, int unit,
+                const std::vector<int>& members) const override {
         double total = 0.0;
-        for (int v : members)
-            total += offSide(problem, unit, v);
+        for (int v : members) total += offSide(problem, unit, v);
         return total;
     }
 
     bool supports_delta() const override { return true; }
-    double delta_cost(const MaxCutProblem &problem,
-                     int unit,
-                     const std::vector<int> & /*members*/,
-                     int vertex) const override
-    {
+    double delta_cost(const MaxCutProblem& problem, int unit, const std::vector<int>& /*members*/,
+                      int vertex) const override {
         return offSide(problem, unit, vertex);
     }
 
 private:
-    static double offSide(const MaxCutProblem &problem, int unit, int vertex)
-    {
+    static double offSide(const MaxCutProblem& problem, int unit, int vertex) {
         const int fixed = problem.fixedSide[vertex];
         return fixed >= 0 && fixed != unit ? 1.0 : 0.0;
     }

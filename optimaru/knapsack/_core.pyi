@@ -172,9 +172,7 @@ def list_constraints() -> list[str]:
     forbidden_items_cost, selection_group_bounds_cost, item_dependency_cost,
     selected_value_cost. The same names optimaru.knapsack.constraints uses."""
 
-def constraint_costs(
-    problem: KnapsackProblem, constraints: Iterable[Any] | None = ...
-) -> dict[str, dict[str, Any]]:
+def constraint_costs(problem: KnapsackProblem, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
     """Raw cost of every constraint, before weight/exponent/offset/level:
     {key: {"costs": [total], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "global": bool, "level": "hard" | "soft",

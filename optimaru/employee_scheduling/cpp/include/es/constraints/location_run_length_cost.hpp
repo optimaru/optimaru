@@ -21,9 +21,12 @@ struct LocationRunLengthCost final : LocationPresenceBase {
     explicit LocationRunLengthCost(double weight = kDefaultWeight, std::string location = {},
                                    int minRun = 0, int maxRun = -1, bool waiveMinAtEnd = true)
         : LocationPresenceBase("locationRunLengthCost", weight, kDefaultLevel, std::move(location)),
-          min_(minRun), max_(maxRun), waiveMinAtEnd_(waiveMinAtEnd) {
+          min_(minRun),
+          max_(maxRun),
+          waiveMinAtEnd_(waiveMinAtEnd) {
         label = "Location run[" + (loc_.empty() ? std::string("work") : loc_) + " " +
-                std::to_string(min_) + ".." + (max_ < 0 ? std::string("inf") : std::to_string(max_)) +
+                std::to_string(min_) + ".." +
+                (max_ < 0 ? std::string("inf") : std::to_string(max_)) +
                 "]";  // display only; never a lookup key
     }
     double cost(const EmployeeSchedule& s, int, const std::vector<int>& members) const override {
@@ -47,7 +50,10 @@ struct LocationRunLengthCost final : LocationPresenceBase {
         }
         if (run > 0 && !allPinned) c += runCost(run, /*touchesEnd=*/true);
         for (int i : members)
-            if (match_[i]) { present_[day_[i]] = 0; pin_[day_[i]] = 0; }
+            if (match_[i]) {
+                present_[day_[i]] = 0;
+                pin_[day_[i]] = 0;
+            }
         return c;
     }
 

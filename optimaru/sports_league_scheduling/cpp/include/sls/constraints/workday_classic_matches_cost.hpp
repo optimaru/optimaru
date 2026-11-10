@@ -3,8 +3,7 @@
 
 #include "sls/constraints/common.hpp"
 
-namespace sls
-{
+namespace sls {
 
 // Soft, weight 1'000: workdayClassicMatchesCost — a classic (derby) match
 // played on a workday, i.e. a round that is neither a weekend nor a holiday.
@@ -13,23 +12,16 @@ namespace sls
 // holiday. The default weight is expensive enough against the
 // kilometre-denominated travel terms that the search will detour a long way
 // to keep a derby on a Saturday.
-struct WorkdayClassicMatchesCost final : PerMatchConstraint
-{
+struct WorkdayClassicMatchesCost final : PerMatchConstraint {
     static constexpr double kDefaultWeight = 1000.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit WorkdayClassicMatchesCost(double weight = kDefaultWeight)
-        : PerMatchConstraint("workdayClassicMatchesCost", weight, kDefaultLevel)
-    {
-    }
-    double matchCost(const LeagueSchedule &schedule,
-                     int unit,
-                     int matchIndex) const override
-    {
-        return schedule.matches[matchIndex].classicMatch
-                       && !schedule.rounds[unit].weekendOrHoliday
-                   ? 1.0
-                   : 0.0;
+        : PerMatchConstraint("workdayClassicMatchesCost", weight, kDefaultLevel) {}
+    double matchCost(const LeagueSchedule& schedule, int unit, int matchIndex) const override {
+        return schedule.matches[matchIndex].classicMatch && !schedule.rounds[unit].weekendOrHoliday
+                       ? 1.0
+                       : 0.0;
     }
 };
 

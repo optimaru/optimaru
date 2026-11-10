@@ -3,8 +3,7 @@
 
 #include "ba/constraints/common.hpp"
 
-namespace ba
-{
+namespace ba {
 
 // Soft, weight 10: departmentSpecialtyPriorityCost — every night a stay
 // spends in a department that offers its specialty only at priority > 1,
@@ -13,25 +12,16 @@ namespace ba
 // its specialty at priority 1 (or not at all). Silent when the department
 // does not offer the specialty: departmentSpecialtyCost already prices that
 // case.
-struct DepartmentSpecialtyPriorityCost final : PerStayRoomConstraint
-{
+struct DepartmentSpecialtyPriorityCost final : PerStayRoomConstraint {
     static constexpr double kDefaultWeight = 10.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit DepartmentSpecialtyPriorityCost(double weight = kDefaultWeight)
-        : PerStayRoomConstraint("departmentSpecialtyPriorityCost",
-                                weight,
-                                kDefaultLevel)
-    {
-    }
-    double
-    roomCost(const BedPlan &plan, int roomIndex, int stayIndex) const override
-    {
-        const Stay &stay = plan.stays[stayIndex];
-        const int priority
-            = stay.specialtyPriorityByDept[plan.rooms[roomIndex].department];
-        if (priority <= 1)
-            return 0.0;
+        : PerStayRoomConstraint("departmentSpecialtyPriorityCost", weight, kDefaultLevel) {}
+    double roomCost(const BedPlan& plan, int roomIndex, int stayIndex) const override {
+        const Stay& stay = plan.stays[stayIndex];
+        const int priority = stay.specialtyPriorityByDept[plan.rooms[roomIndex].department];
+        if (priority <= 1) return 0.0;
         return static_cast<double>((priority - 1) * stay.nightCount());
     }
 };

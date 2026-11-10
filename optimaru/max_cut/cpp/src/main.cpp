@@ -16,11 +16,9 @@
 
 using namespace mc;
 
-namespace
-{
+namespace {
 
-MaxCutProblem webSample()
-{
+MaxCutProblem webSample() {
     MaxCutProblem problem;
     problem.vertexIds = {"A", "B", "C", "D", "E", "F", "G", "H"};
     enum { A, B, C, D, E, F, G, H };
@@ -37,8 +35,7 @@ MaxCutProblem webSample()
 
 }  // namespace
 
-int main(int argc, char **argv)
-{
+int main(int argc, char** argv) {
     const double seconds = argc > 1 ? std::atof(argv[1]) : 2.0;
     MaxCutProblem problem = webSample();
 
@@ -49,14 +46,12 @@ int main(int argc, char **argv)
     solver.solve(problem);
 
     std::printf("Score: %s (cut weight %lld of %lld)\n", problem.score.str().c_str(),
-                static_cast<long long>(problem.cutWeight()), static_cast<long long>(problem.totalEdgeWeight()));
-    for (int s = 0; s < kSideCount; ++s)
-    {
+                static_cast<long long>(problem.cutWeight()),
+                static_cast<long long>(problem.totalEdgeWeight()));
+    for (int s = 0; s < kSideCount; ++s) {
         std::printf("Side %d:", s);
-        for (int v = 0; v < problem.vertexCount(); ++v)
-        {
-            if (problem.side[v] == s)
-                std::printf(" %s", problem.vertexIds[v].c_str());
+        for (int v = 0; v < problem.vertexCount(); ++v) {
+            if (problem.side[v] == s) std::printf(" %s", problem.vertexIds[v].c_str());
         }
         std::printf("\n");
     }
@@ -66,9 +61,9 @@ int main(int argc, char **argv)
     addDefaultConstraints(calculator);
     calculator.rebuild(problem);
     calculator.score();
-    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
-    {
-        std::printf("  %-28s %-4s %g\n", total.name.c_str(), optimaru::level_name(total.level), total.cost);
+    for (const optimaru::ConstraintTotal& total : calculator.constraint_totals()) {
+        std::printf("  %-28s %-4s %g\n", total.name.c_str(), optimaru::level_name(total.level),
+                    total.cost);
     }
     return 0;
 }

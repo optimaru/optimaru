@@ -15,8 +15,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
@@ -79,33 +78,27 @@ using ConstraintAssembly = optimaru::ConstraintAssembly<Timetable>;
 using CanonUnitConstraint = optimaru::UnitConstraint<Timetable>;
 using CanonGlobalConstraint = optimaru::GlobalConstraint<Timetable>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const Timetable &table)
-{
-    if (!table.prepared)
-    {
-        throw std::logic_error("st::canon constraints require "
-                               "ScoreCalculator::prepare(table) first");
+inline void requirePrepared(const Timetable& table) {
+    if (!table.prepared) {
+        throw std::logic_error(
+                "st::canon constraints require "
+                "ScoreCalculator::prepare(table) first");
     }
 }
 
 // The busy-period bit of a slot (bit = period - 1, the monolithic layout).
-inline std::uint16_t periodBit(const Timetable &table, int slot)
-{
+inline std::uint16_t periodBit(const Timetable& table, int slot) {
     return static_cast<std::uint16_t>(1U << (table.periodOfSlot[slot] - 1));
 }
 
 // Number of teachers standing in both lessons (teacherConflictCost counts one
 // conflict pair per shared teacher; teacher lists are tiny and duplicate-free).
-inline int sharedTeachers(const Lesson &a, const Lesson &b)
-{
+inline int sharedTeachers(const Lesson& a, const Lesson& b) {
     int shared = 0;
-    for (int x : a.teachers)
-    {
-        for (int y : b.teachers)
-            shared += (x == y) ? 1 : 0;
+    for (int x : a.teachers) {
+        for (int y : b.teachers) shared += (x == y) ? 1 : 0;
     }
     return shared;
 }
@@ -119,11 +112,9 @@ inline int sharedTeachers(const Lesson &a, const Lesson &b)
 // by TeacherMaskHub (one shared instance for the whole teacher family) and
 // by ClassGapCost (its own class-keyed instance); every flip reaches the
 // owner's metric fold through the callback.
-class OwnerDayMasks
-{
+class OwnerDayMasks {
 public:
-    void reset(int ownerCount, int slotCount, int dayCount)
-    {
+    void reset(int ownerCount, int slotCount, int dayCount) {
         slotCount_ = slotCount;
         dayCount_ = dayCount;
         occupancy_.assign(static_cast<std::size_t>(ownerCount) * slotCount, 0);
@@ -133,31 +124,17 @@ public:
     // Applies one occupancy change of (owner, slot); on a busy-mask flip
     // calls onMaskChange(oldMask, newMask) for the owner's day.
     template <typename F>
-    void apply(int owner,
-               int slot,
-               int day,
-               std::uint16_t bit,
-               bool joined,
-               F &&onMaskChange)
-    {
-        int &count
-            = occupancy_[static_cast<std::size_t>(owner) * slotCount_ + slot];
-        if (joined)
-        {
-            if (++count != 1)
-                return;
+    void apply(int owner, int slot, int day, std::uint16_t bit, bool joined, F&& onMaskChange) {
+        int& count = occupancy_[static_cast<std::size_t>(owner) * slotCount_ + slot];
+        if (joined) {
+            if (++count != 1) return;
+        } else {
+            if (--count != 0) return;
         }
-        else
-        {
-            if (--count != 0)
-                return;
-        }
-        std::uint16_t &mask
-            = mask_[static_cast<std::size_t>(owner) * dayCount_ + day];
+        std::uint16_t& mask = mask_[static_cast<std::size_t>(owner) * dayCount_ + day];
         const std::uint16_t oldMask = mask;
         mask = joined ? static_cast<std::uint16_t>(oldMask | bit)
-                      : static_cast<std::uint16_t>(
-                            oldMask & static_cast<std::uint16_t>(~bit));
+                      : static_cast<std::uint16_t>(oldMask & static_cast<std::uint16_t>(~bit));
         onMaskChange(oldMask, mask);
     }
 

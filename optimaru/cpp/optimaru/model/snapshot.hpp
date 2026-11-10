@@ -71,7 +71,9 @@ struct SolutionSnapshot {
     // recorded for it. A list the snapshot never saw counts as changed.
     static bool same_list(const Solution& solution, const SolutionSnapshot& snap, int l) {
         if constexpr (Traits::shape != Shape::Sequence) {
-            (void)solution; (void)snap; (void)l;
+            (void)solution;
+            (void)snap;
+            (void)l;
             return true;
         } else {
             if (l < 0 || l >= static_cast<int>(snap.lists.size()) ||
@@ -95,21 +97,23 @@ struct SolutionSnapshot {
     // sequence shape: visit(l) for every list that differs from the snapshot.
     template <typename Visit>
     static void for_each_changed_list(const Solution& solution, const SolutionSnapshot& snap,
-                                   Visit&& visit) {
+                                      Visit&& visit) {
         if constexpr (Traits::shape == Shape::Sequence) {
             const int list_count = Traits::list_count(solution);
             for (int l = 0; l < list_count; ++l) {
                 if (!same_list(solution, snap, l)) visit(l);
             }
         } else {
-            (void)solution; (void)snap; (void)visit;
+            (void)solution;
+            (void)snap;
+            (void)visit;
         }
     }
 
     // sequence shape: appends every element of every list that differs from the
     // snapshot (the elements a compound move touched, for the entity tabu).
     static void append_changed_elements(const Solution& solution, const SolutionSnapshot& snap,
-                                      std::vector<int>& out) {
+                                        std::vector<int>& out) {
         for_each_changed_list(solution, snap, [&](int l) {
             if constexpr (Traits::shape == Shape::Sequence) {
                 const int size = Traits::list_size(solution, l);
@@ -122,8 +126,7 @@ struct SolutionSnapshot {
     // editor's list hooks (one begin_list_edit/end_list_edit pair), so the
     // objective re-costs that list only. The caller reindexes its
     // ElementIndex for `l`.
-    static void restore_list(Editor<Solution>& editor, const SolutionSnapshot& snap,
-                            int l) {
+    static void restore_list(Editor<Solution>& editor, const SolutionSnapshot& snap, int l) {
         if constexpr (Traits::shape == Shape::Sequence) {
             // A list the snapshot never recorded cannot be restored: same_list()
             // reports it as changed, and a caller restoring it has a snapshot
@@ -142,7 +145,9 @@ struct SolutionSnapshot {
             }
             editor.end_list_edit(l);
         } else {
-            (void)editor; (void)snap; (void)l;
+            (void)editor;
+            (void)snap;
+            (void)l;
         }
     }
 

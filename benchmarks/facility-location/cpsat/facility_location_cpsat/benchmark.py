@@ -48,11 +48,7 @@ def _build(
             rng.uniform(SOUTH_WEST[1], NORTH_EAST[1]),
         )
         setup_cost = AVERAGE_SETUP_COST + int(SETUP_COST_STD_DEV * rng.gauss(0.0, 1.0))
-        facilities.append(
-            fl.Facility(
-                str(index + 1), location, setup_cost, total_capacity // facility_count
-            )
-        )
+        facilities.append(fl.Facility(str(index + 1), location, setup_cost, total_capacity // facility_count))
 
     consumers = []
     for index in range(consumer_count):
@@ -92,13 +88,12 @@ def describe(problem: Any) -> str:
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
     import optimaru.facility_location as fl
 
-    fl.solve(
-        problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1
-    )
+    fl.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.facility_location import solve
+
     from optimaru.facility_location.models import FacilityLocationProblemModel
 
     solved = solve(

@@ -152,7 +152,7 @@ private:
 // value is reported as not finite on every level (the Python mirror checks
 // finiteness before the hard limit too).
 [[noreturn]] inline void throw_contribution_overflow(const std::string& constraint, double value,
-                                                   bool hard_level) {
+                                                     bool hard_level) {
     throw ContributionOverflowError(constraint, value, hard_level && std::isfinite(value));
 }
 
@@ -221,7 +221,9 @@ public:
     // The exact value fits an int64 (and is that int64).
     bool fits() const { return wraps_ == 0; }
     std::int64_t low() const { return lo_; }
-    double approx() const { return static_cast<double>(lo_) + static_cast<double>(wraps_) * 0x1p64; }
+    double approx() const {
+        return static_cast<double>(lo_) + static_cast<double>(wraps_) * 0x1p64;
+    }
     std::int64_t saturated() const {
         if (wraps_ > 0) return kHardScoreLimit;
         if (wraps_ < 0) return -kHardScoreLimit;
@@ -240,7 +242,7 @@ private:
 // +-kHardScoreLimit by the sign of the true value (rule 2). Sign-agnostic, so
 // it folds penalty sums and score levels (negative) alike.
 inline std::int64_t fold_below_hard_saturating(const HardTotal& hard, double medium,
-                                            std::int64_t unit) {
+                                               std::int64_t unit) {
     std::int64_t scaled = 0;
     std::int64_t total = 0;
     if (hard.fits() && !detail::mul_overflows(hard.low(), unit, scaled) &&
@@ -330,7 +332,7 @@ struct MediumFold {
             case Kind::BelowHard:
                 // Saturating (see "The range of a score" above).
                 return {fold_below_hard_saturating(HardTotal(hard), medium,
-                                                static_cast<std::int64_t>(unit)),
+                                                   static_cast<std::int64_t>(unit)),
                         without_negative_zero(soft)};
             case Kind::None:
                 break;

@@ -3,8 +3,7 @@
 
 #include "bp/constraints/common.hpp"
 
-namespace bp
-{
+namespace bp {
 
 // Hard, weight 1: itemConflictCost — conflict pairs (must-separate items)
 // placed in one bin. Raw cost per bin = the listed pairs whose two items are
@@ -18,56 +17,39 @@ namespace bp
 // the number of its partners (with multiplicity) among the other members —
 // O(partners + members) with a scratch mark per item, 0 at once for an item
 // without conflicts.
-struct ItemConflictCost final : BpUnitConstraint
-{
+struct ItemConflictCost final : BpUnitConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit ItemConflictCost(double weight = kDefaultWeight)
-        : BpUnitConstraint("itemConflictCost", weight, kDefaultLevel)
-    {
-    }
-    void on_reset(const BinPackingProblem &problem) override
-    {
+        : BpUnitConstraint("itemConflictCost", weight, kDefaultLevel) {}
+    void on_reset(const BinPackingProblem& problem) override {
         detail::requirePrepared(problem);
         mark_.assign(problem.items.size(), 0);
     }
-    double cost(const BinPackingProblem &problem,
-                int /*unit*/,
-                const std::vector<int> &members) const override
-    {
+    double cost(const BinPackingProblem& problem, int /*unit*/,
+                const std::vector<int>& members) const override {
         // Every pair inside the bin is seen from both of its items.
-        for (int item : members)
-            mark_[item] = 1;
+        for (int item : members) mark_[item] = 1;
         int twice = 0;
-        for (int item : members)
-        {
-            for (int partner : problem.conflictPartners[item])
-                twice += mark_[partner];
+        for (int item : members) {
+            for (int partner : problem.conflictPartners[item]) twice += mark_[partner];
         }
-        for (int item : members)
-            mark_[item] = 0;
+        for (int item : members) mark_[item] = 0;
         return static_cast<double>(twice / 2);
     }
     bool supports_delta() const override { return true; }
-    double delta_cost(const BinPackingProblem &problem,
-                     int /*unit*/,
-                     const std::vector<int> &members,
-                     int entity) const override
-    {
-        const std::vector<int> &partners = problem.conflictPartners[entity];
-        if (partners.empty())
-            return 0.0;
+    double delta_cost(const BinPackingProblem& problem, int /*unit*/,
+                      const std::vector<int>& members, int entity) const override {
+        const std::vector<int>& partners = problem.conflictPartners[entity];
+        if (partners.empty()) return 0.0;
         for (int partner : partners)
             ++mark_[partner];  // multiplicity: a pair listed twice counts 2
         int together = 0;
-        for (int item : members)
-        {
-            if (item != entity)
-                together += mark_[item];
+        for (int item : members) {
+            if (item != entity) together += mark_[item];
         }
-        for (int partner : partners)
-            mark_[partner] = 0;
+        for (int partner : partners) mark_[partner] = 0;
         return static_cast<double>(together);
     }
 

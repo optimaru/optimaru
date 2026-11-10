@@ -20,9 +20,7 @@ class RandomOperatorSelector final : public OperatorSelectionScheme {
 public:
     explicit RandomOperatorSelector(int operator_count) : OperatorSelectionScheme(operator_count) {}
 
-    int select(std::mt19937_64& rng) override {
-        return random_index(rng, operator_count_);
-    }
+    int select(std::mt19937_64& rng) override { return random_index(rng, operator_count_); }
     void update(int, MoveOutcome) override {}
 };
 

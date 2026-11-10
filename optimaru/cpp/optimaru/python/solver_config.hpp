@@ -51,8 +51,7 @@ inline std::chrono::milliseconds seconds_to_millis(double seconds, const char* n
         return pybind11::repr(pybind11::float_(seconds)).cast<std::string>();
     };
     if (!std::isfinite(seconds) || seconds < 0.0) {
-        throw pybind11::value_error(std::string(name) + " must be finite and >= 0, not " +
-                                    shown());
+        throw pybind11::value_error(std::string(name) + " must be finite and >= 0, not " + shown());
     }
     if (seconds > kMaxTimeLimitSeconds) {
         throw pybind11::value_error(std::string(name) +
@@ -68,7 +67,8 @@ Class& bind_config_copy(Class& cls) {
     using Config = typename Class::type;
     cls.def("__copy__", [](const Config& config) { return Config(config); });
     cls.def(
-            "__deepcopy__", [](const Config& config, const pybind11::dict&) { return Config(config); },
+            "__deepcopy__",
+            [](const Config& config, const pybind11::dict&) { return Config(config); },
             pybind11::arg("memo"));
     return cls;
 }
@@ -84,7 +84,8 @@ namespace detail {
 template <typename Config, typename = void>
 struct HasRuinRecreateRewards : std::false_type {};
 template <typename Config>
-struct HasRuinRecreateRewards<Config, std::void_t<decltype(std::declval<Config&>().ruinRecreateRewards)>>
+struct HasRuinRecreateRewards<Config,
+                              std::void_t<decltype(std::declval<Config&>().ruinRecreateRewards)>>
     : std::true_type {};
 
 }  // namespace detail
@@ -116,7 +117,9 @@ Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
     cls.def_property(
             "spent_limit_seconds",
             [](const Config& c) { return std::chrono::duration<double>(c.time_limit).count(); },
-            [](Config& c, double s) { c.time_limit = seconds_to_millis(s, "spent_limit_seconds"); });
+            [](Config& c, double s) {
+                c.time_limit = seconds_to_millis(s, "spent_limit_seconds");
+            });
     cls.def_property(
             "unimproved_spent_limit_seconds",
             [](const Config& c) {

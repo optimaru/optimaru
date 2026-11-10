@@ -8,8 +8,7 @@
 #include "fp/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace fp
-{
+namespace fp {
 
 // Incremental score calculator of the food-packaging constraints for the
 // engine's sequence hook protocol (before_list_edit / after_list_edit). Every
@@ -34,10 +33,9 @@ namespace fp
 // carry listeners into worker threads). The pool list (index lineCount) and
 // engine-unassigned jobs contribute only the medium unassigned penalty.
 class FoodPackagingIncrementalScoreCalculator final
-    : public optimaru::Objective<PackagingSchedule>
-{
+    : public optimaru::Objective<PackagingSchedule> {
 public:
-    void rebuild(PackagingSchedule &solution) override;
+    void rebuild(PackagingSchedule& solution) override;
     void before_list_edit(int listIndex) override;
     void after_list_edit(int listIndex) override;
     optimaru::Score score() override;
@@ -47,8 +45,7 @@ public:
     Score current_score() const;
 
 private:
-    struct LineState
-    {
+    struct LineState {
         std::int64_t hardLate = 0;    // sum max(0, end - maxEnd)
         std::int64_t mediumLate = 0;  // sum max(0, end - idealEnd)
         std::int64_t makespanSq = 0;  // (last end - line start)^2, 0 if empty
@@ -62,14 +59,13 @@ private:
     // the caller's windows buffer is cleared and refilled so its capacity is
     // reused across moves (after_list_edit runs millions of times per
     // second; a fresh vector per call showed up as allocator time).
-    void deriveLine(int l, LineState &state) const;
+    void deriveLine(int l, LineState& state) const;
     // The overlapping minutes summed over every overlapping window pair of two
     // lines (two-pointer over the sorted windows).
-    static std::int64_t
-    pairOverlap(const std::vector<std::pair<Minutes, Minutes>> &a,
-                const std::vector<std::pair<Minutes, Minutes>> &b);
+    static std::int64_t pairOverlap(const std::vector<std::pair<Minutes, Minutes>>& a,
+                                    const std::vector<std::pair<Minutes, Minutes>>& b);
 
-    PackagingSchedule *schedule_ = nullptr;
+    PackagingSchedule* schedule_ = nullptr;
     std::vector<LineState> lineState_;
     std::vector<std::vector<int>> sameOperatorLines_;  // per line
     std::vector<std::int64_t> pairOverlap_;            // L x L, symmetric

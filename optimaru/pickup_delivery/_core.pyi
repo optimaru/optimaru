@@ -170,9 +170,7 @@ class PdpRoutePlan:
 def calculate_score(plan: PdpRoutePlan) -> Score:
     """Recompute the derived fields and the score (also stores plan.score)."""
 
-def build_random_instance(
-    request_count: int, vehicle_count: int, seed: int = 0
-) -> PdpRoutePlan:
+def build_random_instance(request_count: int, vehicle_count: int, seed: int = 0) -> PdpRoutePlan:
     """A randomly generated PDPTW instance, for demos and benchmarks."""
 
 class SolverConfig:
@@ -270,9 +268,7 @@ class Solver:
     vehicle.node_indices, the unassigned pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: PdpRoutePlan) -> None: ...
-    def solve_with_constraints(
-        self, plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...
-    ) -> None:
+    def solve_with_constraints(self, plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see optimaru.pickup_delivery.constraints). The given list replaces the default set;
         None keeps the default set. A name may be picked several times: each pick is
@@ -287,9 +283,7 @@ def list_constraints() -> list[str]:
     pickup_before_dropoff_cost, unassigned_requests_cost).
     The same names optimaru.pickup_delivery.constraints uses."""
 
-def constraint_costs(
-    plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...
-) -> dict[str, dict[str, Any]]:
+def constraint_costs(plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
     """Per-constraint, per-unit **raw** costs — before weight/exponent/offset/level
     rounding. A unit is a vehicle (plus the unassigned pool as the last unit); a global
     constraint reports one cost. `optimaru.pickup_delivery.constraints.score()` takes these and

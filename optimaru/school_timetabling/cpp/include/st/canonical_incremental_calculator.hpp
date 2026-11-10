@@ -10,31 +10,24 @@
 #include "st/objective_weights.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // Constant-time membership list over a dense integer key space (the
 // penalized-set trick): items() holds the current keys,
 // pos_[key] the index into it or -1. Used to keep the hard-violation "hot"
 // keys enumerable for the solver's violation-guided move selection.
-class HotSet
-{
+class HotSet {
 public:
-    void reset(std::size_t keyCount)
-    {
+    void reset(std::size_t keyCount) {
         items_.clear();
         pos_.assign(keyCount, -1);
     }
-    void set(int key, bool on)
-    {
+    void set(int key, bool on) {
         const int p = pos_[key];
-        if (on && p < 0)
-        {
+        if (on && p < 0) {
             pos_[key] = static_cast<int>(items_.size());
             items_.push_back(key);
-        }
-        else if (!on && p >= 0)
-        {
+        } else if (!on && p >= 0) {
             const int last = items_.back();
             items_[p] = last;
             pos_[last] = p;
@@ -44,7 +37,7 @@ public:
     }
     bool contains(int key) const { return pos_[key] >= 0; }
     std::size_t size() const { return items_.size(); }
-    const std::vector<int> &items() const { return items_; }
+    const std::vector<int>& items() const { return items_; }
 
 private:
     std::vector<int> items_;
@@ -84,17 +77,12 @@ private:
 // construction heuristic can score partially initialized solutions. The
 // full-recompute reference is ScoreCalculator::computeBreakdown (checked in
 // the tests and under ScoreChecks::ScoreChecks::Full).
-class CanonicalIncrementalScoreCalculator final
-    : public optimaru::Objective<Timetable>
-{
+class CanonicalIncrementalScoreCalculator final : public optimaru::Objective<Timetable> {
 public:
-    explicit CanonicalIncrementalScoreCalculator(ObjectiveWeights weights
-                                                 = ObjectiveWeights{})
-        : weights_(weights)
-    {
-    }
+    explicit CanonicalIncrementalScoreCalculator(ObjectiveWeights weights = ObjectiveWeights{})
+        : weights_(weights) {}
 
-    void rebuild(Timetable &solution) override;
+    void rebuild(Timetable& solution) override;
     void before_assign(int lessonIndex) override;
     void after_assign(int lessonIndex) override;
     Score score() override;
@@ -106,16 +94,15 @@ public:
     // its violating keys in a HotSet updated alongside the score deltas, and
     // the key is resolved to one of its lessons by a bounded scan of the
     // owner's static lesson list.
-    int hotLesson(std::mt19937_64 &rng) const;
+    int hotLesson(std::mt19937_64& rng) const;
 
     // True while any hard-violation hot set is non-empty (i.e. the working
     // solution has a hard violation other than unassigned lessons).
-    bool hasHotViolations() const
-    {
-        return hotNotAllowed_.size() != 0 || hotClassCells_.size() != 0
-               || hotTeacherCells_.size() != 0 || hotRoomCells_.size() != 0
-               || hotCourseDays_.size() != 0 || hotBlocks_.size() != 0
-               || hotTeacherDays_.size() != 0 || hotTeachersWeek_.size() != 0;
+    bool hasHotViolations() const {
+        return hotNotAllowed_.size() != 0 || hotClassCells_.size() != 0 ||
+               hotTeacherCells_.size() != 0 || hotRoomCells_.size() != 0 ||
+               hotCourseDays_.size() != 0 || hotBlocks_.size() != 0 ||
+               hotTeacherDays_.size() != 0 || hotTeachersWeek_.size() != 0;
     }
 
     // Debug/test hook: recompute the expected hot membership from the
@@ -124,7 +111,7 @@ public:
 
 private:
     ObjectiveWeights weights_;
-    Timetable *table_ = nullptr;
+    Timetable* table_ = nullptr;
     int slotCount_ = 0;
     int dayCount_ = 0;
     std::vector<int> assign_;  // slot per lesson (-1 == unassigned)
@@ -184,19 +171,13 @@ private:
     // Uniform pick among the assigned lessons of `owners` that satisfy
     // `match(lessonIndex)` (reservoir sampling, k = 1); -1 when none.
     template <typename Match>
-    int pickLesson(const std::vector<int> &owners,
-                   std::mt19937_64 &rng,
-                   Match match) const
-    {
+    int pickLesson(const std::vector<int>& owners, std::mt19937_64& rng, Match match) const {
         int picked = -1;
         std::uint64_t seen = 0;
-        for (int i : owners)
-        {
-            if (assign_[i] < 0 || !match(i))
-                continue;
+        for (int i : owners) {
+            if (assign_[i] < 0 || !match(i)) continue;
             ++seen;
-            if (seen == 1 || rng() % seen == 0)
-                picked = i;
+            if (seen == 1 || rng() % seen == 0) picked = i;
         }
         return picked;
     }
@@ -209,12 +190,10 @@ private:
     // Recompute one block group's blockAdjacencyCost value from assign_.
     void refreshBlock(int group);
 
-    std::size_t slotOffset(int owner, int slot) const
-    {
+    std::size_t slotOffset(int owner, int slot) const {
         return static_cast<std::size_t>(owner) * slotCount_ + slot;
     }
-    std::size_t dayOffset(int owner, int day) const
-    {
+    std::size_t dayOffset(int owner, int day) const {
         return static_cast<std::size_t>(owner) * dayCount_ + day;
     }
 };

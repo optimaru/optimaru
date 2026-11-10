@@ -6,8 +6,7 @@
 
 #include "alb/constraints/common.hpp"
 
-namespace alb
-{
+namespace alb {
 
 // Soft, weight 1: usedStationsCost — the stations the line opens. Raw cost =
 // the number of stations with a load > 0 (durations are > 0, so: stations
@@ -18,31 +17,22 @@ namespace alb
 // Member-change fast path: a station's first task opens it, its last one
 // closes it, O(1). A step function no single-task move can cross, which is
 // why the solver ships CloseStationMove.
-struct UsedStationsCost final : MemberChangeGlobalConstraint
-{
+struct UsedStationsCost final : MemberChangeGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit UsedStationsCost(double weight = kDefaultWeight)
-        : MemberChangeGlobalConstraint("usedStationsCost", weight, kDefaultLevel)
-    {
-    }
+        : MemberChangeGlobalConstraint("usedStationsCost", weight, kDefaultLevel) {}
 
-    void reset(const AssemblyLineBalancingProblem &problem,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+    void reset(const AssemblyLineBalancingProblem& problem,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(problem);
         used_ = 0;
-        for (const std::vector<int> &members : members_per_unit)
-            used_ += members.empty() ? 0 : 1;
+        for (const std::vector<int>& members : members_per_unit) used_ += members.empty() ? 0 : 1;
     }
 
-    void on_member_changed(const AssemblyLineBalancingProblem & /*problem*/,
-                         int /*unit*/,
-                         const std::vector<int> &members,
-                         int /*entity*/,
-                         bool joined) override
-    {
+    void on_member_changed(const AssemblyLineBalancingProblem& /*problem*/, int /*unit*/,
+                           const std::vector<int>& members, int /*entity*/, bool joined) override {
         // `members` is the station AFTER the change.
         if (joined && members.size() == 1)
             ++used_;

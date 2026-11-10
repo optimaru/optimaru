@@ -6,8 +6,7 @@
 
 #include "ts/domain.hpp"
 
-namespace ts
-{
+namespace ts {
 
 // The four tournament-scheduling constraints.
 //
@@ -38,10 +37,9 @@ namespace ts
 // significant figures HALF_EVEN.
 // Unassigned assignments (team == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
-    static Score score(TournamentSchedule &schedule);
+    static Score score(TournamentSchedule& schedule);
 
     // --- shared building blocks (also used by the incremental calculator) ---
 
@@ -51,21 +49,18 @@ public:
     // Load-balance unfairness from the running aggregates:
     // sqrt(sumOfSquares - sumOfLoads^2 / itemCount), 0 when itemCount == 0,
     // rounded to 6 significant figures HALF_EVEN.
-    static double unfairnessFromAggregates(std::int64_t sumOfLoads,
-                                           std::int64_t sumOfSquares,
+    static double unfairnessFromAggregates(std::int64_t sumOfLoads, std::int64_t sumOfSquares,
                                            int itemCount);
 
-    static double unfairness(const std::vector<std::int64_t> &loads);
+    static double unfairness(const std::vector<std::int64_t>& loads);
 
     // The one shared soft assembly: the weighted medium and soft penalties
     // (counted positive) folded with the domain's kMediumFold, i.e.
     // -(soft + medium * 1e6) — the same arithmetic the decomposed calculator
     // applies to its medium accumulator. Both calculators call this so
     // ScoreChecks::Full compares bit-identical doubles.
-    static double combinedSoft(double mediumPenalty, double softPenalty)
-    {
-        const double soft
-            = kMediumFold.to_engine(0, -mediumPenalty, -softPenalty).soft;
+    static double combinedSoft(double mediumPenalty, double softPenalty) {
+        const double soft = kMediumFold.to_engine(0, -mediumPenalty, -softPenalty).soft;
         return soft == 0.0 ? 0.0 : soft;  // normalize -0.0
     }
 };

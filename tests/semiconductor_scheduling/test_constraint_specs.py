@@ -51,6 +51,7 @@ NAMES = [
     "makespan_cost",
 ]
 
+
 def _problem(seed: int = 3) -> SemiconductorScheduleModel:
     return SemiconductorScheduleModel.model_validate(instance(seed))
 

@@ -5,15 +5,13 @@
 
 #include "mc/domain.hpp"
 
-namespace mc
-{
+namespace mc {
 
 // The raw cost of every default constraint on the current partition, before
 // weight / exponent / level (the unit-constraint costs per side, the globals
 // as one total). Read straight from the facts: the reference the incremental
 // calculator, the plugin components and the tests are checked against.
-struct RawCosts
-{
+struct RawCosts {
     std::int64_t fixed[kSideCount] = {0, 0};      // fixedPartitionCost
     std::int64_t same[kSideCount] = {0, 0};       // samePartitionPairsCost
     std::int64_t different[kSideCount] = {0, 0};  // differentPartitionPairsCost
@@ -45,19 +43,18 @@ struct RawCosts
 //   soft 6. cutWeightCost                a reward: -(cut weight), so the soft
 //                                        score is +cut weight
 // Unassigned vertices (-1) follow the rule documented in mc/domain.hpp.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // Runs prepare(), then the full recompute; stores problem.score and sets
     // problem.scored.
-    static Score score(MaxCutProblem &problem);
+    static Score score(MaxCutProblem& problem);
 
     // The raw costs (no prepare needed beyond valid indices; score
     // runs prepare first).
-    static RawCosts rawCosts(const MaxCutProblem &problem);
+    static RawCosts rawCosts(const MaxCutProblem& problem);
 
     // The default-weight score of `raw`.
-    static Score scoreOf(const RawCosts &raw);
+    static Score scoreOf(const RawCosts& raw);
 
     // Validates the facts and the partition and (re)builds the derived
     // indexes (MaxCutProblem's "derived data"). An empty `side` / `fixedSide`
@@ -67,7 +64,7 @@ public:
     // or fixed side outside {-1, 0, 1}, a side / fixedSide vector of the
     // wrong length, or size bounds outside 0 <= min <= max <= |V|.
     // Always rebuilds (cheap, O(vertices + edges + pairs)).
-    static void prepare(MaxCutProblem &problem);
+    static void prepare(MaxCutProblem& problem);
 };
 
 }  // namespace mc

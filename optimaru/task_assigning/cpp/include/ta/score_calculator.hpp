@@ -4,21 +4,19 @@
 #include "ta/domain.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace ta
-{
+namespace ta {
 
 // Full-recompute reference for the six constraints: walks every employee's
 // task list, recomputes the derived task fields and sums the four score
 // levels. It is the correctness
 // oracle for the incremental calculator (checked in the tests and under
 // ScoreChecks::ScoreChecks::Full) and the authoritative final scoring.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // Recomputes every task's derived fields (employee, startTime) from
     // the current employee task lists. Must be called
     // before reading Task::employee / Task::startTime whenever lists change.
-    static void updateShadowVariables(TaskAssigningSolution &solution);
+    static void updateShadowVariables(TaskAssigningSolution& solution);
 
     // Recomputes the derived fields, then the four-level score, storing it in
     // solution.score and returning it. Constraints (all penalties, at the
@@ -29,12 +27,11 @@ public:
     //   soft[2]  criticalPriorityTaskEndTimeCost  endTime x 4
     //            majorPriorityTaskEndTimeCost     endTime x 2
     //            minorPriorityTaskEndTimeCost     endTime x 1
-    static Score score(TaskAssigningSolution &solution);
+    static Score score(TaskAssigningSolution& solution);
 
     // score mapped into the engine's Score through the
     // domain's medium fold (see the mapping rule in ta/domain.hpp).
-    static optimaru::Score
-    calculateEngineScore(TaskAssigningSolution &solution);
+    static optimaru::Score calculateEngineScore(TaskAssigningSolution& solution);
 };
 
 }  // namespace ta

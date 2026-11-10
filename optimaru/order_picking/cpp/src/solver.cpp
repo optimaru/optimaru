@@ -17,11 +17,9 @@
 #include "optimaru/worker_threads.hpp"
 #include "optimaru/search/operators.hpp"
 
-namespace op
-{
+namespace op {
 
-namespace
-{
+namespace {
 
 // ---------------------------------------------------------------------------
 // OrderConsolidateMove (see Config::orderConsolidateMoves)
@@ -51,52 +49,38 @@ namespace
 // split costs 1000 (measured: restricting the target to the holders left
 // every instance 1-2 splits above the floor of one trolley per order, which
 // the full target search reaches on every seed).
-class OrderConsolidateMove final
-    : public optimaru::MoveOperator<OrderPickingSolution>
-{
+class OrderConsolidateMove final : public optimaru::MoveOperator<OrderPickingSolution> {
 public:
-    explicit OrderConsolidateMove(
-        const OrderPickingIncrementalScoreCalculator *calculator)
-        : calculator_(calculator)
-    {
-    }
+    explicit OrderConsolidateMove(const OrderPickingIncrementalScoreCalculator* calculator)
+        : calculator_(calculator) {}
 
-    const char *name() const override { return "orderConsolidate"; }
+    const char* name() const override { return "orderConsolidate"; }
 
-    bool apply(optimaru::OperatorContext<OrderPickingSolution> &ctx,
-               std::mt19937_64 &rng,
-               std::vector<int> &entities) override
-    {
-        OrderPickingSolution &s = ctx.editor.solution();
+    bool apply(optimaru::OperatorContext<OrderPickingSolution>& ctx, std::mt19937_64& rng,
+               std::vector<int>& entities) override {
+        OrderPickingSolution& s = ctx.editor.solution();
         const int orderCount = static_cast<int>(s.orders.size());
 
         candidates_.clear();
-        for (int o = 0; o < orderCount; ++o)
-        {
-            if (calculator_->distinctTrolleyCount(o) > 1)
-                candidates_.push_back(o);
+        for (int o = 0; o < orderCount; ++o) {
+            if (calculator_->distinctTrolleyCount(o) > 1) candidates_.push_back(o);
         }
         // Try a few random split orders through the feasibility gate; when
         // none can be merged anywhere, fall back to the order-level moves.
-        for (int attempt = 0; attempt < 4 && !candidates_.empty(); ++attempt)
-        {
+        for (int attempt = 0; attempt < 4 && !candidates_.empty(); ++attempt) {
             const std::size_t pick = rng() % candidates_.size();
             const int order = candidates_[pick];
             candidates_[pick] = candidates_.back();
             candidates_.pop_back();
-            if (tryConsolidate(ctx, rng, entities, order))
-                return true;
+            if (tryConsolidate(ctx, rng, entities, order)) return true;
         }
-        if (orderMoveFallback(ctx, rng, entities))
-            return true;
+        if (orderMoveFallback(ctx, rng, entities)) return true;
         return relocateFallback(ctx, rng, entities);
     }
 
-    void undo_last(optimaru::OperatorContext<OrderPickingSolution> &ctx) override
-    {
-        OrderPickingSolution &s = ctx.editor.solution();
-        for (const auto &[trolley, list] : saved_)
-        {
+    void undo_last(optimaru::OperatorContext<OrderPickingSolution>& ctx) override {
+        OrderPickingSolution& s = ctx.editor.solution();
+        for (const auto& [trolley, list] : saved_) {
             ctx.editor.begin_list_edit(trolley);
             s.trolleys[trolley].pickTaskIndices = list;
             ctx.editor.end_list_edit(trolley);
@@ -106,61 +90,47 @@ public:
 
 private:
     // Cheapest-insertion position for `location` in the trolley's route.
-    static int cheapestPosition(const OrderPickingSolution &s,
-                                const Trolley &trolley,
-                                const WarehouseLocation &location)
-    {
-        const std::vector<int> &list = trolley.pickTaskIndices;
-        const WarehouseLocation *previous = &trolley.location;
+    static int cheapestPosition(const OrderPickingSolution& s, const Trolley& trolley,
+                                const WarehouseLocation& location) {
+        const std::vector<int>& list = trolley.pickTaskIndices;
+        const WarehouseLocation* previous = &trolley.location;
         const int size = static_cast<int>(list.size());
         int bestPosition = 0;
         int bestDelta = std::numeric_limits<int>::max();
-        for (int p = 0; p <= size; ++p)
-        {
-            const WarehouseLocation &next
-                = p < size ? s.pickTasks[list[p]].location : trolley.location;
-            const int delta = calculateDistance(*previous, location)
-                              + calculateDistance(location, next)
-                              - calculateDistance(*previous, next);
-            if (delta < bestDelta)
-            {
+        for (int p = 0; p <= size; ++p) {
+            const WarehouseLocation& next =
+                    p < size ? s.pickTasks[list[p]].location : trolley.location;
+            const int delta = calculateDistance(*previous, location) +
+                              calculateDistance(location, next) -
+                              calculateDistance(*previous, next);
+            if (delta < bestDelta) {
                 bestDelta = delta;
                 bestPosition = p;
             }
-            if (p < size)
-                previous = &s.pickTasks[list[p]].location;
+            if (p < size) previous = &s.pickTasks[list[p]].location;
         }
         return bestPosition;
     }
 
     // Whether moving `addedVolume` more of `order` onto `trolley` keeps the
     // trolley within its buckets — O(1) from the calculator's live tables.
-    bool fits(const OrderPickingSolution &s,
-              int order,
-              int trolley,
-              std::int64_t addedVolume) const
-    {
-        const Trolley &holder = s.trolleys[trolley];
-        const std::int64_t held
-            = calculator_->orderVolumeOnTrolley(order, trolley);
-        const std::int64_t delta
-            = ScoreCalculator::calculateOrderRequiredBuckets(
-                  held + addedVolume, holder.bucketCapacity)
-              - ScoreCalculator::calculateOrderRequiredBuckets(
-                  held, holder.bucketCapacity);
-        return calculator_->requiredBucketsOnTrolley(trolley) + delta
-               <= holder.bucketCount;
+    bool fits(const OrderPickingSolution& s, int order, int trolley,
+              std::int64_t addedVolume) const {
+        const Trolley& holder = s.trolleys[trolley];
+        const std::int64_t held = calculator_->orderVolumeOnTrolley(order, trolley);
+        const std::int64_t delta =
+                ScoreCalculator::calculateOrderRequiredBuckets(held + addedVolume,
+                                                               holder.bucketCapacity) -
+                ScoreCalculator::calculateOrderRequiredBuckets(held, holder.bucketCapacity);
+        return calculator_->requiredBucketsOnTrolley(trolley) + delta <= holder.bucketCount;
     }
 
     // Merge the order onto one trolley: the best holder that can take the
     // whole order, else any other trolley with room, else the smallest donor
     // folded into the largest holder. False when gated out.
-    bool tryConsolidate(optimaru::OperatorContext<OrderPickingSolution> &ctx,
-                        std::mt19937_64 &rng,
-                        std::vector<int> &entities,
-                        int order)
-    {
-        OrderPickingSolution &s = ctx.editor.solution();
+    bool tryConsolidate(optimaru::OperatorContext<OrderPickingSolution>& ctx, std::mt19937_64& rng,
+                        std::vector<int>& entities, int order) {
+        OrderPickingSolution& s = ctx.editor.solution();
         const int trolleyCount = static_cast<int>(s.trolleys.size());
 
         // The order's largest-volume holder — the natural merge target and
@@ -168,15 +138,11 @@ private:
         int largestHolder = -1;
         std::int64_t largestHolderVolume = -1;
         std::int64_t totalVolume = 0;
-        for (int t = 0; t < trolleyCount; ++t)
-        {
-            if (calculator_->pickCountOnTrolley(order, t) == 0)
-                continue;
-            const std::int64_t volume
-                = calculator_->orderVolumeOnTrolley(order, t);
+        for (int t = 0; t < trolleyCount; ++t) {
+            if (calculator_->pickCountOnTrolley(order, t) == 0) continue;
+            const std::int64_t volume = calculator_->orderVolumeOnTrolley(order, t);
             totalVolume += volume;
-            if (volume > largestHolderVolume)
-            {
+            if (volume > largestHolderVolume) {
                 largestHolderVolume = volume;
                 largestHolder = t;
             }
@@ -187,15 +153,10 @@ private:
         // fragments where the bulk already sits is the cheapest merge.
         int target = -1;
         std::int64_t targetVolume = -1;
-        for (int t = 0; t < trolleyCount; ++t)
-        {
-            const std::int64_t volume
-                = calculator_->orderVolumeOnTrolley(order, t);
-            if (calculator_->pickCountOnTrolley(order, t) == 0
-                || volume <= targetVolume)
-                continue;
-            if (fits(s, order, t, totalVolume - volume))
-            {
+        for (int t = 0; t < trolleyCount; ++t) {
+            const std::int64_t volume = calculator_->orderVolumeOnTrolley(order, t);
+            if (calculator_->pickCountOnTrolley(order, t) == 0 || volume <= targetVolume) continue;
+            if (fits(s, order, t, totalVolume - volume)) {
                 targetVolume = volume;
                 target = t;
             }
@@ -207,19 +168,12 @@ private:
         // the endgame: the orders still split at the 10s mark are the ones
         // whose holders are all bucket-full, while several trolleys stand
         // idle (a spare trolley costs one round trip, the split costs 1000).
-        if (target < 0 && trolleyCount > 0)
-        {
-            const int start = static_cast<int>(
-                rng() % static_cast<std::uint64_t>(trolleyCount));
-            for (int i = 0; i < trolleyCount; ++i)
-            {
-                const int t = start + i < trolleyCount
-                                  ? start + i
-                                  : start + i - trolleyCount;
-                if (calculator_->pickCountOnTrolley(order, t) != 0)
-                    continue;
-                if (fits(s, order, t, totalVolume))
-                {
+        if (target < 0 && trolleyCount > 0) {
+            const int start = static_cast<int>(rng() % static_cast<std::uint64_t>(trolleyCount));
+            for (int i = 0; i < trolleyCount; ++i) {
+                const int t = start + i < trolleyCount ? start + i : start + i - trolleyCount;
+                if (calculator_->pickCountOnTrolley(order, t) != 0) continue;
+                if (fits(s, order, t, totalVolume)) {
                     target = t;
                     break;
                 }
@@ -228,19 +182,13 @@ private:
 
         const bool full = target >= 0;
         int smallestDonor = -1;
-        if (!full)
-        {
+        if (!full) {
             target = largestHolder;
             std::int64_t donorVolume = std::numeric_limits<std::int64_t>::max();
-            for (int t = 0; t < trolleyCount; ++t)
-            {
-                if (t == target
-                    || calculator_->pickCountOnTrolley(order, t) == 0)
-                    continue;
-                const std::int64_t volume
-                    = calculator_->orderVolumeOnTrolley(order, t);
-                if (volume < donorVolume)
-                {
+            for (int t = 0; t < trolleyCount; ++t) {
+                if (t == target || calculator_->pickCountOnTrolley(order, t) == 0) continue;
+                const std::int64_t volume = calculator_->orderVolumeOnTrolley(order, t);
+                if (volume < donorVolume) {
                     donorVolume = volume;
                     smallestDonor = t;
                 }
@@ -253,10 +201,9 @@ private:
         // insert every one of them into the target's route.
         moved_.clear();
         saved_.clear();
-        for (int t = 0; t < trolleyCount; ++t)
-        {
-            if (t == target || calculator_->pickCountOnTrolley(order, t) == 0
-                || (!full && t != smallestDonor))
+        for (int t = 0; t < trolleyCount; ++t) {
+            if (t == target || calculator_->pickCountOnTrolley(order, t) == 0 ||
+                (!full && t != smallestDonor))
                 continue;
             detachOrder(ctx, order, t);
         }
@@ -275,46 +222,34 @@ private:
     // where it is and are the only remaining way to change who carries what:
     // relocate a whole order onto another trolley with room, or swap two
     // whole orders between their trolleys.
-    bool orderMoveFallback(optimaru::OperatorContext<OrderPickingSolution> &ctx,
-                           std::mt19937_64 &rng,
-                           std::vector<int> &entities)
-    {
-        OrderPickingSolution &s = ctx.editor.solution();
+    bool orderMoveFallback(optimaru::OperatorContext<OrderPickingSolution>& ctx,
+                           std::mt19937_64& rng, std::vector<int>& entities) {
+        OrderPickingSolution& s = ctx.editor.solution();
         const int trolleyCount = static_cast<int>(s.trolleys.size());
         const int orderCount = static_cast<int>(s.orders.size());
-        if (trolleyCount < 2 || orderCount == 0)
-            return false;
+        if (trolleyCount < 2 || orderCount == 0) return false;
 
-        for (int attempt = 0; attempt < 6; ++attempt)
-        {
-            const int order = static_cast<int>(
-                rng() % static_cast<std::uint64_t>(orderCount));
+        for (int attempt = 0; attempt < 6; ++attempt) {
+            const int order = static_cast<int>(rng() % static_cast<std::uint64_t>(orderCount));
             if (calculator_->distinctTrolleyCount(order) != 1)
                 continue;  // split orders belong to the consolidation branch
             const int source = holderOf(order, trolleyCount);
-            const std::int64_t volume
-                = calculator_->orderVolumeOnTrolley(order, source);
+            const std::int64_t volume = calculator_->orderVolumeOnTrolley(order, source);
 
-            if ((rng() & 1u) == 0u)
-            {
+            if ((rng() & 1u) == 0u) {
                 // Relocate: the whole order onto the first trolley with room,
                 // scanned from a random offset.
-                const int start = static_cast<int>(
-                    rng() % static_cast<std::uint64_t>(trolleyCount));
-                for (int i = 0; i < trolleyCount; ++i)
-                {
-                    const int t = start + i < trolleyCount
-                                      ? start + i
-                                      : start + i - trolleyCount;
-                    if (t == source || !fits(s, order, t, volume))
-                        continue;
+                const int start =
+                        static_cast<int>(rng() % static_cast<std::uint64_t>(trolleyCount));
+                for (int i = 0; i < trolleyCount; ++i) {
+                    const int t = start + i < trolleyCount ? start + i : start + i - trolleyCount;
+                    if (t == source || !fits(s, order, t, volume)) continue;
                     moved_.clear();
                     saved_.clear();
                     detachOrder(ctx, order, source);
                     saved_.emplace_back(t, s.trolleys[t].pickTaskIndices);
                     attachRange(ctx, t, 0, moved_.size());
-                    entities.insert(
-                        entities.end(), moved_.begin(), moved_.end());
+                    entities.insert(entities.end(), moved_.begin(), moved_.end());
                     return true;
                 }
                 continue;
@@ -322,17 +257,13 @@ private:
 
             // Swap: exchange this order with another whole order sitting on a
             // different trolley, when both trolleys can take the exchange.
-            const int other = static_cast<int>(
-                rng() % static_cast<std::uint64_t>(orderCount));
-            if (other == order || calculator_->distinctTrolleyCount(other) != 1)
-                continue;
+            const int other = static_cast<int>(rng() % static_cast<std::uint64_t>(orderCount));
+            if (other == order || calculator_->distinctTrolleyCount(other) != 1) continue;
             const int otherSource = holderOf(other, trolleyCount);
-            if (otherSource == source)
-                continue;
-            const std::int64_t otherVolume
-                = calculator_->orderVolumeOnTrolley(other, otherSource);
-            if (!swapFits(s, source, volume, otherVolume)
-                || !swapFits(s, otherSource, otherVolume, volume))
+            if (otherSource == source) continue;
+            const std::int64_t otherVolume = calculator_->orderVolumeOnTrolley(other, otherSource);
+            if (!swapFits(s, source, volume, otherVolume) ||
+                !swapFits(s, otherSource, otherVolume, volume))
                 continue;
 
             moved_.clear();
@@ -350,12 +281,9 @@ private:
 
     // The single trolley holding `order` (only called when it has exactly
     // one).
-    int holderOf(int order, int trolleyCount) const
-    {
-        for (int t = 0; t < trolleyCount; ++t)
-        {
-            if (calculator_->pickCountOnTrolley(order, t) != 0)
-                return t;
+    int holderOf(int order, int trolleyCount) const {
+        for (int t = 0; t < trolleyCount; ++t) {
+            if (calculator_->pickCountOnTrolley(order, t) != 0) return t;
         }
         return 0;
     }
@@ -363,35 +291,25 @@ private:
     // Whether `trolley` still fits its buckets after giving up an order of
     // `outVolume` and taking one of `inVolume` (both whole orders, so the
     // bucket demand of each is a single ceil term).
-    bool swapFits(const OrderPickingSolution &s,
-                  int trolley,
-                  std::int64_t outVolume,
-                  std::int64_t inVolume) const
-    {
-        const Trolley &holder = s.trolleys[trolley];
-        const std::int64_t delta
-            = ScoreCalculator::calculateOrderRequiredBuckets(
-                  inVolume, holder.bucketCapacity)
-              - ScoreCalculator::calculateOrderRequiredBuckets(
-                  outVolume, holder.bucketCapacity);
-        return calculator_->requiredBucketsOnTrolley(trolley) + delta
-               <= holder.bucketCount;
+    bool swapFits(const OrderPickingSolution& s, int trolley, std::int64_t outVolume,
+                  std::int64_t inVolume) const {
+        const Trolley& holder = s.trolleys[trolley];
+        const std::int64_t delta =
+                ScoreCalculator::calculateOrderRequiredBuckets(inVolume, holder.bucketCapacity) -
+                ScoreCalculator::calculateOrderRequiredBuckets(outVolume, holder.bucketCapacity);
+        return calculator_->requiredBucketsOnTrolley(trolley) + delta <= holder.bucketCount;
     }
 
     // Removes every pick of `order` from `from` into moved_, recording the
     // trolley's original list for the undo.
-    void detachOrder(optimaru::OperatorContext<OrderPickingSolution> &ctx,
-                     int order,
-                     int from)
-    {
-        OrderPickingSolution &s = ctx.editor.solution();
-        std::vector<int> &list = s.trolleys[from].pickTaskIndices;
+    void detachOrder(optimaru::OperatorContext<OrderPickingSolution>& ctx, int order, int from) {
+        OrderPickingSolution& s = ctx.editor.solution();
+        std::vector<int>& list = s.trolleys[from].pickTaskIndices;
         saved_.emplace_back(from, list);
-        const std::vector<int> &old = saved_.back().second;
+        const std::vector<int>& old = saved_.back().second;
         ctx.editor.begin_list_edit(from);
         auto keep = list.begin();
-        for (int element : old)
-        {
+        for (int element : old) {
             if (s.pickTasks[element].orderIndex == order)
                 moved_.push_back(element);
             else
@@ -403,21 +321,15 @@ private:
 
     // Cheapest-insertion of moved_[first, last) into `target`'s route. The
     // caller must already have recorded `target`'s original list.
-    void attachRange(optimaru::OperatorContext<OrderPickingSolution> &ctx,
-                     int target,
-                     std::size_t first,
-                     std::size_t last)
-    {
-        OrderPickingSolution &s = ctx.editor.solution();
-        const Trolley &trolley = s.trolleys[target];
-        std::vector<int> &list = s.trolleys[target].pickTaskIndices;
+    void attachRange(optimaru::OperatorContext<OrderPickingSolution>& ctx, int target,
+                     std::size_t first, std::size_t last) {
+        OrderPickingSolution& s = ctx.editor.solution();
+        const Trolley& trolley = s.trolleys[target];
+        std::vector<int>& list = s.trolleys[target].pickTaskIndices;
         ctx.editor.begin_list_edit(target);
-        for (std::size_t i = first; i < last; ++i)
-        {
+        for (std::size_t i = first; i < last; ++i) {
             const int element = moved_[i];
-            list.insert(list.begin()
-                            + cheapestPosition(
-                                s, trolley, s.pickTasks[element].location),
+            list.insert(list.begin() + cheapestPosition(s, trolley, s.pickTasks[element].location),
                         element);
         }
         ctx.editor.end_list_edit(target);
@@ -429,51 +341,39 @@ private:
     // selection — a skipped apply gets no outcome reward, so the roulette
     // wheel would keep feeding steps to a dead operator (measured: the step
     // counter inflated ~30x and starved the built-in moves).
-    bool relocateFallback(optimaru::OperatorContext<OrderPickingSolution> &ctx,
-                          std::mt19937_64 &rng,
-                          std::vector<int> &entities)
-    {
-        OrderPickingSolution &s = ctx.editor.solution();
+    bool relocateFallback(optimaru::OperatorContext<OrderPickingSolution>& ctx,
+                          std::mt19937_64& rng, std::vector<int>& entities) {
+        OrderPickingSolution& s = ctx.editor.solution();
         const int element_count = static_cast<int>(s.pickTasks.size());
         const int trolleyCount = static_cast<int>(s.trolleys.size());
-        if (element_count == 0 || trolleyCount < 2)
-            return false;
+        if (element_count == 0 || trolleyCount < 2) return false;
 
         int element = -1;
         int source = -1;
-        for (int attempt = 0; attempt < 8 && element < 0; ++attempt)
-        {
-            const int e = static_cast<int>(
-                rng() % static_cast<std::uint64_t>(element_count));
-            if (ctx.element_list[e] >= 0)
-            {
+        for (int attempt = 0; attempt < 8 && element < 0; ++attempt) {
+            const int e = static_cast<int>(rng() % static_cast<std::uint64_t>(element_count));
+            if (ctx.element_list[e] >= 0) {
                 element = e;
                 source = ctx.element_list[e];
             }
         }
-        if (element < 0)
-            return false;
-        int destination = static_cast<int>(
-            rng() % static_cast<std::uint64_t>(trolleyCount - 1));
-        if (destination >= source)
-            ++destination;
+        if (element < 0) return false;
+        int destination = static_cast<int>(rng() % static_cast<std::uint64_t>(trolleyCount - 1));
+        if (destination >= source) ++destination;
 
         saved_.clear();
         saved_.emplace_back(source, s.trolleys[source].pickTaskIndices);
-        saved_.emplace_back(destination,
-                            s.trolleys[destination].pickTaskIndices);
+        saved_.emplace_back(destination, s.trolleys[destination].pickTaskIndices);
         ctx.editor.remove(source, ctx.element_position[element]);
-        const Trolley &destinationTrolley = s.trolleys[destination];
-        ctx.editor.insert(
-            destination,
-            cheapestPosition(
-                s, destinationTrolley, s.pickTasks[element].location),
-            element);
+        const Trolley& destinationTrolley = s.trolleys[destination];
+        ctx.editor.insert(destination,
+                          cheapestPosition(s, destinationTrolley, s.pickTasks[element].location),
+                          element);
         entities.push_back(element);
         return true;
     }
 
-    const OrderPickingIncrementalScoreCalculator *calculator_;
+    const OrderPickingIncrementalScoreCalculator* calculator_;
     std::vector<int> candidates_;
     std::vector<int> moved_;
     std::vector<std::pair<int, std::vector<int>>> saved_;
@@ -481,16 +381,14 @@ private:
 
 }  // namespace
 
-namespace
-{
+namespace {
 
 // Shared engine wiring for both solve() overloads: termination, late
 // acceptance, the sequence move mix, the ALNS knobs and the distance-nearby
 // selection (all pure problem-fact lookups, so they apply to the plugin path
 // too).
-optimaru::Settings buildEngineConfig(const Solver::Config &config,
-                                         const OrderPickingSolution &solution)
-{
+optimaru::Settings buildEngineConfig(const Solver::Config& config,
+                                     const OrderPickingSolution& solution) {
     optimaru::Settings engineConfig;
     engineConfig.seed = config.seed;
     engineConfig.score_checks = config.score_checks;
@@ -500,21 +398,19 @@ optimaru::Settings buildEngineConfig(const Solver::Config &config,
     engineConfig.limits.target_score = config.target_score;
     engineConfig.limits.stall_time_limit = config.stall_time_limit;
     engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit
-        = config.stall_step_limit;
+    engineConfig.limits.stall_step_limit = config.stall_step_limit;
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length
-        = config.history_length != 0
-              ? config.history_length
-              : std::clamp<std::size_t>(
-                    4 * solution.pickTasks.size(), 200, 1600);
-    auto &moves = engineConfig.search.moves;
+    engineConfig.search.acceptance.history_length =
+            config.history_length != 0
+                    ? config.history_length
+                    : std::clamp<std::size_t>(4 * solution.pickTasks.size(), 200, 1600);
+    auto& moves = engineConfig.search.moves;
     moves.relocate_weight = config.relocate_weight;
     moves.list_swap_weight = config.list_swap_weight;
     moves.two_opt_weight = config.two_opt_weight;
     moves.or_opt_weight = config.or_opt_weight;
     moves.tail_swap_weight = config.tail_swap_weight;
-    auto &lns = engineConfig.search.ruin_recreate;
+    auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
     lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
     lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
@@ -527,24 +423,17 @@ optimaru::Settings buildEngineConfig(const Solver::Config &config,
     // Warehouse-distance nearby neighborhoods over the pick tasks (see
     // Config::distanceNearby). The meter reads a snapshot of the pick
     // locations — a pure lookup.
-    if (config.distanceNearby)
-    {
+    if (config.distanceNearby) {
         auto locations = std::make_shared<std::vector<WarehouseLocation>>();
         locations->reserve(solution.pickTasks.size());
-        for (const PickTask &task : solution.pickTasks)
-            locations->push_back(task.location);
-        engineConfig.search.nearby.distance
-            = [locations](int a, int b)
-        {
-            return static_cast<double>(
-                calculateDistance((*locations)[a], (*locations)[b]));
+        for (const PickTask& task : solution.pickTasks) locations->push_back(task.location);
+        engineConfig.search.nearby.distance = [locations](int a, int b) {
+            return static_cast<double>(calculateDistance((*locations)[a], (*locations)[b]));
         };
-        engineConfig.search.nearby.size = std::max(
-            1,
-            std::min(config.distanceNearbySize,
-                     static_cast<int>(solution.pickTasks.size()) - 1));
-        engineConfig.search.nearby.probability
-            = config.distanceNearbyProbability;
+        engineConfig.search.nearby.size =
+                std::max(1, std::min(config.distanceNearbySize,
+                                     static_cast<int>(solution.pickTasks.size()) - 1));
+        engineConfig.search.nearby.probability = config.distanceNearbyProbability;
     }
 
     return engineConfig;
@@ -552,17 +441,13 @@ optimaru::Settings buildEngineConfig(const Solver::Config &config,
 
 }  // namespace
 
-void Solver::solve(OrderPickingSolution &solution)
-{
-    if (solution.trolleys.empty() || solution.pickTasks.empty())
-    {
+void Solver::solve(OrderPickingSolution& solution) {
+    if (solution.trolleys.empty() || solution.pickTasks.empty()) {
         ScoreCalculator::score(solution);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4)
-    {
-        throw std::invalid_argument(
-            "ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruinRecreateRewards.size() != 4) {
+        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
     }
 
     // Independent parallel starts (the school-timetabling pattern): the
@@ -571,8 +456,7 @@ void Solver::solve(OrderPickingSolution &solution)
     // built-in moves only — cannot be used. Worker i solves its own copy
     // with seed + i; the best final score wins.
     const int workerCount = std::max(1, config_.parallelSolverCount);
-    if (workerCount > 1)
-    {
+    if (workerCount > 1) {
         std::vector<OrderPickingSolution> candidates(workerCount, solution);
         std::vector<std::exception_ptr> failures(workerCount);
         // Raised by the first worker that fails: every worker's engine checks
@@ -580,38 +464,27 @@ void Solver::solve(OrderPickingSolution &solution)
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::run_worker_threads(
-            workerCount, *stop,
-            [this, &candidates, &failures, &stop](int i)
-            {
-                try
-                {
-                    Config workerConfig = config_;
-                    workerConfig.parallelSolverCount = 1;
-                    workerConfig.stop_flag = stop;
-                    workerConfig.seed
-                        += static_cast<std::uint64_t>(i);
-                    if (i != 0)
-                        workerConfig.on_new_best = nullptr;
-                    Solver worker(std::move(workerConfig));
-                    worker.solve(candidates[i]);
-                }
-                catch (...)
-                {
-                    failures[i] = std::current_exception();
-                    stop->store(true);
-                }
-            });
-        for (const std::exception_ptr &failure : failures)
-        {
-            if (failure)
-                std::rethrow_exception(failure);
+        optimaru::run_worker_threads(workerCount, *stop,
+                                     [this, &candidates, &failures, &stop](int i) {
+                                         try {
+                                             Config workerConfig = config_;
+                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.stop_flag = stop;
+                                             workerConfig.seed += static_cast<std::uint64_t>(i);
+                                             if (i != 0) workerConfig.on_new_best = nullptr;
+                                             Solver worker(std::move(workerConfig));
+                                             worker.solve(candidates[i]);
+                                         } catch (...) {
+                                             failures[i] = std::current_exception();
+                                             stop->store(true);
+                                         }
+                                     });
+        for (const std::exception_ptr& failure : failures) {
+            if (failure) std::rethrow_exception(failure);
         }
         int best = 0;
-        for (int i = 1; i < workerCount; ++i)
-        {
-            if (candidates[i].score > candidates[best].score)
-                best = i;
+        for (int i = 1; i < workerCount; ++i) {
+            if (candidates[i].score > candidates[best].score) best = i;
         }
         solution = std::move(candidates[best]);
         return;
@@ -623,12 +496,9 @@ void Solver::solve(OrderPickingSolution &solution)
     // the built-in move mix under adaptive selection.
     OrderPickingIncrementalScoreCalculator calculator;
     optimaru::Solver<OrderPickingSolution> engine(std::move(engineConfig));
-    if (config_.stop_flag)
-        engine.share_stop_flag(config_.stop_flag);
-    if (config_.orderConsolidateMoves)
-    {
-        engine.add_move_operator(
-            std::make_unique<OrderConsolidateMove>(&calculator));
+    if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
+    if (config_.orderConsolidateMoves) {
+        engine.add_move_operator(std::make_unique<OrderConsolidateMove>(&calculator));
     }
     engine.solve(solution, calculator);
 
@@ -637,23 +507,17 @@ void Solver::solve(OrderPickingSolution &solution)
     solution.score = ScoreCalculator::score(solution);
 }
 
-void Solver::solve(
-    OrderPickingSolution &solution,
-    optimaru::DecomposedObjective<OrderPickingSolution> &calculator)
-{
-    if (config_.ruinRecreateRewards.size() != 4)
-    {
-        throw std::invalid_argument(
-            "ruinRecreateRewards must contain exactly 4 values");
+void Solver::solve(OrderPickingSolution& solution,
+                   optimaru::DecomposedObjective<OrderPickingSolution>& calculator) {
+    if (config_.ruinRecreateRewards.size() != 4) {
+        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
     }
-    if (!solution.pickTasks.empty() && !solution.trolleys.empty())
-    {
+    if (!solution.pickTasks.empty() && !solution.trolleys.empty()) {
         // No OrderConsolidateMove here: that operator reads the monolithic
         // calculator's live per-(trolley, order) volume table, which a
         // caller-assembled plugin does not expose. The built-in sequence move mix
         // plus the ALNS kicks remain.
-        optimaru::Solver<OrderPickingSolution> engine(
-            buildEngineConfig(config_, solution));
+        optimaru::Solver<OrderPickingSolution> engine(buildEngineConfig(config_, solution));
         engine.solve(solution, calculator);
     }
 

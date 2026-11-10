@@ -3,8 +3,7 @@
 
 #include "st/constraints/common.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // ---------------------------------------------------------------------------
 // Cross-slot global constraints (assignment member-change fast path: the
@@ -14,17 +13,14 @@ namespace st::canon
 
 // Shared base: supports_member_change() routes everything through
 // on_member_changed; the unit-diff hook is unreachable for assignment-shaped solutions.
-struct MemberChangeGlobalConstraint : CanonGlobalConstraint
-{
+struct MemberChangeGlobalConstraint : CanonGlobalConstraint {
     using CanonGlobalConstraint::CanonGlobalConstraint;
     bool supports_member_change() const override { return true; }
-    void on_unit_changed(const Timetable & /*table*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
-        throw std::logic_error(name
-                               + ": onUnitChanged is unreachable "
-                                 "(member-change fast path)");
+    void on_unit_changed(const Timetable& /*table*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
+        throw std::logic_error(name +
+                               ": onUnitChanged is unreachable "
+                               "(member-change fast path)");
     }
 };
 

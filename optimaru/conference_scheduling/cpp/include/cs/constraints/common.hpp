@@ -11,8 +11,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace cs
-{
+namespace cs {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -85,8 +84,7 @@ namespace cs
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<ConferenceSchedule>;
+using DecomposedCalculator = optimaru::DecomposedObjective<ConferenceSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<ConferenceSchedule>;
 using CsUnitConstraint = optimaru::UnitConstraint<ConferenceSchedule>;
 using CsGlobalConstraint = optimaru::GlobalConstraint<ConferenceSchedule>;
@@ -97,34 +95,27 @@ using CsGlobalConstraint = optimaru::GlobalConstraint<ConferenceSchedule>;
 // int64. Fails to compile if a default weight stops being integral or if
 // a component leaves the level the monolith sums it into.
 template <typename Component, optimaru::Level kLevel>
-constexpr std::int64_t monolithicWeight()
-{
+constexpr std::int64_t monolithicWeight() {
     static_assert(Component::kDefaultLevel == kLevel,
                   "the monolithic calculators sum this constraint into "
                   "another level");
-    constexpr auto weight
-        = static_cast<std::int64_t>(Component::kDefaultWeight);
+    constexpr auto weight = static_cast<std::int64_t>(Component::kDefaultWeight);
     static_assert(weight == Component::kDefaultWeight,
                   "the monolithic calculators assume integral default "
                   "weights");
     return weight;
 }
 template <typename Component>
-constexpr std::int64_t kHardWeight
-    = monolithicWeight<Component, optimaru::Level::Hard>();
+constexpr std::int64_t kHardWeight = monolithicWeight<Component, optimaru::Level::Hard>();
 template <typename Component>
-constexpr std::int64_t kSoftWeight
-    = monolithicWeight<Component, optimaru::Level::Soft>();
+constexpr std::int64_t kSoftWeight = monolithicWeight<Component, optimaru::Level::Soft>();
 
 // The shared per-score projection: one Breakdown, recomputed lazily and at
 // most once however many components read it. Any notification invalidates it;
 // the first cost() of the next score rebuilds it.
-struct BreakdownProjection final : optimaru::SharedConstraintContext
-{
-    const Breakdown &of(const ConferenceSchedule &schedule) const
-    {
-        if (dirty_)
-        {
+struct BreakdownProjection final : optimaru::SharedConstraintContext {
+    const Breakdown& of(const ConferenceSchedule& schedule) const {
+        if (dirty_) {
             breakdown_ = ScoreCalculator::breakdownOfPrepared(schedule);
             dirty_ = false;
         }
@@ -143,52 +134,43 @@ private:
 // Shared base of all 36 components: the subclass writes `select` only — which
 // term of the breakdown it owns — and everything else (invalidation, the
 // shared projection, the level and the weight) comes from here.
-struct BreakdownConstraint : CsGlobalConstraint
-{
+struct BreakdownConstraint : CsGlobalConstraint {
     using CsGlobalConstraint::CsGlobalConstraint;
 
     // This constraint's raw penalty units out of one breakdown. Reward rules
     // return a NEGATIVE value (see the sign convention above).
-    virtual std::int64_t select(const Breakdown &breakdown) const = 0;
+    virtual std::int64_t select(const Breakdown& breakdown) const = 0;
 
-    const char *shared_context_key() const override { return "cs.breakdown"; }
-    std::unique_ptr<optimaru::SharedConstraintContext>
-    create_shared_context() const override
-    {
+    const char* shared_context_key() const override { return "cs.breakdown"; }
+    std::unique_ptr<optimaru::SharedConstraintContext> create_shared_context() const override {
         return std::make_unique<BreakdownProjection>();
     }
-    void bind_shared_context(optimaru::SharedConstraintContext &context) override
-    {
-        projection_ = static_cast<BreakdownProjection *>(&context);
+    void bind_shared_context(optimaru::SharedConstraintContext& context) override {
+        projection_ = static_cast<BreakdownProjection*>(&context);
     }
 
-    void
-    reset(const ConferenceSchedule &schedule,
-          const std::vector<std::vector<int>> & /*members_per_unit*/) override
-    {
-        if (!schedule.prepared)
-        {
-            throw std::logic_error("cs constraints require "
-                                   "ScoreCalculator::prepare(schedule) first");
+    void reset(const ConferenceSchedule& schedule,
+               const std::vector<std::vector<int>>& /*members_per_unit*/) override {
+        if (!schedule.prepared) {
+            throw std::logic_error(
+                    "cs constraints require "
+                    "ScoreCalculator::prepare(schedule) first");
         }
         schedule_ = &schedule;
         projection_->invalidate();
     }
-    void on_unit_changed(const ConferenceSchedule &schedule,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
+    void on_unit_changed(const ConferenceSchedule& schedule, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
         schedule_ = &schedule;
         projection_->invalidate();
     }
-    double cost() const override
-    {
+    double cost() const override {
         return static_cast<double>(select(projection_->of(*schedule_)));
     }
 
 private:
-    const ConferenceSchedule *schedule_ = nullptr;
-    BreakdownProjection *projection_ = nullptr;
+    const ConferenceSchedule* schedule_ = nullptr;
+    BreakdownProjection* projection_ = nullptr;
 };
 
 }  // namespace cs

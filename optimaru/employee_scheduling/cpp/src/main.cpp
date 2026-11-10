@@ -22,13 +22,12 @@ Minutes dt(int day, int hour, int minute) {
 
 int failures = 0;
 
-void check(const std::string& label, long actualHard, double actualSoft,
-           long expectedHard, double expectedSoft) {
+void check(const std::string& label, long actualHard, double actualSoft, long expectedHard,
+           double expectedSoft) {
     // Soft compared with a small tolerance (it carries a rounded decimal).
     bool ok = (actualHard == expectedHard && std::fabs(actualSoft - expectedSoft) < 1e-6);
-    std::printf("  [%s] %-34s got=%ldhard/%gsoft expected=%ldhard/%gsoft\n",
-                ok ? "PASS" : "FAIL", label.c_str(), actualHard, actualSoft,
-                expectedHard, expectedSoft);
+    std::printf("  [%s] %-34s got=%ldhard/%gsoft expected=%ldhard/%gsoft\n", ok ? "PASS" : "FAIL",
+                label.c_str(), actualHard, actualSoft, expectedHard, expectedSoft);
     if (!ok) ++failures;
 }
 
@@ -40,8 +39,7 @@ EmployeeSchedule oneEmployee(std::set<std::string> skills = {"X"}) {
     return s;
 }
 
-Shift makeShift(const std::string& id, Minutes start, Minutes end,
-                const std::string& skill = "X") {
+Shift makeShift(const std::string& id, Minutes start, Minutes end, const std::string& skill = "X") {
     Shift shift;
     shift.id = id;
     shift.start = start;
@@ -142,7 +140,8 @@ void verifyConstraints() {
             sh.employeeIndex = emp;
             s.shifts.push_back(sh);
         };
-        add("case 9.0", 0, 0); add("case 9.1", 3, 0);   // first worker: 2 shifts (days 0, 3)
+        add("case 9.0", 0, 0);
+        add("case 9.1", 3, 0);  // first worker: 2 shifts (days 0, 3)
         add("case 9.2", 6, 1);  // second worker: 1 shift
         add("case 9.3", 9, 2);  // third worker: 1 shift
         Score sc = ScoreCalculator::score(s);
@@ -161,7 +160,8 @@ void verifyConstraints() {
             sh.employeeIndex = emp;
             s.shifts.push_back(sh);
         };
-        add("case 10.0", 0, 0); add("case 10.1", 3, 0);   // first worker: 2 shifts; the others: 0
+        add("case 10.0", 0, 0);
+        add("case 10.1", 3, 0);  // first worker: 2 shifts; the others: 0
         Score sc = ScoreCalculator::score(s);
         // sqrt(4 - 4/3) = sqrt(2.666667) = 1.63299316 -> 6 sig figs -> 1.63299
         check("shiftCountImbalanceCost [2,0,0]", sc.hard, sc.soft, 0, -1.63299);
@@ -181,12 +181,12 @@ EmployeeSchedule buildDemo(int days, int shiftsPerDay, std::uint64_t seed) {
     // unavailable / desired days. Worker 06 holds every skill, which gives the
     // roster enough slack to stay feasible on days when others are unavailable.
     s.employees = {
-        Employee{"Worker 01", {"Skill A", "Skill B"}, {2}, {}, {0}, {}},
-        Employee{"Worker 02", {"Skill A"}, {}, {3}, {1}, {}},
-        Employee{"Worker 03", {"Skill B", "Skill C"}, {1}, {}, {}, {}},
-        Employee{"Worker 04", {"Skill C", "Skill A"}, {}, {0}, {4}, {}},
-        Employee{"Worker 05", {"Skill A", "Skill B", "Skill C"}, {4}, {}, {}, {}},
-        Employee{"Worker 06", {"Skill A", "Skill B", "Skill C"}, {}, {}, {}, {}},
+            Employee{"Worker 01", {"Skill A", "Skill B"}, {2}, {}, {0}, {}},
+            Employee{"Worker 02", {"Skill A"}, {}, {3}, {1}, {}},
+            Employee{"Worker 03", {"Skill B", "Skill C"}, {1}, {}, {}, {}},
+            Employee{"Worker 04", {"Skill C", "Skill A"}, {}, {0}, {4}, {}},
+            Employee{"Worker 05", {"Skill A", "Skill B", "Skill C"}, {4}, {}, {}, {}},
+            Employee{"Worker 06", {"Skill A", "Skill B", "Skill C"}, {}, {}, {}, {}},
     };
 
     std::mt19937_64 rng(seed);
@@ -198,7 +198,7 @@ EmployeeSchedule buildDemo(int days, int shiftsPerDay, std::uint64_t seed) {
             Minutes start = dt(d, (k % 2 == 0) ? 7 : 15, 0);
             Minutes end = start + 8 * 60;
             s.shifts.push_back(
-                makeShift("Shift " + std::to_string(id++), start, end, skills[skillPick(rng)]));
+                    makeShift("Shift " + std::to_string(id++), start, end, skills[skillPick(rng)]));
         }
     }
     // Start every shift unassigned.
@@ -208,8 +208,10 @@ EmployeeSchedule buildDemo(int days, int shiftsPerDay, std::uint64_t seed) {
 
 void solveDemo(int days, int shiftsPerDay, int seconds) {
     EmployeeSchedule schedule = buildDemo(days, shiftsPerDay, /*seed=*/42);
-    std::printf("== Solving a demo roster (%d days x %d shifts/day = %d shifts, %zu employees, %ds) ==\n",
-                days, shiftsPerDay, days * shiftsPerDay, schedule.employees.size(), seconds);
+    std::printf(
+            "== Solving a demo roster (%d days x %d shifts/day = %d shifts, %zu employees, %ds) "
+            "==\n",
+            days, shiftsPerDay, days * shiftsPerDay, schedule.employees.size(), seconds);
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
@@ -243,7 +245,8 @@ void verifyIncremental() {
     std::printf("== Verifying incremental scoring == full recompute ==\n");
     EmployeeSchedule s = buildDemo(/*days*/ 6, /*shiftsPerDay*/ 4, /*seed*/ 7);
     const int employeeCount = static_cast<int>(s.employees.size());
-    for (int i = 0; i < static_cast<int>(s.shifts.size()); ++i) s.shifts[i].employeeIndex = i % employeeCount;
+    for (int i = 0; i < static_cast<int>(s.shifts.size()); ++i)
+        s.shifts[i].employeeIndex = i % employeeCount;
 
     EmployeeSchedulingIncrementalScoreCalculator calc;
     optimaru::Editor<EmployeeSchedule> editor(s, calc);
@@ -259,7 +262,7 @@ void verifyIncremental() {
         if (unit(rng) < 0.75) {
             editor.assign(shiftPick(rng), empPick(rng));  // ChangeMove
         } else {
-            int s1 = shiftPick(rng), s2 = shiftPick(rng);           // SwapMove
+            int s1 = shiftPick(rng), s2 = shiftPick(rng);  // SwapMove
             int v1 = s.shifts[s1].employeeIndex, v2 = s.shifts[s2].employeeIndex;
             editor.assign(s1, v2);
             editor.assign(s2, v1);

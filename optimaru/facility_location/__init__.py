@@ -140,4 +140,6 @@ def solve(
         core = problem.to_core()
         _solve(core)
         return FacilityLocationProblemModel.from_core(core)
-    raise TypeError(f"problem must be a FacilityLocationProblem or a models.FacilityLocationProblemModel: {type(problem)!r}")
+    raise TypeError(
+        f"problem must be a FacilityLocationProblem or a models.FacilityLocationProblemModel: {type(problem)!r}"
+    )

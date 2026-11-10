@@ -6,18 +6,16 @@
 
 #include "fcs/domain.hpp"
 
-namespace fcs
-{
+namespace fcs {
 
 // Per-employee itinerary contribution: everything the pairwise constraints
 // derive from one employee's set of assigned flights. Kept as raw counts;
 // weights and signs are applied when the score is assembled.
-struct ItineraryStats
-{
+struct ItineraryStats {
     std::int64_t conflictPairs = 0;       // flightConflictCost
     std::int64_t transferMismatches = 0;  // transferBetweenTwoFlightsCost
-    std::int64_t firstNotHome = 0;  // firstAssignmentNotDepartingFromHomeCost
-    std::int64_t lastNotHome = 0;   // lastAssignmentNotArrivingAtHomeCost
+    std::int64_t firstNotHome = 0;        // firstAssignmentNotDepartingFromHomeCost
+    std::int64_t lastNotHome = 0;         // lastAssignmentNotArrivingAtHomeCost
 };
 
 // The flight-crew-scheduling score as one monolithic function.
@@ -56,38 +54,33 @@ struct ItineraryStats
 //                                    not arriving at home
 // Unassigned assignments (employee == -1) contribute nothing: the
 // construction heuristic scores partially initialized solutions.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
-    static Score score(FlightCrewSchedule &schedule);
+    static Score score(FlightCrewSchedule& schedule);
 
     // Interns skills into dense ids, flattens the employee skill sets and
     // unavailable days for O(1) lookup, and caches per-flight calendar days.
     // Idempotent (guarded by FlightCrewSchedule::prepared). Must run before
     // scoring; score/solve call it.
-    static void prepare(FlightCrewSchedule &schedule);
+    static void prepare(FlightCrewSchedule& schedule);
 
     // --- shared building blocks (also used by the incremental calculator) --
 
     // Unary constraint predicates for one (assignment, employee) pairing.
-    static bool missingRequiredSkill(const FlightCrewSchedule &schedule,
-                                     int assignmentIndex,
+    static bool missingRequiredSkill(const FlightCrewSchedule& schedule, int assignmentIndex,
                                      int employeeIndex);
-    static bool unavailableEmployee(const FlightCrewSchedule &schedule,
-                                    int assignmentIndex,
+    static bool unavailableEmployee(const FlightCrewSchedule& schedule, int assignmentIndex,
                                     int employeeIndex);
 
     // Sorts assignment indices by (departure time, assignment index).
-    static void sortByDeparture(const FlightCrewSchedule &schedule,
-                                std::vector<int> &assignmentIndices);
+    static void sortByDeparture(const FlightCrewSchedule& schedule,
+                                std::vector<int>& assignmentIndices);
 
     // Computes the pairwise stats for one employee's assignments; the list
     // must already be sorted by sortByDeparture. O(n^2) worst case (n = the
     // employee's assignment count, small in practice).
-    static ItineraryStats
-    itineraryStats(const FlightCrewSchedule &schedule,
-                   int employeeIndex,
-                   const std::vector<int> &sortedAssignments);
+    static ItineraryStats itineraryStats(const FlightCrewSchedule& schedule, int employeeIndex,
+                                         const std::vector<int>& sortedAssignments);
 };
 
 }  // namespace fcs

@@ -19,15 +19,15 @@ constexpr auto kCapacityWeight = static_cast<std::int64_t>(VehicleCapacityCost::
 constexpr auto kTimeWindowWeight = static_cast<std::int64_t>(MaxEndTimeCost::kDefaultWeight);
 constexpr auto kUnassignedWeight = static_cast<std::int64_t>(UnassignedVisitsCost::kDefaultWeight);
 constexpr auto kTravelWeight = static_cast<std::int64_t>(TravelTimeCost::kDefaultWeight);
-static_assert(kCapacityWeight == VehicleCapacityCost::kDefaultWeight
-                      && kTimeWindowWeight == MaxEndTimeCost::kDefaultWeight
-                      && kUnassignedWeight == UnassignedVisitsCost::kDefaultWeight
-                      && kTravelWeight == TravelTimeCost::kDefaultWeight,
+static_assert(kCapacityWeight == VehicleCapacityCost::kDefaultWeight &&
+                      kTimeWindowWeight == MaxEndTimeCost::kDefaultWeight &&
+                      kUnassignedWeight == UnassignedVisitsCost::kDefaultWeight &&
+                      kTravelWeight == TravelTimeCost::kDefaultWeight,
               "the monolithic calculator assumes integral default weights");
-static_assert(VehicleCapacityCost::kDefaultLevel == optimaru::Level::Hard
-                      && MaxEndTimeCost::kDefaultLevel == optimaru::Level::Hard
-                      && UnassignedVisitsCost::kDefaultLevel == optimaru::Level::Medium
-                      && TravelTimeCost::kDefaultLevel == optimaru::Level::Soft,
+static_assert(VehicleCapacityCost::kDefaultLevel == optimaru::Level::Hard &&
+                      MaxEndTimeCost::kDefaultLevel == optimaru::Level::Hard &&
+                      UnassignedVisitsCost::kDefaultLevel == optimaru::Level::Medium &&
+                      TravelTimeCost::kDefaultLevel == optimaru::Level::Soft,
               "the monolithic calculator assumes the components' levels");
 
 }  // namespace

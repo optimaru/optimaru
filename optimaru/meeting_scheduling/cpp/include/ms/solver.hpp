@@ -12,15 +12,13 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 
-namespace ms
-{
+namespace ms {
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
 // wires up the incremental score calculator and delegates solving to
 // optimaru::Solver<MeetingSchedule>, with the engine's adaptive
 // ruin-and-recreate (ALNS) enabled on top of the built-in change/swap moves.
-class Solver
-{
+class Solver {
 public:
     // Tuning history (bench/ms_quality_bench.cpp, 10s single-thread,
     // interleaved A/B on demo + scaled:48 + scaled:96, seeds 42..47; the
@@ -43,15 +41,14 @@ public:
     //     alone cost ~28% of the move throughput.
     //   * move-mix sweeps (0.9/0.1, 0.5/0.5) and ALNS trigger sweeps
     //     (1500, 20000): all worse than the defaults below.
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires (termination is by time_limit).
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<double>::infinity()};
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;
@@ -76,8 +73,7 @@ public:
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
         // slower).
-        optimaru::ScoreChecks score_checks
-            = optimaru::ScoreChecks::Off;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS). Without this the LA acceptor can lock into a local
@@ -117,7 +113,7 @@ public:
         // day-crossing states it needs as stepping stones and the gain is gone.
         double dayFitValueProbability = 0.8;
 
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
     };
 
     Solver() = default;
@@ -126,7 +122,7 @@ public:
     // Solves in place: mutates meetingAssignments[*].grainRoom and stores the
     // best score found in schedule.score. Pinned assignments keep their
     // grainRoom.
-    void solve(MeetingSchedule &schedule);
+    void solve(MeetingSchedule& schedule);
 
     // Solves with a caller-assembled plugin calculator (see
     // ms/constraints.hpp): pick components and weights, then pass the
@@ -137,9 +133,8 @@ public:
     // constraint_totals() explains exactly that score. Single-start: the
     // caller-owned calculator cannot be cloned, so parallelSolverCount is
     // ignored.
-    void
-    solve(MeetingSchedule &schedule,
-          optimaru::DecomposedObjective<MeetingSchedule> &calculator);
+    void solve(MeetingSchedule& schedule,
+               optimaru::DecomposedObjective<MeetingSchedule>& calculator);
 
 private:
     Config config_;

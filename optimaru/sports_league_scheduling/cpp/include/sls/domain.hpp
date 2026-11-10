@@ -7,8 +7,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace sls
-{
+namespace sls {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -25,8 +24,7 @@ using Score = optimaru::Score;
 // Distances between teams live in the solution-level distance matrix
 // LeagueSchedule::distanceToTeam (indexed by team position), so Team itself
 // is plain data.
-struct Team
-{
+struct Team {
     std::string id;
     std::string name;
 };
@@ -39,8 +37,7 @@ struct Team
 // not positions in the rounds vector. Indices must be >= 0 and are normally
 // contiguous 0..N-1, but sparse indices work too (a missing index simply has
 // no round).
-struct Round
-{
+struct Round {
     int index = 0;
     // Rounds on weekends/holidays; classic matches prefer these (soft).
     bool weekendOrHoliday = false;
@@ -52,8 +49,7 @@ struct Round
 // `round` is the only decision variable: the position of the assigned Round
 // in LeagueSchedule::rounds, or -1 while unassigned. Teams are referenced by
 // their position in LeagueSchedule::teams.
-struct Match
-{
+struct Match {
     std::string id;
     int homeTeam = -1;
     int awayTeam = -1;
@@ -74,8 +70,7 @@ struct Match
 // ---------------------------------------------------------------------------
 // LeagueSchedule  (the problem and its solution)
 // ---------------------------------------------------------------------------
-struct LeagueSchedule
-{
+struct LeagueSchedule {
     std::vector<Team> teams;
     std::vector<Round> rounds;
     std::vector<Match> matches;
@@ -100,15 +95,9 @@ struct LeagueSchedule
     int teamCount() const { return static_cast<int>(teams.size()); }
     int roundCount() const { return static_cast<int>(rounds.size()); }
     int matchCount() const { return static_cast<int>(matches.size()); }
-    int distance(int fromTeam, int toTeam) const
-    {
-        return distanceToTeam[fromTeam][toTeam];
-    }
+    int distance(int fromTeam, int toTeam) const { return distanceToTeam[fromTeam][toTeam]; }
     // The constraint-facing round number of a round position (see Round).
-    int roundIndexOf(int roundPosition) const
-    {
-        return rounds[roundPosition].index;
-    }
+    int roundIndexOf(int roundPosition) const { return rounds[roundPosition].index; }
 };
 
 }  // namespace sls
@@ -118,24 +107,19 @@ struct LeagueSchedule
 // engine): entities are matches, the decision variable
 // is Match::round, the value range is the rounds vector.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<sls::LeagueSchedule>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const sls::LeagueSchedule &s)
-    {
+template <>
+struct optimaru::SolutionTraits<sls::LeagueSchedule> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const sls::LeagueSchedule& s) {
         return static_cast<int>(s.matches.size());
     }
-    static int value_count(const sls::LeagueSchedule &s)
-    {
+    static int value_count(const sls::LeagueSchedule& s) {
         return static_cast<int>(s.rounds.size());
     }
-    static int value_of(const sls::LeagueSchedule &s, int matchIndex)
-    {
+    static int value_of(const sls::LeagueSchedule& s, int matchIndex) {
         return s.matches[matchIndex].round;
     }
-    static void assign(sls::LeagueSchedule &s, int matchIndex, int round)
-    {
+    static void assign(sls::LeagueSchedule& s, int matchIndex, int round) {
         s.matches[matchIndex].round = round;
     }
 };

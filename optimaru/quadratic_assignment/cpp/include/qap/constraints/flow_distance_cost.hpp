@@ -5,8 +5,7 @@
 
 #include "qap/constraints/common.hpp"
 
-namespace qap
-{
+namespace qap {
 
 // Soft, weight 1: flowDistanceCost — the quadratic objective. Raw cost = sum
 // over assigned facilities a, b of flows[a][b] * distances[loc a][loc b],
@@ -28,73 +27,56 @@ namespace qap
 // The total is a function of the mirror alone, so the transient states inside
 // a swap (two facilities on one location) stay exact. O(n) per event, four
 // events per swap.
-struct FlowDistanceCost final : QapMemberChangeGlobalConstraint
-{
+struct FlowDistanceCost final : QapMemberChangeGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit FlowDistanceCost(double weight = kDefaultWeight)
-        : QapMemberChangeGlobalConstraint("flowDistanceCost", weight, kDefaultLevel)
-    {
-    }
-    void reset(const QuadraticAssignmentProblem &problem,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+        : QapMemberChangeGlobalConstraint("flowDistanceCost", weight, kDefaultLevel) {}
+    void reset(const QuadraticAssignmentProblem& problem,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(problem);
         location_.assign(static_cast<std::size_t>(problem.facilityCount()), -1);
-        for (std::size_t location = 0; location < members_per_unit.size(); ++location)
-        {
+        for (std::size_t location = 0; location < members_per_unit.size(); ++location) {
             for (int facility : members_per_unit[location])
                 location_[facility] = static_cast<int>(location);
         }
         total_ = 0;
         const int n = problem.facilityCount();
-        for (int a = 0; a < n; ++a)
-        {
-            if (location_[a] < 0)
-                continue;
-            for (int b = 0; b < n; ++b)
-            {
+        for (int a = 0; a < n; ++a) {
+            if (location_[a] < 0) continue;
+            for (int b = 0; b < n; ++b) {
                 if (location_[b] >= 0)
                     total_ += problem.flowOf(a, b) * problem.distanceOf(location_[a], location_[b]);
             }
         }
     }
-    void on_member_changed(const QuadraticAssignmentProblem &problem,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int entity,
-                         bool joined) override
-    {
-        if (joined)
-        {
+    void on_member_changed(const QuadraticAssignmentProblem& problem, int unit,
+                           const std::vector<int>& /*members*/, int entity, bool joined) override {
+        if (joined) {
             location_[entity] = unit;
             total_ += contribution(problem, entity, unit);
-        }
-        else
-        {
+        } else {
             total_ -= contribution(problem, entity, unit);
             location_[entity] = -1;
         }
     }
     double cost() const override { return static_cast<double>(total_); }
-    bool raw_cost_can_be_negative(const QuadraticAssignmentProblem &problem) const override
-    {
+    bool raw_cost_can_be_negative(const QuadraticAssignmentProblem& problem) const override {
         return detail::hasNegative(problem.flows) || detail::hasNegative(problem.distances);
     }
 
 private:
-    std::int64_t contribution(const QuadraticAssignmentProblem &problem, int facility, int location) const
-    {
-        std::int64_t sum = problem.flowOf(facility, facility) * problem.distanceOf(location, location);
+    std::int64_t contribution(const QuadraticAssignmentProblem& problem, int facility,
+                              int location) const {
+        std::int64_t sum =
+                problem.flowOf(facility, facility) * problem.distanceOf(location, location);
         const int n = problem.facilityCount();
-        for (int other = 0; other < n; ++other)
-        {
+        for (int other = 0; other < n; ++other) {
             const int at = location_[other];
-            if (other == facility || at < 0)
-                continue;
-            sum += problem.flowOf(facility, other) * problem.distanceOf(location, at)
-                   + problem.flowOf(other, facility) * problem.distanceOf(at, location);
+            if (other == facility || at < 0) continue;
+            sum += problem.flowOf(facility, other) * problem.distanceOf(location, at) +
+                   problem.flowOf(other, facility) * problem.distanceOf(at, location);
         }
         return sum;
     }

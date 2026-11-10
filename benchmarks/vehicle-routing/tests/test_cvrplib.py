@@ -48,17 +48,13 @@ def test_mirror_solution_cost_and_entry() -> None:
     assert len(set(SET_X_NAMES)) == 100
 
 
-def test_unreadable_cached_mirror_solution_is_fetched_again(
-    tmp_path, monkeypatch
-) -> None:
+def test_unreadable_cached_mirror_solution_is_fetched_again(tmp_path, monkeypatch) -> None:
     from vrp_benchmark import cvrplib
 
     entry = cvrplib.mirror_entry("X-n101-k25")
     cached = tmp_path / "cvrplib-x" / "X-n101-k25.sol"
     cached.parent.mkdir(parents=True)
-    cached.write_text(
-        "<html>502 Bad Gateway</html>"
-    )  # a proxy error page, cached earlier
+    cached.write_text("<html>502 Bad Gateway</html>")  # a proxy error page, cached earlier
 
     downloads: list[str] = []
 

@@ -86,6 +86,7 @@ __all__ = ["Constraint", "Level", "Score", "instance_keys", "score_costs", "sele
 
 _KNOBS = ("weight", "level", "exponent", "offset", "clip")
 
+
 class Level(StrEnum):
     """The score level a constraint is charged on. Hard dominates medium, medium dominates soft."""
 

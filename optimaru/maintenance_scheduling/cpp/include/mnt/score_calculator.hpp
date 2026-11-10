@@ -5,8 +5,7 @@
 
 #include "mnt/domain.hpp"
 
-namespace mnt
-{
+namespace mnt {
 
 // The six maintenance-scheduling constraints.
 //
@@ -34,16 +33,15 @@ namespace mnt
 // the same identity for (tag, day). Unassigned jobs (crewDate == -1)
 // contribute nothing: the construction heuristic scores partially
 // initialized solutions.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
-    static Score score(MaintenanceSchedule &schedule);
+    static Score score(MaintenanceSchedule& schedule);
 
     // Interns tags into dense ids, builds the start-date value range
     // (business days of the calendar), the endDate table and the day
     // horizon. Idempotent (guarded by MaintenanceSchedule::prepared). Must
     // run before scoring; score/solve call it.
-    static void prepare(MaintenanceSchedule &schedule);
+    static void prepare(MaintenanceSchedule& schedule);
 
     // Unordered pairs among n items: C(n, 2).
     static std::int64_t pairs(std::int64_t n) { return n * (n - 1) / 2; }

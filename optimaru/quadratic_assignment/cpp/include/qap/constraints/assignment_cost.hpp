@@ -3,8 +3,7 @@
 
 #include "qap/constraints/common.hpp"
 
-namespace qap
-{
+namespace qap {
 
 // Soft, weight 1: assignmentCost — the direct facility-to-location cost of the
 // assignment. Raw cost = sum over assigned facilities f of
@@ -19,38 +18,28 @@ namespace qap
 //
 // Member-change fast path: a facility joining a location adds its cost there,
 // leaving subtracts it — O(1) per event.
-struct AssignmentCost final : QapMemberChangeGlobalConstraint
-{
+struct AssignmentCost final : QapMemberChangeGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit AssignmentCost(double weight = kDefaultWeight)
-        : QapMemberChangeGlobalConstraint("assignmentCost", weight, kDefaultLevel)
-    {
-    }
-    void reset(const QuadraticAssignmentProblem &problem,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+        : QapMemberChangeGlobalConstraint("assignmentCost", weight, kDefaultLevel) {}
+    void reset(const QuadraticAssignmentProblem& problem,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(problem);
         total_ = 0;
-        for (std::size_t location = 0; location < members_per_unit.size(); ++location)
-        {
+        for (std::size_t location = 0; location < members_per_unit.size(); ++location) {
             for (int facility : members_per_unit[location])
                 total_ += problem.directCostOf(facility, static_cast<int>(location));
         }
     }
-    void on_member_changed(const QuadraticAssignmentProblem &problem,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int entity,
-                         bool joined) override
-    {
+    void on_member_changed(const QuadraticAssignmentProblem& problem, int unit,
+                           const std::vector<int>& /*members*/, int entity, bool joined) override {
         const std::int64_t cost = problem.directCostOf(entity, unit);
         total_ += joined ? cost : -cost;
     }
     double cost() const override { return static_cast<double>(total_); }
-    bool raw_cost_can_be_negative(const QuadraticAssignmentProblem &problem) const override
-    {
+    bool raw_cost_can_be_negative(const QuadraticAssignmentProblem& problem) const override {
         return detail::hasNegative(problem.assignmentCosts);
     }
 

@@ -12,47 +12,33 @@
 
 using namespace fp;
 
-namespace
-{
+namespace {
 
-std::string formatTime(Minutes minute)
-{
+std::string formatTime(Minutes minute) {
     // Times are relative to the demo's Monday 00:00 == minute 0.
     char buffer[32];
-    std::snprintf(buffer,
-                  sizeof(buffer),
-                  "d%02lld %02lld:%02lld",
+    std::snprintf(buffer, sizeof(buffer), "d%02lld %02lld:%02lld",
                   static_cast<long long>(minute / (24 * 60)),
-                  static_cast<long long>(minute / 60 % 24),
-                  static_cast<long long>(minute % 60));
+                  static_cast<long long>(minute / 60 % 24), static_cast<long long>(minute % 60));
     return buffer;
 }
 
-void printSchedule(const PackagingSchedule &schedule)
-{
-    for (int l = 0; l < schedule.lineCount(); ++l)
-    {
-        const Line &line = schedule.lines[l];
-        const std::string operatorId
-            = line.operator_index >= 0
-                  ? schedule.operators[line.operator_index].id
-                  : "(none)";
-        std::printf("  [%s | %s] %zu jobs\n",
-                    line.name.c_str(),
-                    operatorId.c_str(),
+void printSchedule(const PackagingSchedule& schedule) {
+    for (int l = 0; l < schedule.lineCount(); ++l) {
+        const Line& line = schedule.lines[l];
+        const std::string operatorId =
+                line.operator_index >= 0 ? schedule.operators[line.operator_index].id : "(none)";
+        std::printf("  [%s | %s] %zu jobs\n", line.name.c_str(), operatorId.c_str(),
                     line.jobs.size());
-        for (const int j : line.jobs)
-        {
-            const Job &job = schedule.jobs[j];
-            std::printf("    #%-3s %-42s clean %s  run %s -> %s  (ideal %s, "
-                        "max %s)\n",
-                        job.id.c_str(),
-                        job.name.c_str(),
-                        formatTime(job.startCleaningDateTime).c_str(),
-                        formatTime(job.startProductionDateTime).c_str(),
-                        formatTime(job.endDateTime).c_str(),
-                        formatTime(job.idealEndTime).c_str(),
-                        formatTime(job.maxEndTime).c_str());
+        for (const int j : line.jobs) {
+            const Job& job = schedule.jobs[j];
+            std::printf(
+                    "    #%-3s %-42s clean %s  run %s -> %s  (ideal %s, "
+                    "max %s)\n",
+                    job.id.c_str(), job.name.c_str(), formatTime(job.startCleaningDateTime).c_str(),
+                    formatTime(job.startProductionDateTime).c_str(),
+                    formatTime(job.endDateTime).c_str(), formatTime(job.idealEndTime).c_str(),
+                    formatTime(job.maxEndTime).c_str());
         }
     }
     std::printf("\n");
@@ -60,48 +46,38 @@ void printSchedule(const PackagingSchedule &schedule)
 
 }  // namespace
 
-int main(int argc, char **argv)
-{
+int main(int argc, char** argv) {
     int seconds = 10;
-    if (argc > 1)
-        seconds = std::atoi(argv[1]);
+    if (argc > 1) seconds = std::atoi(argv[1]);
 
     PackagingSchedule schedule = generateDemoData();
-    std::printf("== food packaging demo (%d lines, %zu operators, %zu products, "
-                "%zu jobs, %d s) ==\n",
-                schedule.lineCount(),
-                schedule.operators.size(),
-                schedule.products.size(),
-                schedule.jobs.size(),
-                seconds);
+    std::printf(
+            "== food packaging demo (%d lines, %zu operators, %zu products, "
+            "%zu jobs, %d s) ==\n",
+            schedule.lineCount(), schedule.operators.size(), schedule.products.size(),
+            schedule.jobs.size(), seconds);
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = 42;
-    config.on_new_best = [](std::int64_t step, const Score &score)
-    {
-        std::printf("    new best @step %-8lld %s\n",
-                    static_cast<long long>(step),
+    config.on_new_best = [](std::int64_t step, const Score& score) {
+        std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step),
                     score.str().c_str());
     };
     Solver solver(config);
     solver.solve(schedule);
 
-    std::printf("\n  final score: %s  (feasible=%s)\n\n",
-                schedule.score.str().c_str(),
+    std::printf("\n  final score: %s  (feasible=%s)\n\n", schedule.score.str().c_str(),
                 schedule.score.feasible() ? "true" : "false");
     printSchedule(schedule);
 
     int assigned = 0;
-    for (const Job &job : schedule.jobs)
-    {
-        if (job.lineIndex >= 0)
-            ++assigned;
+    for (const Job& job : schedule.jobs) {
+        if (job.lineIndex >= 0) ++assigned;
     }
     std::printf("  jobs assigned: %d / %zu\n", assigned, schedule.jobs.size());
 
-    if (schedule.score.hard == 0)
-    {
+    if (schedule.score.hard == 0) {
         std::printf("  reached hard 0: OK\n");
         return 0;
     }

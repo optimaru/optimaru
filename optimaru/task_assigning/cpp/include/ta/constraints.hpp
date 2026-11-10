@@ -22,8 +22,7 @@
 #include "ta/constraints/squared_makespan_cost.hpp"
 #include "ta/constraints/unassigned_tasks_cost.hpp"
 
-namespace ta
-{
+namespace ta {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -46,8 +45,7 @@ namespace ta
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<RequiredSkillCost>();
     assembly.emplace<UnassignedTasksCost>();
@@ -58,35 +56,30 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 
 // The soft[2] end-time weight of each priority in the monolithic calculators:
 // the three priority components' kDefaultWeight (x 4 / x 2 / x 1), read here
 // so the monoliths never re-type them.
-inline std::int64_t priorityWeight(Priority priority)
-{
-    constexpr auto kCritical
-        = static_cast<std::int64_t>(CriticalPriorityTaskEndTimeCost::kDefaultWeight);
-    constexpr auto kMajor
-        = static_cast<std::int64_t>(MajorPriorityTaskEndTimeCost::kDefaultWeight);
-    constexpr auto kMinor
-        = static_cast<std::int64_t>(MinorPriorityTaskEndTimeCost::kDefaultWeight);
-    static_assert(kCritical == CriticalPriorityTaskEndTimeCost::kDefaultWeight
-                      && kMajor == MajorPriorityTaskEndTimeCost::kDefaultWeight
-                      && kMinor == MinorPriorityTaskEndTimeCost::kDefaultWeight,
+inline std::int64_t priorityWeight(Priority priority) {
+    constexpr auto kCritical =
+            static_cast<std::int64_t>(CriticalPriorityTaskEndTimeCost::kDefaultWeight);
+    constexpr auto kMajor = static_cast<std::int64_t>(MajorPriorityTaskEndTimeCost::kDefaultWeight);
+    constexpr auto kMinor = static_cast<std::int64_t>(MinorPriorityTaskEndTimeCost::kDefaultWeight);
+    static_assert(kCritical == CriticalPriorityTaskEndTimeCost::kDefaultWeight &&
+                          kMajor == MajorPriorityTaskEndTimeCost::kDefaultWeight &&
+                          kMinor == MinorPriorityTaskEndTimeCost::kDefaultWeight,
                   "the monolithic calculators assume integral priority weights");
-    switch (priority)
-    {
-    case Priority::CRITICAL:
-        return kCritical;
-    case Priority::MAJOR:
-        return kMajor;
-    case Priority::MINOR:
-    default:
-        return kMinor;
+    switch (priority) {
+        case Priority::CRITICAL:
+            return kCritical;
+        case Priority::MAJOR:
+            return kMajor;
+        case Priority::MINOR:
+        default:
+            return kMinor;
     }
 }
 

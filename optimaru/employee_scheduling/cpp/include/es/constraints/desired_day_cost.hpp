@@ -15,8 +15,8 @@ struct DesiredDayCost final : DateOverlapConstraint {
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit DesiredDayCost(double weight = kDefaultWeight, bool perDay = false)
-        : DateOverlapConstraint("desiredDayCost", weight, kDefaultLevel,
-                                &Employee::desiredDates, -1.0, perDay) {
+        : DateOverlapConstraint("desiredDayCost", weight, kDefaultLevel, &Employee::desiredDates,
+                                -1.0, perDay) {
         reward = true;
         level_flippable = false;
     }

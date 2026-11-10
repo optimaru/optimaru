@@ -3,8 +3,7 @@
 
 #include "bp/constraints/common.hpp"
 
-namespace bp
-{
+namespace bp {
 
 // Soft, weight 1: usedBinsCost — the objective, the number of bins in use.
 // Raw cost = the bins holding at least one item (one global value; 0 = no
@@ -17,45 +16,34 @@ namespace bp
 // path: a bin switches on when its first item joins and off when its last
 // item leaves. A step function no single change can cross, which is why the
 // solver ships EmptyBinMove and RepackMove (bp/moves.hpp).
-struct UsedBinsCost final : BpGlobalConstraint
-{
+struct UsedBinsCost final : BpGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit UsedBinsCost(double weight = kDefaultWeight)
-        : BpGlobalConstraint("usedBinsCost", weight, kDefaultLevel)
-    {
-    }
-    void reset(const BinPackingProblem &problem,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+        : BpGlobalConstraint("usedBinsCost", weight, kDefaultLevel) {}
+    void reset(const BinPackingProblem& problem,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(problem);
         used_.assign(members_per_unit.size(), 0);
         count_ = 0;
-        for (std::size_t bin = 0; bin < members_per_unit.size(); ++bin)
-        {
-            if (!members_per_unit[bin].empty())
-            {
+        for (std::size_t bin = 0; bin < members_per_unit.size(); ++bin) {
+            if (!members_per_unit[bin].empty()) {
                 used_[bin] = 1;
                 ++count_;
             }
         }
     }
-    void on_unit_changed(const BinPackingProblem & /*problem*/,
-                       int unit,
-                       const std::vector<int> &members) override
-    {
+    void on_unit_changed(const BinPackingProblem& /*problem*/, int unit,
+                         const std::vector<int>& members) override {
         const char now = members.empty() ? 0 : 1;
         count_ += now - used_[unit];
         used_[unit] = now;
     }
     bool supports_member_change() const override { return true; }
-    void on_member_changed(const BinPackingProblem &problem,
-                         int unit,
-                         const std::vector<int> &members,
-                         int /*entity*/,
-                         bool /*joined*/) override
-    {
+    void on_member_changed(const BinPackingProblem& problem, int unit,
+                           const std::vector<int>& members, int /*entity*/,
+                           bool /*joined*/) override {
         on_unit_changed(problem, unit, members);  // `members` is after the change
     }
     double cost() const override { return static_cast<double>(count_); }

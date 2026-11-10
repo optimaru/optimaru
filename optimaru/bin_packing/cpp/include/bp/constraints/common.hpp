@@ -10,8 +10,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace bp
-{
+namespace bp {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
@@ -65,15 +64,13 @@ using ConstraintAssembly = optimaru::ConstraintAssembly<BinPackingProblem>;
 using BpUnitConstraint = optimaru::UnitConstraint<BinPackingProblem>;
 using BpGlobalConstraint = optimaru::GlobalConstraint<BinPackingProblem>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const BinPackingProblem &problem)
-{
-    if (!problem.prepared)
-    {
-        throw std::logic_error("bp constraints require "
-                               "ScoreCalculator::prepare(problem) first");
+inline void requirePrepared(const BinPackingProblem& problem) {
+    if (!problem.prepared) {
+        throw std::logic_error(
+                "bp constraints require "
+                "ScoreCalculator::prepare(problem) first");
     }
 }
 

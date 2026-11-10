@@ -46,7 +46,7 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
         // minimum over the 2^j visits from i (a sparse table, O(n log n),
         // built on the first deadline query after a change: an assembly
         // without the lateness component, or a plan with waiting, never asks).
-        std::vector<Seconds> maxEnd;  // per visit, for the table
+        std::vector<Seconds> maxEnd;               // per visit, for the table
         std::vector<std::vector<Seconds>> minEnd;  // levels; storage kept across rebuilds
         bool minEndValid = false;
     };
@@ -96,14 +96,14 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
     std::int64_t loadOf(const optimaru::ListPiece& piece) const {
         if (piece.size() == 1) return visitOf(piece).demand;
         const ListSums& s = sums(piece.list);
-        return s.cumLoad[static_cast<std::size_t>(piece.end)]
-               - s.cumLoad[static_cast<std::size_t>(piece.begin)];
+        return s.cumLoad[static_cast<std::size_t>(piece.end)] -
+               s.cumLoad[static_cast<std::size_t>(piece.begin)];
     }
     std::int64_t penaltyOf(const optimaru::ListPiece& piece) const {
         if (piece.size() == 1) return visitOf(piece).unassignedPenalty();
         const ListSums& s = sums(piece.list);
-        return s.cumPenalty[static_cast<std::size_t>(piece.end)]
-               - s.cumPenalty[static_cast<std::size_t>(piece.begin)];
+        return s.cumPenalty[static_cast<std::size_t>(piece.end)] -
+               s.cumPenalty[static_cast<std::size_t>(piece.begin)];
     }
 
     // The route `vehicleIndex` would drive holding `pieces` in order: load,
@@ -155,7 +155,9 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
 private:
     // The one visit of a single-element piece, detached or in a list.
     const Visit& visitOf(const optimaru::ListPiece& piece) const {
-        const int visit = piece.detached() ? piece.begin : elementsOf(piece.list)[static_cast<std::size_t>(piece.begin)];
+        const int visit = piece.detached()
+                                  ? piece.begin
+                                  : elementsOf(piece.list)[static_cast<std::size_t>(piece.begin)];
         return plan_->visits[static_cast<std::size_t>(visit)];
     }
     const std::vector<int>& elementsOf(int list) const {
@@ -191,11 +193,12 @@ private:
             s.cumLoad[k + 1] = s.cumLoad[k] + visit.demand;
             s.cumService[k + 1] = s.cumService[k] + visit.serviceDuration;
             s.cumPenalty[k + 1] = s.cumPenalty[k] + visit.unassignedPenalty();
-            s.cumDist[k + 1] = s.cumDist[k] + (k == 0 ? 0 : plan_->drivingTime(previousLocation,
-                                                                                visit.locationIndex));
+            s.cumDist[k + 1] =
+                    s.cumDist[k] +
+                    (k == 0 ? 0 : plan_->drivingTime(previousLocation, visit.locationIndex));
             s.cumRevDist[k + 1] =
-                    s.cumRevDist[k]
-                    + (k == 0 ? 0 : plan_->drivingTime(visit.locationIndex, previousLocation));
+                    s.cumRevDist[k] +
+                    (k == 0 ? 0 : plan_->drivingTime(visit.locationIndex, previousLocation));
             s.maxEnd[k] = visit.maxEndTime;
             previousLocation = visit.locationIndex;
         }

@@ -10,8 +10,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace fcs
-{
+namespace fcs {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -69,21 +68,18 @@ namespace fcs
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<FlightCrewSchedule>;
+using DecomposedCalculator = optimaru::DecomposedObjective<FlightCrewSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<FlightCrewSchedule>;
 using FcsUnitConstraint = optimaru::UnitConstraint<FlightCrewSchedule>;
 using FcsGlobalConstraint = optimaru::GlobalConstraint<FlightCrewSchedule>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const FlightCrewSchedule &schedule)
-{
-    if (!schedule.prepared)
-    {
-        throw std::logic_error("fcs constraints require "
-                               "ScoreCalculator::prepare(schedule) first");
+inline void requirePrepared(const FlightCrewSchedule& schedule) {
+    if (!schedule.prepared) {
+        throw std::logic_error(
+                "fcs constraints require "
+                "ScoreCalculator::prepare(schedule) first");
     }
 }
 
@@ -95,33 +91,25 @@ inline void requirePrepared(const FlightCrewSchedule &schedule)
 // Shared base of the two rules that judge one (assignment, employee) pairing
 // on its own: the subclass writes `violated` only, and both the full re-cost
 // and the exact O(1) delta follow from it.
-struct PerAssignmentConstraint : FcsUnitConstraint
-{
+struct PerAssignmentConstraint : FcsUnitConstraint {
     using FcsUnitConstraint::FcsUnitConstraint;
 
-    virtual bool violated(const FlightCrewSchedule &schedule,
-                          int assignmentIndex,
+    virtual bool violated(const FlightCrewSchedule& schedule, int assignmentIndex,
                           int employeeIndex) const = 0;
 
-    void on_reset(const FlightCrewSchedule &schedule) override
-    {
+    void on_reset(const FlightCrewSchedule& schedule) override {
         detail::requirePrepared(schedule);
     }
-    double cost(const FlightCrewSchedule &schedule,
-                int unit,
-                const std::vector<int> &members) const override
-    {
+    double cost(const FlightCrewSchedule& schedule, int unit,
+                const std::vector<int>& members) const override {
         std::int64_t violations = 0;
         for (int assignmentIndex : members)
             violations += violated(schedule, assignmentIndex, unit) ? 1 : 0;
         return static_cast<double>(violations);
     }
     bool supports_delta() const override { return true; }
-    double delta_cost(const FlightCrewSchedule &schedule,
-                     int unit,
-                     const std::vector<int> & /*members*/,
-                     int entity) const override
-    {
+    double delta_cost(const FlightCrewSchedule& schedule, int unit,
+                      const std::vector<int>& /*members*/, int entity) const override {
         return violated(schedule, entity, unit) ? 1.0 : 0.0;
     }
 };
@@ -135,24 +123,20 @@ struct PerAssignmentConstraint : FcsUnitConstraint
 // calculator uses — so the subtle tie-handling of "consecutive departures"
 // and "earliest / latest departure" stays defined in exactly one place. The
 // subclass picks its field.
-struct ItineraryConstraint : FcsUnitConstraint
-{
+struct ItineraryConstraint : FcsUnitConstraint {
     using FcsUnitConstraint::FcsUnitConstraint;
 
-    virtual std::int64_t select(const ItineraryStats &stats) const = 0;
+    virtual std::int64_t select(const ItineraryStats& stats) const = 0;
 
-    void on_reset(const FlightCrewSchedule &schedule) override
-    {
+    void on_reset(const FlightCrewSchedule& schedule) override {
         detail::requirePrepared(schedule);
     }
-    double cost(const FlightCrewSchedule &schedule,
-                int unit,
-                const std::vector<int> &members) const override
-    {
+    double cost(const FlightCrewSchedule& schedule, int unit,
+                const std::vector<int>& members) const override {
         sorted_ = members;
         ScoreCalculator::sortByDeparture(schedule, sorted_);
         return static_cast<double>(
-            select(ScoreCalculator::itineraryStats(schedule, unit, sorted_)));
+                select(ScoreCalculator::itineraryStats(schedule, unit, sorted_)));
     }
 
 private:

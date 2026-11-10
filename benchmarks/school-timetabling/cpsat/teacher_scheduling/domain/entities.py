@@ -31,8 +31,12 @@ class Subject(BaseModel):
 
     id: str
     name: str
-    required_room_type: str | None = Field(default=None, description="Special-room type needed. None uses the class's own room")
-    preferred_periods: frozenset[int] = Field(default=frozenset(), description="Preferred periods. Empty means no preference")
+    required_room_type: str | None = Field(
+        default=None, description="Special-room type needed. None uses the class's own room"
+    )
+    preferred_periods: frozenset[int] = Field(
+        default=frozenset(), description="Preferred periods. Empty means no preference"
+    )
     avoided_periods: frozenset[int] = Field(default=frozenset(), description="Avoided periods (e.g. PE in period 1)")
 
 
@@ -41,13 +45,17 @@ class Teacher(BaseModel):
 
     id: str
     name: str
-    subject_ids: frozenset[str] = Field(default=frozenset(), description="Subjects the teacher can teach. Empty means unrestricted")
+    subject_ids: frozenset[str] = Field(
+        default=frozenset(), description="Subjects the teacher can teach. Empty means unrestricted"
+    )
     unavailable: frozenset[TimeSlot] = Field(default=frozenset(), description="Times no lesson can be assigned")
     max_periods_per_week: int | None = Field(default=None, ge=0)
     max_periods_per_day: int = Field(default=6, ge=1)
     max_consecutive_periods: int = Field(default=4, ge=1, description="Maximum periods in a row without a break")
     preferred_free_days: frozenset[Weekday] = Field(default=frozenset(), description="Requested free weekdays (soft)")
-    homeroom_class_id: str | None = Field(default=None, description="Id of the class this teacher is homeroom teacher of")
+    homeroom_class_id: str | None = Field(
+        default=None, description="Id of the class this teacher is homeroom teacher of"
+    )
 
 
 class ClassGroup(BaseModel):
@@ -56,7 +64,9 @@ class ClassGroup(BaseModel):
     id: str
     name: str
     grade: int = Field(ge=1)
-    unavailable: frozenset[TimeSlot] = Field(default=frozenset(), description="Times the class itself cannot have lessons")
+    unavailable: frozenset[TimeSlot] = Field(
+        default=frozenset(), description="Times the class itself cannot have lessons"
+    )
 
 
 class Room(BaseModel):
@@ -79,7 +89,9 @@ class Course(BaseModel):
     max_periods_per_day: int = Field(default=1, ge=1, description="Maximum periods of this course on one day")
     fixed_slots: frozenset[TimeSlot] = Field(default=frozenset(), description="Cells the course must occupy")
     forbidden_slots: frozenset[TimeSlot] = Field(default=frozenset(), description="Times blocked for this course only")
-    parallel_group: str | None = Field(default=None, description="Courses with the same value run at the same time (parallel sections)")
+    parallel_group: str | None = Field(
+        default=None, description="Courses with the same value run at the same time (parallel sections)"
+    )
 
     @model_validator(mode="after")
     def _check_consistency(self) -> Course:

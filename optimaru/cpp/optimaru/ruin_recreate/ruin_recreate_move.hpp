@@ -60,9 +60,7 @@ public:
         // Much smaller than a kick's ruin: it has to be cheap enough to run
         // every few steps, and small enough that the acceptor sees a local
         // change rather than a restart.
-        const int ruin_count = std::clamp(
-                1 + random_index(rng, std::max(1, max_ruin_)),
-                1, n - 1);
+        const int ruin_count = std::clamp(1 + random_index(rng, std::max(1, max_ruin_)), 1, n - 1);
 
         drawn_ruin_ = ruin_selector_.select(rng);
         std::vector<int> ruined = ruins_[drawn_ruin_]->select_ruin_set(ctx, ruin_count, rng);

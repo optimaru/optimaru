@@ -128,4 +128,3 @@ def solve(
     else:
         Solver(cfg).solve_with_constraints(plan, constraints)
     return plan
-

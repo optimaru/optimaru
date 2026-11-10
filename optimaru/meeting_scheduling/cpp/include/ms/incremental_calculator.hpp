@@ -7,8 +7,7 @@
 #include "ms/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace ms
-{
+namespace ms {
 
 // The meeting-scheduling implementation of the engine's
 // optimaru::Objective.
@@ -39,16 +38,15 @@ namespace ms
 // full-recompute reference is ScoreCalculator::score (checked in
 // the tests and under ScoreChecks::ScoreChecks::Full).
 class MeetingSchedulingIncrementalScoreCalculator final
-    : public optimaru::Objective<MeetingSchedule>
-{
+    : public optimaru::Objective<MeetingSchedule> {
 public:
-    void rebuild(MeetingSchedule &solution) override;
+    void rebuild(MeetingSchedule& solution) override;
     void before_assign(int assignmentIndex) override;
     void after_assign(int assignmentIndex) override;
     Score score() override;
 
 private:
-    MeetingSchedule *schedule_ = nullptr;
+    MeetingSchedule* schedule_ = nullptr;
     int span_ = 0;
     int roomCount_ = 0;
     std::vector<int> assign_;  // grainRoom per assignment (-1 == unassigned)
@@ -85,10 +83,10 @@ private:
     std::int64_t requiredAndPreferredAttendanceConflictCost_ = 0;  // medium 6
     std::int64_t preferredAttendanceConflictCost_ = 0;             // medium 7
     std::int64_t meetingEndTimeCost_ = 0;                          // soft 8
-    std::int64_t consecutiveMeetingsCost_ = 0;  // soft 9 (x100)
-    std::int64_t meetingOverlapCost_ = 0;       // soft 10 (x10)
-    std::int64_t largerRoomCapacityCost_ = 0;   // soft 11
-    std::int64_t roomChangeCost_ = 0;           // soft 12
+    std::int64_t consecutiveMeetingsCost_ = 0;                     // soft 9 (x100)
+    std::int64_t meetingOverlapCost_ = 0;                          // soft 10 (x10)
+    std::int64_t largerRoomCapacityCost_ = 0;                      // soft 11
+    std::int64_t roomChangeCost_ = 0;                              // soft 12
 
     void insert(int assignmentIndex, int grainRoom);
     void retract(int assignmentIndex, int grainRoom);
@@ -97,19 +95,13 @@ private:
     // position posA, room roomA, meeting meetingA) and another assigned
     // assignment (posB, roomB, meetingB); returns true when the
     // constraint matches. Reads only the flat caches above.
-    bool roomChangePairMatches(int posA,
-                               int roomA,
-                               int meetingA,
-                               int posB,
-                               int roomB,
+    bool roomChangePairMatches(int posA, int roomA, int meetingA, int posB, int roomB,
                                int meetingB) const;
 
-    std::size_t roomGrainOffset(int room, int offset) const
-    {
+    std::size_t roomGrainOffset(int room, int offset) const {
         return static_cast<std::size_t>(room) * span_ + offset;
     }
-    std::size_t personOffset(int person, int offset) const
-    {
+    std::size_t personOffset(int person, int offset) const {
         return static_cast<std::size_t>(person) * span_ + offset;
     }
 };

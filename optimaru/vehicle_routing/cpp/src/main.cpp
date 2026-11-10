@@ -11,16 +11,13 @@
 
 using namespace vrp;
 
-namespace
-{
+namespace {
 
-void solveRandomInstance(int visitCount, int vehicleCount, int seconds,
-                         bool ruin_recreate)
-{
+void solveRandomInstance(int visitCount, int vehicleCount, int seconds, bool ruin_recreate) {
     std::printf(
-        "== Solving a random Firenze-like instance (%d visits, %d vehicles, %ds,"
-        " ALNS %s) ==\n",
-        visitCount, vehicleCount, seconds, ruin_recreate ? "on" : "off");
+            "== Solving a random Firenze-like instance (%d visits, %d vehicles, %ds,"
+            " ALNS %s) ==\n",
+            visitCount, vehicleCount, seconds, ruin_recreate ? "on" : "off");
     VehicleRoutePlan plan = buildRandomInstance(visitCount, vehicleCount, /*seed=*/2);
 
     plan.rebuildUnassignedPool();
@@ -31,8 +28,7 @@ void solveRandomInstance(int visitCount, int vehicleCount, int seconds,
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = 2;
     config.ruin_recreate = ruin_recreate;
-    config.on_new_best = [](std::int64_t step, const Score &s)
-    {
+    config.on_new_best = [](std::int64_t step, const Score& s) {
         std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step),
                     s.str().c_str());
     };
@@ -40,10 +36,9 @@ void solveRandomInstance(int visitCount, int vehicleCount, int seconds,
 
     std::printf("  final score: %s  (feasible=%s)\n", plan.score.str().c_str(),
                 plan.score.feasible() ? "true" : "false");
-    for (const Vehicle &vehicle : plan.vehicles)
-    {
-        std::printf("    vehicle %s (cap %d): %zu visits\n", vehicle.id.c_str(),
-                    vehicle.capacity, vehicle.visitIndices.size());
+    for (const Vehicle& vehicle : plan.vehicles) {
+        std::printf("    vehicle %s (cap %d): %zu visits\n", vehicle.id.c_str(), vehicle.capacity,
+                    vehicle.visitIndices.size());
     }
     std::printf("    unassigned: %zu visits\n", plan.unassignedVisitIndices.size());
     std::printf("\n");
@@ -51,17 +46,14 @@ void solveRandomInstance(int visitCount, int vehicleCount, int seconds,
 
 }  // namespace
 
-int main(int argc, char **argv)
-{
+int main(int argc, char** argv) {
     // vrp_demo [visitCount] [vehicleCount] [seconds] [--no-alns]
     const int visits = (argc > 1) ? std::atoi(argv[1]) : 25;
     const int vehicles = (argc > 2) ? std::atoi(argv[2]) : 6;
     const int seconds = (argc > 3) ? std::atoi(argv[3]) : 3;
     bool ruin_recreate = true;
-    for (int i = 1; i < argc; ++i)
-    {
-        if (std::strcmp(argv[i], "--no-alns") == 0)
-            ruin_recreate = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--no-alns") == 0) ruin_recreate = false;
     }
 
     solveRandomInstance(visits, vehicles, seconds, ruin_recreate);

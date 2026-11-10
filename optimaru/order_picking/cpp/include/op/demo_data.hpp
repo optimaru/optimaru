@@ -5,8 +5,7 @@
 
 #include "op/domain.hpp"
 
-namespace op
-{
+namespace op {
 
 // The demo warehouse: a
 // 37-product catalog (volumes in cm3, product-family shelving placement), the
@@ -17,10 +16,8 @@ namespace op
 // Throws std::invalid_argument when bucketCapacity is smaller than the
 // largest product (the problem
 // assumes every product fits in one bucket).
-OrderPickingSolution buildDemoData(int trolleysCount = 5,
-                                   int bucketCount = 4,
-                                   int bucketCapacity = 60 * 40 * 20,
-                                   int ordersCount = 8,
+OrderPickingSolution buildDemoData(int trolleysCount = 5, int bucketCount = 4,
+                                   int bucketCapacity = 60 * 40 * 20, int ordersCount = 8,
                                    std::int64_t seed = 37);
 
 // The largest product volume in the demo catalog.

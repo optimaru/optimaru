@@ -215,9 +215,7 @@ def list_constraints() -> list[str]:
     the five per-meeting constraints, then the seven pair constraints).
     The same names optimaru.meeting_scheduling.constraints uses."""
 
-def constraint_costs(
-    schedule: MeetingSchedule, constraints: Iterable[Any] | None = ...
-) -> dict[str, dict[str, Any]]:
+def constraint_costs(schedule: MeetingSchedule, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
     """Per-constraint, per-unit **raw** costs — before weight/exponent/offset/level rounding.
     A unit is a (time grain, room) cell; a pair (global) constraint reports one cost.
     `optimaru.meeting_scheduling.constraints.score()` takes these and produces a score:

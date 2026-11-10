@@ -3,8 +3,7 @@
 
 #include "pjs/constraints/common.hpp"
 
-namespace pjs
-{
+namespace pjs {
 
 // Medium, weight 1: projectDelayCost — the days each project's SINK
 // allocation ends past that project's critical-path end date
@@ -18,30 +17,19 @@ namespace pjs
 // the engine's soft level as `medium * 10^9`); hard() makes it 1 hard per
 // day, soft() 1 soft per day (outside the fold), and an explicit weight
 // is in units of the level in effect (medium by default).
-struct ProjectDelayCost final : ScheduleAggregateConstraint
-{
+struct ProjectDelayCost final : ScheduleAggregateConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
 
     explicit ProjectDelayCost(double weight = kDefaultWeight)
-        : ScheduleAggregateConstraint("projectDelayCost",
-                                      weight,
-                                      kDefaultLevel)
-    {
-    }
-    double evaluate(const ProjectJobSchedule &schedule,
-                    const std::vector<int> & /*startDate*/,
-                    const std::vector<int> &endDate) const override
-    {
+        : ScheduleAggregateConstraint("projectDelayCost", weight, kDefaultLevel) {}
+    double evaluate(const ProjectJobSchedule& schedule, const std::vector<int>& /*startDate*/,
+                    const std::vector<int>& endDate) const override {
         std::int64_t delay = 0;
-        for (int a = 0; a < schedule.allocationCount(); ++a)
-        {
-            if (schedule.jobTypeOf(a) != JobType::SINK)
-                continue;
-            const int late
-                = endDate[a] - schedule.projectCriticalPathEndDateOf(a);
-            if (late > 0)
-                delay += late;
+        for (int a = 0; a < schedule.allocationCount(); ++a) {
+            if (schedule.jobTypeOf(a) != JobType::SINK) continue;
+            const int late = endDate[a] - schedule.projectCriticalPathEndDateOf(a);
+            if (late > 0) delay += late;
         }
         return static_cast<double>(delay);
     }

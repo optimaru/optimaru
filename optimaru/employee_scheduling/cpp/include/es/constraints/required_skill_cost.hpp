@@ -20,11 +20,10 @@ struct RequiredSkillCost final : GroupableAssignmentConstraint {
         for (std::size_t e = 0; e < s.employees.size(); ++e) {
             const std::uint64_t mask = s.employees[e].skillMask;
             for (std::size_t i = 0; i < s.shifts.size(); ++i) {
-                miss_[e * s.shifts.size() + i] =
-                        (s.shifts[i].requiredSkillBit != 0 &&
-                         (mask & s.shifts[i].requiredSkillBit) == 0)
-                                ? 1
-                                : 0;  // bit 0 == no skill requirement
+                miss_[e * s.shifts.size() + i] = (s.shifts[i].requiredSkillBit != 0 &&
+                                                  (mask & s.shifts[i].requiredSkillBit) == 0)
+                                                         ? 1
+                                                         : 0;  // bit 0 == no skill requirement
             }
         }
     }
@@ -38,7 +37,7 @@ struct RequiredSkillCost final : GroupableAssignmentConstraint {
     }
     bool supports_delta() const override { return true; }
     double delta_cost(const EmployeeSchedule& s, int unit, const std::vector<int>&,
-                     int entity) const override {
+                      int entity) const override {
         return memberDelta(s, unit, entity);
     }
     double memberDelta(const EmployeeSchedule& s, int unit, int entity) const {

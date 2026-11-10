@@ -13,8 +13,7 @@
 #include "optimaru/score/score.hpp"
 #include "optimaru/score/levels.hpp"
 
-namespace ba
-{
+namespace ba {
 
 // ---------------------------------------------------------------------------
 // Score  (hard / medium / soft)
@@ -39,48 +38,40 @@ namespace ba
 // keeps a separate medium accumulator. A medium constraint's weight is
 // therefore in medium units (unassignedStaysCost: 1), never 10^9.
 constexpr std::int64_t kMediumUnit = 1000000000LL;  // 10^9
-constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
+constexpr optimaru::MediumFold kMediumFold =
+        optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
 
-struct Score
-{
+struct Score {
     std::int64_t hard = 0;
     std::int64_t medium = 0;
     std::int64_t soft = 0;
 
     bool feasible() const { return hard >= 0; }
 
-    bool operator<(const Score &o) const
-    {
-        if (hard != o.hard)
-            return hard < o.hard;
-        if (medium != o.medium)
-            return medium < o.medium;
+    bool operator<(const Score& o) const {
+        if (hard != o.hard) return hard < o.hard;
+        if (medium != o.medium) return medium < o.medium;
         return soft < o.soft;
     }
-    bool operator>(const Score &o) const { return o < *this; }
-    bool operator<=(const Score &o) const { return !(o < *this); }
-    bool operator>=(const Score &o) const { return !(*this < o); }
-    bool operator==(const Score &o) const
-    {
+    bool operator>(const Score& o) const { return o < *this; }
+    bool operator<=(const Score& o) const { return !(o < *this); }
+    bool operator>=(const Score& o) const { return !(*this < o); }
+    bool operator==(const Score& o) const {
         return hard == o.hard && medium == o.medium && soft == o.soft;
     }
 
-    std::string str() const
-    {
-        return std::to_string(hard) + "hard/" + std::to_string(medium)
-               + "medium/" + std::to_string(soft) + "soft";
+    std::string str() const {
+        return std::to_string(hard) + "hard/" + std::to_string(medium) + "medium/" +
+               std::to_string(soft) + "soft";
     }
 };
 
-inline optimaru::Score toEngineScore(const Score &s)
-{
+inline optimaru::Score toEngineScore(const Score& s) {
     // soft + medium * 10^9: the same double arithmetic as the old
     // `medium * kMediumUnit + soft` (exact for the integral levels of this
     // domain, |engine soft| < 2^53).
-    return kMediumFold.to_engine(s.hard,
-                                static_cast<double>(s.medium),
-                                static_cast<double>(s.soft));
+    return kMediumFold.to_engine(s.hard, static_cast<double>(s.medium),
+                                 static_cast<double>(s.soft));
 }
 
 // A best-score LIMIT (Solver::Config::target_score) in engine terms.
@@ -92,8 +83,7 @@ inline optimaru::Score toEngineScore(const Score &s)
 // low enough soft score never reaches. Any other limit folds as a score.
 constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
 
-inline optimaru::Score toEngineScoreLimit(const Score &limit)
-{
+inline optimaru::Score toEngineScoreLimit(const Score& limit) {
     if (limit.medium == kNoLevelFloor || limit.soft == kNoLevelFloor)
         return {limit.hard, -std::numeric_limits<double>::infinity()};
     return toEngineScore(limit);
@@ -101,8 +91,7 @@ inline optimaru::Score toEngineScoreLimit(const Score &limit)
 
 // Inverse of toEngineScore. Every constraint penalizes (medium/soft <= 0 and
 // integral), so truncating integer division decodes the two levels exactly.
-inline Score fromEngineScore(const optimaru::Score &e)
-{
+inline Score fromEngineScore(const optimaru::Score& e) {
     const std::int64_t combined = optimaru::round_score_level(e.soft, "soft");
     return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
 }
@@ -110,14 +99,9 @@ inline Score fromEngineScore(const optimaru::Score &e)
 // ---------------------------------------------------------------------------
 // Enums  (Gender / GenderLimitation)
 // ---------------------------------------------------------------------------
-enum class Gender
-{
-    MALE,
-    FEMALE
-};
+enum class Gender { MALE, FEMALE };
 
-enum class GenderLimitation
-{
+enum class GenderLimitation {
     ANY_GENDER,  // mixed
     MALE_ONLY,
     FEMALE_ONLY,
@@ -128,8 +112,7 @@ enum class GenderLimitation
 // Department  (problem fact)
 // ---------------------------------------------------------------------------
 // minimumAge / maximumAge nullopt == no age restriction.
-struct Department
-{
+struct Department {
     std::string id;
     std::string name;
     std::map<std::string, int> specialtyToPriority;
@@ -140,8 +123,7 @@ struct Department
 // ---------------------------------------------------------------------------
 // Room  (problem fact)
 // ---------------------------------------------------------------------------
-struct Room
-{
+struct Room {
     std::string id;
     std::string name;
     int department = 0;  // index into BedPlan::departments
@@ -153,8 +135,7 @@ struct Room
 // ---------------------------------------------------------------------------
 // Bed  (problem fact; the value a stay is assigned)
 // ---------------------------------------------------------------------------
-struct Bed
-{
+struct Bed {
     std::string id;
     int room = 0;  // index into BedPlan::rooms
     int indexInRoom = 0;
@@ -176,8 +157,7 @@ struct Bed
 //
 // Dates are integer day indices (e.g. days since the epoch); only
 // differences matter. nightCount is departureDay - arrivalDay + 1.
-struct Stay
-{
+struct Stay {
     std::string id;
     std::string patientName;
     Gender patientGender = Gender::MALE;
@@ -202,13 +182,10 @@ struct Stay
 
     // The number of nights both stays are in house
     // (Stay::calculateSameNightCount).
-    int sameNightCount(const Stay &other) const
-    {
-        const int maxArrival
-            = arrivalDay > other.arrivalDay ? arrivalDay : other.arrivalDay;
-        const int minDeparture = departureDay < other.departureDay
-                                     ? departureDay
-                                     : other.departureDay;
+    int sameNightCount(const Stay& other) const {
+        const int maxArrival = arrivalDay > other.arrivalDay ? arrivalDay : other.arrivalDay;
+        const int minDeparture =
+                departureDay < other.departureDay ? departureDay : other.departureDay;
         const int nights = minDeparture - maxArrival + 1;
         return nights > 0 ? nights : 0;
     }
@@ -217,8 +194,7 @@ struct Stay
 // ---------------------------------------------------------------------------
 // BedPlan  (the whole problem and its solution)
 // ---------------------------------------------------------------------------
-struct BedPlan
-{
+struct BedPlan {
     std::vector<Department> departments;
     std::vector<Room> rooms;
     std::vector<Bed> beds;
@@ -240,12 +216,9 @@ struct BedPlan
     // The "no bed" sentinel value (a stay on it is unassigned).
     int noBedValue() const { return bedCount(); }
 
-    bool roomHasEquipment(int roomIndex, int equipmentId) const
-    {
-        return roomEquipmentFlat[static_cast<std::size_t>(roomIndex)
-                                     * equipmentTypeCount
-                                 + equipmentId]
-               != 0;
+    bool roomHasEquipment(int roomIndex, int equipmentId) const {
+        return roomEquipmentFlat[static_cast<std::size_t>(roomIndex) * equipmentTypeCount +
+                                 equipmentId] != 0;
     }
 };
 
@@ -257,23 +230,13 @@ struct BedPlan
 // list plus the "no bed" sentinel. Nothing is pinned, so no is_pinned hook
 // is declared.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<ba::BedPlan>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const ba::BedPlan &p)
-    {
-        return static_cast<int>(p.stays.size());
-    }
-    static int value_count(const ba::BedPlan &p) { return p.bedCount() + 1; }
-    static int value_of(const ba::BedPlan &p, int stayIndex)
-    {
-        return p.stays[stayIndex].bed;
-    }
-    static void assign(ba::BedPlan &p, int stayIndex, int bed)
-    {
-        p.stays[stayIndex].bed = bed;
-    }
+template <>
+struct optimaru::SolutionTraits<ba::BedPlan> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const ba::BedPlan& p) { return static_cast<int>(p.stays.size()); }
+    static int value_count(const ba::BedPlan& p) { return p.bedCount() + 1; }
+    static int value_of(const ba::BedPlan& p, int stayIndex) { return p.stays[stayIndex].bed; }
+    static void assign(ba::BedPlan& p, int stayIndex, int bed) { p.stays[stayIndex].bed = bed; }
 };
 
 // ---------------------------------------------------------------------------
@@ -281,8 +244,8 @@ template <> struct optimaru::SolutionTraits<ba::BedPlan>
 // ---------------------------------------------------------------------------
 // The decomposed calculator folds its medium accumulator with the domain's
 // kMediumFold (see the Score adapter above).
-template <> struct optimaru::MediumFoldOf<ba::BedPlan>
-{
+template <>
+struct optimaru::MediumFoldOf<ba::BedPlan> {
     static constexpr optimaru::MediumFold value = ba::kMediumFold;
 };
 

@@ -42,8 +42,30 @@ SUBJECTS: tuple[tuple[str, str, str, str, str], ...] = (
 
 #: Periods per subject per grade (the sum must equal that grade's weekly periods).
 CURRICULUM: dict[int, dict[str, int]] = {
-    1: {"Korean": 5, "Math": 5, "English": 5, "Science": 4, "Social": 3, "PE": 3, "Music": 2, "Art": 2, "Ethics": 1, "TechHome": 2},
-    2: {"Korean": 5, "Math": 5, "English": 5, "Science": 4, "Social": 3, "PE": 3, "Music": 2, "Art": 2, "Ethics": 1, "TechHome": 2},
+    1: {
+        "Korean": 5,
+        "Math": 5,
+        "English": 5,
+        "Science": 4,
+        "Social": 3,
+        "PE": 3,
+        "Music": 2,
+        "Art": 2,
+        "Ethics": 1,
+        "TechHome": 2,
+    },
+    2: {
+        "Korean": 5,
+        "Math": 5,
+        "English": 5,
+        "Science": 4,
+        "Social": 3,
+        "PE": 3,
+        "Music": 2,
+        "Art": 2,
+        "Ethics": 1,
+        "TechHome": 2,
+    },
     3: {
         "Korean": 5,
         "Math": 5,

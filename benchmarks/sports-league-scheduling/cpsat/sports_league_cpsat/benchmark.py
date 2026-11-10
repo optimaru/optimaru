@@ -42,9 +42,9 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from optimaru.sports_league_scheduling.models import LeagueScheduleModel
-
     from external_solver.sports_league_scheduling import solve
+
+    from optimaru.sports_league_scheduling.models import LeagueScheduleModel
 
     solved = solve(
         LeagueScheduleModel.from_core(problem),

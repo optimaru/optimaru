@@ -19,8 +19,7 @@ struct MaxConsecutiveDaysOffCost final : EsUnitConstraint {
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit MaxConsecutiveDaysOffCost(double weight = kDefaultWeight, int value = 3)
-        : EsUnitConstraint("maxConsecutiveDaysOffCost", weight, kDefaultLevel),
-          value_(value) {}
+        : EsUnitConstraint("maxConsecutiveDaysOffCost", weight, kDefaultLevel), value_(value) {}
     void on_reset(const EmployeeSchedule& s) override {
         horizon_ = 0;
         day_.resize(s.shifts.size());
@@ -35,7 +34,10 @@ struct MaxConsecutiveDaysOffCost final : EsUnitConstraint {
         for (int i : members) worked_[day_[i]] = 1;
         std::int32_t first = -1, last = -1;
         for (std::int32_t d = 0; d < horizon_; ++d)
-            if (worked_[d]) { if (first < 0) first = d; last = d; }
+            if (worked_[d]) {
+                if (first < 0) first = d;
+                last = d;
+            }
         double c = 0;
         std::int32_t run = 0;  // consecutive off days between first..last (interior)
         for (std::int32_t d = first; d >= 0 && d <= last; ++d) {
@@ -52,8 +54,8 @@ struct MaxConsecutiveDaysOffCost final : EsUnitConstraint {
 
 private:
     std::int32_t value_;
-    std::vector<std::int32_t> day_;      // shift -> start day
-    mutable std::vector<char> worked_;   // scratch, zeroed after use
+    std::vector<std::int32_t> day_;     // shift -> start day
+    mutable std::vector<char> worked_;  // scratch, zeroed after use
     std::int32_t horizon_ = 0;
 };
 

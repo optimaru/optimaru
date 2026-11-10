@@ -16,9 +16,7 @@ SAMPLE = """\
 def test_parse_and_scale_li_lim_pdptw() -> None:
     instance = parse_instance(SAMPLE, name="tiny")
     assert len(instance.requests) == 1
-    request, pairs = make_request(
-        instance, seconds=1, seed=0, workers=1, request_limit=None
-    )
+    request, pairs = make_request(instance, seconds=1, seed=0, workers=1, request_limit=None)
     assert len(request.model_input.vehicles) == 1
     assert request.model_input.vehicles[0].fixed_cost == 0
     assert request.model_input.vehicles[0].return_to_depot

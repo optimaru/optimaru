@@ -15,7 +15,7 @@ namespace optimaru {
 // to `e` is only a guard.
 template <typename Solution>
 int movable_entity(const Solution& sol, int e, std::uniform_int_distribution<int>& pick,
-                  std::mt19937_64& rng) {
+                   std::mt19937_64& rng) {
     using Traits = SolutionTraits<Solution>;
     if (!entity_is_pinned<Traits>(sol, e)) return e;
     for (int t = 0; t < 8; ++t) {

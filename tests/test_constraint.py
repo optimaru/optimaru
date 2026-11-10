@@ -113,10 +113,7 @@ def costs_a(fold=None):
         ),
         "idle_worker_cost": ([1.0], {"level": "medium", "is_global": True}),
     }
-    return {
-        name: _entry(values, fold=fold, name=name, **meta)
-        for name, (values, meta) in rows.items()
-    }
+    return {name: _entry(values, fold=fold, name=name, **meta) for name, (values, meta) in rows.items()}
 
 
 BELOW_HARD = ("below_hard", 100.0)
@@ -153,9 +150,7 @@ INTO_SOFT = ("into_soft", 1000.0)
 )
 def test_below_hard_folds_the_whole_score(selection, expected):
     """below_hard reports hard * unit + medium whatever the selection holds."""
-    assert tuple(
-        score_costs(costs_a(BELOW_HARD), select(list(selection), DEFAULTS))
-    ) == pytest.approx(expected)
+    assert tuple(score_costs(costs_a(BELOW_HARD), select(list(selection), DEFAULTS))) == pytest.approx(expected)
 
 
 @pytest.mark.parametrize(
@@ -178,18 +173,14 @@ def test_below_hard_folds_the_whole_score(selection, expected):
     ],
 )
 def test_into_soft_folds_medium_into_soft(selection, expected):
-    assert tuple(
-        score_costs(costs_a(INTO_SOFT), select(list(selection), DEFAULTS))
-    ) == pytest.approx(expected)
+    assert tuple(score_costs(costs_a(INTO_SOFT), select(list(selection), DEFAULTS))) == pytest.approx(expected)
 
 
 def test_a_medium_term_needs_a_fold():
     with pytest.raises(ValueError, match="carry no medium_fold"):
         score_costs(costs_a(None), [OverloadCost()])
     # ... while the same raw costs demoted to soft score fine.
-    assert score_costs(
-        costs_a(None), [OverloadCost(level="soft"), IdleWorkerCost(level="soft")]
-    ) == (0, -2.0)
+    assert score_costs(costs_a(None), [OverloadCost(level="soft"), IdleWorkerCost(level="soft")]) == (0, -2.0)
 
 
 def test_disagreeing_folds_are_refused():
@@ -338,9 +329,7 @@ def test_an_unknown_name_is_refused():
     class Typo(Constraint):
         name = "confict_cost"
 
-    with pytest.raises(
-        ValueError, match="unknown constraint 'confict_cost'; available: "
-    ):
+    with pytest.raises(ValueError, match="unknown constraint 'confict_cost'; available: "):
         score_costs(costs_a(INTO_SOFT), [Typo()])
 
 
@@ -574,7 +563,9 @@ def test_offset_zero_is_the_plain_power_bit_for_bit(cost, exponent, clip):
 
 
 def _tasks_only(costs):
-    return {name: entry for name, entry in costs.items() if name in ("task_cost_cost", "preference_reward", "conflict_cost")}
+    return {
+        name: entry for name, entry in costs.items() if name in ("task_cost_cost", "preference_reward", "conflict_cost")
+    }
 
 
 @pytest.mark.parametrize(
@@ -793,7 +784,9 @@ def test_knob_ranges_are_checked_on_the_double():
     weight that is -0.0 is not."""
     with pytest.raises(ValueError) as refused:
         TaskCostCost(exponent=Fraction(1, 10**400))
-    assert str(refused.value).startswith("constraint 'task_cost_cost': exponent must be finite and > 0, not Fraction(1, ")
+    assert str(refused.value).startswith(
+        "constraint 'task_cost_cost': exponent must be finite and > 0, not Fraction(1, "
+    )
     pick = TaskCostCost(weight=Fraction(-1, 10**400))  # -0.0 as a double: weight 0
     assert score_costs(_tasks_only(costs_a()), [pick]) == (0, 0.0)
 

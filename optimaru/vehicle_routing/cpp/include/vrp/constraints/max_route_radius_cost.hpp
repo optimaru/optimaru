@@ -21,8 +21,9 @@ struct MaxRouteRadiusCost final : detail::PerVehicleConstraint {
         if (detail::isPool(p, u) || p.vehicles[u].maxRouteRadiusMeters <= 0) return 0;
         const Location& home = p.locations[p.vehicles[u].homeLocationIndex];
         double furthest = 0;
-        for (int i : m) furthest = std::max(furthest,
-            detail::haversineMeters(home, p.locations[p.visits[i].locationIndex]));
+        for (int i : m)
+            furthest = std::max(furthest, detail::haversineMeters(
+                                                  home, p.locations[p.visits[i].locationIndex]));
         return std::max(0.0, furthest - p.vehicles[u].maxRouteRadiusMeters);
     }
 };

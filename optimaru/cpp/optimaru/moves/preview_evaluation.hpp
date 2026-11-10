@@ -25,9 +25,8 @@ namespace optimaru {
 // apply() and undo() ran (a caller passing a no-op undo then knows the move is
 // in place).
 template <typename Solution, typename Preview, typename Apply, typename Undo>
-Score evaluate_with_preview(Editor<Solution>& editor, Preview&& preview,
-                                  Apply&& apply, Undo&& undo, bool* served = nullptr,
-                                  bool* applied = nullptr) {
+Score evaluate_with_preview(Editor<Solution>& editor, Preview&& preview, Apply&& apply, Undo&& undo,
+                            bool* served = nullptr, bool* applied = nullptr) {
     Score previewed;
     const bool was_served = preview(editor.objective(), previewed);
     if (served != nullptr) *served = was_served;

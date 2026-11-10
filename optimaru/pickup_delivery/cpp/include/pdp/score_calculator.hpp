@@ -5,8 +5,7 @@
 
 #include "pdp/domain.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
 // ---------------------------------------------------------------------------
 // The PDPTW constraints (the full-recompute reference implementation)
@@ -34,8 +33,7 @@ namespace pdp
 // The first three are what make this a PDP rather than a VRP, and they are
 // where a naive element-granular local search burns its budget — hence the
 // pair-aware operators in solver.hpp.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // Penalty weight (in the same whole-minute units as lateness) for each
     // violated coupling rule — the kDefaultWeight of pairedRequestCost,
@@ -53,15 +51,14 @@ public:
 
     // Recomputes every node's derived fields (vehicleIndex, arrivalTime)
     // from the current vehicle routes.
-    static void updateShadowVariables(PdpRoutePlan &plan);
+    static void updateShadowVariables(PdpRoutePlan& plan);
 
     // Recomputes the derived fields, then the Score, storing it in
     // plan.score and returning it.
-    static Score score(PdpRoutePlan &plan);
+    static Score score(PdpRoutePlan& plan);
 
     // Ceil of a positive second-count to whole minutes.
-    static std::int64_t ceilToMinutes(Seconds seconds)
-    {
+    static std::int64_t ceilToMinutes(Seconds seconds) {
         return seconds <= 0 ? 0 : (seconds + 59) / 60;
     }
 };

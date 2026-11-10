@@ -27,16 +27,21 @@ struct WorkerDayCountInRangeCost final : EsUnitConstraint {
                                        int minCount = 0, int maxCount = -1,
                                        std::string location = "")
         : EsUnitConstraint("workerDayCountInRangeCost", weight, kDefaultLevel),
-          lo_(lo), hi_(hi), min_(minCount), max_(maxCount), loc_(std::move(location)) {
+          lo_(lo),
+          hi_(hi),
+          min_(minCount),
+          max_(maxCount),
+          loc_(std::move(location)) {
         label = "Worker day count[" + (loc_.empty() ? std::string("work") : loc_) + " " +
-                std::to_string(lo_) + ".." + std::to_string(hi_) + " " + std::to_string(min_) + ".." +
-                (max_ < 0 ? std::string("inf") : std::to_string(max_)) +
+                std::to_string(lo_) + ".." + std::to_string(hi_) + " " + std::to_string(min_) +
+                ".." + (max_ < 0 ? std::string("inf") : std::to_string(max_)) +
                 "]";  // display only; never a lookup key
         // hi - lo sizes the scratch table below. hi = -1 is the empty default range.
         if (lo < 0 || lo > MAX_DAY || hi < -1 || hi > MAX_DAY) {
-            throw std::invalid_argument("worker_day_count_in_range_cost: lo and hi must be days 0.." +
-                                        std::to_string(MAX_DAY) + ", got " + std::to_string(lo) +
-                                        ".." + std::to_string(hi));
+            throw std::invalid_argument(
+                    "worker_day_count_in_range_cost: lo and hi must be days 0.." +
+                    std::to_string(MAX_DAY) + ", got " + std::to_string(lo) + ".." +
+                    std::to_string(hi));
         }
     }
     void on_reset(const EmployeeSchedule& s) override {

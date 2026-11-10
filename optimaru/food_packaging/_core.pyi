@@ -173,9 +173,7 @@ def list_constraints() -> list[str]:
     the unit constraints, then the globals operator_cleaning_conflict_cost and
     unassigned_jobs_cost). The same names optimaru.food_packaging.constraints uses."""
 
-def constraint_costs(
-    schedule: PackagingSchedule, constraints: Iterable[Any] | None = ...
-) -> dict[str, dict[str, Any]]:
+def constraint_costs(schedule: PackagingSchedule, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
     """Raw per-unit cost of every constraint, before weight/exponent/offset/level:
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",

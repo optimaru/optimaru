@@ -18,9 +18,7 @@ from optimaru.pickup_delivery.models import (
 
 
 def stop(name: str, service: int = 0) -> StopModel:
-    return StopModel(
-        id=name, location=(37.5, 127.0), max_end_time=10**7, service_duration=service
-    )
+    return StopModel(id=name, location=(37.5, 127.0), max_end_time=10**7, service_duration=service)
 
 
 # Service time is what makes an unassigned request cost anything.
@@ -48,10 +46,7 @@ def line_input(vehicles, deliveries, places: dict[str, int]) -> PdpInput:
 def solve(model_input: PdpInput) -> dict[str, list[str]]:
     solution = solve_request(PdpRequest(model_input=model_input, timelimit=0.3))
     assert solution.feasible
-    return {
-        vehicle: [s.stop_id for s in route]
-        for vehicle, route in solution.routes.items()
-    }
+    return {vehicle: [s.stop_id for s in route] for vehicle, route in solution.routes.items()}
 
 
 def vehicle(name: str, route=(), pinned: int = 0) -> VehicleModel:
@@ -68,26 +63,20 @@ NEARBY = {"v": 0, "ap": 100, "ad": 1000, "bp": 110, "bd": 120}
 
 
 def test_a_new_request_slips_in_after_the_pinned_stop_and_before_a_free_one():
-    model_input = line_input(
-        [vehicle("v", ["ap", "ad"], pinned=1)], [request("a"), request("b")], NEARBY
-    )
+    model_input = line_input([vehicle("v", ["ap", "ad"], pinned=1)], [request("a"), request("b")], NEARBY)
 
     assert solve(model_input)["v"] == ["ap", "bp", "bd", "ad"]
 
 
 def test_pinning_both_stops_keeps_new_work_behind_them():
-    model_input = line_input(
-        [vehicle("v", ["ap", "ad"], pinned=2)], [request("a"), request("b")], NEARBY
-    )
+    model_input = line_input([vehicle("v", ["ap", "ad"], pinned=2)], [request("a"), request("b")], NEARBY)
 
     assert solve(model_input)["v"][:2] == ["ap", "ad"]
 
 
 def test_a_pinned_stop_stays_first_when_something_else_would_be_better():
     places = {"v": 0, "ap": 5000, "ad": 5001, "bp": 1, "bd": 2}
-    model_input = line_input(
-        [vehicle("v", ["ap", "ad"], pinned=1)], [request("a"), request("b")], places
-    )
+    model_input = line_input([vehicle("v", ["ap", "ad"], pinned=1)], [request("a"), request("b")], places)
 
     assert solve(model_input)["v"][0] == "ap"
 
@@ -95,9 +84,7 @@ def test_a_pinned_stop_stays_first_when_something_else_would_be_better():
 def test_a_free_tail_can_be_reordered():
     places = {"v": 0, "ap": 1, "ad": 1000, "bp": 2, "bd": 3}
     route = ["ap", "ad", "bp", "bd"]
-    model_input = line_input(
-        [vehicle("v", route, pinned=1)], [request("a"), request("b")], places
-    )
+    model_input = line_input([vehicle("v", route, pinned=1)], [request("a"), request("b")], places)
 
     assert solve(model_input)["v"] == ["ap", "bp", "bd", "ad"]
 
@@ -130,9 +117,7 @@ def test_a_pinned_pickup_keeps_its_dropoff_on_the_vehicle():
 
 def test_an_initial_route_is_where_the_solve_starts():
     """With no time to search, the given route comes straight back."""
-    model_input = line_input(
-        [vehicle("v", ["bp", "bd", "ap", "ad"])], [request("a"), request("b")], NEARBY
-    )
+    model_input = line_input([vehicle("v", ["bp", "bd", "ap", "ad"])], [request("a"), request("b")], NEARBY)
     request_model = PdpRequest(
         model_input=model_input,
         timelimit=0,
@@ -146,17 +131,13 @@ def test_an_initial_route_is_where_the_solve_starts():
 
 
 def test_a_request_outside_the_initial_routes_is_still_placed():
-    model_input = line_input(
-        [vehicle("v", ["ap", "ad"])], [request("a"), request("b")], NEARBY
-    )
+    model_input = line_input([vehicle("v", ["ap", "ad"])], [request("a"), request("b")], NEARBY)
 
     assert sorted(solve(model_input)["v"]) == ["ad", "ap", "bd", "bp"]
 
 
 def test_pinned_stops_score_as_a_hard_violation():
-    model_input = line_input(
-        [vehicle("v", ["ap", "ad"], pinned=2)], [request("a")], NEARBY
-    )
+    model_input = line_input([vehicle("v", ["ap", "ad"], pinned=2)], [request("a")], NEARBY)
     plan = pdp.models.to_plan(model_input)
     plan.vehicles[0].node_indices = [1, 0]
 
@@ -164,9 +145,7 @@ def test_pinned_stops_score_as_a_hard_violation():
 
 
 def test_constraints_can_be_replaced_with_pins_in_place():
-    model_input = line_input(
-        [vehicle("v", ["ap", "ad"], pinned=1)], [request("a"), request("b")], NEARBY
-    )
+    model_input = line_input([vehicle("v", ["ap", "ad"], pinned=1)], [request("a"), request("b")], NEARBY)
     kept = [c for c in get_constraints() if c.name != "travel_time_cost"]
 
     solution = solve_request(
@@ -184,9 +163,7 @@ def bound(name: str, vehicle_id: str) -> DeliveryModel:
 def test_a_required_request_can_change_places_on_its_route():
     places = {"v": 0, "ap": 1, "ad": 1000, "bp": 2, "bd": 3}
     route = ["ap", "ad", "bp", "bd"]
-    model_input = line_input(
-        [vehicle("v", route, pinned=1)], [bound("a", "v"), bound("b", "v")], places
-    )
+    model_input = line_input([vehicle("v", route, pinned=1)], [bound("a", "v"), bound("b", "v")], places)
 
     assert solve(model_input)["v"] == ["ap", "bp", "bd", "ad"]
 
@@ -208,32 +185,16 @@ def test_a_required_request_stays_when_another_vehicle_would_be_better():
 
 def test_a_required_request_counts_as_a_hard_violation_off_its_vehicle():
     places = {"v": 0, "w": 0, "ap": 1, "ad": 2}
-    model_input = line_input(
-        [vehicle("v"), vehicle("w", ["ap", "ad"])], [bound("a", "v")], places
-    )
+    model_input = line_input([vehicle("v"), vehicle("w", ["ap", "ad"])], [bound("a", "v")], places)
 
-    assert (
-        sum(
-            pdp.constraint_costs(pdp.models.to_plan(model_input))[
-                "required_vehicle_cost"
-            ]["costs"]
-        )
-        == 2
-    )
+    assert sum(pdp.constraint_costs(pdp.models.to_plan(model_input))["required_vehicle_cost"]["costs"]) == 2
 
 
 def test_an_unassigned_required_request_counts_for_less_than_another_vehicle():
     places = {"v": 0, "w": 0, "ap": 1, "ad": 2}
     model_input = line_input([vehicle("v"), vehicle("w")], [bound("a", "v")], places)
 
-    assert (
-        sum(
-            pdp.constraint_costs(pdp.models.to_plan(model_input))[
-                "required_vehicle_cost"
-            ]["costs"]
-        )
-        == 1
-    )
+    assert sum(pdp.constraint_costs(pdp.models.to_plan(model_input))["required_vehicle_cost"]["costs"]) == 1
 
 
 def stops_of(solution, vehicle_id: str) -> list[str]:
@@ -272,14 +233,10 @@ def test_construction_places_a_required_request_before_a_free_one_takes_its_slot
             dropoff=timed_stop("d", close + 2000),
         )
 
-    vehicles = [
-        VehicleModel(id=name, capacity=1, home=(37.5, 127.0)) for name in ("v", "w")
-    ]
+    vehicles = [VehicleModel(id=name, capacity=1, home=(37.5, 127.0)) for name in ("v", "w")]
     places = {"v": 0, "w": 100, "ap": 0, "ad": 0, "bp": 0, "bd": 0}
     # `a` has the tighter window and `v` is closest, but `v` has room for only one of them.
-    model_input = line_input(
-        vehicles, [timed("a", 1200), timed("b", 1300, "v")], places
-    )
+    model_input = line_input(vehicles, [timed("a", 1200), timed("b", 1300, "v")], places)
 
     solution = construct(model_input)
 
@@ -323,10 +280,7 @@ def chained_requests(vehicle_count: int, per_vehicle: int, seed: int) -> PdpInpu
             positions[f"{name}p"], positions[f"{name}d"] = pickup, dropoff
             clock, here = at_dropoff + 60, dropoff
     rng.shuffle(deliveries)
-    vehicles = [
-        VehicleModel(id=f"v{v}", capacity=2, home=(37.5, 127.0))
-        for v in range(vehicle_count)
-    ]
+    vehicles = [VehicleModel(id=f"v{v}", capacity=2, home=(37.5, 127.0)) for v in range(vehicle_count)]
     return line_input(vehicles, deliveries, positions)
 
 
@@ -375,9 +329,7 @@ def timed_stop(name: str, opens: int = 0, closes: int = 10**7) -> StopModel:
     )
 
 
-def timed_request(
-    name: str, opens: int = 0, closes: int = 10**7, required: str | None = None
-) -> DeliveryModel:
+def timed_request(name: str, opens: int = 0, closes: int = 10**7, required: str | None = None) -> DeliveryModel:
     return DeliveryModel(
         id=name,
         demand=1,
@@ -445,9 +397,7 @@ def test_a_pinned_stop_holds_when_breaking_it_would_save_more_lateness(seed):
         timed_request("a", opens=400000),
         timed_request("b", closes=1000, required="v"),
     ]
-    model_input = line_input(
-        [vehicle("v", ["ap", "ad", "bp", "bd"], pinned=1)], deliveries, ALL_AT_ONE_PLACE
-    )
+    model_input = line_input([vehicle("v", ["ap", "ad", "bp", "bd"], pinned=1)], deliveries, ALL_AT_ONE_PLACE)
 
     solution = search(model_input, seed)
 
@@ -459,9 +409,7 @@ def test_a_pinned_stop_holds_when_breaking_it_would_save_more_lateness(seed):
 def test_pinned_stops_keep_their_order_when_they_are_late_themselves(seed):
     # On time only the other way round, but the order was pinned.
     deliveries = [timed_request("a", opens=400000), timed_request("b", closes=1000)]
-    model_input = line_input(
-        [vehicle("v", ["ap", "bp", "ad", "bd"], pinned=2)], deliveries, ALL_AT_ONE_PLACE
-    )
+    model_input = line_input([vehicle("v", ["ap", "bp", "ad", "bd"], pinned=2)], deliveries, ALL_AT_ONE_PLACE)
 
     assert stops_of(search(model_input, seed), "v")[:2] == ["ap", "bp"]
 
@@ -469,15 +417,11 @@ def test_pinned_stops_keep_their_order_when_they_are_late_themselves(seed):
 @pytest.mark.parametrize("plugin_path", [False, True])
 def test_a_required_vehicle_outside_the_plan_is_refused_by_the_engine(plugin_path):
     places = {"v": 0, "w": 0, "ap": 1, "ad": 2}
-    plan = pdp.models.to_plan(
-        line_input([vehicle("v"), vehicle("w")], [bound("a", "w")], places)
-    )
+    plan = pdp.models.to_plan(line_input([vehicle("v"), vehicle("w")], [bound("a", "w")], places))
     plan.vehicles = plan.vehicles[:1]
     solver = pdp._core.Solver(pdp._core.SolverConfig())
 
-    with pytest.raises(
-        ValueError, match=r"requiredVehicleIndex 1 is out of range -1\.\.0"
-    ):
+    with pytest.raises(ValueError, match=r"requiredVehicleIndex 1 is out of range -1\.\.0"):
         if plugin_path:
             solver.solve_with_constraints(plan, get_constraints())
         else:

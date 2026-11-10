@@ -3,8 +3,7 @@
 
 #include "cs/constraints/common.hpp"
 
-namespace cs
-{
+namespace cs {
 
 // Hard, weight 100000: talkTypeIncompatibilityCost — a talk in a timeslot or
 // room that does not admit its talk type. The engine's
@@ -14,18 +13,13 @@ namespace cs
 // talk whose timeslot does not admit its talk type, and again when its room
 // does not; 0 = no violation (every talk sits in a timeslot and a room that
 // admit its type).
-struct TalkTypeIncompatibilityCost final : BreakdownConstraint
-{
+struct TalkTypeIncompatibilityCost final : BreakdownConstraint {
     static constexpr double kDefaultWeight = 100000.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit TalkTypeIncompatibilityCost(double weight = kDefaultWeight)
-        : BreakdownConstraint(
-              "talkTypeIncompatibilityCost", weight, kDefaultLevel)
-    {
-    }
-    std::int64_t select(const Breakdown &breakdown) const override
-    {
+        : BreakdownConstraint("talkTypeIncompatibilityCost", weight, kDefaultLevel) {}
+    std::int64_t select(const Breakdown& breakdown) const override {
         return breakdown.talkTypeIncompatibilityCost;
     }
 };

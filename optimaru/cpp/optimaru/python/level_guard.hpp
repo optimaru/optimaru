@@ -60,7 +60,7 @@ inline std::optional<Level> level_named(std::string_view name) {
 // what makes constraint.level here the same as _level's default. Throws
 // std::invalid_argument.
 inline Level checked_level(const ConstraintMetadata& constraint, Level wanted, MediumFold fold,
-                          const std::string& quoted_name) {
+                           const std::string& quoted_name) {
     if (wanted == Level::Medium && !fold.has_medium()) {
         throw std::invalid_argument("constraint " + quoted_name +
                                     ": this use case has no medium level");
@@ -76,8 +76,8 @@ inline Level checked_level(const ConstraintMetadata& constraint, Level wanted, M
     }
     if (wanted != constraint.level && !constraint.level_flippable) {
         throw std::invalid_argument("constraint " + quoted_name + " is always " +
-                                    level_name(constraint.level) + "; level='" + level_name(wanted) +
-                                    "' is not allowed");
+                                    level_name(constraint.level) + "; level='" +
+                                    level_name(wanted) + "' is not allowed");
     }
     return wanted;
 }
@@ -107,7 +107,7 @@ inline Level checked_level(const ConstraintMetadata& constraint, Level wanted, M
 // validate_level, std::logic_error); this is the Python-facing wording.
 // `quoted_name` as for checked_level. Throws std::invalid_argument.
 inline void check_literal_offset(const ConstraintMetadata& constraint, MediumFold fold,
-                               const std::string& quoted_name) {
+                                 const std::string& quoted_name) {
     if (constraint.clip || constraint.offset == 0.0 || !fold.counts_toward_hard(constraint.level)) {
         return;
     }
@@ -129,8 +129,9 @@ inline void check_literal_offset(const ConstraintMetadata& constraint, MediumFol
 // checks the result (check_literal_offset). `quoted_name` as for checked_level;
 // `fold` is the domain's. Throws std::invalid_argument.
 inline void restate_knobs(ConstraintMetadata& constraint, const Knobs& knobs, MediumFold fold,
-                         const std::string& quoted_name) {
-    if (knobs.level) constraint.set_level(checked_level(constraint, *knobs.level, fold, quoted_name));
+                          const std::string& quoted_name) {
+    if (knobs.level)
+        constraint.set_level(checked_level(constraint, *knobs.level, fold, quoted_name));
     if (knobs.weight) constraint.set_weight(*knobs.weight);
     constraint.set_exponent(knobs.exponent);
     constraint.set_offset(knobs.offset);
@@ -140,14 +141,14 @@ inline void restate_knobs(ConstraintMetadata& constraint, const Knobs& knobs, Me
 
 template <typename Solution>
 void restate_knobs(ConstraintAssembly<Solution>& assembly, const std::string& name,
-                  const Knobs& knobs, const std::string& quoted_name) {
+                   const Knobs& knobs, const std::string& quoted_name) {
     const ConstraintMetadata* constraint = assembly.find(name);
     if (constraint == nullptr) {
         throw std::invalid_argument("Constraint '" + name + "' is not in this assembly");
     }
     if (knobs.level) {
         assembly.level(name, checked_level(*constraint, *knobs.level, MediumFoldOf<Solution>::value,
-                                          quoted_name));
+                                           quoted_name));
     }
     if (knobs.weight) assembly.weight(name, *knobs.weight);
     assembly.exponent(name, knobs.exponent);

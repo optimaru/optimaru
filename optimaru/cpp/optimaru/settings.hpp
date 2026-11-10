@@ -162,8 +162,8 @@ struct RuinRecreateSettings {
     // Which ruin operators join the adaptive pool, on top of the always-on
     // random / related / worst trio. Both are sequence-shape strategies and
     // fall back to the random ruin on assignment solutions (see their headers).
-    bool sisr_ruin = true;    // substring removal (Christiaens & Vanden Berghe)
-    bool route_ruin = true;   // empty whole lists
+    bool sisr_ruin = true;   // substring removal (Christiaens & Vanden Berghe)
+    bool route_ruin = true;  // empty whole lists
     int sisr_max_string_removals = 3;
     int sisr_max_string_size = 12;
 

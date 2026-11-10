@@ -12,8 +12,9 @@ from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
-import optimaru.project_job_scheduling as pjs
 from external_solver.project_job_scheduling import solve as solve_cpsat
+
+import optimaru.project_job_scheduling as pjs
 from optimaru.project_job_scheduling.models import (
     AllocationModel,
     ExecutionModeModel,
@@ -76,9 +77,7 @@ def _download(cache_dir: Path) -> bytes:
         payload = archive.read_bytes()
         if hashlib.sha256(payload).hexdigest() == ARCHIVE_SHA256:
             return payload
-    request = urllib.request.Request(
-        ARCHIVE_URL, headers={"User-Agent": "optimaru-benchmark/1.0"}
-    )
+    request = urllib.request.Request(ARCHIVE_URL, headers={"User-Agent": "optimaru-benchmark/1.0"})
     with urllib.request.urlopen(request, timeout=60) as response:
         payload = response.read()
     digest = hashlib.sha256(payload).hexdigest()
@@ -103,9 +102,7 @@ def load_instance(name: str, cache_dir: Path) -> RcpspInstance:
                 for item in archive.namelist()
                 if item.startswith("rcpsp/instances/") and item.endswith(".rcp")
             )
-            raise ValueError(
-                f"unknown instance {name!r}; available: {', '.join(available)}"
-            ) from exc
+            raise ValueError(f"unknown instance {name!r}; available: {', '.join(available)}") from exc
 
 
 def _topological_order(instance: RcpspInstance) -> list[int]:
@@ -155,17 +152,13 @@ def make_model(instance: RcpspInstance) -> ProjectJobScheduleModel:
                         id=mode_id,
                         duration=task.duration,
                         resource_requirements=[
-                            ResourceRequirementModel(
-                                resource_id=resource_ids[r], requirement=requirement
-                            )
+                            ResourceRequirementModel(resource_id=resource_ids[r], requirement=requirement)
                             for r, requirement in enumerate(task.requirements)
                             if requirement
                         ],
                     )
                 ],
-                successor_job_ids=[
-                    f"J{successor + 1}" for successor in task.successors
-                ],
+                successor_job_ids=[f"J{successor + 1}" for successor in task.successors],
             )
         )
         pinned = job_type != "STANDARD"
@@ -197,9 +190,7 @@ def make_model(instance: RcpspInstance) -> ProjectJobScheduleModel:
     )
 
 
-def rescore(
-    instance: RcpspInstance, solved: ProjectJobScheduleModel
-) -> tuple[int, int]:
+def rescore(instance: RcpspInstance, solved: ProjectJobScheduleModel) -> tuple[int, int]:
     """Independently verify durations, precedences and cumulative resources."""
     allocations = {allocation.job_id: allocation for allocation in solved.allocations}
     starts: list[int] = []
@@ -220,9 +211,7 @@ def rescore(
     for resource, capacity in enumerate(instance.capacities):
         for day in range(max(ends, default=0)):
             usage = sum(
-                task.requirements[resource]
-                for i, task in enumerate(instance.tasks)
-                if starts[i] <= day < ends[i]
+                task.requirements[resource] for i, task in enumerate(instance.tasks) if starts[i] <= day < ends[i]
             )
             resource_excess += max(0, usage - capacity)
     return max(ends, default=0), resource_excess
@@ -261,12 +250,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seconds", type=float, default=10.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--workers", type=int, default=1)
-    parser.add_argument(
-        "--backend", choices=("engine", "cpsat", "both"), default="both"
-    )
-    parser.add_argument(
-        "--cache-dir", type=Path, default=Path(__file__).with_name(".cache")
-    )
+    parser.add_argument("--backend", choices=("engine", "cpsat", "both"), default="both")
+    parser.add_argument("--cache-dir", type=Path, default=Path(__file__).with_name(".cache"))
     args = parser.parse_args(argv)
 
     instance = load_instance(args.instance, args.cache_dir)

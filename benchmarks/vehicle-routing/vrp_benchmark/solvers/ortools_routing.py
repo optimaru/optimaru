@@ -42,12 +42,8 @@ def solve(instance: CvrpInstance, seconds: float, seed: int) -> SolverOutcome:
         routing.AddDisjunction([manager.NodeToIndex(node)], drop_penalty)
 
     parameters = pywrapcp.DefaultRoutingSearchParameters()
-    parameters.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
-    )
-    parameters.local_search_metaheuristic = (
-        routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
-    )
+    parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+    parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     parameters.time_limit.FromMilliseconds(int(seconds * 1000))
 
     assignment = routing.SolveWithParameters(parameters)

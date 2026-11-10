@@ -28,7 +28,7 @@ public:
     const char* name() const override { return "relatedRuin"; }
 
     std::vector<int> select_ruin_set(OperatorContext<Solution>& ctx, int ruin_count,
-                                   std::mt19937_64& rng) override {
+                                     std::mt19937_64& rng) override {
         if (!ctx.nearby.enabled()) return fallback_.select_ruin_set(ctx, ruin_count, rng);
 
         const int n = ruin_candidate_count(ctx);

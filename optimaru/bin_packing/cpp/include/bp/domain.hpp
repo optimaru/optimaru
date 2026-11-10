@@ -12,8 +12,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace bp
-{
+namespace bp {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -35,8 +34,7 @@ using Score = optimaru::Score;
 // value range 0..itemCount()-1 (n identical bins always suffice), -1 ==
 // unassigned. Every solve returns every item assigned; -1 appears only in an
 // unsolved input and inside the engine's ruin-and-recreate.
-struct Item
-{
+struct Item {
     std::string id;
     std::int64_t weight = 0;  // > 0 (one-dimensional size)
     int bin = -1;             // decision variable; -1 == unassigned
@@ -50,8 +48,7 @@ struct Item
 // ---------------------------------------------------------------------------
 // BinPackingProblem  (solution)
 // ---------------------------------------------------------------------------
-struct BinPackingProblem
-{
+struct BinPackingProblem {
     // --- problem facts (the canonical model) ---
     std::int64_t binCapacity = 0;  // the capacity of every (identical) bin
     std::vector<Item> items;
@@ -92,57 +89,43 @@ struct BinPackingProblem
     int binCount() const { return itemCount(); }
 
     // Distinct bins >= 0 holding at least one item.
-    int binsUsed() const
-    {
+    int binsUsed() const {
         std::vector<int> bins;
         bins.reserve(items.size());
-        for (const Item &item : items)
-        {
-            if (item.bin >= 0)
-                bins.push_back(item.bin);
+        for (const Item& item : items) {
+            if (item.bin >= 0) bins.push_back(item.bin);
         }
         std::sort(bins.begin(), bins.end());
-        return static_cast<int>(std::unique(bins.begin(), bins.end())
-                                - bins.begin());
+        return static_cast<int>(std::unique(bins.begin(), bins.end()) - bins.begin());
     }
 
     // [] when no item is assigned, else the load of every bin 0..max bin
     // (an empty bin in between shows as 0).
-    std::vector<std::int64_t> binLoads() const
-    {
+    std::vector<std::int64_t> binLoads() const {
         int top = -1;
-        for (const Item &item : items)
-            top = std::max(top, item.bin);
+        for (const Item& item : items) top = std::max(top, item.bin);
         std::vector<std::int64_t> loads(static_cast<std::size_t>(top + 1), 0);
-        for (const Item &item : items)
-        {
-            if (item.bin >= 0)
-                loads[item.bin] += item.weight;
+        for (const Item& item : items) {
+            if (item.bin >= 0) loads[item.bin] += item.weight;
         }
         return loads;
     }
 
     // The current bin per item (the solution).
-    std::vector<int> assignment() const
-    {
+    std::vector<int> assignment() const {
         std::vector<int> out;
         out.reserve(items.size());
-        for (const Item &item : items)
-            out.push_back(item.bin);
+        for (const Item& item : items) out.push_back(item.bin);
         return out;
     }
 
     // Bulk write of the decision variable. Range-checked at the next
     // ScoreCalculator::prepare (every scoring / solving entry point).
-    void setAssignment(const std::vector<int> &bins)
-    {
-        if (bins.size() != items.size())
-        {
-            throw std::invalid_argument(
-                "assignment length must equal the item count");
+    void setAssignment(const std::vector<int>& bins) {
+        if (bins.size() != items.size()) {
+            throw std::invalid_argument("assignment length must equal the item count");
         }
-        for (std::size_t i = 0; i < bins.size(); ++i)
-            items[i].bin = bins[i];
+        for (std::size_t i = 0; i < bins.size(); ++i) items[i].bin = bins[i];
     }
 };
 
@@ -152,24 +135,15 @@ struct BinPackingProblem
 // SolutionTraits specialization: entities are items, the decision
 // variable is Item::bin, the value range is the n bins 0..n-1.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<bp::BinPackingProblem>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const bp::BinPackingProblem &problem)
-    {
-        return problem.itemCount();
-    }
-    static int value_count(const bp::BinPackingProblem &problem)
-    {
-        return problem.binCount();
-    }
-    static int value_of(const bp::BinPackingProblem &problem, int item)
-    {
+template <>
+struct optimaru::SolutionTraits<bp::BinPackingProblem> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const bp::BinPackingProblem& problem) { return problem.itemCount(); }
+    static int value_count(const bp::BinPackingProblem& problem) { return problem.binCount(); }
+    static int value_of(const bp::BinPackingProblem& problem, int item) {
         return problem.items[item].bin;
     }
-    static void assign(bp::BinPackingProblem &problem, int item, int bin)
-    {
+    static void assign(bp::BinPackingProblem& problem, int item, int bin) {
         problem.items[item].bin = bin;
     }
 };

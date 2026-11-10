@@ -22,49 +22,33 @@
 
 using namespace ts;
 
-namespace
-{
+namespace {
 
 int failures = 0;
 
-void check(bool ok, const std::string &label)
-{
+void check(bool ok, const std::string& label) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-void checkScore(const std::string &label,
-                const Score &actual,
-                long expectedHard,
-                double expectedSoft)
-{
-    const bool ok = (actual.hard == expectedHard
-                     && std::fabs(actual.soft - expectedSoft) < 1e-6);
-    std::printf("  [%s] %-44s got=%s expected=%ldhard/%gsoft\n",
-                ok ? "PASS" : "FAIL",
-                label.c_str(),
-                actual.str().c_str(),
-                expectedHard,
-                expectedSoft);
-    if (!ok)
-        ++failures;
+void checkScore(const std::string& label, const Score& actual, long expectedHard,
+                double expectedSoft) {
+    const bool ok = (actual.hard == expectedHard && std::fabs(actual.soft - expectedSoft) < 1e-6);
+    std::printf("  [%s] %-44s got=%s expected=%ldhard/%gsoft\n", ok ? "PASS" : "FAIL",
+                label.c_str(), actual.str().c_str(), expectedHard, expectedSoft);
+    if (!ok) ++failures;
 }
 
 // Base problem: `teamCount` anonymous teams and `dayCount` days, no
 // assignments yet.
-TournamentSchedule makeBase(int teamCount, int dayCount)
-{
+TournamentSchedule makeBase(int teamCount, int dayCount) {
     TournamentSchedule s;
-    for (int t = 0; t < teamCount; ++t)
-        s.teams.push_back({"T" + std::to_string(t)});
-    for (int d = 0; d < dayCount; ++d)
-        s.days.push_back({d});
+    for (int t = 0; t < teamCount; ++t) s.teams.push_back({"T" + std::to_string(t)});
+    for (int d = 0; d < dayCount; ++d) s.days.push_back({d});
     return s;
 }
 
-void addAssignment(TournamentSchedule &s, int day, int team = -1)
-{
+void addAssignment(TournamentSchedule& s, int day, int team = -1) {
     TeamAssignment assignment;
     assignment.id = static_cast<std::int64_t>(s.teamAssignments.size());
     assignment.day = day;
@@ -79,10 +63,10 @@ void addAssignment(TournamentSchedule &s, int day, int team = -1)
 //   sqrt(2/3)  -> 0.816497   sqrt(10/7) -> 1.19523   (6 s.f., HALF_EVEN)
 // The engine soft = -(medium * 1e6 + soft), see ts::kMediumFold.
 // -------------------------------------------------------------------------
-void verifyConstraints()
-{
-    std::printf("== (a) Verifying constraints against hand-computed scores "
-                "==\n");
+void verifyConstraints() {
+    std::printf(
+            "== (a) Verifying constraints against hand-computed scores "
+            "==\n");
 
     // LoadBalance::unfairness building block itself.
     check(ScoreCalculator::unfairness({}) == 0.0, "unfairness({}) == 0");
@@ -91,9 +75,7 @@ void verifyConstraints()
           "unfairness({3,2}) == 0.707107");
     check(std::fabs(ScoreCalculator::unfairness({1, 1, 2}) - 0.816497) < 1e-12,
           "unfairness({1,1,2}) == 0.816497");
-    check(std::fabs(ScoreCalculator::unfairness({11, 11, 10, 10, 10, 10, 10})
-                    - 1.19523)
-              < 1e-12,
+    check(std::fabs(ScoreCalculator::unfairness({11, 11, 10, 10, 10, 10, 10}) - 1.19523) < 1e-12,
           "unfairness({11,11,10,10,10,10,10}) == 1.19523");
 
     // hard 1: teamConflictCost — T0 three times on
@@ -106,10 +88,7 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         addAssignment(s, 1, 1);
         addAssignment(s, 2, 1);
-        checkScore("teamConflictCost (basic)",
-                   ScoreCalculator::score(s),
-                   -3,
-                   -707107.0);
+        checkScore("teamConflictCost (basic)", ScoreCalculator::score(s), -3, -707107.0);
     }
     // hard 2: teamUnavailabilityCost — penalties
     // (T0, D0) and (T1, D1) both hit (+ T1 twice on D1 = 1 hard pair).
@@ -122,20 +101,14 @@ void verifyConstraints()
         addAssignment(s, 2, 1);
         s.unavailabilityPenalties.push_back({0, 0});
         s.unavailabilityPenalties.push_back({1, 1});
-        checkScore("teamUnavailabilityCost (basic)",
-                   ScoreCalculator::score(s),
-                   -3,
-                   -1414210.0);
+        checkScore("teamUnavailabilityCost (basic)", ScoreCalculator::score(s), -3, -1414210.0);
     }
     // hard 2: a penalty whose (team, day) has no assignment costs nothing.
     {
         TournamentSchedule s = makeBase(3, 3);
         addAssignment(s, 0, 0);
         s.unavailabilityPenalties.push_back({2, 0});
-        checkScore("teamUnavailabilityCost miss",
-                   ScoreCalculator::score(s),
-                   0,
-                   0.0);
+        checkScore("teamUnavailabilityCost miss", ScoreCalculator::score(s), 0, 0.0);
     }
     // hard 2: duplicate penalty facts each count.
     {
@@ -143,10 +116,7 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         s.unavailabilityPenalties.push_back({0, 0});
         s.unavailabilityPenalties.push_back({0, 0});
-        checkScore("teamUnavailabilityCost duplicate facts",
-                   ScoreCalculator::score(s),
-                   -2,
-                   0.0);
+        checkScore("teamUnavailabilityCost duplicate facts", ScoreCalculator::score(s), -2, 0.0);
     }
     // medium 3: assignmentCountImbalanceCost — one
     // assignment each -> perfectly fair, everything 0.
@@ -155,17 +125,11 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         addAssignment(s, 1, 1);
         addAssignment(s, 2, 2);
-        checkScore("assignmentCountImbalanceCost fair",
-                   ScoreCalculator::score(s),
-                   0,
-                   0.0);
+        checkScore("assignmentCountImbalanceCost fair", ScoreCalculator::score(s), 0, 0.0);
         // T2 twice while everyone else once: loads {1, 1, 2} -> 0.816497.
         // Confrontations: only (T0, T2) on D0, a single loaded pair -> 0.
         addAssignment(s, 0, 2);
-        checkScore("assignmentCountImbalanceCost unfair",
-                   ScoreCalculator::score(s),
-                   0,
-                   -816497.0);
+        checkScore("assignmentCountImbalanceCost unfair", ScoreCalculator::score(s), 0, -816497.0);
     }
     // soft 4: confrontationCountImbalanceCost — three
     // teams meet pairwise once on D0 -> perfectly even, everything 0.
@@ -174,17 +138,12 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         addAssignment(s, 0, 1);
         addAssignment(s, 0, 2);
-        checkScore("confrontationCountImbalanceCost even",
-                   ScoreCalculator::score(s),
-                   0,
-                   0.0);
+        checkScore("confrontationCountImbalanceCost even", ScoreCalculator::score(s), 0, 0.0);
         // + T2 again on D0: confrontations (0,1)=1 (0,2)=2 (1,2)=2 ->
         // 0.816497 soft; loads {1,1,2} -> 0.816497 medium; T2's day pair -> 1
         // hard.
         addAssignment(s, 0, 2);
-        checkScore("confrontationCountImbalanceCost uneven",
-                   ScoreCalculator::score(s),
-                   -1,
+        checkScore("confrontationCountImbalanceCost uneven", ScoreCalculator::score(s), -1,
                    -816497.816497);
     }
     // soft 4: confrontation counts multiply per assignment pair: T0 twice +
@@ -196,10 +155,7 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         addAssignment(s, 0, 0);
         addAssignment(s, 0, 1);
-        checkScore("confrontation multiplicity",
-                   ScoreCalculator::score(s),
-                   -1,
-                   -707107.0);
+        checkScore("confrontation multiplicity", ScoreCalculator::score(s), -1, -707107.0);
     }
     // Unassigned assignments contribute nothing (also not to penalties).
     {
@@ -207,10 +163,7 @@ void verifyConstraints()
         s.unavailabilityPenalties.push_back({0, 0});
         addAssignment(s, 0, -1);
         addAssignment(s, 0, 1);
-        checkScore("unassigned contributes nothing",
-                   ScoreCalculator::score(s),
-                   0,
-                   0.0);
+        checkScore("unassigned contributes nothing", ScoreCalculator::score(s), 0, 0.0);
     }
     // Pinned assignments are scored like any other assignment.
     {
@@ -218,10 +171,7 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         s.teamAssignments.back().pinned = true;
         addAssignment(s, 0, 0);
-        checkScore("pinned assignment still scored",
-                   ScoreCalculator::score(s),
-                   -1,
-                   0.0);
+        checkScore("pinned assignment still scored", ScoreCalculator::score(s), -1, 0.0);
     }
     std::printf("\n");
 }
@@ -229,16 +179,13 @@ void verifyConstraints()
 // -------------------------------------------------------------------------
 // Random mid-size instance for the incremental cross-check and the solves.
 // -------------------------------------------------------------------------
-TournamentSchedule
-buildRandomInstance(int teamCount, int dayCount, int perDay, std::uint64_t seed)
-{
+TournamentSchedule buildRandomInstance(int teamCount, int dayCount, int perDay,
+                                       std::uint64_t seed) {
     TournamentSchedule s = makeBase(teamCount, dayCount);
     std::mt19937_64 rng(seed);
     std::int64_t id = 0;
-    for (int d = 0; d < dayCount; ++d)
-    {
-        for (int i = 0; i < perDay; ++i)
-        {
+    for (int d = 0; d < dayCount; ++d) {
+        for (int i = 0; i < perDay; ++i) {
             TeamAssignment assignment;
             assignment.id = id++;
             assignment.day = d;
@@ -247,18 +194,14 @@ buildRandomInstance(int teamCount, int dayCount, int perDay, std::uint64_t seed)
         }
     }
     const int penaltyCount = teamCount * dayCount / 8;
-    while (static_cast<int>(s.unavailabilityPenalties.size()) < penaltyCount)
-    {
+    while (static_cast<int>(s.unavailabilityPenalties.size()) < penaltyCount) {
         const int team = static_cast<int>(rng() % teamCount);
         const int day = static_cast<int>(rng() % dayCount);
         bool duplicate = false;
-        for (const UnavailabilityPenalty &penalty : s.unavailabilityPenalties)
-        {
-            if (penalty.team == team && penalty.day == day)
-                duplicate = true;
+        for (const UnavailabilityPenalty& penalty : s.unavailabilityPenalties) {
+            if (penalty.team == team && penalty.day == day) duplicate = true;
         }
-        if (!duplicate)
-            s.unavailabilityPenalties.push_back({team, day});
+        if (!duplicate) s.unavailabilityPenalties.push_back({team, day});
     }
     return s;
 }
@@ -269,8 +212,7 @@ buildRandomInstance(int teamCount, int dayCount, int perDay, std::uint64_t seed)
 // the before/set/after hook contract is exercised exactly like in the
 // engine.
 // -------------------------------------------------------------------------
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (b) Verifying incremental scoring == full recompute ==\n");
     TournamentSchedule s = buildRandomInstance(/*teams*/ 5,
                                                /*days*/ 6,
@@ -288,20 +230,14 @@ void verifyIncremental()
 
     int mismatches = 0;
     const int steps = 3000;
-    for (int step = 0; step < steps; ++step)
-    {
-        if (unit(rng) < 0.75)
-        {
+    for (int step = 0; step < steps; ++step) {
+        if (unit(rng) < 0.75) {
             // ChangeMove; 10% of the time to unassigned (-1), like the
             // construction heuristic's starting state.
             const int assignment = static_cast<int>(rng() % assignmentCount);
-            const int value = (unit(rng) < 0.10)
-                                  ? -1
-                                  : static_cast<int>(rng() % value_count);
+            const int value = (unit(rng) < 0.10) ? -1 : static_cast<int>(rng() % value_count);
             editor.assign(assignment, value);
-        }
-        else
-        {
+        } else {
             // SwapMove.
             const int a = static_cast<int>(rng() % assignmentCount);
             const int b = static_cast<int>(rng() % assignmentCount);
@@ -311,27 +247,19 @@ void verifyIncremental()
             editor.assign(b, va);
         }
         // Full recompute on the same assignment.
-        for (int i = 0; i < assignmentCount; ++i)
-        {
+        for (int i = 0; i < assignmentCount; ++i) {
             shadow.teamAssignments[i].team = s.teamAssignments[i].team;
         }
         const Score full = ScoreCalculator::score(shadow);
         const Score incremental = editor.score();
-        if (full.hard != incremental.hard
-            || std::fabs(full.soft - incremental.soft) > 1e-9)
-        {
-            if (++mismatches <= 3)
-            {
-                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                            step,
-                            incremental.str().c_str(),
-                            full.str().c_str());
+        if (full.hard != incremental.hard || std::fabs(full.soft - incremental.soft) > 1e-9) {
+            if (++mismatches <= 3) {
+                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
     }
-    check(mismatches == 0,
-          std::to_string(steps)
-              + " random moves, incremental == full recompute");
+    check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
     std::printf("\n");
 }
 
@@ -340,8 +268,7 @@ void verifyIncremental()
 // against a full reset + recompute after every single move and throws
 // ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (c) FULL_ASSERT solve ==\n");
     TournamentSchedule s = buildRandomInstance(/*teams*/ 5,
                                                /*days*/ 5,
@@ -358,23 +285,18 @@ void verifyFullAssertSolve()
 
     bool corrupted = false;
     Score final{};
-    try
-    {
+    try {
         Solver solver(config);
         solver.solve(s);
         final = s.score;
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
-    if (!corrupted)
-    {
+    if (!corrupted) {
         const Score recomputed = ScoreCalculator::score(s);
-        check(final.hard == recomputed.hard
-                  && std::fabs(final.soft - recomputed.soft) < 1e-9,
+        check(final.hard == recomputed.hard && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
     }
     std::printf("\n");
@@ -384,8 +306,7 @@ void verifyFullAssertSolve()
 // (d) Pinned assignments keep their team through a solve, every assignment
 // ends up assigned, and the small instance reaches 0hard.
 // -------------------------------------------------------------------------
-void verifyPinnedSolve()
-{
+void verifyPinnedSolve() {
     std::printf("== (d) Pinned assignment survives a solve ==\n");
     TournamentSchedule s = buildRandomInstance(/*teams*/ 6,
                                                /*days*/ 6,
@@ -402,10 +323,8 @@ void verifyPinnedSolve()
 
     check(s.teamAssignments[0].team == 3, "pinned assignment kept its team");
     bool allAssigned = true;
-    for (const TeamAssignment &assignment : s.teamAssignments)
-    {
-        if (assignment.team < 0)
-            allAssigned = false;
+    for (const TeamAssignment& assignment : s.teamAssignments) {
+        if (assignment.team < 0) allAssigned = false;
     }
     check(allAssigned, "every assignment assigned after the solve");
     check(s.score.hard == 0, "small instance reaches 0hard");
@@ -421,14 +340,11 @@ void verifyPinnedSolve()
 // state is far worse than both ends. Without Config::teamCountMoves the
 // solver stalls at -1195232.563480soft here.
 // -------------------------------------------------------------------------
-void verifyTeamCountMove()
-{
+void verifyTeamCountMove() {
     std::printf("== (e) Loaded-team-count macro move ==\n");
     TournamentSchedule s = makeBase(7, 18);
-    for (int d = 0; d < 18; ++d)
-    {
-        for (int i = 0; i < 4; ++i)
-            addAssignment(s, d);
+    for (int d = 0; d < 18; ++d) {
+        for (int i = 0; i < 4; ++i) addAssignment(s, d);
     }
 
     Solver::Config config;
@@ -438,37 +354,30 @@ void verifyTeamCountMove()
     solver.solve(s);
 
     std::vector<std::int64_t> loads(s.teamCount(), 0);
-    for (const TeamAssignment &assignment : s.teamAssignments)
-    {
-        if (assignment.team >= 0)
-            ++loads[assignment.team];
+    for (const TeamAssignment& assignment : s.teamAssignments) {
+        if (assignment.team >= 0) ++loads[assignment.team];
     }
     int loadedTeams = 0;
-    for (std::int64_t load : loads)
-        loadedTeams += load > 0 ? 1 : 0;
+    for (std::int64_t load : loads) loadedTeams += load > 0 ? 1 : 0;
 
     check(s.score.hard == 0, "penalty-free instance stays feasible");
-    check(loadedTeams == 4,
-          "search empties the teams that unbalance the load ("
-              + std::to_string(loadedTeams) + " teams loaded)");
+    check(loadedTeams == 4, "search empties the teams that unbalance the load (" +
+                                    std::to_string(loadedTeams) + " teams loaded)");
     check(s.score.soft == 0.0,
-          "reaches the 0hard/0soft optimum (got " + std::to_string(s.score.soft)
-              + ")");
+          "reaches the 0hard/0soft optimum (got " + std::to_string(s.score.soft) + ")");
     std::printf("\n");
 }
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyConstraints();
     verifyIncremental();
     verifyFullAssertSolve();
     verifyPinnedSolve();
     verifyTeamCountMove();
 
-    if (failures == 0)
-    {
+    if (failures == 0) {
         std::printf("All tournament-scheduling checks PASSED.\n");
         return 0;
     }

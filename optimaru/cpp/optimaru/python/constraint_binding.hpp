@@ -69,7 +69,8 @@ namespace py = pybind11;
 // DecomposedCalculator.add(), its only caller), where an unread keyword would
 // otherwise be ignored: the level is the `level` knob. The text names add().
 inline constexpr const char* kHardKeyword =
-        "add() got an unexpected keyword argument 'hard'; use level='hard' or level='soft' (level=None keeps "
+        "add() got an unexpected keyword argument 'hard'; use level='hard' or level='soft' "
+        "(level=None keeps "
         "the default)";
 
 // Refuses a `hard` keyword with kHardKeyword; call it first on the **kwargs
@@ -219,9 +220,7 @@ inline std::string quoted(const std::string& shown) {
     return py::repr(py::str(shown)).cast<std::string>();
 }
 
-inline std::string repr_of(const py::handle& value) {
-    return py::repr(value).cast<std::string>();
-}
+inline std::string repr_of(const py::handle& value) { return py::repr(value).cast<std::string>(); }
 
 // numbers.Real minus bool: what _check_knobs accepts as a weight/exponent.
 // numbers.Real is looked up once per module (gil_safe_call_once_and_store,
@@ -229,11 +228,11 @@ inline std::string repr_of(const py::handle& value) {
 inline bool is_real_number(const py::handle& value) {
     if (py::isinstance<py::bool_>(value)) return false;
     PYBIND11_CONSTINIT static py::gil_safe_call_once_and_store<py::object> numbers_real;
-    const py::object& real =
-            numbers_real
-                    .call_once_and_store_result(
-                            [] { return py::module_::import("numbers").attr("Real"); })
-                    .get_stored();
+    const py::object& real = numbers_real
+                                     .call_once_and_store_result([] {
+                                         return py::module_::import("numbers").attr("Real");
+                                     })
+                                     .get_stored();
     return py::isinstance(value, real);
 }
 
@@ -327,7 +326,7 @@ inline Knobs read_knobs(const py::handle& item, const std::string& shown) {
 //           MaxConsecutiveDaysCost::kDefaultWeight, value);
 //   python::apply_knobs(*unit, pick, "max_consecutive_days_cost", MediumFold::none());
 inline void apply_knobs(ConstraintMetadata& constraint, const py::handle& item,
-                       const std::string& shown, MediumFold fold) {
+                        const std::string& shown, MediumFold fold) {
     const Knobs knobs = read_knobs(item, shown);
     try {
         restate_knobs(constraint, knobs, fold, detail::quoted(shown));
@@ -383,20 +382,20 @@ inline void apply_knobs(ConstraintMetadata& constraint, const py::handle& item,
 // ever join through add_repeats() below, after every by-name edit. Every
 // call must build the same components (the same types with the same domain
 // parameters): that is what makes a copy a repeat whose raw cost is the
-// first instance's. A pick's domain parameters (params()) are not read here: a domain whose constraints take parameters
-// builds each pick's component itself and re-states its knobs with
+// first instance's. A pick's domain parameters (params()) are not read here: a domain whose
+// constraints take parameters builds each pick's component itself and re-states its knobs with
 // apply_knobs (employee-scheduling's rule factory).
-template <typename Factory,
-          typename = std::enable_if_t<std::is_invocable_v<Factory&>>>
+template <typename Factory, typename = std::enable_if_t<std::is_invocable_v<Factory&>>>
 std::decay_t<std::invoke_result_t<Factory&>> apply_constraints(Factory&& defaults,
-                                                              const py::object& constraints) {
+                                                               const py::object& constraints) {
     using Assembly = std::decay_t<std::invoke_result_t<Factory&>>;
     Assembly assembly = defaults();
     if (constraints.is_none()) return assembly;
     std::vector<std::string> picked;  // each name once, in first-pick order
     std::vector<Assembly> copies;     // one single-component assembly per repeat
     for (py::handle item : constraints) {
-        const std::string name = resolve_name(assembly, item.attr("name").template cast<std::string>());
+        const std::string name =
+                resolve_name(assembly, item.attr("name").template cast<std::string>());
         const std::string shown = python_name(name);
         const Knobs knobs = read_knobs(item, shown);
         const bool repeat = std::find(picked.begin(), picked.end(), name) != picked.end();
@@ -512,9 +511,8 @@ void bind_info_rows(py::module_& m, Rows rows_of) {
     bind_worker_thread_seam(m);
     py::object namedtuple = py::module_::import("collections").attr("namedtuple");
     py::object row_type = namedtuple(
-            "ConstraintInfo",
-            py::make_tuple("name", "default_level", "default_weight", "level_flippable", "reward",
-                           "default_enabled"));
+            "ConstraintInfo", py::make_tuple("name", "default_level", "default_weight",
+                                             "level_flippable", "reward", "default_enabled"));
     row_type.attr("__module__") = m.attr("__name__");
     row_type.attr("__doc__") =
             "One catalog row: the constraint's Python name, its default level "
@@ -530,8 +528,8 @@ void bind_info_rows(py::module_& m, Rows rows_of) {
                 py::list rows;
                 for (const ConstraintInfo& row : rows_of()) {
                     rows.append(row_type(python_name(row.name), level_name(row.default_level),
-                                        row.default_weight, row.level_flippable, row.reward,
-                                        row.default_enabled));
+                                         row.default_weight, row.level_flippable, row.reward,
+                                         row.default_enabled));
                 }
                 return rows;
             },
@@ -550,7 +548,7 @@ void bind_constraint_info(py::module_& m, Factory default_assembly) {
 
 template <typename DefaultFactory, typename CatalogFactory>
 void bind_constraint_info(py::module_& m, DefaultFactory default_assembly,
-                        CatalogFactory catalog_assembly) {
+                          CatalogFactory catalog_assembly) {
     // catalog_info's std::logic_error (a default declared differently in the
     // two assemblies: a domain bug) reaches Python as RuntimeError.
     detail::bind_info_rows(m, [default_assembly, catalog_assembly]() {

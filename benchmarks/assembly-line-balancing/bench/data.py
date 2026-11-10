@@ -14,9 +14,7 @@ from optimaru.assembly_line_balancing.models import (
     TaskModel,
 )
 
-SALBP_URL = (
-    "https://assembly-line-balancing.de/wp-content/uploads/2017/01/SALBP_benchmark.zip"
-)
+SALBP_URL = "https://assembly-line-balancing.de/wp-content/uploads/2017/01/SALBP_benchmark.zip"
 SALBP_SHA256 = "379a419ff000aab62b12662f6224978f5fc875967ac5944b6a7d09d4555417cd"
 
 DATASETS = {
@@ -41,21 +39,14 @@ _XML_NS = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 
 def _download(destination: Path) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if (
-        destination.exists()
-        and hashlib.sha256(destination.read_bytes()).hexdigest() == SALBP_SHA256
-    ):
+    if destination.exists() and hashlib.sha256(destination.read_bytes()).hexdigest() == SALBP_SHA256:
         return destination
-    request = urllib.request.Request(
-        SALBP_URL, headers={"User-Agent": "optimaru-benchmark/1.0"}
-    )
+    request = urllib.request.Request(SALBP_URL, headers={"User-Agent": "optimaru-benchmark/1.0"})
     with urllib.request.urlopen(request, timeout=180) as response:
         payload = response.read()
     actual = hashlib.sha256(payload).hexdigest()
     if actual != SALBP_SHA256:
-        raise ValueError(
-            f"checksum mismatch for {SALBP_URL}: expected {SALBP_SHA256}, got {actual}"
-        )
+        raise ValueError(f"checksum mismatch for {SALBP_URL}: expected {SALBP_SHA256}, got {actual}")
     destination.write_bytes(payload)
     return destination
 
@@ -88,10 +79,7 @@ def parse_alb_data(payload: str) -> AssemblyLineBalancingProblemModel:
     return AssemblyLineBalancingProblemModel(
         cycle_time=cycle_time,
         max_stations=size,
-        tasks=[
-            TaskModel(id=str(task), duration=durations[task])
-            for task in range(1, size + 1)
-        ],
+        tasks=[TaskModel(id=str(task), duration=durations[task]) for task in range(1, size + 1)],
         precedences=precedences,
     )
 
@@ -134,15 +122,11 @@ def parse_xlsx_best_known(payload: bytes) -> dict[str, int]:
     return result
 
 
-def load_suite(
-    cache_dir: Path, dataset: str
-) -> dict[str, tuple[AssemblyLineBalancingProblemModel, int | None]]:
+def load_suite(cache_dir: Path, dataset: str) -> dict[str, tuple[AssemblyLineBalancingProblemModel, int | None]]:
     try:
         nested_name, details_name = DATASETS[dataset]
     except KeyError as error:
-        raise ValueError(
-            f"unknown SALBP dataset {dataset!r}; choose from {', '.join(DATASETS)}"
-        ) from error
+        raise ValueError(f"unknown SALBP dataset {dataset!r}; choose from {', '.join(DATASETS)}") from error
     archive_path = _download(cache_dir / "salbp-benchmark.zip")
     with zipfile.ZipFile(archive_path) as outer:
         nested_payload = outer.read(nested_name)

@@ -5,9 +5,8 @@ import json
 import time
 from pathlib import Path
 
-from optimaru import quadratic_assignment
-
 from bench.data import apply_permutation, load_suite
+from optimaru import quadratic_assignment
 
 DEFAULT_INSTANCES = ("nug30", "lipa30a", "tai30a")
 
@@ -32,9 +31,7 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
     elapsed = time.perf_counter() - started
     objective = _objective(problem)
     if objective != problem.total_cost:
-        raise AssertionError(
-            f"engine self-report mismatch: {problem.total_cost} != {objective}"
-        )
+        raise AssertionError(f"engine self-report mismatch: {problem.total_cost} != {objective}")
     return {
         "solver": "engine",
         "objective": objective,
@@ -44,8 +41,9 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
 
 
 def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
-    import quadratic_assignment_cpsat  # noqa: F401 - points external_solver at the checkout engine
     from external_solver import quadratic_assignment as cpsat
+
+    import quadratic_assignment_cpsat  # noqa: F401 - points external_solver at the checkout engine
 
     started = time.perf_counter()
     try:
@@ -66,9 +64,7 @@ def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
     elapsed = time.perf_counter() - started
     objective = _objective(solved)
     if objective != solved.total_cost:
-        raise AssertionError(
-            f"CP-SAT self-report mismatch: {solved.total_cost} != {objective}"
-        )
+        raise AssertionError(f"CP-SAT self-report mismatch: {solved.total_cost} != {objective}")
     return {
         "solver": "cp-sat",
         "objective": objective,
@@ -78,9 +74,7 @@ def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Run our QAP engines on QAPLIB instances with 30 to 50 facilities."
-    )
+    parser = argparse.ArgumentParser(description="Run our QAP engines on QAPLIB instances with 30 to 50 facilities.")
     parser.add_argument(
         "--instance",
         action="append",
@@ -100,9 +94,7 @@ def main(argv: list[str] | None = None) -> int:
         default=0,
         help="run the O(n^4) CP-SAT reference only up to this size; 0 disables it",
     )
-    parser.add_argument(
-        "--cache-dir", type=Path, default=Path(__file__).resolve().parent / ".cache"
-    )
+    parser.add_argument("--cache-dir", type=Path, default=Path(__file__).resolve().parent / ".cache")
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
 
@@ -110,34 +102,24 @@ def main(argv: list[str] | None = None) -> int:
     selected = list(suite) if args.all else (args.instance or list(DEFAULT_INSTANCES))
     unknown = sorted(set(selected) - suite.keys())
     if unknown:
-        parser.error(
-            f"unknown instance(s): {', '.join(unknown)}; available: {', '.join(suite)}"
-        )
+        parser.error(f"unknown instance(s): {', '.join(unknown)}; available: {', '.join(suite)}")
 
     results = []
     for name in selected:
         source, reference = suite[name]
         runs = [_run_engine(source.model_copy(deep=True), args.seconds, args.seed)]
         if args.exact_max_size and len(source.facilities) <= args.exact_max_size:
-            runs.append(
-                _run_cpsat(
-                    source.model_copy(deep=True), args.seconds, args.seed, args.workers
-                )
-            )
+            runs.append(_run_cpsat(source.model_copy(deep=True), args.seconds, args.seed, args.workers))
         reference_objective = reference.objective if reference else None
         if reference is not None:
             reference_problem = source.model_copy(deep=True)
             apply_permutation(reference_problem, reference.permutation)
             rescored = _objective(reference_problem)
             if rescored != reference.objective:
-                raise AssertionError(
-                    f"QAPLIB reference mismatch for {name}: {rescored} != {reference.objective}"
-                )
+                raise AssertionError(f"QAPLIB reference mismatch for {name}: {rescored} != {reference.objective}")
         for run in runs:
             run["gap_to_qaplib_percent"] = (
-                None
-                if run["objective"] is None
-                else _gap(run["objective"], reference_objective)
+                None if run["objective"] is None else _gap(run["objective"], reference_objective)
             )
         results.append(
             {
@@ -152,9 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(results, indent=2))
         return 0
     print(f"QAPLIB — {args.seconds:g}s per solver, seed {args.seed}")
-    print(
-        f"{'instance':<12} {'n':>4} {'solver':<9} {'objective':>14} {'QAPLIB BKS':>14} {'gap':>9} {'seconds':>9}"
-    )
+    print(f"{'instance':<12} {'n':>4} {'solver':<9} {'objective':>14} {'QAPLIB BKS':>14} {'gap':>9} {'seconds':>9}")
     for result in results:
         for run in result["runs"]:
             gap = run["gap_to_qaplib_percent"]

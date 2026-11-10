@@ -60,9 +60,7 @@ def parse_backends(spec: str) -> tuple[str, ...]:
         token = token.strip()
         for backend in solvers.BACKENDS if token == "all" else (token,):
             if backend not in solvers.BACKENDS:
-                raise ValueError(
-                    f"unknown backend {token!r}; expected {solvers.BACKENDS} or all"
-                )
+                raise ValueError(f"unknown backend {token!r}; expected {solvers.BACKENDS} or all")
             if backend not in backends:
                 backends.append(backend)
     return tuple(backends)
@@ -75,19 +73,14 @@ def gap(distance: int, best_known_distance: int | None) -> float | None:
     return 100 * (distance - best_known_distance) / best_known_distance
 
 
-def benchmark(
-    backend: str, instance: CvrpInstance, *, seconds: float, seed: int
-) -> BenchmarkResult:
+def benchmark(backend: str, instance: CvrpInstance, *, seconds: float, seed: int) -> BenchmarkResult:
     solve = solvers.get(backend)
     started = time.perf_counter()
     outcome = solve(instance, seconds, seed)
     elapsed = time.perf_counter() - started
     checked = rescore(instance, outcome.routes)
     if outcome.reported_distance is not None and outcome.reported_distance != checked.distance:
-        raise ValueError(
-            f"{backend} reported {outcome.reported_distance}, "
-            f"the harness rescored {checked.distance}"
-        )
+        raise ValueError(f"{backend} reported {outcome.reported_distance}, the harness rescored {checked.distance}")
     complete = checked.feasible and checked.unassigned == 0
     return BenchmarkResult(
         backend=backend,
@@ -140,9 +133,7 @@ def bucket_table(
     rows = []
     for backend in backends:
         for label, _, _ in SIZE_BUCKETS:
-            in_bucket = [
-                r for r in results if r.backend == backend and bucket(r.customer_count) == label
-            ]
+            in_bucket = [r for r in results if r.backend == backend and bucket(r.customer_count) == label]
             solved = [r.gap for r in in_bucket if r.gap is not None]
             rows.append(
                 {
@@ -251,24 +242,16 @@ def print_result(result: BenchmarkResult) -> None:
 def run_series(args: argparse.Namespace) -> int:
     catalog = load_x_catalog(args.cache_dir, refresh=args.refresh_catalog, source=args.catalog_source)
     by_bucket = {
-        label: [entry for entry in catalog if bucket(entry.customer_count) == label]
-        for label, _, _ in SIZE_BUCKETS
+        label: [entry for entry in catalog if bucket(entry.customer_count) == label] for label, _, _ in SIZE_BUCKETS
     }
     catalog_sizes = {label: len(entries) for label, entries in by_bucket.items()}
-    selected = [
-        entry
-        for label, _, _ in SIZE_BUCKETS
-        for entry in even_sample(by_bucket[label], args.limit_per_bucket)
-    ]
+    selected = [entry for label, _, _ in SIZE_BUCKETS for entry in even_sample(by_bucket[label], args.limit_per_bucket)]
     if not selected:
         # A catalog page that parsed to nothing must not pass as a clean run.
         raise RuntimeError(f"catalog source {args.catalog_source!r} yielded no Set X instances")
     # Resolve every BKS first: a download that fails with nothing cached
     # fails the run before any budget is spent.
-    selected = [
-        resolve_mirror_bks(entry, args.cache_dir, refresh=args.refresh_catalog)
-        for entry in selected
-    ]
+    selected = [resolve_mirror_bks(entry, args.cache_dir, refresh=args.refresh_catalog) for entry in selected]
     results: list[BenchmarkResult] = []
     for entry in selected:
         instance = parse_instance(

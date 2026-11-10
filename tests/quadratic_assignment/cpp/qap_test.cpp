@@ -34,65 +34,73 @@
 using namespace qap;
 using namespace qap_test;
 
-namespace
-{
+namespace {
 
 using Raw = ScoreCalculator::RawCosts;
 
-bool rawIs(const Raw &raw, std::int64_t pinned, std::int64_t forbidden, std::int64_t capacity,
-           std::int64_t direct, std::int64_t flow)
-{
-    return raw.pinnedAssignmentsCost == pinned && raw.forbiddenAssignmentsCost == forbidden
-           && raw.locationCapacityCost == capacity && raw.assignmentCost == direct && raw.flowDistanceCost == flow;
+bool rawIs(const Raw& raw, std::int64_t pinned, std::int64_t forbidden, std::int64_t capacity,
+           std::int64_t direct, std::int64_t flow) {
+    return raw.pinnedAssignmentsCost == pinned && raw.forbiddenAssignmentsCost == forbidden &&
+           raw.locationCapacityCost == capacity && raw.assignmentCost == direct &&
+           raw.flowDistanceCost == flow;
 }
 
 // The five raw totals in catalog order.
-std::vector<std::int64_t> perConstraint(const Raw &raw)
-{
-    return {raw.pinnedAssignmentsCost, raw.forbiddenAssignmentsCost, raw.locationCapacityCost, raw.assignmentCost,
-            raw.flowDistanceCost};
+std::vector<std::int64_t> perConstraint(const Raw& raw) {
+    return {raw.pinnedAssignmentsCost, raw.forbiddenAssignmentsCost, raw.locationCapacityCost,
+            raw.assignmentCost, raw.flowDistanceCost};
 }
 
-const char *const kConstraintNames[] = {"pinnedAssignmentsCost", "forbiddenAssignmentsCost", "locationCapacityCost",
-                                        "assignmentCost", "flowDistanceCost"};
+const char* const kConstraintNames[] = {"pinnedAssignmentsCost", "forbiddenAssignmentsCost",
+                                        "locationCapacityCost", "assignmentCost",
+                                        "flowDistanceCost"};
 
 // -------------------------------------------------------------------------
 // (a) Hand-calculated scores.
 // -------------------------------------------------------------------------
-void verifyHandScores()
-{
+void verifyHandScores() {
     std::printf("== (a) Hand-calculated scores ==\n");
     {
         // identity: D[0][1] * F[0][1] + D[1][0] * F[1][0] = 4*3 + 5*2 = 22
         QuadraticAssignmentProblem p = twoFacilities();
         identity(p);
         check(!p.score, "a problem never scored has no score");
-        check(sameScore(ScoreCalculator::score(p), Score{0, -22.0}), "2x2 identity scores 0hard/-22soft");
-        check(p.score && sameScore(*p.score, Score{0, -22.0}), "calculateScore stores problem.score");
-        check(p.totalCost() == 22 && p.flowDistanceCost() == 22 && p.assignmentCost() == 0, "2x2 total cost 22");
+        check(sameScore(ScoreCalculator::score(p), Score{0, -22.0}),
+              "2x2 identity scores 0hard/-22soft");
+        check(p.score && sameScore(*p.score, Score{0, -22.0}),
+              "calculateScore stores problem.score");
+        check(p.totalCost() == 22 && p.flowDistanceCost() == 22 && p.assignmentCost() == 0,
+              "2x2 total cost 22");
         // swapped: D[0][1] * F[1][0] + D[1][0] * F[0][1] = 4*2 + 5*3 = 23
         place(p, {1, 0});
-        check(sameScore(ScoreCalculator::score(p), Score{0, -23.0}), "2x2 swapped scores 0hard/-23soft");
+        check(sameScore(ScoreCalculator::score(p), Score{0, -23.0}),
+              "2x2 swapped scores 0hard/-23soft");
     }
     {
         // L1<-F1, L2<-F2: pin L1->F2 broken (1), F2 at L2 forbidden (1),
         // L1 carries 5 on 3 (2), direct 7 + 8 = 15, flow 22.
         QuadraticAssignmentProblem p = sideInstance();
         identity(p);
-        check(rawIs(ScoreCalculator::rawCosts(p), 1, 1, 2, 15, 22), "side instance, identity: raw 1/1/2/15/22");
-        check(sameScore(ScoreCalculator::score(p), Score{-4, -37.0}), "side instance, identity: -4hard/-37soft");
+        check(rawIs(ScoreCalculator::rawCosts(p), 1, 1, 2, 15, 22),
+              "side instance, identity: raw 1/1/2/15/22");
+        check(sameScore(ScoreCalculator::score(p), Score{-4, -37.0}),
+              "side instance, identity: -4hard/-37soft");
         // L1<-F2, L2<-F1: every side constraint kept, direct 2 + 1 = 3, flow 23.
         place(p, {1, 0});
-        check(rawIs(ScoreCalculator::rawCosts(p), 0, 0, 0, 3, 23), "side instance, swapped: raw 0/0/0/3/23");
-        check(sameScore(ScoreCalculator::score(p), Score{0, -26.0}), "side instance, swapped: 0hard/-26soft");
+        check(rawIs(ScoreCalculator::rawCosts(p), 0, 0, 0, 3, 23),
+              "side instance, swapped: raw 0/0/0/3/23");
+        check(sameScore(ScoreCalculator::score(p), Score{0, -26.0}),
+              "side instance, swapped: 0hard/-26soft");
     }
     {
         // The seed {L3: F1, L1: F2, L2: F3}: 2 * (3*4 + 1*2 + 2*1) = 32.
         QuadraticAssignmentProblem p = threeFacilities();
         place(p, {1, 2, 0});
         check(p.totalCost() == 32, "3x3 seed total cost 32");
-        check(sameScore(ScoreCalculator::score(p), Score{0, -32.0}), "3x3 seed scores 0hard/-32soft");
-        check(p.assignment() == std::vector<int>({1, 2, 0}) && p.isBijection(), "assignment() per location");
+        check(sameScore(ScoreCalculator::score(p), Score{0, -32.0}),
+              "3x3 seed scores 0hard/-32soft");
+        check(p.assignment() == std::vector<int>({1, 2, 0}) && p.isBijection(),
+              "assignment() per location");
     }
     std::printf("\n");
 }
@@ -100,15 +108,15 @@ void verifyHandScores()
 // -------------------------------------------------------------------------
 // (b) Each constraint: a positive and a zero case, plus the edge cases.
 // -------------------------------------------------------------------------
-void verifyConstraintsByHand()
-{
+void verifyConstraintsByHand() {
     std::printf("== (b) Raw cost per constraint, by hand ==\n");
     // pinnedAssignmentsCost
     {
         QuadraticAssignmentProblem p = emptyInstance(3);
         p.fixedAssignments.push_back({2, 0});  // L3 must hold F1
         identity(p);
-        check(ScoreCalculator::rawCosts(p).pinnedAssignmentsCost == 1, "pinned: F1 at L1 instead of L3 -> 1");
+        check(ScoreCalculator::rawCosts(p).pinnedAssignmentsCost == 1,
+              "pinned: F1 at L1 instead of L3 -> 1");
         place(p, {1, 2, 0});
         check(ScoreCalculator::rawCosts(p).pinnedAssignmentsCost == 0, "pinned: F1 at L3 -> 0");
         // An empty pinned location is a broken pin (partial state).
@@ -121,11 +129,14 @@ void verifyConstraintsByHand()
         p.fixedAssignments.push_back({0, 0});
         p.fixedAssignments.push_back({1, 0});
         identity(p);
-        check(ScoreCalculator::rawCosts(p).pinnedAssignmentsCost == 1, "pinned twice: F1 at L1 -> exactly 1");
+        check(ScoreCalculator::rawCosts(p).pinnedAssignmentsCost == 1,
+              "pinned twice: F1 at L1 -> exactly 1");
         place(p, {1, 0, 2});
-        check(ScoreCalculator::rawCosts(p).pinnedAssignmentsCost == 1, "pinned twice: F1 at L2 -> exactly 1");
+        check(ScoreCalculator::rawCosts(p).pinnedAssignmentsCost == 1,
+              "pinned twice: F1 at L2 -> exactly 1");
         place(p, {1, 2, 0});
-        check(ScoreCalculator::rawCosts(p).pinnedAssignmentsCost == 2, "pinned twice: F1 at L3 -> 2");
+        check(ScoreCalculator::rawCosts(p).pinnedAssignmentsCost == 2,
+              "pinned twice: F1 at L3 -> 2");
     }
     // forbiddenAssignmentsCost
     {
@@ -137,7 +148,8 @@ void verifyConstraintsByHand()
         check(ScoreCalculator::rawCosts(p).forbiddenAssignmentsCost == 2,
               "forbidden: F1 at L2 (row listed twice) + F3 at L3 -> 2");
         place(p, {0, 2, 1});
-        check(ScoreCalculator::rawCosts(p).forbiddenAssignmentsCost == 0, "forbidden: no forbidden pair used -> 0");
+        check(ScoreCalculator::rawCosts(p).forbiddenAssignmentsCost == 0,
+              "forbidden: no forbidden pair used -> 0");
     }
     // locationCapacityCost
     {
@@ -149,12 +161,14 @@ void verifyConstraintsByHand()
         p.locations[1].capacity = 0;
         // L3 has no capacity: no limit.
         identity(p);
-        check(ScoreCalculator::rawCosts(p).locationCapacityCost == 3, "capacity: 7 on 4 at L1 -> 3");
+        check(ScoreCalculator::rawCosts(p).locationCapacityCost == 3,
+              "capacity: 7 on 4 at L1 -> 3");
         place(p, {1, 2, 0});
         check(ScoreCalculator::rawCosts(p).locationCapacityCost == 0,
               "capacity: demand 0 on 4, missing demand on 0, 7 on an uncapacitated location -> 0");
         place(p, {2, 0, 1});
-        check(ScoreCalculator::rawCosts(p).locationCapacityCost == 7, "capacity: 7 on capacity 0 -> 7");
+        check(ScoreCalculator::rawCosts(p).locationCapacityCost == 7,
+              "capacity: 7 on capacity 0 -> 7");
     }
     // assignmentCost
     {
@@ -163,8 +177,10 @@ void verifyConstraintsByHand()
         identity(p);
         check(ScoreCalculator::rawCosts(p).assignmentCost == 4, "direct: 4 + 0 -> 4");
         place(p, {1, 0});
-        check(ScoreCalculator::rawCosts(p).assignmentCost == -4, "direct: -6 + 2 -> -4 (a negative raw cost)");
-        check(sameScore(ScoreCalculator::score(p), Score{0, 4.0}), "a negative raw cost scores a soft bonus");
+        check(ScoreCalculator::rawCosts(p).assignmentCost == -4,
+              "direct: -6 + 2 -> -4 (a negative raw cost)");
+        check(sameScore(ScoreCalculator::score(p), Score{0, 4.0}),
+              "a negative raw cost scores a soft bonus");
         QuadraticAssignmentProblem none = emptyInstance(2);
         identity(none);
         check(ScoreCalculator::rawCosts(none).assignmentCost == 0, "direct: no matrix -> 0");
@@ -175,13 +191,16 @@ void verifyConstraintsByHand()
         p.flows[0][0] = 5;  // the diagonal term flows[a][a] * distances[l][l]
         p.distances[1][1] = 3;
         place(p, {1, 0});
-        check(ScoreCalculator::rawCosts(p).flowDistanceCost == 15, "flow: diagonal 5 * 3 counted -> 15");
+        check(ScoreCalculator::rawCosts(p).flowDistanceCost == 15,
+              "flow: diagonal 5 * 3 counted -> 15");
         identity(p);
-        check(ScoreCalculator::rawCosts(p).flowDistanceCost == 0, "flow: diagonal on distance 0 -> 0");
+        check(ScoreCalculator::rawCosts(p).flowDistanceCost == 0,
+              "flow: diagonal on distance 0 -> 0");
         // An unassigned facility contributes nothing.
         QuadraticAssignmentProblem q = twoFacilities();
         place(q, {0, -1});
-        check(ScoreCalculator::rawCosts(q).flowDistanceCost == 0, "flow: one facility unassigned -> 0");
+        check(ScoreCalculator::rawCosts(q).flowDistanceCost == 0,
+              "flow: one facility unassigned -> 0");
     }
     std::printf("\n");
 }
@@ -189,49 +208,47 @@ void verifyConstraintsByHand()
 // -------------------------------------------------------------------------
 // (c) prepare() validation.
 // -------------------------------------------------------------------------
-bool throwsOn(const std::function<void(QuadraticAssignmentProblem &)> &edit)
-{
+bool throwsOn(const std::function<void(QuadraticAssignmentProblem&)>& edit) {
     QuadraticAssignmentProblem p = sideInstance();
     edit(p);
-    try
-    {
+    try {
         ScoreCalculator::prepare(p);
-    }
-    catch (const std::invalid_argument &)
-    {
+    } catch (const std::invalid_argument&) {
         return true;
-    }
-    catch (const std::overflow_error &)
-    {
+    } catch (const std::overflow_error&) {
         return true;
     }
     return false;
 }
 
-void verifyValidation()
-{
+void verifyValidation() {
     std::printf("== (c) prepare() validation ==\n");
-    check(!throwsOn([](QuadraticAssignmentProblem &) {}), "the side instance is valid");
-    check(throwsOn([](QuadraticAssignmentProblem &p) { p.locations.pop_back(); }), "facility / location counts differ");
-    check(throwsOn([](QuadraticAssignmentProblem &p) { p.flows[1].push_back(0); }), "flows not square");
-    check(throwsOn([](QuadraticAssignmentProblem &p) { p.distances.pop_back(); }), "distances mis-sized");
-    check(throwsOn([](QuadraticAssignmentProblem &p) { (*p.assignmentCosts)[0].pop_back(); }),
+    check(!throwsOn([](QuadraticAssignmentProblem&) {}), "the side instance is valid");
+    check(throwsOn([](QuadraticAssignmentProblem& p) { p.locations.pop_back(); }),
+          "facility / location counts differ");
+    check(throwsOn([](QuadraticAssignmentProblem& p) { p.flows[1].push_back(0); }),
+          "flows not square");
+    check(throwsOn([](QuadraticAssignmentProblem& p) { p.distances.pop_back(); }),
+          "distances mis-sized");
+    check(throwsOn([](QuadraticAssignmentProblem& p) { (*p.assignmentCosts)[0].pop_back(); }),
           "assignment_costs mis-sized");
-    check(throwsOn([](QuadraticAssignmentProblem &p) { p.fixedAssignments.push_back({0, 0}); }),
+    check(throwsOn([](QuadraticAssignmentProblem& p) { p.fixedAssignments.push_back({0, 0}); }),
           "a location fixed twice");
-    check(throwsOn([](QuadraticAssignmentProblem &p) { p.fixedAssignments.push_back({1, 5}); }),
+    check(throwsOn([](QuadraticAssignmentProblem& p) { p.fixedAssignments.push_back({1, 5}); }),
           "fixed facility out of range");
-    check(throwsOn([](QuadraticAssignmentProblem &p) { p.forbiddenAssignments.push_back({0, -1}); }),
-          "forbidden location out of range");
-    check(throwsOn([](QuadraticAssignmentProblem &p) { p.facilities[0].demand = -1; }), "negative demand");
-    check(throwsOn([](QuadraticAssignmentProblem &p) { p.locations[1].capacity = -1; }), "negative capacity");
-    check(throwsOn([](QuadraticAssignmentProblem &p) { p.facilities[0].location = 2; }), "location index out of range");
     check(throwsOn(
-              [](QuadraticAssignmentProblem &p)
-              {
-                  p.flows[0][1] = std::numeric_limits<std::int64_t>::max() / 2;
-                  p.distances[0][1] = 9;
-              }),
+                  [](QuadraticAssignmentProblem& p) { p.forbiddenAssignments.push_back({0, -1}); }),
+          "forbidden location out of range");
+    check(throwsOn([](QuadraticAssignmentProblem& p) { p.facilities[0].demand = -1; }),
+          "negative demand");
+    check(throwsOn([](QuadraticAssignmentProblem& p) { p.locations[1].capacity = -1; }),
+          "negative capacity");
+    check(throwsOn([](QuadraticAssignmentProblem& p) { p.facilities[0].location = 2; }),
+          "location index out of range");
+    check(throwsOn([](QuadraticAssignmentProblem& p) {
+              p.flows[0][1] = std::numeric_limits<std::int64_t>::max() / 2;
+              p.distances[0][1] = 9;
+          }),
           "objective magnitudes beyond int64");
     std::printf("\n");
 }
@@ -239,8 +256,7 @@ void verifyValidation()
 // -------------------------------------------------------------------------
 // (d) Incremental == full recompute through the Editor.
 // -------------------------------------------------------------------------
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (d) Incremental == full recompute ==\n");
     int mismatches = 0;
     int rawMismatches = 0;
@@ -249,8 +265,7 @@ void verifyIncremental()
     // constraint must take part in the walk, or its incremental path goes
     // unchecked.
     std::vector<int> nonZero(5, 0);
-    for (int round = 0; round < 4; ++round)
-    {
+    for (int round = 0; round < 4; ++round) {
         QuadraticAssignmentProblem p = randomInstance(12, 31 + round);
         std::mt19937_64 rng(100 + round);
         place(p, randomPermutation(12, rng));
@@ -258,13 +273,11 @@ void verifyIncremental()
         optimaru::Editor<QuadraticAssignmentProblem> editor(p, calculator);
         std::uniform_int_distribution<int> facility(0, 11);
         std::uniform_int_distribution<int> kind(0, 9);
-        for (int step = 0; step < 1250; ++step)
-        {
+        for (int step = 0; step < 1250; ++step) {
             const int a = facility(rng);
             const int b = facility(rng);
             const int what = kind(rng);
-            if (what < 7)
-            {
+            if (what < 7) {
                 // A swap (the solver's only move), batched like the engine does.
                 const int la = p.facilities[a].location;
                 const int lb = p.facilities[b].location;
@@ -272,15 +285,11 @@ void verifyIncremental()
                 editor.assign(a, lb);
                 editor.assign(b, la);
                 editor.end_batch();
-            }
-            else if (what < 9)
-            {
+            } else if (what < 9) {
                 // Unassign / reassign (partial states a caller may write).
                 const int target = p.facilities[a].location < 0 ? facility(rng) : -1;
                 editor.assign(a, target);
-            }
-            else
-            {
+            } else {
                 editor.assign(a, facility(rng));  // a change move (two on one location)
             }
             const Score incremental = editor.score();
@@ -289,30 +298,26 @@ void verifyIncremental()
             const std::vector<std::int64_t> live = perConstraint(calculator.rawCosts());
             const std::vector<std::int64_t> reset = perConstraint(ScoreCalculator::rawCosts(copy));
             ++checks;
-            if (!sameScore(incremental, full) && ++mismatches <= 3)
-            {
+            if (!sameScore(incremental, full) && ++mismatches <= 3) {
                 std::printf("  MISMATCH round %d step %d: incremental=%s full=%s\n", round, step,
                             incremental.str().c_str(), full.str().c_str());
             }
-            for (std::size_t c = 0; c < reset.size(); ++c)
-            {
-                if (live[c] != reset[c] && ++rawMismatches <= 3)
-                {
-                    std::printf("  RAW MISMATCH round %d step %d %s: incremental=%lld full=%lld\n", round, step,
-                                kConstraintNames[c], static_cast<long long>(live[c]),
+            for (std::size_t c = 0; c < reset.size(); ++c) {
+                if (live[c] != reset[c] && ++rawMismatches <= 3) {
+                    std::printf("  RAW MISMATCH round %d step %d %s: incremental=%lld full=%lld\n",
+                                round, step, kConstraintNames[c], static_cast<long long>(live[c]),
                                 static_cast<long long>(reset[c]));
                 }
-                if (reset[c] != 0)
-                    ++nonZero[c];
+                if (reset[c] != 0) ++nonZero[c];
             }
         }
     }
-    check(mismatches == 0, std::to_string(checks) + " random swaps / unassigns / changes: incremental == full");
+    check(mismatches == 0,
+          std::to_string(checks) + " random swaps / unassigns / changes: incremental == full");
     check(rawMismatches == 0, "per-constraint raw totals after every move: incremental == full");
-    for (std::size_t c = 0; c < nonZero.size(); ++c)
-    {
-        check(nonZero[c] > 0,
-              std::string(kConstraintNames[c]) + " non-zero on " + std::to_string(nonZero[c]) + " walk steps");
+    for (std::size_t c = 0; c < nonZero.size(); ++c) {
+        check(nonZero[c] > 0, std::string(kConstraintNames[c]) + " non-zero on " +
+                                      std::to_string(nonZero[c]) + " walk steps");
     }
     std::printf("\n");
 }
@@ -320,8 +325,7 @@ void verifyIncremental()
 // -------------------------------------------------------------------------
 // (e) The solver.
 // -------------------------------------------------------------------------
-Solver::Config budget(std::int64_t steps, std::uint64_t seed = 1)
-{
+Solver::Config budget(std::int64_t steps, std::uint64_t seed = 1) {
     Solver::Config config;
     config.time_limit = std::chrono::seconds(60);
     config.step_limit = steps;
@@ -329,45 +333,36 @@ Solver::Config budget(std::int64_t steps, std::uint64_t seed = 1)
     return config;
 }
 
-Solver::Config zeroBudget()
-{
+Solver::Config zeroBudget() {
     Solver::Config config;
     config.time_limit = std::chrono::milliseconds(0);
     return config;
 }
 
 template <typename Exception>
-bool throws(const std::function<void()> &run)
-{
-    try
-    {
+bool throws(const std::function<void()>& run) {
+    try {
         run();
-    }
-    catch (const Exception &)
-    {
+    } catch (const Exception&) {
         return true;
     }
     return false;
 }
 
-Score bruteForceOptimum(QuadraticAssignmentProblem problem)
-{
+Score bruteForceOptimum(QuadraticAssignmentProblem problem) {
     const int n = problem.facilityCount();
     std::vector<int> perm(n);
     std::iota(perm.begin(), perm.end(), 0);
     Score best{std::numeric_limits<std::int64_t>::min(), -std::numeric_limits<double>::infinity()};
-    do
-    {
+    do {
         place(problem, perm);
         const Score score = ScoreCalculator::score(problem);
-        if (score > best)
-            best = score;
+        if (score > best) best = score;
     } while (std::next_permutation(perm.begin(), perm.end()));
     return best;
 }
 
-void verifySolver()
-{
+void verifySolver() {
     std::printf("== (e) Solver ==\n");
     {
         // Zero budget: the identity, whatever the input assignment said.
@@ -380,7 +375,8 @@ void verifySolver()
         place(s, {1, 2, 0});
         s.warmStart = true;
         Solver(zeroBudget()).solve(s);
-        check(s.assignment() == std::vector<int>({1, 2, 0}) && s.totalCost() == 32 && sameScore(*s.score, {0, -32.0}),
+        check(s.assignment() == std::vector<int>({1, 2, 0}) && s.totalCost() == 32 &&
+                      sameScore(*s.score, {0, -32.0}),
               "zero budget, seeded: the seed comes back with its score");
         check(!s.warmStart, "the seed is used once (warmStart reset)");
         // A seed that breaks a pin survives a zero-budget solve with hard -1.
@@ -403,16 +399,19 @@ void verifySolver()
         QuadraticAssignmentProblem partial = threeFacilities();
         place(partial, {0, 1, -1});
         partial.warmStart = true;
-        check(throws<std::invalid_argument>([&] { Solver(budget(10)).solve(partial); }), "a partial warm start throws");
+        check(throws<std::invalid_argument>([&] { Solver(budget(10)).solve(partial); }),
+              "a partial warm start throws");
         Solver::Config bad = budget(10);
         bad.parallelSolverCount = 0;
         QuadraticAssignmentProblem q = threeFacilities();
-        check(throws<std::invalid_argument>([&] { Solver(bad).solve(q); }), "parallelSolverCount 0 throws");
+        check(throws<std::invalid_argument>([&] { Solver(bad).solve(q); }),
+              "parallelSolverCount 0 throws");
     }
     {
         QuadraticAssignmentProblem empty = emptyInstance(0);
         Solver(budget(100)).solve(empty);
-        check(sameScore(*empty.score, {0, 0.0}) && empty.isBijection(), "n = 0 solves to 0hard/0soft");
+        check(sameScore(*empty.score, {0, 0.0}) && empty.isBijection(),
+              "n = 0 solves to 0hard/0soft");
         QuadraticAssignmentProblem one = emptyInstance(1);
         one.flows = {{3}};
         one.distances = {{2}};
@@ -436,12 +435,9 @@ void verifySolver()
         Solver::Config full = budget(1500, 9);
         full.score_checks = optimaru::ScoreChecks::Full;
         bool ok = true;
-        try
-        {
+        try {
             Solver(full).solve(f);
-        }
-        catch (const std::exception &error)
-        {
+        } catch (const std::exception& error) {
             std::printf("  %s\n", error.what());
             ok = false;
         }
@@ -457,8 +453,7 @@ void verifySolver()
     {
         int reached = 0;
         const int instances = 8;
-        for (int k = 0; k < instances; ++k)
-        {
+        for (int k = 0; k < instances; ++k) {
             const int n = 4 + k % 4;
             QuadraticAssignmentProblem p = randomInstance(n, 700 + k);
             const Score optimum = bruteForceOptimum(p);
@@ -469,14 +464,15 @@ void verifySolver()
                 std::printf("  n=%d: solver %s, optimum %s\n", n, p.score->str().c_str(),
                             optimum.str().c_str());
         }
-        check(reached == instances, std::to_string(reached) + "/" + std::to_string(instances)
-                                        + " small instances (n = 4..7) reach the brute-force optimum");
+        check(reached == instances,
+              std::to_string(reached) + "/" + std::to_string(instances) +
+                      " small instances (n = 4..7) reach the brute-force optimum");
     }
     {
         // on_new_best fires and the seeded solve is reproducible.
         int calls = 0;
         Solver::Config config = budget(2000, 21);
-        config.on_new_best = [&calls](std::int64_t, const Score &) { ++calls; };
+        config.on_new_best = [&calls](std::int64_t, const Score&) { ++calls; };
         QuadraticAssignmentProblem a = randomInstance(12, 77);
         Solver(config).solve(a);
         QuadraticAssignmentProblem b = randomInstance(12, 77);
@@ -489,15 +485,13 @@ void verifySolver()
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyHandScores();
     verifyConstraintsByHand();
     verifyValidation();
     verifyIncremental();
     verifySolver();
-    if (failures != 0)
-    {
+    if (failures != 0) {
         std::printf("%d check(s) FAILED\n", failures);
         return 1;
     }

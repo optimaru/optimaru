@@ -8,24 +8,19 @@
 
 #include "cs/constraints.hpp"
 
-namespace cs
-{
+namespace cs {
 
-namespace
-{
+namespace {
 
 // Interns each distinct string into a dense id and returns the sorted,
 // deduplicated id vector — the set representation every tag comparison uses.
-std::vector<int> internSorted(std::unordered_map<std::string, int> &pool,
-                              const std::vector<std::string> &values)
-{
+std::vector<int> internSorted(std::unordered_map<std::string, int>& pool,
+                              const std::vector<std::string>& values) {
     std::vector<int> ids;
     ids.reserve(values.size());
-    for (const std::string &value : values)
-    {
+    for (const std::string& value : values) {
         auto it = pool.find(value);
-        if (it == pool.end())
-            it = pool.emplace(value, static_cast<int>(pool.size())).first;
+        if (it == pool.end()) it = pool.emplace(value, static_cast<int>(pool.size())).first;
         ids.push_back(it->second);
     }
     std::sort(ids.begin(), ids.end());
@@ -35,20 +30,16 @@ std::vector<int> internSorted(std::unordered_map<std::string, int> &pool,
 
 }  // namespace
 
-int ScoreCalculator::overlappingCount(const std::vector<int> &left,
-                                      const std::vector<int> &right)
-{
+int ScoreCalculator::overlappingCount(const std::vector<int>& left, const std::vector<int>& right) {
     int count = 0;
     std::size_t i = 0;
     std::size_t j = 0;
-    while (i < left.size() && j < right.size())
-    {
+    while (i < left.size() && j < right.size()) {
         if (left[i] < right[j])
             ++i;
         else if (right[j] < left[i])
             ++j;
-        else
-        {
+        else {
             ++count;
             ++i;
             ++j;
@@ -57,17 +48,13 @@ int ScoreCalculator::overlappingCount(const std::vector<int> &left,
     return count;
 }
 
-int ScoreCalculator::missingCount(const std::vector<int> &required,
-                                  const std::vector<int> &available)
-{
-    return static_cast<int>(required.size())
-           - overlappingCount(required, available);
+int ScoreCalculator::missingCount(const std::vector<int>& required,
+                                  const std::vector<int>& available) {
+    return static_cast<int>(required.size()) - overlappingCount(required, available);
 }
 
-void ScoreCalculator::prepare(ConferenceSchedule &schedule)
-{
-    if (schedule.prepared)
-        return;
+void ScoreCalculator::prepare(ConferenceSchedule& schedule) {
+    if (schedule.prepared) return;
 
     const int slotCount = schedule.timeslotCount();
     const int roomCount = schedule.roomCount();
@@ -81,9 +68,8 @@ void ScoreCalculator::prepare(ConferenceSchedule &schedule)
     schedule.slotDur.assign(slotCount, 0);
     schedule.slotDay.assign(slotCount, 0);
     schedule.daysSorted.clear();
-    for (int s = 0; s < slotCount; ++s)
-    {
-        const Timeslot &slot = schedule.timeslots[s];
+    for (int s = 0; s < slotCount; ++s) {
+        const Timeslot& slot = schedule.timeslots[s];
         schedule.slotStart[s] = slot.startMinute;
         schedule.slotEnd[s] = slot.endMinute;
         schedule.slotDur[s] = slot.durationInMinutes();
@@ -91,67 +77,46 @@ void ScoreCalculator::prepare(ConferenceSchedule &schedule)
         schedule.daysSorted.push_back(schedule.slotDay[s]);
     }
     std::sort(schedule.daysSorted.begin(), schedule.daysSorted.end());
-    schedule.daysSorted.erase(
-        std::unique(schedule.daysSorted.begin(), schedule.daysSorted.end()),
-        schedule.daysSorted.end());
+    schedule.daysSorted.erase(std::unique(schedule.daysSorted.begin(), schedule.daysSorted.end()),
+                              schedule.daysSorted.end());
     schedule.dayCount = static_cast<int>(schedule.daysSorted.size());
     schedule.slotDayIndex.assign(slotCount, 0);
-    for (int s = 0; s < slotCount; ++s)
-    {
-        schedule.slotDayIndex[s]
-            = static_cast<int>(std::lower_bound(schedule.daysSorted.begin(),
-                                                schedule.daysSorted.end(),
-                                                schedule.slotDay[s])
-                               - schedule.daysSorted.begin());
+    for (int s = 0; s < slotCount; ++s) {
+        schedule.slotDayIndex[s] =
+                static_cast<int>(std::lower_bound(schedule.daysSorted.begin(),
+                                                  schedule.daysSorted.end(), schedule.slotDay[s]) -
+                                 schedule.daysSorted.begin());
     }
 
     // Compatibility tables (talkType x slot / talkType x room).
-    schedule.typeSlotAllowed.assign(
-        static_cast<std::size_t>(typeCount) * slotCount, 0);
-    for (int s = 0; s < slotCount; ++s)
-    {
-        for (int t : schedule.timeslots[s].talkTypes)
-        {
+    schedule.typeSlotAllowed.assign(static_cast<std::size_t>(typeCount) * slotCount, 0);
+    for (int s = 0; s < slotCount; ++s) {
+        for (int t : schedule.timeslots[s].talkTypes) {
             if (t >= 0 && t < typeCount)
-                schedule.typeSlotAllowed[static_cast<std::size_t>(t) * slotCount
-                                         + s] = 1;
+                schedule.typeSlotAllowed[static_cast<std::size_t>(t) * slotCount + s] = 1;
         }
     }
-    schedule.typeRoomAllowed.assign(
-        static_cast<std::size_t>(typeCount) * roomCount, 0);
-    for (int r = 0; r < roomCount; ++r)
-    {
-        for (int t : schedule.rooms[r].talkTypes)
-        {
+    schedule.typeRoomAllowed.assign(static_cast<std::size_t>(typeCount) * roomCount, 0);
+    for (int r = 0; r < roomCount; ++r) {
+        for (int t : schedule.rooms[r].talkTypes) {
             if (t >= 0 && t < typeCount)
-                schedule.typeRoomAllowed[static_cast<std::size_t>(t) * roomCount
-                                         + r] = 1;
+                schedule.typeRoomAllowed[static_cast<std::size_t>(t) * roomCount + r] = 1;
         }
     }
 
     // Unavailability tables.
-    schedule.roomUnavailableFlat.assign(
-        static_cast<std::size_t>(roomCount) * slotCount, 0);
-    for (int r = 0; r < roomCount; ++r)
-    {
-        for (int s : schedule.rooms[r].unavailableTimeslots)
-        {
+    schedule.roomUnavailableFlat.assign(static_cast<std::size_t>(roomCount) * slotCount, 0);
+    for (int r = 0; r < roomCount; ++r) {
+        for (int s : schedule.rooms[r].unavailableTimeslots) {
             if (s >= 0 && s < slotCount)
-                schedule
-                    .roomUnavailableFlat[static_cast<std::size_t>(r) * slotCount
-                                         + s] = 1;
+                schedule.roomUnavailableFlat[static_cast<std::size_t>(r) * slotCount + s] = 1;
         }
     }
-    schedule.speakerUnavailableFlat.assign(
-        static_cast<std::size_t>(speakerCount) * slotCount, 0);
-    for (int k = 0; k < speakerCount; ++k)
-    {
-        for (int s : schedule.speakers[k].unavailableTimeslots)
-        {
+    schedule.speakerUnavailableFlat.assign(static_cast<std::size_t>(speakerCount) * slotCount, 0);
+    for (int k = 0; k < speakerCount; ++k) {
+        for (int s : schedule.speakers[k].unavailableTimeslots) {
             if (s >= 0 && s < slotCount)
-                schedule.speakerUnavailableFlat[static_cast<std::size_t>(k)
-                                                    * slotCount
-                                                + s] = 1;
+                schedule.speakerUnavailableFlat[static_cast<std::size_t>(k) * slotCount + s] = 1;
         }
     }
 
@@ -173,26 +138,22 @@ void ScoreCalculator::prepare(ConferenceSchedule &schedule)
     schedule.talkSpeakersSorted.resize(talkCount);
     schedule.talkLanguageId.assign(talkCount, -1);
     schedule.talkPrefIds.resize(talkCount);
-    auto sortedUnique = [](std::vector<int> v)
-    {
+    auto sortedUnique = [](std::vector<int> v) {
         std::sort(v.begin(), v.end());
         v.erase(std::unique(v.begin(), v.end()), v.end());
         return v;
     };
-    for (int i = 0; i < talkCount; ++i)
-    {
-        const Talk &talk = schedule.talks[i];
+    for (int i = 0; i < talkCount; ++i) {
+        const Talk& talk = schedule.talks[i];
         schedule.talkThemeIds[i] = internSorted(pool, talk.themeTrackTags);
         schedule.talkSectorIds[i] = internSorted(pool, talk.sectorTags);
         schedule.talkAudienceIds[i] = internSorted(pool, talk.audienceTypes);
         schedule.talkContentIds[i] = internSorted(pool, talk.contentTags);
-        schedule.talkMutexIds[i]
-            = internSorted(pool, talk.mutuallyExclusiveTalksTags);
+        schedule.talkMutexIds[i] = internSorted(pool, talk.mutuallyExclusiveTalksTags);
         schedule.talkPrereqSorted[i] = sortedUnique(talk.prerequisiteTalks);
         schedule.talkSpeakersSorted[i] = sortedUnique(talk.speakers);
-        schedule.talkLanguageId[i]
-            = internSorted(pool, {talk.language}).front();
-        PreferenceTagIds &p = schedule.talkPrefIds[i];
+        schedule.talkLanguageId[i] = internSorted(pool, {talk.language}).front();
+        PreferenceTagIds& p = schedule.talkPrefIds[i];
         p.requiredTimeslot = internSorted(pool, talk.requiredTimeslotTags);
         p.preferredTimeslot = internSorted(pool, talk.preferredTimeslotTags);
         p.prohibitedTimeslot = internSorted(pool, talk.prohibitedTimeslotTags);
@@ -203,14 +164,12 @@ void ScoreCalculator::prepare(ConferenceSchedule &schedule)
         p.undesiredRoom = internSorted(pool, talk.undesiredRoomTags);
     }
     schedule.speakerPrefIds.resize(speakerCount);
-    for (int k = 0; k < speakerCount; ++k)
-    {
-        const Speaker &speaker = schedule.speakers[k];
-        PreferenceTagIds &p = schedule.speakerPrefIds[k];
+    for (int k = 0; k < speakerCount; ++k) {
+        const Speaker& speaker = schedule.speakers[k];
+        PreferenceTagIds& p = schedule.speakerPrefIds[k];
         p.requiredTimeslot = internSorted(pool, speaker.requiredTimeslotTags);
         p.preferredTimeslot = internSorted(pool, speaker.preferredTimeslotTags);
-        p.prohibitedTimeslot
-            = internSorted(pool, speaker.prohibitedTimeslotTags);
+        p.prohibitedTimeslot = internSorted(pool, speaker.prohibitedTimeslotTags);
         p.undesiredTimeslot = internSorted(pool, speaker.undesiredTimeslotTags);
         p.requiredRoom = internSorted(pool, speaker.requiredRoomTags);
         p.preferredRoom = internSorted(pool, speaker.preferredRoomTags);
@@ -225,82 +184,59 @@ void ScoreCalculator::prepare(ConferenceSchedule &schedule)
 // weighted totals read the same kDefaultWeight constants the components carry
 // (kHardWeight / kSoftWeight check that each one is integral and on the level
 // it is summed into).
-std::int64_t Breakdown::hardTotal() const
-{
-    return kHardWeight<TalkTypeIncompatibilityCost>
-               * talkTypeIncompatibilityCost
-           + kHardWeight<RoomUnavailabilityCost> * roomUnavailabilityCost
-           + kHardWeight<RoomConflictCost> * roomConflictCost
-           + kHardWeight<SpeakerUnavailabilityCost> * speakerUnavailabilityCost
-           + kHardWeight<SpeakerConflictCost> * speakerConflictCost
-           + kHardWeight<TalkPrerequisiteTalksCost> * talkPrerequisiteTalksCost
-           + kHardWeight<TalkMutuallyExclusiveTalksTagsCost>
-                 * talkMutuallyExclusiveTalksTagsCost
-           + kHardWeight<ConsecutiveTalksPauseCost> * consecutiveTalksPauseCost
-           + kHardWeight<CrowdControlRiskCost> * crowdControlRiskCost
-           + kHardWeight<SpeakerRequiredTimeslotTagsCost>
-                 * speakerRequiredTimeslotTagsCost
-           + kHardWeight<SpeakerProhibitedTimeslotTagsCost>
-                 * speakerProhibitedTimeslotTagsCost
-           + kHardWeight<TalkRequiredTimeslotTagsCost>
-                 * talkRequiredTimeslotTagsCost
-           + kHardWeight<TalkProhibitedTimeslotTagsCost>
-                 * talkProhibitedTimeslotTagsCost
-           + kHardWeight<SpeakerRequiredRoomTagsCost>
-                 * speakerRequiredRoomTagsCost
-           + kHardWeight<SpeakerProhibitedRoomTagsCost>
-                 * speakerProhibitedRoomTagsCost
-           + kHardWeight<TalkRequiredRoomTagsCost> * talkRequiredRoomTagsCost
-           + kHardWeight<TalkProhibitedRoomTagsCost>
-                 * talkProhibitedRoomTagsCost;
+std::int64_t Breakdown::hardTotal() const {
+    return kHardWeight<TalkTypeIncompatibilityCost> * talkTypeIncompatibilityCost +
+           kHardWeight<RoomUnavailabilityCost> * roomUnavailabilityCost +
+           kHardWeight<RoomConflictCost> * roomConflictCost +
+           kHardWeight<SpeakerUnavailabilityCost> * speakerUnavailabilityCost +
+           kHardWeight<SpeakerConflictCost> * speakerConflictCost +
+           kHardWeight<TalkPrerequisiteTalksCost> * talkPrerequisiteTalksCost +
+           kHardWeight<TalkMutuallyExclusiveTalksTagsCost> * talkMutuallyExclusiveTalksTagsCost +
+           kHardWeight<ConsecutiveTalksPauseCost> * consecutiveTalksPauseCost +
+           kHardWeight<CrowdControlRiskCost> * crowdControlRiskCost +
+           kHardWeight<SpeakerRequiredTimeslotTagsCost> * speakerRequiredTimeslotTagsCost +
+           kHardWeight<SpeakerProhibitedTimeslotTagsCost> * speakerProhibitedTimeslotTagsCost +
+           kHardWeight<TalkRequiredTimeslotTagsCost> * talkRequiredTimeslotTagsCost +
+           kHardWeight<TalkProhibitedTimeslotTagsCost> * talkProhibitedTimeslotTagsCost +
+           kHardWeight<SpeakerRequiredRoomTagsCost> * speakerRequiredRoomTagsCost +
+           kHardWeight<SpeakerProhibitedRoomTagsCost> * speakerProhibitedRoomTagsCost +
+           kHardWeight<TalkRequiredRoomTagsCost> * talkRequiredRoomTagsCost +
+           kHardWeight<TalkProhibitedRoomTagsCost> * talkProhibitedRoomTagsCost;
 }
 
-std::int64_t Breakdown::softPenaltyTotal() const
-{
-    return kSoftWeight<ThemeTrackConflictCost> * themeTrackConflictCost
-           + kSoftWeight<ThemeTrackRoomChangeCost> * themeTrackRoomChangeCost
-           + kSoftWeight<SectorConflictCost> * sectorConflictCost
-           + kSoftWeight<AudienceTypeThemeTrackConflictCost>
-                 * audienceTypeThemeTrackConflictCost
-           + kSoftWeight<ContentAudienceLevelFlowViolationCost>
-                 * contentAudienceLevelFlowViolationCost
-           + kSoftWeight<ContentConflictCost> * contentConflictCost
-           + kSoftWeight<DifferentDayTalksCost> * differentDayTalksCost
-           + kSoftWeight<PopularTalksRoomSizeCost> * popularTalksRoomSizeCost
-           + kSoftWeight<SpeakerPreferredTimeslotTagsCost>
-                 * speakerPreferredTimeslotTagsCost
-           + kSoftWeight<SpeakerUndesiredTimeslotTagsCost>
-                 * speakerUndesiredTimeslotTagsCost
-           + kSoftWeight<TalkPreferredTimeslotTagsCost>
-                 * talkPreferredTimeslotTagsCost
-           + kSoftWeight<TalkUndesiredTimeslotTagsCost>
-                 * talkUndesiredTimeslotTagsCost
-           + kSoftWeight<SpeakerPreferredRoomTagsCost>
-                 * speakerPreferredRoomTagsCost
-           + kSoftWeight<SpeakerUndesiredRoomTagsCost>
-                 * speakerUndesiredRoomTagsCost
-           + kSoftWeight<TalkPreferredRoomTagsCost> * talkPreferredRoomTagsCost
-           + kSoftWeight<TalkUndesiredRoomTagsCost> * talkUndesiredRoomTagsCost
-           + kSoftWeight<SpeakerMakespanCost> * speakerMakespanCost;
+std::int64_t Breakdown::softPenaltyTotal() const {
+    return kSoftWeight<ThemeTrackConflictCost> * themeTrackConflictCost +
+           kSoftWeight<ThemeTrackRoomChangeCost> * themeTrackRoomChangeCost +
+           kSoftWeight<SectorConflictCost> * sectorConflictCost +
+           kSoftWeight<AudienceTypeThemeTrackConflictCost> * audienceTypeThemeTrackConflictCost +
+           kSoftWeight<ContentAudienceLevelFlowViolationCost> *
+                   contentAudienceLevelFlowViolationCost +
+           kSoftWeight<ContentConflictCost> * contentConflictCost +
+           kSoftWeight<DifferentDayTalksCost> * differentDayTalksCost +
+           kSoftWeight<PopularTalksRoomSizeCost> * popularTalksRoomSizeCost +
+           kSoftWeight<SpeakerPreferredTimeslotTagsCost> * speakerPreferredTimeslotTagsCost +
+           kSoftWeight<SpeakerUndesiredTimeslotTagsCost> * speakerUndesiredTimeslotTagsCost +
+           kSoftWeight<TalkPreferredTimeslotTagsCost> * talkPreferredTimeslotTagsCost +
+           kSoftWeight<TalkUndesiredTimeslotTagsCost> * talkUndesiredTimeslotTagsCost +
+           kSoftWeight<SpeakerPreferredRoomTagsCost> * speakerPreferredRoomTagsCost +
+           kSoftWeight<SpeakerUndesiredRoomTagsCost> * speakerUndesiredRoomTagsCost +
+           kSoftWeight<TalkPreferredRoomTagsCost> * talkPreferredRoomTagsCost +
+           kSoftWeight<TalkUndesiredRoomTagsCost> * talkUndesiredRoomTagsCost +
+           kSoftWeight<SpeakerMakespanCost> * speakerMakespanCost;
 }
 
-std::int64_t Breakdown::softRewardTotal() const
-{
-    return kSoftWeight<AudienceTypeDiversityCost> * audienceTypeDiversityCost
-           + kSoftWeight<AudienceLevelDiversityCost>
-                 * audienceLevelDiversityCost
-           + kSoftWeight<LanguageDiversityCost> * languageDiversityCost;
+std::int64_t Breakdown::softRewardTotal() const {
+    return kSoftWeight<AudienceTypeDiversityCost> * audienceTypeDiversityCost +
+           kSoftWeight<AudienceLevelDiversityCost> * audienceLevelDiversityCost +
+           kSoftWeight<LanguageDiversityCost> * languageDiversityCost;
 }
 
-Breakdown ScoreCalculator::computeBreakdown(ConferenceSchedule &schedule)
-{
+Breakdown ScoreCalculator::computeBreakdown(ConferenceSchedule& schedule) {
     prepare(schedule);
     return breakdownOfPrepared(schedule);
 }
 
-Breakdown
-ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
-{
+Breakdown ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule& schedule) {
     Breakdown b;
     const int slotCount = schedule.timeslotCount();
     const int talkCount = schedule.talkCount();
@@ -314,11 +250,9 @@ ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
     std::vector<std::int64_t> speakerMaxDay(speakerCount, 0);
     std::vector<char> speakerHasTalk(speakerCount, 0);
 
-    for (int i = 0; i < talkCount; ++i)
-    {
-        const Talk &talk = schedule.talks[i];
-        if (talk.slotRoom < 0)
-            continue;  // unassigned: contributes nothing
+    for (int i = 0; i < talkCount; ++i) {
+        const Talk& talk = schedule.talks[i];
+        if (talk.slotRoom < 0) continue;  // unassigned: contributes nothing
         const int s = schedule.timeslotIndexOf(talk.slotRoom);
         const int r = schedule.roomIndexOf(talk.slotRoom);
         const std::int64_t dur = schedule.slotDur[s];
@@ -330,74 +264,52 @@ ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
             b.talkTypeIncompatibilityCost += std::max<std::int64_t>(dur, 1);
 
         // h1: roomUnavailabilityCost.
-        if (roomUnavailableAt(schedule, r, s))
-            b.roomUnavailabilityCost += dur;
+        if (roomUnavailableAt(schedule, r, s)) b.roomUnavailabilityCost += dur;
 
         // h3: speakerUnavailabilityCost (per distinct unavailable
         // speaker).
-        for (int k : schedule.talkSpeakersSorted[i])
-        {
-            if (speakerUnavailableAt(schedule, k, s))
-                b.speakerUnavailabilityCost += dur;
+        for (int k : schedule.talkSpeakersSorted[i]) {
+            if (speakerUnavailableAt(schedule, k, s)) b.speakerUnavailabilityCost += dur;
         }
 
         // h9-h16 / s12-s19: the eight talk + eight speaker tag constraints.
-        const PreferenceTagIds &tp = schedule.talkPrefIds[i];
-        const std::vector<int> &slotTags = schedule.slotTagIds[s];
-        const std::vector<int> &roomTags = schedule.roomTagIds[r];
-        b.talkRequiredTimeslotTagsCost
-            += missingCount(tp.requiredTimeslot, slotTags) * dur;
-        b.talkProhibitedTimeslotTagsCost
-            += overlappingCount(tp.prohibitedTimeslot, slotTags) * dur;
-        b.talkPreferredTimeslotTagsCost
-            += missingCount(tp.preferredTimeslot, slotTags) * dur;
-        b.talkUndesiredTimeslotTagsCost
-            += overlappingCount(tp.undesiredTimeslot, slotTags) * dur;
-        b.talkRequiredRoomTagsCost
-            += missingCount(tp.requiredRoom, roomTags) * dur;
-        b.talkProhibitedRoomTagsCost
-            += overlappingCount(tp.prohibitedRoom, roomTags) * dur;
-        b.talkPreferredRoomTagsCost
-            += missingCount(tp.preferredRoom, roomTags) * dur;
-        b.talkUndesiredRoomTagsCost
-            += overlappingCount(tp.undesiredRoom, roomTags) * dur;
-        for (int k : talk.speakers)
-        {
-            const PreferenceTagIds &sp = schedule.speakerPrefIds[k];
-            b.speakerRequiredTimeslotTagsCost
-                += missingCount(sp.requiredTimeslot, slotTags) * dur;
-            b.speakerProhibitedTimeslotTagsCost
-                += overlappingCount(sp.prohibitedTimeslot, slotTags) * dur;
-            b.speakerPreferredTimeslotTagsCost
-                += missingCount(sp.preferredTimeslot, slotTags) * dur;
-            b.speakerUndesiredTimeslotTagsCost
-                += overlappingCount(sp.undesiredTimeslot, slotTags) * dur;
-            b.speakerRequiredRoomTagsCost
-                += missingCount(sp.requiredRoom, roomTags) * dur;
-            b.speakerProhibitedRoomTagsCost
-                += overlappingCount(sp.prohibitedRoom, roomTags) * dur;
-            b.speakerPreferredRoomTagsCost
-                += missingCount(sp.preferredRoom, roomTags) * dur;
-            b.speakerUndesiredRoomTagsCost
-                += overlappingCount(sp.undesiredRoom, roomTags) * dur;
+        const PreferenceTagIds& tp = schedule.talkPrefIds[i];
+        const std::vector<int>& slotTags = schedule.slotTagIds[s];
+        const std::vector<int>& roomTags = schedule.roomTagIds[r];
+        b.talkRequiredTimeslotTagsCost += missingCount(tp.requiredTimeslot, slotTags) * dur;
+        b.talkProhibitedTimeslotTagsCost += overlappingCount(tp.prohibitedTimeslot, slotTags) * dur;
+        b.talkPreferredTimeslotTagsCost += missingCount(tp.preferredTimeslot, slotTags) * dur;
+        b.talkUndesiredTimeslotTagsCost += overlappingCount(tp.undesiredTimeslot, slotTags) * dur;
+        b.talkRequiredRoomTagsCost += missingCount(tp.requiredRoom, roomTags) * dur;
+        b.talkProhibitedRoomTagsCost += overlappingCount(tp.prohibitedRoom, roomTags) * dur;
+        b.talkPreferredRoomTagsCost += missingCount(tp.preferredRoom, roomTags) * dur;
+        b.talkUndesiredRoomTagsCost += overlappingCount(tp.undesiredRoom, roomTags) * dur;
+        for (int k : talk.speakers) {
+            const PreferenceTagIds& sp = schedule.speakerPrefIds[k];
+            b.speakerRequiredTimeslotTagsCost += missingCount(sp.requiredTimeslot, slotTags) * dur;
+            b.speakerProhibitedTimeslotTagsCost +=
+                    overlappingCount(sp.prohibitedTimeslot, slotTags) * dur;
+            b.speakerPreferredTimeslotTagsCost +=
+                    missingCount(sp.preferredTimeslot, slotTags) * dur;
+            b.speakerUndesiredTimeslotTagsCost +=
+                    overlappingCount(sp.undesiredTimeslot, slotTags) * dur;
+            b.speakerRequiredRoomTagsCost += missingCount(sp.requiredRoom, roomTags) * dur;
+            b.speakerProhibitedRoomTagsCost += overlappingCount(sp.prohibitedRoom, roomTags) * dur;
+            b.speakerPreferredRoomTagsCost += missingCount(sp.preferredRoom, roomTags) * dur;
+            b.speakerUndesiredRoomTagsCost += overlappingCount(sp.undesiredRoom, roomTags) * dur;
         }
 
         // h8 prep: crowd-control occupancy.
-        if (talk.crowdControlRisk > 0)
-            ++crowdCnt[s];
+        if (talk.crowdControlRisk > 0) ++crowdCnt[s];
 
         // s20 prep: per-speaker day span over assigned talks.
         const std::int64_t day = schedule.slotDay[s];
-        for (int k : talk.speakers)
-        {
-            if (!speakerHasTalk[k])
-            {
+        for (int k : talk.speakers) {
+            if (!speakerHasTalk[k]) {
                 speakerHasTalk[k] = 1;
                 speakerMinDay[k] = day;
                 speakerMaxDay[k] = day;
-            }
-            else
-            {
+            } else {
                 speakerMinDay[k] = std::min(speakerMinDay[k], day);
                 speakerMaxDay[k] = std::max(speakerMaxDay[k], day);
             }
@@ -406,127 +318,99 @@ ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
 
     // h8: crowdControlRiskCost — a risk>0 talk sharing its timeslot with >= 2
     // other risk>0 talks.
-    for (int i = 0; i < talkCount; ++i)
-    {
-        const Talk &talk = schedule.talks[i];
-        if (talk.slotRoom < 0 || talk.crowdControlRisk <= 0)
-            continue;
+    for (int i = 0; i < talkCount; ++i) {
+        const Talk& talk = schedule.talks[i];
+        if (talk.slotRoom < 0 || talk.crowdControlRisk <= 0) continue;
         const int s = schedule.timeslotIndexOf(talk.slotRoom);
-        if (crowdCnt[s] >= 3)
-            b.crowdControlRiskCost += schedule.slotDur[s];
+        if (crowdCnt[s] >= 3) b.crowdControlRiskCost += schedule.slotDur[s];
     }
 
     // s20: speakerMakespanCost — each day beyond the first counts for 8 hours.
-    for (int k = 0; k < speakerCount; ++k)
-    {
-        if (!speakerHasTalk[k])
-            continue;
+    for (int k = 0; k < speakerCount; ++k) {
+        if (!speakerHasTalk[k]) continue;
         const std::int64_t span = speakerMaxDay[k] - speakerMinDay[k];
-        if (span > 1)
-            b.speakerMakespanCost += (span - 1) * 8 * 60;
+        if (span > 1) b.speakerMakespanCost += (span - 1) * 8 * 60;
     }
 
     // Pairwise constraints.
-    for (int i = 0; i < talkCount; ++i)
-    {
-        const Talk &a = schedule.talks[i];
-        if (a.slotRoom < 0)
-            continue;
+    for (int i = 0; i < talkCount; ++i) {
+        const Talk& a = schedule.talks[i];
+        if (a.slotRoom < 0) continue;
         const int sa = schedule.timeslotIndexOf(a.slotRoom);
         const int ra = schedule.roomIndexOf(a.slotRoom);
-        for (int j = i + 1; j < talkCount; ++j)
-        {
-            const Talk &c = schedule.talks[j];
-            if (c.slotRoom < 0)
-                continue;
+        for (int j = i + 1; j < talkCount; ++j) {
+            const Talk& c = schedule.talks[j];
+            if (c.slotRoom < 0) continue;
             const int sb = schedule.timeslotIndexOf(c.slotRoom);
             const int rb = schedule.roomIndexOf(c.slotRoom);
             const std::int64_t overlap = overlapMinutes(schedule, sa, sb);
-            const std::int64_t combined
-                = schedule.slotDur[sa] + schedule.slotDur[sb];
+            const std::int64_t combined = schedule.slotDur[sa] + schedule.slotDur[sb];
             const bool sameSlot = sa == sb;
             const bool sameDay = schedule.slotDay[sa] == schedule.slotDay[sb];
 
-            const int themes = overlappingCount(schedule.talkThemeIds[i],
-                                                schedule.talkThemeIds[j]);
-            const int sectors = overlappingCount(schedule.talkSectorIds[i],
-                                                 schedule.talkSectorIds[j]);
-            const int audiences = overlappingCount(schedule.talkAudienceIds[i],
-                                                   schedule.talkAudienceIds[j]);
-            const int contents = overlappingCount(schedule.talkContentIds[i],
-                                                  schedule.talkContentIds[j]);
+            const int themes = overlappingCount(schedule.talkThemeIds[i], schedule.talkThemeIds[j]);
+            const int sectors =
+                    overlappingCount(schedule.talkSectorIds[i], schedule.talkSectorIds[j]);
+            const int audiences =
+                    overlappingCount(schedule.talkAudienceIds[i], schedule.talkAudienceIds[j]);
+            const int contents =
+                    overlappingCount(schedule.talkContentIds[i], schedule.talkContentIds[j]);
 
-            if (overlap > 0)
-            {
+            if (overlap > 0) {
                 // h2: roomConflictCost.
-                if (ra == rb)
-                    b.roomConflictCost += overlap;
+                if (ra == rb) b.roomConflictCost += overlap;
                 // h4: speakerConflictCost (per shared speaker).
-                const int shared
-                    = overlappingCount(schedule.talkSpeakersSorted[i],
-                                       schedule.talkSpeakersSorted[j]);
-                if (shared > 0)
-                    b.speakerConflictCost += shared * overlap;
+                const int shared = overlappingCount(schedule.talkSpeakersSorted[i],
+                                                    schedule.talkSpeakersSorted[j]);
+                if (shared > 0) b.speakerConflictCost += shared * overlap;
                 // h6: talkMutuallyExclusiveTalksTagsCost.
-                const int mutex = overlappingCount(schedule.talkMutexIds[i],
-                                                   schedule.talkMutexIds[j]);
-                if (mutex > 0)
-                    b.talkMutuallyExclusiveTalksTagsCost += mutex * overlap;
+                const int mutex =
+                        overlappingCount(schedule.talkMutexIds[i], schedule.talkMutexIds[j]);
+                if (mutex > 0) b.talkMutuallyExclusiveTalksTagsCost += mutex * overlap;
                 // s1 / s3 / s5 / s8.
                 b.themeTrackConflictCost += themes * overlap;
                 b.sectorConflictCost += sectors * overlap;
-                b.audienceTypeThemeTrackConflictCost
-                    += themes * audiences * overlap;
+                b.audienceTypeThemeTrackConflictCost += themes * audiences * overlap;
                 b.contentConflictCost += contents * overlap;
             }
 
             // h5: talkPrerequisiteTalksCost (both orders; x in y.prerequisites
             // means x must end by the time y starts).
             if (std::binary_search(schedule.talkPrereqSorted[j].begin(),
-                                   schedule.talkPrereqSorted[j].end(),
-                                   i)
-                && schedule.slotEnd[sa] > schedule.slotStart[sb])
+                                   schedule.talkPrereqSorted[j].end(), i) &&
+                schedule.slotEnd[sa] > schedule.slotStart[sb])
                 b.talkPrerequisiteTalksCost += combined;
             if (std::binary_search(schedule.talkPrereqSorted[i].begin(),
-                                   schedule.talkPrereqSorted[i].end(),
-                                   j)
-                && schedule.slotEnd[sb] > schedule.slotStart[sa])
+                                   schedule.talkPrereqSorted[i].end(), j) &&
+                schedule.slotEnd[sb] > schedule.slotStart[sa])
                 b.talkPrerequisiteTalksCost += combined;
 
             // h7: consecutiveTalksPauseCost (pairs sharing >= 1 speaker).
-            if (overlappingCount(schedule.talkSpeakersSorted[i],
-                                 schedule.talkSpeakersSorted[j])
-                    > 0
-                && !pauseExists(schedule, sa, sb, pause))
+            if (overlappingCount(schedule.talkSpeakersSorted[i], schedule.talkSpeakersSorted[j]) >
+                        0 &&
+                !pauseExists(schedule, sa, sb, pause))
                 b.consecutiveTalksPauseCost += combined;
 
             // s2: themeTrackRoomChangeCost (same day, different rooms).
-            if (sameDay && themes > 0 && ra != rb)
-                b.themeTrackRoomChangeCost += themes * combined;
+            if (sameDay && themes > 0 && ra != rb) b.themeTrackRoomChangeCost += themes * combined;
 
             // s4 / s6 / s9: same-timeslot diversity rewards.
-            if (sameSlot)
-            {
+            if (sameSlot) {
                 const std::int64_t slotDur = schedule.slotDur[sa];
-                if (audiences > 0)
-                    b.audienceTypeDiversityCost += audiences * slotDur;
-                if (a.audienceLevel != c.audienceLevel)
-                    b.audienceLevelDiversityCost += slotDur;
+                if (audiences > 0) b.audienceTypeDiversityCost += audiences * slotDur;
+                if (a.audienceLevel != c.audienceLevel) b.audienceLevelDiversityCost += slotDur;
                 if (schedule.talkLanguageId[i] != schedule.talkLanguageId[j])
                     b.languageDiversityCost += slotDur;
             }
 
             // s7: contentAudienceLevelFlowViolationCost (both orders).
-            if (contents > 0)
-            {
-                if (a.audienceLevel < c.audienceLevel
-                    && schedule.slotEnd[sa] > schedule.slotStart[sb])
-                    b.contentAudienceLevelFlowViolationCost
-                        += contents * combined;
-                if (c.audienceLevel < a.audienceLevel
-                    && schedule.slotEnd[sb] > schedule.slotStart[sa])
-                    b.contentAudienceLevelFlowViolationCost
-                        += contents * combined;
+            if (contents > 0) {
+                if (a.audienceLevel < c.audienceLevel &&
+                    schedule.slotEnd[sa] > schedule.slotStart[sb])
+                    b.contentAudienceLevelFlowViolationCost += contents * combined;
+                if (c.audienceLevel < a.audienceLevel &&
+                    schedule.slotEnd[sb] > schedule.slotStart[sa])
+                    b.contentAudienceLevelFlowViolationCost += contents * combined;
             }
 
             // s10: differentDayTalksCost (shared content/theme on different
@@ -536,11 +420,11 @@ ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
 
             // s11: popularTalksRoomSizeCost (both orders: the more popular talk
             // sits in the smaller room).
-            if (a.favoriteCount < c.favoriteCount
-                && schedule.rooms[ra].capacity > schedule.rooms[rb].capacity)
+            if (a.favoriteCount < c.favoriteCount &&
+                schedule.rooms[ra].capacity > schedule.rooms[rb].capacity)
                 b.popularTalksRoomSizeCost += combined;
-            if (c.favoriteCount < a.favoriteCount
-                && schedule.rooms[rb].capacity > schedule.rooms[ra].capacity)
+            if (c.favoriteCount < a.favoriteCount &&
+                schedule.rooms[rb].capacity > schedule.rooms[ra].capacity)
                 b.popularTalksRoomSizeCost += combined;
         }
     }
@@ -548,8 +432,7 @@ ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
     return b;
 }
 
-Score ScoreCalculator::score(ConferenceSchedule &schedule)
-{
+Score ScoreCalculator::score(ConferenceSchedule& schedule) {
     const Score score = computeBreakdown(schedule).toScore();
     schedule.score = score;
     return score;

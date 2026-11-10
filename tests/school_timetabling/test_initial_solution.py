@@ -69,7 +69,9 @@ def test_a_solved_result_feeds_back_as_a_dict_and_as_json(problem, solved):
 
 def test_room_ids_in_the_seed_are_ignored(problem, solved):
     def rooms(result: dict) -> list[tuple]:
-        return sorted((x["course_id"], x["slot"]["day"], x["slot"]["period"], str(x["room_id"])) for x in result["lessons"])
+        return sorted(
+            (x["course_id"], x["slot"]["day"], x["slot"]["period"], str(x["room_id"])) for x in result["lessons"]
+        )
 
     seed = copy.deepcopy(solved)
     for lesson in seed["lessons"]:
@@ -200,7 +202,9 @@ def test_a_section_given_only_on_its_second_course_is_not_lost(problem):
     problem = parallel_problem(problem)
     day, period = times_construction_avoids(problem, "C1-ENG")[0]
 
-    result = st.solve(problem, time_limit_seconds=0, initial_solution={"lessons": lessons_of([("C1-ENG", day, period)])})
+    result = st.solve(
+        problem, time_limit_seconds=0, initial_solution={"lessons": lessons_of([("C1-ENG", day, period)])}
+    )
 
     assert {("C1-KOR", day, period), ("C1-ENG", day, period)} <= set(slots(result))
 

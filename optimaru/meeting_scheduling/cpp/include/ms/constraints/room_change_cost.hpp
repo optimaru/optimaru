@@ -3,8 +3,7 @@
 
 #include "ms/constraints/common.hpp"
 
-namespace ms
-{
+namespace ms {
 
 // Soft, weight 1: roomChangeCost — a shared attendee whose next meeting
 // starts within two grains but in a different room, so they have to pack up
@@ -16,57 +15,40 @@ namespace ms
 // "Next" orders TimeGrains by (day, then starting minute) and
 // must be strict — two meetings starting at the same grain have no earlier
 // one, so nobody walks between them.
-struct RoomChangeCost final : AttendanceArcConstraint
-{
+struct RoomChangeCost final : AttendanceArcConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit RoomChangeCost(double weight = kDefaultWeight)
-        : AttendanceArcConstraint("roomChangeCost", weight, kDefaultLevel)
-    {
-    }
+        : AttendanceArcConstraint("roomChangeCost", weight, kDefaultLevel) {}
 
 protected:
-    std::int64_t marginal(const MeetingSchedule &schedule,
-                          int assignmentIndex,
-                          int unit) const override
-    {
-        const int meeting
-            = schedule.meetingAssignments[assignmentIndex].meeting;
+    std::int64_t marginal(const MeetingSchedule& schedule, int assignmentIndex,
+                          int unit) const override {
+        const int meeting = schedule.meetingAssignments[assignmentIndex].meeting;
         int start = 0;
         int end = 0;
         detail::spanOf(schedule, unit, assignmentIndex, start, end);
         const int position = schedule.timeGrainPosOf(unit);
         std::int64_t total = 0;
-        for (int arcIndex : arcsOf(meeting))
-        {
-            const ConflictArc &arc = schedule.conflictArcs[arcIndex];
-            if (arc.attendanceWeight == 0)
-                continue;
+        for (int arcIndex : arcsOf(meeting)) {
+            const ConflictArc& arc = schedule.conflictArcs[arcIndex];
+            if (arc.attendanceWeight == 0) continue;
             int partnerAssignment = -1;
             int partnerUnit = -1;
-            if (!partnerOf(
-                    schedule, arc, meeting, partnerAssignment, partnerUnit))
-                continue;
+            if (!partnerOf(schedule, arc, meeting, partnerAssignment, partnerUnit)) continue;
             if (schedule.roomIndexOf(unit) == schedule.roomIndexOf(partnerUnit))
                 continue;  // same room: nobody has to move
             const int partnerPosition = schedule.timeGrainPosOf(partnerUnit);
             const int order = ScoreCalculator::compareTimeGrains(
-                schedule.timeGrains[position],
-                schedule.timeGrains[partnerPosition]);
-            if (order == 0)
-                continue;
+                    schedule.timeGrains[position], schedule.timeGrains[partnerPosition]);
+            if (order == 0) continue;
             int partnerStart = 0;
             int partnerEnd = 0;
-            detail::spanOf(schedule,
-                           partnerUnit,
-                           partnerAssignment,
-                           partnerStart,
-                           partnerEnd);
+            detail::spanOf(schedule, partnerUnit, partnerAssignment, partnerStart, partnerEnd);
             const int firstEnd = order < 0 ? end : partnerEnd;
             const int secondStart = order < 0 ? partnerStart : start;
-            if (secondStart - firstEnd <= 2)
-                total += arc.attendanceWeight;
+            if (secondStart - firstEnd <= 2) total += arc.attendanceWeight;
         }
         return total;
     }

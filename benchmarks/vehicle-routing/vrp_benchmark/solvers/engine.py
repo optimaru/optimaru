@@ -28,11 +28,7 @@ def make_request(instance: CvrpInstance, *, seconds: float, seed: int) -> RouteP
     # No time window can bind: every deadline lies past the longest possible
     # route (every leg at the longest distance, every service included), so
     # the engine minimises exactly the CVRPLIB distance.
-    deadline = (
-        max(map(max, instance.distances)) * (customer_count + 1)
-        + SERVICE_SECONDS * customer_count
-        + 1
-    )
+    deadline = max(map(max, instance.distances)) * (customer_count + 1) + SERVICE_SECONDS * customer_count + 1
     depot = instance.coordinates[0]
     return RoutePlanRequest(
         name=instance.name,

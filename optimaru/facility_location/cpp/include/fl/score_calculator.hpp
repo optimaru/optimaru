@@ -3,8 +3,7 @@
 
 #include "fl/domain.hpp"
 
-namespace fl
-{
+namespace fl {
 
 // The facility-location score as one monolithic function.
 //
@@ -22,16 +21,15 @@ namespace fl
 //   soft 3. distanceFromFacilityCost   -6 * meters per assigned consumer
 // Unassigned consumers (facility == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
-    static Score score(FacilityLocationProblem &problem);
+    static Score score(FacilityLocationProblem& problem);
 
     // Precomputes the consumer->facility distance matrix so scoring reads
     // are O(1) integer lookups. Idempotent (guarded by
     // FacilityLocationProblem::prepared). Must run before scoring;
     // score/solve call it.
-    static void prepare(FacilityLocationProblem &problem);
+    static void prepare(FacilityLocationProblem& problem);
 };
 
 }  // namespace fl

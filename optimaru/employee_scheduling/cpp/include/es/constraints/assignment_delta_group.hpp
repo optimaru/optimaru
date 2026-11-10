@@ -23,8 +23,7 @@ namespace es {
 // loaded from their prepared tables; all pairwise terms share one walk over
 // the employee's other shifts. The core applies each raw delta through the
 // constraint's independent weight/level/exponent metadata afterwards.
-struct EmployeeAssignmentDeltaGroup final
-    : optimaru::UnitConstraintDeltaGroup<EmployeeSchedule> {
+struct EmployeeAssignmentDeltaGroup final : optimaru::UnitConstraintDeltaGroup<EmployeeSchedule> {
     static constexpr std::size_t NONE = std::numeric_limits<std::size_t>::max();
     static constexpr std::size_t PAIR_CACHE_BUDGET_BYTES = 64U * 1024U * 1024U;
 
@@ -38,7 +37,8 @@ struct EmployeeAssignmentDeltaGroup final
             if (requiredSkill_ != nullptr) duplicate_ = true;
             requiredSkill_ = typed;
             requiredSkillIndex_ = index;
-        } else if (const auto* typed = dynamic_cast<const EmployeeUnavailabilityCost*>(&constraint)) {
+        } else if (const auto* typed =
+                           dynamic_cast<const EmployeeUnavailabilityCost*>(&constraint)) {
             if (unavailable_ != nullptr) duplicate_ = true;
             unavailable_ = typed;
             unavailableIndex_ = index;
@@ -90,8 +90,7 @@ struct EmployeeAssignmentDeltaGroup final
         const std::size_t n = schedule.shifts.size();
         const bool cellsFit = n == 0 || n <= std::numeric_limits<std::size_t>::max() / n;
         const std::size_t cells = cellsFit ? n * n : 0;
-        const bool canCache =
-                cellsFit && cells <= PAIR_CACHE_BUDGET_BYTES / sizeof(PairProjection);
+        const bool canCache = cellsFit && cells <= PAIR_CACHE_BUDGET_BYTES / sizeof(PairProjection);
         bool projectionUnchanged = pairCached_ && canCache && start_.size() == n;
         if (projectionUnchanged) {
             for (std::size_t i = 0; i < n; ++i) {
@@ -152,10 +151,8 @@ struct EmployeeAssignmentDeltaGroup final
         const bool needsOverlap = overlapIndex_ != NONE;
         const bool needsSameDay = sameDayIndex_ != NONE;
         const bool needsRest = minimumRest_ != nullptr;
-        const std::int32_t minGap = needsRest
-                                            ? static_cast<std::int32_t>(
-                                                      minimumRest_->minGapMinutes())
-                                            : 0;
+        const std::int32_t minGap =
+                needsRest ? static_cast<std::int32_t>(minimumRest_->minGapMinutes()) : 0;
         const std::int32_t entityDay = day_[entity];
         for (int other : members) {
             if (other == entity) continue;

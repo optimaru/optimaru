@@ -23,8 +23,10 @@ struct WorkerLocationCountCost final : EsUnitConstraint {
                                      std::string workerSkill = {}, int minCount = 0,
                                      int maxCount = -1)
         : EsUnitConstraint("workerLocationCountCost", weight, kDefaultLevel),
-          loc_(std::move(location)), skill_(std::move(workerSkill)),
-          min_(minCount), max_(maxCount) {
+          loc_(std::move(location)),
+          skill_(std::move(workerSkill)),
+          min_(minCount),
+          max_(maxCount) {
         label = "Worker location count[" + (loc_.empty() ? std::string("work") : loc_) + " " +
                 (skill_.empty() ? std::string("all") : skill_) + " " + std::to_string(min_) + ".." +
                 (max_ < 0 ? std::string("inf") : std::to_string(max_)) +

@@ -27,8 +27,8 @@ namespace optimaru {
 // Builds the configured scheme. `segment_length` applies to
 // SegmentedRouletteWheel, `alpha` to AlphaUcb; both are ignored otherwise.
 inline std::unique_ptr<OperatorSelectionScheme> make_operator_selection_scheme(
-        SelectionScheme type, int operator_count, const std::vector<double>& rewards,
-        double decay, std::int64_t segment_length, double alpha) {
+        SelectionScheme type, int operator_count, const std::vector<double>& rewards, double decay,
+        std::int64_t segment_length, double alpha) {
     switch (type) {
         case SelectionScheme::SegmentedRouletteWheel:
             return std::make_unique<SegmentedRouletteWheelSelector>(operator_count, rewards, decay,

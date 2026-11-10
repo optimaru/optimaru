@@ -22,10 +22,11 @@ struct WorkerPairingCost final : EsGlobalConstraint {
 
     explicit WorkerPairingCost(double weight = kDefaultWeight, int anchor = -1, int paired = -1,
                                std::vector<int> bucketDays = {},
-                               std::vector<std::string> bucketLocations = {},
-                               bool penalty = false)
+                               std::vector<std::string> bucketLocations = {}, bool penalty = false)
         : EsGlobalConstraint("workerPairingCost", weight, kDefaultLevel),
-          anchor_(anchor), paired_(paired), penalty_(penalty) {
+          anchor_(anchor),
+          paired_(paired),
+          penalty_(penalty) {
         label = "Worker pairing[" + std::to_string(anchor_) + (penalty_ ? "!=" : "==") +
                 std::to_string(paired_) + "]";  // display only; never a lookup key
         const std::size_t n = std::min(bucketDays.size(), bucketLocations.size());
@@ -41,12 +42,14 @@ struct WorkerPairingCost final : EsGlobalConstraint {
             loc_[i] = s.shifts[i].location;
         }
         const int units = static_cast<int>(members_per_unit.size());
-        aMembers_ = (anchor_ >= 0 && anchor_ < units) ? members_per_unit[anchor_] : std::vector<int>{};
-        bMembers_ = (paired_ >= 0 && paired_ < units) ? members_per_unit[paired_] : std::vector<int>{};
+        aMembers_ =
+                (anchor_ >= 0 && anchor_ < units) ? members_per_unit[anchor_] : std::vector<int>{};
+        bMembers_ =
+                (paired_ >= 0 && paired_ < units) ? members_per_unit[paired_] : std::vector<int>{};
         recompute();
     }
     void on_unit_changed(const EmployeeSchedule&, int unit,
-                       const std::vector<int>& members) override {
+                         const std::vector<int>& members) override {
         if (unit == anchor_) {
             aMembers_ = members;
             recompute();
@@ -72,7 +75,8 @@ private:
     }
     int anchor_, paired_;
     bool penalty_;
-    std::set<std::pair<int, std::string>> targets_;  // (day, location) buckets both are eligible for
+    std::set<std::pair<int, std::string>>
+            targets_;  // (day, location) buckets both are eligible for
     std::vector<int> aMembers_, bMembers_;
     std::vector<int> day_;
     std::vector<std::string> loc_;

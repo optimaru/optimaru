@@ -8,32 +8,26 @@
 #include "op/constraints/trolley_capacity_cost.hpp"
 #include "op/score_calculator.hpp"
 
-namespace op
-{
+namespace op {
 
-namespace
-{
+namespace {
 
 // The same constants the components and ScoreCalculator read (integral and
 // level-checked; see constraints/common.hpp).
 constexpr std::int64_t kCapacityWeight = kHardWeight<TrolleyCapacityCost>;
-constexpr std::int64_t kDistanceWeight
-    = kSoftWeight<DistanceFromPreviousPickTaskCost>;
+constexpr std::int64_t kDistanceWeight = kSoftWeight<DistanceFromPreviousPickTaskCost>;
 constexpr std::int64_t kSplitWeight = kSoftWeight<OrderSplitByTrolleyCost>;
 // dist_ keeps each trolley's whole round trip (the outbound legs of
 // distanceFromPreviousPickTaskCost plus the return leg of
 // distanceFromLastPickTaskToPathOriginCost) as ONE number, so both distance
 // constraints must default to the same weight.
-static_assert(kDistanceWeight
-                  == kSoftWeight<DistanceFromLastPickTaskToPathOriginCost>,
+static_assert(kDistanceWeight == kSoftWeight<DistanceFromLastPickTaskToPathOriginCost>,
               "the round-trip distance total assumes equal default weights "
               "for the two distance constraints");
 
 }  // namespace
 
-void OrderPickingIncrementalScoreCalculator::rebuild(
-    OrderPickingSolution &solution)
-{
+void OrderPickingIncrementalScoreCalculator::rebuild(OrderPickingSolution& solution) {
     solution_ = &solution;
     trolleyCount_ = static_cast<int>(solution.trolleys.size());
     orderCount_ = static_cast<int>(solution.orders.size());
@@ -50,98 +44,79 @@ void OrderPickingIncrementalScoreCalculator::rebuild(
     distTotal_ = 0;
     splitTotal_ = 0;
 
-    for (int t = 0; t < trolleyCount_; ++t)
-    {
-        for (int pickIndex : solution.trolleys[t].pickTaskIndices)
-        {
-            const PickTask &task = solution.pickTasks[pickIndex];
+    for (int t = 0; t < trolleyCount_; ++t) {
+        for (int pickIndex : solution.trolleys[t].pickTaskIndices) {
+            const PickTask& task = solution.pickTasks[pickIndex];
             volume_[cell(task.orderIndex, t)] += task.volume;
-            if (count_[cell(task.orderIndex, t)]++ == 0)
-            {
+            if (count_[cell(task.orderIndex, t)]++ == 0) {
                 ++distinctTrolleys_[task.orderIndex];
                 ++splitTotal_;
             }
         }
-        const Trolley &trolley = solution.trolleys[t];
+        const Trolley& trolley = solution.trolleys[t];
         const std::int64_t required = requiredBuckets(t);
         required_[t] = required;
-        shortage_[t] = required > trolley.bucketCount
-                           ? required - trolley.bucketCount
-                           : 0;
+        shortage_[t] = required > trolley.bucketCount ? required - trolley.bucketCount : 0;
         shortageTotal_ += shortage_[t];
         dist_[t] = roundTripDistance(t);
         distTotal_ += dist_[t];
     }
 }
 
-void OrderPickingIncrementalScoreCalculator::before_list_edit(int listIndex)
-{
+void OrderPickingIncrementalScoreCalculator::before_list_edit(int listIndex) {
     // Retract the trolley's whole contribution against its OLD contents.
     shortageTotal_ -= shortage_[listIndex];
     distTotal_ -= dist_[listIndex];
-    for (int pickIndex : solution_->trolleys[listIndex].pickTaskIndices)
-    {
-        const PickTask &task = solution_->pickTasks[pickIndex];
+    for (int pickIndex : solution_->trolleys[listIndex].pickTaskIndices) {
+        const PickTask& task = solution_->pickTasks[pickIndex];
         volume_[cell(task.orderIndex, listIndex)] -= task.volume;
-        if (--count_[cell(task.orderIndex, listIndex)] == 0)
-        {
+        if (--count_[cell(task.orderIndex, listIndex)] == 0) {
             --distinctTrolleys_[task.orderIndex];
             --splitTotal_;
         }
     }
 }
 
-void OrderPickingIncrementalScoreCalculator::after_list_edit(int listIndex)
-{
+void OrderPickingIncrementalScoreCalculator::after_list_edit(int listIndex) {
     // Insert the trolley's contribution from its NEW contents.
-    for (int pickIndex : solution_->trolleys[listIndex].pickTaskIndices)
-    {
-        const PickTask &task = solution_->pickTasks[pickIndex];
+    for (int pickIndex : solution_->trolleys[listIndex].pickTaskIndices) {
+        const PickTask& task = solution_->pickTasks[pickIndex];
         volume_[cell(task.orderIndex, listIndex)] += task.volume;
-        if (count_[cell(task.orderIndex, listIndex)]++ == 0)
-        {
+        if (count_[cell(task.orderIndex, listIndex)]++ == 0) {
             ++distinctTrolleys_[task.orderIndex];
             ++splitTotal_;
         }
     }
-    const Trolley &trolley = solution_->trolleys[listIndex];
+    const Trolley& trolley = solution_->trolleys[listIndex];
     const std::int64_t required = requiredBuckets(listIndex);
     required_[listIndex] = required;
-    shortage_[listIndex]
-        = required > trolley.bucketCount ? required - trolley.bucketCount : 0;
+    shortage_[listIndex] = required > trolley.bucketCount ? required - trolley.bucketCount : 0;
     shortageTotal_ += shortage_[listIndex];
     dist_[listIndex] = roundTripDistance(listIndex);
     distTotal_ += dist_[listIndex];
 }
 
-Score OrderPickingIncrementalScoreCalculator::score()
-{
+Score OrderPickingIncrementalScoreCalculator::score() {
     return {-kCapacityWeight * shortageTotal_,
-            static_cast<double>(
-                -(kDistanceWeight * distTotal_ + kSplitWeight * splitTotal_))};
+            static_cast<double>(-(kDistanceWeight * distTotal_ + kSplitWeight * splitTotal_))};
 }
 
-std::int64_t
-OrderPickingIncrementalScoreCalculator::requiredBuckets(int trolley)
-{
+std::int64_t OrderPickingIncrementalScoreCalculator::requiredBuckets(int trolley) {
     ++stampGeneration_;
     std::int64_t buckets = 0;
-    const Trolley &owner = solution_->trolleys[trolley];
-    for (int pickIndex : owner.pickTaskIndices)
-    {
+    const Trolley& owner = solution_->trolleys[trolley];
+    for (int pickIndex : owner.pickTaskIndices) {
         const int order = solution_->pickTasks[pickIndex].orderIndex;
         if (orderStamp_[order] == stampGeneration_)
             continue;  // this order's volume was already counted
         orderStamp_[order] = stampGeneration_;
-        buckets += ScoreCalculator::calculateOrderRequiredBuckets(
-            volume_[cell(order, trolley)], owner.bucketCapacity);
+        buckets += ScoreCalculator::calculateOrderRequiredBuckets(volume_[cell(order, trolley)],
+                                                                  owner.bucketCapacity);
     }
     return buckets;
 }
 
-std::int64_t
-OrderPickingIncrementalScoreCalculator::roundTripDistance(int trolley) const
-{
+std::int64_t OrderPickingIncrementalScoreCalculator::roundTripDistance(int trolley) const {
     return calculateDistanceToTravel(*solution_, solution_->trolleys[trolley]);
 }
 

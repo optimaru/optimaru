@@ -77,21 +77,15 @@ def _build(project_count: int, jobs_per_project: int, seed: int) -> Any:
                         resource = pool[_draw_index(rng, [0.4, 0.6, 0.75, 1.0])]
                         if resource not in used:
                             used.add(resource)
-                            chosen.append(
-                                pjs.ResourceRequirement(resource, rng.randint(1, 5))
-                            )
-                    modes.append(
-                        pjs.ExecutionMode(str(mode_counter), rng.randint(1, 5), chosen)
-                    )
+                            chosen.append(pjs.ResourceRequirement(resource, rng.randint(1, 5)))
+                    modes.append(pjs.ExecutionMode(str(mode_counter), rng.randint(1, 5), chosen))
                     mode_counter += 1
             jobs.append(pjs.Job(str(base + i), p, job_type, modes))
 
         per_project: list[list[int]] = [[] for _ in range(jobs_per_project)]
         per_project[0] = [base + 1, base + 2, base + 3]
         for i in range(1, jobs_per_project):
-            count = min(
-                _draw_index(rng, [0.54, 0.81, 1.0]) + 1, jobs_per_project - i - 1
-            )
+            count = min(_draw_index(rng, [0.54, 0.81, 1.0]) + 1, jobs_per_project - i - 1)
             picked: list[int] = []
             while len(picked) < count:
                 candidate = base + rng.randint(i + 1, jobs_per_project - 1)
@@ -154,6 +148,7 @@ def self_report(problem: Any) -> tuple[float, ...]:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.project_job_scheduling import solve
+
     from optimaru.project_job_scheduling.models import ProjectJobScheduleModel
 
     solved = solve(

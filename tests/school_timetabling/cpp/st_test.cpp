@@ -22,66 +22,44 @@
 
 using namespace st;
 
-namespace
-{
+namespace {
 
 int failures = 0;
 
-void check(bool ok, const std::string &label)
-{
+void check(bool ok, const std::string& label) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-void checkScore(const std::string &label,
-                const Score &actual,
-                long expectedHard,
-                double expectedSoft)
-{
-    const bool ok = (actual.hard == expectedHard
-                     && std::fabs(actual.soft - expectedSoft) < 1e-9);
-    std::printf("  [%s] %-40s got=%s expected=%ldhard/%gsoft\n",
-                ok ? "PASS" : "FAIL",
-                label.c_str(),
-                actual.str().c_str(),
-                expectedHard,
-                expectedSoft);
-    if (!ok)
-        ++failures;
+void checkScore(const std::string& label, const Score& actual, long expectedHard,
+                double expectedSoft) {
+    const bool ok = (actual.hard == expectedHard && std::fabs(actual.soft - expectedSoft) < 1e-9);
+    std::printf("  [%s] %-40s got=%s expected=%ldhard/%gsoft\n", ok ? "PASS" : "FAIL",
+                label.c_str(), actual.str().c_str(), expectedHard, expectedSoft);
+    if (!ok) ++failures;
 }
 
 // Base problem: `days` x `periodsPerDay` timeslots (index = day * periodsPerDay
 // + period - 1) and `roomCount` rooms, no lessons yet.
-Timetable makeBase(int days, int periodsPerDay, int roomCount)
-{
+Timetable makeBase(int days, int periodsPerDay, int roomCount) {
     Timetable t;
-    for (int d = 0; d < days; ++d)
-    {
-        for (int p = 1; p <= periodsPerDay; ++p)
-            t.timeslots.push_back({d, p});
+    for (int d = 0; d < days; ++d) {
+        for (int p = 1; p <= periodsPerDay; ++p) t.timeslots.push_back({d, p});
     }
-    for (int r = 0; r < roomCount; ++r)
-    {
+    for (int r = 0; r < roomCount; ++r) {
         t.rooms.push_back({"R" + std::to_string(r), "regular"});
     }
     return t;
 }
 
-void addLesson(Timetable &t,
-               const std::string &subject,
-               const std::string &teacher,
-               const std::string &group,
-               int timeslotIndex = -1,
-               int roomIndex = -1)
-{
+void addLesson(Timetable& t, const std::string& subject, const std::string& teacher,
+               const std::string& group, int timeslotIndex = -1, int roomIndex = -1) {
     Lesson lesson;
     lesson.id = "L" + std::to_string(t.lessons.size());
     lesson.subject = subject;
     lesson.teacher = teacher;
     lesson.studentGroup = group;
-    lesson.slotRoom
-        = timeslotIndex < 0 ? -1 : t.slotRoomOf(timeslotIndex, roomIndex);
+    lesson.slotRoom = timeslotIndex < 0 ? -1 : t.slotRoomOf(timeslotIndex, roomIndex);
     t.lessons.push_back(lesson);
 }
 
@@ -89,8 +67,7 @@ void addLesson(Timetable &t,
 // (a) Each constraint in isolation, full recompute vs hand-computed scores.
 // Base grid: 2 days x 3 periods (slots 0..5; 0,1,2 = Mon periods 1-3), 3 rooms.
 // -------------------------------------------------------------------------
-void verifyConstraints()
-{
+void verifyConstraints() {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
     // hard 1: roomConflictCost — same timeslot, same room, otherwise unrelated.
@@ -98,8 +75,7 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TB", "G2", 0, 0);
-        checkScore(
-            "roomConflictCost pair", ScoreCalculator::score(t), -1, 0);
+        checkScore("roomConflictCost pair", ScoreCalculator::score(t), -1, 0);
     }
     // hard 1: three lessons in one cell -> C(3,2) = 3 pairs.
     {
@@ -107,10 +83,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TB", "G2", 0, 0);
         addLesson(t, "Science", "TC", "G3", 0, 0);
-        checkScore("roomConflictCost triple",
-                   ScoreCalculator::score(t),
-                   -3,
-                   0);
+        checkScore("roomConflictCost triple", ScoreCalculator::score(t), -3, 0);
     }
     // hard 2: teacherConflictCost — same teacher, same timeslot, different
     // rooms. The pair is also a different-room pair of one teacher:
@@ -119,9 +92,7 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TA", "G2", 0, 1);
-        checkScore("teacherConflictCost (+teacherRoomChangeCost)",
-                   ScoreCalculator::score(t),
-                   -1,
+        checkScore("teacherConflictCost (+teacherRoomChangeCost)", ScoreCalculator::score(t), -1,
                    -1);
     }
     // hard 3: classConflictCost — same group, same timeslot, different
@@ -130,28 +101,21 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "English", "TB", "G1", 0, 1);
-        checkScore(
-            "classConflictCost", ScoreCalculator::score(t), -1, 0);
+        checkScore("classConflictCost", ScoreCalculator::score(t), -1, 0);
     }
     // hard 4: teacherUnavailabilityCost — one lesson on a blocked timeslot.
     {
         Timetable t = makeBase(2, 3, 3);
         t.teacherUnavailable["TA"] = {0};
         addLesson(t, "Math", "TA", "G1", 0, 0);
-        checkScore("teacherUnavailabilityCost hit",
-                   ScoreCalculator::score(t),
-                   -1,
-                   0);
+        checkScore("teacherUnavailabilityCost hit", ScoreCalculator::score(t), -1, 0);
     }
     // hard 4: the same lesson on an open timeslot costs nothing.
     {
         Timetable t = makeBase(2, 3, 3);
         t.teacherUnavailable["TA"] = {0};
         addLesson(t, "Math", "TA", "G1", 3, 0);
-        checkScore("teacherUnavailabilityCost miss",
-                   ScoreCalculator::score(t),
-                   0,
-                   0);
+        checkScore("teacherUnavailabilityCost miss", ScoreCalculator::score(t), 0, 0);
     }
     // soft 5: teacherRoomChangeCost — same teacher on different days, different
     // rooms -> -1; same room -> 0.
@@ -159,31 +123,21 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 3, 1);
-        checkScore("teacherRoomChangeCost differ",
-                   ScoreCalculator::score(t),
-                   0,
-                   -1);
+        checkScore("teacherRoomChangeCost differ", ScoreCalculator::score(t), 0, -1);
     }
     {
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 3, 0);
-        checkScore("teacherRoomChangeCost same",
-                   ScoreCalculator::score(t),
-                   0,
-                   0);
+        checkScore("teacherRoomChangeCost same", ScoreCalculator::score(t), 0, 0);
     }
     // soft 5: rooms [A, A, B] -> C(3,2) - C(2,2) = 2 different-room pairs.
     {
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
-        addLesson(
-            t, "Korean", "TA", "G2", 2, 0);  // periods 1 and 3: not adjacent
+        addLesson(t, "Korean", "TA", "G2", 2, 0);  // periods 1 and 3: not adjacent
         addLesson(t, "English", "TA", "G3", 3, 1);
-        checkScore("teacherRoomChangeCost [A,A,B]",
-                   ScoreCalculator::score(t),
-                   0,
-                   -2);
+        checkScore("teacherRoomChangeCost [A,A,B]", ScoreCalculator::score(t), 0, -2);
     }
     // soft 6: teacherTimeEfficiencyCost (a reward) — same teacher, same day,
     // consecutive periods, same room -> +1 reward.
@@ -191,20 +145,14 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 1, 0);
-        checkScore("teacherTimeEfficiencyCost adjacent",
-                   ScoreCalculator::score(t),
-                   0,
-                   +1);
+        checkScore("teacherTimeEfficiencyCost adjacent", ScoreCalculator::score(t), 0, +1);
     }
     // soft 6: periods 1 and 3 are not consecutive -> no reward.
     {
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Korean", "TA", "G2", 2, 0);
-        checkScore("teacherTimeEfficiencyCost gap",
-                   ScoreCalculator::score(t),
-                   0,
-                   0);
+        checkScore("teacherTimeEfficiencyCost gap", ScoreCalculator::score(t), 0, 0);
     }
     // soft 6: last period of Mon and first period of Tue are NOT consecutive
     // even though their timeslot indices are adjacent.
@@ -212,10 +160,7 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 2, 0);
         addLesson(t, "Korean", "TA", "G2", 3, 0);
-        checkScore("teacherTimeEfficiencyCost day border",
-                   ScoreCalculator::score(t),
-                   0,
-                   0);
+        checkScore("teacherTimeEfficiencyCost day border", ScoreCalculator::score(t), 0, 0);
     }
     // soft 7: classSubjectRepeatCost — same group+subject on consecutive
     // periods (different teachers, to isolate) -> -1.
@@ -223,10 +168,7 @@ void verifyConstraints()
         Timetable t = makeBase(2, 3, 3);
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Math", "TB", "G1", 1, 1);
-        checkScore("classSubjectRepeatCost",
-                   ScoreCalculator::score(t),
-                   0,
-                   -1);
+        checkScore("classSubjectRepeatCost", ScoreCalculator::score(t), 0, -1);
     }
     // soft 6 + 7 together: the usual same-teacher double period.
     // classSubjectRepeatCost -1, teacherTimeEfficiencyCost +1,
@@ -236,9 +178,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         addLesson(t, "Math", "TA", "G1", 1, 0);
         checkScore("double period (teacherTimeEfficiencyCost + classSubjectRepeatCost)",
-                   ScoreCalculator::score(t),
-                   0,
-                   0);
+                   ScoreCalculator::score(t), 0, 0);
     }
     // Unassigned lessons contribute nothing.
     {
@@ -248,10 +188,7 @@ void verifyConstraints()
         addLesson(t, "English", "TA", "G1");  // unassigned
         // Only the assigned lesson counts: teacherUnavailabilityCost -1,
         // nothing else.
-        checkScore("unassigned contributes nothing",
-                   ScoreCalculator::score(t),
-                   -1,
-                   0);
+        checkScore("unassigned contributes nothing", ScoreCalculator::score(t), -1, 0);
     }
     // Pinned lessons are scored like any other lesson.
     {
@@ -259,10 +196,7 @@ void verifyConstraints()
         addLesson(t, "Math", "TA", "G1", 0, 0);
         t.lessons.back().pinned = true;
         addLesson(t, "English", "TB", "G2", 0, 0);
-        checkScore("pinned lesson still scored",
-                   ScoreCalculator::score(t),
-                   -1,
-                   0);
+        checkScore("pinned lesson still scored", ScoreCalculator::score(t), -1, 0);
     }
     std::printf("\n");
 }
@@ -270,19 +204,14 @@ void verifyConstraints()
 // -------------------------------------------------------------------------
 // Random mid-size instance for the incremental cross-check and the solves.
 // -------------------------------------------------------------------------
-Timetable buildRandomInstance(int lessonCount, std::uint64_t seed)
-{
+Timetable buildRandomInstance(int lessonCount, std::uint64_t seed) {
     Timetable t = makeBase(/*days*/ 3, /*periodsPerDay*/ 4, /*rooms*/ 3);
     const std::vector<std::string> teachers = {"TA", "TB", "TC", "TD"};
     const std::vector<std::string> groups = {"GA", "GB", "GC"};
-    const std::vector<std::string> subjects
-        = {"Korean", "Math", "English", "Science", "PE"};
+    const std::vector<std::string> subjects = {"Korean", "Math", "English", "Science", "PE"};
     std::mt19937_64 rng(seed);
-    for (int i = 0; i < lessonCount; ++i)
-    {
-        addLesson(t,
-                  subjects[rng() % subjects.size()],
-                  teachers[rng() % teachers.size()],
+    for (int i = 0; i < lessonCount; ++i) {
+        addLesson(t, subjects[rng() % subjects.size()], teachers[rng() % teachers.size()],
                   groups[rng() % groups.size()]);
     }
     t.teacherUnavailable["TA"] = {0, 5};
@@ -295,8 +224,7 @@ Timetable buildRandomInstance(int lessonCount, std::uint64_t seed)
 // swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the engine.
 // -------------------------------------------------------------------------
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (b) Verifying incremental scoring == full recompute ==\n");
     Timetable t = buildRandomInstance(/*lessonCount*/ 24, /*seed*/ 7);
 
@@ -311,20 +239,14 @@ void verifyIncremental()
 
     int mismatches = 0;
     const int steps = 3000;
-    for (int step = 0; step < steps; ++step)
-    {
-        if (unit(rng) < 0.75)
-        {
+    for (int step = 0; step < steps; ++step) {
+        if (unit(rng) < 0.75) {
             // ChangeMove; 10% of the time to unassigned (-1), like the
             // construction heuristic's starting state.
             const int lesson = static_cast<int>(rng() % lessonCount);
-            const int value = (unit(rng) < 0.10)
-                                  ? -1
-                                  : static_cast<int>(rng() % value_count);
+            const int value = (unit(rng) < 0.10) ? -1 : static_cast<int>(rng() % value_count);
             editor.assign(lesson, value);
-        }
-        else
-        {
+        } else {
             // SwapMove.
             const int a = static_cast<int>(rng() % lessonCount);
             const int b = static_cast<int>(rng() % lessonCount);
@@ -334,27 +256,19 @@ void verifyIncremental()
             editor.assign(b, va);
         }
         // Full recompute on the same assignment.
-        for (int i = 0; i < lessonCount; ++i)
-        {
+        for (int i = 0; i < lessonCount; ++i) {
             shadow.lessons[i].slotRoom = t.lessons[i].slotRoom;
         }
         const Score full = ScoreCalculator::score(shadow);
         const Score incremental = editor.score();
-        if (full.hard != incremental.hard
-            || std::fabs(full.soft - incremental.soft) > 1e-9)
-        {
-            if (++mismatches <= 3)
-            {
-                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                            step,
-                            incremental.str().c_str(),
-                            full.str().c_str());
+        if (full.hard != incremental.hard || std::fabs(full.soft - incremental.soft) > 1e-9) {
+            if (++mismatches <= 3) {
+                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
     }
-    check(mismatches == 0,
-          std::to_string(steps)
-              + " random moves, incremental == full recompute");
+    check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
     std::printf("\n");
 }
 
@@ -363,8 +277,7 @@ void verifyIncremental()
 // against a full reset + recompute after every single move and throws
 // ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (c) FULL_ASSERT solve ==\n");
     Timetable t = buildRandomInstance(/*lessonCount*/ 18, /*seed*/ 11);
 
@@ -378,23 +291,18 @@ void verifyFullAssertSolve()
 
     bool corrupted = false;
     Score final{};
-    try
-    {
+    try {
         Solver solver(config);
         solver.solve(t);
         final = t.score;
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
-    if (!corrupted)
-    {
+    if (!corrupted) {
         const Score recomputed = ScoreCalculator::score(t);
-        check(final.hard == recomputed.hard
-                  && std::fabs(final.soft - recomputed.soft) < 1e-9,
+        check(final.hard == recomputed.hard && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
     }
     std::printf("\n");
@@ -404,8 +312,7 @@ void verifyFullAssertSolve()
 // (d) Pinned lessons keep their assignment through a solve, and every lesson
 // ends up assigned.
 // -------------------------------------------------------------------------
-void verifyPinnedSolve()
-{
+void verifyPinnedSolve() {
     std::printf("== (d) Pinned lesson survives a solve ==\n");
     Timetable t = buildRandomInstance(/*lessonCount*/ 10, /*seed*/ 21);
     const int pinnedValue = t.slotRoomOf(/*timeslot*/ 4, /*room*/ 2);
@@ -418,13 +325,10 @@ void verifyPinnedSolve()
     Solver solver(config);
     solver.solve(t);
 
-    check(t.lessons[0].slotRoom == pinnedValue,
-          "pinned lesson kept its slotRoom");
+    check(t.lessons[0].slotRoom == pinnedValue, "pinned lesson kept its slotRoom");
     bool allAssigned = true;
-    for (const Lesson &lesson : t.lessons)
-    {
-        if (lesson.slotRoom < 0)
-            allAssigned = false;
+    for (const Lesson& lesson : t.lessons) {
+        if (lesson.slotRoom < 0) allAssigned = false;
     }
     check(allAssigned, "every lesson assigned after the solve");
     check(t.score.hard == 0, "small instance reaches 0hard");
@@ -441,23 +345,20 @@ void verifyPinnedSolve()
 // back from a whole-solution snapshot. A pinned lesson is in the instance so
 // the pinned guards on both paths are exercised too.
 // -------------------------------------------------------------------------
-void verifySearchStrategies()
-{
+void verifySearchStrategies() {
     std::printf("== (e) Descent + destroy-repair-as-move (FULL_ASSERT) ==\n");
-    struct Case
-    {
-        const char *label;
+    struct Case {
+        const char* label;
         double descent;
         double drMove;
     };
     const Case cases[] = {
-        {"descent only", 0.05, 0.0},
-        {"destroy-repair as move only", 0.0, 0.15},
-        {"both", 0.05, 0.15},
-        {"both, heavily weighted", 0.30, 0.40},
+            {"descent only", 0.05, 0.0},
+            {"destroy-repair as move only", 0.0, 0.15},
+            {"both", 0.05, 0.15},
+            {"both, heavily weighted", 0.30, 0.40},
     };
-    for (const Case &testCase : cases)
-    {
+    for (const Case& testCase : cases) {
         Timetable t = buildRandomInstance(/*lessonCount*/ 18, /*seed*/ 11);
         const int pinnedValue = t.slotRoomOf(/*timeslot*/ 3, /*room*/ 1);
         t.lessons[0].slotRoom = pinnedValue;
@@ -473,28 +374,21 @@ void verifySearchStrategies()
         config.ruinRecreatePolishSteps = 100;
 
         bool corrupted = false;
-        try
-        {
+        try {
             Solver(config).solve(t);
-        }
-        catch (const optimaru::ScoreMismatchError &e)
-        {
+        } catch (const optimaru::ScoreMismatchError& e) {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
         }
 
         bool allAssigned = true;
-        for (const Lesson &lesson : t.lessons)
-        {
-            if (lesson.slotRoom < 0)
-                allAssigned = false;
+        for (const Lesson& lesson : t.lessons) {
+            if (lesson.slotRoom < 0) allAssigned = false;
         }
         const Score recomputed = ScoreCalculator::score(t);
-        const bool matches
-            = t.score.hard == recomputed.hard
-              && std::fabs(t.score.soft - recomputed.soft) < 1e-9;
-        check(!corrupted && allAssigned && matches
-                  && t.lessons[0].slotRoom == pinnedValue,
+        const bool matches =
+                t.score.hard == recomputed.hard && std::fabs(t.score.soft - recomputed.soft) < 1e-9;
+        check(!corrupted && allAssigned && matches && t.lessons[0].slotRoom == pinnedValue,
               testCase.label);
     }
     std::printf("\n");
@@ -502,16 +396,14 @@ void verifySearchStrategies()
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyConstraints();
     verifyIncremental();
     verifyFullAssertSolve();
     verifyPinnedSolve();
     verifySearchStrategies();
 
-    if (failures == 0)
-    {
+    if (failures == 0) {
         std::printf("All school-timetabling checks PASSED.\n");
         return 0;
     }

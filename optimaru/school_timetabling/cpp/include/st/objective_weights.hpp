@@ -8,8 +8,7 @@
 #include "st/constraints/teacher/teacher_gap_cost.hpp"
 #include "st/constraints/teacher/teacher_workday_cost.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // The soft weights of the MONOLITHIC fast path, one per soft constraint and
 // named like it (canon.ObjectiveWeights(teacher_gap_cost=40) in Python).
@@ -21,8 +20,7 @@ namespace st::canon
 //
 // The plugin path (Solver::solve(table, calculator)) never reads these: the
 // assembly's components carry their own weights.
-struct ObjectiveWeights
-{
+struct ObjectiveWeights {
     double teacherGapCost = TeacherGapCost::kDefaultWeight;
     double teacherWorkdayCost = TeacherWorkdayCost::kDefaultWeight;
     double teacherFreeDayCost = TeacherFreeDayCost::kDefaultWeight;

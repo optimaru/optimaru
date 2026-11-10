@@ -9,8 +9,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace st
-{
+namespace st {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -27,8 +26,7 @@ using Score = optimaru::Score;
 // clock times. day 0 = Monday; period is 1-based. Two periods are consecutive
 // when they share a day and differ by exactly 1.
 // (day, period) pairs are assumed unique within a Timetable.
-struct Timeslot
-{
+struct Timeslot {
     int day = 0;     // 0=Mon .. 4=Fri (5=Sat allowed)
     int period = 1;  // 1-based period of the day
 };
@@ -38,8 +36,7 @@ struct Timeslot
 // ---------------------------------------------------------------------------
 // `type` is informational only (regular/science lab/gym/...):
 // no hard constraint restricts which lessons a room may host.
-struct Room
-{
+struct Room {
     std::string name;
     std::string type;
 };
@@ -53,8 +50,7 @@ struct Room
 //   slotRoom = timeslotIndex * roomCount + roomIndex
 // -1 means unassigned (no timeslot and no room). Decoding helpers live
 // on Timetable, which knows roomCount.
-struct Lesson
-{
+struct Lesson {
     std::string id;
     std::string subject;
     std::string teacher;
@@ -77,8 +73,7 @@ struct Lesson
 // ---------------------------------------------------------------------------
 // Timetable  (solution)
 // ---------------------------------------------------------------------------
-struct Timetable
-{
+struct Timetable {
     std::vector<Timeslot> timeslots;
     std::vector<Room> rooms;
     std::vector<Lesson> lessons;
@@ -109,8 +104,7 @@ struct Timetable
     int timeslotCount() const { return static_cast<int>(timeslots.size()); }
     int roomCount() const { return static_cast<int>(rooms.size()); }
     int slotRoomCount() const { return timeslotCount() * roomCount(); }
-    int slotRoomOf(int timeslotIndex, int roomIndex) const
-    {
+    int slotRoomOf(int timeslotIndex, int roomIndex) const {
         return timeslotIndex * roomCount() + roomIndex;
     }
     int timeslotIndexOf(int slotRoom) const { return slotRoom / roomCount(); }
@@ -123,25 +117,18 @@ struct Timetable
 // SolutionTraits specialization: entities are lessons, the decision variable
 // is Lesson::slotRoom, the value range is the (timeslot x room) grid.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<st::Timetable>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const st::Timetable &t)
-    {
-        return static_cast<int>(t.lessons.size());
-    }
-    static int value_count(const st::Timetable &t) { return t.slotRoomCount(); }
-    static int value_of(const st::Timetable &t, int lessonIndex)
-    {
+template <>
+struct optimaru::SolutionTraits<st::Timetable> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const st::Timetable& t) { return static_cast<int>(t.lessons.size()); }
+    static int value_count(const st::Timetable& t) { return t.slotRoomCount(); }
+    static int value_of(const st::Timetable& t, int lessonIndex) {
         return t.lessons[lessonIndex].slotRoom;
     }
-    static void assign(st::Timetable &t, int lessonIndex, int slotRoom)
-    {
+    static void assign(st::Timetable& t, int lessonIndex, int slotRoom) {
         t.lessons[lessonIndex].slotRoom = slotRoom;
     }
-    static bool is_pinned(const st::Timetable &t, int lessonIndex)
-    {
+    static bool is_pinned(const st::Timetable& t, int lessonIndex) {
         return t.lessons[lessonIndex].pinned;
     }
 };

@@ -32,7 +32,7 @@ struct ShiftCountImbalanceCost final : EsGlobalConstraint {
         }
     }
     void on_unit_changed(const EmployeeSchedule& /*s*/, int unit,
-                       const std::vector<int>& members) override {
+                         const std::vector<int>& members) override {
         long oldCount = counts_[unit];
         long newCount = static_cast<long>(members.size());
         sum_ += newCount - oldCount;
@@ -40,8 +40,8 @@ struct ShiftCountImbalanceCost final : EsGlobalConstraint {
         counts_[unit] = newCount;
     }
     bool supports_member_change() const override { return true; }
-    void on_member_changed(const EmployeeSchedule& s, int unit,
-                         const std::vector<int>& members, int, bool) override {
+    void on_member_changed(const EmployeeSchedule& s, int unit, const std::vector<int>& members,
+                           int, bool) override {
         on_unit_changed(s, unit, members);
     }
     double cost() const override {

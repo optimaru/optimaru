@@ -14,25 +14,22 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 
-namespace fl
-{
+namespace fl {
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
 // wires up the incremental score calculator and delegates solving to
 // optimaru::Solver<FacilityLocationProblem>, with the engine's adaptive
 // ruin-and-recreate (ALNS) enabled on top of the built-in change/swap moves.
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires (termination is by time_limit).
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<double>::infinity()};
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;
@@ -52,8 +49,7 @@ public:
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
         // slower).
-        optimaru::ScoreChecks score_checks
-            = optimaru::ScoreChecks::Off;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS). Reassigning one consumer at a time cannot close a
@@ -121,7 +117,7 @@ public:
         // facilities that are already open.
         double closeFacilityMigrateProbability = 0.25;
 
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
@@ -134,7 +130,7 @@ public:
 
     // Solves in place: mutates consumers[*].facility and stores the best
     // score found in problem.score.
-    void solve(FacilityLocationProblem &problem);
+    void solve(FacilityLocationProblem& problem);
 
     // Solves with a caller-assembled plugin calculator (see
     // fl/constraints.hpp): pick components and weights, then pass the
@@ -145,9 +141,8 @@ public:
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
     // so parallelSolverCount is ignored.
-    void solve(FacilityLocationProblem &problem,
-               optimaru::DecomposedObjective<FacilityLocationProblem>
-                   &calculator);
+    void solve(FacilityLocationProblem& problem,
+               optimaru::DecomposedObjective<FacilityLocationProblem>& calculator);
 
 private:
     Config config_;

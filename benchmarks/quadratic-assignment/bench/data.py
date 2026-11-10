@@ -9,16 +9,10 @@ from pathlib import Path
 
 from optimaru.quadratic_assignment import QuadraticAssignmentProblemModel
 
-QAPLIB_DATA_URL = (
-    "https://coral.ise.lehigh.edu/wp-content/uploads/2014/07/qapdata.tar.gz"
-)
+QAPLIB_DATA_URL = "https://coral.ise.lehigh.edu/wp-content/uploads/2014/07/qapdata.tar.gz"
 QAPLIB_DATA_SHA256 = "c6bf0e277156d097df21124f53ca5a5d0fa5344481ee401e13acb67694e190b3"
-QAPLIB_SOLUTIONS_URL = (
-    "https://coral.ise.lehigh.edu/wp-content/uploads/2014/07/qapsoln.tar.gz"
-)
-QAPLIB_SOLUTIONS_SHA256 = (
-    "002243dea9452000ec7ee5e43bd0aa651a639eb61039c4f35679531e67d71744"
-)
+QAPLIB_SOLUTIONS_URL = "https://coral.ise.lehigh.edu/wp-content/uploads/2014/07/qapsoln.tar.gz"
+QAPLIB_SOLUTIONS_SHA256 = "002243dea9452000ec7ee5e43bd0aa651a639eb61039c4f35679531e67d71744"
 
 
 # The benchmark covers every QAPLIB instance with 30 to 50 facilities (33 of
@@ -44,30 +38,21 @@ class QapReference:
 
 def _download(url: str, destination: Path, sha256: str) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if (
-        destination.exists()
-        and hashlib.sha256(destination.read_bytes()).hexdigest() == sha256
-    ):
+    if destination.exists() and hashlib.sha256(destination.read_bytes()).hexdigest() == sha256:
         return destination
-    request = urllib.request.Request(
-        url, headers={"User-Agent": "optimaru-benchmark/1.0"}
-    )
+    request = urllib.request.Request(url, headers={"User-Agent": "optimaru-benchmark/1.0"})
     with urllib.request.urlopen(request, timeout=120) as response:
         payload = response.read()
     actual = hashlib.sha256(payload).hexdigest()
     if actual != sha256:
-        raise ValueError(
-            f"checksum mismatch for {url}: expected {sha256}, got {actual}"
-        )
+        raise ValueError(f"checksum mismatch for {url}: expected {sha256}, got {actual}")
     destination.write_bytes(payload)
     return destination
 
 
 def download_archives(cache_dir: Path) -> tuple[Path, Path]:
     return (
-        _download(
-            QAPLIB_DATA_URL, cache_dir / "qaplib-data.tar.gz", QAPLIB_DATA_SHA256
-        ),
+        _download(QAPLIB_DATA_URL, cache_dir / "qaplib-data.tar.gz", QAPLIB_DATA_SHA256),
         _download(
             QAPLIB_SOLUTIONS_URL,
             cache_dir / "qaplib-solutions.tar.gz",
@@ -83,17 +68,11 @@ def parse_qap_data(payload: str) -> QuadraticAssignmentProblemModel:
     size = values[0]
     expected = 1 + 2 * size * size
     if len(values) != expected:
-        raise ValueError(
-            f"expected {expected} integers for a {size}x{size} QAP, got {len(values)}"
-        )
+        raise ValueError(f"expected {expected} integers for a {size}x{size} QAP, got {len(values)}")
     cursor = 1
-    distances = [
-        values[cursor + row * size : cursor + (row + 1) * size] for row in range(size)
-    ]
+    distances = [values[cursor + row * size : cursor + (row + 1) * size] for row in range(size)]
     cursor += size * size
-    flows = [
-        values[cursor + row * size : cursor + (row + 1) * size] for row in range(size)
-    ]
+    flows = [values[cursor + row * size : cursor + (row + 1) * size] for row in range(size)]
     return QuadraticAssignmentProblemModel(
         facilities=[f"facility-{index + 1}" for index in range(size)],
         locations=[f"location-{index + 1}" for index in range(size)],
@@ -128,9 +107,7 @@ def load_suite(
                 continue
             extracted = archive.extractfile(member)
             if extracted is not None:
-                references[Path(member.name).stem.lower()] = parse_qap_solution(
-                    extracted.read().decode("ascii")
-                )
+                references[Path(member.name).stem.lower()] = parse_qap_solution(extracted.read().decode("ascii"))
 
     payloads: dict[str, str] = {}
     with tarfile.open(data_archive, "r:gz") as archive:
@@ -146,16 +123,10 @@ def load_suite(
     missing = sorted(set(SUITE) - payloads.keys())
     if missing:
         raise ValueError(f"QAPLIB archive lacks {', '.join(missing)}")
-    return {
-        instance: (parse_qap_data(payloads[instance]), references.get(instance))
-        for instance in SUITE
-    }
+    return {instance: (parse_qap_data(payloads[instance]), references.get(instance)) for instance in SUITE}
 
 
-def apply_permutation(
-    problem: QuadraticAssignmentProblemModel, permutation: tuple[int, ...]
-) -> None:
+def apply_permutation(problem: QuadraticAssignmentProblemModel, permutation: tuple[int, ...]) -> None:
     problem.assignment = {
-        location: problem.facilities[permutation[index]]
-        for index, location in enumerate(problem.locations)
+        location: problem.facilities[permutation[index]] for index, location in enumerate(problem.locations)
     }

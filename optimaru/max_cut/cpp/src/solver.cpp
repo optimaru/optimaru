@@ -14,14 +14,11 @@
 #include "optimaru/settings.hpp"
 #include "optimaru/worker_threads.hpp"
 
-namespace mc
-{
+namespace mc {
 
-namespace
-{
+namespace {
 
-void requireRewards(const Solver::Config &config)
-{
+void requireRewards(const Solver::Config& config) {
     if (config.ruinRecreateRewards.size() != 4)
         throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
 }
@@ -30,8 +27,7 @@ void requireRewards(const Solver::Config &config)
 // and every parallel start: late-acceptance local search over the built-in
 // assignment moves, plus the ALNS kicks. The engine's construction heuristic finds
 // nothing left to place: the start partition assigned every vertex.
-optimaru::Settings engineConfigOf(const Solver::Config &config, const MaxCutProblem &problem)
-{
+optimaru::Settings engineConfigOf(const Solver::Config& config, const MaxCutProblem& problem) {
     optimaru::Settings engineConfig;
     engineConfig.seed = config.seed;
     engineConfig.score_checks = config.score_checks;
@@ -41,15 +37,15 @@ optimaru::Settings engineConfigOf(const Solver::Config &config, const MaxCutProb
     engineConfig.limits.stall_time_limit = config.stall_time_limit;
     engineConfig.limits.step_limit = config.step_limit;
     engineConfig.limits.stall_step_limit = config.stall_step_limit;
-    engineConfig.search.acceptance.history_length
-        = config.history_length != 0
-              ? config.history_length
-              : std::clamp<std::size_t>(8 * problem.vertexIds.size(), 400, 3200);
+    engineConfig.search.acceptance.history_length =
+            config.history_length != 0
+                    ? config.history_length
+                    : std::clamp<std::size_t>(8 * problem.vertexIds.size(), 400, 3200);
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
     engineConfig.search.descent_weight = config.descent_weight;
 
-    auto &lns = engineConfig.search.ruin_recreate;
+    auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
     lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
     lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
@@ -61,8 +57,7 @@ optimaru::Settings engineConfigOf(const Solver::Config &config, const MaxCutProb
     lns.as_move_weight = config.ruinRecreateAsMoveWeight;
     lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
 
-    if (problem.exactSize())
-    {
+    if (problem.exactSize()) {
         // Swaps only: every other move (a flip, a ruin's unassign-and-recreate,
         // a descent's change) could change a side size.
         engineConfig.search.moves.change_weight = 0.0;
@@ -75,13 +70,10 @@ optimaru::Settings engineConfigOf(const Solver::Config &config, const MaxCutProb
 }
 
 // Validates, builds the start partition and consumes the seed.
-void construct(MaxCutProblem &problem)
-{
+void construct(MaxCutProblem& problem) {
     ScoreCalculator::prepare(problem);  // validates the facts and the partition
-    if (!problem.warmStart)
-        std::fill(problem.side.begin(), problem.side.end(), kUnassigned);
-    for (int v = 0; v < problem.vertexCount(); ++v)
-    {
+    if (!problem.warmStart) std::fill(problem.side.begin(), problem.side.end(), kUnassigned);
+    for (int v = 0; v < problem.vertexCount(); ++v) {
         if (problem.side[v] == kUnassigned)
             problem.side[v] = problem.is_pinned(v) ? problem.fixedSide[v] : v % kSideCount;
     }
@@ -91,10 +83,8 @@ void construct(MaxCutProblem &problem)
 // Whether the search has anything to do: an empty graph has no move, and in
 // exact-size mode a swap needs two free vertices (the engine's fallback
 // for fewer entities is a change move, which would break the size).
-bool searchable(const MaxCutProblem &problem)
-{
-    if (problem.vertexCount() == 0)
-        return false;
+bool searchable(const MaxCutProblem& problem) {
+    if (problem.vertexCount() == 0) return false;
     return !problem.exactSize() || problem.movableCount() >= 2;
 }
 
@@ -106,8 +96,7 @@ bool searchable(const MaxCutProblem &problem)
 // ScoreMismatchError or a bad_alloc in one worker stops the others early
 // and is rethrown here once every worker has joined, instead of terminating
 // the process.
-void searchInParallel(const Solver::Config &config, MaxCutProblem &problem, int starts)
-{
+void searchInParallel(const Solver::Config& config, MaxCutProblem& problem, int starts) {
     std::vector<MaxCutProblem> copies(starts, problem);
     std::vector<optimaru::Score> scores(starts);
     std::vector<std::exception_ptr> failures(starts);
@@ -115,68 +104,52 @@ void searchInParallel(const Solver::Config &config, MaxCutProblem &problem, int 
     // stop all of them (request_stop() is thread-safe and sticky).
     std::vector<std::unique_ptr<optimaru::Solver<MaxCutProblem>>> engines;
     engines.reserve(starts);
-    for (int i = 0; i < starts; ++i)
-    {
+    for (int i = 0; i < starts; ++i) {
         optimaru::Settings engineConfig = engineConfigOf(config, problem);
         engineConfig.seed += static_cast<std::uint64_t>(i);
-        if (i != 0)
-            engineConfig.on_new_best = nullptr;
-        engines.push_back(std::make_unique<optimaru::Solver<MaxCutProblem>>(std::move(engineConfig)));
+        if (i != 0) engineConfig.on_new_best = nullptr;
+        engines.push_back(
+                std::make_unique<optimaru::Solver<MaxCutProblem>>(std::move(engineConfig)));
     }
     // A worker that cannot be started (std::system_error) stops and joins the
     // ones already running before the error is rethrown here.
-    const auto stopAll = [&engines]
-    {
-        for (const auto &engine : engines)
-            engine->request_stop();
+    const auto stopAll = [&engines] {
+        for (const auto& engine : engines) engine->request_stop();
     };
     optimaru::run_worker_threads(
-        starts,
-        [&copies, &scores, &failures, &engines, &stopAll](int i)
-        {
-            try
-            {
-                MaxCutIncrementalScoreCalculator calculator;
-                scores[i] = engines[i]->solve(copies[i], calculator);
-            }
-            catch (...)
-            {
-                failures[i] = std::current_exception();
-                stopAll();
-            }
-        },
-        stopAll);
-    for (const std::exception_ptr &failure : failures)
-    {
-        if (failure)
-            std::rethrow_exception(failure);
+            starts,
+            [&copies, &scores, &failures, &engines, &stopAll](int i) {
+                try {
+                    MaxCutIncrementalScoreCalculator calculator;
+                    scores[i] = engines[i]->solve(copies[i], calculator);
+                } catch (...) {
+                    failures[i] = std::current_exception();
+                    stopAll();
+                }
+            },
+            stopAll);
+    for (const std::exception_ptr& failure : failures) {
+        if (failure) std::rethrow_exception(failure);
     }
     int best = 0;
-    for (int i = 1; i < starts; ++i)
-    {
-        if (scores[i] > scores[best])
-            best = i;
+    for (int i = 1; i < starts; ++i) {
+        if (scores[i] > scores[best]) best = i;
     }
     problem = std::move(copies[best]);
 }
 
 }  // namespace
 
-void Solver::solve(MaxCutProblem &problem)
-{
+void Solver::solve(MaxCutProblem& problem) {
     requireRewards(config_);
     construct(problem);
-    if (searchable(problem))
-    {
+    if (searchable(problem)) {
         const int starts = std::max(1, config_.parallelSolverCount);
-        if (starts == 1)
-        {
+        if (starts == 1) {
             MaxCutIncrementalScoreCalculator calculator;
             optimaru::Solver<MaxCutProblem> engine(engineConfigOf(config_, problem));
             engine.solve(problem, calculator);
-        }
-        else
-        {
+        } else {
             searchInParallel(config_, problem, starts);
         }
     }
@@ -184,12 +157,11 @@ void Solver::solve(MaxCutProblem &problem)
     ScoreCalculator::score(problem);
 }
 
-void Solver::solve(MaxCutProblem &problem, optimaru::DecomposedObjective<MaxCutProblem> &calculator)
-{
+void Solver::solve(MaxCutProblem& problem,
+                   optimaru::DecomposedObjective<MaxCutProblem>& calculator) {
     requireRewards(config_);
     construct(problem);
-    if (searchable(problem))
-    {
+    if (searchable(problem)) {
         // Single-start: the caller-owned calculator cannot be cloned.
         optimaru::Solver<MaxCutProblem> engine(engineConfigOf(config_, problem));
         engine.solve(problem, calculator);

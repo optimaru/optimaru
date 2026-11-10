@@ -24,8 +24,7 @@
 #include "sls/constraints/team_conflict_cost.hpp"
 #include "sls/constraints/workday_classic_matches_cost.hpp"
 
-namespace sls
-{
+namespace sls {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -51,8 +50,7 @@ namespace sls
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<TeamConflictCost>();
     assembly.emplace<ConsecutiveHomeMatchesCost>();
@@ -67,8 +65,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

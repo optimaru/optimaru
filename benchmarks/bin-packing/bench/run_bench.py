@@ -6,9 +6,8 @@ import math
 import time
 from pathlib import Path
 
-from optimaru import bin_packing
-
 from bench.data import load_suite
+from optimaru import bin_packing
 
 DEFAULT_INSTANCES = ("t60_00", "u120_04", "u250_03")
 
@@ -30,15 +29,14 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
         raise AssertionError("engine returned an overloaded bin")
     bins = int(costs["used_bins_cost"]["costs"][0])
     if bins != core.bins_used():
-        raise AssertionError(
-            f"engine self-report mismatch: {core.bins_used()} != {bins}"
-        )
+        raise AssertionError(f"engine self-report mismatch: {core.bins_used()} != {bins}")
     return {"solver": "engine", "bins": bins, "seconds": elapsed}
 
 
 def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
-    import bin_packing_cpsat  # noqa: F401 - points external_solver at the checkout engine
     from external_solver import bin_packing as cpsat
+
+    import bin_packing_cpsat  # noqa: F401 - points external_solver at the checkout engine
 
     started = time.perf_counter()
     try:
@@ -61,9 +59,7 @@ def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
         raise AssertionError("CP-SAT returned an overloaded bin")
     bins = int(costs["used_bins_cost"]["costs"][0])
     if bins != solved.bins_used:
-        raise AssertionError(
-            f"CP-SAT self-report mismatch: {solved.bins_used} != {bins}"
-        )
+        raise AssertionError(f"CP-SAT self-report mismatch: {solved.bins_used} != {bins}")
     return {"solver": "cp-sat", "bins": bins, "seconds": time.perf_counter() - started}
 
 
@@ -81,9 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--exact-max-size", type=int, default=120)
-    parser.add_argument(
-        "--cache-dir", type=Path, default=Path(__file__).resolve().parent / ".cache"
-    )
+    parser.add_argument("--cache-dir", type=Path, default=Path(__file__).resolve().parent / ".cache")
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
 
@@ -100,21 +94,13 @@ def main(argv: list[str] | None = None) -> int:
         lower_bound = _lower_bound(source)
         runs = [_run_engine(source.model_copy(deep=True), args.seconds, args.seed)]
         if args.exact_max_size and len(source.items) <= args.exact_max_size:
-            runs.append(
-                _run_cpsat(
-                    source.model_copy(deep=True), args.seconds, args.seed, args.workers
-                )
-            )
+            runs.append(_run_cpsat(source.model_copy(deep=True), args.seconds, args.seed, args.workers))
         for run in runs:
             run["gap_to_capacity_lower_bound_percent"] = (
-                None
-                if run["bins"] is None
-                else (run["bins"] - lower_bound) / lower_bound * 100.0
+                None if run["bins"] is None else (run["bins"] - lower_bound) / lower_bound * 100.0
             )
             run["gap_to_best_known_percent"] = (
-                None
-                if run["bins"] is None
-                else (run["bins"] - best_known) / best_known * 100.0
+                None if run["bins"] is None else (run["bins"] - best_known) / best_known * 100.0
             )
         results.append(
             {
@@ -129,9 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.as_json:
         print(json.dumps(results, indent=2))
         return 0
-    print(
-        f"Falkenauer u/t instances (OR-Library) — {args.seconds:g}s per solver, seed {args.seed}"
-    )
+    print(f"Falkenauer u/t instances (OR-Library) — {args.seconds:g}s per solver, seed {args.seed}")
     print(
         f"{'instance':<12} {'items':>6} {'solver':<9} {'bins':>7} {'weight LB':>10} {'LB gap':>9} {'best':>6} {'BKS gap':>9} {'seconds':>9}"
     )

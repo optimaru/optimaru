@@ -11,9 +11,7 @@ from optimaru.vehicle_routing import models
 
 def test_request_solver_parameters_are_applied():
     config = vrp.SolverConfig()
-    models._apply_solver_parameters(
-        config, {"late_acceptance_size": 7, "ruin_recreate": False}
-    )
+    models._apply_solver_parameters(config, {"late_acceptance_size": 7, "ruin_recreate": False})
     assert config.late_acceptance_size == 7
     assert config.ruin_recreate is False
     with pytest.raises(ValueError, match="unknown solver parameter"):
@@ -48,9 +46,7 @@ def small_plan():
     visits = []
     for i, (lat, lon) in enumerate(visit_coords):
         locations.append(vrp.Location(lat, lon))
-        visits.append(
-            vrp.Visit(f"C{i}", f"Customer {i}", 2 + i, 2, 8 * 3600, 20 * 3600, 600)
-        )
+        visits.append(vrp.Visit(f"C{i}", f"Customer {i}", 2 + i, 2, 8 * 3600, 20 * 3600, 600))
     vehicles = [
         vrp.Vehicle("V1", 6, 0, departure_time=7 * 3600),
         vrp.Vehicle("V2", 6, 1, departure_time=7 * 3600),
@@ -142,6 +138,7 @@ def test_pydantic_models_round_trip():
 
 def test_duplicate_ids_rejected():
     from optimaru.vehicle_routing import models
+
     with pytest.raises(ValueError, match="duplicate"):
         models.RoutingInput(
             vehicles=[models.VehicleModel(id="V", capacity=1, depot=(0, 0))] * 2,

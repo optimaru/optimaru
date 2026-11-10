@@ -19,12 +19,13 @@ struct TravelTimeCost final : detail::SummedUnitConstraint {
         : SummedUnitConstraint("travelTimeCost", weight, kDefaultLevel) {}
 
     bool piecewise_cost(const VehicleRoutePlan& plan, int unit, const optimaru::ListPiece* pieces,
-                       int count, double& out) const override {
+                        int count, double& out) const override {
         if (detail::isPool(plan, unit)) {
             out = 0.0;
             return true;
         }
-        const detail::RouteSumsContext::PieceWalk walk = sums_->walk(unit, pieces, count, /*withMinEnd=*/false);
+        const detail::RouteSumsContext::PieceWalk walk =
+                sums_->walk(unit, pieces, count, /*withMinEnd=*/false);
         if (!walk.any) {
             out = 0.0;
             return true;
@@ -37,8 +38,7 @@ struct TravelTimeCost final : detail::SummedUnitConstraint {
     double cost(const VehicleRoutePlan& plan, int unit,
                 const std::vector<int>& members) const override {
         if (detail::isPool(plan, unit)) return 0.0;  // nobody drives the pool
-        return static_cast<double>(
-                detail::walkRoute(plan, unit, members, [](int, Seconds) {}));
+        return static_cast<double>(detail::walkRoute(plan, unit, members, [](int, Seconds) {}));
     }
 };
 

@@ -9,8 +9,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace mc
-{
+namespace mc {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
@@ -84,43 +83,36 @@ using ConstraintAssembly = optimaru::ConstraintAssembly<MaxCutProblem>;
 using McUnitConstraint = optimaru::UnitConstraint<MaxCutProblem>;
 using McGlobalConstraint = optimaru::GlobalConstraint<MaxCutProblem>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const MaxCutProblem &problem)
-{
-    if (!problem.prepared)
-    {
-        throw std::logic_error("mc constraints require "
-                               "ScoreCalculator::prepare(problem) first");
+inline void requirePrepared(const MaxCutProblem& problem) {
+    if (!problem.prepared) {
+        throw std::logic_error(
+                "mc constraints require "
+                "ScoreCalculator::prepare(problem) first");
     }
 }
 
 // Membership flags of one unit's members (a unit cost is a pure function of
 // (unit, members); cost() is only called at reset and in tests, so the O(V)
 // scratch is cheap).
-inline std::vector<char> memberFlags(const MaxCutProblem &problem, const std::vector<int> &members)
-{
+inline std::vector<char> memberFlags(const MaxCutProblem& problem,
+                                     const std::vector<int>& members) {
     std::vector<char> in(problem.vertexIds.size(), 0);
-    for (int v : members)
-        in[v] = 1;
+    for (int v : members) in[v] = 1;
     return in;
 }
 
 // The common shape of the two globals: driven by joins / leaves.
-struct MemberChangeConstraint : McGlobalConstraint
-{
+struct MemberChangeConstraint : McGlobalConstraint {
     using McGlobalConstraint::McGlobalConstraint;
 
     bool supports_member_change() const final { return true; }
 
     // Never called (supports_member_change): every change arrives as a
     // join/leave through on_member_changed.
-    void on_unit_changed(const MaxCutProblem & /*problem*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) final
-    {
-    }
+    void on_unit_changed(const MaxCutProblem& /*problem*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) final {}
 };
 
 }  // namespace detail

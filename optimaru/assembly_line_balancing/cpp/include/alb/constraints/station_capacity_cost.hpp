@@ -6,8 +6,7 @@
 
 #include "alb/constraints/common.hpp"
 
-namespace alb
-{
+namespace alb {
 
 // Hard, weight 1: stationCapacityCost — processing time a station carries
 // beyond the cycle time. Raw cost per station = max(0, summed duration of its
@@ -16,26 +15,19 @@ namespace alb
 // No delta contract: max(0, load - cycle) is not a sum of per-member terms
 // (the clamp makes it non-additive), so the marginal cost of one task depends
 // on the whole station. cost() is O(members) either way.
-struct StationCapacityCost final : AlbUnitConstraint
-{
+struct StationCapacityCost final : AlbUnitConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit StationCapacityCost(double weight = kDefaultWeight)
-        : AlbUnitConstraint("stationCapacityCost", weight, kDefaultLevel)
-    {
-    }
-    void on_reset(const AssemblyLineBalancingProblem &problem) override
-    {
+        : AlbUnitConstraint("stationCapacityCost", weight, kDefaultLevel) {}
+    void on_reset(const AssemblyLineBalancingProblem& problem) override {
         detail::requirePrepared(problem);
     }
-    double cost(const AssemblyLineBalancingProblem &problem,
-                int /*unit*/,
-                const std::vector<int> &members) const override
-    {
+    double cost(const AssemblyLineBalancingProblem& problem, int /*unit*/,
+                const std::vector<int>& members) const override {
         std::int64_t load = 0;
-        for (int task : members)
-            load += problem.tasks[task].duration;
+        for (int task : members) load += problem.tasks[task].duration;
         const std::int64_t over = load - problem.cycleTime;
         return over > 0 ? static_cast<double>(over) : 0.0;
     }

@@ -7,8 +7,7 @@
 #include "cs/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace cs
-{
+namespace cs {
 
 // The conference-scheduling implementation of the engine's
 // optimaru::Objective: one hand-written incremental calculator for all
@@ -49,10 +48,9 @@ namespace cs
 // kDefaultWeight (cs/constraints/*_cost.hpp), read once at the top of
 // incremental_calculator.cpp: this is the default assembly, hand-tuned.
 class ConferenceSchedulingIncrementalScoreCalculator final
-    : public optimaru::Objective<ConferenceSchedule>
-{
+    : public optimaru::Objective<ConferenceSchedule> {
 public:
-    void rebuild(ConferenceSchedule &solution) override;
+    void rebuild(ConferenceSchedule& solution) override;
     void before_assign(int talkIndex) override;
     void after_assign(int talkIndex) override;
     Score score() override;
@@ -69,7 +67,7 @@ public:
     bool isHotTalk(int talkIndex) const;
 
 private:
-    ConferenceSchedule *schedule_ = nullptr;
+    ConferenceSchedule* schedule_ = nullptr;
     int slotCount_ = 0;
     int roomCount_ = 0;
     int talkCount_ = 0;
@@ -89,13 +87,13 @@ private:
     // Dense per-family tag indices (the shared interned pool remapped to
     // 0..familySize-1 so per-slot count tables stay small).
     // ------------------------------------------------------------------
-    int themeDim_ = 1;    // T
-    int sectorDim_ = 1;   // Sec
-    int audDim_ = 1;      // A
-    int contentDim_ = 1;  // C
-    int mutexDim_ = 1;    // M
-    int levelDim_ = 1;    // L (distinct audienceLevels, ascending)
-    int langDim_ = 1;     // G
+    int themeDim_ = 1;                        // T
+    int sectorDim_ = 1;                       // Sec
+    int audDim_ = 1;                          // A
+    int contentDim_ = 1;                      // C
+    int mutexDim_ = 1;                        // M
+    int levelDim_ = 1;                        // L (distinct audienceLevels, ascending)
+    int langDim_ = 1;                         // G
     std::vector<std::vector<int>> themeD_;    // per talk, dense theme ids
     std::vector<std::vector<int>> sectorD_;   // per talk
     std::vector<std::vector<int>> audD_;      // per talk
@@ -161,11 +159,8 @@ private:
     // Total (hard, soft) pairwise contribution of talk i at (slot, room)
     // against every OTHER assigned talk, read from the aggregates (which
     // must not contain i at call time).
-    void pairTotals(int talkIndex,
-                    int slot,
-                    int room,
-                    std::int64_t &hardUnits,
-                    std::int64_t &softUnits) const;
+    void pairTotals(int talkIndex, int slot, int room, std::int64_t& hardUnits,
+                    std::int64_t& softUnits) const;
     // Adds (sign=+1) / removes (sign=-1) talk i at (slot, room) to/from the
     // aggregates.
     void applyAggregates(int talkIndex, int slot, int room, int sign);
@@ -178,7 +173,7 @@ private:
     // Fenwick helpers over the flattened per-class trees.
     void favAdd(int capClass, int rank, int cnt, std::int64_t dur);
     // Sum of counts / durations with rank <= the given rank.
-    void favPrefix(int capClass, int rank, int &cnt, std::int64_t &dur) const;
+    void favPrefix(int capClass, int rank, int& cnt, std::int64_t& dur) const;
 };
 
 }  // namespace cs

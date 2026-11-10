@@ -24,7 +24,7 @@ public:
     const char* name() const override { return "randomRuin"; }
 
     std::vector<int> select_ruin_set(OperatorContext<Solution>& ctx, int ruin_count,
-                                   std::mt19937_64& rng) override {
+                                     std::mt19937_64& rng) override {
         const int n = ruin_candidate_count(ctx);
         std::vector<int> ids(n);
         for (int i = 0; i < n; ++i) ids[i] = i;

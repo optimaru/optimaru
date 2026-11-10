@@ -12,74 +12,56 @@
 
 using namespace ta;
 
-namespace
-{
+namespace {
 
-void printSummary(const TaskAssigningSolution &solution)
-{
-    for (const Employee &employee : solution.employees)
-    {
+void printSummary(const TaskAssigningSolution& solution) {
+    for (const Employee& employee : solution.employees) {
         Minutes endTime = 0;
-        std::printf("  %-5s [%zu tasks]",
-                    employee.fullName.c_str(),
-                    employee.tasks.size());
-        for (int taskIndex : employee.tasks)
-        {
-            const Task &task = solution.tasks[taskIndex];
-            const Minutes end
-                = task.startTime + solution.taskDuration(task, task.employee);
-            std::printf("  %s-%d(%lld-%lld)",
-                        solution.taskTypes[task.taskType].code.c_str(),
-                        task.indexInTaskType,
-                        static_cast<long long>(task.startTime),
+        std::printf("  %-5s [%zu tasks]", employee.fullName.c_str(), employee.tasks.size());
+        for (int taskIndex : employee.tasks) {
+            const Task& task = solution.tasks[taskIndex];
+            const Minutes end = task.startTime + solution.taskDuration(task, task.employee);
+            std::printf("  %s-%d(%lld-%lld)", solution.taskTypes[task.taskType].code.c_str(),
+                        task.indexInTaskType, static_cast<long long>(task.startTime),
                         static_cast<long long>(end));
             endTime = end;
         }
         std::printf("  -> end %lld\n", static_cast<long long>(endTime));
     }
     int unassigned = 0;
-    for (const Task &task : solution.tasks)
-    {
-        if (task.employee < 0)
-            ++unassigned;
+    for (const Task& task : solution.tasks) {
+        if (task.employee < 0) ++unassigned;
     }
     std::printf("  unassigned tasks: %d\n\n", unassigned);
 }
 
 }  // namespace
 
-int main(int argc, char **argv)
-{
+int main(int argc, char** argv) {
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
 
     TaskAssigningSolution solution = demo::generateDemoData();
-    std::printf("== task assigning demo (%zu task types, %zu customers, "
-                "%zu employees, %zu tasks, %d s) ==\n",
-                solution.taskTypes.size(),
-                solution.customers.size(),
-                solution.employees.size(),
-                solution.tasks.size(),
-                seconds);
+    std::printf(
+            "== task assigning demo (%zu task types, %zu customers, "
+            "%zu employees, %zu tasks, %d s) ==\n",
+            solution.taskTypes.size(), solution.customers.size(), solution.employees.size(),
+            solution.tasks.size(), seconds);
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = 42;
-    config.on_new_best = [](std::int64_t step, const Score &score)
-    {
-        std::printf("    new best @step %-8lld %s\n",
-                    static_cast<long long>(step),
+    config.on_new_best = [](std::int64_t step, const Score& score) {
+        std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step),
                     score.str().c_str());
     };
     Solver solver(config);
     solver.solve(solution);
 
-    std::printf("\n  final score: %s  (feasible=%s)\n\n",
-                solution.score.str().c_str(),
+    std::printf("\n  final score: %s  (feasible=%s)\n\n", solution.score.str().c_str(),
                 solution.score.feasible() ? "true" : "false");
     printSummary(solution);
 
-    if (solution.score.hard == 0 && solution.score.soft0 == 0)
-    {
+    if (solution.score.hard == 0 && solution.score.soft0 == 0) {
         std::printf("  reached hard 0 + every task assigned: OK\n");
         return 0;
     }
