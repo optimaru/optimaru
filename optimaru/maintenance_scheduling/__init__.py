@@ -78,7 +78,7 @@ def with_initial_solution(problem, solution):
 
 
 def solve(
-    schedule: MaintenanceSchedule,
+    schedule,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -88,8 +88,11 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> MaintenanceSchedule:
+):
     """High-level API that solves a `MaintenanceSchedule` in place and returns it.
+
+    `schedule` is a `MaintenanceSchedule` (solved in place and returned) or a
+    `models.MaintenanceScheduleModel` (converted, solved, and returned as a new model).
 
     ``config`` becomes the base settings (None = engine defaults: 30 s budget, ALNS
     on). Explicit keyword arguments override config.
@@ -121,8 +124,21 @@ def solve(
         cfg.full_assert = True
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
-    if constraints is None:
-        Solver(cfg).solve(schedule)
-    else:
-        Solver(cfg).solve_with_constraints(schedule, constraints)
-    return schedule
+    def _solve(core):
+        if constraints is None:
+            Solver(cfg).solve(core)
+        else:
+            Solver(cfg).solve_with_constraints(core, constraints)
+
+    if isinstance(schedule, MaintenanceSchedule):
+        _solve(schedule)
+        return schedule
+
+    # pydantic model (lazy import: pydantic is an optional dependency).
+    from .models import MaintenanceScheduleModel
+
+    if isinstance(schedule, MaintenanceScheduleModel):
+        core = schedule.to_core()
+        _solve(core)
+        return MaintenanceScheduleModel.from_core(core)
+    raise TypeError(f"schedule must be a MaintenanceSchedule or a models.MaintenanceScheduleModel: {type(schedule)!r}")

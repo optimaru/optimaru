@@ -264,7 +264,8 @@ def test_package_solve_solves_in_place_and_returns_the_plan():
     plan = pdp.build_random_instance(request_count=8, vehicle_count=3, seed=7)
     config = _steps(1500)
     assert pdp.solve(plan, config=config, random_seed=7, full_assert=True) is plan
-    assert plan.score is not None
+    assert any(vehicle.node_indices for vehicle in plan.vehicles)
+    assert str(plan.score) == str(pdp.calculate_score(plan))
     assert config.full_assert is False  # the keyword overrides go to a copy
 
 
@@ -291,3 +292,27 @@ def test_package_solve_with_constraints_equals_solve_with_constraints():
 def test_config_rejects_out_of_range_values(field, value, message):
     with pytest.raises(ValueError, match=message):
         setattr(pdp.SolverConfig(), field, value)
+
+
+def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
+    seen = {}
+
+    class Recorder:
+        def __init__(self, config):
+            seen["limit"] = config.best_score_limit
+            seen["callback"] = config.on_new_best
+
+        def solve(self, problem):
+            seen["solved"] = problem
+
+    monkeypatch.setattr(pdp, "Solver", Recorder)
+    callback = lambda step, score: None  # noqa: E731
+    pdp.solve("the problem", stop_at_first_feasible=True, on_new_best=callback)
+    assert seen["limit"] == (0, -(2**63), -(2**63))
+    assert seen["callback"] is not None and seen["solved"] == "the problem"
+
+
+def test_package_solve_reports_new_bests():
+    calls = []
+    pdp.solve(pdp.build_random_instance(request_count=8, vehicle_count=3, seed=7), config=_steps(300), on_new_best=lambda step, score: calls.append(step))
+    assert calls

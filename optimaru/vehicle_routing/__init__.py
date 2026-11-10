@@ -5,7 +5,9 @@
 come from the compiled C++ core (`_core`). Each vehicle's ordered
 `visit_indices` list (its route) is the decision; a visit
 missing from every route is unassigned (penalized on the medium score level)
-and ends up in `plan.unassigned_visit_indices` after solving.
+and ends up in `plan.unassigned_visit_indices` after solving. `solve(plan, ...)`
+solves a plan in place and returns it; `solve_request` does the same for a
+`models` request.
 
 The solver is the shared engine in `optimaru/cpp/optimaru/`: a cheapest-insertion construction
 heuristic, then local search over relocate / swap / 2-opt / or-opt / tail-swap

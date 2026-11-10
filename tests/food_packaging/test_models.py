@@ -2,6 +2,8 @@
 
 from datetime import date, datetime, timedelta
 
+import pytest
+
 import optimaru.food_packaging as fp
 from optimaru.food_packaging.models import PackagingScheduleModel, datetime_to_minute, minute_to_datetime
 
@@ -117,3 +119,23 @@ def test_from_core_on_demo():
     # The demo starts fully unassigned.
     assert all(job.line_id is None for job in model.jobs)
     assert (model.to_date - model.from_date).days == 14
+
+
+def _steps(steps):
+    config = fp.SolverConfig()
+    config.step_count_limit = steps
+    return config
+
+
+def test_solve_takes_the_model_and_returns_a_solved_model():
+    model = sample_model()
+    solved = fp.solve(model, config=_steps(500), random_seed=3)
+    assert isinstance(solved, PackagingScheduleModel)
+    core = model.to_core()
+    fp.solve(core, config=_steps(500), random_seed=3)
+    assert (solved.score_hard, solved.score_soft) == (core.score.hard, core.score.soft)
+
+
+def test_solve_refuses_anything_but_the_problem_or_its_model():
+    with pytest.raises(TypeError, match="must be a"):
+        fp.solve(3)

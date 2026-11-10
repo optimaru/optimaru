@@ -58,11 +58,17 @@ solved = uc.solve(
 
 It returns the solved problem, and the score is on it. A problem built from the
 compiled classes (`optimaru.<use case>.<Problem>`) is solved in place and
-returned, with its score in `solved.score`. A pydantic model from
+returned, with its score in `solved.score`. A pydantic problem model from
 `optimaru.<use case>.models` comes back as a solved model with its score fields
 (`score_hard`, `score_soft`, and one per further level the use case has). Always
 use the return value: some use cases write the result into the model they were
 given and others return a new one.
+
+Four use cases model a whole request (input, time limit, seed) in pydantic
+instead of the problem alone: employee scheduling, order picking, pickup &
+delivery and vehicle routing. Their `solve()` takes the compiled problem only,
+and `solve_request(request)` in `optimaru.<use case>.models` is the pydantic
+path (JSON in, JSON out).
 
 School timetabling takes and returns dicts (a `TimetableProblem` in, a
 `Timetable` out) and has two more keywords, `mode` and `initial_solution`.

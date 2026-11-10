@@ -979,3 +979,27 @@ def test_parallel_solver_count_is_a_checked_config_field():
     assert config.parallel_solver_count == 2
     with pytest.raises(ValueError, match="must be positive"):
         config.parallel_solver_count = 0
+
+
+def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
+    seen = {}
+
+    class Recorder:
+        def __init__(self, config):
+            seen["limit"] = config.best_score_limit
+            seen["callback"] = config.on_new_best
+
+        def solve(self, problem):
+            seen["solved"] = problem
+
+    monkeypatch.setattr(es, "Solver", Recorder)
+    callback = lambda step, score: None  # noqa: E731
+    es.solve("the problem", stop_at_first_feasible=True, on_new_best=callback)
+    assert seen["limit"] == (0, float("-inf"))
+    assert seen["callback"] is not None and seen["solved"] == "the problem"
+
+
+def test_package_solve_reports_new_bests():
+    calls = []
+    es.solve(es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=3), config=_steps(300), on_new_best=lambda step, score: calls.append(step))
+    assert calls

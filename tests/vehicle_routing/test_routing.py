@@ -271,3 +271,27 @@ def test_package_solve_with_constraints_equals_solve_with_constraints():
 def test_config_rejects_out_of_range_values(field, value, message):
     with pytest.raises(ValueError, match=message):
         setattr(vrp.SolverConfig(), field, value)
+
+
+def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
+    seen = {}
+
+    class Recorder:
+        def __init__(self, config):
+            seen["limit"] = config.best_score_limit
+            seen["callback"] = config.on_new_best
+
+        def solve(self, problem):
+            seen["solved"] = problem
+
+    monkeypatch.setattr(vrp, "Solver", Recorder)
+    callback = lambda step, score: None  # noqa: E731
+    vrp.solve("the problem", stop_at_first_feasible=True, on_new_best=callback)
+    assert seen["limit"] == (0, -(2**63), -(2**63))
+    assert seen["callback"] is not None and seen["solved"] == "the problem"
+
+
+def test_package_solve_reports_new_bests():
+    calls = []
+    vrp.solve(small_plan(), config=_steps(300), on_new_best=lambda step, score: calls.append(step))
+    assert calls

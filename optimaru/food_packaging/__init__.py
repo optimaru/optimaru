@@ -106,7 +106,7 @@ def with_initial_solution(problem, solution):
 
 
 def solve(
-    schedule: PackagingSchedule,
+    schedule,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -116,8 +116,11 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> PackagingSchedule:
+):
     """High-level API that solves a `PackagingSchedule` in place and returns it.
+
+    `schedule` is a `PackagingSchedule` (solved in place and returned) or a
+    `models.PackagingScheduleModel` (converted, solved, and returned as a new model).
 
     ``config`` becomes the base settings (None = engine defaults: 30 s budget, ALNS
     on). Explicit keyword arguments override config.
@@ -153,8 +156,21 @@ def solve(
         cfg.full_assert = True
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
-    if constraints is None:
-        Solver(cfg).solve(schedule)
-    else:
-        Solver(cfg).solve_with_constraints(schedule, constraints)
-    return schedule
+    def _solve(core):
+        if constraints is None:
+            Solver(cfg).solve(core)
+        else:
+            Solver(cfg).solve_with_constraints(core, constraints)
+
+    if isinstance(schedule, PackagingSchedule):
+        _solve(schedule)
+        return schedule
+
+    # pydantic model (lazy import: pydantic is an optional dependency).
+    from .models import PackagingScheduleModel
+
+    if isinstance(schedule, PackagingScheduleModel):
+        core = schedule.to_core()
+        _solve(core)
+        return PackagingScheduleModel.from_core(core)
+    raise TypeError(f"schedule must be a PackagingSchedule or a models.PackagingScheduleModel: {type(schedule)!r}")

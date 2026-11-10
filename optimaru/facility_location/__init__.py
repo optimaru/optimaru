@@ -70,7 +70,7 @@ def with_initial_solution(problem, solution):
 
 
 def solve(
-    problem: FacilityLocationProblem,
+    problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -82,6 +82,9 @@ def solve(
     constraints=None,
 ):
     """High-level API that solves `problem` in place and returns it.
+
+    `problem` is a `FacilityLocationProblem` (solved in place and returned) or a
+    `models.FacilityLocationProblemModel` (converted, solved, and returned as a new model).
 
     The score is on the result: ``solve(problem).score`` (``.hard``, ``.soft``).
 
@@ -114,8 +117,21 @@ def solve(
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
 
-    if constraints is None:
-        Solver(cfg).solve(problem)
-    else:
-        Solver(cfg).solve_with_constraints(problem, constraints)
-    return problem
+    def _solve(core):
+        if constraints is None:
+            Solver(cfg).solve(core)
+        else:
+            Solver(cfg).solve_with_constraints(core, constraints)
+
+    if isinstance(problem, FacilityLocationProblem):
+        _solve(problem)
+        return problem
+
+    # pydantic model (lazy import: pydantic is an optional dependency).
+    from .models import FacilityLocationProblemModel
+
+    if isinstance(problem, FacilityLocationProblemModel):
+        core = problem.to_core()
+        _solve(core)
+        return FacilityLocationProblemModel.from_core(core)
+    raise TypeError(f"problem must be a FacilityLocationProblem or a models.FacilityLocationProblemModel: {type(problem)!r}")

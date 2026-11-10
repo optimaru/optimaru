@@ -8,8 +8,9 @@ constraint specs (see `constraints.py`, one class per constraint):
 — or by name via `DecomposedCalculator().add("undesired_day_cost", weight=2.0)` /
 `default_calculator()`. `constraint_info()` lists all 30 constraints with their
 C++ default level and weight (the eight defaults first); `list_constraints()`
-the names the rule factory accepts. `make_random_roster`, `summary` and
-`to_dataframe` are pure-Python conveniences.
+the names the rule factory accepts. `solve(schedule, ...)` solves a schedule in
+place and returns it; `make_random_roster`, `summary` and `to_dataframe` are
+pure-Python conveniences.
 
 The JSON-friendly request/solution layer is `optimaru.employee_scheduling.models` (optional
 pydantic dependency); `optimaru.employee_scheduling.demo.generate_demo_data` builds a sample

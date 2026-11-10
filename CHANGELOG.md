@@ -11,7 +11,13 @@
     `facility_location`, `knapsack`, `max_cut`, `quadratic_assignment` and
     `semiconductor_scheduling`, `solve()` returned the `Score`. It now returns
     the problem it was given: write `uc.solve(problem).score` for a compiled
-    problem, or read `score_hard` / `score_soft` from a pydantic model.
+    problem, or read `score_hard` / `score_soft` from the solved pydantic
+    model.
+  - *New:* `solve()` in `bin_packing`, `facility_location`, `food_packaging`
+    and `maintenance_scheduling` also takes the use case's pydantic problem
+    model and returns a solved model, as the others do. (Employee scheduling,
+    order picking, pickup & delivery and vehicle routing keep
+    `models.solve_request` for their request models.)
   - *New:* `solve()` in `employee_scheduling`, `pickup_delivery` and
     `vehicle_routing`; the `full_assert` keyword in the 15 use cases whose
     `solve()` lacked it; `SolverConfig.full_assert` in those three and
@@ -20,8 +26,6 @@
     rejects `parallel_solver_count <= 0` and `late_acceptance_size < 0`, and in
     those two and `order_picking` a `ruin_recreate_rewards` list that does not
     hold exactly 4 values, with the `ValueError` the other use cases raise.
-- **Review language.** The review workflows answer in English, like everything
-  else in the repository.
 - **Engine: repeated instances in `ConstraintAssembly`.** A by-name edit or
   lookup (`weight()`, `level()`, `hard()`, `soft()`, `exponent()`, `offset()`,
   `clip()`, `find()`, `drop()`, and `add()`'s replacement) of a name the
