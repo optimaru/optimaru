@@ -133,9 +133,12 @@ an Enterprise edition (coming soon).
 Apache-2.0. The engine and several use cases are derived from
 [Timefold Solver](https://github.com/TimefoldAI/timefold-solver) and
 [Timefold Quickstarts](https://github.com/TimefoldAI/timefold-quickstarts)
-(both Apache-2.0); the wheel ships `LICENSE` and `NOTICE`, and the
+(both Apache-2.0); the wheel ships `LICENSE`, `NOTICE` and `THIRD-PARTY-LICENSES`, and the
 [NOTICE](https://github.com/optimaru/optimaru/blob/main/NOTICE) file lists the
 attribution. optimaru is not affiliated with or endorsed by Timefold BV.
 The compiled extensions are built with
 [pybind11](https://github.com/pybind/pybind11) (BSD-3-Clause), whose license
-is reproduced at the end of NOTICE.
+is reproduced at the end of NOTICE. The musllinux and Windows wheels also
+bundle the C++ runtime libraries they load (libstdc++ and libgcc under
+GPL-3.0-or-later with the GCC Runtime Library Exception; the Microsoft Visual
+C++ runtime); `THIRD-PARTY-LICENSES`, shipped in every wheel, has their terms.

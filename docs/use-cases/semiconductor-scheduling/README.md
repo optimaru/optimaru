@@ -184,7 +184,7 @@ incremental == a fresh recompute over random walks, ScoreChecks::Full solves).
 
 ```sh
 OPTIMARU_USE_CASES=semiconductor_scheduling uv sync --python 3.14   # builds only this use case's C++ extension
-uv run --python 3.14 --with pytest python -m pytest -q tests
+uv run --python 3.14 --with pytest python -m pytest -q tests/semiconductor_scheduling
 ```
 
 ```python

@@ -47,7 +47,7 @@ repeat carries its own level.
 
 ```bash
 OPTIMARU_USE_CASES=semiconductor_scheduling uv sync --python 3.14   # builds only this use case's C++ extension
-uv run --python 3.14 --with pytest python -m pytest -q tests
+uv run --python 3.14 --with pytest python -m pytest -q tests/semiconductor_scheduling
 ```
 
 `tests/semiconductor_scheduling/reference_semiconductor_scheduling.py` is a pure-Python reference scorer and
