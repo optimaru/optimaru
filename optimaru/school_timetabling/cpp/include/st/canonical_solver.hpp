@@ -31,8 +31,8 @@ class Solver {
 public:
     // The limits, the seed, the parallel starts, the callback and the ruin &
     // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
-    //   time_limit             the CP-SAT package's SOLVER_TIME_LIMIT_SECONDS
-    //                          analog
+    //   time_limit             the CP-SAT package's
+    //                          SolverConfig.time_limit_seconds analog
     //   history_length 0       clamp(4 * lessonCount, 400, 3200): on the
     //                          track-2 bench the small instance prefers ~800
     //                          while the mid/large ones profit from 1600+, and

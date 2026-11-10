@@ -29,12 +29,8 @@ _WEEKDAY_LABELS: dict[Weekday, str] = {
 class RoomType(StrEnum):
     """Special-room types. `Room.room_type` is a string, so values not listed here work as well."""
 
-    HOMEROOM = "homeroom"
     SCIENCE_LAB = "science lab"
-    COMPUTER_LAB = "computer lab"
     MUSIC_ROOM = "music room"
     ART_ROOM = "art room"
     GYM = "gym"
-    LANGUAGE_LAB = "language lab"
-    HOME_ECONOMICS = "home economics room"
     TECH_LAB = "tech room"

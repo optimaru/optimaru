@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **School timetabling benchmark: the CP-SAT package keeps only what the benchmark runs.**
+  `benchmarks/school-timetabling/cpsat` still carried parts of the application it came from
+  that no benchmark and no test of the model used: a workbook importer, timetable and
+  school-system exports, a timetable inspection report, a sample workbook, and settings read
+  from environment variables. They are removed (about 2,250 lines) with the two dependencies
+  only they needed (`openpyxl`, `pydantic-settings`). The model, its constraints and the three
+  benchmark tracks are unchanged.
 - **More instances in every engine-vs-CP-SAT comparison.** Each of the 17
   comparisons on generated or demo instances now runs a ladder of four to
   seven instances of growing size, 97 in all (was 38), and every results

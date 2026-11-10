@@ -5,7 +5,6 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from optimaru.school_timetabling import constraint_info
-from teacher_scheduling.config import env
 
 
 def _default_weights() -> dict[str, int]:
@@ -74,9 +73,9 @@ class ObjectiveWeights(BaseModel):
 class SolverConfig(BaseModel):
     """CP-SAT run parameters."""
 
-    time_limit_seconds: float = Field(default_factory=lambda: env.SOLVER_TIME_LIMIT_SECONDS, gt=0)
-    num_workers: int = Field(default_factory=lambda: env.SOLVER_NUM_WORKERS, ge=1)
-    log_search_progress: bool = Field(default_factory=lambda: env.SOLVER_LOG_SEARCH_PROGRESS)
+    time_limit_seconds: float = Field(default=60.0, gt=0, description="Search time limit (seconds)")
+    num_workers: int = Field(default=8, ge=1, description="Number of parallel search workers")
+    log_search_progress: bool = Field(default=False, description="Whether to print the CP-SAT search log")
     random_seed: int = 0
     relative_gap_limit: float | None = Field(
         default=None, ge=0, description="Stop early once this relative gap is reached"
