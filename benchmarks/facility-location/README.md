@@ -35,5 +35,5 @@ Every cell is the score of that solver's final solution under the use case's own
 | large | 600 cons / 80 fac | 0hard/-6498876soft | **0hard/-6381914soft** |
 | xlarge | 1200 cons / 120 fac | 0hard/-10319278soft | **0hard/-9988242soft** |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

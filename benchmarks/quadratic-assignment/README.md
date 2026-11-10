@@ -91,7 +91,7 @@ Every cell is the score of that solver's final solution under the use case's own
 | random16 | 16 facilities | 0hard/-4112soft | **0hard/-4020soft** |
 | random20 | 20 facilities | **0hard/-7816soft** | 0hard/-7918soft |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->
 
 <!-- qaplib:start -->

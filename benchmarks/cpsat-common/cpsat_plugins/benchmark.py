@@ -209,6 +209,8 @@ def run_instance(
     it would have in a comparison; that lets the single-threaded engine runs and
     the CP-SAT runs of a long list be measured side by side on separate cores.
     """
+    if isinstance(solvers, str) or not solvers or not set(solvers) <= set(SOLVERS):
+        raise ValueError(f"solvers is a sequence of {' and/or '.join(SOLVERS)}, got {solvers!r}")
     # Built for a CP-SAT-only run too: the size of the result is described from it.
     engine_problem = factory()
     runs = []

@@ -31,5 +31,5 @@ Every cell is the score of that solver's final solution under the use case's own
 | days4 | 118 talks / 10 halls / 24 timeslots / 94 speakers | **0hard/-5382840soft** | — (no solution in time) |
 | days5 | 190 talks / 13 halls / 30 timeslots / 152 speakers | **0hard/-15019890soft** | — (no solution in time) |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

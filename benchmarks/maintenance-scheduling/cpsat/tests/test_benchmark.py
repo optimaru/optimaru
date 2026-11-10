@@ -12,3 +12,9 @@ def test_every_instance_builds() -> None:
     assert built and all(problem is not None for problem in built.values())
     # Every rung has a size to show beside its name.
     assert all(benchmark.describe(problem) for problem in built.values())
+
+
+def test_a_rung_is_the_same_instance_every_time() -> None:
+    # The generators draw from random.Random(seed) alone, so a second build describes the same.
+    for name, build in benchmark.instances().items():
+        assert benchmark.describe(build()) == benchmark.describe(build()), name

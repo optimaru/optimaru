@@ -41,6 +41,6 @@ Every cell is the score of that solver's final solution under the use case's own
 | larger | 360 slots / 14 teams / 60 days | **0hard/0medium/0soft** | 0hard/-2medium/-618616.9929soft |
 | xlarge | 800 slots / 20 teams / 100 days | **0hard/0medium/-5.1640soft** | -1177hard/-229medium/-424155.0950soft |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 Note: the two imbalance costs are sqrt(ssd) rounded to 6 significant figures; CP-SAT minimises the integral surrogate scale * ssd instead (not raw-identical), so both answers are rescored by the engine.
 <!-- results:end -->

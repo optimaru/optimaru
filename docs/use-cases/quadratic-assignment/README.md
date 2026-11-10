@@ -299,8 +299,8 @@ full bijection.
 ## Benchmark
 
 [`benchmarks/quadratic-assignment`](../../../benchmarks/quadratic-assignment) compares this
-use case with OR-Tools CP-SAT on the same small instances, rescored by the same
-evaluator, and runs the QAPLIB instances below.
+use case with OR-Tools CP-SAT on generated instances of up to 20 facilities, rescored
+by the same evaluator, and runs the QAPLIB instances below.
 
 ### QAPLIB benchmark
 

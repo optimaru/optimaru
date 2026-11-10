@@ -30,5 +30,5 @@ Every cell is the score of that solver's final solution under the use case's own
 | medium | 60 tasks / 12 employees / 6 customers | **0hard/0medium/-31599610023799soft** | 0hard/0medium/-31716730023950soft |
 | large | 120 tasks / 20 employees / 8 customers | **0hard/0medium/-118983210094159soft** | 0hard/0medium/-119384290095569soft |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

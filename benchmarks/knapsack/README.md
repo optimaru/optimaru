@@ -49,5 +49,5 @@ Every cell is the score of that solver's final solution under the use case's own
 | n2000 | 2000 items | 0hard/68261soft | **0hard/68262soft** |
 | n5000 | 5000 items | 0hard/170340soft | **0hard/170341soft** |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

@@ -114,11 +114,20 @@ results blocks of these READMEs (between `<!-- results:start -->` and
 `<!-- results:end -->`) and the homepage's benchmark data from the JSON the
 harnesses print; its docstring lists the file each harness's output goes in.
 A refresh may cover some data sets only: the others keep their text and their
-date.
+date. Two guides quote their table by hand and are updated with it (the
+"Latest run" line of `docs/use-cases/knapsack/README.md` and of
+`docs/use-cases/max-cut/README.md`).
 
 The published numbers are single runs on one machine. The harnesses were run
 side by side, each on its own performance cores: one CP-SAT job at a time
 (8 workers) beside two single-threaded jobs, at most ten solver threads on
 twelve performance cores, with builds and other work kept to the efficiency
-cores (`taskpolicy -b` on macOS).
+cores (`taskpolicy -b` on macOS). In the generated comparisons that means the
+engine's runs and CP-SAT's were made at the same time, not one after the other.
+
+How far a number repeats differs by use case. The 38 instances measured on two
+days gave the same engine score both times, while CP-SAT's differed on 8 (eight
+workers under a time limit), and the engine's own result varies by a few percent
+on the larger semiconductor instances (see that README). Read a small margin in
+any table as noise.
 

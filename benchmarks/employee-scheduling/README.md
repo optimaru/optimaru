@@ -33,6 +33,6 @@ Every cell is the score of that solver's final solution under the use case's own
 | large | 672 shifts / 48 workers / 28 days | **0hard/46080soft** | 0hard/32141.1674soft |
 | xlarge | 1120 shifts / 80 workers / 28 days | **0hard/76800soft** | -45242hard/70011.4542soft |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 Note: unfairness is sqrt(ssd) rounded to 6 significant figures; the CP-SAT objective holds half the squared loads instead, so it can weigh balance against the other soft rules differently from the engine, whose calculator scores both answers.
 <!-- results:end -->

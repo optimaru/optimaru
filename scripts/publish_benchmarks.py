@@ -11,7 +11,8 @@ whose file is missing keeps its README text and its homepage entry.
 
 - ``compare/<slug>.json``: ``python -m <package>.benchmark --json`` of a use case, or
   ``compare/<slug>.engine.json`` and ``compare/<slug>.cp-sat.json``, its two ``--solver``
-  runs, which are joined instance by instance;
+  runs, which are joined instance by instance (any other ``*.json`` in ``compare/`` is
+  refused, so keep scratch files elsewhere);
 - ``vrp-x.json``, ``vrp-a.json``: ``python -m vrp_benchmark --series x|a --out FILE``;
 - ``pdp-li-lim.json``, ``pdp-synthetic.json``: ``pickup-delivery-public-bench --json``
   (the lists of several runs concatenated);
@@ -1166,7 +1167,8 @@ def main() -> None:
         return (
             f"Measured {args.date} on {args.machine}, {args.seconds:g} s per solver and instance, "
             f"seed {_seed(results, 1)}. The engine runs single-threaded; CP-SAT uses {args.workers} workers "
-            "and its budget starts once its model is built. Single runs — treat small differences as noise."
+            "and its budget starts once its model is built. Single runs — treat small differences as noise. "
+            "How the runs were made: [benchmarks/README.md](../README.md#publishing-results)."
         )
 
     for slug in COMPARED:

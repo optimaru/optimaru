@@ -16,3 +16,9 @@ def test_every_instance_builds():
     assert benchmark.instances()
     for build in benchmark.instances().values():
         assert build() is not None
+
+
+def test_a_rung_is_the_same_instance_every_time() -> None:
+    # The generators draw from random.Random(seed) alone, so a second build describes the same.
+    for name, build in benchmark.instances().items():
+        assert benchmark.describe(build()) == benchmark.describe(build()), name

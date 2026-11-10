@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from cpsat_plugins import benchmark
 
 
@@ -71,7 +73,17 @@ def test_a_failed_instance_fails_the_run(capsys) -> None:
         def solve_engine(problem, seconds: float, seed: int) -> None:
             raise ValueError("boom")
 
-    assert benchmark.run_cli(Broken, ["--json", "--seconds", "0.01"]) == 1
+    assert benchmark.run_cli(Broken, ["--json", "--seconds", "0.01", "--seed", "5", "--workers", "3"]) == 1
+    (result,) = json.loads(capsys.readouterr().out)
+    # A failed result says what it was given, like the others.
+    assert "boom" in result["error"] and (result["seed"], result["workers"]) == (5, 3)
+
+
+@pytest.mark.parametrize("solvers", ["engine", (), ("cpsat",), ("engine", "ortools")])
+def test_a_solver_the_runner_does_not_know_is_refused(solvers) -> None:
+    # A bare string would pass a substring test and give a result with no runs.
+    with pytest.raises(ValueError, match="solvers is a sequence of engine and/or cp-sat"):
+        benchmark.run_instance(FakeCase, "small", FakeCase.instances()["small"], 0.01, 1, 1, solvers=solvers)
 
 
 def test_a_stalled_cpsat_run_is_stopped_at_the_deadline() -> None:

@@ -176,6 +176,13 @@ def test_count_rows_mark_a_solver_that_was_not_run() -> None:
     block = publish.bpp_block(results, ARGS)
     assert "| u120_00 | 120 | 48 | **48** | 49 |" in block
     assert "| u250_00 | 250 | 99 | 100 | not run (size cap) |" in block
+    assert "| t60_00 | 60 | 20 | **21** | no solution in time |" in block
+
+    # A packing that breaks a rule is "infeasible", with no "in time": the solver did answer.
+    broken = {"instance": "t60_01", "items": 60, "best_known": 20}
+    broken["runs"] = [{"solver": "engine", "bins": 21}, {"solver": "cp-sat", "bins": 20, "feasible": False}]
+    cells, texts = publish._count_cells(broken, "bins")
+    assert cells["ortools"] == {"value": None, "status": "infeasible"} and texts["ortools"] == "infeasible"
 
 
 def test_replace_block_keeps_the_text_around_the_markers(tmp_path) -> None:
