@@ -17,8 +17,9 @@ constraint selections, and the defaults are the C++ components'
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
+from .._models import StrictModel
 from . import _core
 
 __all__ = [
@@ -31,8 +32,7 @@ __all__ = [
 ]
 
 
-class TaskModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TaskModel(StrictModel):
     id: str
     duration: int = Field(gt=0)
     min_station: int = Field(default=0, ge=0)
@@ -54,26 +54,22 @@ class TaskModel(BaseModel):
         return self
 
 
-class PrecedenceModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PrecedenceModel(StrictModel):
     before: str
     after: str
 
 
-class TaskPairModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TaskPairModel(StrictModel):
     first: str
     second: str
 
 
-class TaskGroupModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TaskGroupModel(StrictModel):
     id: str
     task_ids: list[str] = Field(min_length=2)
 
 
-class AssemblyLineBalancingProblemModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class AssemblyLineBalancingProblemModel(StrictModel):
     cycle_time: int = Field(gt=0, description="Maximum processing time assigned to one station.")
     tasks: list[TaskModel] = Field(description="Tasks that must each be assigned to one station.")
     precedences: list[PrecedenceModel] = Field(default_factory=list, description="Before/after task arcs.")

@@ -19,8 +19,9 @@ start_production_date_time / end_date_time are result-only fields
 from datetime import date, datetime, timedelta
 from itertools import pairwise
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
+from .._models import StrictModel
 from . import _core
 
 __all__ = [
@@ -51,31 +52,25 @@ def _opt_to_datetime(minute: int | None) -> datetime | None:
     return None if minute is None else minute_to_datetime(minute)
 
 
-class ProductModel(BaseModel):
+class ProductModel(StrictModel):
     """A product. cleaning_durations maps a previous product to the cleaning time:
     keys are the id of the product made on the line 'just before'. When a (previous,
     current) pair without an entry actually ends up adjacent, it is an error."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str
     cleaning_durations: dict[str, timedelta] = Field(default_factory=dict)
 
 
-class OperatorModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class OperatorModel(StrictModel):
     id: str
 
 
-class JobModel(BaseModel):
+class JobModel(StrictModel):
     """A packaging job (an element of a line's job list). LineModel.job_ids is the source
     of truth for the assignment; line_id and start_cleaning/start_production/end are
     result-only derived fields (ignored by to_core). min_start_time and priority are read
     by no constraint."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str
@@ -93,11 +88,9 @@ class JobModel(BaseModel):
     end_date_time: datetime | None = None
 
 
-class LineModel(BaseModel):
+class LineModel(StrictModel):
     """A production line. job_ids is the decision (the line's jobs, order matters);
     operator_id is the second decision, the line's operator."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str
@@ -106,12 +99,10 @@ class LineModel(BaseModel):
     job_ids: list[str] = Field(default_factory=list)
 
 
-class PackagingScheduleModel(BaseModel):
+class PackagingScheduleModel(StrictModel):
     """The whole schedule. The score is a read-only result, kept as separate fields.
     Jobs in no line's job_ids are unassigned (the solver leaves pinned unassigned
     jobs alone, and the rest can get assigned on a re-solve)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     from_date: date  # inclusive
     to_date: date  # exclusive

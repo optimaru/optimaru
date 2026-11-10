@@ -11,11 +11,11 @@ from optimaru.vehicle_routing import models
 
 def test_request_solver_parameters_are_applied():
     config = vrp.SolverConfig()
-    models._apply_solver_parameters(config, {"late_acceptance_size": 7, "ruin_recreate": False})
+    models.apply_solver_parameters(config, {"late_acceptance_size": 7, "ruin_recreate": False})
     assert config.late_acceptance_size == 7
     assert config.ruin_recreate is False
     with pytest.raises(ValueError, match="unknown solver parameter"):
-        models._apply_solver_parameters(config, {"not_a_parameter": 1})
+        models.apply_solver_parameters(config, {"not_a_parameter": 1})
 
 
 def test_granular_descent_parameters_are_public():

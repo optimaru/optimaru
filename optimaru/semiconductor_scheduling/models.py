@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
+
+from .._models import StrictModel
 
 
-class TimeWindowModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TimeWindowModel(StrictModel):
     start: int = Field(ge=0)
     end: int = Field(gt=0)
 
@@ -15,8 +16,7 @@ class TimeWindowModel(BaseModel):
         return self
 
 
-class MachineModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class MachineModel(StrictModel):
     id: str = Field(min_length=1)
     group: str = Field(min_length=1, description="Equipment group, for example LITHO or ETCH.")
     batch_capacity: int = Field(
@@ -41,24 +41,21 @@ class MachineModel(BaseModel):
         return self
 
 
-class AuxiliaryResourceModel(BaseModel):
+class AuxiliaryResourceModel(StrictModel):
     """Reusable operator, reticle, fixture, or transport resource."""
 
-    model_config = ConfigDict(extra="forbid")
     id: str = Field(min_length=1)
     capacity: int = Field(default=1, ge=1)
     unavailable: list[TimeWindowModel] = Field(default_factory=list)
 
 
-class MachineOptionModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class MachineOptionModel(StrictModel):
     machine_id: str
     duration: int = Field(gt=0)
     preference_cost: int = Field(default=0, ge=0)
 
 
-class OperationModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class OperationModel(StrictModel):
     id: str = Field(min_length=1)
     family: str = Field(min_length=1, description="Recipe/family used for batching and setup transitions.")
     eligible_machines: list[MachineOptionModel] = Field(min_length=1)
@@ -78,8 +75,7 @@ class OperationModel(BaseModel):
     )
 
 
-class LotModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class LotModel(StrictModel):
     id: str = Field(min_length=1)
     product: str = Field(min_length=1)
     release_time: int = Field(default=0, ge=0)
@@ -93,23 +89,20 @@ class LotModel(BaseModel):
     operations: list[OperationModel] = Field(min_length=1)
 
 
-class SetupTimeModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class SetupTimeModel(StrictModel):
     machine_group: str
     from_family: str
     to_family: str
     duration: int = Field(ge=0)
 
 
-class TransportTimeModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TransportTimeModel(StrictModel):
     from_group: str
     to_group: str
     duration: int = Field(ge=0)
 
 
-class AssignmentModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class AssignmentModel(StrictModel):
     lot_id: str
     operation_id: str
     machine_id: str
@@ -124,10 +117,9 @@ class AssignmentModel(BaseModel):
         return self
 
 
-class SemiconductorScheduleModel(BaseModel):
+class SemiconductorScheduleModel(StrictModel):
     """Re-entrant semiconductor-fab lot and equipment scheduling contract."""
 
-    model_config = ConfigDict(extra="forbid")
     machines: list[MachineModel] = Field(min_length=1)
     auxiliary_resources: list[AuxiliaryResourceModel] = Field(default_factory=list)
     setup_times: list[SetupTimeModel] = Field(default_factory=list)

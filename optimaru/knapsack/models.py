@@ -14,13 +14,13 @@ model and leaves the one passed in as it was.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
+from .._models import StrictModel
 from . import _core
 
 
-class ItemModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class ItemModel(StrictModel):
     id: str = Field(min_length=1)
     weight: int = Field(gt=0)
     value: int = Field(ge=0)
@@ -32,8 +32,7 @@ class ItemModel(BaseModel):
     selected: bool = False
 
 
-class SelectionGroupModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class SelectionGroupModel(StrictModel):
     id: str = Field(min_length=1)
     item_ids: list[str] = Field(min_length=1)
     min_selected: int = Field(default=0, ge=0)
@@ -49,8 +48,7 @@ class SelectionGroupModel(BaseModel):
         return self
 
 
-class KnapsackProblemModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class KnapsackProblemModel(StrictModel):
     capacity: int = Field(gt=0, description="Maximum total selected weight.")
     items: list[ItemModel] = Field(description="Candidate items with weight and value.")
     resource_capacities: dict[str, int] = Field(

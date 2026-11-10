@@ -14,26 +14,24 @@ model; the model passed in is not changed.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
+from .._models import StrictModel
 from . import _core
 
 
-class EdgeModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class EdgeModel(StrictModel):
     source: str
     target: str
     weight: int = Field(default=1, ge=0)
 
 
-class VertexPairModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class VertexPairModel(StrictModel):
     first: str
     second: str
 
 
-class MaxCutProblemModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class MaxCutProblemModel(StrictModel):
     vertices: list[str] = Field(description="Unique graph vertex ids.")
     edges: list[EdgeModel] = Field(description="Weighted undirected graph edges.")
     fixed_partition: dict[str, int] = Field(

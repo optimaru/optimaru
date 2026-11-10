@@ -16,16 +16,15 @@ only from constraint selections, and the defaults (1 each) are the C++ component
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
+from .._models import StrictModel
 from . import _core
 
 __all__ = ["BinPackingProblemModel", "ConflictModel", "ItemModel", "with_initial_solution"]
 
 
-class ItemModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ItemModel(StrictModel):
     id: str = Field(min_length=1, description="Unique item identifier.")
     weight: int = Field(gt=0, description="One-dimensional item weight or size.")
     bin: int = Field(
@@ -38,16 +37,12 @@ class ItemModel(BaseModel):
     )
 
 
-class ConflictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ConflictModel(StrictModel):
     first: str = Field(description="Id of one item of the pair.")
     second: str = Field(description="Id of the other item; the two should not share a bin.")
 
 
-class BinPackingProblemModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class BinPackingProblemModel(StrictModel):
     bin_capacity: int = Field(gt=0, description="Maximum load of each identical bin.")
     items: list[ItemModel] = Field(description="Items that must each be assigned exactly once.")
     conflicts: list[ConflictModel] = Field(

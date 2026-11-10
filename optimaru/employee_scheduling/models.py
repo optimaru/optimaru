@@ -64,6 +64,7 @@ from pydantic import (
 )
 
 from .._constraint import _check_literal_offset
+from .._models import StrictModel
 from . import _core
 from . import constraints as _specs
 
@@ -92,10 +93,8 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-class WorkerModel(BaseModel):
+class WorkerModel(StrictModel):
     """One person who can be assigned to shifts."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     skills: list[str] = Field(default_factory=list)
@@ -108,10 +107,8 @@ class WorkerModel(BaseModel):
     )
 
 
-class ShiftModel(BaseModel):
+class ShiftModel(StrictModel):
     """One shift to be covered by exactly one worker."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     start: int = Field(ge=0, description="minutes from day 0 00:00; day 0 is the first day, history included")
@@ -350,9 +347,7 @@ _PORTFOLIO_KEYS = frozenset(
 )
 
 
-class SolverSettings(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class SolverSettings(StrictModel):
     random_seed: int = 0
     guided_moves: bool = True
     employee_greedy_construction: bool = True
@@ -517,9 +512,7 @@ class SchedulingInput(BaseModel):
         return self
 
 
-class ScheduleRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ScheduleRequest(StrictModel):
     name: str | None = None
     timelimit: float = Field(default=30.0, ge=0, description="seconds")
     num_workers: int = Field(

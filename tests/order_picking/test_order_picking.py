@@ -11,11 +11,11 @@ from optimaru.order_picking import models
 
 def test_request_solver_parameters_are_applied():
     config = op.SolverConfig()
-    models._apply_solver_parameters(config, {"late_acceptance_size": 7, "ruin_recreate": False})
+    models.apply_solver_parameters(config, {"late_acceptance_size": 7, "ruin_recreate": False})
     assert config.late_acceptance_size == 7
     assert config.ruin_recreate is False
     with pytest.raises(ValueError, match="unknown solver parameter"):
-        models._apply_solver_parameters(config, {"not_a_parameter": 1})
+        models.apply_solver_parameters(config, {"not_a_parameter": 1})
 
 
 def location(column, shelving_row, side, row):

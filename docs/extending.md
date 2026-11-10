@@ -21,7 +21,7 @@ C++ namespace `<ns>` (such as `vrp`):
 | The Python module `optimaru.<uc>._core` | `optimaru/<uc>/cpp/bindings.cpp`, stubs in `optimaru/<uc>/_core.pyi` |
 | Constraint specs for Python | `optimaru/<uc>/constraints.py` |
 | Python models (`to_core()` / `from_core()`) | `optimaru/<uc>/models.py` |
-| What the use cases' Python shares | `optimaru/_constraint.py` (the constraint-spec base), `optimaru/_solve.py` (the steps of `solve()`) |
+| What the use cases' Python shares | `optimaru/_constraint.py` (the constraint-spec base), `optimaru/_solve.py` (the steps of `solve()`), `optimaru/_models.py` (the model base and helpers) |
 | C++ tests | `tests/<uc>/cpp/<ns>_test.cpp`, `tests/<uc>/cpp/<ns>_plugin_test.cpp` |
 | Python tests | `tests/<uc>/test_*.py` |
 | The use case's guide | `docs/use-cases/<slug>/README.md` and `python.md` |

@@ -18,8 +18,9 @@ the ordered list of task ids that employee performs. The task side carries the c
 `pydantic` is an optional dependency (`pip install task_assigning[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from .._models import StrictModel
 from . import _core
 
 __all__ = [
@@ -37,11 +38,7 @@ AFFINITIES = ("NONE", "LOW", "MEDIUM", "HIGH")
 PRIORITIES = ("MINOR", "MAJOR", "CRITICAL")
 
 
-class _Model(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class TaskTypeModel(_Model):
+class TaskTypeModel(StrictModel):
     """A task type. base_duration is the base duration in minutes (before the affinity
     multiplier)."""
 
@@ -51,14 +48,14 @@ class TaskTypeModel(_Model):
     required_skills: list[str] = Field(default_factory=list)
 
 
-class CustomerModel(_Model):
+class CustomerModel(StrictModel):
     """A customer (problem fact)."""
 
     id: str
     name: str = ""
 
 
-class TaskModel(_Model):
+class TaskModel(StrictModel):
     """One task to perform. Which employee does it is decided by
     `EmployeeModel.tasks` (an ordered list of task ids).
     `start_time` is the computed start (minutes; None when unassigned)."""
@@ -78,7 +75,7 @@ class TaskModel(_Model):
         return self
 
 
-class EmployeeModel(_Model):
+class EmployeeModel(StrictModel):
     """An employee. `tasks` is the decision variable — the ordered
     list of task ids this employee performs back to back. Customers missing from
     `customer_to_affinity` count as NONE (multiplier 4)."""
@@ -97,7 +94,7 @@ class EmployeeModel(_Model):
         return self
 
 
-class TaskAssigningSolutionModel(_Model):
+class TaskAssigningSolutionModel(StrictModel):
     """Pydantic mirror of the solution. score_* are read-only results, kept as separate fields
     (the four score levels, [1]hard/[3]soft)."""
 

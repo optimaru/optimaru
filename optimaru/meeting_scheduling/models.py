@@ -18,8 +18,9 @@ Score mapping (hard / medium / soft -> engine Score):
 `pydantic` is an optional dependency (`pip install meeting_scheduling[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from .._models import StrictModel, entities_by_id, require_same_order, solution_dict, valid_positions
 from . import _core
 
 __all__ = [
@@ -34,25 +35,16 @@ __all__ = [
 ]
 
 
-def _valid_positions(count: int) -> str:
-    """The valid positions among `count`, for an error message."""
-    return f"0..{count - 1}" if count else "(the list is empty)"
-
-
-class PersonModel(BaseModel):
+class PersonModel(StrictModel):
     """An attendee. Referenced by index into the people list."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     full_name: str = ""
 
 
-class TimeGrainModel(BaseModel):
+class TimeGrainModel(StrictModel):
     """A 15-minute time grain. grain_index is the unit duration/overlap is computed in
     (consecutive and 1-based in the demo)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     grain_index: int
@@ -60,21 +52,17 @@ class TimeGrainModel(BaseModel):
     starting_minute_of_day: int = Field(ge=0)
 
 
-class RoomModel(BaseModel):
+class RoomModel(StrictModel):
     """A meeting room. capacity feeds the hard room_capacity_cost (and larger_room_capacity_cost)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str = ""
     capacity: int = 0
 
 
-class MeetingModel(BaseModel):
+class MeetingModel(StrictModel):
     """A meeting (fixed input). required/preferred_attendees are lists of people
     indices — one element is one attendance."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     topic: str = ""
@@ -84,11 +72,9 @@ class MeetingModel(BaseModel):
     entire_group_meeting: bool = False
 
 
-class MeetingAssignmentModel(BaseModel):
+class MeetingAssignmentModel(StrictModel):
     """One meeting's assignment. grain_room is the composite variable time_grain_pos * room_count +
     room_index (None == unassigned); meeting is a meetings index."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     meeting: int = Field(ge=0)
@@ -96,10 +82,8 @@ class MeetingAssignmentModel(BaseModel):
     pinned: bool = False
 
 
-class MeetingScheduleModel(BaseModel):
+class MeetingScheduleModel(StrictModel):
     """Mirror of the whole schedule. score is a read-only result, kept as a separate field."""
-
-    model_config = ConfigDict(extra="forbid")
 
     people: list[PersonModel]
     time_grains: list[TimeGrainModel]
@@ -114,7 +98,7 @@ class MeetingScheduleModel(BaseModel):
         """`grain_room` is a raw value the engine reads without a range check. It refuses
         bad people and meetings itself."""
         value_count = len(self.time_grains) * len(self.rooms)
-        valid_values = _valid_positions(value_count)
+        valid_values = valid_positions(value_count)
         for assignment in self.meeting_assignments:
             value = assignment.grain_room
             if value is not None and not 0 <= value < value_count:
@@ -198,42 +182,6 @@ def demo_data() -> MeetingScheduleModel:
     return MeetingScheduleModel.from_core(_core.demo_data())
 
 
-def _solution_dict(solution) -> dict:
-    if isinstance(solution, BaseModel):
-        return solution.model_dump()
-    if isinstance(solution, dict):
-        return solution
-    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
-
-
-def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
-    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
-    entities = solved.get(name)
-    if not isinstance(entities, list):
-        raise ValueError(f"solution has no {name!r} list")
-    known = set(ids)
-    if len(known) != len(ids):
-        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
-    by_id: dict = {}
-    for entity in entities:
-        entity_id = entity.get(key) if isinstance(entity, dict) else None
-        if not isinstance(entity_id, (str, int)) or entity_id not in known:
-            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
-        if entity_id in by_id:
-            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
-        by_id[entity_id] = entity
-    return by_id
-
-
-def _require_same_order(solved: dict, name: str, ids: list, key: str = "id") -> None:
-    """A positional value only means the same thing over the same list. `solved` may omit the list."""
-    values = solved.get(name)
-    if values is None:
-        return
-    if not isinstance(values, list) or [v.get(key) if isinstance(v, dict) else None for v in values] != ids:
-        raise ValueError(f"solution {name!r} list differs from the problem's (same entries, same order required)")
-
-
 def with_initial_solution(problem, solution):
     """Return a copy of `problem` whose search starts from `solution`.
 
@@ -255,10 +203,10 @@ def with_initial_solution(problem, solution):
     """
     if not isinstance(problem, MeetingScheduleModel):
         raise TypeError(f"problem must be a MeetingScheduleModel: {type(problem)!r}")
-    solved = _solution_dict(solution)
-    _require_same_order(solved, "time_grains", [g.id for g in problem.time_grains])
-    _require_same_order(solved, "rooms", [r.id for r in problem.rooms])
-    assignments = _entities_by_id(solved, "meeting_assignments", [a.id for a in problem.meeting_assignments])
+    solved = solution_dict(solution)
+    require_same_order(solved, "time_grains", [g.id for g in problem.time_grains])
+    require_same_order(solved, "rooms", [r.id for r in problem.rooms])
+    assignments = entities_by_id(solved, "meeting_assignments", [a.id for a in problem.meeting_assignments])
     value_count = len(problem.time_grains) * len(problem.rooms)
     seeded = problem.model_copy(deep=True)
     seeded.score_hard = seeded.score_soft = None
@@ -269,7 +217,7 @@ def with_initial_solution(problem, solution):
         if value is None:
             continue
         if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value < value_count:
-            valid_values = _valid_positions(value_count)
+            valid_values = valid_positions(value_count)
             raise ValueError(
                 f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range {valid_values}"
             )
