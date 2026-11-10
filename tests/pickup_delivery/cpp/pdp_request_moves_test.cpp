@@ -325,6 +325,20 @@ void testBlinker() {
     for (int i = 0; i < draws; ++i) skips += tenth.skip() ? 1 : 0;
     std::printf("    rate 0.1: %d of %d skipped\n", skips, draws);
     check(skips > draws * 9 / 100 && skips < draws * 11 / 100, "rate 0.1 skips about one in ten");
+
+    // The edges of the knob: a rate too small to ever fire, one past 1, and
+    // a value that is no rate at all.
+    Blinker tiny(1e-30, rng);
+    Blinker denormal(std::numeric_limits<double>::denorm_min(), rng);
+    Blinker invalid(std::numeric_limits<double>::quiet_NaN(), rng);
+    bool fired = false;
+    for (int i = 0; i < draws; ++i)
+        fired = fired || tiny.skip() || denormal.skip() || invalid.skip();
+    check(!fired, "a vanishing rate and a NaN never skip");
+    Blinker always(2.0, rng);
+    skips = 0;
+    for (int i = 0; i < draws; ++i) skips += always.skip() ? 1 : 0;
+    check(skips > draws * 99 / 100, "a rate of 1 or more skips nearly every candidate");
     std::printf("\n");
 }
 

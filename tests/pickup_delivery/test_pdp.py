@@ -195,6 +195,34 @@ def test_request_moves_alone_keep_every_request_whole(switches):
             assert pickup[0] == dropoff[0] and pickup[1] < dropoff[1]
 
 
+def test_soft_time_windows_are_broken_by_the_stop_moves_not_the_request_moves():
+    """The request moves only place a request inside its windows, whatever level they are scored on.
+
+    Here no stop can be reached in time. With the windows soft, routing a request late
+    beats leaving it out, and the plan that does so comes from the engine's own moves.
+    """
+    from optimaru.pickup_delivery.constraints import MaxEndTimeCost, get_constraints
+
+    plan = build_two_request_plan()
+    nodes = []
+    for node in plan.nodes:
+        node.max_end_time = hour_minute(7, 0)  # the vehicle leaves at 7:00
+        nodes.append(node)
+    plan = pdp.PdpRoutePlan("late", plan.locations, plan.vehicles, nodes, plan.deliveries)
+
+    picks = [pick for pick in get_constraints() if pick.name != "max_end_time_cost"]
+    picks.append(MaxEndTimeCost(level="soft"))
+    config = pdp.SolverConfig()
+    config.step_count_limit = 20_000
+    config.random_seed = 3
+    pdp.Solver(config).solve_with_constraints(plan, picks)
+
+    assert plan.unassigned_node_indices == []
+    assert (plan.score.hard, plan.score.medium) == (0, 0)
+    # The default constraints call the same plan late.
+    assert pdp.calculate_score(plan).hard < 0
+
+
 def test_request_uses_explicit_driving_matrix():
     data = models.PdpInput(
         vehicles=[models.VehicleModel(id="V", capacity=1, home=(0, 0))],

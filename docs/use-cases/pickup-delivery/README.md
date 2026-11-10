@@ -195,8 +195,13 @@ request's required vehicle). Among the feasible slot pairs the one that adds the
 least driving wins. The objective still has the last word: an operator applies
 what the scan proposes through the engine, and the acceptor judges the real
 score. A constraint selection that prices other things (a fixed cost, the route
-duration) is therefore followed, only less directly, and one that turns a limit
-soft still gets insertions that respect it.
+duration) is therefore followed, only less directly.
+
+The scan does not read the selection, though. The request moves only propose
+placements that keep the plan's windows, capacity and vehicle limits, whatever
+level those constraints are scored on. With one of them soft or left out, a
+request that has no slot inside the limits is not placed by a request move:
+the engine's stop moves are what try plans that break a limit.
 
 A route that already breaks a limit takes less: no request in front of a stop
 that is late, and none at all while it is over its travel budget or its stop

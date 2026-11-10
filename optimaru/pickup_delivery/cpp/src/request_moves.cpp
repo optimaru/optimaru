@@ -639,6 +639,7 @@ private:
     // The requests with a stop in a random stretch of the route around
     // `nodeIndex`, until pending() holds `count`.
     void takeStretch(int nodeIndex, int count, std::mt19937_64& rng) {
+        if (pendingCount() >= count) return;  // nothing left to take
         const int list = listOf(nodeIndex);
         nearStamp_[static_cast<std::size_t>(list)] = nearEpoch_;
         const std::vector<int>& route = plan_->vehicles[static_cast<std::size_t>(list)].nodeIndices;

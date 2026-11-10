@@ -11,6 +11,9 @@ namespace {
 // Far enough from the int64 range that a few subtractions never wrap.
 constexpr Seconds kNoLimit = std::numeric_limits<Seconds>::max() / 4;
 constexpr Seconds kNever = std::numeric_limits<Seconds>::min() / 4;
+// More candidates than any solve scans: a blinker this far from its next skip
+// never skips.
+constexpr std::int64_t kLongestGap = 1'000'000'000'000'000'000;
 
 // Whether two vehicles serve any request identically while they are idle:
 // the same limits, and the same driving times between their home and every
@@ -49,7 +52,8 @@ bool sameService(const PdpRoutePlan& plan, const Vehicle& a, const Vehicle& b) {
 // ---------------------------------------------------------------------------
 
 Blinker::Blinker(double rate, std::mt19937_64& rng) {
-    if (rate <= 0.0) return;
+    // Written so that a NaN rate, like one of 0 or less, never skips.
+    if (!(rate > 0.0)) return;
     rng_ = &rng;
     logKeep_ = std::log1p(-std::min(rate, 0.999999));
     draw();
@@ -58,7 +62,11 @@ Blinker::Blinker(double rate, std::mt19937_64& rng) {
 void Blinker::draw() {
     // A geometric gap: the candidates up to and including the next skipped one.
     const double unit = (static_cast<double>((*rng_)() >> 11) + 1.0) * 0x1.0p-53;  // (0, 1]
-    remaining_ = 1 + static_cast<std::int64_t>(std::log(unit) / logKeep_);
+    // With a rate near 0 the gap outgrows any scan, and the int64 range with
+    // it: hold it at kLongestGap (the comparison is false for a NaN too).
+    const double gap = std::log(unit) / logKeep_;
+    remaining_ = gap < static_cast<double>(kLongestGap) ? 1 + static_cast<std::int64_t>(gap)
+                                                        : kLongestGap;
 }
 
 // ---------------------------------------------------------------------------
