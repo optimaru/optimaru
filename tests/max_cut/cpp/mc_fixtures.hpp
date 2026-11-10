@@ -13,17 +13,14 @@
 
 #include "mc/domain.hpp"
 #include "mc/score_calculator.hpp"
+#include "optimaru/testing/check.hpp"
 
 namespace mc_test {
 
 using namespace mc;
 
-inline int failures = 0;
-
-inline void check(bool ok, const std::string& label) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok) ++failures;
-}
+using optimaru::testing::check;
+using optimaru::testing::failures;
 
 inline bool sameScore(const Score& a, const Score& b) {
     return a.hard == b.hard && a.soft == b.soft;

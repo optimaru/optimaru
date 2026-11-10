@@ -19,17 +19,14 @@
 #include "st/score_calculator.hpp"
 #include "st/solver.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/testing/check.hpp"
 
 using namespace st;
 
 namespace {
 
-int failures = 0;
-
-void check(bool ok, const std::string& label) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok) ++failures;
-}
+using optimaru::testing::check;
+using optimaru::testing::failures;
 
 void checkScore(const std::string& label, const Score& actual, long expectedHard,
                 double expectedSoft) {

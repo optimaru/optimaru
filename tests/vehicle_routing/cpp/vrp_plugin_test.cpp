@@ -53,17 +53,14 @@
 #include "vrp/domain.hpp"
 #include "vrp/score_calculator.hpp"
 #include "vrp/solver.hpp"
+#include "optimaru/testing/check.hpp"
 
 using namespace vrp;
 
 namespace {
 
-int failures = 0;
-
-void check(bool ok, const std::string& label) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok) ++failures;
-}
+using optimaru::testing::check;
+using optimaru::testing::failures;
 
 Score scoreWith(DecomposedCalculator& calculator, VehicleRoutePlan& plan) {
     calculator.rebuild(plan);

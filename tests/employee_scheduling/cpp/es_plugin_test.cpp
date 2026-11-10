@@ -48,17 +48,14 @@
 #include "optimaru/model/editor.hpp"
 #include "optimaru/worker_threads.hpp"
 #include "optimaru/python/names.hpp"
+#include "optimaru/testing/check.hpp"
 
 using namespace es;
 
 namespace {
 
-int failures = 0;
-
-void check(bool ok, const std::string& label) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok) ++failures;
-}
+using optimaru::testing::check;
+using optimaru::testing::failures;
 
 bool sameScore(const Score& a, const Score& b) {
     const double tolerance = 1e-6 * std::max(1.0, std::fabs(b.soft));

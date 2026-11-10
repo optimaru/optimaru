@@ -22,17 +22,14 @@
 #include "op/score_calculator.hpp"
 #include "op/solver.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/testing/check.hpp"
 
 using namespace op;
 
 namespace {
 
-int failures = 0;
-
-void check(bool ok, const std::string& label) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok) ++failures;
-}
+using optimaru::testing::check;
+using optimaru::testing::failures;
 
 WarehouseLocation loc(char column, int shelvingRow1Based, Side side, int row) {
     WarehouseLocation location;
