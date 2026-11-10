@@ -1988,6 +1988,19 @@ void testConstraintAssembly() {
           "weight(name, 0, w) + drop(name, 1) == the single instance re-weighted");
     check(scoreOf(repeated().soft("conflict", 0).soft("conflict", 1)).hard == 0,
           "soft(name, instance) flips each instance");
+    auto knobs = repeated()
+                         .soft("conflict", 0)
+                         .level("conflict", 1, optimaru::Level::Soft)
+                         .hard("conflict", 1)
+                         .clip("conflict", 1, false)
+                         .exponent("conflict", 1, 2.0)
+                         .offset("conflict", 0, 1.0);
+    const optimaru::ConstraintMetadata& first = *knobs.find("conflict", 0);
+    const optimaru::ConstraintMetadata& other = *knobs.find("conflict", 1);
+    check(first.level == optimaru::Level::Soft && first.clip && first.exponent == 1.0 &&
+                  first.offset == 1.0 && other.level == optimaru::Level::Hard && !other.clip &&
+                  other.exponent == 2.0 && other.offset == 0.0,
+          "level / hard / clip / exponent / offset by instance leave the other instance alone");
     auto second = repeated().drop("conflict", 0);
     check(second.instance_count("conflict") == 1 && second.find("conflict")->weight == 3.0,
           "after drop(name, 0) the name is unambiguous again and names the former second");

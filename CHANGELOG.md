@@ -11,7 +11,9 @@
   counted from 0: `weight(name, instance, w)` and the same for the other
   setters, `find(name, instance)` and `drop(name, instance)`.
   `instance_count(name)` says how many there are and `drop_all(name)` removes
-  them all. A name held once behaves as before, and so does the Python API,
+  them all. `find(name)` throws for such a name as well, where it used to
+  return the first instance; `contains(name)` never throws. A name held once
+  behaves as before, and so does the Python API,
   which never edits a repeated name.
 - **Docs: the cost of a negative threshold.** The guides now say that a
   negative `offset` with `clip=True` (a fixed charge per non-zero unit) is
