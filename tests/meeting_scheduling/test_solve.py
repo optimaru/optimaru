@@ -99,27 +99,38 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     assert seen[-1].hard == 0 and seen[-1].soft < -1e18
 
 
+def _step_limited_score(seed, starts, **solve_arguments):
+    """The score of a seeded demo solve that 2,000 steps end, not the clock."""
+    config = ms.SolverConfig()
+    config.spent_limit_seconds = 60.0
+    config.step_count_limit = 2000
+    config.random_seed = seed
+    config.parallel_solver_count = starts
+    solved = ms.solve(ms.demo_data(), config=config, **solve_arguments)
+    return (solved.score.hard, solved.score.soft)
+
+
 def test_parallel_starts_return_the_best_single_start():
     """Start i of a multi-start solve searches with random_seed + i and the best score wins,
     so four step-limited starts return what the best of the four single-start solves does.
     A solve that ran one start whatever the count says returns the first one's score instead,
     and the first start is not the best one for every seed below."""
-
-    def score(seed, starts):
-        config = ms.SolverConfig()
-        config.spent_limit_seconds = 60.0  # the step limit ends the solve
-        config.step_count_limit = 2000
-        config.random_seed = seed
-        config.parallel_solver_count = starts
-        solved = ms.solve(ms.demo_data(), config=config)
-        return (solved.score.hard, solved.score.soft)
-
     first_was_best = []
     for seed in range(0, 60, 10):
-        singles = [score(seed + start, 1) for start in range(4)]
-        assert score(seed, 4) == max(singles)
+        singles = [_step_limited_score(seed + start, 1) for start in range(4)]
+        assert _step_limited_score(seed, 4) == max(singles)
         first_was_best.append(singles[0] == max(singles))
     assert not all(first_was_best)
+
+
+def test_a_solve_with_constraints_runs_one_start():
+    """The constraints path is single-start (its calculator cannot be cloned for more):
+    parallel_solver_count changes nothing there."""
+    from optimaru.meeting_scheduling.constraints import get_constraints
+
+    for seed in (0, 10, 20):
+        one = _step_limited_score(seed, 1, constraints=get_constraints())
+        assert _step_limited_score(seed, 4, constraints=get_constraints()) == one
 
 
 def _boom(_step, _score):

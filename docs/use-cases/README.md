@@ -68,6 +68,11 @@ It returns the solved problem, and the score is on it.
   use case accepts a model there, is the one call that writes into it: it fills
   in the model's score fields.)
 
+`parallel_solver_count=N` runs N independent starts, start *i* with
+`random_seed + i`, and returns the best of them. `on_new_best` reports the first
+start only, so the returned score can be better than the last one it was called
+with.
+
 Four use cases model a whole request (input, time limit, seed) in pydantic
 instead of the problem alone: employee scheduling, order picking, pickup &
 delivery and vehicle routing. Their `solve()` takes the compiled problem only,

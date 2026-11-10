@@ -100,6 +100,9 @@ void runEngine(const Solver::Config& config, MeetingSchedule& schedule, int para
     }
 
     engineConfig.parallel_starts = parallel_starts;
+    // Everything above travels in the Settings, which every start copies. A
+    // custom move, ruin or derived state registered on this engine would not:
+    // solve_multistart() runs its starts with the built-ins only.
     optimaru::Solver<MeetingSchedule> engine(std::move(engineConfig));
     search(engine);
 }
