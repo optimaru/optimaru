@@ -84,7 +84,13 @@ def _core_of(problem):
     """(engine object, the model to write back into or None)."""
     if isinstance(problem, _core.SemiconductorSchedule):
         return problem, None
-    return problem.to_core(), problem
+    from .models import SemiconductorScheduleModel
+
+    if isinstance(problem, SemiconductorScheduleModel):
+        return problem.to_core(), problem
+    raise TypeError(
+        f"problem must be a SemiconductorSchedule or a models.SemiconductorScheduleModel: {type(problem)!r}"
+    )
 
 
 def _write_scores(model, core) -> None:

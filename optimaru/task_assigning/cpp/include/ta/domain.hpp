@@ -61,7 +61,7 @@ constexpr Minutes kNullTime = -1;  // startTime of an unassigned task
 //    dominates soft2 as long as |soft2| < 10^7 (weighted end-minute sum).
 //    That covers instances whose horizon is tens of thousands of minutes.
 // One semantic wrinkle: the engine's feasible() (engine.hard >= 0) now
-// also requires soft0 == 0. Because the engine's LIST local search keeps
+// also requires soft0 == 0. Because the engine's sequence local search keeps
 // every task assigned once construction finished, final solutions always
 // have soft0 == 0, so feasibility coincides with hard == 0.
 constexpr std::int64_t kMissingSkillUnit = 1000000000LL;
@@ -202,7 +202,7 @@ struct TaskType
 };
 
 // ---------------------------------------------------------------------------
-// Task  (the LIST element)
+// Task  (the list element)
 // ---------------------------------------------------------------------------
 // The input fields are immutable; the derived fields (employee, startTime)
 // are computed from the employees' task lists:

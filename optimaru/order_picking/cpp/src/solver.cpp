@@ -485,7 +485,7 @@ namespace
 {
 
 // Shared engine wiring for both solve() overloads: termination, late
-// acceptance, the LIST move mix, the ALNS knobs and the distance-nearby
+// acceptance, the sequence move mix, the ALNS knobs and the distance-nearby
 // selection (all pure problem-fact lookups, so they apply to the plugin path
 // too).
 optimaru::Settings buildEngineConfig(const Solver::Config &config,
@@ -650,7 +650,7 @@ void Solver::solve(
     {
         // No OrderConsolidateMove here: that operator reads the monolithic
         // calculator's live per-(trolley, order) volume table, which a
-        // caller-assembled plugin does not expose. The built-in LIST move mix
+        // caller-assembled plugin does not expose. The built-in sequence move mix
         // plus the ALNS kicks remain.
         optimaru::Solver<OrderPickingSolution> engine(
             buildEngineConfig(config_, solution));

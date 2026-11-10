@@ -3,7 +3,7 @@
 //   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 200 random list
 //       layouts (unassigned jobs included)
-//   (b) incremental score == full recompute across 1500 random LIST moves
+//   (b) incremental score == full recompute across 1500 random sequence moves
 //       driven through the engine's Editor protocol (plugin path)
 //   (c) constraint_totals() explains exactly the reported score
 //   (d) weight / level overrides
@@ -24,7 +24,7 @@
 //       unassigned pool), the globals' totals shaped once, the literal
 //       formula refused on hard at reset and kept on soft (and on the
 //       into_soft medium), incremental == a fresh recompute over a random
-//       LIST walk and a ScoreChecks::Full solve with repeated, shifted components
+//       sequence walk and a ScoreChecks::Full solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -133,7 +133,7 @@ void verifyAssemblyParity()
 }
 
 // -------------------------------------------------------------------------
-// (b) Incremental score == full recompute across a random walk of LIST
+// (b) Incremental score == full recompute across a random walk of sequence
 // mutations, driven through the Editor. The unassigned pool is one of
 // the engine's lists here, so a "relocate to the pool" is an ordinary move.
 // -------------------------------------------------------------------------
@@ -803,7 +803,7 @@ void verifyMediumLevel()
 
 // -------------------------------------------------------------------------
 // (i) Incremental == full recompute with each medium term overridden,
-// through the Editor's LIST protocol (relocations, including to the
+// through the Editor's sequence protocol (relocations, including to the
 // pool, and 2-opt reversals).
 // -------------------------------------------------------------------------
 void verifyMediumIncremental()
@@ -1217,7 +1217,7 @@ void verifyRepeatsAndOffsets()
               "literal formula on the into_soft medium");
     }
     {
-        // Random LIST walk: incremental == a fresh calculator of the same
+        // Random sequence walk: incremental == a fresh calculator of the same
         // assembly.
         PackagingSchedule s = generateDemoData(/*lines*/ 4, /*jobs*/ 24);
         ScoreCalculator::prepare(s);

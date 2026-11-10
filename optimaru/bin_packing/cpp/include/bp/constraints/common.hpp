@@ -21,7 +21,7 @@ namespace bp
 // BinPackingIncrementalScoreCalculator, which stays the tuned default fast
 // path.
 //
-// Unit choice: the BASIC descriptor's unit is the VALUE, i.e. one bin;
+// Unit choice: the assignment shape's unit is the VALUE, i.e. one bin;
 // members are the items currently in it (order irrelevant). Capacity, colour
 // and conflict violations all decompose per bin, so they are UnitConstraints
 // (one cost per bin 0..n-1, an empty bin costs 0). usedBinsCost is a
@@ -54,7 +54,7 @@ namespace bp
 // ("binCapacityCost"); Python sees them through python_name()
 // ("bin_capacity_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score.
 //
 // Every component requires ScoreCalculator::prepare(problem) to have run

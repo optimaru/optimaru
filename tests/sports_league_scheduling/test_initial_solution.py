@@ -2,8 +2,6 @@
 
 import pytest
 
-pytest.importorskip("pydantic")
-
 import optimaru.sports_league_scheduling as sl
 from optimaru.sports_league_scheduling.models import LeagueScheduleModel
 

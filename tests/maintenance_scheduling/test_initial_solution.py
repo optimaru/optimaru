@@ -4,8 +4,6 @@ from datetime import date, timedelta
 
 import pytest
 
-pytest.importorskip("pydantic")
-
 import optimaru.maintenance_scheduling as mnt
 from optimaru.maintenance_scheduling.models import MaintenanceScheduleModel, epoch_to_date
 

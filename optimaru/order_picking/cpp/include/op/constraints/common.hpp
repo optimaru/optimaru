@@ -20,7 +20,7 @@ namespace op
 // monolithic OrderPickingIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
-// Unit choice: with the LIST descriptor the calculator's unit is one LIST,
+// Unit choice: with the sequence shape the calculator's unit is one list,
 // i.e. one trolley; members are its pick tasks IN PICKING ORDER. This domain
 // decomposes perfectly: all four rules are per-trolley sums, so every
 // component is a UnitConstraint and there is no GlobalConstraint at all —
@@ -31,7 +31,7 @@ namespace op
 // A component never reads the PickTask derived fields (trolleyIndex,
 // previousPickTask, nextPickTask): it walks the unit's own member order,
 // which is what makes each cost a pure function of (solution, unit, members)
-// as the engine's contract requires. The LIST path re-costs a touched list
+// as the engine's contract requires. The sequence path re-costs a touched list
 // whole, so no delta contract is needed.
 //
 //   DecomposedCalculator calc;
@@ -58,7 +58,7 @@ namespace op
 // ("trolleyCapacityCost"); Python sees them through python_name()
 // ("trolley_capacity_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation (orderSplitByTrolleyCost is the documented
 // exception: it counts every (order, trolley) pair, so it is 0 only without
 // assigned picks); the calculator negates into the score. An assembly of all

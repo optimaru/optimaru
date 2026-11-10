@@ -298,7 +298,7 @@ buildRandomInstance(int taskCount, int employeeCount, unsigned seed)
 }
 
 // -------------------------------------------------------------------------
-// (b) Incremental == full recompute across a random walk of LIST mutations
+// (b) Incremental == full recompute across a random walk of sequence mutations
 // through the Editor protocol.
 // -------------------------------------------------------------------------
 void verifyIncremental()

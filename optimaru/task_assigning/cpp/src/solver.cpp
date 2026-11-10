@@ -17,7 +17,7 @@ namespace
 {
 
 // Translates a domain Config into the engine's Settings: termination,
-// late acceptance, the LIST move mix and the ALNS knobs. Shared by both
+// late acceptance, the sequence move mix and the ALNS knobs. Shared by both
 // solve() overloads.
 optimaru::Settings buildEngineConfig(const Solver::Config &config,
                                          const TaskAssigningSolution &solution,
@@ -98,7 +98,7 @@ void Solver::solve(TaskAssigningSolution &solution)
     }
 
     // Cheapest-insertion construction + late-acceptance local search over
-    // the LIST moves (+ ALNS kicks), multi-start parallel when
+    // the sequence moves (+ ALNS kicks), multi-start parallel when
     // parallelSolverCount > 1. Each start gets its own calculator instance
     // (the calculators are stateful).
     optimaru::Solver<TaskAssigningSolution> engine(

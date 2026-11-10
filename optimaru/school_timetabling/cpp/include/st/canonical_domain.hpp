@@ -22,7 +22,7 @@
 // components' kDefaultWeight by default).
 //
 // Modeling decisions (fixed by design, do not change casually):
-//   - The single decision variable is the timeslot index (BASIC, -1 =
+//   - The single decision variable is the timeslot index (assignment, -1 =
 //     unassigned). Rooms are NOT a variable: same-typed special rooms are
 //     interchangeable, so roomCapacityCost only compares per-(roomType, slot)
 //     demand against the owned count (like the CP-SAT model; concrete rooms

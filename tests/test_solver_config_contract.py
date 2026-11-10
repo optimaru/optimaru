@@ -1,11 +1,12 @@
 """The part of SolverConfig every use case shares (optimaru::python::bind_solver_config)."""
 
 import copy
-import importlib
 
 import pytest
 
 import optimaru
+
+from ._build import use_case_module
 
 SHARED_FIELDS = [
     "spent_limit_seconds",
@@ -22,10 +23,7 @@ NO_AUTO_LATE_ACCEPTANCE = {"employee_scheduling"}
 
 
 def _config(use_case):
-    try:
-        return importlib.import_module(f"optimaru.{use_case}").SolverConfig()
-    except ImportError:  # a build narrowed with OPTIMARU_USE_CASES
-        pytest.skip(f"optimaru.{use_case} is not built")
+    return use_case_module(use_case).SolverConfig()
 
 
 @pytest.mark.parametrize("use_case", optimaru.__all__)

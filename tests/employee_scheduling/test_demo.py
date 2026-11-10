@@ -2,10 +2,8 @@
 
 import pytest
 
-pytest.importorskip("pydantic")
-
-from optimaru.employee_scheduling.demo import generate_demo_data  # noqa: E402
-from optimaru.employee_scheduling.models import ScheduleRequest, solve_request  # noqa: E402
+from optimaru.employee_scheduling.demo import generate_demo_data
+from optimaru.employee_scheduling.models import ScheduleRequest, solve_request
 
 
 def test_the_same_arguments_give_the_same_request():

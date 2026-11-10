@@ -21,7 +21,7 @@ namespace fcs
 // TO the monolithic FlightCrewSchedulingIncrementalScoreCalculator, which
 // stays the tuned default fast path.
 //
-// Unit choice: with the BASIC descriptor the calculator's unit is the VALUE,
+// Unit choice: with the assignment shape the calculator's unit is the VALUE,
 // i.e. one employee; members are the flight assignments they hold. This
 // domain decomposes unusually cleanly — every single constraint is a function
 // of ONE employee's itinerary, so all six are UnitConstraints and there is no
@@ -63,7 +63,7 @@ namespace fcs
 // ("requiredSkillCost"); Python sees them through python_name()
 // ("required_skill_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run

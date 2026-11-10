@@ -3,8 +3,7 @@
 import pytest
 
 import optimaru.facility_location as fl
-
-models = pytest.importorskip("optimaru.facility_location.models")
+from optimaru.facility_location import models
 
 
 def sample_problem():

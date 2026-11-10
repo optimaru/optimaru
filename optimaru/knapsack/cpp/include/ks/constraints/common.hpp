@@ -19,7 +19,7 @@ namespace ks
 // DecomposedObjective — the assembly path NEXT TO the monolithic
 // KnapsackIncrementalScoreCalculator, which stays the default fast path.
 //
-// Unit choice: the BASIC descriptor's units are the two VALUES — unit 0 holds
+// Unit choice: the assignment shape's units are the two VALUES — unit 0 holds
 // the unselected items, unit 1 the selected ones (an undecided item, -1, is in
 // neither). Every constraint is a function of the selected set as a whole
 // (a capacity, a count per group, a pair of items), so none decomposes per
@@ -56,7 +56,7 @@ namespace ks
 // ("knapsackCapacityCost"); Python sees them through python_name()
 // ("knapsack_capacity_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; selectedValueCost is a reward (raw <= 0, never
 // hard). The calculator negates into the score.
 //

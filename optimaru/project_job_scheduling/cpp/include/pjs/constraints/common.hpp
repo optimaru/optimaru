@@ -78,7 +78,7 @@ namespace pjs
 // Registry names are the struct names with a lower-case first letter
 // ("makespanCost"); Python sees them through python_name() ("makespan_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. An
 // assembly of all four components at their default weights therefore scores
 // bit-for-bit like ScoreCalculator::score.

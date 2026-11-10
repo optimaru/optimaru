@@ -50,7 +50,7 @@ struct Resource
 // ---------------------------------------------------------------------------
 // Item  (entity)
 // ---------------------------------------------------------------------------
-// `selected` is the single BASIC decision variable: 1 = selected, 0 = not
+// `selected` is the single assignment decision variable: 1 = selected, 0 = not
 // selected, -1 = undecided (counted as not selected).
 struct Item
 {

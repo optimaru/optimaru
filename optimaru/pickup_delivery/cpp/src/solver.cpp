@@ -794,7 +794,7 @@ void checkRequiredVehicles(const PdpRoutePlan &plan)
 }
 
 // Shared engine wiring for both solve() overloads: termination, late
-// acceptance, the LIST move mix, the ALNS knobs and the driving-time nearby
+// acceptance, the sequence move mix, the ALNS knobs and the driving-time nearby
 // selection (all pure problem-fact lookups, so they apply to the plugin path
 // too).
 optimaru::Settings buildEngineConfig(const Solver::Config &config,

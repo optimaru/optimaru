@@ -4,14 +4,11 @@ import os
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
-pytest.importorskip("pydantic")
-
-from pydantic import ValidationError  # noqa: E402
-
-import optimaru.employee_scheduling as es  # noqa: E402
-from optimaru.employee_scheduling import models  # noqa: E402
-from optimaru.employee_scheduling.constraints import (  # noqa: E402
+import optimaru.employee_scheduling as es
+from optimaru.employee_scheduling import models
+from optimaru.employee_scheduling.constraints import (
     SPEC_CLASSES,
     AssignmentCost,
     DayPatternCost,
@@ -21,8 +18,8 @@ from optimaru.employee_scheduling.constraints import (  # noqa: E402
     UndesiredDayCost,
     WorkerDayCountInRangeCost,
 )
-from optimaru.employee_scheduling.demo import generate_demo_data  # noqa: E402
-from optimaru.employee_scheduling.models import (  # noqa: E402
+from optimaru.employee_scheduling.demo import generate_demo_data
+from optimaru.employee_scheduling.models import (
     RULE_MODELS,
     RuleTotal,
     ScheduleRequest,

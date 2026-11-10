@@ -86,7 +86,7 @@ DateWindows buildDateWindows(const MaintenanceSchedule &schedule)
 }
 
 // Shared engine wiring for both solve() overloads: termination, late
-// acceptance, the BASIC move mix and the ALNS knobs.
+// acceptance, the assignment move mix and the ALNS knobs.
 optimaru::Settings buildEngineConfig(const Solver::Config &config,
                                          const MaintenanceSchedule &schedule)
 {

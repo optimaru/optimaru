@@ -3,7 +3,7 @@
 //   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 300 random route
 //       layouts (unassigned visits included)
-//   (b) incremental score == full recompute across 1500 random LIST moves
+//   (b) incremental score == full recompute across 1500 random sequence moves
 //       driven through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: each component isolates its own term
 //   (d) weight / level overrides
@@ -116,7 +116,7 @@ void verifyAssemblyParity() {
 }
 
 // -------------------------------------------------------------------------
-// (b) Incremental score == full recompute across a random walk of LIST
+// (b) Incremental score == full recompute across a random walk of sequence
 // mutations, driven through the Editor.
 // -------------------------------------------------------------------------
 void verifyIncremental() {
@@ -783,7 +783,7 @@ void verifyMediumLevel() {
 // Incremental == full recompute and every move preview == the applied score
 // with the medium term overridden: a random walk of list moves through the
 // Editor protocol, then the preview harness on the same assembly. The
-// LIST domain previews through the global's piecewise contract, so this is
+// sequence-shape domain previews through the global's piecewise contract, so this is
 // the path a medium term takes in the engine's move evaluation.
 void verifyMediumIncremental() {
     std::printf("== (l) Medium overrides: incremental == full, previews == applied ==\n");

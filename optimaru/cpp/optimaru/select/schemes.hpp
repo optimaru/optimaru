@@ -7,9 +7,8 @@
 // ---------------------------------------------------------------------------
 // Adaptive operator selection — umbrella header
 // ---------------------------------------------------------------------------
-// The plugin point lives in select/scheme.hpp and one
-// scheme per file next to it. Including this header
-// still gives the whole set plus the factory, so call sites do not change.
+// The plugin point lives in select/scheme.hpp, with one scheme per file
+// next to it. This header gives the whole set plus the factory.
 //
 // Adding a scheme is a file there, a line here, an enum value and a case in
 // the factory below.

@@ -74,7 +74,7 @@ namespace cs
 // ("roomConflictCost"); Python sees them through python_name()
 // ("room_conflict_cost"). Each Breakdown member carries the same name.
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation, NEGATIVE = reward. The three *DiversityCost rules
 // are rewards and return negative costs (they are
 // marked `reward = true; level_flippable = false;`, so hard() and any level

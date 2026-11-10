@@ -30,7 +30,7 @@ using Score = optimaru::Score;
 // ---------------------------------------------------------------------------
 // Facility  (entity)
 // ---------------------------------------------------------------------------
-// `location` is the single BASIC decision variable: the index into
+// `location` is the single assignment decision variable: the index into
 // QuadraticAssignmentProblem::locations, -1 == unassigned. The solver keeps
 // the facilities a permutation of the locations (swap moves only), so -1
 // appears only in a partial state a caller wrote.

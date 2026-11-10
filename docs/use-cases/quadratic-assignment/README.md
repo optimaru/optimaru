@@ -213,7 +213,7 @@ The package is the C++ engine with pybind11 bindings, like the other C++ use cas
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=quadratic_assignment
 cmake --build build -j4
 ctest --test-dir build --output-on-failure --no-tests=error
-./build/quadratic_assignment/quadratic-assignment/qap_demo 2
+./build/quadratic_assignment/qap_demo 2
 ```
 
 `qap_test`: hand-calculated scores, a positive and a zero case

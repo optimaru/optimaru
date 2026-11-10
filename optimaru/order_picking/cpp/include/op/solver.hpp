@@ -19,7 +19,7 @@ namespace op
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/.
 // (following the school-timetabling Solver pattern,
-// LIST-kind edition). On top of the built-in list move mix (relocate / swap /
+// sequence-shape edition). On top of the built-in list move mix (relocate / swap /
 // 2-opt / or-opt / tail swap) and the engine's adaptive ruin-and-recreate
 // (ALNS, on by default) it registers a warehouse-distance nearby meter, which
 // biases move partners toward picks that are physically close — the natural
@@ -76,7 +76,7 @@ public:
         std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
         std::int64_t ruinRecreatePolishSteps = 5000;
 
-        // LIST move mix. Weights are relative; 0 disables a move. Or-opt
+        // Sequence move mix. Weights are relative; 0 disables a move. Or-opt
         // (short-segment relocate) and tail swap (2-opt*) are on: both are
         // classic routing moves and this is a routing-shaped problem.
         double relocate_weight = 0.40;

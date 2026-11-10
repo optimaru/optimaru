@@ -3,7 +3,7 @@
 //   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 300 random list
 //       layouts (unassigned pick tasks included)
-//   (b) incremental score == full recompute across 2000 random LIST moves
+//   (b) incremental score == full recompute across 2000 random sequence moves
 //       driven through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
 //   (d) weight / level overrides
@@ -180,7 +180,7 @@ void verifyAssemblyParity()
 }
 
 // -------------------------------------------------------------------------
-// (b) Incremental score == full recompute across a random walk of LIST
+// (b) Incremental score == full recompute across a random walk of sequence
 // mutations, driven through the Editor.
 // -------------------------------------------------------------------------
 void verifyIncremental()

@@ -27,7 +27,7 @@ void requireRewards(const Solver::Config &config)
 }
 
 // The engine configuration shared by both solve() overloads: late-acceptance
-// local search over the built-in BASIC moves, plus the ALNS kicks. The
+// local search over the built-in assignment moves, plus the ALNS kicks. The
 // engine's construction heuristic finds nothing left to place: the domain
 // construction decided every item.
 optimaru::Settings engineConfigOf(const Solver::Config &config,

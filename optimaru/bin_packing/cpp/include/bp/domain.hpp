@@ -31,7 +31,7 @@ using Score = optimaru::Score;
 // ---------------------------------------------------------------------------
 // Item  (entity)
 // ---------------------------------------------------------------------------
-// `bin` is the single BASIC decision variable: a 0-based bin index into the
+// `bin` is the single assignment decision variable: a 0-based bin index into the
 // value range 0..itemCount()-1 (n identical bins always suffice), -1 ==
 // unassigned. Every solve returns every item assigned; -1 appears only in an
 // unsolved input and inside the engine's ruin-and-recreate.

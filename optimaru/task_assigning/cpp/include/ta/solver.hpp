@@ -17,7 +17,7 @@ namespace ta
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
 // wires up the incremental score calculator and delegates solving to
-// optimaru::Solver<TaskAssigningSolution> (LIST variable: cheapest-insertion
+// optimaru::Solver<TaskAssigningSolution> (sequence variable: cheapest-insertion
 // construction + relocate/swap/2-opt/or-opt/tail-swap local search), with
 // the engine's adaptive ruin-and-recreate (ALNS) kicks enabled by default.
 class Solver
@@ -68,7 +68,7 @@ public:
         std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
         std::int64_t ruinRecreatePolishSteps = 5000;
 
-        // LIST move mix. Weights are relative; 0 disables a move. Or-opt
+        // Sequence move mix. Weights are relative; 0 disables a move. Or-opt
         // (segment relocate) and tail swap (2-opt*) are enabled here on top
         // of the engine defaults: both are natural task-queue moves.
         double relocate_weight = 0.4;
@@ -92,7 +92,7 @@ public:
     // Solves with a caller-assembled plugin calculator (see
     // ta/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies — cheapest-insertion
-    // construction, late-acceptance local search over the LIST moves and
+    // construction, late-acceptance local search over the sequence moves and
     // ALNS kicks. Weights come from the assembly, NOT from the
     // default weights. The final solution.score is computed by THIS
     // calculator (decoded back into the score levels) and the calculator

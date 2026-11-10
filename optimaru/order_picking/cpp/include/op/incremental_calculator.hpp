@@ -13,7 +13,7 @@ namespace op
 // The order-picking implementation of the engine's
 // optimaru::Objective.
 //
-// LIST-kind hooks, per-trolley granularity (the vehicle-routing pattern): a
+// Sequence-shape hooks, per-trolley granularity (the vehicle-routing pattern): a
 // move touches at most two trolleys, and every constraint decomposes into
 // per-trolley terms plus the per-(order, trolley) presence matrix:
 //   - soft distance: dist_[t] = the trolley's round-trip travel distance

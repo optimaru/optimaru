@@ -19,7 +19,7 @@ namespace mc
 // DecomposedObjective — the assembly path NEXT TO the monolithic
 // MaxCutIncrementalScoreCalculator, which stays the default fast path.
 //
-// Unit choice: the BASIC descriptor's units are the two VALUES — unit 0 holds
+// Unit choice: the assignment shape's units are the two VALUES — unit 0 holds
 // the side-0 vertices, unit 1 the side-1 vertices (an unassigned vertex, -1,
 // is in neither). Four constraints decompose per side and are
 // UnitConstraints (constraint_costs() reports [side 0, side 1]):
@@ -66,12 +66,12 @@ namespace mc
 // ("fixedPartitionCost"); Python sees them through python_name()
 // ("fixed_partition_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; cutWeightCost is a reward (raw <= 0, never
 // hard). The calculator negates into the score.
 //
 // The pair deltas read the partner's side from the working solution. That is
-// exact because the engine notifies BASIC changes one entity at a time
+// exact because the engine notifies assignment changes one entity at a time
 // (before / set / after): at every delta_cost() call each OTHER vertex's side
 // equals its unit membership. ScoreChecks::Full solves (swaps and ruin-and-recreate
 // included) and the random-walk tests check it.

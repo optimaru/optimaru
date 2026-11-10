@@ -4,7 +4,8 @@
 #ifndef OPTIMARU_OPTIMARU_HPP
 #define OPTIMARU_OPTIMARU_HPP
 
-// Everything a use case needs. The directories:
+// Everything a use case's solver needs (python/ holds the pybind11 helpers
+// a bindings.cpp includes itself). The directories:
 //   model/      how the engine reads and writes a solution
 //   score/      the score, its levels and the incremental objectives
 //   construct/  the initial solution
@@ -20,6 +21,8 @@
 #include "optimaru/score/chain_objective.hpp"
 #include "optimaru/score/weighted_objective.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
+#include "optimaru/score/levels.hpp"
+#include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/objective.hpp"
 #include "optimaru/score/breakdown.hpp"
 #include "optimaru/model/editor.hpp"
@@ -28,5 +31,6 @@
 #include "optimaru/background_solve.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/worker_threads.hpp"
 
 #endif  // OPTIMARU_OPTIMARU_HPP

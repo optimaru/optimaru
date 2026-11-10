@@ -12,7 +12,7 @@ namespace fp
 {
 
 // Incremental score calculator of the food-packaging constraints for the
-// engine's LIST hook protocol (before_list_edit / after_list_edit). Every
+// engine's sequence hook protocol (before_list_edit / after_list_edit). Every
 // constraint decomposes per line once the job times of the line are known:
 //
 //   - per line l: lateness sums (hard maxEndTimeCost / medium

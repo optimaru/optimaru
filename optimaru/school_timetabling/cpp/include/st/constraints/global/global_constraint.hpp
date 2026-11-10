@@ -7,13 +7,13 @@ namespace st::canon
 {
 
 // ---------------------------------------------------------------------------
-// Cross-slot global constraints (BASIC member-change fast path: the
+// Cross-slot global constraints (assignment member-change fast path: the
 // calculator delivers every lesson join/leave, including the inverse writes
 // of a rolled-back move, so exactly reversible aggregates stay consistent)
 // ---------------------------------------------------------------------------
 
 // Shared base: supports_member_change() routes everything through
-// on_member_changed; the unit-diff hook is unreachable for BASIC solutions.
+// on_member_changed; the unit-diff hook is unreachable for assignment-shaped solutions.
 struct MemberChangeGlobalConstraint : CanonGlobalConstraint
 {
     using CanonGlobalConstraint::CanonGlobalConstraint;

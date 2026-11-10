@@ -22,7 +22,7 @@ namespace ba
 // monolithic BedAllocationIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
-// Unit choice: with the BASIC descriptor the calculator's unit is the VALUE,
+// Unit choice: with the assignment shape the calculator's unit is the VALUE,
 // i.e. one assignable value — a real bed, or the "no bed" sentinel
 // (BedPlan::noBedValue()); members are the stays currently assigned to it.
 // Uninitialized stays (bed == -1) belong to no unit and so contribute
@@ -75,7 +75,7 @@ namespace ba
 // ("bedConflictCost"); Python sees them through python_name()
 // ("bed_conflict_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score.
 //
 // Every component requires ScoreCalculator::prepare(plan) to have run (the
@@ -202,7 +202,7 @@ private:
 // Cross-unit global constraints
 // ---------------------------------------------------------------------------
 // Shared base: supports_member_change() routes everything through
-// on_member_changed; the unit-diff hook is unreachable for BASIC solutions.
+// on_member_changed; the unit-diff hook is unreachable for assignment-shaped solutions.
 struct MemberChangeGlobalConstraint : BaGlobalConstraint
 {
     using BaGlobalConstraint::BaGlobalConstraint;

@@ -273,3 +273,15 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     )
     assert time.monotonic() - started < 20.0
     assert seen[-1].hard == 0 and seen[-1].soft < -1e18
+
+
+def test_inputs_of_the_wrong_type_are_refused():
+    import pytest
+
+    import optimaru.semiconductor_scheduling as package
+
+    with pytest.raises(TypeError, match="SemiconductorSchedule or a models.SemiconductorScheduleModel"):
+        solve_fab({"lots": []})
+    for refuses in (fab_costs, fab_items, package.calculate_score):
+        with pytest.raises(TypeError):
+            refuses([])

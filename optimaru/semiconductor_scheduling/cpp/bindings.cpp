@@ -22,7 +22,7 @@
 
 namespace py = pybind11;
 using namespace fab;
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 
 namespace
 {
@@ -330,7 +330,7 @@ PYBIND11_MODULE(_core, m)
             if (constraints.is_none())
                 return ScoreCalculator::score(schedule);
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            opy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
             calculator.rebuild(schedule);
             const Score score = calculator.score();
             storeScore(schedule, score);
@@ -417,7 +417,7 @@ PYBIND11_MODULE(_core, m)
             {
                 ScoreCalculator::prepare(schedule);
                 DecomposedCalculator calculator;
-                tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+                opy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(schedule, calculator);
             },
@@ -435,8 +435,8 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(schedule);
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
-            return tfpy::constraint_costs(calculator, schedule);
+            opy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            return opy::constraint_costs(calculator, schedule);
         },
         py::arg("schedule"), py::arg("constraints") = py::none(),
         "Raw cost of every constraint on schedule.assignments, before weight/exponent/offset/level.");
@@ -449,7 +449,7 @@ PYBIND11_MODULE(_core, m)
             ScoreCalculator::prepare(schedule);
             RawItems items;
             ScoreCalculator::rawCosts(schedule, &items);
-            const std::vector<std::string> names = tfpy::constraint_names(defaultConstraints());
+            const std::vector<std::string> names = opy::constraint_names(defaultConstraints());
             py::dict out;
             for (std::size_t t = 0; t < names.size(); ++t)
                 out[py::str(names[t])] = py::cast(items[t]);
@@ -457,10 +457,10 @@ PYBIND11_MODULE(_core, m)
         },
         py::arg("schedule"), "Per-item raw costs of every constraint on schedule.assignments (one list per constraint).");
 
-    m.def("list_constraints", [] { return tfpy::constraint_names(defaultConstraints()); },
+    m.def("list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
           "Constraint names available to optimaru.semiconductor_scheduling.constraints.");
 
-    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
 
     // --- the decoder, for tests and tools ---------------------------------
     m.def(

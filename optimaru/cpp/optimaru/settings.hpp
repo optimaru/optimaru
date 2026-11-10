@@ -120,18 +120,13 @@ struct AcceptanceSettings {
     Score water_level_step{0, 0.0};
     std::int64_t recount_interval = 400;  // StepCountingHillClimbing
 
-    // RecordToRecordTravel: the acceptable soft-score gap below the
-    // baseline, shrinking from start to end over the solve. Both are
+    // RecordToRecordTravel: the acceptable soft-score gap below the best
+    // score, shrinking linearly from start to end over the solve. Both are
     // fractions of the initial score's soft magnitude (the autofit form), so
-    // they need no per-instance tuning; rrt_steps is how many steps the
-    // schedule spans (0 = auto, derived from the step limit or a 10^6
-    // default). rrt_compare_to_best = false switches from RRT to threshold
-    // accepting (baseline = current instead of best).
+    // they need no per-instance tuning. The schedule spans the step limit,
+    // or 10^6 steps when there is none.
     double rrt_start_gap = 0.02;
     double rrt_end_gap = 0.0;
-    std::int64_t rrt_steps = 0;
-    bool rrt_exponential = false;
-    bool rrt_compare_to_best = true;
 };
 
 // The adaptive ruin-and-recreate (ALNS) settings, with adaptive operator

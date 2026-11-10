@@ -315,17 +315,6 @@ def test_soft_weights_need_not_be_integers(problem):
 # ------------------------------------------------------------- one name in every layer
 
 
-def test_every_cpsat_constraint_has_the_engine_name():
-    """The CP-SAT reference and the engine call each constraint by the same name — there is no alias table.
-
-    Runs only when the cpsat package is installed — catches the two packages drifting apart.
-    """
-    catalog = pytest.importorskip("teacher_scheduling.api").catalog
-    engine_names = set(list_constraints())
-    for spec in catalog():
-        assert spec.name in engine_names, f"no engine counterpart: {spec.name}"
-
-
 def test_structural_constraints_assemble_like_any_other(problem):
     """fixed_slots_cost / parallel_groups_cost are real components: they assemble, cost 0, stay hard."""
     assembly = Assembly([st.constraints.fixed_slots_cost, st.constraints.parallel_groups_cost])

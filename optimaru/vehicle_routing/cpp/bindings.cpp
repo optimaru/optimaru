@@ -20,7 +20,7 @@
 
 namespace py = pybind11;
 using namespace vrp;
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 
 PYBIND11_MODULE(_core, m)
 {
@@ -421,7 +421,7 @@ PYBIND11_MODULE(_core, m)
                const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::apply_constraints([] { return defaultConstraints(); },
+                opy::apply_constraints([] { return defaultConstraints(); },
                                        constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
@@ -442,10 +442,10 @@ PYBIND11_MODULE(_core, m)
         [](VehicleRoutePlan &plan, const py::object &constraints)
         {
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); },
+            opy::apply_constraints([] { return defaultConstraints(); },
                                    constraints)
                 .into(calculator);
-            return tfpy::constraint_costs(calculator, plan);
+            return opy::constraint_costs(calculator, plan);
         },
         py::arg("plan"),
         py::arg("constraints") = py::none(),
@@ -457,7 +457,7 @@ PYBIND11_MODULE(_core, m)
     // the same strings a score breakdown reports.
     m.def(
         "list_constraints",
-        [] { return tfpy::constraint_names(defaultConstraints()); },
+        [] { return opy::constraint_names(defaultConstraints()); },
         "Constraint names available to optimaru.vehicle_routing.constraints.");
 
     // The constraint catalog, read off the same default assembly:
@@ -465,5 +465,5 @@ PYBIND11_MODULE(_core, m)
     // default_weight, level_flippable, reward, default_enabled), ...] in
     // list_constraints() order. The defaults live in the C++ components only
     // (unassigned_visits_cost: medium, weight 1 in medium units).
-    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

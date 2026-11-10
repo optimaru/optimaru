@@ -21,7 +21,7 @@ namespace vrp {
 // assembly path NEXT TO ScoreCalculator::score, which stays the
 // default path for the four core rules.
 //
-// Unit choice: with the LIST descriptor the calculator's unit is one LIST,
+// Unit choice: with the sequence shape the calculator's unit is one list,
 // i.e. one vehicle; members are its visits IN ROUTE ORDER. Every rule but one
 // is a per-route sum and runs as a UnitConstraint over the vehicles
 // (detail::PerVehicleConstraint: the pool list is no vehicle, so it is not
@@ -31,7 +31,7 @@ namespace vrp {
 // A component never reads the Visit derived fields (vehicleIndex,
 // arrivalTime): walkRoute below re-derives the arrival chain from the unit's
 // own member order, which is what makes each cost a pure function of
-// (solution, unit, members) as the engine's contract requires. The LIST path
+// (solution, unit, members) as the engine's contract requires. The sequence path
 // re-costs a touched route whole, so no delta contract is needed. The four
 // core components also answer the engine's move previews in O(pieces) from
 // shared per-route prefix sums (route_sums.hpp); the optional policies are
@@ -73,7 +73,7 @@ namespace vrp {
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. The
 // default assembly therefore scores bit-for-bit like
 // ScoreCalculator::score on a plan without route policies.
@@ -92,7 +92,7 @@ struct RouteMetrics {
 };
 
 // Is this list the virtual unassigned pool rather than a real vehicle? The
-// descriptor exposes the pool as one extra LIST after the vehicles, so every
+// solution traits expose the pool as one extra list after the vehicles, so every
 // per-route component has to step over it.
 inline bool isPool(const VehicleRoutePlan& plan, int unit) {
     return unit >= static_cast<int>(plan.vehicles.size());

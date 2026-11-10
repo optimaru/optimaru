@@ -20,7 +20,7 @@
 
 namespace py = pybind11;
 using namespace fl;
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 
 PYBIND11_MODULE(_core, m)
 {
@@ -195,7 +195,7 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::valueRecommenderProbability)
         .def_readwrite("value_recommender_keep",
                        &Solver::Config::valueRecommenderKeep)
-        // BASIC best-improvement descent strategy weight. 0 = off.
+        // Assignment best-improvement descent strategy weight. 0 = off.
         .def_readwrite("descent_weight", &Solver::Config::descent_weight)
         // Gate on how often a step may draw CloseFacilityMove. 1 = engine
         // default (unrestricted).
@@ -247,7 +247,7 @@ PYBIND11_MODULE(_core, m)
             {
                 ScoreCalculator::prepare(problem);
                 DecomposedCalculator calculator;
-                tfpy::apply_constraints([] { return defaultConstraints(); },
+                opy::apply_constraints([] { return defaultConstraints(); },
                                        constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
@@ -268,10 +268,10 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); },
+            opy::apply_constraints([] { return defaultConstraints(); },
                                    constraints)
                 .into(calculator);
-            return tfpy::constraint_costs(calculator, problem);
+            return opy::constraint_costs(calculator, problem);
         },
         py::arg("problem"),
         py::arg("constraints") = py::none(),
@@ -281,12 +281,12 @@ PYBIND11_MODULE(_core, m)
     // the same strings a score breakdown reports.
     m.def(
         "list_constraints",
-        [] { return tfpy::constraint_names(defaultConstraints()); },
+        [] { return opy::constraint_names(defaultConstraints()); },
         "Constraint names available to optimaru.facility_location.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,
     // default_weight, level_flippable, reward, default_enabled), ...] in
     // list_constraints() order. The defaults live in the C++ components only.
-    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

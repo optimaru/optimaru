@@ -30,7 +30,7 @@ bool improveOperatorAssignment(PackagingSchedule &schedule);
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
 // wires up the incremental score calculator and delegates the job-list
-// variable to optimaru::Solver<PackagingSchedule> with the engine's LIST
+// variable to optimaru::Solver<PackagingSchedule> with the engine's sequence
 // moves (relocate/swap/2-opt/or-opt/tail-swap) and adaptive
 // ruin-and-recreate (ALNS) enabled.
 //
@@ -98,7 +98,7 @@ public:
         std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
         std::int64_t ruinRecreatePolishSteps = 5000;
 
-        // LIST move mix. Weights are relative; 0 disables a move. Or-opt
+        // Sequence move mix. Weights are relative; 0 disables a move. Or-opt
         // (segment relocate) and tail swap (2-opt*) are enabled here on top
         // of the engine defaults: sequences of consecutive jobs matter in
         // this domain (cleanup chains). Adopted (R2): the relocate-heavy mix

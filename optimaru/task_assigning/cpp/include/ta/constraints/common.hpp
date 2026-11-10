@@ -21,7 +21,7 @@ namespace ta
 // monolithic TaskAssigningIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
-// Unit choice: with the LIST descriptor the calculator's unit is one LIST,
+// Unit choice: with the sequence shape the calculator's unit is one list,
 // i.e. one employee; members are that employee's task indices IN EXECUTION
 // ORDER. Five of the six rules are per-employee sums over that ordered chain
 // and therefore plain UnitConstraints. unassignedTasksCost counts the tasks
@@ -31,7 +31,7 @@ namespace ta
 // A component never reads the derived Task fields (employee, startTime):
 // walkChain below re-derives the start/end chain from the unit's own member
 // order, which is what makes each cost a pure function of (solution, unit,
-// members) as the engine's contract requires. The LIST path re-costs a
+// members) as the engine's contract requires. The sequence path re-costs a
 // touched list whole, so no delta contract is needed.
 //
 // Score levels: this use case scores four score levels (1 hard, 3 soft).
@@ -74,7 +74,7 @@ namespace ta
 // ("requiredSkillCost"); Python sees them through python_name()
 // ("required_skill_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score.
 
 using DecomposedCalculator

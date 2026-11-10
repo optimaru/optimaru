@@ -2,7 +2,7 @@
 // The Python extension links the existing ba::* implementations and imports
 // the generic optimaru engine from optimaru/cpp/optimaru; the engine itself
 // is not modified here. One domain is exposed
-// (ba::BedPlan, BASIC bed variable with a "no bed" sentinel for stays left
+// (ba::BedPlan, assignment bed variable with a "no bed" sentinel for stays left
 // unassigned), as the module optimaru.bed_allocation._core.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
@@ -24,7 +24,7 @@
 
 namespace py = pybind11;
 using namespace ba;
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 
 PYBIND11_MODULE(_core, m)
 {
@@ -314,7 +314,7 @@ PYBIND11_MODULE(_core, m)
             {
                 ScoreCalculator::prepare(plan);
                 DecomposedCalculator calculator;
-                tfpy::apply_constraints([] { return defaultConstraints(); },
+                opy::apply_constraints([] { return defaultConstraints(); },
                                        constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
@@ -339,10 +339,10 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(plan);
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); },
+            opy::apply_constraints([] { return defaultConstraints(); },
                                    constraints)
                 .into(calculator);
-            return tfpy::constraint_costs(calculator, plan);
+            return opy::constraint_costs(calculator, plan);
         },
         py::arg("plan"),
         py::arg("constraints") = py::none(),
@@ -353,10 +353,10 @@ PYBIND11_MODULE(_core, m)
     // same strings a score breakdown reports.
     m.def(
         "list_constraints",
-        [] { return tfpy::constraint_names(defaultConstraints()); },
+        [] { return opy::constraint_names(defaultConstraints()); },
         "Constraint names available to optimaru.bed_allocation.constraints.");
 
     // The constraint catalog, read off the default assembly: the components'
     // kDefaultWeight / kDefaultLevel are the only place a default lives.
-    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

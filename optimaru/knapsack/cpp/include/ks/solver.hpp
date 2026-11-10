@@ -18,7 +18,7 @@ namespace ks
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/: it
 // runs the domain construction (the greedy of construction.hpp), wires up the
 // incremental score calculator and delegates the search to
-// optimaru::Solver<KnapsackProblem> — late acceptance over the built-in BASIC
+// optimaru::Solver<KnapsackProblem> — late acceptance over the built-in assignment
 // moves (a change move is a flip, a swap move trades a selected item for an
 // unselected one), with the engine's adaptive ruin-and-recreate (ALNS) on
 // stagnation.
@@ -79,13 +79,13 @@ public:
         double ruinRecreateAsMoveWeight = 0.05;
         int ruinRecreateAsMoveMaxRuin = 12;
 
-        // BASIC move mix. Weights are relative; 0 disables a move. A change
+        // Assignment move mix. Weights are relative; 0 disables a move. A change
         // move flips one item; a swap move exchanges a selected and an
         // unselected item, which keeps the load near the capacity.
         double change_weight = 0.5;
         double swap_weight = 0.5;
 
-        // BASIC best-improvement descent strategy weight (engine
+        // Assignment best-improvement descent strategy weight (engine
         // local_search.descent_weight). 0 (default) = off.
         double descent_weight = 0.0;
 

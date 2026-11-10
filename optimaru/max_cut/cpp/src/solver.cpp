@@ -28,7 +28,7 @@ void requireRewards(const Solver::Config &config)
 
 // The engine configuration of one search, shared by both solve() overloads
 // and every parallel start: late-acceptance local search over the built-in
-// BASIC moves, plus the ALNS kicks. The engine's construction heuristic finds
+// assignment moves, plus the ALNS kicks. The engine's construction heuristic finds
 // nothing left to place: the start partition assigned every vertex.
 optimaru::Settings engineConfigOf(const Solver::Config &config, const MaxCutProblem &problem)
 {

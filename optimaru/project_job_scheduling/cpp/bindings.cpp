@@ -2,7 +2,7 @@
 // The Python extension links the existing pjs::* implementations and imports
 // the generic optimaru engine from optimaru/cpp/optimaru; the engine itself
 // is not modified here. One domain is exposed
-// (pjs::ProjectJobSchedule, BASIC composite (executionMode, delay) variable),
+// (pjs::ProjectJobSchedule, assignment composite (executionMode, delay) variable),
 // as the module optimaru.project_job_scheduling._core.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
@@ -23,7 +23,7 @@
 
 namespace py = pybind11;
 using namespace pjs;
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 
 PYBIND11_MODULE(_core, m)
 {
@@ -341,7 +341,7 @@ PYBIND11_MODULE(_core, m)
             {
                 ScoreCalculator::prepare(schedule);
                 DecomposedCalculator calculator;
-                tfpy::apply_constraints([] { return defaultConstraints(); },
+                opy::apply_constraints([] { return defaultConstraints(); },
                                        constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
@@ -364,10 +364,10 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(schedule);
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); },
+            opy::apply_constraints([] { return defaultConstraints(); },
                                    constraints)
                 .into(calculator);
-            return tfpy::constraint_costs(calculator, schedule);
+            return opy::constraint_costs(calculator, schedule);
         },
         py::arg("schedule"),
         py::arg("constraints") = py::none(),
@@ -377,10 +377,10 @@ PYBIND11_MODULE(_core, m)
     // the same strings constraint_costs() reports.
     m.def(
         "list_constraints",
-        [] { return tfpy::constraint_names(defaultConstraints()); },
+        [] { return opy::constraint_names(defaultConstraints()); },
         "Constraint names available to optimaru.project_job_scheduling.constraints.");
 
     // The constraint catalog, read off the default assembly: the components'
     // kDefaultWeight / kDefaultLevel are the only place a default lives.
-    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

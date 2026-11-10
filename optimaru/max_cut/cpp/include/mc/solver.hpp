@@ -18,7 +18,7 @@ namespace mc
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/: it
 // builds the start partition (see solve()), wires up the
 // incremental score calculator and delegates the search to
-// optimaru::Solver<MaxCutProblem> — late acceptance over the built-in BASIC
+// optimaru::Solver<MaxCutProblem> — late acceptance over the built-in assignment
 // moves (a change move flips one vertex, a swap move exchanges a side-0 and a
 // side-1 vertex), with the engine's adaptive ruin-and-recreate (ALNS) on
 // stagnation. Fixed vertices are pinned: no move, swap or ruin touches them.
@@ -83,13 +83,13 @@ public:
         double ruinRecreateAsMoveWeight = 0.0;
         int ruinRecreateAsMoveMaxRuin = 12;
 
-        // BASIC move mix. Weights are relative; 0 disables a move. With two
+        // Assignment move mix. Weights are relative; 0 disables a move. With two
         // sides a change move is a flip; a swap move exchanges a side-0 and a
         // side-1 vertex (the sizes stay). Exact-size mode forces 0 / 1.
         double change_weight = 0.8;
         double swap_weight = 0.2;
 
-        // BASIC best-improvement descent strategy weight (engine
+        // Assignment best-improvement descent strategy weight (engine
         // local_search.descent_weight). 0 (default) = off; ignored in
         // exact-size mode.
         double descent_weight = 0.0;

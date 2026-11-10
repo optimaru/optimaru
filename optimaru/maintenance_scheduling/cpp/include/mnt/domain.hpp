@@ -74,7 +74,7 @@ struct Crew
 // Job  (the entity the solver assigns)
 // ---------------------------------------------------------------------------
 // A job has TWO decisions (crew, startDate) plus a derived endDate.
-// The engine supports one BASIC int variable
+// The engine supports one assignment int variable
 // per entity, so both are composed into a single value (the school-
 // timetabling slotRoom pattern):
 //   crewDate = startDateIndex * crewCount + crewIndex

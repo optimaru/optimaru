@@ -195,7 +195,7 @@ struct Job
 // An allocation has TWO decisions — executionMode (value range = the job's
 // own executionModes) and delay (value range = [0, delayRangeSize)) — plus
 // the derived dates predecessorsDoneDate -> startDate -> endDate. The
-// engine supports one BASIC int variable per entity with one global value
+// engine supports one assignment int variable per entity with one global value
 // range, so both decisions are composed into a single value:
 //
 //   modeDelay = delay * maxModeCount + modeSlot,   modeDelay in

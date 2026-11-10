@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Semiconductor scheduling: a wrong problem type is a `TypeError`.** `solve()`,
+  `calculate_score()`, `constraint_costs()` and `constraint_items()` raised `AttributeError`
+  for a value that was neither a `SemiconductorSchedule` nor a
+  `models.SemiconductorScheduleModel`; they now say which two types they take, as the other
+  use cases do.
+- **Flight crew scheduling ignores `FCS_*` environment variables.** Three overrides a
+  tuning session left in the solver (`FCS_DESCENT_WEIGHT`, `FCS_ASMOVE_WEIGHT`,
+  `FCS_ASMOVE_MAXRUIN`) are gone.
+- **Engine (C++): unused settings removed.** `AcceptanceSettings::rrt_steps`,
+  `rrt_exponential` and `rrt_compare_to_best` were set by nothing; record-to-record travel
+  keeps the schedule it always ran, linear against the best score. `Solver::clear_stop()`
+  is gone too: a stopped solver stays stopped.
 - **Notebooks.** The notebooks in `examples/` are saved with outputs from optimaru 0.4.1 again.
   The conference-scheduling notebook read a `hard` key that `constraint_costs()` no longer
   returns and did not run; a few sentences that named a result the outputs no longer show are

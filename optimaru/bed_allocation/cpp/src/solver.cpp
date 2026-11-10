@@ -55,9 +55,8 @@ void configureEngine(const Solver::Config &config,
         = config.change_weight;
     engineConfig.search.moves.swap_weight
         = config.swap_weight;
-    // R2 SCREEN: BASIC exhaustive descent at the budget-share rule
-    // weight x valueRange = 0.2 (the small-value-range
-    // regime).
+    // Exhaustive assignment descent at the budget-share rule:
+    // weight x value range = 0.2 (the small-value-range regime).
     engineConfig.search.descent_weight
         = 0.2 / static_cast<double>(plan.beds.size() + 1);
     auto &lns = engineConfig.search.ruin_recreate;

@@ -4,8 +4,6 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-pytest.importorskip("pydantic")
-
 import optimaru.flight_crew_scheduling as fc
 from optimaru.flight_crew_scheduling.models import (
     AirportModel,

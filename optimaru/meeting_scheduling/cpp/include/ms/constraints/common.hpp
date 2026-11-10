@@ -21,7 +21,7 @@ namespace ms
 // the monolithic MeetingSchedulingIncrementalScoreCalculator, which stays the
 // tuned default fast path.
 //
-// Unit choice: with the BASIC descriptor the calculator's unit is the VALUE,
+// Unit choice: with the assignment shape the calculator's unit is the VALUE,
 // i.e. one composite grainRoom — a (starting time grain, room) cell; members
 // are the meeting assignments placed there. Unassigned assignments
 // (grainRoom == -1) belong to no unit and contribute nothing.
@@ -77,7 +77,7 @@ namespace ms
 // raw unit, moved to soft 1 soft per raw unit (outside the fold); an explicit
 // weight stays in units of the level in effect.
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty; the calculator negates into the score. An assembly of all twelve
 // components at their default weights therefore scores bit-for-bit like
 // ScoreCalculator::score.

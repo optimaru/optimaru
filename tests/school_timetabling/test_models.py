@@ -2,8 +2,6 @@
 
 import pytest
 
-pytest.importorskip("pydantic")
-
 import optimaru.school_timetabling as st
 from optimaru.school_timetabling.models import (
     LessonModel,

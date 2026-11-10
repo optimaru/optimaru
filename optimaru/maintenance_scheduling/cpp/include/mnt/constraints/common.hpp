@@ -22,7 +22,7 @@ namespace mnt
 // TO the monolithic MaintenanceSchedulingIncrementalScoreCalculator, which
 // stays the tuned default fast path.
 //
-// Unit choice: with the BASIC descriptor the calculator's unit is the VALUE,
+// Unit choice: with the assignment shape the calculator's unit is the VALUE,
 // i.e. one composite crewDate — a (start date, crew) cell of the grid;
 // members are the jobs placed there. Unassigned jobs (crewDate == -1) belong
 // to no unit and so contribute nothing.
@@ -61,7 +61,7 @@ namespace mnt
 // ("crewConflictCost"); Python sees them through python_name()
 // ("crew_conflict_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. An
 // assembly of all six components at their default weights therefore scores
 // bit-for-bit like ScoreCalculator::score.

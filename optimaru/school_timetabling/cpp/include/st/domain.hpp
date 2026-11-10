@@ -47,7 +47,7 @@ struct Room
 // ---------------------------------------------------------------------------
 // Lesson  (entity)
 // ---------------------------------------------------------------------------
-// slotRoom is the only decision variable. The engine supports one BASIC int
+// slotRoom is the only decision variable. The engine supports one assignment int
 // variable per entity, so the two decisions per lesson (timeslot, room) are
 // composed into a single value:
 //   slotRoom = timeslotIndex * roomCount + roomIndex

@@ -170,7 +170,7 @@ struct Bed
 //   bedCount (sentinel)   "no bed" — the stay is left unassigned,
 //                         penalized per night on the medium level
 //                         (unassignedStaysCost)
-// The sentinel keeps "may be unassigned" inside the engine's BASIC
+// The sentinel keeps "may be unassigned" inside the engine's assignment
 // value range [0, value_count): local search can move a stay to "no bed" when
 // every real bed causes a hard conflict.
 //

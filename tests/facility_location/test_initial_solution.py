@@ -4,8 +4,6 @@ import random
 
 import pytest
 
-pytest.importorskip("pydantic")
-
 import optimaru.facility_location as fl
 from optimaru.facility_location.models import (
     ConsumerModel,

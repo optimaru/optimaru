@@ -23,7 +23,7 @@ namespace sls
 // NEXT TO the monolithic SportsLeagueSchedulingIncrementalScoreCalculator,
 // which stays the tuned default fast path.
 //
-// Unit choice: with the BASIC descriptor the calculator's unit is the VALUE,
+// Unit choice: with the assignment shape the calculator's unit is the VALUE,
 // i.e. one round POSITION; members are the matches played in it. Unassigned
 // matches (round == -1) belong to no unit and contribute nothing.
 //
@@ -78,7 +78,7 @@ namespace sls
 //     named edits. The travel-hop rules cost plain kilometres at weight 1,
 //     and workdayClassicMatchesCost carries x 1'000.
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. An
 // assembly of all ten components at their default weights therefore scores
 // bit-for-bit like ScoreCalculator::score.

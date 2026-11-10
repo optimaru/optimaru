@@ -373,8 +373,8 @@ inline void apply_knobs(ConstraintMetadata& constraint, const py::handle& item,
 // once for all its picks. constraint_costs() keys the k-th instance "<name>#<k>"
 // (instance_keys), the order Python's instance_keys derives from the list.
 //
-//   tfpy::apply_constraints([] { return defaultConstraints(); }, constraints)
-//   tfpy::apply_constraints([&] { return defaultConstraints(problem); }, constraints)
+//   opy::apply_constraints([] { return defaultConstraints(); }, constraints)
+//   opy::apply_constraints([&] { return defaultConstraints(problem); }, constraints)
 //
 // `defaults` is a callable returning the domain's default assembly; it is
 // called once, plus once per repeated pick. That assembly must hold every

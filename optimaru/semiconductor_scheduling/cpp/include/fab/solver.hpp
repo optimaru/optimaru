@@ -77,7 +77,7 @@ public:
         // Moves. The change move draws its value from the recommender: with
         // machineMoveProbability another machine for the row (rank kept),
         // otherwise a small priority shift (machine kept, rank +- 1..8);
-        // `change_weight` / `swap_weight` are the engine's BASIC mix
+        // `change_weight` / `swap_weight` are the engine's assignment mix
         // (the built-in swap would trade whole values between unrelated
         // rows, so it is off). The priority swap exchanges the ranks of two
         // rows of different lots, both machines kept; custom_move_probability

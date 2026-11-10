@@ -99,7 +99,7 @@ public:
         double descent_weight = 0.0;
         int descent_max_sweeps = 4;
 
-        // BASIC move mix. Weights are relative; 0 disables a move.
+        // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
         double swap_weight = 0.25;
 
