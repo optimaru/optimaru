@@ -77,7 +77,9 @@ struct ConstraintInfo {
 // time) is the same component added more than once. add() keeps its
 // override semantics; add_instance() / add_instances() append further
 // instances next to the one already held, each scored on its own with its
-// own metadata, and the instances add up. A name that is held once is
+// own metadata, and the instances add up. add_repeats() appends instances
+// that are the first one again with other knobs, which lets the objective
+// compute their raw cost once. A name that is held once is
 // addressed by the name alone. A name held SEVERAL times is ambiguous, so
 // every by-name edit and lookup (weight(), level(), hard(), soft(),
 // exponent(), offset(), clip(), find(), drop(), add()'s replacement) THROWS
@@ -186,6 +188,26 @@ public:
     }
     ConstraintAssembly&& add_instances(ConstraintAssembly&& other) && {
         add_instances(std::move(other));
+        return std::move(*this);
+    }
+    // add_instances() for REPEATS: components that are the first instance of
+    // their name once more, built the same way with the same domain
+    // parameters, with only their knobs re-stated (a copy taken from the
+    // domain's default assembly). Each is marked
+    // ConstraintMetadata::repeats_first, and the objective then computes the
+    // raw cost of a unit constraint once for the first instance and its
+    // repeats instead of once per instance. The score is the same as with
+    // add_instances(); only use this when the raw costs really are the same.
+    // Throws for a component whose name this assembly does not hold yet.
+    ConstraintAssembly& add_repeats(ConstraintAssembly&& other) & {
+        for (const auto& constraint : other.units_) require_held(constraint->name);
+        for (const auto& constraint : other.globals_) require_held(constraint->name);
+        for (auto& constraint : other.units_) constraint->repeats_first = true;
+        for (auto& constraint : other.globals_) constraint->repeats_first = true;
+        return add_instances(std::move(other));
+    }
+    ConstraintAssembly&& add_repeats(ConstraintAssembly&& other) && {
+        add_repeats(std::move(other));
         return std::move(*this);
     }
 
@@ -560,6 +582,10 @@ private:
     [[noreturn]] void throw_missing(const std::string& name) const {
         throw std::invalid_argument("Constraint '" + name + "' is not in this assembly; it holds " +
                                     name_list());
+    }
+
+    void require_held(const std::string& name) const {
+        if (instance_count(name) == 0) throw_missing(name);
     }
 
     // A by-name edit or lookup needs a name the assembly holds at most once.

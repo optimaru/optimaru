@@ -123,7 +123,8 @@ instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
   the literal `(x - offset) ** exponent`, per unit (each vehicle, slot, ...),
   not on the total. A constraint may be added several times
   (`add_instance()`), each instance with its own knobs, and the instances add
-  up; a name held several times is edited per instance (`weight(name,
+  up; instances that are the same component with other knobs
+  (`add_repeats()`) have their raw cost computed once; a name held several times is edited per instance (`weight(name,
   instance, w)`, `drop_all(name)`), and its name alone throws. Rewards (raw
   cost <= 0) never go hard, the literal formula with an offset never lands on
   a level that counts toward the hard score (so hard 0 still means no

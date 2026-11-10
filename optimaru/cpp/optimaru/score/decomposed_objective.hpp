@@ -11,6 +11,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <typeinfo>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -225,6 +226,17 @@ struct ConstraintMetadata {
     // the knobs (Python: the costs entries' default_weight / default_level).
     double default_weight;
     Level default_level;
+    // true = this instance is a REPEAT of the first instance of its name in
+    // the objective: the same component built with the same domain
+    // parameters, so cost(), delta_cost() and piecewise_cost() return what
+    // the first instance's return, and only the knobs above differ. The
+    // objective then asks one of them and shapes the answer per instance
+    // (DecomposedObjective, "Repeats share the raw cost"). Set by
+    // ConstraintAssembly::add_repeats(), which the Python bindings use for
+    // the second and later picks of a name; never set it on a component
+    // whose parameters differ from the first instance's. Read for unit
+    // constraints only: every global keeps its own aggregates.
+    bool repeats_first = false;
 
     bool is_hard() const { return level == Level::Hard; }
 
@@ -771,11 +783,11 @@ public:
                     const std::size_t base =
                             static_cast<std::size_t>(unit) * unit_constraints_.size();
                     const UnitDispatchEntry* const end = dispatch_end(unit);
+                    begin_share_pass();
                     for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
-                        if (entry->kind != kFullRecost) continue;
+                        if (!is_full_recost(entry->kind)) continue;
                         save_unit_for_trial(unit);
-                        apply_raw(unit, *entry, base + entry->c,
-                                 entry->constraint->cost(*solution_, unit, members));
+                        apply_raw(unit, *entry, base + entry->c, raw_cost(*entry, unit, members));
                     }
                 }
                 set_penalized(unit, unit_hard_[unit].positive());
@@ -1225,7 +1237,16 @@ private:
         kVirtualDelta = 2,    // per-constraint delta_cost() call
         kFullRecost = 3,      // full cost() re-run: no delta contract, or a raw that
                               // must be exact (shaping_jumps_at_zero)
+        // The same two for an instance of a share class ("Repeats share the
+        // raw cost" below): the delta or the cost is asked of one instance
+        // per unit event and reused by the others.
+        kSharedVirtualDelta = 4,
+        kSharedFullRecost = 5,
     };
+    static bool is_full_recost(std::uint8_t kind) {
+        return kind == kFullRecost || kind == kSharedFullRecost;
+    }
+    static bool is_shared(std::uint8_t kind) { return kind >= kSharedVirtualDelta; }
     // One compiled dispatch entry: everything the hot path needs, contiguous
     // (the constraint pointer for the virtual call, the classification, and
     // the reset-sampled metadata apply_raw uses).
@@ -1249,6 +1270,96 @@ private:
     }
     const UnitDispatchEntry* dispatch_end(int unit) const {
         return dispatch_.data() + dispatch_start_[unit + 1];
+    }
+
+    // --- Repeats share the raw cost ----------------------------------------
+    // A constraint picked several times is several components that differ
+    // only in their knobs (ConstraintMetadata::repeats_first), so they all
+    // have the same raw cost and the same delta. compile_unit_dispatch puts
+    // such instances into a share class, and within one pass over a unit's
+    // dispatch entries (a member change, a re-cost, a batch end, one list of
+    // a preview) the first entry of a class that needs the value asks its
+    // component and the others reuse the answer: N picks cost one cost() or
+    // delta_cost() call instead of N. Every instance still keeps its own
+    // cells (raw, hard, soft) and its own shaping, so nothing else changes:
+    // the score is bit for bit the one N independent components give.
+    //
+    // A pass is identified by share_pass_; share_stamp_[k] says whether class
+    // k already holds this pass's value in share_value_[k].
+    void begin_share_pass() const { ++share_pass_; }
+    template <typename Compute>
+    double shared_value(const UnitDispatchEntry& entry, Compute&& compute) const {
+        const std::uint32_t k = share_class_[entry.c];
+        if (share_stamp_[k] == share_pass_) return share_value_[k];
+        const double value = compute();
+        share_stamp_[k] = share_pass_;
+        share_value_[k] = value;
+        return value;
+    }
+    // cost() of one entry's component on a unit, through its share class.
+    double raw_cost(const UnitDispatchEntry& entry, int unit, const std::vector<int>& members) const {
+        if (!is_shared(entry.kind)) return entry.constraint->cost(*solution_, unit, members);
+        return shared_value(entry, [&] { return entry.constraint->cost(*solution_, unit, members); });
+    }
+
+    // The share class of every unit constraint: the index of the earliest
+    // instance it shares with (itself when it shares with none). Instance c
+    // joins the class of the first earlier instance f of its name that is the
+    // name's first instance or another repeat, and that the objective handles
+    // the same way, so one answer serves both:
+    //   - the same dispatch kind, kVirtualDelta or kFullRecost (a repeat
+    //     whose shaping jumps at 0 re-costs while a plain one takes deltas,
+    //     and the members of a compiled delta group are evaluated together
+    //     by the group already);
+    //   - the same preview path (piecewise_);
+    //   - the same scope (scoped_units()), so both sit in the same units'
+    //     dispatch entries.
+    // Instances that match no earlier one stay on their own, as before.
+    // Declaring a repeat of a component of another type is a programming
+    // error and throws.
+    void compile_share_classes(std::vector<UnitDispatchEntry>& metas) {
+        const std::size_t C = unit_constraints_.size();
+        share_class_.resize(C);
+        share_stamp_.assign(C, 0);
+        share_value_.assign(C, 0.0);
+        share_pass_ = 0;
+        std::vector<std::size_t> members(C, 1);
+        auto same_scope = [](const std::vector<int>* a, const std::vector<int>* b) {
+            return (a == nullptr) == (b == nullptr) && (a == nullptr || *a == *b);
+        };
+        for (std::size_t c = 0; c < C; ++c) {
+            share_class_[c] = static_cast<std::uint32_t>(c);
+            const UnitConstraint<Solution>& constraint = *unit_constraints_[c];
+            if (!constraint.repeats_first) continue;
+            bool first_seen = false;
+            for (std::size_t f = 0; f < c; ++f) {
+                const UnitConstraint<Solution>& earlier = *unit_constraints_[f];
+                if (earlier.name != constraint.name) continue;
+                const bool is_first = !first_seen;
+                first_seen = true;
+                if (typeid(earlier) != typeid(constraint)) {
+                    if (!is_first) continue;
+                    throw std::logic_error("Constraint '" + constraint.name +
+                                           "' is declared a repeat of the first instance of its "
+                                           "name, which is a different component");
+                }
+                if (!is_first && !earlier.repeats_first) continue;
+                if (share_class_[f] != f) continue;  // its class's first instance was tried already
+                if (metas[f].kind != metas[c].kind ||
+                    (metas[c].kind != kVirtualDelta && metas[c].kind != kFullRecost) ||
+                    piecewise_[f] != piecewise_[c] ||
+                    !same_scope(earlier.scoped_units(), constraint.scoped_units())) {
+                    continue;
+                }
+                share_class_[c] = static_cast<std::uint32_t>(f);
+                ++members[f];
+                break;
+            }
+        }
+        for (std::size_t c = 0; c < C; ++c) {
+            if (members[share_class_[c]] < 2) continue;
+            metas[c].kind = metas[c].kind == kVirtualDelta ? kSharedVirtualDelta : kSharedFullRecost;
+        }
     }
 
     // One unit's shaped, weighted contribution (the knobs sampled at reset).
@@ -1317,6 +1428,7 @@ private:
             unit_clip_[c] = constraint.clip ? 1 : 0;
             unit_knobs_.push_back(live_knobs(constraint));
         }
+        compile_share_classes(metas);
         std::vector<std::size_t> apply_all;
         for (std::size_t c = 0; c < C; ++c)
             if (unit_constraints_[c]->scoped_units() == nullptr) apply_all.push_back(c);
@@ -1466,9 +1578,9 @@ private:
         const std::vector<int>& m = members_[unit];
         const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
         const UnitDispatchEntry* const end = dispatch_end(unit);
+        begin_share_pass();
         for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
-            apply_raw(unit, *entry, base + entry->c,
-                     entry->constraint->cost(*solution_, unit, m));
+            apply_raw(unit, *entry, base + entry->c, raw_cost(*entry, unit, m));
         }
         set_penalized(unit, unit_hard_[unit].positive());
     }
@@ -1496,6 +1608,7 @@ private:
         // which keep their original accumulation order through apply_raw).
         HardTotal hard_acc;
         const UnitDispatchEntry* const end = dispatch_end(unit);
+        begin_share_pass();
         for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
             switch (entry->kind) {
                 case kGroupedHardInt: {
@@ -1540,6 +1653,21 @@ private:
                         save_unit_for_trial(unit);
                         apply_raw(unit, *entry, base + entry->c,
                                  entry->constraint->cost(*solution_, unit, m));
+                    }
+                    break;
+                case kSharedVirtualDelta: {
+                    const double d = shared_value(*entry, [&] {
+                        return entry->constraint->delta_cost(*solution_, unit, m, entity);
+                    });
+                    if (d == 0.0) break;
+                    const std::size_t idx = base + entry->c;
+                    apply_raw(unit, *entry, idx, cache_raw_[idx] + sign * d);
+                    break;
+                }
+                case kSharedFullRecost:
+                    if (batch_depth_ == 0 && !rollback_active_) {
+                        save_unit_for_trial(unit);
+                        apply_raw(unit, *entry, base + entry->c, raw_cost(*entry, unit, m));
                     }
                     break;
             }
@@ -1666,16 +1794,25 @@ private:
             const int unit = changes[i].unit;
             const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
             const UnitDispatchEntry* const end = dispatch_end(unit);
+            // The candidate raw cost of one entry: its piecewise answer, or
+            // cost() on the written-out list.
+            auto candidate_raw = [&](const UnitDispatchEntry& entry) {
+                double raw;
+                if (!piecewise_[entry.c] ||
+                    !entry.constraint->piecewise_cost(*solution_, unit, runs[i].pieces,
+                                                     runs[i].count, raw)) {
+                    materialize_run(i);  // this run only: the other may stay piecewise
+                    raw = entry.constraint->cost(*solution_, unit, *changes[i].members);
+                }
+                return raw;
+            };
+            begin_share_pass();
             for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
                 if (entry->weight == 0.0) continue;  // contributes nothing, see reset
                 const std::size_t idx = base + entry->c;
-                double raw;
-                if (!piecewise_[entry->c] ||
-                    !entry->constraint->piecewise_cost(*solution_, unit, runs[i].pieces,
-                                                      runs[i].count, raw)) {
-                    materialize_run(i);  // this run only: the other may stay piecewise
-                    raw = entry->constraint->cost(*solution_, unit, *changes[i].members);
-                }
+                const double raw = is_shared(entry->kind)
+                                           ? shared_value(*entry, [&] { return candidate_raw(*entry); })
+                                           : candidate_raw(*entry);
                 const double value = unit_contribution(*entry, raw);
                 const std::string& name = entry->constraint->name;
                 if (entry->is_hard) {
@@ -1800,6 +1937,13 @@ private:
     std::vector<double> grouped_delta_buffer_;
     bool delta_groups_dirty_ = true;
     bool has_full_recost_ = false;  // some dispatch entry is kFullRecost (compile_unit_dispatch)
+    // Share classes ("Repeats share the raw cost"), per unit constraint:
+    // the class, and per class the pass its value belongs to and the value.
+    // Mutable because a preview (const) shares within its own passes.
+    std::vector<std::uint32_t> share_class_;
+    mutable std::vector<std::uint64_t> share_stamp_;
+    mutable std::vector<double> share_value_;
+    mutable std::uint64_t share_pass_ = 0;
 
     Solution* solution_ = nullptr;
     int unit_count_ = 0;
