@@ -82,7 +82,8 @@
   timetabling, whose `solve()` takes dicts, still does not). pydantic is a dependency of
   `optimaru`, so nothing new has to be installed; the first import of one of the 15 takes
   about 35 ms longer (`vehicle_routing` 15 ms to 48 ms, `employee_scheduling` 25 ms to
-  72 ms), which is the time the first model call used to take. On the package,
+  72 ms, measured with `python -X importtime` on one machine), which is the time the first
+  model call used to take. On the package,
   `with_initial_solution` (and `vehicle_routing.solve_request`) is now the `models` function
   itself, with its docstring and annotations, instead of a wrapper around it.
 - **A star import of five modules binds their own names only.** `models` in `knapsack`,
