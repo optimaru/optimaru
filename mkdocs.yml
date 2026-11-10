@@ -6,6 +6,10 @@ repo_url: https://github.com/optimaru/optimaru
 repo_name: optimaru/optimaru
 edit_uri: edit/main/docs/
 copyright: Copyright 2026 The optimaru Authors. Apache-2.0.
+# No theme credit in the footer: the site is also served under optimaru.com,
+# which does not name third-party tools.
+extra:
+  generator: false
 
 docs_dir: docs
 exclude_docs: |
