@@ -11,7 +11,8 @@
   shared constraint base, one directory per use case), and the guides to
   `docs/`. The standalone per-use-case packages (`vrp_routing`,
   `st_timetabling`, ...) and their 22 copies of the constraint-spec base are
-  gone: everything imports `optimaru.<use case>`. The installed package and its
+  gone: everything imports `optimaru.<use case>`. `setup.py` finds the use cases
+  and their sources itself. The installed package and its
   API do not change.
 - **Builds.** One `uv sync` at the root builds every extension in place, and
   one CMake project (`cmake -B build`) builds the engine and every use case's

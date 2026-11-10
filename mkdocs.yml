@@ -62,14 +62,20 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
+      # GitHub's heading anchors, so a #fragment works on GitHub and on the site.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
   - pymdownx.highlight
   - pymdownx.superfences
   - pymdownx.snippets:
       base_path: !relative $config_dir
       check_paths: true
 
+# Broken links and anchors fail the strict build. Links that leave docs/ are
+# rewritten to GitHub by scripts/mkdocs_hooks.py before validation.
 validation:
   omitted_files: info
   absolute_links: info
-  unrecognized_links: info
-  anchors: info
+  unrecognized_links: warn
+  anchors: warn

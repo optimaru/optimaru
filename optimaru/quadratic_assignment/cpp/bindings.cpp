@@ -312,7 +312,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("problem"),
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
-        // quadratic_assignment.constraints). The picks replace the defaults;
+        // optimaru.quadratic_assignment.constraints). The picks replace the defaults;
         // None keeps them. Single start. A name may be picked several times:
         // every pick is its own instance (a fresh copy of the default
         // component) with its own knobs.
@@ -329,7 +329,7 @@ PYBIND11_MODULE(_core, m)
             py::arg("constraints") = py::none());
 
     // The raw costs of an assembly on `problem` — the input
-    // quadratic_assignment.constraints.score() turns into a score: the three
+    // optimaru.quadratic_assignment.constraints.score() turns into a score: the three
     // side constraints per location (in location order; each also reports the
     // locations it evaluates as "units"), the two objectives as one total
     // each. None = the default assembly in list_constraints() order; a pick
@@ -353,7 +353,7 @@ PYBIND11_MODULE(_core, m)
     m.def(
         "list_constraints",
         [] { return tfpy::constraint_names(defaultConstraints()); },
-        "Constraint names available to quadratic_assignment.constraints.");
+        "Constraint names available to optimaru.quadratic_assignment.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,

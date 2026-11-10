@@ -43,6 +43,13 @@ uv run pytest -q tests/<uc>
 `uv sync` rebuilds the extension when a `.cpp` or `.hpp` under `optimaru/`
 changes. If you ever get a stale `_core`, run `uv sync --reinstall-package optimaru`.
 
+The extensions are built in place (`optimaru/<uc>/_core*.so`) and shared by every
+environment that installs this checkout, the benchmark projects included. A
+narrowed build (`OPTIMARU_USE_CASES=<uc>`) refreshes only that use case and
+leaves the others' `_core` from earlier builds. After a change to the engine
+headers, rebuild everything (`uv sync` without the variable) before you run
+other use cases' tests, or they run against an old binary.
+
 ## Adding a move
 
 ### First, check the built-in moves

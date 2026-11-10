@@ -203,9 +203,10 @@ docs). Each use case's guide repeats the cost steps with its own file names.
 
 ## How the extensions are built
 
-[`setup.py`](../../setup.py) lists every use case's extension
-(`optimaru.<use case>._core`) and the C++ sources it compiles from
-`optimaru/<use case>/cpp/`. `uv sync` installs the package in editable mode and
+[`setup.py`](../../setup.py) builds one extension per use case
+(`optimaru.<use case>._core`, for every subpackage with a `_core.pyi`) from
+`optimaru/<use case>/cpp/bindings.cpp` and every `cpp/src/*.cpp` except
+`main.cpp`, the same sources as the core library in its `CMakeLists.txt`. `uv sync` installs the package in editable mode and
 builds the extensions in place, next to the Python files. `OPTIMARU_USE_CASES`
 (comma-separated) limits the build to some use cases. uv rebuilds when a
 `.cpp` / `.hpp` under `optimaru/`, `setup.py`, `pyproject.toml` or

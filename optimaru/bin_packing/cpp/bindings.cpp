@@ -157,7 +157,7 @@ PYBIND11_MODULE(_core, m)
     // Full recompute of the Score (also stores problem.score).
     // constraints=None scores the default set (the monolithic calculator,
     // which knows the default picks only); a list scores exactly those picks
-    // on the assembly path (see bin_packing.constraints), a name picked
+    // on the assembly path (see optimaru.bin_packing.constraints), a name picked
     // several times once per pick.
     m.def(
         "calculate_score",
@@ -298,7 +298,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("problem"),
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
-        // bin_packing.constraints). The picks replace the defaults; None
+        // optimaru.bin_packing.constraints). The picks replace the defaults; None
         // keeps them. Single start (parallel_solver_count is ignored). A
         // name may be picked several times: every pick is its own instance
         // (a fresh copy of the default component) with its own knobs.
@@ -315,7 +315,7 @@ PYBIND11_MODULE(_core, m)
             py::arg("constraints") = py::none());
 
     // The raw per-unit costs of an assembly on `problem` — the input
-    // bin_packing.constraints.score() turns into a score. Scoring once is
+    // optimaru.bin_packing.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
     // None = the default assembly; a pick list scores exactly those picks
     // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
@@ -337,7 +337,7 @@ PYBIND11_MODULE(_core, m)
     m.def(
         "list_constraints",
         [] { return tfpy::constraint_names(defaultConstraints()); },
-        "Constraint names available to bin_packing.constraints.");
+        "Constraint names available to optimaru.bin_packing.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,

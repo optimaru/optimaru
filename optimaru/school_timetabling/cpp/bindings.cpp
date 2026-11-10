@@ -502,7 +502,7 @@ void bindCanon(py::module_ &canon)
         "DecomposedCalculator",
         py::module_local(),
         "Pluggable score calculator: assemble canonical constraints — either "
-        "from constraint picks (see st_timetabling.constraints) or one by one "
+        "from constraint picks (see optimaru.school_timetabling.constraints) or one by one "
         "via add(name, ...) — then pass to Solver.solve(table, calc). The "
         "default set (default_calculator) reproduces canon.calculate_score "
         "exactly.")
@@ -655,7 +655,7 @@ void bindCanon(py::module_ &canon)
 
     // The raw per-unit costs of the default set (or of `constraints`, the
     // same picks as solve(constraints=...)), before weight / exponent /
-    // level — what st_timetabling.constraints.score() turns into a score.
+    // level — what optimaru.school_timetabling.constraints.score() turns into a score.
     canon.def(
         "constraint_costs",
         [](cn::Timetable &table, const py::object &constraints)

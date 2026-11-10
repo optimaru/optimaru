@@ -3,7 +3,7 @@
 // the generic optimaru engine from ../../../include; the engine itself
 // is not modified here. One domain is exposed: the quickstart port
 // (ba::BedPlan, BASIC bed variable with a "no bed" sentinel for
-// allowsUnassigned semantics), as the module bed_allocation._core.
+// allowsUnassigned semantics), as the module optimaru.bed_allocation._core.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::map / std::optional / std::string
@@ -368,7 +368,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("plan"),
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
-        // bed_allocation.constraints). The picks replace the defaults;
+        // optimaru.bed_allocation.constraints). The picks replace the defaults;
         // None keeps them. A name may be picked several times: every pick is
         // its own instance (a fresh copy of the default component) with its
         // own knobs.
@@ -388,7 +388,7 @@ PYBIND11_MODULE(_core, m)
             py::arg("constraints") = py::none());
 
     // The raw per-unit costs of an assembly on `plan` — the input
-    // bed_allocation.constraints.score() turns into a score. Scoring once is
+    // optimaru.bed_allocation.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
     // Units are the planning values (beds in order, then the "no bed"
     // sentinel); a global constraint has one entry. "units" lists what a unit
@@ -418,7 +418,7 @@ PYBIND11_MODULE(_core, m)
     m.def(
         "list_constraints",
         [] { return tfpy::constraint_names(defaultConstraints()); },
-        "Constraint names available to bed_allocation.constraints.");
+        "Constraint names available to optimaru.bed_allocation.constraints.");
 
     // The constraint catalog, read off the default assembly: the components'
     // kDefaultWeight / kDefaultLevel are the only place a default lives.

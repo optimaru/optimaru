@@ -264,7 +264,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("problem"),
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
-        // max_cut.constraints). The picks replace the defaults; None keeps
+        // optimaru.max_cut.constraints). The picks replace the defaults; None keeps
         // them. Single start. A name may be picked several times: every pick
         // is its own instance (a fresh copy of the default component) with
         // its own knobs.
@@ -281,7 +281,7 @@ PYBIND11_MODULE(_core, m)
             py::arg("constraints") = py::none());
 
     // The raw costs of an assembly on `problem` — the input
-    // max_cut.constraints.score() turns into a score: the four unit
+    // optimaru.max_cut.constraints.score() turns into a score: the four unit
     // constraints per side ([side 0, side 1]), the two globals as one total.
     // None = the default assembly in list_constraints() order; a pick list
     // scores exactly those picks (apply_constraints), each entry carrying its
@@ -305,7 +305,7 @@ PYBIND11_MODULE(_core, m)
     m.def(
         "list_constraints",
         [] { return tfpy::constraint_names(defaultConstraints()); },
-        "Constraint names available to max_cut.constraints.");
+        "Constraint names available to optimaru.max_cut.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,

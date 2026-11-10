@@ -57,7 +57,7 @@ for a in result.flight_assignments:
 - Seats with `pinned=True` keep their assignment (counted in the score, never moved).
 - There is also a low-level path that builds engine objects (`fc.FlightCrewSchedule`,
   index references) directly and uses `fc.Solver`/`fc.calculate_score` — it needs no
-  pydantic. For types/fields see `flight_crew/_core.pyi`.
+  pydantic. For types/fields see `optimaru/flight_crew_scheduling/_core.pyi`.
 - Fine-grained settings go through `models.SolveConfig` (serializable) or `fc.SolverConfig`:
   `fc.solve(problem, config=SolveConfig(time_limit_seconds=10, parallel_solver_count=4))`.
 

@@ -504,7 +504,7 @@ PYBIND11_MODULE(_core, m)
         m,
         "DecomposedCalculator",
         "Pluggable score calculator: assemble constraints — either from a "
-        "list of constraint specs (see es_scheduling.constraints) or "
+        "list of constraint specs (see optimaru.employee_scheduling.constraints) or "
         "incrementally via add(name, ...) — then pass to "
         "Solver.solve(schedule, calc). The eight defaults at their default "
         "weights reproduce calculate_score exactly. A constraint may be "

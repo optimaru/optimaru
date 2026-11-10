@@ -378,7 +378,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("schedule"),
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
-        // food_packaging.constraints). The picks replace the defaults; None
+        // optimaru.food_packaging.constraints). The picks replace the defaults; None
         // keeps them. A name may be picked several times: every pick is its
         // own instance (a fresh copy of the default component) with its own
         // knobs. schedule.score then reports the three levels the assembly
@@ -402,7 +402,7 @@ PYBIND11_MODULE(_core, m)
             py::arg("constraints") = py::none());
 
     // The raw per-unit costs of an assembly on `schedule` — the input
-    // food_packaging.constraints.score() turns into a score. Scoring once is
+    // optimaru.food_packaging.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
     // Units are the lists (the packaging lines in order, then the unassigned
     // pool); a global constraint has one entry, and a per-line constraint
@@ -434,7 +434,7 @@ PYBIND11_MODULE(_core, m)
     m.def(
         "list_constraints",
         [] { return tfpy::constraint_names(defaultConstraints()); },
-        "Constraint names available to food_packaging.constraints.");
+        "Constraint names available to optimaru.food_packaging.constraints.");
 
     // The constraint catalog, read off the default assembly: the components'
     // kDefaultWeight / kDefaultLevel are the only place a default lives.

@@ -746,10 +746,21 @@ def test_costs_without_clip_cannot_score_the_literal_formula():
 
 # --- a numeric knob counts as the double the engine reads --------------------------
 
-_TINY = [Fraction(1, 10**400), np.longdouble("1e-4000")]  # != 0, but 0.0 as a double
+# != 0, but 0.0 as a double. The longdouble case needs an extended long double.
+_TINY = [
+    pytest.param(Fraction(1, 10**400), id="Fraction"),
+    pytest.param(
+        np.longdouble("1e-4000"),
+        id="longdouble",
+        marks=pytest.mark.skipif(
+            np.finfo(np.longdouble).tiny >= np.finfo(np.float64).tiny,
+            reason="np.longdouble is a plain double here (macOS arm64): 1e-4000 is already 0",
+        ),
+    ),
+]
 
 
-@pytest.mark.parametrize("offset", _TINY, ids=["Fraction", "longdouble"])
+@pytest.mark.parametrize("offset", _TINY)
 def test_an_offset_that_is_zero_as_a_double_is_no_offset(offset):
     """The engine reads float(offset) (py::float_) and sees 0.0, so the pick is allowed there.
 

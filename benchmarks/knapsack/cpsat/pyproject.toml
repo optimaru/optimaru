@@ -13,7 +13,7 @@ knapsack-compare = "knapsack_cpsat.benchmark:main"
 
 [tool.uv]
 # external-solver pins the published optimaru; the benchmarks measure the engine in
-# this checkout instead (the path source above, checked by cpsat_plugins.checkout).
+# this checkout instead (the path source below, checked by cpsat_plugins.checkout).
 override-dependencies = ["optimaru"]
 
 [tool.uv.sources]

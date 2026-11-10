@@ -272,7 +272,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("problem"),
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
-        // assembly_line_balancing.constraints). The picks replace the
+        // optimaru.assembly_line_balancing.constraints). The picks replace the
         // defaults; None keeps them. Single start. A name may be picked
         // several times: every pick is its own instance (a fresh copy of the
         // default component) with its own knobs.
@@ -289,7 +289,7 @@ PYBIND11_MODULE(_core, m)
             py::arg("constraints") = py::none());
 
     // The raw per-unit costs of an assembly on `problem` — the input
-    // assembly_line_balancing.constraints.score() turns into a score — in
+    // optimaru.assembly_line_balancing.constraints.score() turns into a score — in
     // catalog (list_constraints()) order. Scoring once is enough: re-pricing
     // any assembly is pure Python arithmetic on these. None = the default
     // assembly; a pick list scores exactly those picks (apply_constraints),
@@ -332,7 +332,7 @@ PYBIND11_MODULE(_core, m)
                 names.push_back(tfpy::python_name(name));
             return names;
         },
-        "Constraint names available to assembly_line_balancing.constraints.");
+        "Constraint names available to optimaru.assembly_line_balancing.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,

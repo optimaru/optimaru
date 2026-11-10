@@ -58,7 +58,7 @@ public:
         // Only solve(schedule) honors this; solve(schedule, calculator) ignores
         // it and runs one search. Python goes through the calculator overload
         // and gets its parallel starts from separate processes instead (see
-        // es_scheduling.models.solve_request).
+        // optimaru.employee_scheduling.models.solve_request).
         int parallelSolverCount = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full

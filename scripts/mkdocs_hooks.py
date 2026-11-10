@@ -1,9 +1,12 @@
-"""MkDocs hook: point links to repository files outside docs/ at GitHub.
+"""MkDocs hook: make the guides' GitHub-style links work on the site.
 
-The guides link to source files (``../../optimaru/knapsack/cpp/...``,
-``../../benchmarks/...``) so that they work when browsed on GitHub. The site
-only contains docs/, so on the site those links are rewritten to the same file
-on GitHub (`main`).
+The guides are written to be browsed on GitHub, so on the site two kinds of
+relative link need rewriting:
+
+- links to repository files outside docs/ (``../../optimaru/knapsack/cpp/...``,
+  ``../../benchmarks/...``) point at the same file on GitHub (`main`);
+- links to a directory under docs/ (``knapsack``), which GitHub shows through
+  its README.md, point at that README.md (the page MkDocs builds for it).
 """
 
 from __future__ import annotations
@@ -30,6 +33,9 @@ def on_page_markdown(markdown, page, config, files):
         path, sep, fragment = target.partition("#")
         repo_path = posixpath.normpath(posixpath.join(doc_dir, path))
         if repo_path.startswith("docs/") and repo_path != "docs/pypi.md":
+            if (ROOT / repo_path).is_dir() and (ROOT / repo_path / "README.md").is_file():
+                readme = posixpath.join(path.rstrip("/"), "README.md")
+                return f"{match.group(1)}{readme}{sep}{fragment}{match.group(3)}"
             return match.group(0)  # a page of the site
         kind = "tree" if (ROOT / repo_path).is_dir() else "blob"
         url = f"{GITHUB}/{kind}/main/{repo_path}" + (f"#{fragment}" if sep else "")

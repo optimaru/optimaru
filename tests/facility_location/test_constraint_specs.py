@@ -728,7 +728,20 @@ def test_the_refusal_comes_after_every_knob_of_a_duck_typed_pick():
 # --- a numeric knob counts as the double the engine reads ---------------------------
 
 
-@pytest.mark.parametrize("offset", [Fraction(1, 10**400), np.longdouble("1e-4000")], ids=["Fraction", "longdouble"])
+@pytest.mark.parametrize(
+    "offset",
+    [
+        pytest.param(Fraction(1, 10**400), id="Fraction"),
+        pytest.param(
+            np.longdouble("1e-4000"),
+            id="longdouble",
+            marks=pytest.mark.skipif(
+                np.finfo(np.longdouble).tiny >= np.finfo(np.float64).tiny,
+                reason="np.longdouble is a plain double here (macOS arm64): 1e-4000 is already 0",
+            ),
+        ),
+    ],
+)
 def test_an_offset_that_is_zero_as_a_double_is_no_offset_on_every_path(offset):
     """The engine reads float(offset) and sees 0.0, so the literal pick on hard is the plain
     shaping there; score() checks and shapes the same double instead of refusing the pick."""

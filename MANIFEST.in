@@ -7,3 +7,6 @@ recursive-include optimaru/*/cpp/include *.hpp
 recursive-include optimaru/*/cpp/src *.cpp *.hpp
 include optimaru/*/cpp/bindings.cpp
 global-exclude *.so *.pyd __pycache__ *.pyc
+prune tests
+prune benchmarks
+prune examples

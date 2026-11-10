@@ -355,7 +355,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("schedule"),
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
-        // meeting_scheduling.constraints). The picks replace the defaults; None
+        // optimaru.meeting_scheduling.constraints). The picks replace the defaults; None
         // keeps them. A name may be picked several times: every pick is its
         // own instance (a fresh copy of the default component) with its own
         // knobs.
@@ -377,7 +377,7 @@ PYBIND11_MODULE(_core, m)
             py::arg("constraints") = py::none());
 
     // The raw per-unit costs of an assembly on `schedule` — the input
-    // meeting_scheduling.constraints.score() turns into a score. Scoring once
+    // optimaru.meeting_scheduling.constraints.score() turns into a score. Scoring once
     // is enough: re-pricing any assembly is pure Python arithmetic on these.
     // None = the default assembly; a pick list scores exactly those picks
     // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
@@ -403,7 +403,7 @@ PYBIND11_MODULE(_core, m)
     m.def(
         "list_constraints",
         [] { return tfpy::constraint_names(defaultConstraints()); },
-        "Constraint names available to meeting_scheduling.constraints.");
+        "Constraint names available to optimaru.meeting_scheduling.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,

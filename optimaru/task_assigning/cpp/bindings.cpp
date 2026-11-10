@@ -4,7 +4,7 @@
 // is not modified here. One domain is exposed: the quickstart port
 // (ta::TaskAssigningSolution, LIST variable — every employee holds an
 // ordered task list, allowsUnassignedValues), as the module
-// task_assigning._core.
+// optimaru.task_assigning._core.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::string
@@ -397,7 +397,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("solution"),
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
-        // task_assigning.constraints). The picks replace the defaults; None
+        // optimaru.task_assigning.constraints). The picks replace the defaults; None
         // keeps them. A name may be picked several times: every pick is its
         // own instance (a fresh copy of the default component) with its own
         // knobs.
@@ -418,7 +418,7 @@ PYBIND11_MODULE(_core, m)
             py::arg("constraints") = py::none());
 
     // The raw per-unit costs of an assembly on `solution` — the input
-    // task_assigning.constraints.score() turns into a score. Scoring once is
+    // optimaru.task_assigning.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
     // Every entry carries the domain's medium fold ("medium_fold":
     // {"kind": "below_hard", "unit": 1e9}), so score() folds like the engine.
@@ -444,7 +444,7 @@ PYBIND11_MODULE(_core, m)
     m.def(
         "list_constraints",
         [] { return tfpy::constraint_names(defaultConstraints()); },
-        "Constraint names available to task_assigning.constraints.");
+        "Constraint names available to optimaru.task_assigning.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,

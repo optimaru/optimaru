@@ -289,8 +289,9 @@ and the C++ tests in `tests/<use case>/cpp/`, built under `build/<use case>/`.
 
 ## Building and releasing
 
-The distribution is built from this repository by [`setup.py`](setup.py), which
-lists every use case's extension and the C++ sources it compiles.
+The distribution is built from this repository by [`setup.py`](setup.py): one
+extension per use case, from its `cpp/bindings.cpp` and every `cpp/src/*.cpp`
+except `main.cpp` (the demo).
 `OPTIMARU_USE_CASES=knapsack,vehicle_routing` builds only those extensions (CI
 tests one use case per job that way); a release builds all of them.
 

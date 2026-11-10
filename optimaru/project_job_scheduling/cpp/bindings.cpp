@@ -3,7 +3,7 @@
 // the generic optimaru engine from ../../../include; the engine itself
 // is not modified here. One domain is exposed: the quickstart port
 // (pjs::ProjectJobSchedule, BASIC composite (executionMode, delay) variable),
-// as the module project_job._core.
+// as the module optimaru.project_job_scheduling._core.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::string
@@ -392,7 +392,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("schedule"),
              py::call_guard<py::gil_scoped_release>())
         // Same solve, scored by a caller-chosen constraint set (see
-        // project_job.constraints). The picks replace the defaults; None
+        // optimaru.project_job_scheduling.constraints). The picks replace the defaults; None
         // keeps them. A name may be picked several times: every pick is its
         // own instance (a fresh copy of the default component) with its own
         // knobs. schedule.score then reports the three levels the assembly
@@ -416,7 +416,7 @@ PYBIND11_MODULE(_core, m)
             py::arg("constraints") = py::none());
 
     // The raw per-unit costs of an assembly on `schedule` — the input
-    // project_job.constraints.score() turns into a score. Scoring once is
+    // optimaru.project_job_scheduling.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
     // All four constraints are global (one total each, which the exponent /
     // offset / clip shape once). Every entry carries the domain's medium fold
@@ -443,7 +443,7 @@ PYBIND11_MODULE(_core, m)
     m.def(
         "list_constraints",
         [] { return tfpy::constraint_names(defaultConstraints()); },
-        "Constraint names available to project_job.constraints.");
+        "Constraint names available to optimaru.project_job_scheduling.constraints.");
 
     // The constraint catalog, read off the default assembly: the components'
     // kDefaultWeight / kDefaultLevel are the only place a default lives.

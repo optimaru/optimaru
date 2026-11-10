@@ -7,7 +7,25 @@ name: docs
 on:
   push:
     branches: [main]
+    paths:
+      - "docs/**"
+      - "optimaru/**/*.py"
+      - "optimaru/**/*.pyi"
+      - "mkdocs.yml"
+      - "CHANGELOG.md"
+      - "scripts/gen_docs_pages.py"
+      - "scripts/mkdocs_hooks.py"
+      - ".github/workflows/docs.yml"
   pull_request:
+    paths:
+      - "docs/**"
+      - "optimaru/**/*.py"
+      - "optimaru/**/*.pyi"
+      - "mkdocs.yml"
+      - "CHANGELOG.md"
+      - "scripts/gen_docs_pages.py"
+      - "scripts/mkdocs_hooks.py"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -36,6 +54,10 @@ jobs:
 
   deploy:
     needs: build
+    # One Pages deployment at a time; a newer push waits instead of cancelling it.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

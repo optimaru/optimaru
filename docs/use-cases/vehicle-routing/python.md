@@ -89,11 +89,11 @@ Everything round-trips through JSON (`model_validate_json` /
 ## Files
 
 ```
-bindings.cpp             pybind11 module (PYBIND11_MODULE(_core)) — thin wrapper
-vrp_routing/__init__.py  re-exports the core
-vrp_routing/constraints.py  the constraint specs (one class per C++ component)
-vrp_routing/_constraint.py  the shared spec base (a synced copy; never edit by hand)
-vrp_routing/models.py    pydantic request/response layer (optional)
-setup.py, pyproject.toml build (links optimaru/vehicle_routing/cpp)
-tests/                   correctness + model tests (pytest)
+optimaru/vehicle_routing/
+├── __init__.py       re-exports the core
+├── constraints.py    the constraint specs (one class per C++ component), built on optimaru/_constraint.py
+├── models.py         pydantic request/response layer (optional)
+├── _core.pyi         stubs of the compiled module
+└── cpp/              bindings.cpp (the _core module, a thin wrapper), include/vrp/, src/
+tests/vehicle_routing/   correctness + model tests (pytest); cpp/ holds the C++ tests
 ```

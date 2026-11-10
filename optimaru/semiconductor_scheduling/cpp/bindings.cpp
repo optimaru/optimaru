@@ -467,7 +467,7 @@ PYBIND11_MODULE(_core, m)
 
     // The raw costs of an assembly on schedule.assignments: one entry per
     // constraint (a global constraint reports its total as one element) —
-    // the input semiconductor_scheduling.constraints.score() turns into a
+    // the input optimaru.semiconductor_scheduling.constraints.score() turns into a
     // score. None = the default assembly; a pick list scores exactly those
     // picks (apply_constraints), each entry carrying its pick's knobs, the
     // k-th pick of a name keyed "<name>#<k>".
@@ -500,7 +500,7 @@ PYBIND11_MODULE(_core, m)
         py::arg("schedule"), "Per-item raw costs of every constraint on schedule.assignments (one list per constraint).");
 
     m.def("list_constraints", [] { return tfpy::constraint_names(defaultConstraints()); },
-          "Constraint names available to semiconductor_scheduling.constraints.");
+          "Constraint names available to optimaru.semiconductor_scheduling.constraints.");
 
     tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
 
