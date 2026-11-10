@@ -53,7 +53,7 @@ jobs:
 
             Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
 
-            Write your review comments in Korean (한국어).
+            Write your review comments in English: the repository is public and everything in it is English.
 
             Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
 
