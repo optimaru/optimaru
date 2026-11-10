@@ -635,12 +635,12 @@ def _penalty(value: float) -> float:
     return round(-float(value), 2) + 0.0  # + 0.0 turns -0.0 into 0.0
 
 
-def planning_row(result: dict) -> dict:
-    runs = _runs(result)
-    scored = {solver: run for solver, run in runs.items() if run.get("score") is not None}
+def _deciding_level(result: dict) -> tuple[int, list[str]]:
+    """The level a row is decided on, and the names of the levels: the first level the solvers
+    differ on; on a full tie, the objective (last) level; with one solution only, its first
+    non-zero level."""
+    scored = {solver: run for solver, run in _runs(result).items() if run.get("score") is not None}
     names = next(iter(scored.values()))["score_names"] if scored else ["soft"]
-    # The deciding level: the first one the solvers differ on; on a full tie, the objective
-    # (last) level; with one solution only, its first non-zero level.
     if len(scored) == 2:
         engine, ortools = (scored[name]["score"] for name in SOLVERS)
         level = next(
@@ -652,6 +652,12 @@ def planning_row(result: dict) -> dict:
         level = next((i for i, value in enumerate(score) if value != 0), len(names) - 1)
     else:
         level = len(names) - 1
+    return level, names
+
+
+def planning_row(result: dict) -> dict:
+    runs = _runs(result)
+    level, names = _deciding_level(result)
     cells = {}
     for solver, key in SOLVERS.items():
         run = runs.get(solver)
@@ -684,22 +690,36 @@ def _section(section_id: str, metric: str, rows: list[dict], *, solvers=("engine
     return {"id": section_id, "metric": metric, "solvers": list(solvers), **extra, "rows": rows}
 
 
-def _as_rewards(rows: list[dict]) -> bool:
-    """Whether a use case scores a reward (a knapsack's value, a cut's weight): then the
-    deciding level of every row is positive, and the table shows scores, higher being better."""
-    values = [cell["value"] for row in rows for cell in row["cells"].values() if cell["value"] is not None]
+def _as_rewards(rows: list[dict], on_objective: list[bool]) -> bool:
+    """Whether a use case scores a reward (a knapsack's value, a cut's weight): then its
+    objective level is positive on every row decided there, and the table shows scores,
+    higher being better.
+
+    A row of such a use case that is decided on an earlier level (one solver breaks a hard
+    rule) shows the score on that level, zero or negative: its violations are no reward,
+    and they do not turn the table into penalties.
+    """
+    values = [
+        cell["value"]
+        for row, objective in zip(rows, on_objective, strict=True)
+        if objective
+        for cell in row["cells"].values()
+        if cell["value"] is not None
+    ]
     if not values or max(values) > 0 or min(values) == 0:
         return False
     for row in rows:
         for cell in row["cells"].values():
             if cell["value"] is not None:
-                cell["value"] = -cell["value"]
+                cell["value"] = -cell["value"] + 0.0  # + 0.0 turns -0.0 into 0.0
     return True
 
 
 def compare_dataset(slug: str, results: list[dict], seconds: float) -> dict:
-    rows = [planning_row(result) for result in results if "error" not in result]
-    metric = "reward" if _as_rewards(rows) else "penalty"
+    measured = [result for result in results if "error" not in result]
+    rows = [planning_row(result) for result in measured]
+    on_objective = [level == len(names) - 1 for level, names in map(_deciding_level, measured)]
+    metric = "reward" if _as_rewards(rows, on_objective) else "penalty"
     caveats = list(dict.fromkeys(result["caveat"] for result in results if result.get("caveat")))
     dataset = _dataset(
         slug,

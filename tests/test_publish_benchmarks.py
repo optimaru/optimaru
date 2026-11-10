@@ -221,6 +221,36 @@ def test_a_use_case_that_scores_a_reward_is_shown_as_scores() -> None:
     assert section["rows"][0]["best"] == ["ortools"] and section["rows"][1]["best"] == ["engine", "ortools"]
     assert reward["command"] == "uv run knapsack-compare --seconds 30 --workers 8"
 
+
+def test_a_reward_table_stays_one_when_a_row_is_decided_on_a_hard_rule() -> None:
+    # A roster scores a reward; on the largest instance one solver breaks hard rules.
+    results = [_compared([0, 46080], [0, 32141]), _compared([0, 76800], [-45242, 70011])]
+    section = publish.compare_dataset("employee-scheduling", results, 30)["sections"][0]
+
+    assert section["metric"] == "reward"
+    soft, hard = section["rows"]
+    assert (soft["level"], soft["cells"]["engine"]["value"], soft["cells"]["ortools"]["value"]) == (
+        "soft",
+        46080.0,
+        32141.0,
+    )
+    # The hard row shows the score on that level: no violation beside 45242 of them.
+    assert (hard["level"], hard["cells"]["engine"]["value"], hard["cells"]["ortools"]["value"]) == (
+        "hard",
+        0.0,
+        -45242.0,
+    )
+    assert str(hard["cells"]["engine"]["value"]) == "0.0" and hard["best"] == ["engine"]
+
+
+def test_a_penalty_table_has_no_negative_value() -> None:
+    # A tie at zero and a hard row do not make a penalty table a reward table.
+    results = [_compared([0, 0], [0, 0]), _compared([0, -30], [-2, -10]), _compared([0, -7], [0, -9])]
+    section = publish.compare_dataset("bed-allocation", results, 30)["sections"][0]
+    assert section["metric"] == "penalty"
+    values = [cell["value"] for row in section["rows"] for cell in row["cells"].values()]
+    assert values == [0.0, 0.0, 0.0, 2.0, 7.0, 9.0]
+
     penalty = publish.compare_dataset("bed-allocation", [_compared([0, -30], [-2, -10]), _compared([0, 0], [0, 0])], 30)
     assert penalty["sections"][0]["metric"] == "penalty"
     assert penalty["sections"][0]["rows"][0]["cells"]["ortools"]["value"] == 2.0
