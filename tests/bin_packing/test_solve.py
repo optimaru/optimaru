@@ -19,6 +19,7 @@ from optimaru.bin_packing.models import BinPackingProblemModel
 WEB_DEMO = Path(__file__).parent / "fixtures" / "web_demo.json"
 
 
+# Also the small problem of tests/_problems.py.
 def web_demo() -> bp.BinPackingProblem:
     return BinPackingProblemModel.model_validate(json.loads(WEB_DEMO.read_text())).to_core()
 

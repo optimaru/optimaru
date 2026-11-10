@@ -18,6 +18,7 @@ from optimaru.flight_crew_scheduling.models import (
 DAY0 = datetime(2026, 8, 10)
 
 
+# Also the small problem of tests/_problems.py.
 def _mini_problem() -> FlightCrewScheduleModel:
     """Two days x (ICN->NRT, NRT->ICN) round trips, one pilot + one flight attendant per flight.
 

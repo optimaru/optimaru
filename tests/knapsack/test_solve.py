@@ -13,6 +13,7 @@ from optimaru.knapsack.models import KnapsackProblemModel
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+# Also the small problem of tests/_problems.py.
 def demo() -> KnapsackProblemModel:
     return KnapsackProblemModel.model_validate(json.loads((FIXTURES / "web_demo.json").read_text()))
 
