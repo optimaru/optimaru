@@ -108,8 +108,8 @@ void Solver::solve(QuadraticAssignmentProblem& problem) {
     requireConfig(config_);
     if (start(problem)) {
         // Independent parallel starts through the engine's own multi-start:
-        // no custom operator or variable listener is registered, so the
-        // worker threads run exactly the same search (seed + i each).
+        // no custom operator is registered, so the worker threads run exactly
+        // the same search (seed + i each).
         const int starts = std::max(1, config_.parallel_solver_count);
         optimaru::Solver<QuadraticAssignmentProblem> engine(
                 engineConfigOf(config_, problem, starts));

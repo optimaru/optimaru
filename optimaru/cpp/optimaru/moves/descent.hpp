@@ -93,11 +93,6 @@ public:
         assignments_.clear();
         if constexpr (Traits::shape == Shape::Assignment) {
             return apply_basic(ctx, rng, entities);
-        } else if constexpr (Traits::shape != Shape::Sequence) {
-            (void)ctx;
-            (void)rng;
-            (void)entities;
-            return false;
         } else {
             Editor<Solution>& editor = ctx.editor;
             Solution& solution = editor.solution();
@@ -177,8 +172,6 @@ public:
             }
             ctx.editor.end_batch();
             assignments_.clear();
-        } else if constexpr (Traits::shape != Shape::Sequence) {
-            (void)ctx;
         } else {
             // Reverse order, so each operation sees the list state it created.
             for (auto it = applied_.rbegin(); it != applied_.rend(); ++it) {

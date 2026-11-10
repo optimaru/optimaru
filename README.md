@@ -104,16 +104,10 @@ instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
 ## Features
 
 - **Solution shapes** (`SolutionTraits<Solution>`): assignment (each entity
-  takes a value), sequence (ordered lists of elements) and chain (predecessor
-  links from anchors, solved through a synchronized list view so every
-  sequence move applies).
-- **Derived state** via `DerivedState<Solution>`
-  (`Solver::add_derived_state()`): values computed from the decisions, kept up
-  to date around every write; `ScoreChecks::Full` also catches stale ones.
+  takes a value) and sequence (ordered lists of elements).
 - **Scoring**: `Score` (int64 hard, double soft); constraints are written as an
-  incremental `Objective` (assignment and list hooks) or summed from named
-  components with `WeightedObjective`. Move evaluation stays incremental
-  (O(change)).
+  incremental `Objective` (assignment and list hooks). Move evaluation stays
+  incremental (O(change)).
 - **Constraint plugins**: `DecomposedObjective` scores named unit and
   global components (`<Subject>Cost`). Each declares its default weight and
   level (`kDefaultWeight` / `kDefaultLevel`: hard, medium or soft); a caller
@@ -132,9 +126,9 @@ instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
   means no violation), structural constraints keep their level, and a domain
   with a medium level declares once how it folds into the hard/soft score
   (`MediumFold`).
-- **Score explanation**: `explain_score()` → `ScoreBreakdown`, a
-  per-constraint split over the named components; `rescore()` recomputes a
-  score from scratch.
+- **Score explanation**: `DecomposedObjective::constraint_totals()` gives the
+  weighted total of each constraint, and `constraint_costs()` the raw per-unit
+  costs, from which a caller re-prices an assembly without scoring again.
 - **Verification**: `ScoreChecks::Full` compares every incremental score with
   a full recompute and throws `ScoreMismatchError` on a difference.
 - **Construction**: first fit, first fit decreasing, cheapest insertion for
@@ -151,8 +145,8 @@ instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
   regret-k (default k=3, nearby-restricted) recreate + polish, adaptive operator
   weights (roulette wheel by default; segmented roulette, alpha-UCB, uniform).
 - **Solving**: `Solver<Solution>(settings).solve(solution, objective)`;
-  `solve_in_background()` → `BackgroundSolve` (`status()`, `request_stop()`,
-  `wait()`); `solve_multistart()` (N independent starts, best wins).
+  `solve_multistart()` (N independent starts, best wins); `request_stop()`
+  ends a running solve from another thread.
 - **Custom operators**: implement `MoveOperator` / `RuinOperator`
   (`search/operators.hpp`) and register them with `Solver::add_move_operator` /
   `add_ruin_operator`; `set_acceptor_factory` swaps the acceptor.
@@ -220,8 +214,6 @@ setup.py, CMakeLists.txt           the wheel's extensions; the C++ build
 optimaru/cpp/optimaru/
 ├── optimaru.hpp                  umbrella include for consumers
 ├── solver.hpp                    Solver: construction, then search; multi-start
-├── background_solve.hpp          solve_in_background / BackgroundSolve
-├── explain.hpp                   explain_score / rescore
 ├── settings.hpp                  Settings, Limits, AcceptanceSettings, MoveMix,
 │                                 NeighborSettings, RuinRecreateSettings, ...
 ├── solver_config.hpp             what every use case's Solver::Config shares:
@@ -230,11 +222,9 @@ optimaru/cpp/optimaru/
 │                                 every standard library
 ├── worker_threads.hpp            thread start-up / shutdown for parallel pools
 ├── model/                        the solution as the engine sees it
-│   ├── solution_traits.hpp       SolutionTraits, Shape (Assignment | Sequence |
-│   │                             Chain), pinning, chain link encoding
-│   ├── derived_state.hpp         values derived from the decisions
+│   ├── solution_traits.hpp       SolutionTraits, Shape (Assignment | Sequence),
+│   │                             pinning
 │   ├── editor.hpp                every write, bracketed by the objective's hooks
-│   ├── chain_view.hpp            the list view a chain solve runs on
 │   ├── element_index.hpp         element -> (list, position)
 │   ├── snapshot.hpp              whole and list-wise restore
 │   └── neighborhoods.hpp         k-nearest-neighbour lists
@@ -242,13 +232,10 @@ optimaru/cpp/optimaru/
 │   ├── score.hpp                 Score, ScoreChecks, ScoreMismatchError
 │   ├── levels.hpp                Level (hard / medium / soft), MediumFold
 │   ├── objective.hpp             Objective: the incremental scoring contract
-│   ├── chain_objective.hpp       the objective contract for chain solutions
-│   ├── weighted_objective.hpp    sums independent objectives into one score
 │   ├── decomposed_objective.hpp  per-unit and global constraint plugins
-│   ├── constraint_assembly.hpp   default constraint set: weight / level /
-│   │                             exponent / offset / clip / drop by name,
-│   │                             repeated instances, info() catalog
-│   └── breakdown.hpp             ScoreBreakdown / ConstraintScore
+│   └── constraint_assembly.hpp   default constraint set: weight / level /
+│                                 exponent / offset / clip / drop by name,
+│                                 repeated instances, info() catalog
 ├── construct/                    the initial solution: first fit (decreasing),
 │                                 cheapest insertion
 ├── accept/                       Acceptor and one file per rule: hill climbing,
@@ -282,7 +269,7 @@ optimaru/cpp/optimaru/
 ```
 
 `optimaru::` is one flat namespace apart from the `optimaru::testing` and
-`optimaru::python` helpers (and small `detail` / `chain` helper namespaces);
+`optimaru::python` helpers (and small `detail` helper namespaces);
 the directories organize the headers, the namespaces don't. Functions and
 members are snake_case, types PascalCase.
 

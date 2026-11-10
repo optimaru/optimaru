@@ -54,9 +54,9 @@ struct Score {
 
 // Whether every score is re-derived from scratch and compared with the
 // incremental one. ScoreChecks::Full recomputes after every scored move
-// (derived state rebuilt, objective rebuilt, then scored) and throws
-// ScoreMismatchError on a difference, which catches both a buggy objective
-// and buggy derived state. Orders of magnitude slower: for debugging only.
+// (objective rebuilt, then scored) and throws ScoreMismatchError on a
+// difference, which catches a buggy objective. Orders of magnitude slower:
+// for debugging only.
 enum class ScoreChecks { Off, Full };
 
 // Does an incremental (or previewed) score agree with the full recompute?

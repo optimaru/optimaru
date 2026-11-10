@@ -4,7 +4,6 @@
 #ifndef OPTIMARU_MODEL_SOLUTION_TRAITS_HPP
 #define OPTIMARU_MODEL_SOLUTION_TRAITS_HPP
 
-#include <limits>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -15,8 +14,7 @@ namespace optimaru {
 // Which shape a solution's decisions take.
 //   Assignment  every entity takes one value from [0, value_count)
 //   Sequence    elements are placed, in order, into one of several lists
-//   Chain       every entity links to a predecessor: another entity or an anchor
-enum class Shape { Assignment, Sequence, Chain };
+enum class Shape { Assignment, Sequence };
 
 // ---------------------------------------------------------------------------
 // SolutionTraits
@@ -52,21 +50,6 @@ enum class Shape { Assignment, Sequence, Chain };
 //       static void insert_element(MySolution&, int list_index, int position, int element);
 //       static int remove_element(MySolution&, int list_index, int position);  // -> element
 //       static void reverse_segment(MySolution&, int list_index, int first, int last);
-//   };
-//
-// Chain: every entity links to its predecessor, which is another entity, an
-// anchor (encoded with chain::anchor) or chain::kUnlinked. The engine works on
-// a list view of the chains (ChainView) and keeps the solution's links in
-// step through every move, so all sequence moves apply. Its objective is a
-// ChainObjective.
-//
-//   template <>
-//   struct optimaru::SolutionTraits<MySolution> {
-//       static constexpr optimaru::Shape shape = optimaru::Shape::Chain;
-//       static int anchor_count(const MySolution&);
-//       static int entity_count(const MySolution&);
-//       static int previous_of(const MySolution&, int entity_index);
-//       static void link(MySolution&, int entity_index, int previous);
 //   };
 template <typename Solution>
 struct SolutionTraits;  // no primary definition: each solution specializes it
@@ -112,15 +95,6 @@ inline void require_pinned_values(const Solution& solution) {
         }
     }
 }
-
-// The chain shape's `previous` encoding: another entity (>= 0), an anchor
-// (encoded negative), or kUnlinked.
-namespace chain {
-constexpr int kUnlinked = std::numeric_limits<int>::min();
-constexpr int anchor(int anchor_index) { return -(anchor_index + 1); }
-constexpr bool is_anchor(int previous) { return previous < 0 && previous != kUnlinked; }
-constexpr int anchor_index(int previous) { return -previous - 1; }
-}  // namespace chain
 
 }  // namespace optimaru
 

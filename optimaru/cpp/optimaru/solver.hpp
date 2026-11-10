@@ -16,10 +16,8 @@
 
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
-#include "optimaru/score/chain_objective.hpp"
 #include "optimaru/score/objective.hpp"
 #include "optimaru/model/editor.hpp"
-#include "optimaru/model/chain_view.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/construct/construction.hpp"
 #include "optimaru/model/neighborhoods.hpp"
@@ -80,13 +78,6 @@ public:
         acceptor_factory_ = std::move(factory);
     }
 
-    // Register derived state (see DerivedState): the Editor updates it around
-    // every write to a decision variable, so values computed from the
-    // decision variables stay consistent for the objective.
-    void add_derived_state(std::unique_ptr<DerivedState<Solution>> derived) {
-        derived_states_.push_back(std::move(derived));
-    }
-
     // Cooperatively stops a running solve() (checked once per step); the
     // solve returns its best-found solution as usual. Thread-safe. The flag
     // is sticky and solve() never clears it (a request_stop() racing a
@@ -97,12 +88,8 @@ public:
 
     // Solves in place; returns the best score found.
     Score solve(Solution& solution, Objective<Solution>& objective) {
-        static_assert(Traits::shape != Shape::Chain,
-                      "chain-shaped solutions solve through the "
-                      "ChainObjective overload");
         require_pinned_values<Traits>(solution);
-        Editor<Solution> editor(solution, objective, config_.score_checks,
-                                derived_states_.empty() ? nullptr : &derived_states_);
+        Editor<Solution> editor(solution, objective, config_.score_checks);
         StopCondition stop(config_.limits, stop_requested_.get(), run_stop_.get());
         build_nearby(solution);
         Construction<Solution>::run(editor, config_.construction);
@@ -111,31 +98,11 @@ public:
         return local_search.run(editor, stop);
     }
 
-    // Chain shape: materialize the chains into a list view, run the full
-    // sequence machinery on it, and keep the domain's previous pointers in sync
-    // through every move (see ChainView). Custom move/ruin
-    // operators are not forwarded into the chained inner solve; derived
-    // state and all settings (nearby, LNS, acceptors, limits) are.
-    Score solve(Solution& solution, ChainObjective<Solution>& objective) {
-        static_assert(Traits::shape == Shape::Chain, "this overload is for chain-shaped solutions");
-        ChainView<Solution> working(solution);
-        ChainObjectiveBridge<Solution> bridge(objective);
-        Solver<ChainView<Solution>> inner(config_);
-        inner.share_stop_flag(stop_requested_);
-        inner.run_stop_ = run_stop_;
-        if (acceptor_factory_) inner.set_acceptor_factory(acceptor_factory_);
-        for (const auto& derived : derived_states_) {
-            inner.add_derived_state(std::make_unique<ChainDerivedStateBridge<Solution>>(*derived));
-        }
-        return inner.solve(working, bridge);
-    }
-
     // Shares a cooperative-stop flag with this solver: setting it has the
-    // effect of request_stop(), and request_stop() sets it. The chain
-    // facade hands its flag to its inner solver this way, and
+    // effect of request_stop(), and request_stop() sets it.
     // solve_parallel_starts (solver_config.hpp) gives every start's solver
-    // one flag, which the first start that fails raises so the others stop at
-    // their next step.
+    // one flag this way, which the first start that fails or reaches the
+    // target raises so the others stop at their next step.
     void share_stop_flag(std::shared_ptr<std::atomic<bool>> flag) {
         stop_requested_ = std::move(flag);
     }
@@ -157,12 +124,10 @@ public:
     // thread that cannot be created (std::system_error) stops and joins the
     // starts already running before the error is rethrown
     // (run_worker_threads). request_stop() on this solver reaches every start.
-    // Note: registered custom operators and derived states are per-Solver
-    // (possibly stateful), so multi-start threads run with the built-ins only
-    // — do NOT combine solve_multistart() with an objective that reads derived
-    // values (their derived state would be missing in the threads). The
-    // acceptor factory (set_acceptor_factory) IS shared: every start calls it
-    // for an acceptor of its own, so it must be safe to call concurrently.
+    // Note: registered custom operators are per-Solver (possibly stateful), so
+    // multi-start threads run with the built-ins only. The acceptor factory
+    // (set_acceptor_factory) IS shared: every start calls it for an acceptor
+    // of its own, so it must be safe to call concurrently.
     template <typename ObjectiveFactory>
     Score solve_multistart(Solution& solution, ObjectiveFactory&& make_objective) {
         require_pinned_values<Traits>(solution);
@@ -219,15 +184,10 @@ public:
     }
 
 private:
-    // The chain facade hands its run-scoped stop flag to its inner solver.
-    template <typename>
-    friend class Solver;
-
     Settings config_;
     Neighborhoods nearby_;
     std::vector<std::unique_ptr<MoveOperator<Solution>>> move_operators_;
     std::vector<std::unique_ptr<RuinOperator<Solution>>> ruin_operators_;
-    std::vector<std::unique_ptr<DerivedState<Solution>>> derived_states_;
     std::function<std::unique_ptr<Acceptor>(const Score&)> acceptor_factory_;
     // shared_ptr so the solver object stays movable.
     std::shared_ptr<std::atomic<bool>> stop_requested_ = std::make_shared<std::atomic<bool>>(false);

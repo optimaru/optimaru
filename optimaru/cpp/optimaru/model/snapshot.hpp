@@ -163,7 +163,7 @@ struct SolutionSnapshot {
             editor.end_batch();
         } else {
             // One-time rebuild: write the lists directly, then resynchronize
-            // the derived state and the objective with a reset.
+            // the objective with a reset.
             for (int l = 0; l < static_cast<int>(snap.lists.size()); ++l) {
                 while (Traits::list_size(solution, l) > 0) {
                     Traits::remove_element(solution, l, Traits::list_size(solution, l) - 1);

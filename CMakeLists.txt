@@ -9,8 +9,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # The engine: header-only, in optimaru/cpp/optimaru/ (#include "optimaru/...").
-# Multi-start and background solves run on std::thread, so consumers link the
-# platform's thread library through the target.
+# Multi-start solves run on std::thread, so consumers link the platform's
+# thread library through the target.
 find_package(Threads REQUIRED)
 add_library(optimaru INTERFACE)
 add_library(optimaru::optimaru ALIAS optimaru)
