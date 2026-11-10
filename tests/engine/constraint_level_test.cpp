@@ -2703,6 +2703,21 @@ void testSharedRepeats() {
           "BelowHard: repeats == independent instances over 2000 moves (trials, batches)");
     check(walkAgrees<SoftFoldTasks>([] { return repeated<SoftFoldTasks>(true); }, 47),
           "repeats: incremental == fresh over 2000 moves (1/3 rejected)");
+    check(walkAgrees<Tasks>(
+                  [] {
+                      // The members of a compiled delta group are evaluated by
+                      // the group and stay out of the share classes.
+                      optimaru::ConstraintAssembly<Tasks> assembly;
+                      assembly.emplace<GroupedTaskCost<Tasks>>();
+                      optimaru::ConstraintAssembly<Tasks> copies;
+                      copies.emplace_instance<GroupedTaskCost<Tasks>>(2.0);
+                      copies.emplace_instance<GroupedTaskCost<Tasks>>(3.0);
+                      copies.offset("groupedTaskCost", 1, 10.0);
+                      assembly.add_repeats(std::move(copies));
+                      return assembly;
+                  },
+                  53),
+          "repeats of a grouped component keep the group path: incremental == fresh");
     listRepeatPreviews<SoftFoldRoutes>("sequence IntoSoft, repeats", 67, /*shared=*/true);
     listRepeatPreviews<HardFoldRoutes>("sequence BelowHard, repeats", 71, /*shared=*/true);
     {

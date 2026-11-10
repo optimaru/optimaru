@@ -202,8 +202,9 @@ public:
     ConstraintAssembly& add_repeats(ConstraintAssembly&& other) & {
         for (const auto& constraint : other.units_) require_held(constraint->name);
         for (const auto& constraint : other.globals_) require_held(constraint->name);
+        // Unit constraints only: the objective shares nothing between
+        // globals, so a global is appended as an independent instance.
         for (auto& constraint : other.units_) constraint->repeats_first = true;
-        for (auto& constraint : other.globals_) constraint->repeats_first = true;
         return add_instances(std::move(other));
     }
     ConstraintAssembly&& add_repeats(ConstraintAssembly&& other) && {

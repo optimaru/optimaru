@@ -128,9 +128,9 @@ instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
   handles them the same way; a name held several times is edited per instance
   (`weight(name, instance, w)`, `drop_all(name)`), and its name alone throws.
   Rewards (raw cost <= 0) never go hard, the literal formula with an offset
-  never lands on a level that counts toward the hard score (so hard 0 still means no
-  violation), structural constraints keep their level, and a domain with a
-  medium level declares once how it folds into the hard/soft score
+  never lands on a level that counts toward the hard score (so hard 0 still
+  means no violation), structural constraints keep their level, and a domain
+  with a medium level declares once how it folds into the hard/soft score
   (`MediumFold`).
 - **Score explanation**: `explain_score()` → `ScoreBreakdown`, a
   per-constraint split over the named components; `rescore()` recomputes a

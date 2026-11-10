@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -1384,13 +1385,15 @@ private:
                 if (!is_shared(entry->kind) || share_class_[entry->c] == entry->c) continue;
                 const double own = entry->constraint->cost(*solution_, unit, members_[unit]);
                 if (own != cache_raw_[base + entry->c]) {
+                    char values[80];  // every digit: the two may differ in the last bit only
+                    std::snprintf(values, sizeof values, "%.17g against %.17g", own,
+                                  cache_raw_[base + entry->c]);
                     throw std::logic_error(
                             "Constraint '" + entry->constraint->name +
                             "' is declared a repeat of the first instance of its name "
                             "(add_repeats), but its raw cost differs from that instance's (" +
-                            std::to_string(own) + " against " +
-                            std::to_string(cache_raw_[base + entry->c]) + " on unit " +
-                            std::to_string(unit) + "); add it with add_instances()");
+                            values + " on unit " + std::to_string(unit) +
+                            "); add it with add_instances()");
                 }
             }
         }
