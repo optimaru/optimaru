@@ -224,19 +224,6 @@ PYBIND11_MODULE(_core, m) {
 
     optimaru::python::bind_solver_config(config);
     config.def(py::init<>())
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruin_recreate_min_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruin_recreate_max_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruin_recreate_max_ruin_count)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruin_recreate_operator_decay)
-            .def_readwrite("ruin_recreate_polish_steps",
-                           &Solver::Config::ruin_recreate_polish_steps)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Guided selection (see cpp/src/solver.cpp): change moves draw the
@@ -245,21 +232,7 @@ PYBIND11_MODULE(_core, m) {
             // for the whole span.
             .def_readwrite("window_value_probability", &Solver::Config::window_value_probability)
             .def_readwrite("hot_job_probability", &Solver::Config::hot_job_probability)
-            .def_readwrite("free_crew_candidates", &Solver::Config::free_crew_candidates)
-            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-            // stops at the first feasible solution.
-            .def_property(
-                    "best_score_limit",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // Callback fired on every new best solution: on_new_best(step,
-            // score). The pybind11 wrapper re-acquires the GIL, so it is safe
-            // from the engine's multi-start worker threads too.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+            .def_readwrite("free_crew_candidates", &Solver::Config::free_crew_candidates);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

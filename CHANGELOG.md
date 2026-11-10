@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Maintenance scheduling: `SolverConfig` gains `ruin_recreate_as_move_weight` and
+  `ruin_recreate_as_move_max_ruin`.** The C++ solver already had the two knobs
+  (destroy-and-repair as an ordinary move judged by the acceptor; 0, the default, turns it
+  off), but Python could not set them.
 - **Semiconductor scheduling: a wrong problem type is a `TypeError`.** `solve()`,
   `calculate_score()`, `constraint_costs()` and `constraint_items()` raised `AttributeError`
   for a value that was neither a `SemiconductorSchedule` nor a
