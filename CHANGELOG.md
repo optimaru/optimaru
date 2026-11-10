@@ -7,9 +7,11 @@
   each start used to stop on its own, so `solve()` returned only when the slowest start had
   reached the target or run out the time limit. Now the first start to reach it ends the run:
   the others stop at their next step and hand over their best so far, and the best of all
-  starts is returned. Which start gets there first depends on the threads, so in that
-  combination the same seed can give a different solution from run to run; without a target,
-  or with one start, a seeded solve is as reproducible as before. C++: the same holds for
+  starts is returned. That solution can score lower on the levels below the target than
+  the best of all starts run to the end did, which is what the earlier return costs. Which
+  start gets there first depends on the threads, so in that combination the same seed can
+  give a different solution from run to run; without a target, or with one start, a seeded
+  solve is as reproducible as before. C++: the same holds for
   `Solver::solve_multistart()` and `optimaru::solve_parallel_starts()`.
 - **Benchmarks on whole public data sets.** The public-instance harnesses now run
   whole sets or stated samples instead of a few instances, and every results

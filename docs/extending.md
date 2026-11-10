@@ -180,6 +180,11 @@ its own and registers its own operators.
 you extend calls `solve_multistart` (knapsack does, for example), switch it to
 that pattern before adding a move.
 
+In both, a start that reaches the target stops the others, and the best of all
+starts wins, a stopped one included. So the function a start runs (`solve_one`)
+must leave `candidate.score` set also when the stop flag ended its search
+early: score after the engine returns, whatever made it return.
+
 ### 3. Expose a switch (recommended)
 
 Add a field to the use case's `Solver::Config` (`my_moves = true`), bind it in

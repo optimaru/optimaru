@@ -330,7 +330,9 @@ void testMultiStartAndFfd(const Score& optimum) {
     }
     {  // A start that reaches the target ends the run. Start 0 can reach the
         // optimum; starts 1 and 2 search with a handicapped objective and
-        // never do, so on their own they would run out the 30 s.
+        // never do, so on their own they would run out the 30 s. Their scores
+        // are on the handicapped scale, always below start 0's, so start 0
+        // is also the one the comparison picks.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);

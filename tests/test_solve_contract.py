@@ -110,7 +110,10 @@ def test_parallel_starts_return_the_best_single_start(use_case):
 def test_a_multi_start_solve_with_a_target_returns_the_score_of_its_solution(use_case):
     """A start that reaches the target stops the others, and the best candidate wins, one that
     was stopped on the way included. Whichever start that is, the score on the result is the
-    score of the solution on it: a stopped start hands over a scored candidate."""
+    score of the solution on it: a stopped start hands over a scored candidate.
+
+    This checks the scoring only. On problems this small every start is feasible within
+    milliseconds, so the stop itself is what tests/engine/engine_test.cpp checks."""
     module = use_case_module(use_case)
     for seed in (0, 1, 2):
         started = time.monotonic()
