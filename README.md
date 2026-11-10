@@ -151,24 +151,6 @@ instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
   (`search/operators.hpp`) and register them with `Solver::add_move_operator` /
   `add_ruin_operator`; `set_acceptor_factory` swaps the acceptor.
 
-Multithreaded *move* evaluation is deliberately excluded: it only pays when a
-single score calculation is expensive (ms-scale); at this engine's ~200ns
-moves, per-step thread synchronization would cost more than it saves — use
-`solve_multistart()` to occupy cores instead. Also out of scope:
-exhaustive/partitioned search and REST layers.
-
-## Performance features
-
-- **Nearby selection**: on spatial problems a distant relocate/swap is almost
-  never an improvement, so moves are biased toward k-nearest neighbors. The
-  same lists drive the LNS related ruin and the nearby-restricted repair.
-- **LNS / ALNS**: escapes the local optima that acceptor-only search cannot
-  leave — verified in the tests: hill climbing alone stays trapped on a
-  conflicted instance, hill climbing + LNS reaches the global optimum.
-- Measured on 100-city random TSP (5-seed sweep): nearby + LNS beats plain
-  local search on every seed even with HALF the outer step budget
-  (mean tour 2514 → 2409).
-
 ## Repository layout
 
 The layout follows the usual pattern for a compiled Python package: one package,
