@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 NEEDED = re.compile(
-    r"^(setup\.py|pyproject\.toml|LICENSE|NOTICE|docs/pypi\.md"
+    r"^(setup\.py|pyproject\.toml|LICENSE|NOTICE|THIRD-PARTY-LICENSES|docs/pypi\.md"
     r"|optimaru/.*\.pyi?|optimaru/(.*/)?py\.typed"
     r"|optimaru/cpp/.+"
     r"|optimaru/[^/]+/cpp/(bindings\.cpp|include/.+|src/.+))$"

@@ -13,8 +13,10 @@ readme = "docs/pypi.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 # The compiled extensions embed pybind11 headers (BSD-3-Clause); its license
-# is reproduced at the end of NOTICE, which ships with every wheel and the sdist.
-license-files = ["LICENSE", "NOTICE"]
+# is reproduced at the end of NOTICE. THIRD-PARTY-LICENSES covers the C++ runtime
+# libraries the wheel repair tools bundle into the musllinux and Windows wheels.
+# All three ship with every wheel and the sdist.
+license-files = ["LICENSE", "NOTICE", "THIRD-PARTY-LICENSES"]
 authors = [{ name = "optimaru" }]
 keywords = [
   "optimization", "combinatorial-optimization", "metaheuristics", "scheduling",

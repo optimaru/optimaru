@@ -314,3 +314,9 @@ Both are Apache-2.0; [NOTICE](NOTICE) lists exactly which parts derive from
 which. When you redistribute optimaru or a derivative of it, include both
 [LICENSE](LICENSE) and [NOTICE](NOTICE). optimaru is not affiliated with or
 endorsed by Timefold BV.
+
+The musllinux and Windows wheels on PyPI also bundle the C++ runtime libraries
+their extensions load (libstdc++ and libgcc, GPL-3.0-or-later with the GCC
+Runtime Library Exception; the Microsoft Visual C++ runtime).
+[THIRD-PARTY-LICENSES](THIRD-PARTY-LICENSES) carries their terms and ships in
+every wheel; pass it on with those wheels.
