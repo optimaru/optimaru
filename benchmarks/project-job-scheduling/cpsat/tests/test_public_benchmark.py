@@ -9,6 +9,7 @@ from project_job_cpsat.public_benchmark import (
     _verified,
     critical_path,
     instance_names,
+    load_instance,
     main,
     make_model,
     parse_instance,
@@ -81,3 +82,9 @@ def test_all_and_instance_do_not_go_together() -> None:
     with pytest.raises(SystemExit) as exit_info:
         main(["--all", "--instance", "Pat1"])
     assert exit_info.value.code == 2
+
+
+def test_an_instance_that_is_not_pinned_is_not_loaded(tmp_path) -> None:
+    # Refused by name, before the archive is read or downloaded.
+    with pytest.raises(ValueError, match="unknown instance 'Pat6'; available: Pat1, Pat2, Pat3, Pat4, Pat5"):
+        load_instance("Pat6", tmp_path)

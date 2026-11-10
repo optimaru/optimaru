@@ -168,6 +168,22 @@ def _bold(cells: dict[str, dict], texts: dict[str, str]) -> dict[str, str]:
     return {name: f"**{text}**" if name in best else text for name, text in texts.items()}
 
 
+def _seed(results: list[dict], default: int) -> int:
+    """The seed the results record. `default` is the harness's own default, for results written
+    before a harness recorded its seed; results of different seeds do not share a table."""
+    seeds = {result["seed"] for result in results if "seed" in result}
+    if len(seeds) > 1:
+        raise SystemExit(f"results of different seeds cannot share a table: {sorted(seeds)}")
+    return seeds.pop() if seeds else default
+
+
+def _check_vrp(what: str, data: dict, args: argparse.Namespace) -> None:
+    """Refuse a routing file run with another budget than the homepage entry will state."""
+    seconds = data["protocol"]["seconds"]
+    if seconds != args.seconds:
+        raise SystemExit(f"{what}: run with {seconds:g} s, not --seconds {args.seconds:g}")
+
+
 def _footer(args: argparse.Namespace, seed: int, *, workers: bool = True) -> str:
     text = f"Measured {args.date} on {args.machine}, {args.seconds:g} s per solver and instance, seed {seed}. "
     if workers:
@@ -467,6 +483,8 @@ def _count_cells(result: dict, field: str) -> tuple[dict[str, dict], dict[str, s
     cells, texts = {}, {}
     for solver, key in SOLVERS.items():
         run = runs.get(solver)
+        if run is not None and run.get("outcome") == "mismatch":
+            raise SystemExit(f"{result['instance']}: a run cannot be published: {run['status']}")
         if run is None:
             cells[key], texts[key] = {"value": None, "status": "not run"}, "not run (size cap)"
         elif run.get(field) is None or run.get("feasible") is False:
@@ -492,7 +510,7 @@ def rcpsp_block(results: list[dict], args: argparse.Namespace) -> str:
             f"| {result['instance']} | {result['tasks'] - 2} | {result['critical_path']} | "
             f"{texts['engine']} | {texts['ortools']} |"
         )
-    lines += ["", _footer(args, 0)]
+    lines += ["", _footer(args, _seed(results, 0))]
     return "\n".join(lines)
 
 
@@ -518,7 +536,7 @@ def bpp_block(results: list[dict], args: argparse.Namespace) -> str:
     lines += [
         "",
         (f"CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, {cap} items). " if cap else "")
-        + _footer(args, 1),
+        + _footer(args, _seed(results, 1)),
     ]
     return "\n".join(lines)
 
@@ -558,7 +576,7 @@ def qaplib_block(results: list[dict], args: argparse.Namespace) -> str:
         if gaps
         else ""
     )
-    lines += ["", summary + _footer(args, 1, workers=False)]
+    lines += ["", summary + _footer(args, _seed(results, 1), workers=False)]
     return "\n".join(lines)
 
 
@@ -588,7 +606,7 @@ def salbp_block(sets: dict[str, list[dict]], args: argparse.Namespace) -> str:
     lines += [
         "",
         (f"CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, {cap} tasks). " if cap else "")
-        + _footer(args, 1),
+        + _footer(args, _seed(everything, 1)),
     ]
     return "\n".join(lines)
 
@@ -748,6 +766,8 @@ def vrp_dataset(slug: str, data: dict) -> dict:
     command = "uv run python -m vrp_benchmark --series {} --seconds {:g}".format(series, data["protocol"]["seconds"])
     if series == "x":
         command += " --catalog-source mirror"
+    # A run of chosen instances reproduces with the same choice, not as the whole series.
+    command += "".join(f" --only {name}" for name in data["protocol"].get("only") or [])
     return _dataset(slug, "vehicle-routing", "public", "routing", "vehicle-routing", command, [section])
 
 
@@ -854,7 +874,9 @@ def rcpsp_dataset(results: list[dict], seconds: float) -> dict:
 
 def bpp_dataset(results: list[dict], seconds: float) -> dict:
     rows = _count_rows(results, "bins", lambda result: f"{result['items']} items")
-    # `--sample-per-class N` picks N evenly spread instances of the twenty a class has (bench.run_bench).
+    # `--sample-per-class N` picks N evenly spread instances of the twenty a Falkenauer class has.
+    # The same rounding as `sample_per_class` in benchmarks/bin-packing/bench/run_bench.py: if the two
+    # ever differ, the command below falls back to naming every instance, which is still correct.
     numbers = _shared_numbers([result["instance"] for result in results]) or []
     count = len(numbers)
     spread = [f"{(i * 19 + (count - 1) // 2) // (count - 1):02d}" for i in range(count)] if count > 1 else None
@@ -1061,19 +1083,26 @@ def main() -> None:
     datasets: dict[str, dict] = {}
 
     compare = {path.stem: json.loads(path.read_text()) for path in sorted((args.results / "compare").glob("*.json"))}
-    footer = (
-        f"Measured {args.date} on {args.machine}, {args.seconds:g} s per solver and instance, seed 1. "
-        f"The engine runs single-threaded; CP-SAT uses {args.workers} workers and its budget starts once its "
-        "model is built. Single runs — treat small differences as noise."
-    )
+
+    def compare_footer(results: list[dict]) -> str:
+        return (
+            f"Measured {args.date} on {args.machine}, {args.seconds:g} s per solver and instance, "
+            f"seed {_seed(results, 1)}. The engine runs single-threaded; CP-SAT uses {args.workers} workers "
+            "and its budget starts once its model is built. Single runs — treat small differences as noise."
+        )
+
     for slug in COMPARED:
         if slug not in compare:
             continue
-        _check_protocol(slug, [result for result in compare[slug] if "error" not in result], args)
+        measured = [result for result in compare[slug] if "error" not in result]
+        _check_protocol(slug, measured, args)
         datasets[slug] = compare_dataset(slug, compare[slug], args.seconds)
-        _replace_block(_readme_of(slug), compare_block(compare[slug], footer))
+        _replace_block(_readme_of(slug), compare_block(compare[slug], compare_footer(measured)))
 
     set_x, set_a = _load(args.results, "vrp-x.json"), _load(args.results, "vrp-a.json")
+    for name, data in (("vehicle-routing (Set X)", set_x), ("vehicle-routing (Set A)", set_a)):
+        if data:
+            _check_vrp(name, data, args)
     if set_x or set_a:
         _replace_block(BENCHMARKS / "vehicle-routing" / "README.md", vrp_block(set_x, set_a, args))
     if set_x:
@@ -1087,7 +1116,8 @@ def main() -> None:
         _check_protocol("pickup-delivery (Li & Lim)", li_lim, args)
         datasets["li-lim-pdptw"] = pdp_li_lim_dataset(li_lim, args.seconds)
         _replace_block(
-            pdp / "cpsat" / "PUBLIC_BENCHMARKS.md", pdp_li_lim_block(li_lim, args) + "\n\n" + _footer(args, 0)
+            pdp / "cpsat" / "PUBLIC_BENCHMARKS.md",
+            pdp_li_lim_block(li_lim, args) + "\n\n" + _footer(args, _seed(li_lim, 0)),
         )
     if synthetic:
         _check_protocol("pickup-delivery (synthetic)", synthetic, args)
@@ -1097,7 +1127,7 @@ def main() -> None:
             "## Results\n\n"
             + pdp_synthetic_block(synthetic)
             + "\n\nThe Li & Lim results are in [`cpsat/PUBLIC_BENCHMARKS.md`](cpsat/PUBLIC_BENCHMARKS.md).\n\n"
-            + _footer(args, 0),
+            + _footer(args, _seed(synthetic, 0)),
         )
 
     rcpsp = _load(args.results, "rcpsp.json")

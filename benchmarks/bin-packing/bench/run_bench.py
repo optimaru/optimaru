@@ -103,6 +103,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cache-dir", type=Path, default=Path(__file__).resolve().parent / ".cache")
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
+    if sum(bool(choice) for choice in (args.all, args.sample_per_class, args.instance)) > 1:
+        parser.error("--all, --sample-per-class and --instance are mutually exclusive")
 
     suite = load_suite(args.cache_dir)
     if args.all:

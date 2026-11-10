@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -23,15 +22,20 @@ def _gap(value: int, reference: int | None) -> float | None:
     return (value - reference) / abs(reference) * 100.0
 
 
-def reference_objective(source, reference) -> int:
-    """What the QAPLIB reference permutation scores under the use case's evaluator.
+#: Solution files whose stated value their own permutation does not reproduce, and what
+#: the permutation scores. The kra32 file states 88900, the value of kra30a.
+REFERENCE_ERRATA = {"kra32": 88700}
+
+
+def reference_objective(name: str, source, reference) -> int:
+    """What the QAPLIB reference permutation of instance `name` scores under the use
+    case's evaluator.
 
     A solution file lists either the facility of each location or the location
-    of each facility, and the archive does not say which: both readings are
-    assignments, so the better one is the reference. It is normally the value
-    the file states; where it is not (the kra32 file states kra30a's 88900 and
-    its permutation scores 88700), the score of the permutation is what a
-    solver can be compared with, and a warning says so.
+    of each facility, and the archive does not say which, so both readings are
+    scored. One of them must give the value the file states, or the value
+    `REFERENCE_ERRATA` records for a file known to state another: anything else
+    is a parsing or scoring bug and stops the run.
     """
     inverse = [0] * len(reference.permutation)
     for index, value in enumerate(reference.permutation):
@@ -43,13 +47,12 @@ def reference_objective(source, reference) -> int:
         scores.append(_objective(problem))
     if reference.objective in scores:
         return reference.objective
-    best = min(scores)
-    print(
-        f"QAPLIB reference: the solution file states {reference.objective}, "
-        f"its permutation scores {best}; using {best}",
-        file=sys.stderr,
+    if REFERENCE_ERRATA.get(name) in scores:
+        return REFERENCE_ERRATA[name]
+    raise AssertionError(
+        f"QAPLIB reference mismatch for {name}: the solution file states {reference.objective}, "
+        f"its permutation scores {' or '.join(map(str, scores))}"
     )
-    return best
 
 
 def _run_engine(problem, seconds: float, seed: int) -> dict:
@@ -140,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         runs = [_run_engine(source.model_copy(deep=True), args.seconds, args.seed)]
         if args.exact_max_size and len(source.facilities) <= args.exact_max_size:
             runs.append(_run_cpsat(source.model_copy(deep=True), args.seconds, args.seed, args.workers))
-        best_known = None if reference is None else reference_objective(source, reference)
+        best_known = None if reference is None else reference_objective(name, source, reference)
         for run in runs:
             run["gap_to_qaplib_percent"] = None if run["objective"] is None else _gap(run["objective"], best_known)
         results.append(

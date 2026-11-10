@@ -122,6 +122,7 @@ def test_one_choice_of_instances_per_run() -> None:
         ["--all", "--instance", "lc101"],
         ["--all", "--synthetic", "5"],
         ["--instance", "lc101", "--synthetic", "5"],
+        ["--synthetic", "5", "--requests", "3"],
     ):
         with pytest.raises(SystemExit) as exit_info:
             main(argv)

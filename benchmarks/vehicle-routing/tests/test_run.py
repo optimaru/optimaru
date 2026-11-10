@@ -1,4 +1,5 @@
 import argparse
+import json
 
 import pytest
 
@@ -175,3 +176,14 @@ def test_limit_per_bucket_goes_with_a_set_x_sample_only() -> None:
         with pytest.raises(SystemExit) as exit_info:
             main(argv)
         assert exit_info.value.code == 2
+
+
+def test_the_protocol_names_the_instances_a_run_was_limited_to(tmp_path, monkeypatch) -> None:
+    from vrp_benchmark import run
+
+    args = argparse.Namespace(
+        series="a", seconds=1.0, seed=0, only=["A-n32-k5"], out=tmp_path / "a.json", summary_markdown=None
+    )
+    run.write_outputs(args, [BenchmarkResult("engine", "A-n32-k5", 31, 5, 784, 0.0, 0, 1.0, "")], ("engine",), None)
+    protocol = json.loads(args.out.read_text())["protocol"]
+    assert protocol["only"] == ["A-n32-k5"] and protocol["series"] == "a"

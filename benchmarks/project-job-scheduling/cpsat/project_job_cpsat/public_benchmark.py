@@ -125,12 +125,11 @@ def instance_names() -> list[str]:
 
 
 def load_instance(name: str, cache_dir: Path) -> RcpspInstance:
+    # Only a pinned file is read: an archive may carry others, and nothing vouches for them.
+    if name not in INSTANCE_SHA256:
+        raise ValueError(f"unknown instance {name!r}; available: {', '.join(instance_names())}")
     with zipfile.ZipFile(io.BytesIO(_download(cache_dir))) as archive:
-        member = f"{ARCHIVE_PREFIX}{name}.rcp"
-        try:
-            return parse_instance(archive.read(member).decode(), name=name)
-        except KeyError as exc:
-            raise ValueError(f"unknown instance {name!r}; available: {', '.join(instance_names())}") from exc
+        return parse_instance(archive.read(f"{ARCHIVE_PREFIX}{name}.rcp").decode(), name=name)
 
 
 def _topological_order(instance: RcpspInstance) -> list[int]:
@@ -303,6 +302,8 @@ def run_case(
             "resource_excess": None,
             "feasible": False,
             "seconds": None,
+            # ok, no solution, infeasible or mismatch; `status` has the words.
+            "outcome": "ok",
             "status": "",
         }
         runs.append(run)
@@ -311,13 +312,24 @@ def run_case(
             solved, elapsed = _run(backend, model, seconds=seconds, seed=seed, workers=workers)
         except RuntimeError as exc:
             run["seconds"] = time.perf_counter() - started
+            run["outcome"] = "no solution"
             run["status"] = f"no solution: {exc}"
             log(f"{backend:6} no-solution within {seconds:.2f}s: {exc}")
             continue
         makespan, resource_excess = rescore(instance, solved)
         if solved.score_hard != -resource_excess:
-            raise ValueError("solver report and independent resource score disagree")
+            # A harness or adapter bug, not a result. Recorded, so a run of several
+            # instances keeps what it has measured; the publisher refuses it.
+            run["seconds"] = elapsed
+            run["outcome"] = "mismatch"
+            run["status"] = (
+                f"mismatch: the solver reports a hard score of {solved.score_hard}, "
+                f"the independent scorer a resource excess of {resource_excess}"
+            )
+            log(f"{backend:6} {run['status']}")
+            continue
         run.update(
+            outcome="ok" if resource_excess == 0 else "infeasible",
             makespan=makespan,
             resource_excess=resource_excess,
             feasible=resource_excess == 0,

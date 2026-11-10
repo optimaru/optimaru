@@ -289,3 +289,37 @@ def test_sample_and_size_cap_in_the_prose_come_from_the_results() -> None:
     uneven = [bins("u120_00", 120), bins("u120_04", 120), bins("t60_00", 60)]
     assert "Falkenauer: 3 instances." in publish.bpp_block(uneven, ARGS)
     assert "--instance u120_00 --instance u120_04 --instance t60_00" in publish.bpp_dataset(uneven, 30)["command"]
+
+
+def test_a_routing_file_run_with_another_budget_is_refused_and_a_partial_run_says_so() -> None:
+    data = {
+        "protocol": {"series": "x", "seconds": 10.0, "seed": 0, "only": ["X-n101-k25"]},
+        "results": [_vrp("X-n101-k25", "engine", 100, 1.0), _vrp("X-n101-k25", "ortools", 100, 2.0)],
+    }
+    with pytest.raises(SystemExit, match="10 s, not --seconds 30"):
+        publish._check_vrp("vehicle-routing (Set X)", data, ARGS)
+    data["protocol"]["seconds"] = 30.0
+    publish._check_vrp("vehicle-routing (Set X)", data, ARGS)
+    assert publish.vrp_dataset("cvrplib-x", data)["command"].endswith("--catalog-source mirror --only X-n101-k25")
+    data["protocol"]["only"] = None
+    assert publish.vrp_dataset("cvrplib-x", data)["command"].endswith("--catalog-source mirror")
+
+
+def test_the_footer_states_the_seed_the_results_record() -> None:
+    def makespan(instance, seed=None):
+        result = {"instance": instance, "tasks": 32, "resources": 4, "critical_path": 20}
+        result["runs"] = [{"solver": "engine", "makespan": 66}, {"solver": "cp-sat", "makespan": 62}]
+        return result if seed is None else result | {"seed": seed}
+
+    # Results written before a harness recorded its seed: the harness default.
+    assert "seed 0." in publish.rcpsp_block([makespan("Pat1")], ARGS)
+    assert "seed 7." in publish.rcpsp_block([makespan("Pat1", 7), makespan("Pat2", 7)], ARGS)
+    with pytest.raises(SystemExit, match="different seeds"):
+        publish.rcpsp_block([makespan("Pat1", 0), makespan("Pat2", 7)], ARGS)
+
+
+def test_a_run_whose_score_disagrees_with_the_scorer_is_not_published() -> None:
+    run = {"solver": "cp-sat", "makespan": None, "outcome": "mismatch", "status": "mismatch: hard -1, excess 0"}
+    result = {"instance": "Pat1", "tasks": 32, "resources": 4, "critical_path": 20, "runs": [run]}
+    with pytest.raises(SystemExit, match="Pat1: a run cannot be published"):
+        publish._count_cells(result, "makespan")

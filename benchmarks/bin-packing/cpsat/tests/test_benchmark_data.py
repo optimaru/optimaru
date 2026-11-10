@@ -6,7 +6,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from bench.data import parse_orlib_bpp
-from bench.run_bench import sample_per_class
+from bench.run_bench import main, sample_per_class
 
 ORLIB_SAMPLE = """\
 2
@@ -66,3 +66,10 @@ def test_sample_per_class_spreads_evenly_from_first_to_last() -> None:
     assert sample_per_class(names, 1) == ["u120_09", "t60_09"]
     # Never more than a class holds, and never an instance twice.
     assert sample_per_class(["a_0", "a_1", "b_0"], 5) == ["a_0", "a_1", "b_0"]
+
+
+def test_one_way_of_choosing_instances_per_run() -> None:
+    for argv in (["--all", "--instance", "u120_00"], ["--sample-per-class", "3", "--instance", "u120_00"]):
+        with pytest.raises(SystemExit) as exit_info:
+            main(argv)
+        assert exit_info.value.code == 2

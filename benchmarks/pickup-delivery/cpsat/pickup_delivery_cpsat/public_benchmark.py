@@ -519,6 +519,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if sum(bool(choice) for choice in (args.all, args.instance, args.synthetic)) > 1:
         parser.error("--all, --instance and --synthetic are mutually exclusive")
+    if args.synthetic and args.requests:
+        parser.error("--requests cuts an official instance; a synthetic instance is run whole")
 
     cases: list[tuple[PdptwInstance, int | None]]
     if args.synthetic:

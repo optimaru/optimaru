@@ -7,7 +7,8 @@ what its QAPLIB reference permutation scores under the same evaluator, read in
 whichever index convention the solution file uses (facility per location, or
 location per facility). That is the value the file states, except for `kra32`,
 whose file states 88900 (the value of `kra30a`) while its permutation scores
-88700.
+88700: `REFERENCE_ERRATA` in `bench/run_bench.py` records it, and any other
+mismatch stops the run.
 
 <!-- results:start -->
 The 33 QAPLIB instances with 30 to 50 facilities. Lower is better; the gap is to the

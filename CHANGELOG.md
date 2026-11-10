@@ -29,8 +29,9 @@
   - *Quadratic assignment.* `--all` stopped at `kra30a`: the harness re-scores
     each QAPLIB reference permutation and read every solution file as the
     facility of each location, while four files list the location of each
-    facility. Both readings are tried, and the reference is what the permutation
-    scores (`kra32`'s file states 88900, its permutation scores 88700).
+    facility. Both readings are tried. `kra32`'s file states 88900 while its
+    permutation scores 88700, which is recorded as an erratum; any other
+    mismatch still stops the run.
   - *Bin packing.* `--sample-per-class N` picks N evenly spread instances of each
     Falkenauer class.
   - *Assembly line balancing.* The best-known values of the medium (n=50) data

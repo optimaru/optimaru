@@ -225,6 +225,8 @@ def write_outputs(
             "seconds": args.seconds,
             "seed": args.seed,
             "backends": list(backends),
+            # The instances `--only` named: a run of them is not a run of the series.
+            "only": args.only,
         }
         if args.series == "x":
             protocol["limit_per_bucket"] = args.limit_per_bucket
