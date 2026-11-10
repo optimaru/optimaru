@@ -75,9 +75,11 @@ struct SolverConfigBase {
     // starts only start 0 reports.
     std::function<void(std::int64_t, const ScoreT&)> on_new_best;
 
-    // The run-scoped stop of solve_parallel_starts: the first start that fails
-    // raises it, and every start's engine checks it once a step. Null outside
-    // a parallel run.
+    // Internal to solve_parallel_starts, which sets it on each start's copy of
+    // the Config: the first start that fails raises it, and every start's
+    // engine checks it once a step. Not for a caller to set: a flag set from
+    // outside is replaced when there is more than one start, and a solver on
+    // the engine's own multi-start never reads it. Null in any other solve.
     std::shared_ptr<std::atomic<bool>> stop_flag;
 };
 

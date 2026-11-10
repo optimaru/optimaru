@@ -4,7 +4,6 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
-#include <limits>
 #include <utility>
 
 #include "fp/domain.hpp"
@@ -60,8 +59,7 @@ public:
         // (hard = hard; soft = medium * kMediumUnit + soft). E.g.
         // {0, -inf} stops at the first hard-feasible solution. The default
         // never fires.
-        optimaru::Score target_score{std::numeric_limits<std::int64_t>::max(),
-                                     std::numeric_limits<double>::infinity()};
+        optimaru::Score target_score = optimaru::Score::unreachable();
         // Optional early exits per engine leg; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;

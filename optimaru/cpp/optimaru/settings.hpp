@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <limits>
 #include <random>
 #include <vector>
 
@@ -38,8 +37,7 @@ struct Limits {
     // Steps since the last new best (0 = disabled).
     std::int64_t stall_step_limit = 0;
     // Stop once the best score reaches this (default never fires).
-    Score target_score{std::numeric_limits<std::int64_t>::max(),
-                       std::numeric_limits<double>::infinity()};
+    Score target_score = Score::unreachable();
 };
 
 // The construction step that assigns everything left unassigned before local

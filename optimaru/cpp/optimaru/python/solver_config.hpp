@@ -175,7 +175,10 @@ Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
     }
     if constexpr (optimaru::detail::HasSolverConfigBase<Config>::value) {
         // pybind11's std::function caster re-acquires the GIL around the call,
-        // so the callback is safe from a parallel start's thread too.
+        // so the callback is safe from a parallel start's thread too. An
+        // exception it raises there is caught on that thread, stops the other
+        // starts and is rethrown to Python by the pool that runs them
+        // (solve_parallel_starts or the engine's solve_multistart).
         cls.def_readwrite("on_new_best", &Config::on_new_best);
         if constexpr (std::is_base_of_v<SolverConfigBase<Score>, Config>) {
             // (0, -inf) stops at the first feasible solution.

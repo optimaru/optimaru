@@ -30,6 +30,7 @@
 #include "optimaru/solver.hpp"
 #include "optimaru/background_solve.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/solver_config.hpp"
 #include "optimaru/search/operators.hpp"
 #include "optimaru/worker_threads.hpp"
 
