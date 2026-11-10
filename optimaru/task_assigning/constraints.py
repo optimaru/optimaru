@@ -78,22 +78,22 @@ from .._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
     "Constraint",
-    "Level",
-    "Score",
-    "score",
-    "RequiredSkillCost",
-    "SquaredMakespanCost",
     "CriticalPriorityTaskEndTimeCost",
+    "Level",
     "MajorPriorityTaskEndTimeCost",
     "MinorPriorityTaskEndTimeCost",
+    "RequiredSkillCost",
+    "Score",
+    "SquaredMakespanCost",
     "UnassignedTasksCost",
-    "required_skill_cost",
-    "squared_makespan_cost",
     "critical_priority_task_end_time_cost",
+    "get_constraints",
     "major_priority_task_end_time_cost",
     "minor_priority_task_end_time_cost",
+    "required_skill_cost",
+    "score",
+    "squared_makespan_cost",
     "unassigned_tasks_cost",
-    "get_constraints",
 ]
 
 

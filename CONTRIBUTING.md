@@ -9,7 +9,8 @@ step-by-step guide with real code to copy from.
 
 ```sh
 git clone https://github.com/optimaru/optimaru && cd optimaru
-OPTIMARU_USE_CASES=<uc> uv sync          # builds optimaru.<uc>._core in place
+export OPTIMARU_USE_CASES=<uc>           # build and test one use case
+uv sync                                  # builds optimaru.<uc>._core in place
 uv run pytest -q tests/<uc>
 
 cmake -B build -DOPTIMARU_USE_CASES=<uc> && cmake --build build -j
@@ -17,8 +18,10 @@ ctest --test-dir build --output-on-failure   # the engine tests and <uc>'s C++ t
 ```
 
 `<uc>` is the subpackage name, such as `vehicle_routing` or `bin_packing`. Leave
-`OPTIMARU_USE_CASES` out to build all 22. You need a C++17 compiler, CMake and
-uv.
+`OPTIMARU_USE_CASES` unset to build all 22, and keep it exported while you test:
+uv rebuilds when it changes, and the two contract tests
+(`tests/test_solve_contract.py`, `tests/test_solver_config_contract.py`) skip
+only the use cases it leaves out. You need a C++17 compiler, CMake and uv.
 
 ## Where things are
 
@@ -103,10 +106,12 @@ them correct and as fast as before.
 
   ```sh
   uv run ruff check --fix . && uv run ruff format .                 # Python
-  git ls-files '*.cpp' '*.hpp' | xargs uv run clang-format -i       # C++ (.clang-format)
+  git ls-files -z '*.cpp' '*.hpp' | xargs -0 uv run clang-format -i # C++ (.clang-format)
   ```
 
-  `uv sync` installs both tools at the versions `uv.lock` pins, and
+  Run them at the repository root, also for a benchmark project: the root
+  `pyproject.toml` is the only ruff configuration. `uv sync` installs both
+  tools at the versions `uv.lock` pins, and
   `pre-commit install` runs them on every commit if you use
   [pre-commit](https://pre-commit.com). Guides (`*.md`) and notebooks keep
   their hand layout: the formatter skips them.

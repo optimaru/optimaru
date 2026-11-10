@@ -21,6 +21,7 @@ C++ namespace `<ns>` (such as `vrp`):
 | The Python module `optimaru.<uc>._core` | `optimaru/<uc>/cpp/bindings.cpp`, stubs in `optimaru/<uc>/_core.pyi` |
 | Constraint specs for Python | `optimaru/<uc>/constraints.py` |
 | Python models (`to_core()` / `from_core()`) | `optimaru/<uc>/models.py` |
+| What the use cases' Python shares | `optimaru/_constraint.py` (the constraint-spec base), `optimaru/_solve.py` (the steps of `solve()`), `optimaru/_models.py` (the model base and helpers) |
 | C++ tests | `tests/<uc>/cpp/<ns>_test.cpp`, `tests/<uc>/cpp/<ns>_plugin_test.cpp` |
 | Python tests | `tests/<uc>/test_*.py` |
 | The use case's guide | `docs/use-cases/<slug>/README.md` and `python.md` |
@@ -49,7 +50,8 @@ changing:
 cmake -B build -DOPTIMARU_USE_CASES=<uc> && cmake --build build -j
 ctest --test-dir build --output-on-failure      # the engine tests and <uc>'s C++ tests
 
-OPTIMARU_USE_CASES=<uc> uv sync                 # builds optimaru.<uc>._core in place
+export OPTIMARU_USE_CASES=<uc>                  # keep it exported for the test run too
+uv sync                                         # builds optimaru.<uc>._core in place
 uv run pytest -q tests/<uc>
 ```
 
@@ -366,8 +368,8 @@ class MyRuleCost(Constraint):
 
 Then add a module-level default instance (`my_rule_cost = MyRuleCost()`), put
 that instance into `_DEFAULTS` at the same position as in `defaultConstraints()`,
-and add both names to `__all__`. The spec declares no defaults: they come from
-`constraint_info()`. Callers can now write
+and add both names to `__all__`, which every module keeps sorted. The spec
+declares no defaults: they come from `constraint_info()`. Callers can now write
 `solve_with_constraints(plan, get_constraints([..., MyRuleCost(weight=5, level="hard")]))`.
 
 ### 6. Tests

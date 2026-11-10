@@ -25,8 +25,9 @@ Times are integer seconds from a common day start; locations are
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from .._models import StrictModel, apply_solver_parameters
 from . import _core
 
 __all__ = [
@@ -44,11 +45,7 @@ __all__ = [
 ]
 
 
-class _Model(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class VehicleModel(_Model):
+class VehicleModel(StrictModel):
     id: str
     capacity: int
     depot: tuple[float, float]  # (latitude, longitude)
@@ -78,7 +75,7 @@ class VehicleModel(_Model):
     )
 
 
-class VisitModel(_Model):
+class VisitModel(StrictModel):
     id: str
     location: tuple[float, float]
     demand: int = 1
@@ -89,7 +86,7 @@ class VisitModel(_Model):
     unassigned_penalty_minutes: int = Field(default=-1, ge=-1)
 
 
-class RoutingInput(_Model):
+class RoutingInput(StrictModel):
     vehicles: list[VehicleModel]
     visits: list[VisitModel]
     driving_seconds: list[list[int]] | None = None
@@ -121,7 +118,7 @@ class RoutingInput(_Model):
                 seen.add(visit_id)
 
 
-class RoutePlanRequest(_Model):
+class RoutePlanRequest(StrictModel):
     name: str | None = None
     timelimit: float = Field(default=30.0, ge=0, description="seconds")
     model_input: RoutingInput
@@ -131,13 +128,13 @@ class RoutePlanRequest(_Model):
     solver_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
-class VisitStop(_Model):
+class VisitStop(StrictModel):
     visit_id: str
     arrival_time: int  # seconds from day start
     demand: int
 
 
-class VehicleMetrics(_Model):
+class VehicleMetrics(StrictModel):
     """Per-vehicle figures derived from a finished route (post-processing).
 
     Nothing here is scored. The numbers are recomputed from the reported stop
@@ -155,7 +152,7 @@ class VehicleMetrics(_Model):
     return_to_depot: bool = False
 
 
-class RouteSolution(_Model):
+class RouteSolution(StrictModel):
     routes: dict[str, list[VisitStop]]  # vehicle id -> ordered stops
     unassigned: list[str] = Field(default_factory=list)  # visit ids
     score: str
@@ -256,7 +253,7 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
     cfg.spent_limit_seconds = request.timelimit
     cfg.random_seed = request.random_seed
     cfg.parallel_solver_count = request.num_workers
-    _apply_solver_parameters(cfg, request.solver_parameters)
+    apply_solver_parameters(cfg, request.solver_parameters)
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
         cfg.best_score_limit = (0, -(2**63), -(2**63))
@@ -327,27 +324,3 @@ def with_initial_solution(problem: RoutePlanRequest, solution: RouteSolution | d
     for vehicle in data["model_input"]["vehicles"]:
         vehicle["initial_route"] = [stop.visit_id for stop in routes.get(vehicle["id"], [])]
     return RoutePlanRequest.model_validate(data)
-
-
-def _apply_solver_parameters(config, parameters: dict[str, Any]) -> None:
-    for name, value in parameters.items():
-        if name in {
-            "spent_limit_seconds",
-            "random_seed",
-            "parallel_solver_count",
-            "on_new_best",
-        }:
-            raise ValueError(f"solver parameter {name!r} is controlled by the solve request")
-        if name.startswith("_") or not hasattr(config, name) or callable(getattr(config, name)):
-            raise ValueError(f"unknown solver parameter: {name}")
-        if value is None:
-            continue
-        if name == "best_score_limit" and isinstance(value, list):
-            value = tuple(value)
-        current = getattr(config, name)
-        if isinstance(value, str) and hasattr(type(current), value):
-            value = getattr(type(current), value)
-        try:
-            setattr(config, name, value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid solver parameter {name!r}: {exc}") from exc

@@ -15,7 +15,7 @@ from optimaru.pickup_delivery import models
 
 def test_request_solver_parameters_are_applied():
     config = pdp.SolverConfig()
-    models._apply_solver_parameters(
+    models.apply_solver_parameters(
         config,
         {
             "late_acceptance_size": 7,
@@ -28,7 +28,7 @@ def test_request_solver_parameters_are_applied():
     assert config.ruin_recreate is False
     assert config.acceptor_type == pdp.AcceptorType.HILL_CLIMBING
     with pytest.raises(ValueError, match="controlled by the solve request"):
-        models._apply_solver_parameters(config, {"random_seed": 3})
+        models.apply_solver_parameters(config, {"random_seed": 3})
 
 
 def hour_minute(hour: int, minute: int) -> int:

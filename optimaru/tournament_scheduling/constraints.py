@@ -75,19 +75,19 @@ so they match the strings `list_constraints()` prints.
 from .._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
+    "AssignmentCountImbalanceCost",
+    "ConfrontationCountImbalanceCost",
     "Constraint",
     "Level",
     "Score",
-    "score",
     "TeamConflictCost",
     "TeamUnavailabilityCost",
-    "AssignmentCountImbalanceCost",
-    "ConfrontationCountImbalanceCost",
-    "team_conflict_cost",
-    "team_unavailability_cost",
     "assignment_count_imbalance_cost",
     "confrontation_count_imbalance_cost",
     "get_constraints",
+    "score",
+    "team_conflict_cost",
+    "team_unavailability_cost",
 ]
 
 

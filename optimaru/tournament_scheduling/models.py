@@ -20,8 +20,9 @@ Score mapping (hard / medium / soft -> engine Score):
 
 import random
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from .._models import StrictModel, entities_by_id, require_same_order, solution_dict, valid_positions
 from . import _core
 
 __all__ = [
@@ -35,41 +36,28 @@ __all__ = [
 ]
 
 
-def _valid_positions(count: int) -> str:
-    """The valid positions among `count`, for an error message."""
-    return f"0..{count - 1}" if count else "(the list is empty)"
-
-
-class TeamModel(BaseModel):
+class TeamModel(StrictModel):
     """A participating team, identified by its list index."""
-
-    model_config = ConfigDict(extra="forbid")
 
     name: str
 
 
-class DayModel(BaseModel):
+class DayModel(StrictModel):
     """A match day. date_index is informational (references use the days list index)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     date_index: int = Field(ge=0)
 
 
-class UnavailabilityPenaltyModel(BaseModel):
+class UnavailabilityPenaltyModel(StrictModel):
     """Unavailability: one hard point when (team, day) has at least one assignment."""
-
-    model_config = ConfigDict(extra="forbid")
 
     team: int = Field(ge=0)
     day: int = Field(ge=0)
 
 
-class TeamAssignmentModel(BaseModel):
+class TeamAssignmentModel(StrictModel):
     """One match slot of a day. team is the decision variable
     (None == unassigned); ids must be unique."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: int
     day: int = Field(ge=0)
@@ -78,10 +66,8 @@ class TeamAssignmentModel(BaseModel):
     pinned: bool = False
 
 
-class TournamentScheduleModel(BaseModel):
+class TournamentScheduleModel(StrictModel):
     """Pydantic mirror of the schedule. score is a read-only result, kept as a separate field."""
-
-    model_config = ConfigDict(extra="forbid")
 
     teams: list[TeamModel]
     days: list[DayModel]
@@ -96,8 +82,8 @@ class TournamentScheduleModel(BaseModel):
         its errors give its place in the list."""
         team_count = len(self.teams)
         day_count = len(self.days)
-        valid_teams = _valid_positions(team_count)
-        valid_days = _valid_positions(day_count)
+        valid_teams = valid_positions(team_count)
+        valid_days = valid_positions(day_count)
         for position, penalty in enumerate(self.unavailability_penalties):
             if not 0 <= penalty.team < team_count:
                 raise ValueError(
@@ -185,42 +171,6 @@ def demo_data() -> TournamentScheduleModel:
     )
 
 
-def _solution_dict(solution) -> dict:
-    if isinstance(solution, BaseModel):
-        return solution.model_dump()
-    if isinstance(solution, dict):
-        return solution
-    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
-
-
-def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
-    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
-    entities = solved.get(name)
-    if not isinstance(entities, list):
-        raise ValueError(f"solution has no {name!r} list")
-    known = set(ids)
-    if len(known) != len(ids):
-        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
-    by_id: dict = {}
-    for entity in entities:
-        entity_id = entity.get(key) if isinstance(entity, dict) else None
-        if not isinstance(entity_id, (str, int)) or entity_id not in known:
-            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
-        if entity_id in by_id:
-            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
-        by_id[entity_id] = entity
-    return by_id
-
-
-def _require_same_order(solved: dict, name: str, ids: list, key: str = "id") -> None:
-    """A positional value only means the same thing over the same list. `solved` may omit the list."""
-    values = solved.get(name)
-    if values is None:
-        return
-    if not isinstance(values, list) or [v.get(key) if isinstance(v, dict) else None for v in values] != ids:
-        raise ValueError(f"solution {name!r} list differs from the problem's (same entries, same order required)")
-
-
 def with_initial_solution(problem, solution):
     """Return a copy of `problem` whose search starts from `solution`.
 
@@ -240,9 +190,9 @@ def with_initial_solution(problem, solution):
     """
     if not isinstance(problem, TournamentScheduleModel):
         raise TypeError(f"problem must be a TournamentScheduleModel: {type(problem)!r}")
-    solved = _solution_dict(solution)
-    _require_same_order(solved, "teams", [t.name for t in problem.teams], key="name")
-    assignments = _entities_by_id(solved, "team_assignments", [a.id for a in problem.team_assignments])
+    solved = solution_dict(solution)
+    require_same_order(solved, "teams", [t.name for t in problem.teams], key="name")
+    assignments = entities_by_id(solved, "team_assignments", [a.id for a in problem.team_assignments])
     value_count = len(problem.teams)
     seeded = problem.model_copy(deep=True)
     seeded.score_hard = seeded.score_soft = None
@@ -254,6 +204,6 @@ def with_initial_solution(problem, solution):
             continue
         if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value < value_count:
             raise ValueError(
-                f"team assignment {assignment.id!r}: team {value!r} is out of range {_valid_positions(value_count)}"
+                f"team assignment {assignment.id!r}: team {value!r} is out of range {valid_positions(value_count)}"
             )
     return seeded

@@ -36,9 +36,9 @@ path); `constraints=` selects a plugin assembly instead (see `constraints.py`)::
 Pydantic mirrors (for serialization) live in `optimaru.school_timetabling.models` (optional dependency).
 """
 
-import copy
 import time
 
+from .._solve import solver_config
 from . import quickstart
 from ._core import (
     ConstraintInfo,
@@ -199,17 +199,17 @@ def _assemble_plugin(constraints):
 
 
 def _resolve_config(config, *, canonical: bool):
-    """Converts the config argument into the core SolverConfig of the mode."""
+    """The config argument as the core SolverConfig of the mode (None stays None: the engine defaults)."""
     if config is None:
-        return canon.SolverConfig() if canonical else SolverConfig()
+        return None
     if canonical:
         if isinstance(config, canon.SolverConfig):
-            return copy.copy(config)  # solve()'s overrides must not leak into it
+            return config
         if hasattr(config, "to_canon"):
             return config.to_canon()
         raise ValueError("a canonical-mode config must be a canon.SolverConfig or an object with to_canon()")
     if isinstance(config, SolverConfig):
-        return copy.copy(config)  # solve()'s overrides must not leak into it
+        return config
     if hasattr(config, "to_core"):
         return config.to_core()
     raise ValueError("a quickstart-mode config must be a SolverConfig or an object with to_core()")
@@ -316,19 +316,16 @@ def solve(
     if constraints is not None and not canonical:
         raise ValueError("constraints are supported in canonical mode only")
 
-    cfg = _resolve_config(config, canonical=canonical)
-    if time_limit_seconds is not None:
-        cfg.spent_limit_seconds = time_limit_seconds
-    if random_seed is not None:
-        cfg.random_seed = random_seed
-    if parallel_solver_count is not None:
-        cfg.parallel_solver_count = parallel_solver_count
-    if stop_at_first_feasible:
-        cfg.best_score_limit = (0, float("-inf"))
-    if full_assert:
-        cfg.full_assert = True
-    if on_new_best is not None:
-        cfg.on_new_best = on_new_best
+    cfg = solver_config(
+        canon.SolverConfig if canonical else SolverConfig,
+        _resolve_config(config, canonical=canonical),
+        time_limit_seconds=time_limit_seconds,
+        random_seed=random_seed,
+        parallel_solver_count=parallel_solver_count,
+        stop_at_first_feasible=stop_at_first_feasible,
+        full_assert=full_assert,
+        on_new_best=on_new_best,
+    )
     if weights is not None:
         unknown = sorted(set(weights) - set(_SOFT_NAMES))
         if unknown:

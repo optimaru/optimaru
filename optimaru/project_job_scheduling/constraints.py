@@ -68,17 +68,17 @@ from .._constraint import Constraint, Level, Score, score_costs, select
 __all__ = [
     "Constraint",
     "Level",
-    "Score",
-    "score",
-    "NonRenewableResourceCapacityCost",
-    "RenewableResourceCapacityCost",
-    "ProjectDelayCost",
     "MakespanCost",
-    "non_renewable_resource_capacity_cost",
-    "renewable_resource_capacity_cost",
-    "project_delay_cost",
-    "makespan_cost",
+    "NonRenewableResourceCapacityCost",
+    "ProjectDelayCost",
+    "RenewableResourceCapacityCost",
+    "Score",
     "get_constraints",
+    "makespan_cost",
+    "non_renewable_resource_capacity_cost",
+    "project_delay_cost",
+    "renewable_resource_capacity_cost",
+    "score",
 ]
 
 

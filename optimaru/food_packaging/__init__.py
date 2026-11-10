@@ -51,9 +51,9 @@ Usage::
     print(schedule.score, schedule.score.is_feasible())
 """
 
-import copy
 from typing import TypeVar
 
+from .._solve import solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
     Job,
@@ -85,11 +85,11 @@ __all__ = [
     "SolverConfig",
     "assign_missing_operators",
     "calculate_score",
-    "generate_demo_data",
-    "list_constraints",
     "constraint_costs",
     "constraint_info",
+    "generate_demo_data",
     "improve_operator_assignment",
+    "list_constraints",
     "solve",
     "with_initial_solution",
 ]
@@ -148,29 +148,18 @@ def solve(
 
     The result's score then reports each term on the level the selection gave it.
     """
-    # A copy: the keyword overrides below must not leak into the caller's config.
-    cfg = copy.copy(config) if config is not None else SolverConfig()
-    if time_limit_seconds is not None:
-        cfg.spent_limit_seconds = time_limit_seconds
-    if random_seed is not None:
-        cfg.random_seed = random_seed
-    if parallel_solver_count is not None:
-        cfg.parallel_solver_count = parallel_solver_count
-    if stop_at_first_feasible:
-        cfg.best_score_limit = (0, float("-inf"))
-    if full_assert:
-        cfg.full_assert = True
-    if on_new_best is not None:
-        cfg.on_new_best = on_new_best
-
-    def _solve(core):
-        if constraints is None:
-            Solver(cfg).solve(core)
-        else:
-            Solver(cfg).solve_with_constraints(core, constraints)
-
+    cfg = solver_config(
+        SolverConfig,
+        config,
+        time_limit_seconds=time_limit_seconds,
+        random_seed=random_seed,
+        parallel_solver_count=parallel_solver_count,
+        stop_at_first_feasible=stop_at_first_feasible,
+        full_assert=full_assert,
+        on_new_best=on_new_best,
+    )
     if isinstance(schedule, PackagingSchedule):
-        _solve(schedule)
+        solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
 
     # pydantic model (lazy import: pydantic is an optional dependency).
@@ -178,6 +167,6 @@ def solve(
 
     if isinstance(schedule, PackagingScheduleModel):
         core = schedule.to_core()
-        _solve(core)
+        solve_in_place(Solver(cfg), core, constraints)
         return PackagingScheduleModel.from_core(core)
     raise TypeError(f"schedule must be a PackagingSchedule or a models.PackagingScheduleModel: {type(schedule)!r}")

@@ -17,8 +17,7 @@ pydantic dependency); `optimaru.employee_scheduling.demo.generate_demo_data` bui
 request and `with_initial_solution` restarts a solve from an earlier result.
 """
 
-import copy
-
+from .._solve import solver_config
 from ._core import (
     CONSTRAINT_NAMES,
     MAX_DAY,
@@ -73,56 +72,56 @@ from .constraints import (
 from .helpers import list_constraints, make_random_roster, summary, to_dataframe
 
 __all__ = [
-    "Employee",
-    "Shift",
-    "EmployeeSchedule",
-    "Score",
-    "Solver",
-    "SolverConfig",
-    "DecomposedCalculator",
-    "default_calculator",
     "CONSTRAINT_NAMES",
-    "ConstraintInfo",
-    "constraint_info",
-    "constraint_costs",
-    "list_constraints",
-    "Constraint",
-    "RequiredSkillCost",
-    "EmployeeUnavailabilityCost",
-    "ShiftOverlapCost",
-    "MaxOneShiftPerDayCost",
-    "MinRestCost",
-    "UndesiredDayCost",
-    "DesiredDayCost",
-    "DesiredShiftCost",
-    "ShiftCountImbalanceCost",
-    "MaxConsecutiveDaysCost",
-    "MinConsecutiveDaysCost",
-    "MaxConsecutiveDaysOffCost",
-    "RestAfterConsecutiveWorkCost",
-    "MaxWeeklyMinutesCost",
-    "MinWeeklyMinutesCost",
-    "MinWeeklyRestDaysCost",
-    "AssignmentCost",
-    "UnassignedShiftsCost",
-    "ShiftCountGapCost",
-    "WeeklyMinutesGapCost",
-    "ShiftCoverageCost",
-    "LocationRunLengthCost",
-    "RestAfterLocationRunCost",
-    "LocationRunGapCost",
-    "WorkerLocationCountCost",
-    "DayPatternCost",
-    "TargetDaysOffCost",
-    "WorkerDayCountInRangeCost",
-    "LocationImbalanceCost",
-    "WorkerPairingCost",
-    "calculate_score",
-    "solve",
-    "minutes",
     "MAX_DAY",
     "MINUTES_PER_DAY",
+    "AssignmentCost",
+    "Constraint",
+    "ConstraintInfo",
+    "DayPatternCost",
+    "DecomposedCalculator",
+    "DesiredDayCost",
+    "DesiredShiftCost",
+    "Employee",
+    "EmployeeSchedule",
+    "EmployeeUnavailabilityCost",
+    "LocationImbalanceCost",
+    "LocationRunGapCost",
+    "LocationRunLengthCost",
+    "MaxConsecutiveDaysCost",
+    "MaxConsecutiveDaysOffCost",
+    "MaxOneShiftPerDayCost",
+    "MaxWeeklyMinutesCost",
+    "MinConsecutiveDaysCost",
+    "MinRestCost",
+    "MinWeeklyMinutesCost",
+    "MinWeeklyRestDaysCost",
+    "RequiredSkillCost",
+    "RestAfterConsecutiveWorkCost",
+    "RestAfterLocationRunCost",
+    "Score",
+    "Shift",
+    "ShiftCountGapCost",
+    "ShiftCountImbalanceCost",
+    "ShiftCoverageCost",
+    "ShiftOverlapCost",
+    "Solver",
+    "SolverConfig",
+    "TargetDaysOffCost",
+    "UnassignedShiftsCost",
+    "UndesiredDayCost",
+    "WeeklyMinutesGapCost",
+    "WorkerDayCountInRangeCost",
+    "WorkerLocationCountCost",
+    "WorkerPairingCost",
+    "calculate_score",
+    "constraint_costs",
+    "constraint_info",
+    "default_calculator",
+    "list_constraints",
     "make_random_roster",
+    "minutes",
+    "solve",
     "summary",
     "to_dataframe",
     "with_initial_solution",
@@ -164,20 +163,16 @@ def solve(
         raise TypeError(
             f"schedule must be an instance of EmployeeSchedule: {type(schedule)!r} (models.solve_request solves a models.ScheduleRequest)"
         )
-    # A copy: the keyword overrides below must not leak into the caller's config.
-    cfg = copy.copy(config) if config is not None else SolverConfig()
-    if time_limit_seconds is not None:
-        cfg.spent_limit_seconds = time_limit_seconds
-    if random_seed is not None:
-        cfg.random_seed = random_seed
-    if parallel_solver_count is not None:
-        cfg.parallel_solver_count = parallel_solver_count
-    if stop_at_first_feasible:
-        cfg.best_score_limit = (0, float("-inf"))
-    if full_assert:
-        cfg.full_assert = True
-    if on_new_best is not None:
-        cfg.on_new_best = on_new_best
+    cfg = solver_config(
+        SolverConfig,
+        config,
+        time_limit_seconds=time_limit_seconds,
+        random_seed=random_seed,
+        parallel_solver_count=parallel_solver_count,
+        stop_at_first_feasible=stop_at_first_feasible,
+        full_assert=full_assert,
+        on_new_best=on_new_best,
+    )
     if constraints is None:
         Solver(cfg).solve(schedule)
     else:

@@ -4,6 +4,13 @@ import random
 
 from ._core import CONSTRAINT_NAMES, Employee, EmployeeSchedule, Shift, minutes
 
+__all__ = [
+    "list_constraints",
+    "make_random_roster",
+    "summary",
+    "to_dataframe",
+]
+
 
 def list_constraints():
     """Every constraint name the rule factory accepts (`DecomposedCalculator.add`,

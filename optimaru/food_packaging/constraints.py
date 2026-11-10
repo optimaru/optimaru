@@ -73,21 +73,21 @@ Module-level instance names use the same snake_case, so they match the strings
 from .._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
+    "AfterIdealEndTimeCost",
     "Constraint",
     "Level",
-    "Score",
-    "score",
     "MaxEndTimeCost",
-    "AfterIdealEndTimeCost",
-    "SquaredMakespanCost",
     "OperatorCleaningConflictCost",
+    "Score",
+    "SquaredMakespanCost",
     "UnassignedJobsCost",
-    "max_end_time_cost",
     "after_ideal_end_time_cost",
-    "squared_makespan_cost",
-    "operator_cleaning_conflict_cost",
-    "unassigned_jobs_cost",
     "get_constraints",
+    "max_end_time_cost",
+    "operator_cleaning_conflict_cost",
+    "score",
+    "squared_makespan_cost",
+    "unassigned_jobs_cost",
 ]
 
 

@@ -13,8 +13,9 @@ snapshots, ...)::
 `pydantic` is an optional dependency (`pip install conference-scheduling[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from .._models import StrictModel, entities_by_id, require_same_order, solution_dict, valid_positions
 from . import _core
 
 __all__ = [
@@ -28,15 +29,8 @@ __all__ = [
 ]
 
 
-def _valid_positions(count: int) -> str:
-    """The valid positions among `count`, for an error message."""
-    return f"0..{count - 1}" if count else "(the list is empty)"
-
-
-class TimeslotModel(BaseModel):
+class TimeslotModel(StrictModel):
     """A time slot. In minutes (shared origin; midnight boundaries are multiples of 1440)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     start_minute: int = Field(ge=0)
@@ -45,10 +39,8 @@ class TimeslotModel(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
-class RoomModel(BaseModel):
+class RoomModel(StrictModel):
     """A room. unavailable_timeslots are timeslot indices."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str = ""
@@ -58,9 +50,7 @@ class RoomModel(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
-class SpeakerModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class SpeakerModel(StrictModel):
     id: str
     name: str = ""
     unavailable_timeslots: list[int] = Field(default_factory=list)
@@ -74,10 +64,8 @@ class SpeakerModel(BaseModel):
     undesired_room_tags: list[str] = Field(default_factory=list)
 
 
-class TalkModel(BaseModel):
+class TalkModel(StrictModel):
     """Slot_room is the composite timeslot*room variable (-1 = unassigned)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     code: str
     title: str = ""
@@ -105,10 +93,8 @@ class TalkModel(BaseModel):
     pinned: bool = False
 
 
-class ConferenceScheduleModel(BaseModel):
+class ConferenceScheduleModel(StrictModel):
     """Solution mirror. score is a read-only result, kept as a separate field."""
-
-    model_config = ConfigDict(extra="forbid")
 
     name: str
     talk_types: list[str]
@@ -130,12 +116,12 @@ class ConferenceScheduleModel(BaseModel):
         for talk in self.talks:
             if not 0 <= talk.talk_type < type_count:
                 raise ValueError(
-                    f"talk {talk.code!r}: talk_type {talk.talk_type!r} is out of range {_valid_positions(type_count)}"
+                    f"talk {talk.code!r}: talk_type {talk.talk_type!r} is out of range {valid_positions(type_count)}"
                 )
             for speaker in talk.speakers:
                 if not 0 <= speaker < speaker_count:
                     raise ValueError(
-                        f"talk {talk.code!r}: speaker {speaker!r} is out of range {_valid_positions(speaker_count)}"
+                        f"talk {talk.code!r}: speaker {speaker!r} is out of range {valid_positions(speaker_count)}"
                     )
             if not -1 <= talk.slot_room < value_count:
                 raise ValueError(
@@ -234,10 +220,8 @@ class ConferenceScheduleModel(BaseModel):
         )
 
 
-class SolveConfig(BaseModel):
+class SolveConfig(StrictModel):
     """Serializable mirror of `_core.SolverConfig`."""
-
-    model_config = ConfigDict(extra="forbid")
 
     time_limit_seconds: float = Field(default=30.0, ge=0)
     random_seed: int = 0
@@ -316,42 +300,6 @@ class SolveConfig(BaseModel):
         return cfg
 
 
-def _solution_dict(solution) -> dict:
-    if isinstance(solution, BaseModel):
-        return solution.model_dump()
-    if isinstance(solution, dict):
-        return solution
-    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
-
-
-def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
-    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
-    entities = solved.get(name)
-    if not isinstance(entities, list):
-        raise ValueError(f"solution has no {name!r} list")
-    known = set(ids)
-    if len(known) != len(ids):
-        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
-    by_id: dict = {}
-    for entity in entities:
-        entity_id = entity.get(key) if isinstance(entity, dict) else None
-        if not isinstance(entity_id, (str, int)) or entity_id not in known:
-            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
-        if entity_id in by_id:
-            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
-        by_id[entity_id] = entity
-    return by_id
-
-
-def _require_same_order(solved: dict, name: str, ids: list, key: str = "id") -> None:
-    """A positional value only means the same thing over the same list. `solved` may omit the list."""
-    values = solved.get(name)
-    if values is None:
-        return
-    if not isinstance(values, list) or [v.get(key) if isinstance(v, dict) else None for v in values] != ids:
-        raise ValueError(f"solution {name!r} list differs from the problem's (same entries, same order required)")
-
-
 def with_initial_solution(problem, solution):
     """Return a copy of `problem` whose search starts from `solution`.
 
@@ -370,10 +318,10 @@ def with_initial_solution(problem, solution):
     """
     if not isinstance(problem, ConferenceScheduleModel):
         raise TypeError(f"problem must be a ConferenceScheduleModel: {type(problem)!r}")
-    solved = _solution_dict(solution)
-    _require_same_order(solved, "timeslots", [t.id for t in problem.timeslots])
-    _require_same_order(solved, "rooms", [r.id for r in problem.rooms])
-    talks = _entities_by_id(solved, "talks", [t.code for t in problem.talks], key="code")
+    solved = solution_dict(solution)
+    require_same_order(solved, "timeslots", [t.id for t in problem.timeslots])
+    require_same_order(solved, "rooms", [r.id for r in problem.rooms])
+    talks = entities_by_id(solved, "talks", [t.code for t in problem.talks], key="code")
     value_count = len(problem.timeslots) * len(problem.rooms)
     seeded = problem.model_copy(deep=True)
     seeded.score_hard = seeded.score_soft = None

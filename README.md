@@ -86,8 +86,8 @@ assembly-line balancing, quadratic assignment, max-cut.
 ```sh
 uv sync                                    # editable install; builds all 22 extensions in place
 uv run pytest                              # every Python test
-OPTIMARU_USE_CASES=knapsack uv sync        # build only the use cases you work on
-uv run pytest tests/knapsack
+export OPTIMARU_USE_CASES=knapsack         # or build only the use cases you work on
+uv sync && uv run pytest tests/knapsack    # (uv rebuilds when the variable changes)
 cmake -B build && cmake --build build -j && ctest --test-dir build   # engine + use-case C++ tests
 ```
 
@@ -186,6 +186,8 @@ domain code**; every use case is a subpackage that consumes it as a library.
 optimaru/                          the Python package (pip install optimaru)
 ├── __init__.py                    loads each use case on first access
 ├── _constraint.py                 the constraint-spec base every use case shares
+├── _solve.py                      the steps the use cases' solve() functions share
+├── _models.py                     what the use cases' pydantic models share
 ├── cpp/optimaru/                  the engine (header-only C++17), below
 └── <use case>/                    22 subpackages, e.g. vehicle_routing/
     ├── __init__.py, models.py,    the Python API: solve, pydantic models,
