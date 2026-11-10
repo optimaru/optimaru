@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 - **One `solve()` for every use case (breaking for seven).**
   `optimaru.<use case>.solve(problem, ...)` now exists in all 22, takes the same
