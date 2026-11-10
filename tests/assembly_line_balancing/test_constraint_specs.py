@@ -121,8 +121,11 @@ def _config(steps=400, seed=1):
 
 
 def solve(constraints=None):
+    # Enough steps to reach the optimum from any seed: the tests below compare scores
+    # with it, and a seeded search does not take the same path with every C++ standard
+    # library (400 steps reach it with libstdc++ and stop one station short with libc++).
     problem = build_problem()
-    alb.solve(problem, config=_config(), constraints=constraints)
+    alb.solve(problem, config=_config(steps=5000), constraints=constraints)
     return problem.score
 
 
