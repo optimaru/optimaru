@@ -60,7 +60,7 @@ namespace es {
 // instance with `level` / set_level() (ConstraintAssembly hard()/soft(),
 // Python level). Same for `weight` and `exponent`.
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, negative = reward; the calculator negates into the score.
 
 using DecomposedCalculator = optimaru::DecomposedObjective<EmployeeSchedule>;

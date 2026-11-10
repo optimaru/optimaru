@@ -1,7 +1,6 @@
 #include "fcs/solver.hpp"
 
 #include <algorithm>
-#include <cstdlib>
 #include <memory>
 #include <stdexcept>
 
@@ -58,15 +57,6 @@ optimaru::Settings buildEngineConfig(const Solver::Config &config,
     lns.operator_decay = config.ruinRecreateOperatorDecay;
     lns.rewards = config.ruinRecreateRewards;
     lns.polish_steps = config.ruinRecreatePolishSteps;
-
-    // TEMPORARY SCREENING SCAFFOLDING (tuning session): env-var overrides so
-    // one build can sweep candidate knobs. Removed before the session ends.
-    if (const char *dw = std::getenv("FCS_DESCENT_WEIGHT"))
-        engineConfig.search.descent_weight = std::atof(dw);
-    if (const char *aw = std::getenv("FCS_ASMOVE_WEIGHT"))
-        lns.as_move_weight = std::atof(aw);
-    if (const char *ar = std::getenv("FCS_ASMOVE_MAXRUIN"))
-        lns.as_move_max_ruin = std::atoi(ar);
 
     return engineConfig;
 }

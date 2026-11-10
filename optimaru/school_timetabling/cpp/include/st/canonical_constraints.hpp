@@ -141,17 +141,10 @@ inline std::vector<std::string> constraintOrder()
     return detail::buildDefaultSet(nullptr).order;
 }
 
-// The two names the repo uses for pouring the default set straight into a
-// calculator: addDefaultConstraints is the uniform one every other use case
-// exposes, addCanonicalConstraints the name this domain had first.
+// Pours the default set straight into a calculator.
 inline void addDefaultConstraints(DecomposedCalculator &calculator)
 {
     defaultConstraints().into(calculator);
-}
-
-inline void addCanonicalConstraints(DecomposedCalculator &calculator)
-{
-    addDefaultConstraints(calculator);
 }
 
 }  // namespace st::canon

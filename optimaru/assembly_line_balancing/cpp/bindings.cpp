@@ -22,7 +22,7 @@
 
 namespace py = pybind11;
 using namespace alb;
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 
 PYBIND11_MODULE(_core, m)
 {
@@ -191,7 +191,7 @@ PYBIND11_MODULE(_core, m)
         // Guided change-move targets from each task's precedence / domain
         // window. probability 0 = off.
         .def_readwrite("value_recommender_probability", &Solver::Config::valueRecommenderProbability)
-        // BASIC best-improvement descent strategy weight. 0 = off.
+        // Assignment best-improvement descent strategy weight. 0 = off.
         .def_readwrite("descent_weight", &Solver::Config::descent_weight)
         // Gate on how often a step may draw CloseStationMove. 1 = engine
         // default (unrestricted).
@@ -230,7 +230,7 @@ PYBIND11_MODULE(_core, m)
             [](Solver &solver, AssemblyLineBalancingProblem &problem, const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+                opy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(problem, calculator);
             },
@@ -242,7 +242,7 @@ PYBIND11_MODULE(_core, m)
     // catalog (list_constraints()) order. Scoring once is enough: re-pricing
     // any assembly is pure Python arithmetic on these. None = the default
     // assembly; a pick list scores exactly those picks (apply_constraints),
-    // each entry carrying its pick's knobs. The keys are tfpy::constraint_costs'
+    // each entry carrying its pick's knobs. The keys are opy::constraint_costs'
     // (the k-th instance of a name "<name>#<k>", in calculator order); only
     // the order of the names follows the catalog, each name's instances stay
     // together in their own order.
@@ -252,12 +252,12 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
-            const py::dict costs = tfpy::constraint_costs(calculator, problem);
+            opy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            const py::dict costs = opy::constraint_costs(calculator, problem);
             py::dict ordered;
             for (const std::string &name : catalogNames())
             {
-                const std::string python_name = tfpy::python_name(name);
+                const std::string python_name = opy::python_name(name);
                 for (const auto &item : costs)
                 {
                     if (py::reinterpret_borrow<py::dict>(item.second)["name"].cast<std::string>() == python_name)
@@ -278,7 +278,7 @@ PYBIND11_MODULE(_core, m)
         {
             std::vector<std::string> names;
             for (const std::string &name : catalogNames())
-                names.push_back(tfpy::python_name(name));
+                names.push_back(opy::python_name(name));
             return names;
         },
         "Constraint names available to optimaru.assembly_line_balancing.constraints.");
@@ -290,5 +290,5 @@ PYBIND11_MODULE(_core, m)
     // (The rows come from catalogRows(), the assembly's info() in catalog
     // order: an assembly lists its unit components before its globals, and
     // this domain interleaves them.)
-    tfpy::detail::bind_info_rows(m, [] { return catalogRows(); });
+    opy::detail::bind_info_rows(m, [] { return catalogRows(); });
 }

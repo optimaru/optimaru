@@ -33,7 +33,7 @@
 #include "optimaru/python/constraint_binding.hpp"
 
 namespace py = pybind11;
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 using namespace st;
 namespace cn = st::canon;
 
@@ -89,7 +89,7 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
 // ---------------------------------------------------------------------------
 // The Python names are python_name() of the components' registry names
 // (teacherGapCost -> teacher_gap_cost), resolved against the default
-// assembly by tfpy::apply_constraints — no name table of our own. The one
+// assembly by opy::apply_constraints — no name table of our own. The one
 // domain-specific piece is the TeacherMaskHub: the five teacher-mask
 // components of ONE calculator share one projection, so a pick added to a
 // calculator that already holds family members joins their hub
@@ -108,7 +108,7 @@ void addPicks(cn::DecomposedCalculator &calc, const py::object &picks)
     std::shared_ptr<cn::TeacherMaskHub> hub = cn::sharedTeacherMaskHub(calc);
     if (hub == nullptr)
         hub = std::make_shared<cn::TeacherMaskHub>();
-    tfpy::apply_constraints([&] { return cn::defaultConstraints(hub); }, picks)
+    opy::apply_constraints([&] { return cn::defaultConstraints(hub); }, picks)
         .into(calc);
 }
 
@@ -117,7 +117,7 @@ std::vector<std::string> catalogNames()
 {
     std::vector<std::string> names;
     for (const std::string &name : cn::constraintOrder())
-        names.push_back(tfpy::python_name(name));
+        names.push_back(opy::python_name(name));
     return names;
 }
 
@@ -139,14 +139,14 @@ std::vector<optimaru::ConstraintInfo> catalogRows()
     return ordered;
 }
 
-// tfpy::constraint_costs(calc, table) with its entries in the catalog order:
+// opy::constraint_costs(calc, table) with its entries in the catalog order:
 // each catalog name's instances together, in the calculator's order (the
-// keys stay tfpy's: "<name>", "<name>#2", ..., the instance_keys rule).
+// keys are unchanged: "<name>", "<name>#2", ..., the instance_keys rule).
 py::dict orderedConstraintCosts(cn::DecomposedCalculator &calc,
                                 cn::Timetable &table)
 {
     cn::ScoreCalculator::prepare(table);
-    const py::dict costs = tfpy::constraint_costs(calc, table);
+    const py::dict costs = opy::constraint_costs(calc, table);
     py::dict ordered;
     for (const std::string &name : catalogNames())
     {
@@ -445,7 +445,7 @@ void bindCanon(py::module_ &canon)
         .def(py::init<>())
         // Example: DecomposedCalculator([TeacherGapCost(weight=40), ...]).
         // Duck-typed picks (.name/.weight/.level/.exponent, optionally
-        // .offset/.clip), resolved and checked by tfpy::apply_constraints:
+        // .offset/.clip), resolved and checked by opy::apply_constraints:
         // weight None keeps the component's kDefaultWeight, level None its
         // kDefaultLevel; a name picked several times is one instance per
         // pick.
@@ -546,7 +546,7 @@ void bindCanon(py::module_ &canon)
                 for (const optimaru::ConstraintTotal &t : totals)
                 {
                     py::dict d;
-                    d["name"] = tfpy::python_name(t.name);
+                    d["name"] = opy::python_name(t.name);
                     d["label"] = t.label;
                     d["cost"] = t.cost;  // weighted; positive = penalizing
                     d["level"] = optimaru::level_name(t.level);
@@ -824,7 +824,7 @@ PYBIND11_MODULE(_core, m)
     // the top-level module so ConstraintInfo pickles by reference. The rows
     // go through bind_info_rows directly (not bind_constraint_info) only to keep
     // the catalog order, which ConstraintAssembly::info() does not.
-    tfpy::detail::bind_info_rows(m, [] { return catalogRows(); });
+    opy::detail::bind_info_rows(m, [] { return catalogRows(); });
     m.def(
         "list_constraints",
         [] { return catalogNames(); },

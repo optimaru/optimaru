@@ -28,7 +28,7 @@ using namespace es;
 namespace
 {
 
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 
 // Typed getters for the per-constraint parameter dict (the spec's domain
 // fields, e.g. MaxConsecutiveDaysCost.value). A missing key or None keeps
@@ -278,7 +278,7 @@ py::dict paramsOf(const py::handle &pick)
 // Builds one pick and adds it to `calc`: the factory component (at its
 // kDefaultWeight / kDefaultLevel and the given parameters), wrapped in a
 // ScopedUnit when the pick has a worker / shift scope, with the pick's
-// knobs re-stated on the outermost component by tfpy::apply_knobs (weight
+// knobs re-stated on the outermost component by opy::apply_knobs (weight
 // None keeps kDefaultWeight, level None keeps kDefaultLevel; a reward refuses
 // level='hard'; the type and range checks speak the Python base's words).
 //
@@ -306,7 +306,7 @@ void addConstraintByName(DecomposedCalculator &calc,
                               + "'; available: " + known);
     }
     Built built = entry->build(params);
-    if (tfpy::python_name(built.metadata().name) != name)
+    if (opy::python_name(built.metadata().name) != name)
     {
         throw std::logic_error("factory entry '" + name + "' builds '"
                                + built.metadata().name + "'");
@@ -346,7 +346,7 @@ void addConstraintByName(DecomposedCalculator &calc,
                               + name + "'");
     }
 
-    tfpy::apply_knobs(built.metadata(), pick, name, optimaru::MediumFold::none());
+    opy::apply_knobs(built.metadata(), pick, name, optimaru::MediumFold::none());
     if (built.unit)
         calc.add(std::move(built.unit));
     else
@@ -538,7 +538,7 @@ PYBIND11_MODULE(_core, m)
             {
                 // kwargs are domain parameters, which the factory reads by name
                 // and otherwise ignores: hard= must not vanish there.
-                tfpy::refuse_hard_keyword(kwargs);
+                opy::refuse_hard_keyword(kwargs);
                 // The same checks as a spec pick: a SimpleNamespace carrying
                 // the five knobs goes through the one factory path.
                 py::object pick = py::module_::import("types").attr(
@@ -598,7 +598,7 @@ PYBIND11_MODULE(_core, m)
                      calc.constraint_totals())
                 {
                     py::dict d;
-                    d["name"] = tfpy::python_name(t.name);
+                    d["name"] = opy::python_name(t.name);
                     d["label"] = t.label;  // the instance's display text
                     d["cost"] = t.cost;    // weighted; positive = penalizing
                     d["level"] = optimaru::level_name(t.level);
@@ -636,7 +636,7 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(schedule);
             auto calc = calculatorFor(constraints);
-            return tfpy::constraint_costs(*calc, schedule);
+            return opy::constraint_costs(*calc, schedule);
         },
         py::arg("schedule"),
         py::arg("constraints") = py::none(),
@@ -650,7 +650,7 @@ PYBIND11_MODULE(_core, m)
     // The constraint catalog: the eight defaults (default_enabled=True),
     // then every other constraint the factory builds (default_enabled=False),
     // read off es::defaultConstraints() / es::catalogConstraints().
-    tfpy::bind_constraint_info(
+    opy::bind_constraint_info(
         m,
         [] { return defaultConstraints(); },
         [] { return catalogConstraints(); });

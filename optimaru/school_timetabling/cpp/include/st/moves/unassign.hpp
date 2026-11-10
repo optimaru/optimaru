@@ -16,7 +16,7 @@ namespace st::canon
 
 // Unassign move (only registered when the assembly demotes
 // unassignedLessonsCost to soft): take one assigned lesson out of the
-// timetable. The BASIC move mix only ever draws values from [0, slotCount), so
+// timetable. The assignment move mix only ever draws values from [0, slotCount), so
 // without this operator "leave it unassigned" is not a choice the search can
 // make — demoting unassignedLessonsCost to soft would change the score of a
 // solution the search can never reach, and the run would come back with every

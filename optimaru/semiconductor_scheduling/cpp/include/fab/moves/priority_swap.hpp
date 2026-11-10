@@ -18,7 +18,7 @@ namespace fab
 // whose ranks compete at the same decode steps; a row of the same lot is
 // the fallback. A pair with equal ranks is no move.
 //
-// The built-in BASIC swap is no substitute: it exchanges whole values, so the
+// The built-in assignment swap is no substitute: it exchanges whole values, so the
 // machine slot of one operation would land on another operation's option
 // list.
 class PrioritySwapMove final : public optimaru::MoveOperator<SemiconductorSchedule>

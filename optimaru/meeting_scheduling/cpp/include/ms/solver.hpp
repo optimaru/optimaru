@@ -105,7 +105,7 @@ public:
         double ruinRecreateAsMoveWeight = 2e-4;
         int ruinRecreateAsMoveMaxRuin = 12;
 
-        // BASIC move mix. Weights are relative; 0 disables a move.
+        // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
         double swap_weight = 0.25;
 

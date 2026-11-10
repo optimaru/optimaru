@@ -82,7 +82,7 @@ struct Speaker
 // ---------------------------------------------------------------------------
 // Talk  (entity)
 // ---------------------------------------------------------------------------
-// slotRoom is the only decision variable. The engine supports one BASIC int
+// slotRoom is the only decision variable. The engine supports one assignment int
 // variable per entity, so the two decisions per talk (timeslot, room)
 // are composed into a single value (the school-timetabling encoding):
 //   slotRoom = timeslotIndex * roomCount + roomIndex
@@ -206,7 +206,7 @@ struct ConferenceSchedule
 // is Talk::slotRoom, the value range is the (timeslot x room) grid.
 //
 // NOTE on value ranges: a talk may only use the timeslots/rooms compatible
-// with its TalkType. The engine's BASIC variable has one global range, so
+// with its TalkType. The engine's assignment variable has one global range, so
 // compatibility is enforced with the hard constraint
 // talkTypeIncompatibilityCost instead (see cs/score_calculator.hpp) and biases
 // the search toward compatible values (see cs/solver.hpp).

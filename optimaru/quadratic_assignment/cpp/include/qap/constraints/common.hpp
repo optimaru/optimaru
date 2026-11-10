@@ -22,7 +22,7 @@ namespace qap
 // monolithic QuadraticAssignmentIncrementalScoreCalculator, which stays the
 // tuned default fast path.
 //
-// Unit choice: the BASIC descriptor's unit is the VALUE, i.e. one LOCATION;
+// Unit choice: the assignment shape's unit is the VALUE, i.e. one LOCATION;
 // its members are the facilities standing there (exactly one in a bijection).
 // The three side constraints are per location, so they are UnitConstraints
 // and the exponent shapes each location's cost:
@@ -60,7 +60,7 @@ namespace qap
 // ("pinnedAssignmentsCost"); Python sees them through python_name()
 // ("pinned_assignments_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. The
 // objectives are not validated >= 0 (flows, distances and direct costs are
 // plain integers), so they may be negative: a negative total is scored as a
@@ -116,7 +116,7 @@ inline bool hasNegative(const std::optional<std::vector<std::vector<std::int64_t
 }  // namespace detail
 
 // A GlobalConstraint maintained purely from member joins / leaves (the
-// engine's BASIC fast path): the calculator never diffs a unit for it, so
+// engine's assignment fast path): the calculator never diffs a unit for it, so
 // on_unit_changed is unreachable.
 struct QapMemberChangeGlobalConstraint : QapGlobalConstraint
 {

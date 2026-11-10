@@ -57,7 +57,7 @@ public:
         // Tightest time window / largest demand first.
         bool firstFitDecreasing = true;
         // Build the initial solution one complete request at a time with a
-        // feasible cheapest insertion. The generic LIST constructor sees
+        // feasible cheapest insertion. The generic sequence constructor sees
         // individual nodes and strands pairs on larger instances.
         bool pairConstructionHeuristic = true;
 

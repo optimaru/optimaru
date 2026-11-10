@@ -59,7 +59,7 @@ namespace fab
 // Global constraints shape their TOTAL: exponent e scores weight * total^e
 // (not each item). Hard totals are rounded per constraint.
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. Every
 // component requires ScoreCalculator::prepare(schedule) to have run.
 

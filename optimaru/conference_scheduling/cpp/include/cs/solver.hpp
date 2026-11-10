@@ -82,7 +82,7 @@ public:
         std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
         std::int64_t ruinRecreatePolishSteps = 5000;
 
-        // BASIC move mix. Weights are relative; 0 disables a move.
+        // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
         double swap_weight = 0.25;
 

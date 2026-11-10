@@ -90,12 +90,11 @@ public:
 
     // Cooperatively stops a running solve() (checked once per step); the
     // solve returns its best-found solution as usual. Thread-safe. The flag
-    // is sticky: to reuse this solver instance afterwards, call
-    // clear_stop() first (solve() itself must not clear it, or a
-    // request_stop() racing a starting solve would be lost).
+    // is sticky and solve() never clears it (a request_stop() racing a
+    // starting solve would be lost otherwise), so a stopped solver stays
+    // stopped: make a new Solver to solve again.
     void request_stop() { stop_requested_->store(true); }
     bool stop_requested() const { return stop_requested_->load(); }
-    void clear_stop() { stop_requested_->store(false); }
 
     // Solves in place; returns the best score found.
     Score solve(Solution& solution, Objective<Solution>& objective) {

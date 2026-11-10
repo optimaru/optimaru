@@ -193,7 +193,7 @@ offsets; it rejects an exponent other than 1).
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=max_cut
 cmake --build build -j4
 ctest --test-dir build --output-on-failure --no-tests=error
-./build/max_cut/max-cut/mc_demo 2
+./build/max_cut/mc_demo 2
 ```
 
 `mc_test`: per-constraint hand checks (positive and zero) on the full recompute and

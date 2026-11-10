@@ -20,7 +20,7 @@ namespace alb
 // monolithic AssemblyLineBalancingIncrementalScoreCalculator, which stays the
 // tuned default fast path.
 //
-// Unit choice: the BASIC descriptor's unit is the VALUE, i.e. one station;
+// Unit choice: the assignment shape's unit is the VALUE, i.e. one station;
 // members are the tasks currently on it. Unassigned tasks (station == -1)
 // belong to no unit and so contribute nothing (the engine convention).
 //
@@ -55,7 +55,7 @@ namespace alb
 // ("stationCapacityCost"); Python sees them through python_name()
 // ("station_capacity_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score.
 //
 // Every component requires ScoreCalculator::prepare(problem) to have run
@@ -63,7 +63,7 @@ namespace alb
 // monolithic path all call it).
 //
 // Reading the solution: a component may read another task's `station` from
-// the solution. For BASIC solutions the calculator updates its member lists
+// the solution. For assignment-shaped solutions the calculator updates its member lists
 // on every single variable change (also inside a batch), so the solution's
 // decision variables and the member lists agree at every call.
 

@@ -172,7 +172,7 @@ integral offsets.
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=assembly_line_balancing
 cmake --build build -j4
 ctest --test-dir build --output-on-failure --no-tests=error
-./build/assembly_line_balancing/assembly-line-balancing/alb_demo 5
+./build/assembly_line_balancing/alb_demo 5
 ```
 
 `alb_test`: per-constraint hand checks (positive and zero), the construction cases,

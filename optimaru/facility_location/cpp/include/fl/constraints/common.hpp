@@ -21,7 +21,7 @@ namespace fl
 // the monolithic FacilityLocationIncrementalScoreCalculator, which stays the
 // tuned default fast path.
 //
-// Unit choice: the BASIC descriptor's unit is the VALUE, i.e. one facility;
+// Unit choice: the assignment shape's unit is the VALUE, i.e. one facility;
 // members are the consumers currently assigned to it. Every constraint is a
 // function of one facility and its consumers, so all three decompose per
 // unit and none of them needs a GlobalConstraint. "Facility serves at least
@@ -53,7 +53,7 @@ namespace fl
 // ("facilityCapacityCost"); Python sees them through python_name()
 // ("facility_capacity_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score.
 //
 // Every component requires ScoreCalculator::prepare(problem) to have run

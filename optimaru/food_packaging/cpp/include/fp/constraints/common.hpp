@@ -23,7 +23,7 @@ namespace fp
 // monolithic FoodPackagingIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
-// Unit choice: with the LIST descriptor the calculator's unit is one LIST,
+// Unit choice: with the sequence shape the calculator's unit is one list,
 // i.e. one packaging line; members are its jobs IN PRODUCTION ORDER. Three
 // rules are per-line sums over that ordered chain and run as UnitConstraints
 // over the lines (PerLineConstraint: the unassigned pool list is no line, so
@@ -37,7 +37,7 @@ namespace fp
 // startCleaning/startProduction/endDateTime): LineChain below re-derives the
 // cleaning-and-production chain from a unit's own member order, which is what
 // makes each cost a pure function of (solution, unit, members) as the
-// engine's contract requires. The LIST path re-costs a touched list whole, so
+// engine's contract requires. The sequence path re-costs a touched list whole, so
 // no delta contract is needed.
 //
 // Score levels: the score has three levels (hard / medium / soft), which this
@@ -80,7 +80,7 @@ namespace fp
 // ("maxEndTimeCost"); Python sees them through python_name()
 // ("max_end_time_cost").
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. An
 // assembly of all five components at their default weights therefore scores
 // bit-for-bit like ScoreCalculator::score.

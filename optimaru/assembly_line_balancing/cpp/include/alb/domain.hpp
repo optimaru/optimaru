@@ -33,7 +33,7 @@ using Score = optimaru::Score;
 // ---------------------------------------------------------------------------
 // Task  (entity)
 // ---------------------------------------------------------------------------
-// `station` is the single BASIC decision variable: a station index
+// `station` is the single assignment decision variable: a station index
 // (0-based), -1 == unassigned. Stations are not bounded above by the facts:
 // the value range is AssemblyLineBalancingProblem::stationCount (see there).
 struct Task
@@ -95,7 +95,7 @@ struct AssemblyLineBalancingProblem
     // false after the solve, so a seed is used once.
     bool warmStart = false;
 
-    // The BASIC value range V: the engine draws stations from [0, V).
+    // The assignment value range V: the engine draws stations from [0, V).
     // V = max(task count, 1 + max station), refreshed by
     // ScoreCalculator::prepare() — which the Solver calls once per solve,
     // AFTER its construction (which may place tasks beyond the task count) and

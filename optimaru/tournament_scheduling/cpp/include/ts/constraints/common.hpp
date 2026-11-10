@@ -22,7 +22,7 @@ namespace ts
 // the monolithic TournamentSchedulingIncrementalScoreCalculator, which stays
 // the tuned default fast path.
 //
-// Unit choice: with the BASIC descriptor the calculator's unit is the VALUE,
+// Unit choice: with the assignment shape the calculator's unit is the VALUE,
 // i.e. one team; members are the assignments currently given to it.
 // Unassigned assignments (team == -1) belong to no unit and so contribute
 // nothing, exactly like in the monolithic path.
@@ -81,7 +81,7 @@ namespace ts
 // weight is in units of the level in effect. A name may be held several
 // times (ConstraintAssembly::add_instances), each instance with its own knobs.
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty; the calculator negates into the score.
 
 using DecomposedCalculator
@@ -132,7 +132,7 @@ inline int dayOf(const TournamentSchedule &schedule, int assignmentIndex)
 // Cross-unit global constraints
 // ---------------------------------------------------------------------------
 // Shared base: supports_member_change() routes everything through
-// on_member_changed; the unit-diff hook is unreachable for BASIC solutions.
+// on_member_changed; the unit-diff hook is unreachable for assignment-shaped solutions.
 struct MemberChangeGlobalConstraint : TsGlobalConstraint
 {
     using TsGlobalConstraint::TsGlobalConstraint;

@@ -421,15 +421,8 @@ private:
                                                    ? config_.limits.step_limit
                                                    : 1000000;
                 return std::make_unique<RecordToRecordTravel>(
-                        RecordToRecordTravel::autofit(
-                                initial_score.soft, c.rrt_start_gap,
-                                c.rrt_end_gap,
-                                c.rrt_steps > 0 ? c.rrt_steps
-                                                                : steps,
-                                c.rrt_exponential
-                                        ? RecordToRecordTravel::Method::Exponential
-                                        : RecordToRecordTravel::Method::Linear,
-                                c.rrt_compare_to_best));
+                        RecordToRecordTravel::autofit(initial_score.soft, c.rrt_start_gap,
+                                                      c.rrt_end_gap, steps));
             }
             case AcceptanceRule::LateAcceptance:
             default:

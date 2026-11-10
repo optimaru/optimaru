@@ -151,7 +151,7 @@ monolithic calculator. The CP-SAT reference takes integral offsets.
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=bin_packing
 cmake --build build -j2
 ctest --test-dir build --output-on-failure   # bp_test + bp_plugin_test
-./build/bin_packing/bin-packing/bp_demo 2   # 2 s solve; checks hard 0 (exit 0)
+./build/bin_packing/bp_demo 2   # 2 s solve; checks hard 0 (exit 0)
 ```
 
 `bp_test`: per-constraint hand checks (a positive and a zero case each, monolithic and

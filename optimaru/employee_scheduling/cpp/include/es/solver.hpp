@@ -127,11 +127,11 @@ public:
         // soft terms). For large-only workloads prefer 0.8.
         double nearbyShiftsProbability = 0.65;
 
-        // BASIC move mix. Weights are relative; 0 disables a move.
+        // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
         double swap_weight = 0.25;
 
-        // Employee-scheduling-specific BASIC operators registered through the
+        // Employee-scheduling-specific assignment operators registered through the
         // engine's custom move hooks. They complement the generic change/swap
         // moves with stronger domain moves while keeping the same score
         // calculator and acceptor protocol.
@@ -159,8 +159,8 @@ public:
         // (the usual setup) an empty slot is penalized and refilled anyway.
         bool employeeUnassignMoves = false;
 
-        // LIST move mix. Exposed for parity with the generic engine; employee
-        // scheduling is BASIC, so these do not affect this domain.
+        // Sequence move mix. Exposed for parity with the generic engine; employee
+        // scheduling is assignment-shaped, so these do not affect this domain.
         double relocate_weight = 0.5;
         double list_swap_weight = 0.3;
         double two_opt_weight = 0.2;

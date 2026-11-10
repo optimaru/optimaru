@@ -274,7 +274,7 @@ void verifyAssemblyParity()
                 t.blockGroupCount);
 
     DecomposedCalculator calc;
-    addCanonicalConstraints(calc);
+    addDefaultConstraints(calc);
 
     std::mt19937_64 rng(2024);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -364,7 +364,7 @@ void verifyIncremental()
     ScoreCalculator::prepare(t);
 
     DecomposedCalculator calc;
-    addCanonicalConstraints(calc);
+    addDefaultConstraints(calc);
     optimaru::Editor<Timetable> editor(t, calc);
     Timetable shadow = t;
 
@@ -598,7 +598,7 @@ void verifyFullAssertSolve()
     config.ruinRecreatePolishSteps = 100;
 
     DecomposedCalculator calc;
-    addCanonicalConstraints(calc);
+    addDefaultConstraints(calc);
 
     bool corrupted = false;
     Score final{};
@@ -770,7 +770,7 @@ void verifySampleScaleSolve()
     config.weights = ObjectiveWeights{};  // ignored on the plugin path
 
     DecomposedCalculator calc;
-    addCanonicalConstraints(calc);
+    addDefaultConstraints(calc);
 
     const auto start = std::chrono::steady_clock::now();
     Solver solver(config);

@@ -106,7 +106,7 @@ struct Meeting
 // MeetingAssignment  (the decision)
 // ---------------------------------------------------------------------------
 // A meeting is assigned a starting time grain and a room. The
-// engine supports one BASIC int variable per entity, so the two are composed
+// engine supports one assignment int variable per entity, so the two are composed
 // into a single value (the school-timetabling slotRoom pattern):
 //   grainRoom = timeGrainPos * roomCount + roomIndex
 // where timeGrainPos indexes MeetingSchedule::timeGrains. -1 means unassigned

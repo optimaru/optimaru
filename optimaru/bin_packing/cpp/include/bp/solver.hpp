@@ -77,7 +77,7 @@ public:
         double ruinRecreateAsMoveWeight = 0.0;
         int ruinRecreateAsMoveMaxRuin = 12;
 
-        // BASIC move mix. Weights are relative; 0 disables a move.
+        // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
         double swap_weight = 0.25;
 
@@ -88,7 +88,7 @@ public:
         // which are empty in a good packing. 0 = off.
         double valueRecommenderProbability = 0.5;
 
-        // BASIC best-improvement descent strategy (engine
+        // Assignment best-improvement descent strategy (engine
         // local_search.descent_weight). 0 (default) = off.
         double descent_weight = 0.0;
 

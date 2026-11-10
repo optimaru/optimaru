@@ -22,9 +22,9 @@ namespace pdp
 // ScoreCalculator::score and the monolithic incremental calculator,
 // which stay the tuned default path for the seven core rules.
 //
-// Unit choice: with the LIST descriptor the calculator's unit is one LIST,
-// i.e. one vehicle; members are its nodes IN ROUTE ORDER. The descriptor
-// exposes the unassigned pool as one extra list after the vehicles, so every
+// Unit choice: with the sequence shape the calculator's unit is one list,
+// i.e. one vehicle; members are its nodes IN ROUTE ORDER. The solution
+// traits expose the unassigned pool as one extra list after the vehicles, so every
 // per-route component steps over it (detail::isPool) and evaluates the
 // vehicles only (detail::PerVehicleConstraint); requiredVehicleCost and
 // squaredOrderAgeCost price the pool too and evaluate every list.
@@ -38,7 +38,7 @@ namespace pdp
 // A component never reads the Node derived fields (vehicleIndex,
 // arrivalTime): walkRoute below re-derives the arrival chain from the unit's
 // own member order, which is what makes each cost a pure function of
-// (solution, unit, members) as the engine's contract requires. The LIST path
+// (solution, unit, members) as the engine's contract requires. The sequence path
 // re-costs a touched route whole, so no delta contract is needed.
 //
 // Naming: one header per component, named after its struct
@@ -79,7 +79,7 @@ namespace pdp
 // `ConstraintAssembly{}` when you would rather list components from
 // scratch than start from the defaults.
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. The
 // default assembly therefore scores bit-for-bit like
 // ScoreCalculator::score on a plan without route policies.

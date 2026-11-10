@@ -5,7 +5,7 @@
 //       cannot isolate one constraint, so every expectation here accounts
 //       for all five constraints)
 //   (b) incremental score == full recompute across a long random walk of
-//       LIST moves driven through the engine's Editor protocol,
+//       sequence moves driven through the engine's Editor protocol,
 //       with shared operators, a pinned line prefix and a pinned
 //       unassigned job in play
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
@@ -298,7 +298,7 @@ PackagingSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
 }
 
 // -------------------------------------------------------------------------
-// (b) Incremental == full recompute across a random LIST-move walk driven
+// (b) Incremental == full recompute across a random sequence-move walk driven
 // through the Editor (the exact before/mutate/after protocol the
 // engine uses), against the independently coded full calculator.
 // -------------------------------------------------------------------------

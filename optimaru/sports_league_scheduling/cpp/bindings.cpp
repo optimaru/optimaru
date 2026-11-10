@@ -20,7 +20,7 @@
 
 namespace py = pybind11;
 using namespace sls;
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 
 PYBIND11_MODULE(_core, m)
 {
@@ -211,7 +211,7 @@ PYBIND11_MODULE(_core, m)
             {
                 ScoreCalculator::prepare(schedule);
                 DecomposedCalculator calculator;
-                tfpy::apply_constraints([] { return defaultConstraints(); },
+                opy::apply_constraints([] { return defaultConstraints(); },
                                        constraints)
                     .into(calculator);
                 py::gil_scoped_release release;
@@ -232,10 +232,10 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(schedule);
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); },
+            opy::apply_constraints([] { return defaultConstraints(); },
                                    constraints)
                 .into(calculator);
-            return tfpy::constraint_costs(calculator, schedule);
+            return opy::constraint_costs(calculator, schedule);
         },
         py::arg("schedule"),
         py::arg("constraints") = py::none(),
@@ -247,12 +247,12 @@ PYBIND11_MODULE(_core, m)
     // constraint_costs().
     m.def(
         "list_constraints",
-        [] { return tfpy::constraint_names(defaultConstraints()); },
+        [] { return opy::constraint_names(defaultConstraints()); },
         "Constraint names available to optimaru.sports_league_scheduling.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,
     // default_weight, level_flippable, reward, default_enabled), ...] in
     // list_constraints() order. The defaults live in the C++ components only.
-    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

@@ -663,7 +663,7 @@ struct MoveDriver
     {
     }
     optimaru::Neighborhoods nearby;  // empty: no distance meter
-    std::vector<int> noLists;              // BASIC: no element index
+    std::vector<int> noLists;              // Assignment: no element index
     optimaru::OperatorContext<BinPackingProblem> ctx;
     std::vector<int> entities;
 };

@@ -138,7 +138,7 @@ struct Location
 };
 
 // ---------------------------------------------------------------------------
-// Visit  (the LIST element)
+// Visit  (the list element)
 // ---------------------------------------------------------------------------
 // The input fields are immutable; the derived fields (vehicleIndex,
 // arrivalTime) are recomputed from the vehicle routes.
@@ -178,7 +178,7 @@ struct Visit
 };
 
 // ---------------------------------------------------------------------------
-// Vehicle  (the LIST owner)
+// Vehicle  (the list owner)
 // ---------------------------------------------------------------------------
 // visitIndices is the decision: the ordered list of visits this vehicle
 // services. A visit may appear in no vehicle's list at all (see
@@ -227,7 +227,7 @@ struct VehicleRoutePlan
     std::vector<Visit> visits;
 
     // The unassigned pool. A visit may be left unassigned, but the engine's
-    // LIST kind requires every
+    // sequence shape requires every
     // element to live in exactly one list, so the pool is materialized as one
     // extra virtual list at index vehicles.size() (see the SolutionTraits
     // below). Everything in it is unassigned: it has no route, no arrival
@@ -276,7 +276,7 @@ struct VehicleRoutePlan
 // The vehicles are the list owners and the visits are the elements — plus ONE
 // extra list at index vehicles.size() holding the unassigned visits.
 //
-// Why the extra list rather than "an element in no list": the engine's LIST
+// Why the extra list rather than "an element in no list": the engine's sequence
 // moves index elements by (list, position) and assume every element is
 // reachable, so genuinely-unassigned elements would be invisible to relocate,
 // swap and the LNS ruin — the solver could never assign a dropped visit back,

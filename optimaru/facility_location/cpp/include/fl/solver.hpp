@@ -77,7 +77,7 @@ public:
         double ruinRecreateAsMoveWeight = 0.0;
         int ruinRecreateAsMoveMaxRuin = 12;
 
-        // BASIC move mix. Weights are relative; 0 disables a move.
+        // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
         double swap_weight = 0.25;
 
@@ -95,7 +95,7 @@ public:
         double valueRecommenderProbability = 0.0;
         int valueRecommenderKeep = 8;
 
-        // BASIC descent strategy (engine local_search.descent_weight):
+        // Assignment descent strategy (engine local_search.descent_weight):
         // best-improvement over one nearby consumer pair — all values of
         // both plus their swap — repeated until locally optimal. One
         // application costs ~2 * facilityCount evaluations, so weight by the

@@ -167,7 +167,7 @@ struct Job
 
     // Pinning: a pinned job keeps its exact (line, position) — or stays
     // unassigned — and is scored like any other job. Because the engine's
-    // LIST moves cannot skip elements, pinning is enforced structurally: the
+    // sequence moves cannot skip elements, pinning is enforced structurally: the
     // SolutionTraits below exposes only unpinned jobs to the engine, and
     // pinned jobs must form a PREFIX of their line (continuous planning
     // pins everything before "now", which is always a prefix).

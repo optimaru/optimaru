@@ -23,7 +23,7 @@
 
 namespace py = pybind11;
 using namespace bp;
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 
 namespace
 {
@@ -167,7 +167,7 @@ PYBIND11_MODULE(_core, m)
                 return ScoreCalculator::score(problem);
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            opy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
             calculator.rebuild(problem);
             problem.score = calculator.score();
             return problem.score;
@@ -194,7 +194,7 @@ PYBIND11_MODULE(_core, m)
         // Guided change-move targets: the bin of a random other item (a bin
         // in use). probability 0 = off (uniform over all n bins).
         .def_readwrite("value_recommender_probability", &Solver::Config::valueRecommenderProbability)
-        // BASIC best-improvement descent strategy weight. 0 = off.
+        // Assignment best-improvement descent strategy weight. 0 = off.
         .def_readwrite("descent_weight", &Solver::Config::descent_weight)
         // Gate on how often a step may draw a macro move (EmptyBinMove,
         // RepackMove). 1 = engine default (unrestricted).
@@ -255,7 +255,7 @@ PYBIND11_MODULE(_core, m)
             [](Solver &solver, BinPackingProblem &problem, const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+                opy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(problem, calculator);
             },
@@ -274,8 +274,8 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
-            return tfpy::constraint_costs(calculator, problem);
+            opy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            return opy::constraint_costs(calculator, problem);
         },
         py::arg("problem"),
         py::arg("constraints") = py::none(),
@@ -284,12 +284,12 @@ PYBIND11_MODULE(_core, m)
     // The constraint names this domain scores, in default-assembly order.
     m.def(
         "list_constraints",
-        [] { return tfpy::constraint_names(defaultConstraints()); },
+        [] { return opy::constraint_names(defaultConstraints()); },
         "Constraint names available to optimaru.bin_packing.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,
     // default_weight, level_flippable, reward, default_enabled), ...] in
     // list_constraints() order. The defaults live in the C++ components only.
-    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

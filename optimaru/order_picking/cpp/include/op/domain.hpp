@@ -175,7 +175,7 @@ struct Order
 };
 
 // ---------------------------------------------------------------------------
-// PickTask  (the LIST element)
+// PickTask  (the list element)
 // ---------------------------------------------------------------------------
 // The picking of one order item by a trolley. The Solver assigns each
 // PickTask to a position in a Trolley's pick list:
@@ -205,7 +205,7 @@ struct PickTask
 };
 
 // ---------------------------------------------------------------------------
-// Trolley  (the LIST owner)
+// Trolley  (the list owner)
 // ---------------------------------------------------------------------------
 // The trolley that will be filled with the order items. pickTaskIndices is
 // the decision: the ordered indices of the PickTasks the trolley

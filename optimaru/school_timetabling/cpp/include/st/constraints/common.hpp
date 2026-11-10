@@ -42,7 +42,7 @@ namespace st::canon
 // `component->level = optimaru::Level::Soft`. The two structural components
 // (fixedSlotsCost, parallelGroupsCost) are not level-flippable.
 //
-// Unit choice: with the BASIC descriptor the calculator's unit is the VALUE,
+// Unit choice: with the assignment shape the calculator's unit is the VALUE,
 // i.e. one timeslot; members are the lessons currently assigned to it. The
 // per-slot rules (class/teacher conflicts, disallowed slots, room capacity,
 // avoided / non-preferred periods) therefore decompose as UnitConstraints
@@ -68,7 +68,7 @@ namespace st::canon
 //   defaultConstraints().weight("teacherGapCost", 40).into(calc);
 //   solver.solve(table, calc);
 //
-// Cost sign convention (see decomposed_score_calculator.hpp): positive =
+// Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty; the calculator negates into the score.
 //
 // Every component requires ScoreCalculator::prepare(table) to have run (the

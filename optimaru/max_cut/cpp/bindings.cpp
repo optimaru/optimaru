@@ -21,7 +21,7 @@
 
 namespace py = pybind11;
 using namespace mc;
-namespace tfpy = optimaru::python;
+namespace opy = optimaru::python;
 
 namespace
 {
@@ -187,7 +187,7 @@ PYBIND11_MODULE(_core, m)
         // side-1 vertex. Exact-size mode forces 0 / 1 (swaps only).
         .def_readwrite("change_move_weight", &Solver::Config::change_weight)
         .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
-        // BASIC best-improvement descent strategy weight. 0 = off.
+        // Assignment best-improvement descent strategy weight. 0 = off.
         .def_readwrite("descent_weight", &Solver::Config::descent_weight)
         // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
@@ -221,7 +221,7 @@ PYBIND11_MODULE(_core, m)
             [](Solver &solver, MaxCutProblem &problem, const py::object &constraints)
             {
                 DecomposedCalculator calculator;
-                tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+                opy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
                 py::gil_scoped_release release;
                 solver.solve(problem, calculator);
             },
@@ -240,8 +240,8 @@ PYBIND11_MODULE(_core, m)
         {
             ScoreCalculator::prepare(problem);
             DecomposedCalculator calculator;
-            tfpy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
-            return tfpy::constraint_costs(calculator, problem);
+            opy::apply_constraints([] { return defaultConstraints(); }, constraints).into(calculator);
+            return opy::constraint_costs(calculator, problem);
         },
         py::arg("problem"),
         py::arg("constraints") = py::none(),
@@ -252,12 +252,12 @@ PYBIND11_MODULE(_core, m)
     // strings a score breakdown reports.
     m.def(
         "list_constraints",
-        [] { return tfpy::constraint_names(defaultConstraints()); },
+        [] { return opy::constraint_names(defaultConstraints()); },
         "Constraint names available to optimaru.max_cut.constraints.");
 
     // The constraint catalog, read off the same default assembly:
     // constraint_info() -> [ConstraintInfo(name, default_level,
     // default_weight, level_flippable, reward, default_enabled), ...] in
     // list_constraints() order. The defaults live in the C++ components only.
-    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

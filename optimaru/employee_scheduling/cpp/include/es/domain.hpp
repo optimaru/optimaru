@@ -89,8 +89,6 @@ struct Shift {
     int startDay = 0;                    // dayOf(start) -- avoids a division per pair
     int endDay = 0;                      // dayOf(end)
     std::uint64_t requiredSkillBit = 0;  // single bit for requiredSkill's id
-
-    Minutes durationMinutes() const { return end - start; }
 };
 
 // ---------------------------------------------------------------------------

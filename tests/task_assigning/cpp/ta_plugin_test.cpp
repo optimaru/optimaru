@@ -3,7 +3,7 @@
 //   (a) the default assembly on the engine's DecomposedObjective
 //       reproduces the monolithic score bit-for-bit on 300 random list
 //       layouts (unassigned tasks included)
-//   (b) incremental score == full recompute across 3000 random LIST moves
+//   (b) incremental score == full recompute across 3000 random sequence moves
 //       driven through the engine's Editor protocol (plugin path)
 //   (c) partial assemblies: each component in isolation, hand-computed
 //   (d) weight / level / exponent overrides
@@ -19,7 +19,7 @@
 //       repeat, threshold and literal offsets by hand (an idle employee is
 //       an evaluated unit), the global's total shaped once, the literal
 //       formula refused at reset on hard and on the below-hard medium and
-//       kept on soft, incremental == a fresh recompute over a random LIST
+//       kept on soft, incremental == a fresh recompute over a random sequence
 //       walk and a ScoreChecks::Full solve with repeated, shifted components
 #include <algorithm>
 #include <chrono>
@@ -215,7 +215,7 @@ void verifyAssemblyParity()
 }
 
 // -------------------------------------------------------------------------
-// (b) Incremental score == full recompute across a random walk of LIST
+// (b) Incremental score == full recompute across a random walk of sequence
 // mutations, driven through the Editor so the plugin path's
 // before/after hook contract is exercised exactly like in the engine.
 // -------------------------------------------------------------------------
@@ -1131,7 +1131,7 @@ void verifyRepeatsAndOffsets()
               "both, and the literal formula on soft");
     }
     {
-        // Random LIST walk: incremental == a fresh calculator of the same
+        // Random sequence walk: incremental == a fresh calculator of the same
         // assembly.
         TaskAssigningSolution solution
             = buildRandomInstance(/*taskCount*/ 30, /*employeeCount*/ 6, 7);

@@ -70,7 +70,7 @@ struct Facility
 // ---------------------------------------------------------------------------
 // Consumer  (entity)
 // ---------------------------------------------------------------------------
-// `facility` is the single BASIC decision variable: the index into
+// `facility` is the single assignment decision variable: the index into
 // FacilityLocationProblem::facilities, -1 == unassigned.
 struct Consumer
 {
