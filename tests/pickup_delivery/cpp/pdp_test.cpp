@@ -263,30 +263,22 @@ PdpRoutePlan tighten(PdpRoutePlan plan, int capacity, Seconds windowMinutes) {
     return plan;
 }
 
-// What the pair-aware operators are actually for.
+// What working in whole requests is for: the defaults (the pair operators and
+// the request moves) against the engine's stop-granular moves alone.
 //
-// Measured across instance tightness (5 seeds each, 4s budget): on a LOOSE
-// instance they are a wash (3 wins / 2 losses) — the built-in element moves
-// already route every request, so the two configurations only differ by noise
-// in travel time. Their value shows up once capacity and time windows force
-// requests to be dropped: 4/1 on both the medium and tight settings, and the
-// gap is on the MEDIUM level, not soft. On the tightest seeds the built-ins
-// leave roughly twice as many requests unrouted (-320 vs -160 medium).
-//
-// That is the expected shape, and it is the reason the operators exist:
-// moving a request into or out of the unassigned pool is only reachable as a
-// pair move. A single stop moved into the pool leaves a half-assigned request,
-// which is hard-infeasible and therefore always rejected — so without a pair
-// move the set of routed requests is frozen at whatever the construction
-// heuristic produced, and the search can only reorder within it.
+// Moving a request into or out of the unassigned pool is only reachable as a
+// whole-request move. A single stop moved into the pool leaves a half-assigned
+// request, which is hard-infeasible and therefore always rejected — so
+// without one the set of routed requests is frozen at whatever the
+// construction heuristic produced, and the search can only reorder within it.
+// The guide's "What they are worth" table has the measurements by tightness.
 //
 // The check runs on a step budget, not wall clock, and compares the MEDIUM
-// level only. With 4s per solve the outcome depended on the machine: a slow
-// CI runner got 2/3 and failed, twice on soft-level ties of the medium level
-// the claim is about. At 100k steps every seed routes more requests with the
-// pair-aware operators (5/0), and the same seed gives the same result anywhere.
+// level only: with a time budget the outcome depended on the machine. At 100k
+// steps every seed routes more requests with the request-level operators
+// (5/0), and the same seed gives the same result anywhere.
 void testPairOperatorsMatter() {
-    std::printf("== Pair-aware operators vs built-ins alone (tight instance) ==\n");
+    std::printf("== Request-level operators vs built-ins alone (tight instance) ==\n");
     int pairWins = 0;
     int builtinWins = 0;
     const int seeds = 5;
@@ -304,18 +296,21 @@ void testPairOperatorsMatter() {
         Solver::Config withoutConfig = base;
         withoutConfig.pair_moves = false;
         withoutConfig.pair_ruin = false;
+        withoutConfig.request_ruin_recreate = false;
+        withoutConfig.bundle_moves = false;
         Solver(withoutConfig).solve(without);
 
         Solver(base).solve(with);
 
-        std::printf("    seed %d: built-ins only %-28s | pair-aware %s\n", seed,
+        std::printf("    seed %d: built-ins only %-28s | request-level %s\n", seed,
                     without.score.str().c_str(), with.score.str().c_str());
         if (with.score.medium > without.score.medium)
             ++pairWins;
         else if (without.score.medium > with.score.medium)
             ++builtinWins;
     }
-    check(pairWins > builtinWins, "pair-aware operators route more requests on a tight instance");
+    check(pairWins > builtinWins,
+          "request-level operators route more requests on a tight instance");
     std::printf("\n");
 }
 

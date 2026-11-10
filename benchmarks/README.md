@@ -132,8 +132,10 @@ engine's runs and CP-SAT's were made at the same time, not one after the other.
 How far a number repeats differs by use case. The 38 instances of the earlier
 generated ladders were measured on two days: the engine's score was the same
 both times on all of them, and CP-SAT's differed on 8 (eight workers under a
-time limit). The engine's own result does move elsewhere: on the 400-request
-synthetic pickup-delivery instance (54 vehicles one day, 55 the other) and by
-a few percent on the larger semiconductor instances (see that README). Read a
-small margin in any table as noise.
+time limit). The engine's own result does move elsewhere: by a few percent on
+the larger semiconductor instances (see that README), and on the 400-request
+synthetic pickup-delivery instance it did with the stop-granular search those
+days measured (54 vehicles one day, 55 the other; the request-level search that
+replaced it returned the same plan in two runs on 2026-11-11). Read a small
+margin in any table as noise.
 

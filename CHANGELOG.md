@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **Pickup and delivery: the search works in whole requests.** Three new move operators take
+  a pickup and its dropoff out of a route together and put them back together, at the
+  cheapest feasible slot pair, so the acceptor is offered plans with every request whole
+  instead of split ones to reject. `requestRuinRecreate` takes 1 to
+  `request_ruin_max_requests` requests out (random, related, the costliest, one route's, or
+  adjacent stretches of nearby routes) and reinserts them in random order or by regret, with
+  blinking; requests waiting unassigned join the reinsertion. `bundleRelocate` moves up to
+  `bundle_max_requests` requests whose pickups follow each other on a route to one other
+  route, and `bundleExchange` swaps two such bundles. A slot pair is checked in O(1) from a
+  per-route timeline (departures, latest feasible arrivals, loads), against the capacity,
+  the time windows and the vehicle limits that are set (`max_end_time`,
+  `max_route_duration`, `max_travel_time`, `max_stops`, pinned stops, a required vehicle).
+  Construction uses the same scan, so the first plan keeps those vehicle limits too (it
+  checked capacity and time windows only). `SolverConfig` gains `request_ruin_recreate`,
+  `request_ruin_max_requests` (20), `bundle_moves` and `bundle_max_requests` (3); the two
+  switches are on by default, so a seeded solve no longer walks the path it did, and the
+  two counts refuse a value below 1. `pdp_demo`'s control flag is `--stop-moves-only` now
+  (it was `--no-pair-moves`) and turns every request-level operator off. Both results
+  blocks of `benchmarks/pickup-delivery` are measured again (30 s, seed 0). On the 56 Li &
+  Lim instances the engine's mean distance goes from 7.5% above the best known to 0.8%
+  below it (the harness minimizes distance only, so a plan with more vehicles can be
+  shorter than the best known), the worst instance from +22.0% to +2.4%, the instances
+  more than 1% above from 43 to 2, and the vehicles used from 485 to 409 (best known:
+  402). The generated instances of 25 to 400 requests come out 2% to 10% shorter.
 - **Engine (C++): features no use case used are removed.** Gone from the engine headers: the
   chain solution shape (`Shape::Chain`, `ChainObjective`, the chain overload of
   `Solver::solve()`, the `chain::` link helpers), `WeightedObjective`, `explain_score()`,

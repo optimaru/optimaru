@@ -16,21 +16,27 @@ namespace pdp {
 // ---------------------------------------------------------------------------
 // Solver
 // ---------------------------------------------------------------------------
-// The same engine as vehicle-routing, plus the two extension points that a
-// pickup-and-delivery problem actually needs:
+// The same engine as vehicle-routing, plus the operators a pickup-and-delivery
+// problem needs: ones whose unit is the request, not the stop.
 //
-//   * PairRelocateMove (a custom MoveOperator) — moves a request's pickup and
-//     dropoff together, and repairs requests whose coupling is currently
-//     broken. Without it the engine's element-granular moves have to break a
-//     pair to move it and climb back out through a hard-infeasible state,
-//     which late acceptance almost never tolerates; the assignment then
-//     freezes at whatever the construction heuristic produced.
+//   * The request moves (pdp/request_moves.hpp) — requestRuinRecreate takes
+//     requests out of their routes and puts each back, pickup and dropoff
+//     together, at its cheapest feasible slot pair; bundleRelocate and
+//     bundleExchange carry several requests between two routes in one step.
+//     They are what improves a plan: every candidate they offer the acceptor
+//     has its requests whole.
 //
-//   * PairRuin (a custom RuinOperator) — ruins whole requests rather than
-//     individual stops, so a kick never leaves a pickup stranded without its
-//     dropoff.
+//   * PairRelocateMove (a custom MoveOperator) — repairs requests whose
+//     coupling is currently broken, and moves a whole request to or from the
+//     unassigned pool. The engine's element-granular moves and its
+//     ruin-and-recreate kick have no notion of a pair, so they leave such
+//     requests behind.
 //
-// Both join the engine's adaptive selection alongside the built-ins, so their
+//   * PairRuin (a custom RuinOperator) — makes the engine's kick ruin whole
+//     requests rather than individual stops, so it never leaves a pickup
+//     stranded without its dropoff.
+//
+// All join the engine's adaptive selection alongside the built-ins, so their
 // weight is learned rather than fixed.
 class Solver {
 public:
@@ -76,8 +82,8 @@ public:
         double cross_exchange_weight = 0.0;
         int cross_exchange_max_run = 3;
 
-        // Whether to register the pair-aware move operator (on by default;
-        // turn it off to measure what it is worth).
+        // Whether to register the pair move operator (on by default; turn it
+        // off to measure what it is worth).
         bool pair_moves = true;
         bool pair_exchange_moves = true;
         // Exchange is valuable on large route sets but steals too many steps
@@ -90,11 +96,24 @@ public:
         // pull one back out — how the medium level gets optimized at all.
         double pair_assignment_probability = 0.1;
 
+        // --- request-level moves (pdp/request_moves.hpp) ---
+        // requestRuinRecreate: take up to request_ruin_max_requests requests
+        // out and reinsert each at its cheapest feasible slot pair (in random
+        // order, or by regret_k; blink_rate applies).
+        bool request_ruin_recreate = true;
+        int request_ruin_max_requests = 20;
+        // bundleRelocate / bundleExchange: move up to bundle_max_requests
+        // requests of one route to another route together, or swap two such
+        // bundles.
+        bool bundle_moves = true;
+        int bundle_max_requests = 3;
+
         // --- adaptive ruin & recreate (ALNS) ---
         bool pair_ruin = true;
         // Search-strategy parity with vehicle-routing. These
         // remain opt-in for PDP because the generic variants manipulate
-        // individual nodes; pair-aware move/ruin operators are the defaults.
+        // individual nodes; the request-level move/ruin operators are the
+        // defaults.
         double ruin_recreate_as_move_weight = 0.0;
         int ruin_recreate_as_move_max_ruin = 12;
         double descent_weight = 0.0;
@@ -127,7 +146,7 @@ public:
 
     // Solves with a caller-assembled plugin calculator (see
     // pdp/constraints.hpp): pick components and weights, then pass the
-    // assembly here. The same search applies, the pair-aware move and ruin
+    // assembly here. The same search applies, the request-level move and ruin
     // operators included (they read the plan, not the calculator). Weights
     // come from the assembly, NOT from the defaults. The final plan.score is
     // computed by THIS calculator, its three levels read before the medium

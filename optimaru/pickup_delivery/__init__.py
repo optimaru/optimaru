@@ -22,11 +22,15 @@ Score (hard / medium / soft, lexicographic), at the default weights:
 `constraint_info()` lists every constraint with its default level and weight;
 `optimaru.pickup_delivery.constraints` picks and re-weights them.
 
-The solver is the shared engine in `optimaru/cpp/optimaru/`, with two PDP-specific extensions
-registered on top of it: a pair-aware move operator (relocates a whole request
-and repairs broken pairs) and a pair-aware ruin operator (kicks whole requests,
-never half of one). Both are on by default; `pair_moves` / `pair_ruin` turn
-them off to measure what they are worth.
+The solver is the shared engine in `optimaru/cpp/optimaru/`, with operators
+registered on top of it whose unit is the request, not the stop. The request
+moves take requests out of their routes and put each back, pickup and dropoff
+together, at its cheapest feasible slot pair (`request_ruin_recreate`), or carry
+a bundle of requests from one route to another and swap bundles between routes
+(`bundle_moves`). A pair move repairs requests whose pair is broken
+(`pair_moves`) and a pair ruin kicks whole requests, never half of one
+(`pair_ruin`). All are on by default; the switches turn them off to measure
+what they are worth.
 """
 
 from .._solve import solve_in_place, solver_config

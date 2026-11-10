@@ -171,54 +171,123 @@ shows it in that unit. The CP-SAT reference enforces the three coupling rules
 structurally and refuses any level but hard (`level="medium"` or `"soft"`) or another
 weight for them; the engine keeps them flippable.
 
-## Why the pair-aware operators exist
+## Searching in whole requests
 
 The engine's built-in moves are element-granular: they relocate, swap and
-reverse individual stops. On a PDP that is not enough, for two distinct
-reasons — so the solver registers two extensions.
+reverse individual stops. On a PDP almost every such move splits a request or
+puts a dropoff before its pickup, and the acceptor rejects it. So the solver
+registers operators whose unit is the request: a pickup and its dropoff leave a
+route together and come back together.
+
+### Where a request fits
+
+`pdp/request_insertion.hpp` answers one question: the cheapest feasible way to
+add a request to a route. For each pickup slot it walks the dropoff slot forward
+and carries the schedule along. A `RouteTimeline` keeps, per stop, the departure
+time, the latest arrival that still keeps the rest of the route on time and the
+load on board, so one slot pair is checked in O(1) and a route of n stops in
+O(n²).
+
+Feasible is what the plan says: the running load against the capacity, every
+stop's window, and the vehicle limits that are set (`max_end_time`,
+`max_route_duration`, `max_travel_time`, `max_stops`, the pinned stops, a
+request's required vehicle). Among the feasible slot pairs the one that adds the
+least driving wins. The objective still has the last word: an operator applies
+what the scan proposes through the engine, and the acceptor judges the real
+score. A constraint selection that prices other things (a fixed cost, the route
+duration) is therefore followed, only less directly.
+
+The scan does not read the selection, though. The request moves only propose
+placements that keep the plan's windows, capacity and vehicle limits, whatever
+level those constraints are scored on. With one of them soft or left out, a
+request that has no slot inside the limits is not placed by a request move:
+the engine's stop moves are what try plans that break a limit.
+
+A route that already breaks a limit takes less: no request in front of a stop
+that is late, and none at all while it is over its travel budget or its stop
+cap. Requests can still be taken off such a route, which is how the request
+moves mend one; a plan that cannot be made feasible is left to the engine's
+stop moves, which trade one violation against another.
+
+Construction (`constructPairs`) places every request with the same scan, so the
+first plan already keeps the vehicle limits.
+
+### The request moves
+
+`pdp/request_moves.hpp` registers three move operators on that scan. They work
+on copies of the routes and write a changed route through the engine once, when
+the whole move is laid out, so a candidate never holds half a request.
+
+| Operator | One application |
+| --- | --- |
+| `requestRuinRecreate` | Takes 1 to `request_ruin_max_requests` requests out (never more than two fifths of the plan's requests) and reinserts each at its cheapest slot pair: large neighbourhood search at request granularity. Which requests: random ones, related ones (the requests of nearby stops), the ones whose stops cost the most driving, the requests of one route, or the requests in adjacent stretches of nearby routes. In which order: at random, or by regret-`regret_k` (the request that loses the most by waiting goes first). `blink_rate` skips a candidate slot now and then, so the same hole is not always rebuilt the same way. Up to two requests waiting in the unassigned pool join each reinsertion, which is how a left-out request gets routed. |
+| `bundleRelocate` | Moves a bundle (1 to `bundle_max_requests` requests whose pickups follow each other on a route) to one other route, each request at its cheapest slot there. A cluster of orders crosses in one step; moved one by one, the plans in between are worse or infeasible. |
+| `bundleExchange` | Swaps a bundle of one route with a bundle of a nearby route, the two sized independently. |
+
+A request with a pinned stop is left where it is, and a request bound to a
+vehicle is only offered that vehicle. On a large fleet (more than 32 vehicles
+to offer) a request is offered to the idle vehicles and to the routes that hold
+one of its nearby stops, and to the rest of the fleet only when none of those
+has room; idle vehicles that would serve it identically are offered once.
+
+The removal and reinsertion rules follow Shaw (1998), Ropke & Pisinger (2006,
+"An Adaptive Large Neighborhood Search Heuristic for the Pickup and Delivery
+Problem with Time Windows") and Christiaens & Vanden Berghe (2020, "Slack
+Induction by String Removals for Vehicle Routing Problems").
+
+### The pair operators
+
+The older pair operators stay registered. The engine's ruin-and-recreate kick
+rebuilds a plan one stop at a time and knows nothing of pairs, and two of them
+deal with what it leaves behind.
 
 **`PairRelocateMove`** moves a whole request, in three tiers:
 
 1. **Repair** — a request whose pair is currently broken (split across
    vehicles, dropoff before pickup, only half routed) is re-laid as a proper
-   pair. Needed continuously, because the built-in moves *and* the engine's
-   recreate both work one stop at a time and have no notion of a pair.
-2. **Assignment** — a whole request moves into or out of the unassigned pool.
-   This is the only way the medium level is reachable at all: moving a *single*
-   stop into the pool leaves a half-assigned request, which is hard-infeasible
-   and therefore always rejected. Without it the set of routed requests is
-   frozen at whatever the construction heuristic produced.
-3. **Relocate** — the ordinary move, to a position anchored on a nearby stop.
+   pair.
+2. **Assignment** — a whole request moves into the unassigned pool, or out of it
+   at its cheapest feasible slot pair. Moving a *single* stop into the pool
+   leaves a half-assigned request, which is hard-infeasible and always rejected.
+3. **Relocate** — to a position anchored on a nearby stop.
 
-Insertion positions are anchored on spatial neighbours rather than chosen
-uniformly, mirroring the engine's nearby-biased relocate; a uniformly random
-vehicle and position is rejected almost every time and just burns the step
-budget.
+**`PairExchangeMove`** swaps two requests of different routes in place (from
+`pair_exchange_min_nodes` stops on).
 
-**`PairRuin`** ruins whole requests, seeded at a random one and spreading to its
-nearest neighbours. The built-in ruins pick individual stops, which strands half
-a request in a hard-infeasible state the recreate then has to guess its way out
-of.
+**`PairRuin`** makes the engine's kick take whole requests, seeded at a random
+one and spreading to its nearest neighbours. The built-in ruins pick individual
+stops, which strands half a request.
 
 ### What they are worth
 
-Measured across instance tightness (5 seeds each, 4s budget,
-`tests/pickup_delivery/cpp/pdp_test.cpp` and the harness in its comments):
+Three configurations on the same generated instances (`build_random_instance`
+with the capacity and the windows below, closed routes; 5 seeds each, 4 s): the
+engine's stop-granular moves alone (`pair_moves`, `pair_ruin`,
+`request_ruin_recreate` and `bundle_moves` off), with the pair operators, and
+with the request moves as well (the defaults). Cells are the mean medium / soft
+level; measured 2026-11-11.
 
-| Instance | pair-aware wins | built-ins win |
-| --- | --- | --- |
-| loose (50 req / 6 veh, cap 12, 300 min windows) | 3 | 2 |
-| medium (50 / 4, cap 8, 180 min) | 4 | 1 |
-| tight (60 / 3, cap 6, 120 min) | 4 | 1 |
-| very tight (60 / 3, cap 5, 90 min) | 3 | 2 |
+| Instance | stop-granular moves | + pair operators | + request moves |
+| --- | --- | --- | --- |
+| loose (50 req / 6 veh, cap 12, 300 min windows) | 0 / −11,994 | 0 / −10,472 | 0 / −9,482 |
+| medium (50 / 4, cap 8, 180 min) | 0 / −14,153 | 0 / −12,770 | 0 / −11,279 |
+| tight (60 / 3, cap 6, 120 min) | −144 / −14,891 | −130 / −14,619 | −86 / −11,765 |
+| very tight (60 / 3, cap 5, 90 min) | −268 / −10,686 | −254 / −11,747 | −218 / −8,594 |
 
-On loose instances it is a wash — the built-in moves already route every
-request, so the two configurations differ only by noise in travel time. The
-value shows once capacity and windows force requests to be dropped, and the gap
-is on the **medium** level rather than soft: on the tightest seeds the built-ins
-leave roughly twice as many requests unrouted (−320 vs −160 medium). That is
-the expected shape, and it is the honest claim — these operators buy *coverage*,
-not travel time.
+The request moves give the better plan in all 20 runs, against either other
+configuration. Where every request fits (loose, medium) they drive about a
+tenth less than the pair operators do. Where capacity and windows force
+requests to be left out they route more of them, which is the medium level, and
+drive less for the ones they route. The pair operators alone mostly buy
+coverage: they beat the stop-granular moves in 17 of the 20 runs.
+
+Most of the gain is `requestRuinRecreate`. On 14 of the harder Li & Lim
+instances (3 s each, 5 seeds) the mean distance ends 0.5% above the best known
+with the defaults and 4.0% above with `request_ruin_recreate` off. Switching off
+the bundle moves, the pair operators, regret or blinking instead leaves it
+between 0.1% and 0.5%, which is the spread between seeds; without the engine's
+kick it is 0.7%. The Li & Lim results at 30 s are in
+[`benchmarks/pickup-delivery`](../../../benchmarks/pickup-delivery/cpsat/PUBLIC_BENCHMARKS.md).
 
 ## Scoring: two implementations, checked against each other
 
@@ -244,9 +313,10 @@ through mid-move.
 cmake -B build -DOPTIMARU_USE_CASES=pickup_delivery && cmake --build build -j
 ./build/pickup_delivery/pdp_demo                       # 30 requests, 5 vehicles, 5s
 ./build/pickup_delivery/pdp_demo 60 6 10               # 60 requests, 6 vehicles, 10s
-./build/pickup_delivery/pdp_demo 60 6 10 --no-pair-moves   # control: built-in moves only
+./build/pickup_delivery/pdp_demo 60 6 10 --stop-moves-only   # control: the engine's stop moves only
 ./build/pickup_delivery/pdp_test
 ./build/pickup_delivery/pdp_plugin_test    # assembly == monolith, raw costs by hand, catalog, medium level
+./build/pickup_delivery/pdp_request_moves_test   # insertion scan == brute force, the request moves in a solve
 ```
 
 ```sh
@@ -291,7 +361,7 @@ The solution has the **sequence** shape; the domain solver that configures the
 engine is `optimaru/pickup_delivery/cpp/include/pdp/solver.hpp` + `optimaru/pickup_delivery/cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
-(weights in `Solver::Config`). `PairRelocateMove` / `PairExchangeMove` (move a pickup together with its drop-off) and the `PairRuin` ruin operator are defined and registered in `optimaru/pickup_delivery/cpp/src/solver.cpp` — use them as templates. A new move is a
+(weights in `Solver::Config`). `PairRelocateMove` / `PairExchangeMove` (move a pickup together with its drop-off) and the `PairRuin` ruin operator are defined in `optimaru/pickup_delivery/cpp/src/solver.cpp`, the request moves in `optimaru/pickup_delivery/cpp/src/request_moves.cpp` (on the insertion scan of `request_insertion.cpp`) — use them as templates. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `optimaru/pickup_delivery/cpp/src/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.

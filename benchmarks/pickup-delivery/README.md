@@ -30,11 +30,11 @@ are vehicles / distance.
 
 | Requests | engine | CP-SAT |
 | --- | --- | --- |
-| 25 | 9 / 1,665.3 | **8 / 1,636.5** |
-| 50 | **14 / 3,440.2** | incomplete (leaves stops unserved) |
-| 100 | **24 / 6,172.1** | no solution in time |
-| 200 | **40 / 11,321.7** | no solution in time |
-| 400 | 55 / 22,236.5 | not run |
+| 25 | **8 / 1,636.5** | 8 / 1,653.3 |
+| 50 | **13 / 3,369.6** | incomplete (leaves stops unserved) |
+| 100 | **22 / 5,615.2** | no solution in time |
+| 200 | **36 / 10,509.9** | no solution in time |
+| 400 | 51 / 19,982 | not run |
 
 CP-SAT is not run at 400 requests: its model takes minutes and gigabytes to build (at 400 requests it was still being built after 10 minutes at 11 GB, 2026-10-29).
 

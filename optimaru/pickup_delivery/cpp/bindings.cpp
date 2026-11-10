@@ -262,13 +262,34 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("tail_swap_move_weight", &Solver::Config::tail_swap_weight)
             .def_readwrite("inter_exchange_move_weight", &Solver::Config::cross_exchange_weight)
             .def_readwrite("inter_exchange_max_segment", &Solver::Config::cross_exchange_max_run)
-            // --- pair-aware operators ---
+            // --- pair operators ---
             .def_readwrite("pair_moves", &Solver::Config::pair_moves)
             .def_readwrite("pair_exchange_moves", &Solver::Config::pair_exchange_moves)
             .def_readwrite("pair_exchange_min_nodes", &Solver::Config::pair_exchange_min_nodes)
             .def_readwrite("pair_repair_probability", &Solver::Config::pair_repair_probability)
             .def_readwrite("pair_assignment_probability",
                            &Solver::Config::pair_assignment_probability)
+            // --- request-level moves ---
+            .def_readwrite("request_ruin_recreate", &Solver::Config::request_ruin_recreate)
+            .def_property(
+                    "request_ruin_max_requests",
+                    [](const Solver::Config& c) { return c.request_ruin_max_requests; },
+                    [](Solver::Config& c, int count) {
+                        if (count <= 0) {
+                            throw py::value_error("request_ruin_max_requests must be positive");
+                        }
+                        c.request_ruin_max_requests = count;
+                    })
+            .def_readwrite("bundle_moves", &Solver::Config::bundle_moves)
+            .def_property(
+                    "bundle_max_requests",
+                    [](const Solver::Config& c) { return c.bundle_max_requests; },
+                    [](Solver::Config& c, int count) {
+                        if (count <= 0) {
+                            throw py::value_error("bundle_max_requests must be positive");
+                        }
+                        c.bundle_max_requests = count;
+                    })
             .def_readwrite("pair_ruin", &Solver::Config::pair_ruin)
             // --- adaptive ruin & recreate (ALNS) ---
             // (bind_solver_config binds the shared ruin_recreate* knobs.)

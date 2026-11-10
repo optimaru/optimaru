@@ -214,7 +214,7 @@ class SolverConfig:
     inter_exchange_move_weight: float
     inter_exchange_max_segment: int
 
-    # --- pair-aware operators (the PDP-specific extensions) ---
+    # --- pair operators ---
     pair_moves: bool
     pair_exchange_moves: bool
     pair_exchange_min_nodes: int
@@ -226,6 +226,21 @@ class SolverConfig:
     out — how the medium level is reachable at all."""
     pair_ruin: bool
     """Ruin whole requests, never half of one."""
+
+    # --- request-level moves ---
+    request_ruin_recreate: bool
+    """Take a few requests out of their routes and reinsert each, pickup and
+    dropoff together, at its cheapest feasible slot pair (in random order or by
+    `regret_k`, with `blink_rate`). Requests waiting unassigned join the
+    reinsertion."""
+    request_ruin_max_requests: int
+    """The most requests one application takes out (1 = a pair relocate with the
+    best slot). Never more than two fifths of the plan's requests."""
+    bundle_moves: bool
+    """Move requests whose pickups follow each other on a route to another route
+    together, or swap two such bundles between nearby routes."""
+    bundle_max_requests: int
+    """The most requests in one bundle."""
 
     # --- adaptive ruin & recreate (ALNS) ---
     ruin_recreate: bool
@@ -264,7 +279,7 @@ class SolverConfig:
 
 class Solver:
     """Construction heuristic + local search + adaptive ruin & recreate, with
-    pair-aware move and ruin operators. Solves IN PLACE: fills
+    request-level move and ruin operators. Solves IN PLACE: fills
     vehicle.node_indices, the unassigned pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: PdpRoutePlan) -> None: ...
