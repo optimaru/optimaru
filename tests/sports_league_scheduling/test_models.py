@@ -79,3 +79,21 @@ def test_a_round_edited_after_validation_is_refused_by_to_core():
     model.matches[0].round = 99999999
     with pytest.raises(ValueError, match="out of range"):
         model.to_core()
+
+
+def test_solve_takes_the_model_and_leaves_it_as_it_was():
+    model = LeagueScheduleModel.from_core(small_schedule())
+    before = model.model_dump()
+    config = sl.SolverConfig()
+    config.step_count_limit = 500
+    solved = sl.solve(model, config=config, random_seed=3)
+    assert isinstance(solved, LeagueScheduleModel) and solved is not model
+    assert model.model_dump() == before
+    core = model.to_core()
+    sl.solve(core, config=config, random_seed=3)
+    assert (solved.score_hard, solved.score_soft) == (core.score.hard, core.score.soft)
+
+
+def test_solve_refuses_anything_but_the_schedule_or_its_model():
+    with pytest.raises(TypeError, match="must be a"):
+        sl.solve(3)

@@ -82,20 +82,22 @@ def test_from_core_reports_the_solved_results():
 
 
 def test_the_model_and_the_core_solve_alike():
-    """solve(model) converts, solves and writes back in place: the same result as the core path."""
+    """solve(model) converts, solves and returns a new solved model: the same result as the core path."""
     config = alb.SolverConfig()
     config.spent_limit_seconds = 600
     config.step_count_limit = 500
     config.random_seed = 7
     data = json.loads(WEB_DEMO.read_text())
     model = AssemblyLineBalancingProblemModel.model_validate(data)
+    before = model.model_dump()
     returned = alb.solve(model, config=config)
     core = AssemblyLineBalancingProblemModel.model_validate(data).to_core()
-    alb.solve(core, config=config)
-    assert [t.station for t in model.tasks] == core.assignment()
-    assert (model.score_hard, model.score_soft) == (core.score.hard, core.score.soft)
-    assert returned is model
-    assert model == AssemblyLineBalancingProblemModel.from_core(core)
+    assert alb.solve(core, config=config) is core  # the engine object is solved in place
+    assert isinstance(returned, AssemblyLineBalancingProblemModel) and returned is not model
+    assert model.model_dump() == before  # the model passed in stays the problem it was
+    assert [t.station for t in returned.tasks] == core.assignment()
+    assert (returned.score_hard, returned.score_soft) == (core.score.hard, core.score.soft)
+    assert returned == AssemblyLineBalancingProblemModel.from_core(core)
 
 
 @pytest.mark.parametrize("constraints", [None, [*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)]])
@@ -109,7 +111,7 @@ def test_full_assert_solves_on_both_paths(constraints):
     config.ruin_recreate_unimproved_step_trigger = 100
     config.ruin_recreate_polish_steps = 50
     model = AssemblyLineBalancingProblemModel.model_validate(json.loads(WEB_DEMO.read_text()))
-    alb.solve(model, config=config, constraints=constraints)
+    model = alb.solve(model, config=config, constraints=constraints)
     check = alb.calculate_score(model.model_copy(deep=True), constraints)
     assert (check.hard, check.soft) == (model.score_hard, model.score_soft)
 

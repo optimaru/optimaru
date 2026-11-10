@@ -26,8 +26,9 @@ print(cs.constraint_costs(schedule)["content_conflict_cost"]["costs"])  # raw, b
 ```
 
 - `solve(schedule, *, time_limit_seconds, random_seed, parallel_solver_count,
-  stop_at_first_feasible, on_new_best, config, constraints)` — solves in place and
-  returns it. `config` accepts a `SolverConfig` or a `models.SolveConfig`;
+  stop_at_first_feasible, full_assert, on_new_best, config, constraints)` — a
+  `ConferenceSchedule` is solved in place and returned; a `models.ConferenceScheduleModel` is left
+  as it was and a new, solved model is returned. `config` accepts a `SolverConfig` or a `models.SolveConfig`;
   `constraints` picks the cost function (see below).
 - `calculate_score` — full recompute of all 37 constraints at their default weights.
 - `constraint_costs(schedule)` — every constraint's raw cost (one global total each;

@@ -26,7 +26,7 @@ problem = KnapsackProblemModel(
     items=[ItemModel(id="A", weight=6, value=9), ItemModel(id="B", weight=4, value=7),
            ItemModel(id="C", weight=5, value=8)],
 )
-knapsack.solve(problem, time_limit_seconds=1.0, random_seed=42)          # the model, in place (and returned)
+problem = knapsack.solve(problem, time_limit_seconds=1.0, random_seed=42)   # the model: returns a new, solved model
 print(problem.score_hard, problem.score_soft)                             # 0 16.0
 print([item.id for item in problem.items if item.selected], problem.total_value)
 
@@ -35,15 +35,14 @@ print(knapsack.solve(core, time_limit_seconds=1.0, random_seed=42).score)   # 0h
 print(KnapsackProblemModel.from_core(core).total_weight)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `on_new_best`, a full `config` (`knapsack.SolverConfig`)
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`knapsack.SolverConfig`)
 and `constraints`:
 
 ```python
 from optimaru.knapsack.constraints import ForbiddenItemsCost, SelectedValueCost, get_constraints, score
 
 knapsack.constraint_info()     # [ConstraintInfo(name='knapsack_capacity_cost', default_level='hard', ...), ...]
-knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
+problem = knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
 raw = knapsack.constraint_costs(problem)            # raw totals, re-priced in pure Python:
 score(raw), score(raw, [*get_constraints()[:3], ForbiddenItemsCost(level="soft"), *get_constraints()[4:]])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip
@@ -110,7 +109,7 @@ Each pick is its own instance with its own knobs, its level included, and the in
 add up:
 
 ```python
-knapsack.solve(problem, constraints=[
+solved = knapsack.solve(problem, constraints=[
     KnapsackCapacityCost(),
     ResourceCapacityCost(),                         # the resource overflow
     ResourceCapacityCost(exponent=2, offset=10),    # + (overflow beyond 10 units)^2
@@ -135,17 +134,17 @@ rejects an exponent other than 1).
   `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded search =
   `step_count_limit = N`. Without a time limit a solve runs the 30 s budget.
   `on_new_best(step, score)`.
-- `solve()` returns the problem it was given, solved: the engine object (its `score` is the
-  engine `Score`: `.hard`, `.soft`, `is_feasible()`) or the model (written back in place,
-  with `score_hard` / `score_soft`). `calculate_score(problem,
+- `solve()` returns the solved problem: the engine object it was given, solved in place (its
+  `score` is the engine `Score`: `.hard`, `.soft`, `is_feasible()`), or, for a model, a new
+  solved model with `score_hard` / `score_soft` (the model passed in is left as it was). `calculate_score(problem,
   constraints)` returns the engine `Score` for the defaults and a
   `constraints.Score(hard, soft)` named tuple for a selection; `constraints.score()`
   re-prices raw costs. With `constraints=...` a solve is single-start
   (`parallel_solver_count` is ignored), as in every C++ package.
 - `KnapsackProblemModel.to_core()` / `from_core()` convert to and from the real engine
   object. `from_core()` returns each item's `resource_usage` with its keys sorted (the
-  engine keeps it in a map). `solve(model)` writes only the selection and the results
-  back, so the model keeps its own order.
+  engine keeps it in a map). `solve(model)` returns a copy of the model with only the
+  selection and the results filled in, so it keeps the model's own order.
 
 ## C++
 
@@ -203,7 +202,7 @@ duplicates and non-boolean values raise `ValueError`.
 from optimaru.knapsack import with_initial_solution
 
 warm = with_initial_solution(problem, problem.model_dump(mode="json"))
-knapsack.solve(warm, time_limit_seconds=1.0, random_seed=42)
+warm = knapsack.solve(warm, time_limit_seconds=1.0, random_seed=42)
 print([item.id for item in warm.items if item.selected], warm.total_value)
 ```
 

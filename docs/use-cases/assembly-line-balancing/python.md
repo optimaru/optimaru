@@ -27,7 +27,7 @@ alb.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='workload_imbalance_cost', default_level='soft', default_weight=0.0,
 #                 level_flippable=True, reward=False, default_enabled=False)]
-alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+problem = alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
 raw = alb.constraint_costs(problem)       # raw costs per station (one total for a global)
 score(raw), score(raw, [UsedStationsCost(exponent=2.0)])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip
@@ -63,11 +63,11 @@ from optimaru import assembly_line_balancing as alb
 from optimaru.assembly_line_balancing.models import AssemblyLineBalancingProblemModel
 
 problem = AssemblyLineBalancingProblemModel.model_validate(data)   # the canonical JSON
-alb.solve(problem, time_limit_seconds=5.0, random_seed=42)         # in place: stations, loads, score
+problem = alb.solve(problem, time_limit_seconds=5.0, random_seed=42)   # a new model: stations, loads, score
 print(problem.score_hard, problem.score_soft, problem.stations_used, problem.station_loads)
 
 core = problem.to_core()                                           # the engine object
-alb.solve(core, time_limit_seconds=5.0, random_seed=42)
+alb.solve(core, time_limit_seconds=5.0, random_seed=42)            # solved in place
 print(core.score, core.assignment(), core.station_loads())
 ```
 

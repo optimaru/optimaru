@@ -16,11 +16,13 @@ the raw per-constraint costs::
     print(result.score.hard, result.score.soft)
 
 `solve` accepts both a `_core.MeetingSchedule` (solved in place and returned) and the
-pydantic mirror `models.MeetingScheduleModel` (converted, solved, returned as a new model).
+pydantic mirror `models.MeetingScheduleModel` (converted, solved, and returned as a new model; the
+one passed in is left as it was).
 The pydantic mirror (for serialization) is in `optimaru.meeting_scheduling.models` (optional dependency).
 """
 
 import copy
+from typing import TypeVar
 
 from ._core import (
     GRAIN_LENGTH_IN_MINUTES,
@@ -75,8 +77,12 @@ def with_initial_solution(problem, solution):
     return models.with_initial_solution(problem, solution)
 
 
+# solve() returns what it was given: the compiled problem, or its pydantic model.
+_Problem = TypeVar("_Problem")
+
+
 def solve(
-    schedule,
+    schedule: _Problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -86,11 +92,12 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-):
+) -> _Problem:
     """High-level API that solves a schedule and returns it.
 
     ``schedule`` is a `_core.MeetingSchedule` (solved in place and returned)
-    or a `models.MeetingScheduleModel` (converted, solved, returned as a new model).
+    or a `models.MeetingScheduleModel` (converted, solved, and returned as a new model; the
+    one passed in is left as it was).
 
     ``config`` becomes the base settings (None = engine defaults: 30 s budget);
     explicit keyword arguments override config. ``stop_at_first_feasible``

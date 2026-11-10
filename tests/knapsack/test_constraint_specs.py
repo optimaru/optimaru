@@ -79,8 +79,7 @@ def solved(constraints=None, problem=None) -> KnapsackProblemModel:
     config = knapsack.SolverConfig()
     config.step_count_limit = 2000
     config.random_seed = 1
-    knapsack.solve(problem, config=config, constraints=constraints)
-    return problem
+    return knapsack.solve(problem, config=config, constraints=constraints)
 
 
 def test_list_constraints_matches_the_spec_names():

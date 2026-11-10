@@ -8,8 +8,8 @@ engine object (`optimaru.max_cut._core.MaxCutProblem`, vertices by index) and
     max_cut.solve(core, time_limit_seconds=5)
     result = MaxCutProblemModel.from_core(core)
 
-`max_cut.solve(model)` does the same round trip and writes the result back into
-the model in place.
+`max_cut.solve(model)` does the same round trip and returns the result as a new
+model; the model passed in is not changed.
 """
 
 from __future__ import annotations

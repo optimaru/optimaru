@@ -29,13 +29,12 @@ from optimaru import semiconductor_scheduling as fab
 from optimaru.semiconductor_scheduling.models import SemiconductorScheduleModel
 
 problem = SemiconductorScheduleModel.model_validate_json(open("fab.json").read())
-fab.solve(problem, time_limit_seconds=2.0, random_seed=42)   # fills problem.assignments (and returns problem)
+problem = fab.solve(problem, time_limit_seconds=2.0, random_seed=42)   # a new model with the assignments
 print(problem.score_hard, problem.score_soft, problem.makespan)
 print([(a.lot_id, a.operation_id, a.machine_id, a.start, a.batch_id) for a in problem.assignments])
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config`
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config`
 (`fab.SolverConfig`) and `constraints`. See [python.md](python.md).
 
 ## Domain (assignment shape, decoded schedule)
@@ -113,7 +112,7 @@ instance with its own knobs, its level included, and the instances add up (every
 reads the calculator's one shared schedule view, so a repeat costs no second decode):
 
 ```python
-fab.solve(problem, constraints=[
+problem = fab.solve(problem, constraints=[
     *get_constraints()[:-1],
     MakespanCost(),                              # the makespan
     MakespanCost(weight=100, offset=480),        # + 100 x (every minute beyond 480)
@@ -151,9 +150,11 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
   start. A complete warm-start seed is recognised by its values (not by object identity),
   so returning to the seed's values later in the search scores the supplied schedule
   again.
-- `solve` / `calculate_score` accept the Pydantic model (written back in place) or the
+- `solve` / `calculate_score` accept the Pydantic model or the
   engine object `_core.SemiconductorSchedule` (`to_core()` / `from_core()` convert to and
-  from it). `solve` returns the problem it was given, solved: the score is `score_hard` /
+  from it). `solve` returns the solved problem: the engine object it was given, solved in
+  place, or, for a model, a new model with the result (the model passed in is not changed;
+  `calculate_score` writes the scores into the model it is given). The score is `score_hard` /
   `score_soft` on the model and `score` on the engine object. `calculate_score` returns a
   `Score` (iterable and comparable as `(hard, soft)`).
 - **Integer range**: times, durations, priorities and costs are int64 in the engine.
@@ -215,7 +216,7 @@ durations raise `ValueError`.
 
 ```python
 warm = fab.with_initial_solution(problem, problem.model_dump(mode="json"))
-fab.solve(warm, time_limit_seconds=2.0, random_seed=42)
+warm = fab.solve(warm, time_limit_seconds=2.0, random_seed=42)
 print(warm.score_hard, warm.score_soft, warm.makespan, warm.total_weighted_tardiness)
 ```
 

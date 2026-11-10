@@ -25,6 +25,7 @@ The pydantic mirror (for serialization) is in `optimaru.sports_league_scheduling
 """
 
 import copy
+from typing import TypeVar
 
 from ._core import (
     ConstraintInfo,
@@ -71,8 +72,12 @@ def with_initial_solution(problem, solution):
     return models.with_initial_solution(problem, solution)
 
 
+# solve() returns what it was given: the compiled problem, or its pydantic model.
+_Problem = TypeVar("_Problem")
+
+
 def solve(
-    schedule: LeagueSchedule,
+    schedule: _Problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -82,8 +87,11 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> LeagueSchedule:
-    """High-level API that solves a `LeagueSchedule` in place and returns it.
+) -> _Problem:
+    """High-level API that solves a schedule and returns it in the same shape.
+
+    ``schedule`` is a `LeagueSchedule` or a `models.LeagueScheduleModel` (converted, solved, and
+    returned as a new model; the one passed in is left as it was).
 
     ``config`` becomes the base settings (`_core.SolverConfig`, or an object with
     `to_core()` — `models.SolveConfig`). None = engine defaults (30 s budget).
@@ -124,8 +132,21 @@ def solve(
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
 
-    if constraints is None:
-        Solver(cfg).solve(schedule)
-    else:
-        Solver(cfg).solve_with_constraints(schedule, constraints)
-    return schedule
+    def _solve(core):
+        if constraints is None:
+            Solver(cfg).solve(core)
+        else:
+            Solver(cfg).solve_with_constraints(core, constraints)
+
+    if isinstance(schedule, LeagueSchedule):
+        _solve(schedule)
+        return schedule
+
+    # pydantic model (lazy import: pydantic is an optional dependency).
+    from .models import LeagueScheduleModel
+
+    if isinstance(schedule, LeagueScheduleModel):
+        core = schedule.to_core()
+        _solve(core)
+        return LeagueScheduleModel.from_core(core)
+    raise TypeError(f"schedule must be a LeagueSchedule or a models.LeagueScheduleModel: {type(schedule)!r}")

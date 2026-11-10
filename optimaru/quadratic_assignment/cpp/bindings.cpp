@@ -212,43 +212,10 @@ PYBIND11_MODULE(_core, m)
         .value("STEP_COUNTING_HILL_CLIMBING", optimaru::AcceptanceRule::StepCountingHillClimbing)
         .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptanceRule::RecordToRecordTravel);
 
-    optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
+    optimaru::python::bind_solver_config(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
-        .def_property(
-            "spent_limit_seconds",
-            [](const Solver::Config &c) { return std::chrono::duration<double>(c.time_limit).count(); },
-            [](Solver::Config &c, double s)
-            { c.time_limit = optimaru::python::seconds_to_millis(s, "spent_limit_seconds"); })
-        .def_property(
-            "unimproved_spent_limit_seconds",
-            [](const Solver::Config &c) { return std::chrono::duration<double>(c.stall_time_limit).count(); },
-            [](Solver::Config &c, double s)
-            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
-        // 0 = no step limit.
-        .def_readwrite("step_count_limit", &Solver::Config::step_limit)
-        .def_readwrite("unimproved_step_count_limit", &Solver::Config::stall_step_limit)
-        .def_readwrite("random_seed", &Solver::Config::seed)
-        .def_property(
-            "parallel_solver_count",
-            [](const Solver::Config &c) { return c.parallelSolverCount; },
-            [](Solver::Config &c, int count)
-            {
-                if (count <= 0)
-                    throw py::value_error("parallel_solver_count must be positive");
-                c.parallelSolverCount = count;
-            })
         // The local-search acceptor (LATE_ACCEPTANCE by default).
         .def_readwrite("acceptor_type", &Solver::Config::rule)
-        // 0 = auto: clamp(8 * facilities, 400, 3200).
-        .def_property(
-            "late_acceptance_size",
-            [](const Solver::Config &c) { return c.history_length; },
-            [](Solver::Config &c, std::int64_t size)
-            {
-                if (size < 0)
-                    throw py::value_error("late_acceptance_size must be >= 0 (0 = auto)");
-                c.history_length = static_cast<std::size_t>(size);
-            })
         .def_property(
             "entity_tabu_size",
             [](const Solver::Config &c) { return c.tabu_tenure; },
@@ -282,13 +249,6 @@ PYBIND11_MODULE(_core, m)
                     throw py::value_error("simulated_annealing_temperature_fraction must be finite and > 0");
                 c.simulatedAnnealingTemperatureFraction = f;
             })
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; much slower).
-        .def_property(
-            "full_assert",
-            [](const Solver::Config &c) { return c.score_checks == optimaru::ScoreChecks::Full; },
-            [](Solver::Config &c, bool on)
-            { c.score_checks = on ? optimaru::ScoreChecks::Full : optimaru::ScoreChecks::Off; })
         // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
         // stops at the first feasible solution.
         .def_property(

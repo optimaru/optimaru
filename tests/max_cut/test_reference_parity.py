@@ -240,17 +240,17 @@ def test_the_zero_budget_solve_returns_the_oracle_start(name):
     """No warm start, a complete warm start and a partial one: the reference start partition."""
     problem = _samples()[name]
     plain = Model.model_validate({**problem, "partition": {}})
-    max_cut.solve(plain, time_limit_seconds=0)
+    plain = max_cut.solve(plain, time_limit_seconds=0)
     assert plain.partition == ref.start_partition(_dump({**problem, "partition": {}}))
     preset = Model.model_validate(_with_partition(problem, [1] * len(problem["vertices"])))
-    max_cut.solve(preset, time_limit_seconds=0)
+    preset = max_cut.solve(preset, time_limit_seconds=0)
     assert preset.partition == ref.start_partition(preset.model_dump())  # warm_start False: ignored
     vertices = problem["vertices"]
     fixed = problem.get("fixed_partition", {})
     partial = {vertex: fixed.get(vertex, 1) for vertex in vertices[::2]}
     seeded = with_initial_solution(Model.model_validate({**problem, "partition": {}}), {"partition": partial})
     expected = ref.start_partition(seeded.model_dump())
-    max_cut.solve(seeded, time_limit_seconds=0)
+    seeded = max_cut.solve(seeded, time_limit_seconds=0)
     assert seeded.partition == expected
     assert (seeded.score_hard, seeded.score_soft) == ref.calculate_score({**seeded.model_dump()})
 
@@ -261,7 +261,7 @@ def test_a_warm_start_against_a_fixed_side_is_kept_like_the_reference():
     data = _with_partition(problem, [0, 0, 1, 1], warm_start=True)  # A is fixed to 1
     model = Model.model_validate(data)
     expected = ref.start_partition(_dump(data))
-    max_cut.solve(model, time_limit_seconds=0)
+    model = max_cut.solve(model, time_limit_seconds=0)
     assert model.partition == expected
     assert (model.score_hard, model.score_soft) == ref.calculate_score(model.model_dump())
 

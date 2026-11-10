@@ -20,8 +20,8 @@ Basic usage::
     from optimaru.assembly_line_balancing.models import AssemblyLineBalancingProblemModel
 
     problem = AssemblyLineBalancingProblemModel.model_validate(data)
-    alb.solve(problem, time_limit_seconds=5.0, random_seed=42)       # the model, in place
-    core = problem.to_core(); alb.solve(core)                         # or the engine object
+    solved = alb.solve(problem, time_limit_seconds=5.0, random_seed=42)   # the model: a new, solved model
+    core = problem.to_core(); alb.solve(core)                         # or the engine object, in place
 
 `solve`, `calculate_score` and `constraint_costs` take the pydantic model or the engine
 object (`AssemblyLineBalancingProblem`, `models.AssemblyLineBalancingProblemModel.to_core()`).
@@ -30,7 +30,7 @@ object (`AssemblyLineBalancingProblem`, `models.AssemblyLineBalancingProblemMode
 from __future__ import annotations
 
 import copy
-from typing import Any
+from typing import Any, TypeVar
 
 from ._core import (
     AssemblyLineBalancingProblem,
@@ -113,8 +113,12 @@ def calculate_score(problem, constraints=None):
     return result
 
 
+# solve() returns what it was given: the compiled problem, or its pydantic model.
+_Problem = TypeVar("_Problem")
+
+
 def solve(
-    problem,
+    problem: _Problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -124,12 +128,13 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-):
-    """Solve `problem` and return it, solved.
+) -> _Problem:
+    """Solve `problem` and return the solved problem.
 
     `problem` is the engine object (solved in place; the server path is ``to_core()`` ->
-    ``solve`` -> ``from_core()``) or the pydantic model (converted, solved, and the stations,
-    results and ``warm_start=False`` written back into it). The score is on the result:
+    ``solve`` -> ``from_core()``) or the pydantic model (converted, solved, and returned as a new
+    model with the stations, results and ``warm_start=False`` filled in; the one passed in is left as
+    it was). The score is on the result:
     ``.score`` (``.hard``, ``.soft``) of the engine object, ``score_hard`` / ``score_soft`` of
     the model.
 
@@ -148,7 +153,7 @@ def solve(
     constraint at its default weight::
 
         from optimaru.assembly_line_balancing.constraints import get_constraints
-        alb.solve(problem, constraints=get_constraints())
+        solved = alb.solve(problem, constraints=get_constraints())
     """
     # A copy: the keyword overrides below must not leak into the caller's config.
     cfg = copy.copy(config) if config is not None else SolverConfig()
@@ -171,5 +176,10 @@ def solve(
     else:
         Solver(cfg).solve_with_constraints(core, constraints)
     if isinstance(problem, AssemblyLineBalancingProblemModel):
-        problem._update_from_core(core)
+        # A model is not solved in place: the caller's stays the problem it was. A copy
+        # updated from the core, not from_core(): the copy keeps the model's own fields
+        # and their order, which the core does not carry.
+        solved = problem.model_copy(deep=True)
+        solved._update_from_core(core)
+        return solved
     return problem

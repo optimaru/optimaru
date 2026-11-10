@@ -11,9 +11,9 @@ call per constraint::
         MachineEligibilityCost, MakespanCost, WeightedTardinessCost, get_constraints,
     )
 
-    fab.solve(problem, constraints=get_constraints())                       # defaults as-is
-    fab.solve(problem, constraints=[MachineEligibilityCost(), MakespanCost(),
-                                    WeightedTardinessCost(weight=50)])      # picked
+    problem = fab.solve(problem, constraints=get_constraints())                       # defaults as-is
+    problem = fab.solve(problem, constraints=[MachineEligibilityCost(), MakespanCost(),
+                                              WeightedTardinessCost(weight=50)])      # picked
 
 Only listed constraints are scored — leave one out and its term disappears from the
 score. (The module also carries ready-made default instances: ``makespan_cost`` is
@@ -42,7 +42,7 @@ The same constraint may be picked several times; each pick is scored on its own 
 its own knobs (its level included) and the picks add up. The makespan plus a steep
 penalty on every minute beyond 480::
 
-    fab.solve(problem, constraints=[
+    problem = fab.solve(problem, constraints=[
         *get_constraints()[:-1],
         MakespanCost(),
         MakespanCost(weight=100, offset=480),

@@ -35,6 +35,7 @@ The pydantic mirror (for serialization) is in `optimaru.bed_allocation.models` (
 """
 
 import copy
+from typing import TypeVar
 
 from ._core import (
     Bed,
@@ -114,8 +115,12 @@ def _build_config(
     return cfg
 
 
+# solve() returns what it was given: the compiled problem, or its pydantic model.
+_Problem = TypeVar("_Problem")
+
+
 def solve(
-    plan,
+    plan: _Problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -125,12 +130,12 @@ def solve(
     on_new_best=None,
     config=None,
     constraints=None,
-):
+) -> _Problem:
     """High-level API that solves a bed allocation problem and returns it in the same shape.
 
     ``plan`` is a `_core.BedPlan` (solved in place and returned) or a
     `models.BedPlanModel` (converted to the engine shape, solved, and returned as a new
-    `BedPlanModel`; needs pydantic).
+    model, the one passed in left as it was; needs pydantic).
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine default
     30 s budget). Explicit keyword arguments override config.

@@ -20,8 +20,8 @@ Basic usage::
     from optimaru.knapsack.models import KnapsackProblemModel
 
     problem = KnapsackProblemModel.model_validate(data)
-    knapsack.solve(problem, time_limit_seconds=5.0, random_seed=42)   # the model, in place
-    core = problem.to_core(); knapsack.solve(core)                     # or the engine object
+    solved = knapsack.solve(problem, time_limit_seconds=5.0, random_seed=42)   # the model: a new, solved model
+    core = problem.to_core(); knapsack.solve(core)                     # or the engine object, in place
 
 `solve`, `calculate_score` and `constraint_costs` take the pydantic model or the engine
 object (`KnapsackProblem`, `models.KnapsackProblemModel.to_core()`).
@@ -30,7 +30,7 @@ object (`KnapsackProblem`, `models.KnapsackProblemModel.to_core()`).
 from __future__ import annotations
 
 import copy
-from typing import Any
+from typing import Any, TypeVar
 
 from ._core import (
     ConstraintInfo,
@@ -107,8 +107,12 @@ def calculate_score(problem, constraints=None):
     return result
 
 
+# solve() returns what it was given: the compiled problem, or its pydantic model.
+_Problem = TypeVar("_Problem")
+
+
 def solve(
-    problem,
+    problem: _Problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -118,15 +122,16 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-):
-    """Solve `problem` and return it, solved.
+) -> _Problem:
+    """Solve `problem` and return the solved problem.
 
     `problem` is the engine object (solved in place; the server path is ``to_core()`` ->
-    ``solve`` -> ``from_core()``) or the pydantic model (converted, solved, and the selection,
-    totals, score and ``warm_start=False`` written back into it).
+    ``solve`` -> ``from_core()``) or the pydantic model (converted, solved, and returned as a new
+    model with the selection, totals, score and ``warm_start=False`` filled in; the one passed in is left as
+    it was).
 
-    `solve` returns the same object. The score is on it: ``problem.score`` (`Score`) on the engine
-    object, ``score_hard`` / ``score_soft`` on the model.
+    The score is on the result: ``.score`` (`Score`) of the engine
+    object, ``score_hard`` / ``score_soft`` of the model.
 
     ``config`` becomes the base settings (None = engine defaults: 30 s budget, ALNS on).
     Explicit keyword arguments override config. A zero time budget
@@ -144,7 +149,7 @@ def solve(
     constraint at its default weight::
 
         from optimaru.knapsack.constraints import get_constraints
-        knapsack.solve(problem, constraints=get_constraints())
+        solved = knapsack.solve(problem, constraints=get_constraints())
     """
     # A copy: the keyword overrides below must not leak into the caller's config.
     cfg = copy.copy(config) if config is not None else SolverConfig()
@@ -167,5 +172,10 @@ def solve(
     else:
         Solver(cfg).solve_with_constraints(core, constraints)
     if isinstance(problem, KnapsackProblemModel):
-        problem._update_from_core(core)
+        # A model is not solved in place: the caller's stays the problem it was. A copy
+        # updated from the core, not from_core(): the copy keeps the model's own fields
+        # and their order, which the core does not carry.
+        solved = problem.model_copy(deep=True)
+        solved._update_from_core(core)
+        return solved
     return problem

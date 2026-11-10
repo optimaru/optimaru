@@ -41,7 +41,7 @@ cs.solve(schedule, time_limit_seconds=5.0, random_seed=42)   # solves in place
 print(schedule.score)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`conference_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`conference_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=conference_scheduling && cmake --build build -j

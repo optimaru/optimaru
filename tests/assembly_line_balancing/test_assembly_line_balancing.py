@@ -18,7 +18,7 @@ def test_manual_constraints_and_meta():
     assert (score.hard, score.soft) == (-1, -2.0)
     assert (problem.score_hard, problem.score_soft) == (-1, -2.0)
     assert problem.station_loads == [3, 3]
-    solve(problem, time_limit_seconds=0.05)
+    problem = solve(problem, time_limit_seconds=0.05)
     assert problem.score_hard == 0
     assert problem.stations_used == 2
 

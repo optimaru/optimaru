@@ -20,8 +20,8 @@ Basic usage::
     from optimaru.max_cut.models import MaxCutProblemModel
 
     problem = MaxCutProblemModel.model_validate(data)
-    max_cut.solve(problem, time_limit_seconds=5.0, random_seed=42)   # the model, in place
-    core = problem.to_core(); max_cut.solve(core)                     # or the engine object
+    problem = max_cut.solve(problem, time_limit_seconds=5.0, random_seed=42)   # a new, solved model
+    core = problem.to_core(); max_cut.solve(core)   # or the engine object, solved in place
 
 `solve`, `calculate_score` and `constraint_costs` take the pydantic model or the engine
 object (`MaxCutProblem`, `models.MaxCutProblemModel.to_core()`). `calculate_score` and
@@ -32,7 +32,7 @@ ValueError on a partial one; `solve` fills in the missing sides.
 from __future__ import annotations
 
 import copy
-from typing import Any
+from typing import Any, TypeVar
 
 from ._core import (
     ConstraintInfo,
@@ -124,8 +124,12 @@ def calculate_score(problem, constraints=None):
     return result
 
 
+# solve() returns what it was given: the compiled problem, or its pydantic model.
+_Problem = TypeVar("_Problem")
+
+
 def solve(
-    problem,
+    problem: _Problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -135,15 +139,16 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-):
+) -> _Problem:
     """Solve `problem` and return it, solved.
 
     `problem` is the engine object (solved in place; the server path is ``to_core()`` ->
-    ``solve`` -> ``from_core()``) or the pydantic model (converted, solved, and the partition,
-    cut weight, score and ``warm_start=False`` written back into it).
+    ``solve`` -> ``from_core()``) or the pydantic model (converted, solved, and returned as a
+    new model with the partition, cut weight, score and ``warm_start=False`` filled in; the one
+    passed in is left as it was).
 
-    `solve` returns the same object. The score is on it: ``problem.score`` (`Score`) on the engine
-    object, ``score_hard`` / ``score_soft`` on the model.
+    The score is on the result: ``problem.score`` (`Score`) on the engine object,
+    ``score_hard`` / ``score_soft`` on the model.
 
     The start partition: vertex i takes side ``i % 2``, a fixed vertex its
     fixed side, and with ``warm_start`` the given partition overrides both (see
@@ -166,7 +171,7 @@ def solve(
     constraint at its default weight::
 
         from optimaru.max_cut.constraints import get_constraints
-        max_cut.solve(problem, constraints=get_constraints())
+        problem = max_cut.solve(problem, constraints=get_constraints())
     """
     # A copy: the keyword overrides below must not leak into the caller's config.
     cfg = copy.copy(config) if config is not None else SolverConfig()
@@ -189,5 +194,10 @@ def solve(
     else:
         Solver(cfg).solve_with_constraints(core, constraints)
     if isinstance(problem, MaxCutProblemModel):
-        problem._update_from_core(core)
+        # A model is not solved in place: the caller's stays the problem it was. A copy
+        # updated from the core, not from_core(): the copy keeps the model's own fields
+        # and their order, which the core does not carry.
+        solved = problem.model_copy(deep=True)
+        solved._update_from_core(core)
+        return solved
     return problem

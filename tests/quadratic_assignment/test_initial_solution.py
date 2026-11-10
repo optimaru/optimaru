@@ -29,12 +29,12 @@ def _steps(count: int, seed: int) -> SolverConfig:
 
 def test_complete_seed_comes_back_unchanged_with_zero_budget():
     plain = _problem()
-    solve(plain, config=_no_search())
+    plain = solve(plain, config=_no_search())
     assert plain.assignment == {"L1": "F1", "L2": "F2", "L3": "F3"}
 
     seed = {"L3": "F1", "L1": "F2", "L2": "F3"}
     seeded = with_initial_solution(_problem(), {"assignment": seed})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignment == seed
     assert seeded.total_cost == 2 * (3 * 4 + 1 * 2 + 2 * 1)
 
@@ -45,14 +45,14 @@ def test_seed_is_read_by_location_id_not_by_position():
     problem.distances = [row[::-1] for row in problem.distances[::-1]]
     seed = {"L1": "F2", "L2": "F3", "L3": "F1"}
     seeded = with_initial_solution(problem, {"assignment": seed})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignment == seed
 
 
 def test_complete_seed_keeps_a_broken_fixed_assignment_with_zero_budget():
     problem = _problem(fixed_assignments={"L1": "F1"})
     seeded = with_initial_solution(problem, {"assignment": {"L1": "F2", "L2": "F1", "L3": "F3"}})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignment["L1"] == "F2"
     assert seeded.score_hard == -1
 
@@ -60,11 +60,11 @@ def test_complete_seed_keeps_a_broken_fixed_assignment_with_zero_budget():
 @pytest.mark.parametrize("as_dict", [False, True])
 def test_solved_result_feeds_back(as_dict):
     solved = _problem()
-    solve(solved, time_limit_seconds=0.05, random_seed=3)
+    solved = solve(solved, time_limit_seconds=0.05, random_seed=3)
     solution = solved.model_dump(mode="json") if as_dict else solved
     seeded = with_initial_solution(_problem(), solution)
     assert seeded.warm_start is True
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignment == solved.assignment
     assert seeded.total_cost == solved.total_cost
 
@@ -72,7 +72,7 @@ def test_solved_result_feeds_back(as_dict):
 def test_search_from_a_seed_never_scores_below_it():
     seeded = with_initial_solution(_problem(), {"assignment": {"L1": "F3", "L2": "F1", "L3": "F2"}})
     seed_score = calculate_score(seeded.model_copy(deep=True))
-    solve(seeded, config=_steps(200, seed=1))
+    seeded = solve(seeded, config=_steps(200, seed=1))
     assert (seeded.score_hard, seeded.score_soft) >= (seed_score.hard, seed_score.soft)
 
 
@@ -104,20 +104,20 @@ def test_malformed_solution_raises(solution):
 def test_hard_infeasible_result_feeds_back_unchanged():
     problem = _problem(fixed_assignments={"L1": "F1", "L2": "F1"})
     solved = problem.model_copy(deep=True)
-    solve(solved, config=_steps(50, seed=1))
+    solved = solve(solved, config=_steps(50, seed=1))
     assert solved.score_hard < 0
     seeded = with_initial_solution(problem, solved.model_dump(mode="json"))
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignment == solved.assignment
     assert (seeded.score_hard, seeded.score_soft) == (solved.score_hard, solved.score_soft)
 
 
 def test_input_problem_is_not_mutated():
     problem = _problem()
-    solve(problem, config=_no_search())
+    problem = solve(problem, config=_no_search())
     before = problem.model_dump()
     seeded = with_initial_solution(problem, {"assignment": {"L1": "F3", "L2": "F1", "L3": "F2"}})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert problem.model_dump() == before
 
 
@@ -125,15 +125,15 @@ def test_plain_solve_still_ignores_input_assignment():
     fresh = _problem()
     preset = _problem(assignment={"L1": "F3", "L2": "F1", "L3": "F2"})
     assert preset.warm_start is False
-    solve(fresh, config=_no_search())
-    solve(preset, config=_no_search())
+    fresh = solve(fresh, config=_no_search())
+    preset = solve(preset, config=_no_search())
     assert fresh.assignment == preset.assignment == {"L1": "F1", "L2": "F2", "L3": "F3"}
 
 
 def test_a_seed_is_used_once():
     problem = _problem()
-    solve(problem, config=_no_search())
+    problem = solve(problem, config=_no_search())
     seeded = with_initial_solution(_problem(), problem)
     assert seeded.warm_start is True
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.warm_start is False

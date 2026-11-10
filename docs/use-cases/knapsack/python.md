@@ -23,7 +23,7 @@ knapsack.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='selected_value_cost', default_level='soft', default_weight=1.0,
 #                 level_flippable=False, reward=True, default_enabled=True)]
-knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
+problem = knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
 raw = knapsack.constraint_costs(problem)   # {name: {"costs": [total], "weight": ..., ...}}
 score(raw), score(raw, [MandatoryItemsCost(exponent=2.0)])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip
@@ -59,11 +59,11 @@ from optimaru import knapsack
 from optimaru.knapsack.models import KnapsackProblemModel
 
 problem = KnapsackProblemModel.model_validate(data)          # the canonical JSON
-knapsack.solve(problem, time_limit_seconds=5.0, random_seed=42)   # in place: selection, totals, score
+problem = knapsack.solve(problem, time_limit_seconds=5.0, random_seed=42)   # a new model: selection, totals, score
 print(problem.score_hard, problem.score_soft, problem.total_weight, problem.total_value)
 
 core = problem.to_core()                                     # the engine object
-knapsack.solve(core, time_limit_seconds=5.0, random_seed=42)
+knapsack.solve(core, time_limit_seconds=5.0, random_seed=42)   # solved in place
 print(core.score, core.assignment(), core.total_value())
 ```
 

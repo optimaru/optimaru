@@ -85,10 +85,13 @@ def test_the_web_demo_validates_and_converts():
     }
 
 
-def test_solving_the_model_writes_the_result_back_in_place():
-    model = rich()
-    model.warm_start = True
-    assert knapsack.solve(model, time_limit_seconds=0.2, random_seed=3) is model
+def test_solving_the_model_returns_a_new_solved_model():
+    problem = rich()
+    problem.warm_start = True
+    before = problem.model_dump()
+    model = knapsack.solve(problem, time_limit_seconds=0.2, random_seed=3)
+    assert isinstance(model, KnapsackProblemModel) and model is not problem
+    assert problem.model_dump() == before  # the model passed in stays the problem it was
     result = knapsack.calculate_score(model.model_copy(deep=True))
     assert (model.score_hard, model.score_soft) == (result.hard, result.soft)
     assert model.warm_start is False

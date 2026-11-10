@@ -25,8 +25,9 @@ print(sum(sl.constraint_costs(schedule)["away_to_away_hop_cost"]["costs"]))  # r
 ```
 
 - `solve(schedule, *, time_limit_seconds, random_seed, parallel_solver_count,
-  stop_at_first_feasible, on_new_best, config, constraints)` — solves in place and
-  returns it. `config` accepts a `SolverConfig` or a `models.SolveConfig`;
+  stop_at_first_feasible, full_assert, on_new_best, config, constraints)` — a
+  `LeagueSchedule` is solved in place and returned; a `models.LeagueScheduleModel` is left
+  as it was and a new, solved model is returned. `config` accepts a `SolverConfig` or a `models.SolveConfig`;
   `constraints` picks, re-weights or flips constraints (`optimaru.sports_league_scheduling.constraints`).
 - `calculate_score` — full recompute of all 10 constraints at the default weights.
 - `constraint_costs` — the raw cost of every constraint (one cost per round position

@@ -154,7 +154,7 @@ def _random_selection(problem: dict, rng: random.Random) -> list[bool]:
 
 def _constructed(data: dict) -> list[bool]:
     model = Model.model_validate(data)
-    knapsack.solve(model, time_limit_seconds=0)
+    model = knapsack.solve(model, time_limit_seconds=0)
     return [item.selected for item in model.items]
 
 
@@ -202,7 +202,7 @@ def test_a_solved_sample_matches_the_oracle(name):
     config.spent_limit_seconds = 600
     config.step_count_limit = 500
     config.random_seed = 42
-    knapsack.solve(model, config=config)
+    model = knapsack.solve(model, config=config)
     data = model.model_dump()
     _assert_parity(data)
     assert (model.score_hard, model.score_soft) == ref.calculate_score(data)

@@ -275,16 +275,21 @@ def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
 def test_default_solve_equals_explicit_default_constraints():
     plain = _problem(5)
     explicit = _problem(5)
-    fab.solve(plain, time_limit_seconds=5, random_seed=2, parallel_solver_count=1, config=_steps(300))
-    fab.solve(explicit, time_limit_seconds=5, random_seed=2, config=_steps(300), constraints=get_constraints())
+    plain = fab.solve(plain, time_limit_seconds=5, random_seed=2, parallel_solver_count=1, config=_steps(300))
+    explicit = fab.solve(
+        explicit, time_limit_seconds=5, random_seed=2, config=_steps(300), constraints=get_constraints()
+    )
     assert plain.assignments == explicit.assignments
     assert (plain.score_hard, plain.score_soft) == (explicit.score_hard, explicit.score_soft)
 
 
 def test_picks_score_the_result_and_the_totals_stay_complete():
-    problem = _problem(8)
+    given = _problem(8)
+    before = given.model_dump()
     picks = [specs.machine_eligibility_cost, WeightedTardinessCost(weight=3)]
-    assert fab.solve(problem, time_limit_seconds=5, random_seed=1, config=_steps(200), constraints=picks) is problem
+    problem = fab.solve(given, time_limit_seconds=5, random_seed=1, config=_steps(200), constraints=picks)
+    assert isinstance(problem, SemiconductorScheduleModel) and problem is not given
+    assert given.model_dump() == before  # a model is not solved in place
     raw = fab.constraint_costs(problem)
     assert (problem.score_hard, problem.score_soft) == tuple(score(raw, picks))
     assert problem.makespan == raw["makespan_cost"]["costs"][0]
@@ -515,7 +520,7 @@ def test_score_equals_the_engine_with_repeats_and_offsets():
 def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     problem = _problem(8)
-    fab.solve(problem, random_seed=3, full_assert=True, config=_steps(300), constraints=picks)
+    problem = fab.solve(problem, random_seed=3, full_assert=True, config=_steps(300), constraints=picks)
     raw = fab.constraint_costs(problem, picks)
     assert len(raw) == len(picks)
     python = score(raw, picks)
@@ -647,7 +652,7 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     assert engine == score(fab.constraint_costs(problem), picks)
     assert (engine.hard, engine.soft) == (defaults.hard, pytest.approx(defaults.soft + offset))
     solved = problem.model_copy(deep=True)
-    fab.solve(solved, random_seed=1, config=_steps(50), constraints=picks)
+    solved = fab.solve(solved, random_seed=1, config=_steps(50), constraints=picks)
     assert tuple(score(fab.constraint_costs(solved), picks)) == pytest.approx((solved.score_hard, solved.score_soft))
 
 

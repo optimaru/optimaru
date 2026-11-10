@@ -12,7 +12,7 @@ def test_manual_two_facilities():
     )
     result = calculate_score(problem)
     assert (result.hard, result.soft) == (0, -22.0)
-    solve(problem, time_limit_seconds=0.05)
+    problem = solve(problem, time_limit_seconds=0.05)
     assert problem.total_cost == 22
 
 

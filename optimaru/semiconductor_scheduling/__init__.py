@@ -18,17 +18,20 @@ Basic usage::
     from optimaru.semiconductor_scheduling.models import SemiconductorScheduleModel
 
     problem = SemiconductorScheduleModel.model_validate(data)
-    fab.solve(problem, time_limit_seconds=5.0, random_seed=42)   # writes into `problem` and returns it
+    problem = fab.solve(problem, time_limit_seconds=5.0, random_seed=42)   # a new, solved model
     print(problem.score_hard, problem.score_soft, problem.makespan, problem.assignments[0])
 
-``solve`` and ``calculate_score`` take the Pydantic model (written back in place) or the
-engine object ``_core.SemiconductorSchedule`` (``problem.to_core()``; solved in place).
-``solve`` returns the problem it was given; ``calculate_score`` returns the `Score`.
+``solve`` and ``calculate_score`` take the Pydantic model or the engine object
+``_core.SemiconductorSchedule`` (``problem.to_core()``). ``solve`` returns the solved
+problem: the engine object it was given, solved in place, or, for a model, a new model
+with the result (the model passed in is not changed). ``calculate_score`` returns the
+`Score` and writes the score fields into the model it is given.
 """
 
 from __future__ import annotations
 
 import copy
+from typing import TypeVar
 
 from . import _core
 from ._core import (
@@ -121,8 +124,12 @@ def with_initial_solution(problem, solution):
     return models.with_initial_solution(problem, solution)
 
 
+# solve() returns what it was given: the compiled problem, or its pydantic model.
+_Problem = TypeVar("_Problem")
+
+
 def solve(
-    problem,
+    problem: _Problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -132,16 +139,17 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-):
+) -> _Problem:
     """Solve `problem` and return it, solved.
 
-    A `models.SemiconductorScheduleModel` is converted, solved and written back INTO THE
-    SAME MODEL: assignments (with batch ids), makespan, total_weighted_tardiness,
-    total_cycle_time, score_hard, score_soft and warm_start=False. A
-    `_core.SemiconductorSchedule` is solved in place.
+    A `_core.SemiconductorSchedule` is solved in place and returned. A
+    `models.SemiconductorScheduleModel` is converted, solved and returned as a new model
+    with assignments (with batch ids), makespan, total_weighted_tardiness,
+    total_cycle_time, score_hard, score_soft and warm_start=False filled in; the one
+    passed in is left as it was.
 
-    `solve` returns the same object. The score is on it: ``problem.score`` (`Score`) on the engine
-    object, ``score_hard`` / ``score_soft`` on the model.
+    The score is on the result: ``problem.score`` (`Score`) on the engine object,
+    ``score_hard`` / ``score_soft`` on the model.
 
     Without a warm start the input assignments are ignored; with one (see
     `with_initial_solution`) the search starts from them, and a complete seed is returned
@@ -177,11 +185,14 @@ def solve(
         Solver(cfg).solve(core)
     else:
         Solver(cfg).solve_with_constraints(core, constraints)
-    if model is not None:
-        model.assignments = _assignment_models(core, core.assignments)
-        _write_scores(model, core)
-        model.warm_start = False  # a seed is used once
-    return problem
+    if model is None:
+        return problem
+    # A model is not solved in place: the caller's stays the problem it was.
+    solved = model.model_copy(deep=True)
+    solved.assignments = _assignment_models(core, core.assignments)
+    _write_scores(solved, core)
+    solved.warm_start = False  # a seed is used once
+    return solved
 
 
 def calculate_score(problem, constraints=None) -> Score:

@@ -24,8 +24,8 @@ problem = MaxCutProblemModel(
     edges=[EdgeModel(source="A", target="B", weight=2), EdgeModel(source="B", target="C", weight=3),
            EdgeModel(source="A", target="C", weight=4)],
 )
-max_cut.solve(problem, time_limit_seconds=1.0, random_seed=42)          # the model, in place (and returned)
-print(problem.score_hard, problem.score_soft)                           # 0 7.0
+problem = max_cut.solve(problem, time_limit_seconds=1.0, random_seed=42)   # a new, solved model
+print(problem.score_hard, problem.score_soft)                             # 0 7.0
 print(problem.partition, problem.cut_weight)
 
 core = problem.to_core()                                                # or the engine object
@@ -33,15 +33,14 @@ print(max_cut.solve(core, time_limit_seconds=1.0, random_seed=42).score)   # 0ha
 print(MaxCutProblemModel.from_core(core).cut_weight)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `on_new_best`, a full `config` (`max_cut.SolverConfig`)
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`max_cut.SolverConfig`)
 and `constraints`:
 
 ```python
 from optimaru.max_cut.constraints import CutWeightCost, PartitionImbalanceCost, PartitionSizeBoundsCost, get_constraints, score
 
 max_cut.constraint_info()     # [ConstraintInfo(name='fixed_partition_cost', default_level='hard', ...), ...]
-max_cut.solve(
+problem = max_cut.solve(
     problem,
     time_limit_seconds=1.0,
     constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()],
@@ -130,7 +129,7 @@ cut beyond it and a literal one adds `offset` to the reward. Each pick is its ow
 with its own knobs, its level included, and the instances add up:
 
 ```python
-max_cut.solve(problem, constraints=[
+problem = max_cut.solve(problem, constraints=[
     *get_constraints()[:4],
     PartitionImbalanceCost(weight=1),                          # |n0 - n1|
     PartitionImbalanceCost(weight=5, exponent=2, offset=2),    # + 5 x (imbalance beyond 2)^2
@@ -158,9 +157,10 @@ offsets; it rejects an exponent other than 1).
   means "no limit"); a bounded search = `step_count_limit = N`. Without a time limit a
   solve runs the 30 s budget. `on_new_best(step, score)`. Multi-start runs independent
   engine searches from the same start.
-- `solve()` returns the problem it was given, solved: the engine object (its `score` is the
-  engine `Score`: `.hard`, `.soft`, `is_feasible()`) or the model (written back in place,
-  with `score_hard` / `score_soft`). `calculate_score(problem,
+- `solve()` returns the solved problem: the engine object it was given, solved in place (its
+  `score` is the engine `Score`: `.hard`, `.soft`, `is_feasible()`), or, for a model, a new
+  model with the result and `score_hard` / `score_soft` (the model passed in is not
+  changed). `calculate_score(problem,
   constraints)` returns the engine `Score` for the defaults and a
   `constraints.Score(hard, soft)` named tuple for a selection; `constraints.score()`
   re-prices raw costs. With `constraints=...` a solve is single-start
@@ -228,7 +228,7 @@ back unchanged.
 from optimaru.max_cut import with_initial_solution
 
 warm = with_initial_solution(problem, problem.model_dump(mode="json"))
-max_cut.solve(warm, time_limit_seconds=1.0, random_seed=42)
+warm = max_cut.solve(warm, time_limit_seconds=1.0, random_seed=42)
 print(warm.partition, warm.cut_weight)
 ```
 

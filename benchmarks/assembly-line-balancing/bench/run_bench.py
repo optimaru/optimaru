@@ -31,7 +31,7 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
     config.random_seed = seed
     config.parallel_solver_count = 1
     started = time.perf_counter()
-    assembly_line_balancing.solve(problem, config=config)
+    problem = assembly_line_balancing.solve(problem, config=config)
     elapsed = time.perf_counter() - started
     objective = _rescore(problem)
     if objective != problem.stations_used:

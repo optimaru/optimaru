@@ -17,7 +17,7 @@ def test_manual_triangle():
     result = calculate_score(problem)
     assert (result.hard, result.soft) == (0, 5.0)
     assert (problem.cut_weight, problem.score_hard, problem.score_soft) == (5, 0, 5.0)
-    solve(problem, time_limit_seconds=0.05)
+    problem = solve(problem, time_limit_seconds=0.05)
     assert problem.cut_weight == 7
 
 
@@ -59,5 +59,5 @@ def test_a_partial_partition_is_not_scored():
     with pytest.raises(ValueError, match="partition is partial"):
         constraint_costs(problem.to_core())
     assert problem.cut_weight is None
-    solve(problem, time_limit_seconds=0)  # solve fills the missing side in
+    problem = solve(problem, time_limit_seconds=0)  # solve fills the missing side in
     assert set(problem.partition) == {"A", "B", "C"}

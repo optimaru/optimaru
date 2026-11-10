@@ -2,7 +2,7 @@
 
 The pybind11 package of the semiconductor fab use case (`optimaru/semiconductor_scheduling/cpp`, namespace `fab`). The
 Pydantic models (`optimaru.semiconductor_scheduling.models`) are the primary API: the web demo and
-the server speak them, and `solve` writes its result back into the model it is given.
+the server speak them, and `solve` returns its result as a new model (the model it is given is not changed).
 
 Score, at the default weights:
 
@@ -24,7 +24,7 @@ fab.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...]
 picks = [*get_constraints()[:7], MaxQueueTimeCost(level="soft"), *get_constraints()[8:17],
          WeightedTardinessCost(weight=50), *get_constraints()[18:]]
-fab.solve(problem, time_limit_seconds=5, constraints=picks)
+problem = fab.solve(problem, time_limit_seconds=5, constraints=picks)
 raw = fab.constraint_costs(problem)        # raw totals, re-priced in pure Python:
 score(raw), score(raw, picks), score(raw, [WeightedTardinessCost(exponent=2.0)])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip
@@ -62,7 +62,7 @@ from optimaru import semiconductor_scheduling as fab
 from optimaru.semiconductor_scheduling.models import SemiconductorScheduleModel
 
 problem = SemiconductorScheduleModel.model_validate_json(open("fab.json").read())
-fab.solve(problem, time_limit_seconds=5.0, random_seed=42)   # written back into `problem`, which is returned
+problem = fab.solve(problem, time_limit_seconds=5.0, random_seed=42)   # a new, solved model
 hard, soft = problem.score_hard, problem.score_soft
 print(problem.makespan, problem.total_weighted_tardiness, problem.assignments[0])
 

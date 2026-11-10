@@ -26,8 +26,8 @@ problem = QuadraticAssignmentProblemModel(
     facilities=["F1", "F2"], locations=["L1", "L2"],
     flows=[[0, 3], [2, 0]], distances=[[0, 4], [5, 0]],
 )
-qap.solve(problem, time_limit_seconds=1.0, random_seed=42)          # the model, in place (and returned)
-print(problem.score_hard, problem.score_soft)                       # 0 -22.0
+problem = qap.solve(problem, time_limit_seconds=1.0, random_seed=42)   # a new, solved model
+print(problem.score_hard, problem.score_soft)                         # 0 -22.0
 print(problem.assignment, problem.total_cost)
 
 core = problem.to_core()                                             # or the engine object
@@ -35,15 +35,14 @@ print(qap.solve(core, time_limit_seconds=1.0, random_seed=42).score)   # 0hard/-
 print(core.assignment(), core.total_cost())                          # per location: the facility index
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `on_new_best`, a full `config`
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config`
 (`quadratic_assignment.SolverConfig`) and `constraints`:
 
 ```python
 from optimaru.quadratic_assignment.constraints import FlowDistanceCost, PinnedAssignmentsCost, get_constraints, score
 
 qap.constraint_info()      # [ConstraintInfo(name='pinned_assignments_cost', default_level='hard', ...), ...]
-qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
+problem = qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
 raw = qap.constraint_costs(problem)                  # raw costs, re-priced in pure Python:
 score(raw), score(raw, [PinnedAssignmentsCost(level="soft"), *get_constraints()[1:]])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip
@@ -122,7 +121,7 @@ reward that cancels another location's violation. Each pick is its own instance 
 own knobs, its level included, and the instances add up:
 
 ```python
-qap.solve(problem, constraints=[
+problem = qap.solve(problem, constraints=[
     *get_constraints()[:-1],
     FlowDistanceCost(),                           # the flow cost
     FlowDistanceCost(weight=10, offset=1000),     # + 10 x (what exceeds a budget of 1000)
@@ -183,7 +182,7 @@ The package is the C++ engine with pybind11 bindings, like the other C++ use cas
   time limit generous enough for the step budget; once the clock leads, the
   run depends on timing. `ENTITY_TABU` accepts only non-worsening swaps (a hill
   climber), and `GREAT_DELUGE` keeps the start score as its water level.
-- `solve()` returns the problem it was given, solved: the engine object (its `score` is the engine `Score`: `.hard`, `.soft`, `is_feasible()`) or the model (written back in place, with `score_hard` / `score_soft`).
+- `solve()` returns the solved problem: the engine object it was given, solved in place (its `score` is the engine `Score`: `.hard`, `.soft`, `is_feasible()`), or, for a model, a new model with the result and `score_hard` / `score_soft` (the model passed in is not changed).
   `calculate_score(problem, constraints)` returns the engine `Score` for the
   defaults and a `constraints.Score(hard, soft)` named tuple for a selection.
   Use `constraints.get_constraints()` / `constraints.score()` for selections. With `constraints=...` a solve is single-start
@@ -247,7 +246,7 @@ unchanged, even one that breaks a pin (pins are a penalized hard constraint).
 from optimaru.quadratic_assignment import with_initial_solution
 
 warm = with_initial_solution(problem, problem.model_dump(mode="json"))
-qap.solve(warm, time_limit_seconds=1.0, random_seed=42)
+warm = qap.solve(warm, time_limit_seconds=1.0, random_seed=42)
 print(warm.assignment, warm.total_cost)
 ```
 

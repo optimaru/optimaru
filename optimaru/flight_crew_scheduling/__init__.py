@@ -34,6 +34,7 @@ and uses `Solver` (no pydantic needed). The pydantic mirror is in `optimaru.flig
 """
 
 import copy
+from typing import TypeVar
 
 from ._core import (
     Airport,
@@ -90,8 +91,12 @@ def _resolve_config(config) -> SolverConfig:
     raise ValueError("config must be a SolverConfig or an object with to_core() (models.SolveConfig)")
 
 
+# solve() returns what it was given: the compiled problem, or its pydantic model.
+_Problem = TypeVar("_Problem")
+
+
 def solve(
-    schedule,
+    schedule: _Problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -101,7 +106,7 @@ def solve(
     on_new_best=None,
     config=None,
     constraints=None,
-):
+) -> _Problem:
     """High-level API that solves a schedule and returns it.
 
     ``schedule`` is one of three:
