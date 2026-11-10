@@ -201,3 +201,10 @@ def test_seeded_solve_is_not_worse_than_the_seed():
     seeded = fc.with_initial_solution(problem, _non_greedy_seed(problem))
     start = _construct(seeded)
     assert _score(fc.solve(seeded, time_limit_seconds=0.3, random_seed=1)) >= _score(start)
+
+
+def test_repeated_id_on_the_problem_raises():
+    problem = _problem()
+    problem.flight_assignments[1].id = problem.flight_assignments[0].id
+    with pytest.raises(ValueError, match="problem repeats an id"):
+        fc.with_initial_solution(problem, {"flight_assignments": []})

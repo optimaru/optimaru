@@ -49,15 +49,6 @@ public:
     // The list the repair is configured never to place into (-1 = none).
     int excluded_list() const { return unassigned_list_; }
 
-    // How many things there are to ruin: entities for assignment, elements for sequence.
-    static int candidate_count(const Solution& solution) {
-        if constexpr (Traits::shape == Shape::Assignment) {
-            return Traits::entity_count(solution);
-        } else {
-            return Traits::element_count(solution);
-        }
-    }
-
     // Order-preserving, range-checked dedup of a ruin set, plus (assignment) the
     // removal of pinned entities.
     //
@@ -205,7 +196,7 @@ private:
         bool evaluated = false;
     };
 
-    // Which placements are worth trying for e: with a distance meter, only the
+    // Which placements are worth trying for e: with nearby selection, only the
     // slots adjacent to its assigned nearby neighbours (plus every list's end,
     // so empty lists stay reachable) — O(nearbySize) trial insertions instead
     // of O(total positions). Without one, every position.

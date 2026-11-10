@@ -7,6 +7,7 @@
 #include <random>
 
 #include "optimaru/select/scheme.hpp"
+#include "optimaru/portable_random.hpp"
 
 namespace optimaru {
 
@@ -20,7 +21,7 @@ public:
     explicit RandomOperatorSelector(int operator_count) : OperatorSelectionScheme(operator_count) {}
 
     int select(std::mt19937_64& rng) override {
-        return static_cast<int>(rng() % static_cast<std::uint64_t>(operator_count_));
+        return random_index(rng, operator_count_);
     }
     void update(int, MoveOutcome) override {}
 };

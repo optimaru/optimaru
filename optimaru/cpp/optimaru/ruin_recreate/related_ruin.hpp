@@ -11,14 +11,15 @@
 #include "optimaru/ruin_recreate/random_ruin.hpp"
 #include "optimaru/ruin_recreate/removal_gain.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/portable_random.hpp"
 
 namespace optimaru {
 
 // Related ruin (Shaw): take a seed and its nearest neighbours, so the kick
 // removes a cluster the recreate can genuinely re-plan together — the ruin
-// that pays off when the domain has a distance meter.
+// that pays off when the domain configures a distance.
 //
-// Falls back to the random sample when no local_search.nearby.distance is configured
+// Falls back to the random sample when no search.nearby.distance is configured
 // (empty neighbour lists), and tops up randomly when the seed has fewer
 // neighbours than the ruin size.
 template <typename Solution>
@@ -33,7 +34,7 @@ public:
         const int n = ruin_candidate_count(ctx);
         std::vector<char> mark(n, 0);
         std::vector<int> set;
-        int seed = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
+        int seed = random_index(rng, n);
         mark[seed] = 1;
         set.push_back(seed);
         for (int nb : ctx.nearby.of(seed)) {
@@ -44,7 +45,7 @@ public:
             }
         }
         while (static_cast<int>(set.size()) < ruin_count) {  // few neighbors: fill randomly
-            int e = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
+            int e = random_index(rng, n);
             if (!mark[e]) {
                 mark[e] = 1;
                 set.push_back(e);

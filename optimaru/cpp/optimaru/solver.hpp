@@ -226,7 +226,7 @@ private:
     std::vector<std::unique_ptr<RuinOperator<Solution>>> ruin_operators_;
     std::vector<std::unique_ptr<DerivedState<Solution>>> derived_states_;
     std::function<std::unique_ptr<Acceptor>(const Score&)> acceptor_factory_;
-    // shared_ptr so the solver object stays movable (SolverManager jobs).
+    // shared_ptr so the solver object stays movable.
     std::shared_ptr<std::atomic<bool>> stop_requested_ =
             std::make_shared<std::atomic<bool>>(false);
     // Run-scoped stop of one multi-start start (null outside solve_multistart).

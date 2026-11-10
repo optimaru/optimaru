@@ -9,6 +9,12 @@
 
 namespace optimaru {
 
+// Uniform in [0, n), for n > 0, from the search's own generator: the bounded
+// draw the moves, the ruins and the selection schemes share.
+inline int random_index(std::mt19937_64& rng, int n) {
+    return static_cast<int>(rng() % static_cast<std::uint64_t>(n));
+}
+
 // Seeded random draws that give the same numbers with every standard library:
 // std::mt19937_64 (whose output the standard fixes) with hand-written bounded
 // draws, because the std:: distributions are implementation-defined and

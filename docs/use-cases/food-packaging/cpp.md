@@ -25,10 +25,10 @@ engine). Files:
 - `src/demo_data.cpp` — the demo plant (5 lines, 100 jobs), drawn
   from a seeded `std::mt19937_64` (seed 37; Monday 00:00 == minute 0)
 - `src/main.cpp` — runs the demo (default 10 s, non-zero exit when hard 0 is not reached)
-- `test/fp_test.cpp` — per-constraint hand-computed cases, 2000 random sequence moves
+- `tests/food_packaging/cpp/fp_test.cpp` — per-constraint hand-computed cases, 2000 random sequence moves
   cross-checked incremental==full, ScoreChecks::Full solve, pinning/pool/operator/
   demo checks
-- `test/fp_plugin_test.cpp` — the plugin assembly == the monolith, plugin incremental ==
+- `tests/food_packaging/cpp/fp_plugin_test.cpp` — the plugin assembly == the monolith, plugin incremental ==
   full, raw costs by hand (a positive and a zero case per constraint), the catalog
   (`info()` == the components' constants), the medium level (fold, `hard()` / `soft()` /
   weight), ScoreChecks::Full plugin solves and `on_new_best` reporting the same levels as the

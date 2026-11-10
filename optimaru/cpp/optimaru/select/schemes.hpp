@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 // Adaptive operator selection — umbrella header
 // ---------------------------------------------------------------------------
-// The plugin point lives in select/operator_selection_scheme.hpp and one
+// The plugin point lives in select/scheme.hpp and one
 // scheme per file next to it. Including this header
 // still gives the whole set plus the factory, so call sites do not change.
 //
@@ -26,7 +26,7 @@
 namespace optimaru {
 
 // Builds the configured scheme. `segment_length` applies to
-// SEGMENTED_ROULETTE_WHEEL, `alpha` to ALPHA_UCB; both are ignored otherwise.
+// SegmentedRouletteWheel, `alpha` to AlphaUcb; both are ignored otherwise.
 inline std::unique_ptr<OperatorSelectionScheme> make_operator_selection_scheme(
         SelectionScheme type, int operator_count, const std::vector<double>& rewards,
         double decay, std::int64_t segment_length, double alpha) {

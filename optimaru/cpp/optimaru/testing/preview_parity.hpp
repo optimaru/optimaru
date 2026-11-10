@@ -13,6 +13,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/objective.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/portable_random.hpp"
 
 namespace optimaru::testing {
 
@@ -46,7 +47,7 @@ PreviewParity run_preview_parity(Editor<Solution>& editor,
     std::mt19937_64 rng(seed);
     const int list_count = Traits::list_count(solution);
     auto size = [&](int l) { return Traits::list_size(solution, l); };
-    auto pick = [&](int n) { return static_cast<int>(rng() % static_cast<std::uint64_t>(n)); };
+    auto pick = [&](int n) { return random_index(rng, n); };
 
     PreviewParity result;
     auto compare = [&](const Score& preview, const Score& actual,

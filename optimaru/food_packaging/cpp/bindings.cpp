@@ -1,6 +1,6 @@
 // pybind11 bindings for the food-packaging C++ domain wrappers. The Python
 // extension links the existing fp::* implementations and imports the generic
-// optimaru engine from ../../../include; the engine itself is not
+// optimaru engine from optimaru/cpp/optimaru; the engine itself is not
 // modified here.
 //
 // Times cross the boundary as int64 MINUTES from a common reference (the

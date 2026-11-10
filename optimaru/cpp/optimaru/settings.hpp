@@ -153,20 +153,20 @@ struct RuinRecreateSettings {
     // makes every kick expensive and unrecoverable within polish_steps, so the
     // unconditional-incumbent kick destroys more progress than it enables.
     int max_ruin_count = 60;
-    // Operator adaptation. ROULETTE_WHEEL is w = decay*w + (1-decay)*reward,
-    // rewards indexed by MoveOutcome (NEW_BEST / BETTER / ACCEPTED / REJECTED);
-    // see ruin_recreate_selector.hpp for the other three schemes.
+    // Operator adaptation. RouletteWheel is w = decay*w + (1-decay)*reward,
+    // rewards indexed by MoveOutcome (NewBest / Better / Accepted / Rejected);
+    // see select/ for the other three schemes.
     SelectionScheme selection_type = SelectionScheme::RouletteWheel;
     double operator_decay = 0.8;
     std::vector<double> rewards{33.0, 9.0, 3.0, 0.0};
-    // SEGMENTED_ROULETTE_WHEEL: iterations per weight-update segment.
+    // SegmentedRouletteWheel: iterations per weight-update segment.
     std::int64_t selection_segment_length = 100;
-    // ALPHA_UCB: exploration weight; <= 0.1 is the usual choice.
+    // AlphaUcb: exploration weight; <= 0.1 is the usual choice.
     double selection_alpha = 0.05;
 
     // Which ruin operators join the adaptive pool, on top of the always-on
-    // random / related / worst trio. Both are LIST-kind strategies and fall
-    // back to the random ruin on BASIC solutions (see their headers).
+    // random / related / worst trio. Both are sequence-shape strategies and
+    // fall back to the random ruin on assignment solutions (see their headers).
     bool sisr_ruin = true;    // substring removal (Christiaens & Vanden Berghe)
     bool route_ruin = true;   // empty whole lists
     int sisr_max_string_removals = 3;
@@ -210,7 +210,7 @@ struct SearchSettings {
     AcceptanceSettings acceptance;
     MoveMix moves;
 
-    // Optional guided move selection, BASIC kind only. Either hook may return
+    // Optional guided move selection, assignment shape only. Either hook may return
     // -1 to fall back to uniform-random selection for that draw.
     std::function<int(std::mt19937_64&)> entity_hint;
     std::function<int(std::mt19937_64&, int entity_index)> value_hint;
@@ -218,7 +218,7 @@ struct SearchSettings {
     NeighborSettings nearby;
     RuinRecreateSettings ruin_recreate;
 
-    // LIST kind: the list holding unplaced elements, a virtual unassigned
+    // Sequence shape: the list holding unplaced elements, a virtual unassigned
     // pool, or -1 for none. One field, read by every built-in that must know
     // the pool:
     //  - the ruin-and-recreate repair, and the iterated local search's,
@@ -273,13 +273,13 @@ struct SearchSettings {
     // the strategies here.
     //
     // descent: best-improvement over one nearby pair, repeated until that pair
-    // is locally optimal. The neighbourhood is per kind — LIST: two
+    // is locally optimal. The neighbourhood is per shape — sequence: two
     // geometrically nearby routes, every relocation between them, both
-    // directions; BASIC: a nearby entity pair, every value of each entity plus
+    // directions; assignment: a nearby entity pair, every value of each entity plus
     // the swap of the two. See moves/descent.hpp.
     //
     // What the right weight is depends entirely on how big that neighbourhood
-    // is, and for BASIC that is the size of the VALUE RANGE — one sweep costs
+    // is, and for assignment that is the size of the VALUE RANGE — one sweep costs
     // ~2 * value_count score evaluations against an ordinary step's one. With 40
     // employees (employee-scheduling) a percent-scale weight spends a sensible
     // slice of the budget and pays for itself; with a 40x25 slot x room grid
@@ -290,11 +290,11 @@ struct SearchSettings {
     // application cannot run away on a large pair.
     int descent_max_sweeps = 4;
 
-    // LIST-only intensification. When enabled, descent evaluates the
+    // Sequence-only intensification. When enabled, descent evaluates the
     // granular neighbourhood around one nearby route pair instead of only
     // relocate moves: Exchange(1,0), Exchange(1,1), 2-opt, 2-opt* and small
     // CROSS-exchange moves. This is intentionally opt-in because a full
-    // route-pair neighbourhood is much more expensive than the BASIC
+    // route-pair neighbourhood is much more expensive than the assignment
     // entity/value descent used by rostering and timetabling.
     bool descent_list_advanced = false;
     int descent_list_max_segment = 2;
@@ -328,7 +328,7 @@ struct SearchSettings {
     // the nearby size and ejection_chain_candidate_lists).
     std::int64_t ejection_chain_max_evaluations = 50000;
 
-    // iterated_local_search (LIST only): one ILS iteration as a move — a small
+    // iterated_local_search (sequence only): one ILS iteration as a move — a small
     // ruin from the adaptive ruin pool, the greedy repair, then a granular
     // first-improvement descent (relocate, swap, 2-opt, 2-opt*, Or-opt, CROSS
     // around every element's nearby neighbours) until the touched lists are
@@ -346,7 +346,7 @@ struct SearchSettings {
     // Evaluations one descent may spend before it stops where it is. At O(1)
     // previews five million evaluations is on the order of a quarter second;
     // where a preview costs O(route) (a decomposed assembly, a plan with
-    // waiting) the descent instead consults the solver's termination every
+    // waiting) the descent instead consults the solver's stop condition every
     // thousand evaluations and stops at the time limit, so this cap is the
     // only bound just for a solve without a wall-clock limit. Lower caps
     // truncate the descents

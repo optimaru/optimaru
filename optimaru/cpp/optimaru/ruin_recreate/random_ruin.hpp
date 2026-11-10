@@ -11,6 +11,7 @@
 
 #include "optimaru/ruin_recreate/removal_gain.hpp"
 #include "optimaru/search/operators.hpp"
+#include "optimaru/portable_random.hpp"
 
 namespace optimaru {
 
@@ -28,7 +29,7 @@ public:
         std::vector<int> ids(n);
         for (int i = 0; i < n; ++i) ids[i] = i;
         for (int i = 0; i < ruin_count; ++i) {
-            int j = i + static_cast<int>(rng() % static_cast<std::uint64_t>(n - i));
+            int j = i + random_index(rng, n - i);
             std::swap(ids[i], ids[j]);
         }
         ids.resize(ruin_count);

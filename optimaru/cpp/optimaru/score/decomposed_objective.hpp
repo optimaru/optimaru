@@ -6,11 +6,8 @@
 
 #include <algorithm>
 #include <cassert>
-#include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -28,7 +25,7 @@ namespace optimaru {
 // ---------------------------------------------------------------------------
 // Decomposed score calculation
 // ---------------------------------------------------------------------------
-// Cost contract generalized over both variable kinds:
+// Cost contract generalized over both solution shapes:
 // a constraint declares that its cost decomposes as a sum over "units", and
 // only writes the per-unit evaluation — the objective below turns that into
 // a correct Objective by caching per-unit contributions and
@@ -44,9 +41,9 @@ namespace optimaru {
 // contribution into the hard accumulator (rounded per unit contribution —
 // hard costs should be integral), the medium accumulator or the soft one.
 // The objective keeps the three apart and folds medium into the engine's
-// Score with the domain's MediumFoldOf<Solution> (see level.hpp)
+// Score with the domain's MediumFoldOf<Solution> (see levels.hpp)
 // when it reports a score. Contributions and totals follow "The range of a
-// score" (level.hpp): a non-finite contribution, or a hard one of 2^62 or
+// score" (levels.hpp): a non-finite contribution, or a hard one of 2^62 or
 // more, throws std::overflow_error; the hard total is summed exactly
 // (HardTotal) and saturates at +-INT64_MAX instead of wrapping.
 //
@@ -556,7 +553,7 @@ class DecomposedObjective final : public Objective<Solution> {
 
 public:
     // How this domain folds its medium accumulator into Score (see
-    // level.hpp). MediumFold::none() unless the domain specializes
+    // levels.hpp). MediumFold::none() unless the domain specializes
     // MediumFoldOf<Solution>.
     static constexpr MediumFold kMediumFold = MediumFoldOf<Solution>::value;
 
@@ -579,14 +576,6 @@ public:
     void rebuild(Solution& solution) override {
         validate_levels(solution);
         solution_ = &solution;
-        if (prof_unit_ns_.empty() && !unit_constraints_.empty()) {
-            prof_ = std::getenv("ES_PROFILE") != nullptr;
-            prof_unit_ns_.assign(unit_constraints_.size(), 0);
-            prof_unit_calls_.assign(unit_constraints_.size(), 0);
-            prof_unit_full_.assign(unit_constraints_.size(), 0);
-            prof_global_ns_.assign(global_constraints_.size(), 0);
-            prof_global_calls_.assign(global_constraints_.size(), 0);
-        }
         if constexpr (Traits::shape == Shape::Assignment) {
             unit_count_ = Traits::value_count(solution);
             members_.assign(unit_count_, {});
@@ -617,7 +606,7 @@ public:
         // constraint at weight 0 (an opt-in objective left off) is not asked
         // during a preview at all: its contribution is 0 whatever it answers,
         // and some such costs are the most expensive in an assembly. The
-        // applied path still costs it, since rawUnitCosts() reports it. An
+        // applied path still costs it, since constraint_costs() reports it. An
         // instance whose shaping jumps at 0 previews through cost() on the
         // written-out candidate, never its piecewise answer (see
         // UnitConstraint::piecewise_cost), so a preview's raw is the applied
@@ -639,18 +628,14 @@ public:
         // metadata overrides take effect at reset, when the cached per-unit
         // contributions are rebuilt against them anyway.
         member_change_globals_.clear();
-        member_change_global_idx_.clear();
         unit_change_globals_.clear();
-        unit_change_global_idx_.clear();
         global_score_.clear();
         for (std::size_t g = 0; g < global_constraints_.size(); ++g) {
             GlobalConstraint<Solution>* pointer = global_constraints_[g].get();
             if (pointer->supports_member_change()) {
                 member_change_globals_.push_back(pointer);
-                member_change_global_idx_.push_back(g);
             } else {
                 unit_change_globals_.push_back(pointer);
-                unit_change_global_idx_.push_back(g);
             }
             global_score_.push_back({pointer, pointer->weight, pointer->exponent,
                                     pointer->level == Level::Hard,
@@ -757,9 +742,8 @@ public:
         if (!accepted) {
             for (int unit : saved_unit_list_) {
                 const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
-                const UnitDispatchEntry* entry = dispatch_.data() + dispatch_start_[unit];
-                const UnitDispatchEntry* const end = dispatch_.data() + dispatch_start_[unit + 1];
-                for (; entry != end; ++entry) {
+                const UnitDispatchEntry* const end = dispatch_end(unit);
+                for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
                     const std::size_t idx = base + entry->c;
                     cache_raw_[idx] = saved_raw_[idx];
                     cache_hard_[idx] = saved_hard_[idx];
@@ -786,10 +770,8 @@ public:
                 if (has_full_recost_) {
                     const std::size_t base =
                             static_cast<std::size_t>(unit) * unit_constraints_.size();
-                    const UnitDispatchEntry* entry = dispatch_.data() + dispatch_start_[unit];
-                    const UnitDispatchEntry* const end =
-                            dispatch_.data() + dispatch_start_[unit + 1];
-                    for (; entry != end; ++entry) {
+                    const UnitDispatchEntry* const end = dispatch_end(unit);
+                    for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
                         if (entry->kind != kFullRecost) continue;
                         save_unit_for_trial(unit);
                         apply_raw(unit, *entry, base + entry->c,
@@ -817,14 +799,8 @@ public:
     }
 
     Score score() override {
-        HardTotal hard = hard_units_;
-        double medium = medium_units_;
-        double soft = soft_units_;
-        for (const GlobalScoreEntry& entry : global_score_) {
-            const double c = global_contribution(entry, entry.constraint->cost());
-            accumulate(entry, c, hard, medium, soft);
-        }
-        return fold_score(hard, medium, soft);
+        const Totals totals = totals_with_globals();
+        return fold_score(totals.hard, totals.medium, totals.soft);
     }
 
     // The three accumulators as score levels (penalties negative), BEFORE the
@@ -837,28 +813,17 @@ public:
         double soft;
     };
     LevelScores level_scores() const {
-        HardTotal hard = hard_units_;
-        double medium = medium_units_;
-        double soft = soft_units_;
-        for (const GlobalScoreEntry& entry : global_score_) {
-            const double c = global_contribution(entry, entry.constraint->cost());
-            accumulate(entry, c, hard, medium, soft);
-        }
-        check_soft_total(medium);
-        check_soft_total(soft);
-        return {-hard.saturated(), medium == 0.0 ? 0.0 : -medium, soft == 0.0 ? 0.0 : -soft};
+        const Totals totals = totals_with_globals();
+        check_soft_total(totals.medium);
+        check_soft_total(totals.soft);
+        return {-totals.hard.saturated(), totals.medium == 0.0 ? 0.0 : -totals.medium,
+                totals.soft == 0.0 ? 0.0 : -totals.soft};
     }
 
     // Previews answer on a sequence domain whenever every global constraint can
     // preview (see GlobalConstraint::supports_preview) and the working
     // solution is set.
-    bool has_previews() const override {
-        if constexpr (Traits::shape != Shape::Sequence) {
-            return false;
-        } else {
-            return previews_served();
-        }
-    }
+    bool has_previews() const override { return previews_served(); }
 
     // --- sequence shape: move previews -----------------------------------------
     // Generic, for every assembly: the move's candidate list contents are
@@ -879,140 +844,110 @@ public:
     // every preview (see GlobalConstraint::supports_preview).
     bool preview_segment_move(int from_list, int start, int len, int to_list, int insert_at,
                             Score& out) override {
-        if constexpr (Traits::shape != Shape::Sequence) {
-            (void)from_list; (void)start; (void)len; (void)to_list; (void)insert_at; (void)out;
-            return false;
-        } else {
-            if (!previews_served() || len <= 0) return false;
-            const int from_size = static_cast<int>(members_[from_list].size());
-            const ListPiece segment{from_list, start, start + len, false};
-            PreviewRun runs[2];
-            runs[0].unit = from_list;
-            runs[0].add({from_list, 0, start, false});
-            runs[0].add({from_list, start + len, from_size, false});
-            if (from_list == to_list) {
-                runs[0].insert_at(insert_at, segment);
-                out = preview_score(runs, 1);
-                return true;
-            }
-            const int to_size = static_cast<int>(members_[to_list].size());
-            runs[1].unit = to_list;
-            runs[1].add({to_list, 0, insert_at, false});
-            runs[1].add(segment);
-            runs[1].add({to_list, insert_at, to_size, false});
-            out = preview_score(runs, 2);
+        if (!previews_served() || len <= 0) return false;
+        const int from_size = static_cast<int>(members_[from_list].size());
+        const ListPiece segment{from_list, start, start + len, false};
+        PreviewRun runs[2];
+        runs[0].unit = from_list;
+        runs[0].add({from_list, 0, start, false});
+        runs[0].add({from_list, start + len, from_size, false});
+        if (from_list == to_list) {
+            runs[0].insert_at(insert_at, segment);
+            out = preview_score(runs, 1);
             return true;
         }
+        const int to_size = static_cast<int>(members_[to_list].size());
+        runs[1].unit = to_list;
+        runs[1].add({to_list, 0, insert_at, false});
+        runs[1].add(segment);
+        runs[1].add({to_list, insert_at, to_size, false});
+        out = preview_score(runs, 2);
+        return true;
     }
     bool preview_swap(int l1, int p1, int l2, int p2, Score& out) override {
-        if constexpr (Traits::shape != Shape::Sequence) {
-            (void)l1; (void)p1; (void)l2; (void)p2; (void)out;
-            return false;
-        } else {
-            if (!previews_served()) return false;
-            PreviewRun runs[2];
-            if (l1 == l2) {
-                if (p1 == p2) {  // a no-op: the current score, exactly
-                    out = score();
-                    return true;
-                }
-                const int a = std::min(p1, p2), b = std::max(p1, p2);
-                const int size = static_cast<int>(members_[l1].size());
-                runs[0].unit = l1;
-                runs[0].add({l1, 0, a, false});
-                runs[0].add({l1, b, b + 1, false});
-                runs[0].add({l1, a + 1, b, false});
-                runs[0].add({l1, a, a + 1, false});
-                runs[0].add({l1, b + 1, size, false});
-                out = preview_score(runs, 1);
+        if (!previews_served()) return false;
+        PreviewRun runs[2];
+        if (l1 == l2) {
+            if (p1 == p2) {  // a no-op: the current score, exactly
+                out = score();
                 return true;
             }
-            const int size1 = static_cast<int>(members_[l1].size());
-            const int size2 = static_cast<int>(members_[l2].size());
+            const int a = std::min(p1, p2), b = std::max(p1, p2);
+            const int size = static_cast<int>(members_[l1].size());
             runs[0].unit = l1;
-            runs[0].add({l1, 0, p1, false});
-            runs[0].add({l2, p2, p2 + 1, false});
-            runs[0].add({l1, p1 + 1, size1, false});
-            runs[1].unit = l2;
-            runs[1].add({l2, 0, p2, false});
-            runs[1].add({l1, p1, p1 + 1, false});
-            runs[1].add({l2, p2 + 1, size2, false});
-            out = preview_score(runs, 2);
+            runs[0].add({l1, 0, a, false});
+            runs[0].add({l1, b, b + 1, false});
+            runs[0].add({l1, a + 1, b, false});
+            runs[0].add({l1, a, a + 1, false});
+            runs[0].add({l1, b + 1, size, false});
+            out = preview_score(runs, 1);
             return true;
         }
+        const int size1 = static_cast<int>(members_[l1].size());
+        const int size2 = static_cast<int>(members_[l2].size());
+        runs[0].unit = l1;
+        runs[0].add({l1, 0, p1, false});
+        runs[0].add({l2, p2, p2 + 1, false});
+        runs[0].add({l1, p1 + 1, size1, false});
+        runs[1].unit = l2;
+        runs[1].add({l2, 0, p2, false});
+        runs[1].add({l1, p1, p1 + 1, false});
+        runs[1].add({l2, p2 + 1, size2, false});
+        out = preview_score(runs, 2);
+        return true;
     }
     bool preview_reverse(int list, int first, int last, Score& out) override {
-        if constexpr (Traits::shape != Shape::Sequence) {
-            (void)list; (void)first; (void)last; (void)out;
-            return false;
-        } else {
-            if (!previews_served()) return false;
-            const int size = static_cast<int>(members_[list].size());
-            PreviewRun run;
-            run.unit = list;
-            run.add({list, 0, first, false});
-            run.add({list, first, last + 1, true});
-            run.add({list, last + 1, size, false});
-            out = preview_score(&run, 1);
-            return true;
-        }
+        if (!previews_served()) return false;
+        const int size = static_cast<int>(members_[list].size());
+        PreviewRun run;
+        run.unit = list;
+        run.add({list, 0, first, false});
+        run.add({list, first, last + 1, true});
+        run.add({list, last + 1, size, false});
+        out = preview_score(&run, 1);
+        return true;
     }
     bool preview_tail_swap(int l1, int c1, int l2, int c2, Score& out) override {
-        if constexpr (Traits::shape != Shape::Sequence) {
-            (void)l1; (void)c1; (void)l2; (void)c2; (void)out;
-            return false;
-        } else {
-            if (!previews_served() || l1 == l2) return false;
-            const int size1 = static_cast<int>(members_[l1].size());
-            const int size2 = static_cast<int>(members_[l2].size());
-            PreviewRun runs[2];
-            runs[0].unit = l1;
-            runs[0].add({l1, 0, c1, false});
-            runs[0].add({l2, c2, size2, false});
-            runs[1].unit = l2;
-            runs[1].add({l2, 0, c2, false});
-            runs[1].add({l1, c1, size1, false});
-            out = preview_score(runs, 2);
-            return true;
-        }
+        if (!previews_served() || l1 == l2) return false;
+        const int size1 = static_cast<int>(members_[l1].size());
+        const int size2 = static_cast<int>(members_[l2].size());
+        PreviewRun runs[2];
+        runs[0].unit = l1;
+        runs[0].add({l1, 0, c1, false});
+        runs[0].add({l2, c2, size2, false});
+        runs[1].unit = l2;
+        runs[1].add({l2, 0, c2, false});
+        runs[1].add({l1, c1, size1, false});
+        out = preview_score(runs, 2);
+        return true;
     }
     bool preview_exchange(int l1, int p1, int len1, int l2, int p2, int len2,
                          Score& out) override {
-        if constexpr (Traits::shape != Shape::Sequence) {
-            (void)l1; (void)p1; (void)len1; (void)l2; (void)p2; (void)len2; (void)out;
-            return false;
-        } else {
-            if (!previews_served() || l1 == l2) return false;
-            const int size1 = static_cast<int>(members_[l1].size());
-            const int size2 = static_cast<int>(members_[l2].size());
-            PreviewRun runs[2];
-            runs[0].unit = l1;
-            runs[0].add({l1, 0, p1, false});
-            runs[0].add({l2, p2, p2 + len2, false});
-            runs[0].add({l1, p1 + len1, size1, false});
-            runs[1].unit = l2;
-            runs[1].add({l2, 0, p2, false});
-            runs[1].add({l1, p1, p1 + len1, false});
-            runs[1].add({l2, p2 + len2, size2, false});
-            out = preview_score(runs, 2);
-            return true;
-        }
+        if (!previews_served() || l1 == l2) return false;
+        const int size1 = static_cast<int>(members_[l1].size());
+        const int size2 = static_cast<int>(members_[l2].size());
+        PreviewRun runs[2];
+        runs[0].unit = l1;
+        runs[0].add({l1, 0, p1, false});
+        runs[0].add({l2, p2, p2 + len2, false});
+        runs[0].add({l1, p1 + len1, size1, false});
+        runs[1].unit = l2;
+        runs[1].add({l2, 0, p2, false});
+        runs[1].add({l1, p1, p1 + len1, false});
+        runs[1].add({l2, p2 + len2, size2, false});
+        out = preview_score(runs, 2);
+        return true;
     }
     bool preview_insert(int list, int pos, int element, Score& out) override {
-        if constexpr (Traits::shape != Shape::Sequence) {
-            (void)list; (void)pos; (void)element; (void)out;
-            return false;
-        } else {
-            if (!previews_served()) return false;
-            const int size = static_cast<int>(members_[list].size());
-            PreviewRun run;
-            run.unit = list;
-            run.add({list, 0, pos, false});
-            run.add({-1, element, element + 1, false});
-            run.add({list, pos, size, false});
-            out = preview_score(&run, 1);
-            return true;
-        }
+        if (!previews_served()) return false;
+        const int size = static_cast<int>(members_[list].size());
+        PreviewRun run;
+        run.unit = list;
+        run.add({list, 0, pos, false});
+        run.add({-1, element, element + 1, false});
+        run.add({list, pos, size, false});
+        out = preview_score(&run, 1);
+        return true;
     }
 
     // Weighted total per constraint, for score explanation ("which constraint
@@ -1198,20 +1133,42 @@ private:
 
     // Folds one weighted contribution into the right accumulator (positive =
     // penalty). Hard rounds per contribution; medium rounds too when the fold
-    // lands it in the hard level. Both check the range rule of level.hpp.
+    // lands it in the hard level. Both check the range rule of levels.hpp.
     template <typename Entry>
     static void accumulate(const Entry& entry, double value, HardTotal& hard, double& medium,
                            double& soft) {
+        const std::string& name = entry.constraint->name;
         if (entry.is_hard) {
-            hard.add(round_hard_contribution(value, entry.constraint->name));
+            hard.add(round_hard_contribution(value, name));
         } else if (kMediumFold.has_medium() && entry.is_medium) {
-            medium += kMediumFold.rounds_medium()
-                              ? static_cast<double>(
-                                        round_hard_contribution(value, entry.constraint->name))
-                              : checked_soft_contribution(value, entry.constraint->name);
+            medium += medium_contribution(value, name);
         } else {
-            soft += checked_soft_contribution(value, entry.constraint->name);
+            soft += checked_soft_contribution(value, name);
         }
+    }
+
+    // One medium contribution: rounded like a hard one when the fold lands
+    // medium in the hard level, range-checked like a soft one otherwise.
+    static double medium_contribution(double value, const std::string& name) {
+        return kMediumFold.rounds_medium()
+                       ? static_cast<double>(round_hard_contribution(value, name))
+                       : checked_soft_contribution(value, name);
+    }
+
+    // The unit totals plus every global's contribution, per level, as
+    // penalties (positive = worse) and before the medium fold.
+    struct Totals {
+        HardTotal hard;
+        double medium;
+        double soft;
+    };
+    Totals totals_with_globals() const {
+        Totals totals{hard_units_, medium_units_, soft_units_};
+        for (const GlobalScoreEntry& entry : global_score_) {
+            accumulate(entry, global_contribution(entry, entry.constraint->cost()), totals.hard,
+                       totals.medium, totals.soft);
+        }
+        return totals;
     }
 
     // A soft total of finite contributions can still overflow a double.
@@ -1276,7 +1233,7 @@ private:
         UnitConstraint<Solution>* constraint;
         double weight;
         double exponent;
-        std::uint32_t c;  // constraint index (cache/buffer addressing, prof rows)
+        std::uint32_t c;  // constraint index (cache/buffer addressing)
         std::uint8_t kind;
         bool is_hard;
         bool is_medium;
@@ -1285,6 +1242,14 @@ private:
         // keeps its 32-byte entries and its plain weighted_cost().
         bool shifted;
     };
+
+    // The compiled entries of one unit: [dispatch_begin, dispatch_end).
+    const UnitDispatchEntry* dispatch_begin(int unit) const {
+        return dispatch_.data() + dispatch_start_[unit];
+    }
+    const UnitDispatchEntry* dispatch_end(int unit) const {
+        return dispatch_.data() + dispatch_start_[unit + 1];
+    }
 
     // One unit's shaped, weighted contribution (the knobs sampled at reset).
     double unit_contribution(const UnitDispatchEntry& entry, double raw) const {
@@ -1487,9 +1452,7 @@ private:
             cache_hard_[idx] = rounded;
         } else if (kMediumFold.has_medium() && entry.is_medium) {
             // Medium cells share cache_soft_ (a constraint has one level).
-            const double medium = kMediumFold.rounds_medium()
-                                          ? static_cast<double>(round_hard_contribution(value, name))
-                                          : checked_soft_contribution(value, name);
+            const double medium = medium_contribution(value, name);
             medium_units_ += medium - cache_soft_[idx];
             cache_soft_[idx] = medium;
         } else {
@@ -1502,9 +1465,8 @@ private:
     void refresh_unit(int unit) {
         const std::vector<int>& m = members_[unit];
         const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
-        const UnitDispatchEntry* entry = dispatch_.data() + dispatch_start_[unit];
-        const UnitDispatchEntry* const end = dispatch_.data() + dispatch_start_[unit + 1];
-        for (; entry != end; ++entry) {
+        const UnitDispatchEntry* const end = dispatch_end(unit);
+        for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
             apply_raw(unit, *entry, base + entry->c,
                      entry->constraint->cost(*solution_, unit, m));
         }
@@ -1518,36 +1480,14 @@ private:
     }
     // assignment move path: `entity` just joined/left `unit` (members_ already
     // updated). Delta-capable constraints adjust the cached raw cost by the
-    // marginal term; the rest fall back to a full unit re-cost. The body is
-    // stamped out twice so the common Prof=false path carries no profiling
-    // code at all (smaller hot code, no per-loop prof branches).
+    // marginal term; the rest fall back to a full unit re-cost.
     void touch_unit_member_changed(int unit, int entity, bool joined) {
-        if (prof_) {
-            touch_unit_member_changed_impl<true>(unit, entity, joined);
-        } else {
-            touch_unit_member_changed_impl<false>(unit, entity, joined);
-        }
-    }
-    template <bool Prof>
-    void touch_unit_member_changed_impl(int unit, int entity, bool joined) {
         if (trial_active_ && !rollback_active_) save_unit_for_trial(unit);
-        const std::size_t C = unit_constraints_.size();
         const std::vector<int>& m = members_[unit];
-        const std::size_t base = static_cast<std::size_t>(unit) * C;
-        if constexpr (!Prof) {
-            for (UnitConstraintDeltaGroup<Solution>* group : delta_group_ptrs_) {
-                group->evaluate(*solution_, unit, m, entity, grouped_delta_buffer_.data());
-            }
-        } else {
-            for (UnitConstraintDeltaGroup<Solution>* group : delta_group_ptrs_) {
-                const std::uint64_t t0 = now_ns_();
-                group->evaluate(*solution_, unit, m, entity, grouped_delta_buffer_.data());
-                prof_group_ns_ += now_ns_() - t0;
-                ++prof_group_calls_;
-            }
+        const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
+        for (UnitConstraintDeltaGroup<Solution>* group : delta_group_ptrs_) {
+            group->evaluate(*solution_, unit, m, entity, grouped_delta_buffer_.data());
         }
-        const UnitDispatchEntry* entry = dispatch_.data() + dispatch_start_[unit];
-        const UnitDispatchEntry* const end = dispatch_.data() + dispatch_start_[unit + 1];
         const double* const grouped_deltas = grouped_delta_buffer_.data();
         long long* const cache_hard = cache_hard_.data();
         const double sign = joined ? 1.0 : -1.0;
@@ -1555,7 +1495,8 @@ private:
         // through one local accumulator is exact (unlike the soft doubles,
         // which keep their original accumulation order through apply_raw).
         HardTotal hard_acc;
-        for (; entry != end; ++entry) {
+        const UnitDispatchEntry* const end = dispatch_end(unit);
+        for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
             switch (entry->kind) {
                 case kGroupedHardInt: {
                     // Grouped, hard, integral raw delta and weight: fold the
@@ -1565,7 +1506,7 @@ private:
                     // (The cell's cache_raw_ is intentionally left stale: for a
                     // grouped-hard constraint nothing reads it until the next
                     // reset rebuilds every cell from cost().) The cell stays
-                    // below 2^62 (rule 1 of level.hpp), so the cast and the
+                    // below 2^62 (rule 1 of levels.hpp), so the cast and the
                     // two additions are defined.
                     const double weighted = entry->weight * (sign * grouped_deltas[entry->c]);
                     long long& cell = cache_hard[base + entry->c];
@@ -1588,15 +1529,7 @@ private:
                     break;
                 }
                 case kVirtualDelta: {
-                    double d;
-                    if constexpr (Prof) {
-                        const std::uint64_t t0 = now_ns_();
-                        d = entry->constraint->delta_cost(*solution_, unit, m, entity);
-                        prof_unit_ns_[entry->c] += now_ns_() - t0;
-                        ++prof_unit_calls_[entry->c];
-                    } else {
-                        d = entry->constraint->delta_cost(*solution_, unit, m, entity);
-                    }
+                    const double d = entry->constraint->delta_cost(*solution_, unit, m, entity);
                     if (d == 0.0) break;
                     const std::size_t idx = base + entry->c;
                     apply_raw(unit, *entry, idx, cache_raw_[idx] + sign * d);
@@ -1605,17 +1538,8 @@ private:
                 case kFullRecost:
                     if (batch_depth_ == 0 && !rollback_active_) {
                         save_unit_for_trial(unit);
-                        if constexpr (Prof) {
-                            const std::uint64_t t0 = now_ns_();
-                            const double v = entry->constraint->cost(*solution_, unit, m);
-                            prof_unit_ns_[entry->c] += now_ns_() - t0;
-                            ++prof_unit_calls_[entry->c];
-                            ++prof_unit_full_[entry->c];
-                            apply_raw(unit, *entry, base + entry->c, v);
-                        } else {
-                            apply_raw(unit, *entry, base + entry->c,
-                                     entry->constraint->cost(*solution_, unit, m));
-                        }
+                        apply_raw(unit, *entry, base + entry->c,
+                                 entry->constraint->cost(*solution_, unit, m));
                     }
                     break;
             }
@@ -1624,17 +1548,8 @@ private:
             hard_units_.add(hard_acc);
             unit_hard_[unit].add(hard_acc);
         }
-        if constexpr (!Prof) {
-            for (GlobalConstraint<Solution>* global : member_change_globals_) {
-                global->on_member_changed(*solution_, unit, m, entity, joined);
-            }
-        } else {
-            for (std::size_t i = 0; i < member_change_globals_.size(); ++i) {
-                const std::uint64_t t0 = now_ns_();
-                member_change_globals_[i]->on_member_changed(*solution_, unit, m, entity, joined);
-                prof_global_ns_[member_change_global_idx_[i]] += now_ns_() - t0;
-                ++prof_global_calls_[member_change_global_idx_[i]];
-            }
+        for (GlobalConstraint<Solution>* global : member_change_globals_) {
+            global->on_member_changed(*solution_, unit, m, entity, joined);
         }
         if (batch_depth_ > 0) {
             if (!dirty_units_[unit]) {
@@ -1644,22 +1559,15 @@ private:
             return;
         }
         if (!rollback_active_) set_penalized(unit, unit_hard_[unit].positive());
-        if constexpr (!Prof) {
-            for (GlobalConstraint<Solution>* global : unit_change_globals_) {
-                global->on_unit_changed(*solution_, unit, m);
-            }
-        } else {
-            for (std::size_t i = 0; i < unit_change_globals_.size(); ++i) {
-                const std::uint64_t t0 = now_ns_();
-                unit_change_globals_[i]->on_unit_changed(*solution_, unit, m);
-                prof_global_ns_[unit_change_global_idx_[i]] += now_ns_() - t0;
-                ++prof_global_calls_[unit_change_global_idx_[i]];
-            }
+        for (GlobalConstraint<Solution>* global : unit_change_globals_) {
+            global->on_unit_changed(*solution_, unit, m);
         }
     }
     // Previews are a sequence shape feature and need every global's cooperation.
+    // The preview_* bodies behind this gate are compiled for every shape, so
+    // they may only use what both shapes have (members_, no list Traits calls).
     bool previews_served() const {
-        if (solution_ == nullptr) return false;
+        if (Traits::shape != Shape::Sequence || solution_ == nullptr) return false;
         for (const auto& g : global_constraints_) {
             // A global at weight 0 is never asked (see preview_score).
             if (g->weight != 0.0 && !g->supports_preview()) return false;
@@ -1757,9 +1665,8 @@ private:
         for (int i = 0; i < count; ++i) {
             const int unit = changes[i].unit;
             const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
-            const UnitDispatchEntry* entry = dispatch_.data() + dispatch_start_[unit];
-            const UnitDispatchEntry* const end = dispatch_.data() + dispatch_start_[unit + 1];
-            for (; entry != end; ++entry) {
+            const UnitDispatchEntry* const end = dispatch_end(unit);
+            for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
                 if (entry->weight == 0.0) continue;  // contributes nothing, see reset
                 const std::size_t idx = base + entry->c;
                 double raw;
@@ -1774,10 +1681,7 @@ private:
                 if (entry->is_hard) {
                     hard.add(round_hard_contribution(value, name) - cache_hard_[idx]);
                 } else if (kMediumFold.has_medium() && entry->is_medium) {
-                    medium += (kMediumFold.rounds_medium()
-                                       ? static_cast<double>(round_hard_contribution(value, name))
-                                       : checked_soft_contribution(value, name)) -
-                              cache_soft_[idx];
+                    medium += medium_contribution(value, name) - cache_soft_[idx];
                 } else {
                     soft += checked_soft_contribution(value, name) - cache_soft_[idx];
                 }
@@ -1791,8 +1695,7 @@ private:
                 materialize_all();
                 raw = entry.constraint->preview_cost(*solution_, changes, count);
             }
-            const double c = global_contribution(entry, raw);
-            accumulate(entry, c, hard, medium, soft);
+            accumulate(entry, global_contribution(entry, raw), hard, medium, soft);
         }
         return fold_score(hard, medium, soft);
     }
@@ -1818,9 +1721,8 @@ private:
         saved_units_[unit] = 1;
         saved_unit_list_.push_back(unit);
         const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
-        const UnitDispatchEntry* entry = dispatch_.data() + dispatch_start_[unit];
-        const UnitDispatchEntry* const end = dispatch_.data() + dispatch_start_[unit + 1];
-        for (; entry != end; ++entry) {
+        const UnitDispatchEntry* const end = dispatch_end(unit);
+        for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
             const std::size_t idx = base + entry->c;
             saved_raw_[idx] = cache_raw_[idx];
             saved_hard_[idx] = cache_hard_[idx];
@@ -1879,12 +1781,9 @@ private:
     std::vector<std::unique_ptr<UnitConstraint<Solution>>> unit_constraints_;
     std::vector<std::unique_ptr<GlobalConstraint<Solution>>> global_constraints_;
     // Global dispatch partition (raw pointers, built at reset): the
-    // member-change fast-path subscribers and the unit-diff rest, plus the
-    // original indices for the profiling rows.
+    // member-change fast-path subscribers and the unit-diff rest.
     std::vector<GlobalConstraint<Solution>*> member_change_globals_;
-    std::vector<std::size_t> member_change_global_idx_;
     std::vector<GlobalConstraint<Solution>*> unit_change_globals_;
-    std::vector<std::size_t> unit_change_global_idx_;
     std::vector<GlobalScoreEntry> global_score_;  // all globals, registration order
     std::vector<std::unique_ptr<UnitConstraintDeltaGroup<Solution>>> delta_groups_;
     std::vector<UnitConstraintDeltaGroup<Solution>*> delta_group_ptrs_;  // dense view
@@ -1911,7 +1810,7 @@ private:
     std::vector<double> cache_raw_;           // per (unit, constraint), raw (pre-weight/shape)
     std::vector<long long> cache_hard_;       // per (unit, constraint), weighted + rounded
     std::vector<double> cache_soft_;          // per (unit, constraint), weighted
-    HardTotal hard_units_;                    // exact, never wraps (level.hpp)
+    HardTotal hard_units_;                    // exact, never wraps (levels.hpp)
     double medium_units_ = 0.0;               // medium penalties, BEFORE the fold
     double soft_units_ = 0.0;
     std::vector<HardTotal> unit_hard_;        // per unit: weighted hard total (> 0 when penalizing)
@@ -1931,56 +1830,6 @@ private:
     HardTotal saved_hard_units_total_;
     double saved_medium_units_total_ = 0;
     double saved_soft_units_total_ = 0;
-
-    // --- optional per-constraint hot-path profiling (env ES_PROFILE set) ---
-    // Times the move-time dispatch: per unit-constraint delta_cost/full-cost, the
-    // grouped-delta evaluate, and per-global onMember/on_unit_changed. Zero cost
-    // when off (one predictable branch). Dumped to stderr on destruction.
-    bool prof_ = false;
-    mutable std::vector<std::uint64_t> prof_unit_ns_;      // per unit-constraint: total ns
-    mutable std::vector<std::uint64_t> prof_unit_calls_;   // per unit-constraint: delta+full calls
-    mutable std::vector<std::uint64_t> prof_unit_full_;    // per unit-constraint: full-recost calls (non-delta)
-    mutable std::vector<std::uint64_t> prof_global_ns_;    // per global: total ns
-    mutable std::vector<std::uint64_t> prof_global_calls_; // per global: calls
-    mutable std::uint64_t prof_group_ns_ = 0;              // grouped-delta evaluate: total ns
-    mutable std::uint64_t prof_group_calls_ = 0;
-
-    static std::uint64_t now_ns_() {
-        return static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count());
-    }
-
-public:
-    ~DecomposedObjective() {
-        if (!prof_) return;
-        struct Row {
-            std::string name;
-            std::uint64_t ns, calls, full;
-            bool global;
-        };
-        std::vector<Row> rows;
-        for (std::size_t c = 0; c < unit_constraints_.size(); ++c)
-            rows.push_back({unit_constraints_[c]->name, prof_unit_ns_[c], prof_unit_calls_[c], prof_unit_full_[c], false});
-        for (std::size_t g = 0; g < global_constraints_.size(); ++g)
-            rows.push_back({global_constraints_[g]->name, prof_global_ns_[g], prof_global_calls_[g], 0, true});
-        std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.ns > b.ns; });
-        std::uint64_t tot = prof_group_ns_;
-        for (const auto& r : rows) tot += r.ns;
-        std::fprintf(stderr, "\n=== ES_PROFILE: per-constraint move-time (total %.3f ms) ===\n", tot / 1e6);
-        std::fprintf(stderr, "  grouped-delta evaluate: %.3f ms (%llu calls)\n", prof_group_ns_ / 1e6,
-                     (unsigned long long)prof_group_calls_);
-        std::fprintf(stderr, "  %-34s %10s %12s %10s %8s %s\n", "constraint", "ms", "calls", "ns/call",
-                     "full", "kind");
-        for (const auto& r : rows) {
-            if (r.calls == 0 && r.ns == 0) continue;
-            std::fprintf(stderr, "  %-34s %10.3f %12llu %10.1f %8llu %s\n", r.name.c_str(), r.ns / 1e6,
-                         (unsigned long long)r.calls, r.calls ? double(r.ns) / r.calls : 0.0,
-                         (unsigned long long)r.full, r.global ? "global" : "unit");
-        }
-        std::fflush(stderr);
-    }
 };
 
 }  // namespace optimaru

@@ -1,6 +1,6 @@
 // pybind11 bindings for the task-assigning C++ domain wrappers.
 // The Python extension links the existing ta::* implementations and imports
-// the generic optimaru engine from ../../../include; the engine itself
+// the generic optimaru engine from optimaru/cpp/optimaru; the engine itself
 // is not modified here. One domain is exposed: ta::TaskAssigningSolution
 // (sequence shape — every employee holds an ordered task list; a task in
 // no list is unassigned), as the module

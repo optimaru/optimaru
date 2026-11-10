@@ -1,6 +1,6 @@
 // pybind11 bindings for the conference-scheduling C++ domain wrappers.
 // The Python extension links the existing cs::* implementations and imports
-// the generic optimaru engine from ../../../include; the engine itself
+// the generic optimaru engine from optimaru/cpp/optimaru; the engine itself
 // is not modified here.
 #include <pybind11/functional.h>  // std::function <-> Python callable
 #include <pybind11/pybind11.h>

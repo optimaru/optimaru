@@ -144,7 +144,7 @@ class SolverConfig:
     ruin_recreate_max_ruin_fraction: float
     ruin_recreate_max_ruin_count: int
     ruin_recreate_operator_decay: float
-    ruin_recreate_rewards: Iterable[float]
+    ruin_recreate_rewards: list[float]
     ruin_recreate_polish_steps: int
     change_move_weight: float
     swap_move_weight: float

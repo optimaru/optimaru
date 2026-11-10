@@ -1,6 +1,6 @@
 // pybind11 bindings for the employee-scheduling C++ domain wrapper.
 // The Python extension links the existing es::* implementation and imports the
-// generic engine from ../../../include; the engine itself is not modified here.
+// generic engine from optimaru/cpp/optimaru; the engine itself is not modified here.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::set / std::string conversions
@@ -402,7 +402,7 @@ PYBIND11_MODULE(_core, m)
     m.attr("MINUTES_PER_DAY") = MINUTES_PER_DAY;
     m.attr("MAX_DAY") = MAX_DAY;
 
-    py::class_<Score>(m, "Score")
+    py::class_<Score>(m, "Score", py::module_local())
         .def_readonly("hard", &Score::hard)
         .def_readonly("soft", &Score::soft)
         .def("is_feasible", &Score::feasible)
@@ -410,7 +410,7 @@ PYBIND11_MODULE(_core, m)
         .def("__repr__",
              [](const Score &s) { return "<Score " + s.str() + ">"; });
 
-    py::class_<Employee>(m, "Employee")
+    py::class_<Employee>(m, "Employee", py::module_local())
         .def(py::init(
                  [](std::string name,
                     std::set<std::string> skills,
@@ -438,7 +438,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("desired_dates", &Employee::desiredDates)
         .def_readwrite("desired_shifts", &Employee::desiredShifts);
 
-    py::class_<Shift>(m, "Shift")
+    py::class_<Shift>(m, "Shift", py::module_local())
         .def(py::init(
                  [](std::string id,
                     Minutes start,
@@ -467,7 +467,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("employee_index", &Shift::employeeIndex)
         .def_readwrite("pinned", &Shift::pinned);
 
-    py::class_<EmployeeSchedule>(m, "EmployeeSchedule")
+    py::class_<EmployeeSchedule>(m, "EmployeeSchedule", py::module_local())
         .def(py::init(
                  [](std::vector<Employee> employees, std::vector<Shift> shifts)
                  {
@@ -503,6 +503,7 @@ PYBIND11_MODULE(_core, m)
     py::class_<DecomposedCalculator>(
         m,
         "DecomposedCalculator",
+        py::module_local(),
         "Pluggable score calculator: assemble constraints — either from a "
         "list of constraint specs (see optimaru.employee_scheduling.constraints) or "
         "incrementally via add(name, ...) — then pass to "
@@ -654,7 +655,7 @@ PYBIND11_MODULE(_core, m)
         [] { return defaultConstraints(); },
         [] { return catalogConstraints(); });
 
-    optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig"))
+    optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
         .def_property(
             "spent_limit_seconds",
@@ -834,7 +835,7 @@ PYBIND11_MODULE(_core, m)
         // The pybind11 wrapper re-acquires the GIL, which solve() releases.
         .def_readwrite("on_new_best", &Solver::Config::on_new_best);
 
-    py::class_<Solver>(m, "Solver")
+    py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: sets shift.employee_index and schedule.score. The GIL

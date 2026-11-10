@@ -28,9 +28,9 @@ namespace optimaru {
 // tabu and the acceptor's memory (-1 = none); they play no part in applying
 // the move, which reads the solution.
 struct ListMove {
-    enum class Kind { SEGMENT, SWAP, REVERSE, TAIL_SWAP, EXCHANGE };
+    enum class Kind { Segment, Swap, Reverse, TailSwap, Exchange };
 
-    Kind kind = Kind::SEGMENT;
+    Kind kind = Kind::Segment;
     int l1 = -1;
     int p1 = -1;
     int l2 = -1;
@@ -41,7 +41,7 @@ struct ListMove {
     int element2 = -1;
 
     // Longest segment the engine's own neighbourhoods generate (the granular
-    // local search clamps its Or-opt length to it); applying a SEGMENT move
+    // local search clamps its Or-opt length to it); applying a Segment move
     // itself takes any length.
     static constexpr int kMaxSegment = 8;
 
@@ -52,27 +52,27 @@ struct ListMove {
     // lists may be the same). A relocation is a segment of length 1.
     static ListMove segment(int from, int start, int len, int to, int insert_at,
                             int element1 = -1, int element2 = -1) {
-        return {Kind::SEGMENT, from, start, to, insert_at, len, 0, element1, element2};
+        return {Kind::Segment, from, start, to, insert_at, len, 0, element1, element2};
     }
     // Exchange the elements at (l1, p1) and (l2, p2); same or different lists.
     static ListMove swap(int l1, int p1, int l2, int p2, int element1 = -1, int element2 = -1) {
-        return {Kind::SWAP, l1, p1, l2, p2, 0, 0, element1, element2};
+        return {Kind::Swap, l1, p1, l2, p2, 0, 0, element1, element2};
     }
     // Reverse [first, last] of `list`.
     static ListMove reverse(int list, int first, int last, int element1 = -1,
                             int element2 = -1) {
-        return {Kind::REVERSE, list, first, list, last, 0, 0, element1, element2};
+        return {Kind::Reverse, list, first, list, last, 0, 0, element1, element2};
     }
     // l1 keeps [0, c1) and takes l2's [c2, end), and vice versa; l1 != l2.
     static ListMove tail_swap(int l1, int c1, int l2, int c2, int element1 = -1,
                              int element2 = -1) {
-        return {Kind::TAIL_SWAP, l1, c1, l2, c2, 0, 0, element1, element2};
+        return {Kind::TailSwap, l1, c1, l2, c2, 0, 0, element1, element2};
     }
     // Replace l1's [p1, p1+len1) with l2's [p2, p2+len2) and vice versa;
     // l1 != l2, either length may be 0.
     static ListMove exchange(int l1, int p1, int len1, int l2, int p2, int len2,
                              int element1 = -1, int element2 = -1) {
-        return {Kind::EXCHANGE, l1, p1, l2, p2, len1, len2, element1, element2};
+        return {Kind::Exchange, l1, p1, l2, p2, len1, len2, element1, element2};
     }
 };
 
@@ -86,15 +86,15 @@ struct ListMoves {
     static bool preview(Objective<Solution>& calc, const ListMove& m,
                         Score& out) {
         switch (m.kind) {
-            case ListMove::Kind::SEGMENT:
+            case ListMove::Kind::Segment:
                 return calc.preview_segment_move(m.l1, m.p1, m.len1, m.l2, m.p2, out);
-            case ListMove::Kind::SWAP:
+            case ListMove::Kind::Swap:
                 return calc.preview_swap(m.l1, m.p1, m.l2, m.p2, out);
-            case ListMove::Kind::REVERSE:
+            case ListMove::Kind::Reverse:
                 return calc.preview_reverse(m.l1, m.p1, m.p2, out);
-            case ListMove::Kind::TAIL_SWAP:
+            case ListMove::Kind::TailSwap:
                 return calc.preview_tail_swap(m.l1, m.p1, m.l2, m.p2, out);
-            case ListMove::Kind::EXCHANGE:
+            case ListMove::Kind::Exchange:
                 return calc.preview_exchange(m.l1, m.p1, m.len1, m.l2, m.p2, m.len2, out);
         }
         return false;
@@ -103,19 +103,19 @@ struct ListMoves {
     static void apply(Editor<Solution>& editor, ElementIndex<Solution>& index,
                       const ListMove& m) {
         switch (m.kind) {
-            case ListMove::Kind::SEGMENT:
+            case ListMove::Kind::Segment:
                 index.move_segment(editor, m.l1, m.p1, m.len1, m.l2, m.p2);
                 break;
-            case ListMove::Kind::SWAP:
+            case ListMove::Kind::Swap:
                 swap_in_place(editor, index, m);
                 break;
-            case ListMove::Kind::REVERSE:
+            case ListMove::Kind::Reverse:
                 index.reverse(editor, m.l1, m.p1, m.p2);
                 break;
-            case ListMove::Kind::TAIL_SWAP:
+            case ListMove::Kind::TailSwap:
                 index.swap_tails(editor, m.l1, m.p1, m.l2, m.p2);
                 break;
-            case ListMove::Kind::EXCHANGE:
+            case ListMove::Kind::Exchange:
                 index.exchange_segments(editor, m.l1, m.p1, m.len1, m.l2, m.p2, m.len2);
                 break;
         }
@@ -125,21 +125,21 @@ struct ListMoves {
     static void undo(Editor<Solution>& editor, ElementIndex<Solution>& index,
                      const ListMove& m) {
         switch (m.kind) {
-            case ListMove::Kind::SEGMENT:
+            case ListMove::Kind::Segment:
                 // The segment sits at [p2, p2+len1) of l2; `p1` indexes l1
                 // without the segment, which is what move_segment expects.
                 index.move_segment(editor, m.l2, m.p2, m.len1, m.l1, m.p1);
                 break;
-            case ListMove::Kind::SWAP:  // self-inverse
+            case ListMove::Kind::Swap:  // self-inverse
                 swap_in_place(editor, index, m);
                 break;
-            case ListMove::Kind::REVERSE:  // self-inverse
+            case ListMove::Kind::Reverse:  // self-inverse
                 index.reverse(editor, m.l1, m.p1, m.p2);
                 break;
-            case ListMove::Kind::TAIL_SWAP:  // self-inverse with the same cuts
+            case ListMove::Kind::TailSwap:  // self-inverse with the same cuts
                 index.swap_tails(editor, m.l1, m.p1, m.l2, m.p2);
                 break;
-            case ListMove::Kind::EXCHANGE:  // the same exchange with the lengths swapped
+            case ListMove::Kind::Exchange:  // the same exchange with the lengths swapped
                 index.exchange_segments(editor, m.l1, m.p1, m.len2, m.l2, m.p2, m.len1);
                 break;
         }
