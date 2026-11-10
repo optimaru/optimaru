@@ -27,7 +27,7 @@ public:
     // auto-scale below (+43% / +21% / +0.7%), the day-fit value recommender,
     // and destroy-repair as an ordinary move at 2e-4 (2026-08-18, seeds
     // 101..112: scaled:48 -19%, scaled:96 -8.7%, demo neutral — see
-    // ruinRecreateAsMoveWeight). Measured and REJECTED, do not retry without
+    // ruin_recreate_as_move_weight). Measured and REJECTED, do not retry without
     // new evidence:
     //   * near-current-grain value bias (the project-job delay-bias pattern):
     //     -3.5% / -9.1% — attendance conflicts are relieved by long jumps in
@@ -68,7 +68,7 @@ public:
         // Independent parallel starts (the engine's multi-start): each worker
         // receives seed + i and the full wall-clock budget; the best
         // solution wins.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
@@ -79,13 +79,13 @@ public:
         // engine's ALNS). Without this the LA acceptor can lock into a local
         // optimum within milliseconds on small instances and never escape.
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
 
         // Destroy-and-repair as an ORDINARY acceptor-judged move (the engine's
         // lns.as_move_weight), in addition to the stagnation kick above: the
@@ -98,8 +98,8 @@ public:
         // (-0.3%); 1e-4 only -2% and 3e-4/5e-4 noisier-to-worse at scaled:96,
         // 4e-4 worse at scaled:48 — the peak is flat 2e-4 across sizes, not
         // the 0.2/cells scaling rule. 0 disables.
-        double ruinRecreateAsMoveWeight = 2e-4;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = 2e-4;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
@@ -111,7 +111,7 @@ public:
         // disables the hook. 0.8 on the quality bench (scaled:48 +7.4%,
         // scaled:96 +8.4%, demo +0.7%); at 1.0 the search loses the
         // day-crossing states it needs as stepping stones and the gain is gone.
-        double dayFitValueProbability = 0.8;
+        double day_fit_value_probability = 0.8;
 
         std::function<void(std::int64_t, const Score&)> on_new_best;
     };
@@ -131,7 +131,7 @@ public:
     // defaults. The final schedule.score is computed by THIS calculator and
     // the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score. Single-start: the
-    // caller-owned calculator cannot be cloned, so parallelSolverCount is
+    // caller-owned calculator cannot be cloned, so parallel_solver_count is
     // ignored.
     void solve(MeetingSchedule& schedule,
                optimaru::DecomposedObjective<MeetingSchedule>& calculator);

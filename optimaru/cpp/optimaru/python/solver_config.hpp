@@ -85,7 +85,7 @@ template <typename Config, typename = void>
 struct HasRuinRecreateRewards : std::false_type {};
 template <typename Config>
 struct HasRuinRecreateRewards<Config,
-                              std::void_t<decltype(std::declval<Config&>().ruinRecreateRewards)>>
+                              std::void_t<decltype(std::declval<Config&>().ruin_recreate_rewards)>>
     : std::true_type {};
 
 }  // namespace detail
@@ -99,12 +99,12 @@ struct HasRuinRecreateRewards<Config,
 //   step_count_limit                 Config::step_limit         (0 = no limit)
 //   unimproved_step_count_limit      Config::stall_step_limit   (0 = no limit)
 //   random_seed                      Config::seed
-//   parallel_solver_count            Config::parallelSolverCount, > 0
+//   parallel_solver_count            Config::parallel_solver_count, > 0
 //   late_acceptance_size             Config::history_length, >= 0 with 0 = auto;
 //                                    > 0 when `late_acceptance_auto` is false
 //                                    (a use case without an automatic size)
 //   full_assert                      Config::score_checks == ScoreChecks::Full
-//   ruin_recreate_rewards            Config::ruinRecreateRewards, exactly 4
+//   ruin_recreate_rewards            Config::ruin_recreate_rewards, exactly 4
 //                                    values (only where the Config has it)
 //
 // A use case binds its own fields (move weights, nearby settings,
@@ -132,12 +132,12 @@ Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
     cls.def_readwrite("unimproved_step_count_limit", &Config::stall_step_limit);
     cls.def_readwrite("random_seed", &Config::seed);
     cls.def_property(
-            "parallel_solver_count", [](const Config& c) { return c.parallelSolverCount; },
+            "parallel_solver_count", [](const Config& c) { return c.parallel_solver_count; },
             [](Config& c, int count) {
                 if (count <= 0) {
                     throw pybind11::value_error("parallel_solver_count must be positive");
                 }
-                c.parallelSolverCount = count;
+                c.parallel_solver_count = count;
             });
     cls.def_property(
             "late_acceptance_size", [](const Config& c) { return c.history_length; },
@@ -154,13 +154,13 @@ Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
             [](Config& c, bool on) { c.score_checks = on ? ScoreChecks::Full : ScoreChecks::Off; });
     if constexpr (detail::HasRuinRecreateRewards<Config>::value) {
         cls.def_property(
-                "ruin_recreate_rewards", [](const Config& c) { return c.ruinRecreateRewards; },
+                "ruin_recreate_rewards", [](const Config& c) { return c.ruin_recreate_rewards; },
                 [](Config& c, std::vector<double> rewards) {
                     if (rewards.size() != 4) {
                         throw pybind11::value_error(
                                 "ruin_recreate_rewards must contain exactly 4 values");
                     }
-                    c.ruinRecreateRewards = std::move(rewards);
+                    c.ruin_recreate_rewards = std::move(rewards);
                 });
     }
     return cls;

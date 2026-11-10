@@ -232,13 +232,15 @@ PYBIND11_MODULE(_core, m) {
                     })
             .def_property(
                     "simulated_annealing_temperature_fraction",
-                    [](const Solver::Config& c) { return c.simulatedAnnealingTemperatureFraction; },
+                    [](const Solver::Config& c) {
+                        return c.simulated_annealing_temperature_fraction;
+                    },
                     [](Solver::Config& c, double f) {
                         if (!(f > 0.0) || !std::isfinite(f))
                             throw py::value_error(
                                     "simulated_annealing_temperature_fraction must be finite and > "
                                     "0");
-                        c.simulatedAnnealingTemperatureFraction = f;
+                        c.simulated_annealing_temperature_fraction = f;
                     })
             // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
             // stops at the first feasible solution.

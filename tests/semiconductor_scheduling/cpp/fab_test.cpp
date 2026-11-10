@@ -535,7 +535,7 @@ void testSolver() {
         SemiconductorSchedule s = randomInstance(42);
         Solver::Config config;
         config.step_limit = 500;
-        config.parallelSolverCount = 4;
+        config.parallel_solver_count = 4;
         config.seed = 3;
         Solver(config).solve(s);
         SemiconductorSchedule rescored = s;

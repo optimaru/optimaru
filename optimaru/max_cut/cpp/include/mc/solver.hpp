@@ -56,7 +56,7 @@ public:
         // best score wins. Only worker 0 calls on_new_best. An exception in a
         // worker (a throwing on_new_best included) stops the other workers and
         // is rethrown by solve(). Ignored by the constraint-assembly overload.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).
@@ -67,18 +67,18 @@ public:
         // engine's greedy recreate puts each back on its better side.
         // Ignored in exact-size mode.
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
         // Destroy-and-repair as an ordinary acceptor-judged move (engine
         // ruin_recreate.as_move_weight). 0 (default) disables it; ignored in
         // exact-size mode.
-        double ruinRecreateAsMoveWeight = 0.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = 0.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Assignment move mix. Weights are relative; 0 disables a move. With two
         // sides a change move is a flip; a swap move exchanges a side-0 and a
@@ -115,7 +115,7 @@ public:
     // problem.score is computed by THIS calculator and the calculator is left
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
-    // so parallelSolverCount is ignored.
+    // so parallel_solver_count is ignored.
     void solve(MaxCutProblem& problem, optimaru::DecomposedObjective<MaxCutProblem>& calculator);
 
 private:

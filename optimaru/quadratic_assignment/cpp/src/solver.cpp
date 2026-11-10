@@ -61,11 +61,11 @@ optimaru::Settings engineConfigOf(const Solver::Config& config,
 }
 
 void requireConfig(const Solver::Config& config) {
-    if (config.parallelSolverCount <= 0)
-        throw std::invalid_argument("parallelSolverCount must be positive");
+    if (config.parallel_solver_count <= 0)
+        throw std::invalid_argument("parallel_solver_count must be positive");
     if (config.tabu_tenure < 0) throw std::invalid_argument("entityTabuSize must be >= 0");
-    if (!(config.simulatedAnnealingTemperatureFraction > 0.0))
-        throw std::invalid_argument("simulatedAnnealingTemperatureFraction must be > 0");
+    if (!(config.simulated_annealing_temperature_fraction > 0.0))
+        throw std::invalid_argument("simulated_annealing_temperature_fraction must be > 0");
 }
 
 // SIMULATED_ANNEALING with the auto starting temperature (0, 0): the
@@ -80,7 +80,7 @@ bool autoTemperature(const Solver::Config& config) {
 void installAutoTemperature(const Solver::Config& config,
                             optimaru::Solver<QuadraticAssignmentProblem>& engine) {
     if (!autoTemperature(config)) return;
-    const double fraction = config.simulatedAnnealingTemperatureFraction;
+    const double fraction = config.simulated_annealing_temperature_fraction;
     engine.set_acceptor_factory(
             [fraction](const optimaru::Score& start) -> std::unique_ptr<optimaru::Acceptor> {
                 const double soft = std::max(1.0, fraction * std::fabs(start.soft));
@@ -117,7 +117,7 @@ void Solver::solve(QuadraticAssignmentProblem& problem) {
         // Independent parallel starts through the engine's own multi-start:
         // no custom operator or variable listener is registered, so the
         // worker threads run exactly the same search (seed + i each).
-        const int starts = std::max(1, config_.parallelSolverCount);
+        const int starts = std::max(1, config_.parallel_solver_count);
         optimaru::Solver<QuadraticAssignmentProblem> engine(
                 engineConfigOf(config_, problem, starts));
         installAutoTemperature(config_, engine);

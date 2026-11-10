@@ -215,9 +215,9 @@ void runEngine(const Solver::Config& config, FacilityLocationProblem& problem,
     // Nearby selection: consumer-to-consumer Euclidean degree distance (the
     // ordering is what matters, so the sqrt/meter scaling is skipped). The
     // problem outlives the engine run, so capturing it by reference is safe.
-    if (config.nearbyProbability > 0.0 && config.nearbySize > 0) {
-        engineConfig.search.nearby.probability = config.nearbyProbability;
-        engineConfig.search.nearby.size = config.nearbySize;
+    if (config.nearby_probability > 0.0 && config.nearby_size > 0) {
+        engineConfig.search.nearby.probability = config.nearby_probability;
+        engineConfig.search.nearby.size = config.nearby_size;
         const FacilityLocationProblem& fixed = problem;
         engineConfig.search.nearby.distance = [&fixed](int a, int b) {
             const Location& la = fixed.consumers[a].location;
@@ -230,21 +230,21 @@ void runEngine(const Solver::Config& config, FacilityLocationProblem& problem,
 
     // Distance-ordered facility shortlist per consumer: where
     // CloseFacilityMove looks for a new home for each evicted consumer.
-    const int preferenceKeep = std::min(config.closeFacilityKeep, problem.facilityCount());
+    const int preferenceKeep = std::min(config.close_facility_keep, problem.facilityCount());
     std::shared_ptr<std::vector<int>> preference;
-    if (config.closeFacilityMoves && preferenceKeep > 0)
+    if (config.close_facility_moves && preferenceKeep > 0)
         preference = buildFacilityPreference(problem, preferenceKeep);
 
     // Guided change-move targets: draw the consumer's new facility from its
     // k nearest ones with the configured probability (-1 falls back to the
     // engine's uniform draw).
     std::shared_ptr<std::vector<int>> valuePreference;
-    const int valueKeep = std::min(config.valueRecommenderKeep, problem.facilityCount());
-    if (config.valueRecommenderProbability > 0.0 && valueKeep > 0) {
+    const int valueKeep = std::min(config.value_recommender_keep, problem.facilityCount());
+    if (config.value_recommender_probability > 0.0 && valueKeep > 0) {
         valuePreference = (valueKeep == preferenceKeep && preference)
                                   ? preference
                                   : buildFacilityPreference(problem, valueKeep);
-        const double p = config.valueRecommenderProbability;
+        const double p = config.value_recommender_probability;
         engineConfig.search.value_hint = [valuePreference, valueKeep, p](std::mt19937_64& rng,
                                                                          int entityIndex) -> int {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -256,21 +256,21 @@ void runEngine(const Solver::Config& config, FacilityLocationProblem& problem,
 
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
 
     optimaru::Solver<FacilityLocationProblem> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
     if (preference) {
         engine.add_move_operator(std::make_unique<CloseFacilityMove>(
-                preference, preferenceKeep, config.closeFacilityMigrateProbability));
+                preference, preferenceKeep, config.close_facility_migrate_probability));
     }
     engine.solve(problem, calculator);
 }
@@ -283,8 +283,8 @@ void Solver::solve(FacilityLocationProblem& problem) {
         ScoreCalculator::score(problem);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     // Independent parallel starts (the school-timetabling pattern): worker i
@@ -292,7 +292,7 @@ void Solver::solve(FacilityLocationProblem& problem) {
     // be used, because it runs the built-in move mix only — a registered
     // custom operator like CloseFacilityMove is per-Solver and stateful, so
     // it would silently vanish in the worker threads. The best score wins.
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         std::vector<FacilityLocationProblem> candidates(workerCount, problem);
         std::vector<std::exception_ptr> failures(workerCount);
@@ -305,7 +305,7 @@ void Solver::solve(FacilityLocationProblem& problem) {
                                      [this, &candidates, &failures, &stop](int i) {
                                          try {
                                              Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.parallel_solver_count = 1;
                                              workerConfig.stop_flag = stop;
                                              workerConfig.seed += static_cast<std::uint64_t>(i);
                                              if (i != 0) workerConfig.on_new_best = nullptr;
@@ -337,8 +337,8 @@ void Solver::solve(FacilityLocationProblem& problem) {
 void Solver::solve(FacilityLocationProblem& problem,
                    optimaru::DecomposedObjective<FacilityLocationProblem>& calculator) {
     ScoreCalculator::prepare(problem);  // distance matrix
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!problem.consumers.empty() && !problem.facilities.empty())
         runEngine(config_, problem, calculator);

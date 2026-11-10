@@ -229,16 +229,17 @@ PYBIND11_MODULE(_core, m) {
             .def(py::init<>())
             .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
             .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
             .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
+                           &Solver::Config::ruin_recreate_min_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
+                           &Solver::Config::ruin_recreate_max_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
+                           &Solver::Config::ruin_recreate_max_ruin_count)
             .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+                           &Solver::Config::ruin_recreate_operator_decay)
+            .def_readwrite("ruin_recreate_polish_steps",
+                           &Solver::Config::ruin_recreate_polish_steps)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Early termination once bestScore >= (hard, medium, soft), e.g.

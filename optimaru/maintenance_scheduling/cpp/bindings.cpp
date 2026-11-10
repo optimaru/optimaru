@@ -226,25 +226,26 @@ PYBIND11_MODULE(_core, m) {
     config.def(py::init<>())
             .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
             .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
             .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
+                           &Solver::Config::ruin_recreate_min_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
+                           &Solver::Config::ruin_recreate_max_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
+                           &Solver::Config::ruin_recreate_max_ruin_count)
             .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+                           &Solver::Config::ruin_recreate_operator_decay)
+            .def_readwrite("ruin_recreate_polish_steps",
+                           &Solver::Config::ruin_recreate_polish_steps)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Guided selection (see cpp/src/solver.cpp): change moves draw the
             // start date from the job's own [minStart, idealEnd] window, seed on
             // jobs sitting in a tagConflictCost, and prefer a crew that is free
             // for the whole span.
-            .def_readwrite("window_value_probability", &Solver::Config::windowValueProbability)
-            .def_readwrite("hot_job_probability", &Solver::Config::hotJobProbability)
-            .def_readwrite("free_crew_candidates", &Solver::Config::freeCrewCandidates)
+            .def_readwrite("window_value_probability", &Solver::Config::window_value_probability)
+            .def_readwrite("hot_job_probability", &Solver::Config::hot_job_probability)
+            .def_readwrite("free_crew_candidates", &Solver::Config::free_crew_candidates)
             // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
             // stops at the first feasible solution.
             .def_property(

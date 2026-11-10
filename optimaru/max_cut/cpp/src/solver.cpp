@@ -19,8 +19,8 @@ namespace mc {
 namespace {
 
 void requireRewards(const Solver::Config& config) {
-    if (config.ruinRecreateRewards.size() != 4)
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config.ruin_recreate_rewards.size() != 4)
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
 }
 
 // The engine configuration of one search, shared by both solve() overloads
@@ -47,15 +47,15 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const MaxCutProb
 
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
 
     if (problem.exactSize()) {
         // Swaps only: every other move (a flip, a ruin's unassign-and-recreate,
@@ -144,7 +144,7 @@ void Solver::solve(MaxCutProblem& problem) {
     requireRewards(config_);
     construct(problem);
     if (searchable(problem)) {
-        const int starts = std::max(1, config_.parallelSolverCount);
+        const int starts = std::max(1, config_.parallel_solver_count);
         if (starts == 1) {
             MaxCutIncrementalScoreCalculator calculator;
             optimaru::Solver<MaxCutProblem> engine(engineConfigOf(config_, problem));

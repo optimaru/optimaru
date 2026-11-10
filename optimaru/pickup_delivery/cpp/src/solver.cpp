@@ -557,7 +557,7 @@ void solveInParallel(const Solver::Config& config, PdpRoutePlan& plan, int worke
             workerCount, *stop, [&config, &candidates, &failures, &stop](int i) {
                 try {
                     Solver::Config workerConfig = config;
-                    workerConfig.parallelSolverCount = 1;
+                    workerConfig.parallel_solver_count = 1;
                     workerConfig.stop_flag = stop;
                     workerConfig.seed += static_cast<std::uint64_t>(i);
                     if (i != 0) workerConfig.on_new_best = nullptr;
@@ -622,7 +622,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
     // still placed one at a time (the engine's CH is element-granular), but
     // consecutive placement means the dropoff is inserted while its pickup is
     // the freshest thing in the route.
-    if (config.firstFitDecreasing) {
+    if (config.first_fit_decreasing) {
         const PdpRoutePlan* facts = &plan;
         engineConfig.construction.difficulty = [facts](int nodeIndex) {
             const Node& node = facts->nodes[static_cast<std::size_t>(nodeIndex)];
@@ -644,8 +644,8 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
                     : (plan.nodes.size() > 60
                                ? 5
                                : std::clamp<std::size_t>(4 * plan.nodes.size(), 200, 1600));
-    acceptor.rrt_start_gap = config.recordToRecordStartGap;
-    acceptor.rrt_end_gap = config.recordToRecordEndGap;
+    acceptor.rrt_start_gap = config.record_to_record_start_gap;
+    acceptor.rrt_end_gap = config.record_to_record_end_gap;
 
     auto& moves = engineConfig.search.moves;
     moves.relocate_weight = config.relocate_weight;
@@ -658,22 +658,22 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
 
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     engineConfig.search.descent_weight = config.descent_weight;
     engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
     engineConfig.search.route_elimination_weight = config.route_elimination_weight;
     engineConfig.search.route_elimination_max_size = config.route_elimination_max_size;
-    lns.selection_type = config.ruinRecreateSelectionType;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.selection_segment_length = config.ruinRecreateSelectionSegmentLength;
-    lns.selection_alpha = config.ruinRecreateSelectionAlpha;
+    lns.selection_type = config.ruin_recreate_selection_type;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.selection_segment_length = config.ruin_recreate_selection_segment_length;
+    lns.selection_alpha = config.ruin_recreate_selection_alpha;
     lns.sisr_ruin = config.sisr_ruin;
     lns.route_ruin = config.route_ruin;
     lns.sisr_max_string_removals = config.sisr_max_string_removals;
@@ -681,7 +681,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
     lns.regret_k = config.regret_k;
     lns.blink_rate = config.blink_rate;
 
-    if (config.drivingTimeNearby && plan.nodes.size() > 1) {
+    if (config.driving_time_nearby && plan.nodes.size() > 1) {
         auto locationOfNode = std::make_shared<std::vector<int>>();
         locationOfNode->reserve(plan.nodes.size());
         for (const Node& node : plan.nodes) locationOfNode->push_back(node.locationIndex);
@@ -691,8 +691,9 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
                                                 [static_cast<std::size_t>((*locationOfNode)[b])]);
         };
         engineConfig.search.nearby.size = std::max(
-                1, std::min(config.drivingTimeNearbySize, static_cast<int>(plan.nodes.size()) - 1));
-        engineConfig.search.nearby.probability = config.drivingTimeNearbyProbability;
+                1,
+                std::min(config.driving_time_nearby_size, static_cast<int>(plan.nodes.size()) - 1));
+        engineConfig.search.nearby.probability = config.driving_time_nearby_probability;
     }
 
     return engineConfig;
@@ -713,8 +714,8 @@ Score levelScoreOf(const optimaru::DecomposedObjective<PdpRoutePlan>& calculator
 void Solver::solve(PdpRoutePlan& plan) {
     checkRequiredVehicles(plan);
     // Empty pool so the construction heuristic places every stop itself.
-    if (config_.pairConstructionHeuristic && !plan.vehicles.empty())
-        constructPairs(plan, config_.firstFitDecreasing);
+    if (config_.pair_construction_heuristic && !plan.vehicles.empty())
+        constructPairs(plan, config_.first_fit_decreasing);
     else
         plan.unassignedNodeIndices.clear();
 
@@ -722,11 +723,11 @@ void Solver::solve(PdpRoutePlan& plan) {
         ScoreCalculator::score(plan);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         solveInParallel(config_, plan, workerCount);
         return;
@@ -736,14 +737,14 @@ void Solver::solve(PdpRoutePlan& plan) {
     PdpIncrementalScoreCalculator calculator;
     optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.pairMoves) {
+    if (config_.pair_moves) {
         engine.add_move_operator(std::make_unique<PairRelocateMove>(
-                config_.pairRepairProbability, config_.pairAssignmentProbability));
+                config_.pair_repair_probability, config_.pair_assignment_probability));
     }
-    if (config_.pairExchangeMoves &&
-        static_cast<int>(plan.nodes.size()) >= config_.pairExchangeMinNodes)
+    if (config_.pair_exchange_moves &&
+        static_cast<int>(plan.nodes.size()) >= config_.pair_exchange_min_nodes)
         engine.add_move_operator(std::make_unique<PairExchangeMove>());
-    if (config_.pairRuin) engine.add_ruin_operator(std::make_unique<PairRuin>());
+    if (config_.pair_ruin) engine.add_ruin_operator(std::make_unique<PairRuin>());
     engine.solve(plan, calculator);
 
     plan.score = ScoreCalculator::score(plan);
@@ -751,11 +752,11 @@ void Solver::solve(PdpRoutePlan& plan) {
 
 void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePlan>& calculator) {
     checkRequiredVehicles(plan);
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
-    if (config_.pairConstructionHeuristic && !plan.vehicles.empty())
-        constructPairs(plan, config_.firstFitDecreasing);
+    if (config_.pair_construction_heuristic && !plan.vehicles.empty())
+        constructPairs(plan, config_.first_fit_decreasing);
     if (!plan.nodes.empty() && !plan.vehicles.empty()) {
         optimaru::Settings engineConfig = buildEngineConfig(config_, plan);
         if (config_.on_new_best) {
@@ -774,14 +775,14 @@ void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePla
         // plugin path keeps them — they are what makes a PDP search work.
         optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
         if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-        if (config_.pairMoves) {
+        if (config_.pair_moves) {
             engine.add_move_operator(std::make_unique<PairRelocateMove>(
-                    config_.pairRepairProbability, config_.pairAssignmentProbability));
+                    config_.pair_repair_probability, config_.pair_assignment_probability));
         }
-        if (config_.pairExchangeMoves &&
-            static_cast<int>(plan.nodes.size()) >= config_.pairExchangeMinNodes)
+        if (config_.pair_exchange_moves &&
+            static_cast<int>(plan.nodes.size()) >= config_.pair_exchange_min_nodes)
             engine.add_move_operator(std::make_unique<PairExchangeMove>());
-        if (config_.pairRuin) engine.add_ruin_operator(std::make_unique<PairRuin>());
+        if (config_.pair_ruin) engine.add_ruin_operator(std::make_unique<PairRuin>());
         engine.solve(plan, calculator);
     }
 

@@ -64,7 +64,7 @@ public:
         // --- construction heuristic ---------------------------------------
         // First Fit Decreasing: initialize the tightest-window, largest-demand
         // visits first. Plain First Fit (input order) with false.
-        bool firstFitDecreasing = true;
+        bool first_fit_decreasing = true;
 
         // --- acceptance ---------------------------------------------------
         optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::LateAcceptance;
@@ -75,8 +75,8 @@ public:
         std::size_t history_length = 0;
         // RECORD_TO_RECORD_TRAVEL: the acceptable gap below the best score,
         // as a fraction of the initial objective, shrinking start -> end.
-        double recordToRecordStartGap = 0.02;
-        double recordToRecordEndGap = 0.0;
+        double record_to_record_start_gap = 0.02;
+        double record_to_record_end_gap = 0.0;
 
         // --- move mix -----------------------------------------------------
         double relocate_weight = 0.4;
@@ -106,13 +106,13 @@ public:
         // search improves until the clock runs out on every instance and
         // ends 6.4/8.7% (X-n289), 17.0/17.9% (X-n895, was 22%), with
         // X-n153/491/701 unchanged or better. Destroy-and-repair still runs
-        // as an acceptor-judged move (ruinRecreateAsMoveWeight below).
+        // as an acceptor-judged move (ruin_recreate_as_move_weight below).
         bool ruin_recreate = false;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        std::int64_t ruin_recreate_polish_steps = 5000;
         // Search strategies registered as move operators from
         // optimaru/cpp/optimaru/moves/ and ruin_recreate/.
         // The weights are deliberately small: all three cost far more than one
@@ -121,17 +121,17 @@ public:
         // starve the ordinary move mix above that. SearchSettings records
         // why these are configured rather than adaptively learned — it was
         // tried, and it is the selection schemes that are not ready for it.
-        double ruinRecreateAsMoveWeight = 0.05;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = 0.05;
+        int ruin_recreate_as_move_max_ruin = 12;
         // Granular intensification (Toth & Vigo 2003): enumerate the bounded
         // Exchange/2-opt/2-opt*/CROSS neighbourhood around a nearby route
         // pair. This is more expensive than a sampled move, so keep the
         // strategy at a measured small share of the search budget.
         double descent_weight = 0.03;
         int descent_max_sweeps = 4;
-        bool granularDescent = true;
-        int granularDescentMaxSegment = 2;
-        int granularDescentCandidateRoutes = 4;
+        bool granular_descent = true;
+        int granular_descent_max_segment = 2;
+        int granular_descent_candidate_routes = 4;
         // Empty the smallest route into the others in one move. The (1,0)
         // relocations above cannot do this on their own — the payoff is the two
         // depot legs that only disappear when the LAST visit leaves, so every
@@ -180,13 +180,13 @@ public:
         std::int64_t iterated_local_search_max_evaluations = 5000000;
 
         // Which adaptive scheme weights the ruin operators.
-        optimaru::SelectionScheme ruinRecreateSelectionType =
+        optimaru::SelectionScheme ruin_recreate_selection_type =
                 optimaru::SelectionScheme::RouletteWheel;
-        double ruinRecreateOperatorDecay = 0.8;
+        double ruin_recreate_operator_decay = 0.8;
         // Rewards indexed by outcome: NEW_BEST / BETTER / ACCEPTED / REJECTED.
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreateSelectionSegmentLength = 100;
-        double ruinRecreateSelectionAlpha = 0.05;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_selection_segment_length = 100;
+        double ruin_recreate_selection_alpha = 0.05;
 
         // Ruin operators joining the always-on random / related / worst trio.
         bool sisr_ruin = true;
@@ -205,20 +205,20 @@ public:
         // and what makes the related ruin and the SISR ruin meaningful.
         // The ejection chain and the iterated local search need it: with it
         // off they decline every draw and only burn their share of the steps.
-        bool drivingTimeNearby = true;
+        bool driving_time_nearby = true;
         // Granular neighbourhood (Toth & Vigo 2003); 50 nearest customers was
         // the initial candidate horizon for route-pair intensification.
         // 25 (from 50) with the iterated local search: half the candidates
         // per visit for the descent and the repair, which bought more than
         // the lost reach on Set X (see iterated_local_search_weight).
-        int drivingTimeNearbySize = 25;
-        double drivingTimeNearbyProbability = 1.0;
+        int driving_time_nearby_size = 25;
+        double driving_time_nearby_probability = 1.0;
 
         // --- engine -------------------------------------------------------
         std::uint64_t seed = 0;
         // Independent parallel starts: each worker receives seed + i and
         // the full wall-clock budget; the best final score wins.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; far slower).
         optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
@@ -251,7 +251,7 @@ public:
     // by THIS calculator (its three levels read off level_scores(), before the
     // medium fold) and the calculator is left primed on the final solution,
     // so constraint_totals() explains exactly that score. Single-start: the
-    // caller-owned calculator cannot be cloned, so parallelSolverCount is
+    // caller-owned calculator cannot be cloned, so parallel_solver_count is
     // ignored.
     void solve(VehicleRoutePlan& plan, optimaru::DecomposedObjective<VehicleRoutePlan>& calculator);
 

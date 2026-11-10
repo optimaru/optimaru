@@ -127,24 +127,25 @@ PYBIND11_MODULE(_core, m) {
             .def(py::init<>())
             .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
             .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
             .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
+                           &Solver::Config::ruin_recreate_min_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
+                           &Solver::Config::ruin_recreate_max_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
+                           &Solver::Config::ruin_recreate_max_ruin_count)
             .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+                           &Solver::Config::ruin_recreate_operator_decay)
+            .def_readwrite("ruin_recreate_polish_steps",
+                           &Solver::Config::ruin_recreate_polish_steps)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Nearby selection over matches sharing a team (0 = auto: 4 * teams;
             // negative disables it) and how often a swap partner is drawn from it.
-            .def_readwrite("nearby_size", &Solver::Config::nearbySize)
-            .def_readwrite("nearby_probability", &Solver::Config::nearbyProbability)
+            .def_readwrite("nearby_size", &Solver::Config::nearby_size)
+            .def_readwrite("nearby_probability", &Solver::Config::nearby_probability)
             // Tournament size of the travel-guided entity selection (1 = uniform).
-            .def_readwrite("costliest_match_sample", &Solver::Config::costliestMatchSample)
+            .def_readwrite("costliest_match_sample", &Solver::Config::costliest_match_sample)
             // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
             // stops at the first feasible solution.
             .def_property(

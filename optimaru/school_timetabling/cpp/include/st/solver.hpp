@@ -18,7 +18,7 @@ namespace st {
 // optimaru::Solver<Timetable>. On top of the built-in change/swap moves and
 // the engine's adaptive ruin-and-recreate (ALNS) it registers the same-group
 // nearby meter adopted on the quality bench, which makes classmates the
-// preferred swap partners (see Config::sameGroupNearby).
+// preferred swap partners (see Config::same_group_nearby).
 class Solver {
 public:
     struct Config {
@@ -45,7 +45,7 @@ public:
         // Independent parallel starts (the engine's multi-start): each worker
         // receives seed + i and the full wall-clock budget; the best
         // solution wins.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
@@ -56,13 +56,13 @@ public:
         // engine's ALNS). Without this the LA acceptor can lock into a local
         // optimum within milliseconds on small instances and never escape.
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
 
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
         // the stagnation kick above (engine
@@ -85,8 +85,8 @@ public:
         // and 1480 cells -5.5% at 10s / -4.8% at 20s — so AUTO switches
         // off rather than extrapolate in either direction. See
         // benchmarks/school-timetabling/RESULTS.md.
-        double ruinRecreateAsMoveWeight = -1.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = -1.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Best-improvement descent over one nearby lesson pair (engine
         // SearchSettings::descent_weight): enumerate every slotRoom for
@@ -114,13 +114,13 @@ public:
         // other's nearest neighbors, biasing swap partners toward classmates
         // (group-conflict-neutral swaps) and turning the LNS related ruin
         // into a same-group cluster ruin. Mirrors the canonical solver's
-        // sameClassNearby; adopted on the quality bench (M/L +10% final
+        // same_class_nearby; adopted on the quality bench (M/L +10% final
         // soft, S unchanged). A best-of-k smart swap operator like the
         // canonical solver's was also tried here and measured strictly
         // worse (the k-fold evaluation cost starves this domain's very high
         // move throughput), so it is deliberately absent.
-        bool sameGroupNearby = true;
-        double sameGroupNearbyProbability = 0.5;
+        bool same_group_nearby = true;
+        double same_group_nearby_probability = 0.5;
 
         std::function<void(std::int64_t, const Score&)> on_new_best;
     };

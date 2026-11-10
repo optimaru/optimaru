@@ -36,7 +36,7 @@ void solveInParallel(const Solver::Config& config, VehicleRoutePlan& plan, int w
             workerCount, *stop, [&config, &candidates, &failures, &stop](int i) {
                 try {
                     Solver::Config workerConfig = config;
-                    workerConfig.parallelSolverCount = 1;
+                    workerConfig.parallel_solver_count = 1;
                     workerConfig.stop_flag = stop;
                     workerConfig.seed += static_cast<std::uint64_t>(i);
                     if (i != 0) workerConfig.on_new_best = nullptr;  // only worker 0 reports
@@ -94,7 +94,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
     // window first, with demand as the tie-break — a narrow window is what
     // actually rules placements out, and a visit inserted late into a full
     // route is the one that ends up in the unassigned pool.
-    if (config.firstFitDecreasing) {
+    if (config.first_fit_decreasing) {
         const VehicleRoutePlan* facts = &plan;
         engineConfig.construction.difficulty = [facts](int visitIndex) {
             const Visit& visit = facts->visits[static_cast<std::size_t>(visitIndex)];
@@ -119,8 +119,8 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
                     ? config.history_length
                     : std::clamp<std::size_t>(60000 / std::max<std::size_t>(plan.visits.size(), 1),
                                               100, 400);
-    acceptor.rrt_start_gap = config.recordToRecordStartGap;
-    acceptor.rrt_end_gap = config.recordToRecordEndGap;
+    acceptor.rrt_start_gap = config.record_to_record_start_gap;
+    acceptor.rrt_end_gap = config.record_to_record_end_gap;
 
     auto& moves = engineConfig.search.moves;
     moves.relocate_weight = config.relocate_weight;
@@ -133,18 +133,18 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
 
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     engineConfig.search.descent_weight = config.descent_weight;
     engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
-    engineConfig.search.descent_list_advanced = config.granularDescent;
-    engineConfig.search.descent_list_max_segment = config.granularDescentMaxSegment;
-    engineConfig.search.descent_list_candidate_routes = config.granularDescentCandidateRoutes;
+    engineConfig.search.descent_list_advanced = config.granular_descent;
+    engineConfig.search.descent_list_max_segment = config.granular_descent_max_segment;
+    engineConfig.search.descent_list_candidate_routes = config.granular_descent_candidate_routes;
     engineConfig.search.route_elimination_weight = config.route_elimination_weight;
     engineConfig.search.route_elimination_max_size = config.route_elimination_max_size;
     engineConfig.search.ejection_chain_weight = config.ejection_chain_weight;
@@ -165,11 +165,11 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
     engineConfig.search.iterated_local_search_max_evaluations =
             config.iterated_local_search_max_evaluations;
     engineConfig.search.ejection_chain_max_evaluations = config.ejection_chain_max_evaluations;
-    lns.selection_type = config.ruinRecreateSelectionType;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.selection_segment_length = config.ruinRecreateSelectionSegmentLength;
-    lns.selection_alpha = config.ruinRecreateSelectionAlpha;
+    lns.selection_type = config.ruin_recreate_selection_type;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.selection_segment_length = config.ruin_recreate_selection_segment_length;
+    lns.selection_alpha = config.ruin_recreate_selection_alpha;
     lns.sisr_ruin = config.sisr_ruin;
     lns.route_ruin = config.route_ruin;
     lns.sisr_max_string_removals = config.sisr_max_string_removals;
@@ -180,7 +180,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
     // Driving-time nearby neighborhoods over the visits. The meter reads a
     // snapshot of the visits' location indices plus the precomputed matrix —
     // a pure lookup, safe to share with the engine for the whole solve.
-    if (config.drivingTimeNearby && plan.visits.size() > 1) {
+    if (config.driving_time_nearby && plan.visits.size() > 1) {
         auto locationOfVisit = std::make_shared<std::vector<int>>();
         locationOfVisit->reserve(plan.visits.size());
         for (const Visit& visit : plan.visits) locationOfVisit->push_back(visit.locationIndex);
@@ -189,10 +189,10 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
             return static_cast<double>((*matrix)[static_cast<std::size_t>((*locationOfVisit)[a])]
                                                 [static_cast<std::size_t>((*locationOfVisit)[b])]);
         };
-        engineConfig.search.nearby.size = std::max(
-                1,
-                std::min(config.drivingTimeNearbySize, static_cast<int>(plan.visits.size()) - 1));
-        engineConfig.search.nearby.probability = config.drivingTimeNearbyProbability;
+        engineConfig.search.nearby.size =
+                std::max(1, std::min(config.driving_time_nearby_size,
+                                     static_cast<int>(plan.visits.size()) - 1));
+        engineConfig.search.nearby.probability = config.driving_time_nearby_probability;
     }
     return engineConfig;
 }
@@ -223,11 +223,11 @@ void Solver::solve(VehicleRoutePlan& plan) {
         ScoreCalculator::score(plan);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         solveInParallel(config_, plan, workerCount);
         return;
@@ -246,8 +246,8 @@ void Solver::solve(VehicleRoutePlan& plan) {
 
 void Solver::solve(VehicleRoutePlan& plan,
                    optimaru::DecomposedObjective<VehicleRoutePlan>& calculator) {
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!plan.visits.empty() && !plan.vehicles.empty()) {
         optimaru::Settings engineConfig = buildEngineConfig(config_, plan);

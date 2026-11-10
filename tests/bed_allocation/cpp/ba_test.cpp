@@ -6,7 +6,7 @@
 //       through the engine's Editor protocol (before/set/after)
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) a plain solve reaches hard 0 and initializes every stay
-//   (e) a parallelSolverCount > 1 solve returns a consistently scored winner
+//   (e) a parallel_solver_count > 1 solve returns a consistently scored winner
 //   (f) stays with no night in house occupy nothing in the per-night
 //       occupancy counters
 #include <chrono>
@@ -412,8 +412,8 @@ void verifyFullAssertSolve() {
     config.seed = 3;
     config.score_checks = optimaru::ScoreChecks::Full;
     // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
-    config.ruinRecreateUnimprovedStepTrigger = 200;
-    config.ruinRecreatePolishSteps = 100;
+    config.ruin_recreate_unimproved_step_trigger = 200;
+    config.ruin_recreate_polish_steps = 100;
 
     bool corrupted = false;
     Score finalScore{};
@@ -457,7 +457,7 @@ void verifyFeasibleSolve() {
 }
 
 // -------------------------------------------------------------------------
-// (e) parallelSolverCount > 1: every worker solves its own copy with its own
+// (e) parallel_solver_count > 1: every worker solves its own copy with its own
 // calculator and nearby tables, and the winner's reported score still equals
 // a full recompute on the returned solution.
 // -------------------------------------------------------------------------
@@ -468,7 +468,7 @@ void verifyParallelSolve() {
     Solver::Config config;
     config.time_limit = std::chrono::seconds(1);
     config.seed = 5;
-    config.parallelSolverCount = 4;
+    config.parallel_solver_count = 4;
     Solver solver(config);
     solver.solve(plan);
 

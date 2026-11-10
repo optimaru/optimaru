@@ -74,7 +74,7 @@ def test_default_constraints_reproduce_the_monolithic_cost_function():
     """A cost function assembled from all default specs must equal the monolithic scoring.
 
     Whether both paths reach the same **solution** cannot be checked: three knobs do
-    not apply on the plugin path — parallelSolverCount and two guided selection hooks
+    not apply on the plugin path — parallel_solver_count and two guided selection hooks
     (windowValueProbability / hotJobProbability) read the monolithic calculator's
     live state (cpp/include/mnt/solver.hpp)."""
     schedule = build_schedule()

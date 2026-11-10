@@ -42,23 +42,23 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     engineConfig.search.moves.swap_weight = config.swap_weight;
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
     // as_move_weight < 0 = auto: the budget-share rule (weight * valueRange
     // ~ 0.2; see Config).
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight >= 0.0
-                                 ? config.ruinRecreateAsMoveWeight
+    lns.as_move_weight = config.ruin_recreate_as_move_weight >= 0.0
+                                 ? config.ruin_recreate_as_move_weight
                                  : 0.2 / std::max(1, schedule.slotRoomCount());
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     engineConfig.search.descent_weight = config.descent_weight;
 
     // Per-talk type-compatible (timeslot, room) cells. Change moves draw from this
-    // list with compatibleValueProbability; the construction heuristic
+    // list with compatible_value_probability; the construction heuristic
     // additionally initializes the most constrained talks first.
     const int slotCount = schedule.timeslotCount();
     const int roomCount = schedule.roomCount();
@@ -79,8 +79,8 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
         // Fewer compatible cells == harder; First Fit Decreasing.
         return -static_cast<double>((*compatibleValues)[talkIndex].size());
     };
-    if (config.compatibleValueProbability > 0.0) {
-        const double probability = config.compatibleValueProbability;
+    if (config.compatible_value_probability > 0.0) {
+        const double probability = config.compatible_value_probability;
         engineConfig.search.value_hint = [compatibleValues, probability](std::mt19937_64& rng,
                                                                          int talkIndex) -> int {
             const std::vector<int>& values = (*compatibleValues)[talkIndex];
@@ -102,8 +102,8 @@ void Solver::solve(ConferenceSchedule& schedule) {
         ScoreCalculator::score(schedule);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     // Independent parallel starts, fanned out here rather than through the
@@ -112,7 +112,7 @@ void Solver::solve(ConferenceSchedule& schedule) {
     // hand every thread one unsegmented full-budget run. Worker i solves its
     // own copy with seed + i; the best final score wins. (The
     // school-timetabling canonical solver fans out here for the same reason.)
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         std::vector<ConferenceSchedule> candidates(workerCount, schedule);
         std::vector<std::exception_ptr> failures(workerCount);
@@ -125,7 +125,7 @@ void Solver::solve(ConferenceSchedule& schedule) {
                                      [this, &candidates, &failures, &stop](int i) {
                                          try {
                                              Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.parallel_solver_count = 1;
                                              workerConfig.stop_flag = stop;
                                              workerConfig.seed += static_cast<std::uint64_t>(i);
                                              if (i != 0) workerConfig.on_new_best = nullptr;
@@ -150,7 +150,7 @@ void Solver::solve(ConferenceSchedule& schedule) {
     optimaru::Settings engineConfig = buildEngineConfig(config_, schedule);
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks),
-    // run as `restartSegments` consecutive segments over the one wall-clock
+    // run as `restart_segments` consecutive segments over the one wall-clock
     // budget (iterated local search).
     //
     // Why segment at all: on this domain a single local-search run stops
@@ -171,7 +171,7 @@ void Solver::solve(ConferenceSchedule& schedule) {
     const bool segmentable = config_.step_limit == 0 && config_.stall_step_limit == 0 &&
                              config_.stall_time_limit.count() == 0 &&
                              config_.time_limit.count() > 0;
-    const int segments = segmentable ? std::max(1, config_.restartSegments) : 1;
+    const int segments = segmentable ? std::max(1, config_.restart_segments) : 1;
     const auto deadline = std::chrono::steady_clock::now() + config_.time_limit;
 
     // The engine's step counter restarts with each segment; keep the
@@ -203,11 +203,11 @@ void Solver::solve(ConferenceSchedule& schedule) {
             lastStep = step;
             if (config_.on_new_best) config_.on_new_best(stepOffset + step, sc);
         };
-        // Violation-guided entity selection (see Config::hotTalkProbability):
+        // Violation-guided entity selection (see Config::hot_talk_probability):
         // rejection-sample a few uniform draws against the calculator's O(1)
         // hot-talk check; -1 falls back to the uniform draw.
-        if (config_.hotTalkProbability > 0.0) {
-            const double probability = config_.hotTalkProbability;
+        if (config_.hot_talk_probability > 0.0) {
+            const double probability = config_.hot_talk_probability;
             const int talkCount = static_cast<int>(schedule.talks.size());
             segmentConfig.search.entity_hint = [&calculator, probability,
                                                 talkCount](std::mt19937_64& rng) -> int {
@@ -239,8 +239,8 @@ void Solver::solve(ConferenceSchedule& schedule) {
 void Solver::solve(ConferenceSchedule& schedule,
                    optimaru::DecomposedObjective<ConferenceSchedule>& calculator) {
     ScoreCalculator::prepare(schedule);
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!schedule.talks.empty() && schedule.slotRoomCount() != 0) {
         // One segment, one start: both the segmented restarts and the

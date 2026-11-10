@@ -51,20 +51,20 @@ void configureEngine(const Solver::Config& config, const BedPlan& plan,
     engineConfig.search.descent_weight = 0.2 / static_cast<double>(plan.beds.size() + 1);
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
 
     // Nearby selection over the stays' date windows: two stays are close when
     // they occupy nearly the same nights. Such a pair can trade beds without
     // disturbing anyone else's occupancy, which is what makes a swap move
     // useful here, and the LNS related ruin then removes one temporal cluster
     // (the contended nights) instead of a scattered set.
-    if (config.nearbyProbability > 0.0) {
+    if (config.nearby_probability > 0.0) {
         const BedPlan* planPtr = &plan;
         engineConfig.search.nearby.distance = [planPtr](int a, int b) {
             const Stay& x = planPtr->stays[a];
@@ -72,8 +72,8 @@ void configureEngine(const Solver::Config& config, const BedPlan& plan,
             return static_cast<double>(std::abs(x.arrivalDay - y.arrivalDay) +
                                        std::abs(x.departureDay - y.departureDay));
         };
-        engineConfig.search.nearby.size = std::max(1, config.nearbySize);
-        engineConfig.search.nearby.probability = config.nearbyProbability;
+        engineConfig.search.nearby.size = std::max(1, config.nearby_size);
+        engineConfig.search.nearby.probability = config.nearby_probability;
     }
 }
 
@@ -134,8 +134,8 @@ void Solver::solve(BedPlan& plan) {
         ScoreCalculator::score(plan);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     // Independent parallel starts (the school-timetabling pattern): worker i
@@ -143,7 +143,7 @@ void Solver::solve(BedPlan& plan) {
     // config, so the nearby distance meter reads the very plan its worker
     // solves instead of a solution shared across threads. The best final score
     // wins.
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         std::vector<BedPlan> candidates(workerCount, plan);
         std::vector<std::exception_ptr> failures(workerCount);
@@ -156,7 +156,7 @@ void Solver::solve(BedPlan& plan) {
                                      [this, &candidates, &failures, &stop](int i) {
                                          try {
                                              Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.parallel_solver_count = 1;
                                              workerConfig.stop_flag = stop;
                                              workerConfig.seed += static_cast<std::uint64_t>(i);
                                              if (i != 0) workerConfig.on_new_best = nullptr;
@@ -187,8 +187,8 @@ void Solver::solve(BedPlan& plan) {
 
 void Solver::solve(BedPlan& plan, optimaru::DecomposedObjective<BedPlan>& calculator) {
     ScoreCalculator::prepare(plan);  // intern equipment ids / priorities
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!plan.stays.empty()) solveSingle(config_, plan, calculator);
 

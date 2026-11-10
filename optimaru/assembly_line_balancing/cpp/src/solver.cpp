@@ -216,9 +216,9 @@ void runEngine(const Solver::Config& config, AssemblyLineBalancingProblem& probl
     // window (-1 falls back to the engine's uniform draw). The engine solves
     // in place, so the problem captured here IS the working solution and the
     // window reads the live stations.
-    if (config.valueRecommenderProbability > 0.0) {
+    if (config.value_recommender_probability > 0.0) {
         const AssemblyLineBalancingProblem& live = problem;
-        const double p = config.valueRecommenderProbability;
+        const double p = config.value_recommender_probability;
         engineConfig.search.value_hint = [&live, p](std::mt19937_64& rng, int task) -> int {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
             if (unit(rng) >= p) return -1;
@@ -234,26 +234,26 @@ void runEngine(const Solver::Config& config, AssemblyLineBalancingProblem& probl
 
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
 
     optimaru::Solver<AssemblyLineBalancingProblem> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
-    if (config.closeStationMoves && problem.stationCount >= 2)
+    if (config.close_station_moves && problem.stationCount >= 2)
         engine.add_move_operator(std::make_unique<CloseStationMove>(rank));
     engine.solve(problem, calculator);
 }
 
 void requireRewards(const Solver::Config& config) {
-    if (config.ruinRecreateRewards.size() != 4)
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config.ruin_recreate_rewards.size() != 4)
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
 }
 
 // One start on an already constructed problem, scored by the monolithic
@@ -282,7 +282,7 @@ void Solver::solve(AssemblyLineBalancingProblem& problem) {
     // be used, because a registered custom operator like CloseStationMove is
     // per-Solver and stateful, so it would silently vanish in the worker
     // threads. The best score wins (the lowest worker index on ties).
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         std::vector<AssemblyLineBalancingProblem> candidates(workerCount, problem);
         std::vector<std::exception_ptr> failures(workerCount);
@@ -295,7 +295,7 @@ void Solver::solve(AssemblyLineBalancingProblem& problem) {
                                      [this, &candidates, &failures, &stop, &rank](int i) {
                                          try {
                                              Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.parallel_solver_count = 1;
                                              workerConfig.stop_flag = stop;
                                              workerConfig.seed += static_cast<std::uint64_t>(i);
                                              if (i != 0) workerConfig.on_new_best = nullptr;

@@ -98,7 +98,7 @@ class SolverConfig:
     ruin_recreate_polish_steps: int
     ruin_recreate_as_move_weight: float
     """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
-    ruinRecreate.asMoveWeight). 0 = off."""
+    ruin_recreate.as_move_weight). 0 = off."""
     ruin_recreate_as_move_max_ruin: int
     change_move_weight: float
     swap_move_weight: float

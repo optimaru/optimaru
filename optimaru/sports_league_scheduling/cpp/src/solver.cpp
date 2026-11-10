@@ -41,20 +41,20 @@ void configureEngine(const Solver::Config& config, LeagueSchedule& schedule,
     engineConfig.search.moves.swap_weight = config.swap_weight;
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
 
-    // Nearby selection (see Config::nearbySize): two matches are "near" when
+    // Nearby selection (see Config::nearby_size): two matches are "near" when
     // they share a team — the only way two matches can directly trade travel
     // — and among those the closest are the ones whose venues are closest.
     // Biases the swap partner and drives the LNS related ruin toward one
     // team's cluster of fixtures.
-    if (config.nearbySize >= 0) {
+    if (config.nearby_size >= 0) {
         const LeagueSchedule* s = &schedule;
         engineConfig.search.nearby.distance = [s](int a, int b) {
             const Match& x = s->matches[a];
@@ -65,10 +65,10 @@ void configureEngine(const Solver::Config& config, LeagueSchedule& schedule,
                                                         s->distance(x.awayTeam, y.awayTeam));
             return (shared ? 0.0 : 1.0e9) + venueGap;
         };
-        // nearbySize 0 = auto (see Config): a match's whole shared-team set.
+        // nearby_size 0 = auto (see Config): a match's whole shared-team set.
         engineConfig.search.nearby.size =
-                config.nearbySize > 0 ? config.nearbySize : 4 * schedule.teamCount();
-        engineConfig.search.nearby.probability = config.nearbyProbability;
+                config.nearby_size > 0 ? config.nearby_size : 4 * schedule.teamCount();
+        engineConfig.search.nearby.probability = config.nearby_probability;
     }
 }
 
@@ -80,8 +80,8 @@ void Solver::solve(LeagueSchedule& schedule) {
         ScoreCalculator::score(schedule);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     // Independent parallel starts (the school-timetabling pattern): worker i
@@ -89,7 +89,7 @@ void Solver::solve(LeagueSchedule& schedule) {
     // working solution and the live calculator, so the engine's built-in
     // multi-start — which shares one config across threads — cannot be used.
     // The best final score wins.
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         std::vector<LeagueSchedule> candidates(workerCount, schedule);
         std::vector<std::exception_ptr> failures(workerCount);
@@ -102,7 +102,7 @@ void Solver::solve(LeagueSchedule& schedule) {
                                      [this, &candidates, &failures, &stop](int i) {
                                          try {
                                              Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.parallel_solver_count = 1;
                                              workerConfig.stop_flag = stop;
                                              workerConfig.seed += static_cast<std::uint64_t>(i);
                                              if (i != 0) workerConfig.on_new_best = nullptr;
@@ -134,12 +134,12 @@ void Solver::solve(LeagueSchedule& schedule) {
 
     // Travel-guided entity selection (the "worst" removal of ALNS, applied to
     // move selection): the moved match is the most expensive of
-    // costliestMatchSample randomly drawn matches. Hard violations are gone
+    // costliest_match_sample randomly drawn matches. Hard violations are gone
     // within milliseconds here — the whole 30s budget goes into travel — so
     // the guidance that pays off is toward the matches actually carrying the
     // travel, not toward violations.
-    if (config_.costliestMatchSample > 1) {
-        const int sample = config_.costliestMatchSample;
+    if (config_.costliest_match_sample > 1) {
+        const int sample = config_.costliest_match_sample;
         engineConfig.search.entity_hint = [&calculator, sample](std::mt19937_64& rng) -> int {
             return calculator.costliestMatch(rng, sample);
         };
@@ -157,8 +157,8 @@ void Solver::solve(LeagueSchedule& schedule) {
 void Solver::solve(LeagueSchedule& schedule,
                    optimaru::DecomposedObjective<LeagueSchedule>& calculator) {
     ScoreCalculator::prepare(schedule);  // intern pair ids / index tables
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!schedule.matches.empty() && schedule.roundCount() != 0) {
         // No travel-guided entity recommender here: it reads the monolithic

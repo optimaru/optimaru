@@ -48,14 +48,17 @@ void bindSolverConfigCommon(py::class_<Config>& cls) {
     cls.def(py::init<>())
             .def_readwrite("ruin_recreate", &Config::ruin_recreate)
             .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Config::ruinRecreateUnimprovedStepTrigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction", &Config::ruinRecreateMinRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction", &Config::ruinRecreateMaxRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_count", &Config::ruinRecreateMaxRuinCount)
-            .def_readwrite("ruin_recreate_operator_decay", &Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Config::ruinRecreatePolishSteps)
-            .def_readwrite("ruin_recreate_as_move_weight", &Config::ruinRecreateAsMoveWeight)
-            .def_readwrite("ruin_recreate_as_move_max_ruin", &Config::ruinRecreateAsMoveMaxRuin)
+                           &Config::ruin_recreate_unimproved_step_trigger)
+            .def_readwrite("ruin_recreate_min_ruin_fraction",
+                           &Config::ruin_recreate_min_ruin_fraction)
+            .def_readwrite("ruin_recreate_max_ruin_fraction",
+                           &Config::ruin_recreate_max_ruin_fraction)
+            .def_readwrite("ruin_recreate_max_ruin_count", &Config::ruin_recreate_max_ruin_count)
+            .def_readwrite("ruin_recreate_operator_decay", &Config::ruin_recreate_operator_decay)
+            .def_readwrite("ruin_recreate_polish_steps", &Config::ruin_recreate_polish_steps)
+            .def_readwrite("ruin_recreate_as_move_weight", &Config::ruin_recreate_as_move_weight)
+            .def_readwrite("ruin_recreate_as_move_max_ruin",
+                           &Config::ruin_recreate_as_move_max_ruin)
             .def_readwrite("descent_weight", &Config::descent_weight)
             .def_readwrite("descent_max_sweeps", &Config::descent_max_sweeps)
             .def_readwrite("change_move_weight", &Config::change_weight)
@@ -505,19 +508,19 @@ void bindCanon(py::module_& canon) {
     // none, the plugin path's components carry their own).
     config.def_readwrite("weights", &cn::Solver::Config::weights);
     // Same-class nearby swap bias (see canonical_solver.hpp).
-    config.def_readwrite("same_class_nearby", &cn::Solver::Config::sameClassNearby);
+    config.def_readwrite("same_class_nearby", &cn::Solver::Config::same_class_nearby);
     config.def_readwrite("same_class_nearby_probability",
-                         &cn::Solver::Config::sameClassNearbyProbability);
+                         &cn::Solver::Config::same_class_nearby_probability);
     // Violation-guided entity selection (see canonical_solver.hpp).
-    config.def_readwrite("hot_lesson_probability", &cn::Solver::Config::hotLessonProbability);
+    config.def_readwrite("hot_lesson_probability", &cn::Solver::Config::hot_lesson_probability);
     // Smart same-class swap operator (see canonical_solver.hpp).
-    config.def_readwrite("smart_class_swap_moves", &cn::Solver::Config::smartClassSwapMoves);
+    config.def_readwrite("smart_class_swap_moves", &cn::Solver::Config::smart_class_swap_moves);
     config.def_readwrite("smart_class_swap_candidates",
-                         &cn::Solver::Config::smartClassSwapCandidates);
+                         &cn::Solver::Config::smart_class_swap_candidates);
     // Best-of-k width of the re-assign move — only in play when the assembly
     // demotes unassigned_lessons_cost to soft (partial timetabling; see
     // canonical_solver.hpp for the sweep).
-    config.def_readwrite("reassign_candidates", &cn::Solver::Config::reassignCandidates);
+    config.def_readwrite("reassign_candidates", &cn::Solver::Config::reassign_candidates);
 
     py::class_<cn::Solver>(canon, "Solver", py::module_local())
             .def(py::init<>())
@@ -642,9 +645,9 @@ PYBIND11_MODULE(_core, m) {
     optimaru::python::bind_solver_config(config);
     bindSolverConfigCommon(config);
     // Same-group nearby swap bias (see st/solver.hpp).
-    config.def_readwrite("same_group_nearby", &Solver::Config::sameGroupNearby);
+    config.def_readwrite("same_group_nearby", &Solver::Config::same_group_nearby);
     config.def_readwrite("same_group_nearby_probability",
-                         &Solver::Config::sameGroupNearbyProbability);
+                         &Solver::Config::same_group_nearby_probability);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

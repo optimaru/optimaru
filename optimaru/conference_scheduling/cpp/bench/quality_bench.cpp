@@ -325,7 +325,7 @@ int main(int argc, char** argv) {
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = seed;
-    config.parallelSolverCount = 1;
+    config.parallel_solver_count = 1;
     for (int a = 4; a < argc; ++a) {
         const char* eq = std::strchr(argv[a], '=');
         if (!eq) {
@@ -335,7 +335,7 @@ int main(int argc, char** argv) {
         const std::string key(argv[a], eq - argv[a]);
         const double value = std::atof(eq + 1);
         if (key == "compatProb")
-            config.compatibleValueProbability = value;
+            config.compatible_value_probability = value;
         else if (key == "la")
             config.history_length = static_cast<std::size_t>(value);
         else if (key == "change")
@@ -343,27 +343,27 @@ int main(int argc, char** argv) {
         else if (key == "swap")
             config.swap_weight = value;
         else if (key == "alnsTrigger")
-            config.ruinRecreateUnimprovedStepTrigger = static_cast<std::int64_t>(value);
+            config.ruin_recreate_unimproved_step_trigger = static_cast<std::int64_t>(value);
         else if (key == "alnsPolish")
-            config.ruinRecreatePolishSteps = static_cast<std::int64_t>(value);
+            config.ruin_recreate_polish_steps = static_cast<std::int64_t>(value);
         else if (key == "minRuin")
-            config.ruinRecreateMinRuinFraction = value;
+            config.ruin_recreate_min_ruin_fraction = value;
         else if (key == "maxRuin")
-            config.ruinRecreateMaxRuinFraction = value;
+            config.ruin_recreate_max_ruin_fraction = value;
         else if (key == "maxRuinCount")
-            config.ruinRecreateMaxRuinCount = static_cast<int>(value);
+            config.ruin_recreate_max_ruin_count = static_cast<int>(value);
         else if (key == "decay")
-            config.ruinRecreateOperatorDecay = value;
+            config.ruin_recreate_operator_decay = value;
         else if (key == "segments")
-            config.restartSegments = static_cast<int>(value);
+            config.restart_segments = static_cast<int>(value);
         else if (key == "asMove")
-            config.ruinRecreateAsMoveWeight = value;
+            config.ruin_recreate_as_move_weight = value;
         else if (key == "asMoveMaxRuin")
-            config.ruinRecreateAsMoveMaxRuin = static_cast<int>(value);
+            config.ruin_recreate_as_move_max_ruin = static_cast<int>(value);
         else if (key == "descent")
             config.descent_weight = value;
         else if (key == "hot")
-            config.hotTalkProbability = value;
+            config.hot_talk_probability = value;
         else {
             std::fprintf(stderr, "unknown knob %s\n", key.c_str());
             return 2;

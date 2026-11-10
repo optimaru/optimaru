@@ -47,7 +47,7 @@ public:
         // Independent parallel starts (the engine's multi-start): each worker
         // receives seed + i and the full wall-clock budget; the best
         // solution wins.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
@@ -58,13 +58,13 @@ public:
         // engine's ALNS). Without this the LA acceptor can lock into a local
         // optimum within milliseconds on small instances and never escape.
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
 
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
@@ -78,8 +78,8 @@ public:
         // = auto: 4 * teamCount, which covers a match's whole shared-team set
         // (4 * teamCount - 6 of them in a double round robin); a negative
         // value disables nearby selection.
-        int nearbySize = 0;
-        double nearbyProbability = 0.95;
+        int nearby_size = 0;
+        double nearby_probability = 0.95;
 
         // Travel-guided entity selection: every move picks this many random
         // matches and moves the one currently carrying the most travel (plus
@@ -87,7 +87,7 @@ public:
         // calculator's per-match soft cost. 1 (or 0) selects uniformly.
         // The guidance stands down while the solution is infeasible (see
         // SportsLeagueIncrementalScoreCalculator::costliestMatch).
-        int costliestMatchSample = 4;
+        int costliest_match_sample = 4;
 
         std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
@@ -111,9 +111,9 @@ public:
     // the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score.
     //
-    // Two knobs do not apply on this path: parallelSolverCount (the
+    // Two knobs do not apply on this path: parallel_solver_count (the
     // caller-owned calculator cannot be cloned across workers) and
-    // costliestMatchSample (the travel-guided entity recommender reads the
+    // costliest_match_sample (the travel-guided entity recommender reads the
     // monolithic calculator's per-match travel costs). The search is the
     // engine's construction heuristic + late-acceptance local search + ALNS
     // kicks.

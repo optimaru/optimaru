@@ -289,8 +289,8 @@ void verifyFullAssertSolve() {
     config.step_limit = 1500;
     config.seed = 4;
     config.score_checks = optimaru::ScoreChecks::Full;
-    config.ruinRecreateUnimprovedStepTrigger = 100;
-    config.ruinRecreatePolishSteps = 50;
+    config.ruin_recreate_unimproved_step_trigger = 100;
+    config.ruin_recreate_polish_steps = 50;
     DecomposedCalculator calculator;
     defaultConstraints().weight("workloadImbalanceCost", 1).into(calculator);
     bool corrupted = false;
@@ -806,8 +806,8 @@ void verifyRepeatsAndOffsets() {
         config.step_limit = 1500;
         config.seed = 4;
         config.score_checks = optimaru::ScoreChecks::Full;
-        config.ruinRecreateUnimprovedStepTrigger = 100;
-        config.ruinRecreatePolishSteps = 50;
+        config.ruin_recreate_unimproved_step_trigger = 100;
+        config.ruin_recreate_polish_steps = 50;
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
         bool corrupted = false;

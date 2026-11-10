@@ -139,28 +139,29 @@ PYBIND11_MODULE(_core, m) {
             .def(py::init<>())
             .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
             .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
             .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
+                           &Solver::Config::ruin_recreate_min_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
+                           &Solver::Config::ruin_recreate_max_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
+                           &Solver::Config::ruin_recreate_max_ruin_count)
             .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+                           &Solver::Config::ruin_recreate_operator_decay)
+            .def_readwrite("ruin_recreate_polish_steps",
+                           &Solver::Config::ruin_recreate_polish_steps)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruinRecreateAsMoveWeight)
+                           &Solver::Config::ruin_recreate_as_move_weight)
             .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruinRecreateAsMoveMaxRuin)
+                           &Solver::Config::ruin_recreate_as_move_max_ruin)
             .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             .def_readwrite("value_recommender", &Solver::Config::value_hint)
             // Loaded-team-count macro moves: the search's only way across the
             // medium level's team-count barrier (see ts/solver.hpp).
-            .def_readwrite("team_count_moves", &Solver::Config::teamCountMoves)
+            .def_readwrite("team_count_moves", &Solver::Config::team_count_moves)
             // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
             // stops at the first feasible solution.
             .def_property(

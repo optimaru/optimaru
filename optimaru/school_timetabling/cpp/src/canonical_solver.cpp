@@ -55,15 +55,15 @@ GuidedSetup configureEngine(const Solver::Config& config, const Timetable& table
     engineConfig.search.moves.swap_weight = config.swap_weight;
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     engineConfig.search.descent_weight = config.descent_weight;
     engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
 
@@ -100,11 +100,11 @@ GuidedSetup configureEngine(const Solver::Config& config, const Timetable& table
         setup.lessonsOfClass[classGroup].push_back(i);
     }
 
-    // Same-class nearby neighborhoods (see Config::sameClassNearby). The
+    // Same-class nearby neighborhoods (see Config::same_class_nearby). The
     // neighbor list of a lesson is its classmates (distance 0) up to the
     // largest class size, so a swap partner drawn nearby always shares the
     // class and the LNS related ruin removes one class's cluster.
-    if (config.sameClassNearby) {
+    if (config.same_class_nearby) {
         std::size_t maxClassSize = 0;
         for (const std::vector<int>& members : setup.lessonsOfClass)
             maxClassSize = std::max(maxClassSize, members.size());
@@ -113,7 +113,7 @@ GuidedSetup configureEngine(const Solver::Config& config, const Timetable& table
             return (*classOf)[a] == (*classOf)[b] ? 0.0 : 1.0;
         };
         engineConfig.search.nearby.size = std::max(1, static_cast<int>(maxClassSize) - 1);
-        engineConfig.search.nearby.probability = config.sameClassNearbyProbability;
+        engineConfig.search.nearby.probability = config.same_class_nearby_probability;
     }
 
     // First Fit Decreasing: initialize the most constrained lessons first —
@@ -146,8 +146,8 @@ void Solver::solve(Timetable& table) {
         ScoreCalculator::score(table, config_.weights);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     // Independent parallel starts: worker i
@@ -155,7 +155,7 @@ void Solver::solve(Timetable& table) {
     // guided-selection hooks below read live calculator state, so the engine's
     // built-in multi-start (which shares the config across threads) cannot be
     // used. The best final score wins.
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         std::vector<Timetable> candidates(workerCount, table);
         std::vector<std::exception_ptr> failures(workerCount);
@@ -168,7 +168,7 @@ void Solver::solve(Timetable& table) {
                                      [this, &candidates, &failures, &stop](int i) {
                                          try {
                                              Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.parallel_solver_count = 1;
                                              workerConfig.stop_flag = stop;
                                              workerConfig.seed += static_cast<std::uint64_t>(i);
                                              if (i != 0) workerConfig.on_new_best = nullptr;
@@ -199,11 +199,11 @@ void Solver::solve(Timetable& table) {
     CanonicalIncrementalScoreCalculator calculator(config_.weights);
 
     // Violation-guided entity selection (the es guided-moves pattern): with
-    // probability hotLessonProbability the moved lesson is drawn from the
+    // probability hot_lesson_probability the moved lesson is drawn from the
     // lessons currently involved in a hard violation. Once feasible there are
     // no hot lessons, so this falls back to uniform exploration by itself.
-    if (config_.hotLessonProbability > 0.0) {
-        const double probability = config_.hotLessonProbability;
+    if (config_.hot_lesson_probability > 0.0) {
+        const double probability = config_.hot_lesson_probability;
         engineConfig.search.entity_hint = [&calculator, probability](std::mt19937_64& rng) -> int {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
             if (unit(rng) >= probability) return -1;
@@ -214,11 +214,11 @@ void Solver::solve(Timetable& table) {
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     optimaru::Solver<Timetable> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.smartClassSwapMoves) {
+    if (config_.smart_class_swap_moves) {
         engine.add_move_operator(
                 std::make_unique<SmartClassSwapMove<CanonicalIncrementalScoreCalculator>>(
                         setup.lessonsOfClass, *setup.classOf, setup.allowedSlots,
-                        config_.smartClassSwapCandidates, &calculator));
+                        config_.smart_class_swap_candidates, &calculator));
     }
     engine.solve(table, calculator);
 
@@ -233,8 +233,8 @@ void Solver::solve(Timetable& table, optimaru::DecomposedObjective<Timetable>& c
         table.score = calculator.score();
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     optimaru::Settings engineConfig;
@@ -244,8 +244,8 @@ void Solver::solve(Timetable& table, optimaru::DecomposedObjective<Timetable>& c
     // penalized units instead of the monolithic hot sets (see
     // DecomposedHotSource). Falls back to uniform exploration once feasible.
     DecomposedHotSource hotSource(&calculator);
-    if (config_.hotLessonProbability > 0.0) {
-        const double probability = config_.hotLessonProbability;
+    if (config_.hot_lesson_probability > 0.0) {
+        const double probability = config_.hot_lesson_probability;
         engineConfig.search.entity_hint = [&hotSource, probability](std::mt19937_64& rng) -> int {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
             if (unit(rng) >= probability) return -1;
@@ -255,10 +255,10 @@ void Solver::solve(Timetable& table, optimaru::DecomposedObjective<Timetable>& c
 
     optimaru::Solver<Timetable> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.smartClassSwapMoves) {
+    if (config_.smart_class_swap_moves) {
         engine.add_move_operator(std::make_unique<SmartClassSwapMove<DecomposedHotSource>>(
                 setup.lessonsOfClass, *setup.classOf, setup.allowedSlots,
-                config_.smartClassSwapCandidates, &hotSource));
+                config_.smart_class_swap_candidates, &hotSource));
     }
     // Only worth a slot in the move mix when the assembly prices unassignment
     // as a soft penalty; with unassignedLessonsCost hard, unassigning is
@@ -269,7 +269,7 @@ void Solver::solve(Timetable& table, optimaru::DecomposedObjective<Timetable>& c
         // guided by the hot lessons, re-placing is not) and the run ends with
         // far more unassigned than the instance requires.
         engine.add_move_operator(std::make_unique<ReassignMove<DecomposedHotSource>>(
-                setup.allowedSlots, config_.reassignCandidates));
+                setup.allowedSlots, config_.reassign_candidates));
     }
     engine.solve(table, calculator);
 

@@ -66,7 +66,7 @@ def test_solve_config_mirror():
 
 
 def test_parallel_solver_count_workers():
-    """parallelSolverCount>1 is handled by a domain-level fan-out rather than the engine's
+    """parallel_solver_count>1 is handled by a domain-level fan-out rather than the engine's
     built-in multiStart (the domain drives the restartSegments budget). Checks that each
     worker's solve ends normally and the best is adopted."""
     for workers in (2, 4):

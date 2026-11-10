@@ -24,8 +24,8 @@ namespace bp {
 namespace {
 
 void requireRewards(const Solver::Config& config) {
-    if (config.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 }
 
@@ -81,9 +81,9 @@ void runEngine(const Solver::Config& config, BinPackingProblem& problem,
     // bin in use; -1 falls back to the engine's uniform draw over all n
     // bins). The engine solves in place, so the problem captured here IS the
     // working solution and the recommender reads the live bins.
-    if (config.valueRecommenderProbability > 0.0 && problem.itemCount() >= 2) {
+    if (config.value_recommender_probability > 0.0 && problem.itemCount() >= 2) {
         const BinPackingProblem& live = problem;
-        const double p = config.valueRecommenderProbability;
+        const double p = config.value_recommender_probability;
         engineConfig.search.value_hint = [&live, p](std::mt19937_64& rng, int item) -> int {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
             if (unit(rng) >= p) return -1;
@@ -96,23 +96,23 @@ void runEngine(const Solver::Config& config, BinPackingProblem& problem,
 
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
 
     optimaru::Solver<BinPackingProblem> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
-    if (config.emptyBinMoves && problem.itemCount() >= 2)
-        engine.add_move_operator(std::make_unique<EmptyBinMove>(config.emptyBinCandidates));
-    if (config.repackMoves && problem.itemCount() >= 2) {
-        engine.add_move_operator(
-                std::make_unique<RepackMove>(config.emptyBinCandidates, config.repackPartnerBins));
+    if (config.empty_bin_moves && problem.itemCount() >= 2)
+        engine.add_move_operator(std::make_unique<EmptyBinMove>(config.empty_bin_candidates));
+    if (config.repack_moves && problem.itemCount() >= 2) {
+        engine.add_move_operator(std::make_unique<RepackMove>(config.empty_bin_candidates,
+                                                              config.repack_partner_bins));
     }
     engine.solve(problem, calculator);
 }
@@ -152,7 +152,7 @@ void Solver::solve(BinPackingProblem& problem) {
     // because a registered custom operator like EmptyBinMove is per-Solver
     // and stateful, so it would silently vanish in the worker threads. The
     // best score wins (the lowest worker index on ties).
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     const std::vector<int> descending = descendingOrder(problem);
     const bool seeded = std::any_of(problem.items.begin(), problem.items.end(),
                                     [](const Item& item) { return item.bin >= 0; });
@@ -172,7 +172,7 @@ void Solver::solve(BinPackingProblem& problem) {
             workerCount, *stop, [this, seeded, &descending, &candidates, &failures, &stop](int i) {
                 try {
                     Config workerConfig = config_;
-                    workerConfig.parallelSolverCount = 1;
+                    workerConfig.parallel_solver_count = 1;
                     workerConfig.stop_flag = stop;
                     workerConfig.seed += static_cast<std::uint64_t>(i);
                     if (i != 0) workerConfig.on_new_best = nullptr;

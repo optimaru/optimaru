@@ -44,7 +44,7 @@ public:
         // Independent parallel starts (the engine's multi-start): each worker
         // receives seed + i and the full wall-clock budget; the best
         // solution wins.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
@@ -55,13 +55,13 @@ public:
         // engine's ALNS). Reassigning one consumer at a time cannot close a
         // used facility whose consumers must move together; a ruin batch can.
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
 
         // Destroy-and-repair as an ORDINARY move (the engine's
         // ruin_recreate.as_move_weight): a small ruin is repaired, scored and
@@ -70,8 +70,8 @@ public:
         // ~ruinCount * facilityCount score evaluations, so its weight follows
         // the value-range budget-share rule (weight * facilityCount ~ 0.2)
         // measured on the school-timetabling bench. 0 disables it.
-        double ruinRecreateAsMoveWeight = 0.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = 0.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
@@ -81,15 +81,15 @@ public:
         // toward geographically close consumers and upgrades the LNS related
         // ruin. The distance meter is the consumers' Euclidean degree
         // distance. probability 0 (default) leaves selection uniform-random.
-        double nearbyProbability = 0.0;
-        int nearbySize = 20;
+        double nearby_probability = 0.0;
+        int nearby_size = 20;
 
         // Guided change-move targets (engine local_search.value_hint):
         // with this probability the change move draws the consumer's new
-        // facility from its `valueRecommenderKeep` nearest facilities instead
+        // facility from its `value_recommender_keep` nearest facilities instead
         // of uniformly over all of them. 0 (default) = off.
-        double valueRecommenderProbability = 0.0;
-        int valueRecommenderKeep = 8;
+        double value_recommender_probability = 0.0;
+        int value_recommender_keep = 8;
 
         // Assignment descent strategy (engine local_search.descent_weight):
         // best-improvement over one nearby consumer pair — all values of
@@ -108,14 +108,14 @@ public:
         // solver.cpp). facilitySetupCost is a step function no single-consumer
         // move can cross, so without this the search converges in a fraction
         // of a second and then stops improving.
-        bool closeFacilityMoves = true;
+        bool close_facility_moves = true;
         // How far down a consumer's distance-ordered facility list the move
         // looks for a new home.
-        int closeFacilityKeep = 8;
+        int close_facility_keep = 8;
         // Probability that the emptied facility's consumers migrate together
         // to one alternative site instead of being redistributed over the
         // facilities that are already open.
-        double closeFacilityMigrateProbability = 0.25;
+        double close_facility_migrate_probability = 0.25;
 
         std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
@@ -140,7 +140,7 @@ public:
     // problem.score is computed by THIS calculator and the calculator is left
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
-    // so parallelSolverCount is ignored.
+    // so parallel_solver_count is ignored.
     void solve(FacilityLocationProblem& problem,
                optimaru::DecomposedObjective<FacilityLocationProblem>& calculator);
 

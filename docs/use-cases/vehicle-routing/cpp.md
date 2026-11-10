@@ -98,7 +98,7 @@ the opt-in weight-0 objectives (`EnclosingCircleRadiusCost`,
    by re-costing the written-out candidate route, so the same strategies run
    on any constraint assembly.
 3. **Adaptive ruin & recreate (ALNS)** — destroy-and-repair runs as an
-   acceptor-judged move (`ruinRecreateAsMoveWeight`). The unconditional
+   acceptor-judged move (`ruin_recreate_as_move_weight`). The unconditional
    stagnation kick is available (`ruin_recreate = true`) but off by default:
    on a tightly loaded fleet the kicked solution is one the search never
    recovers from, and the best stops moving (see `Solver::Config`).

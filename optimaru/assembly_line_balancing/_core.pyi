@@ -134,7 +134,7 @@ class SolverConfig:
     ruin_recreate_polish_steps: int
     ruin_recreate_as_move_weight: float
     """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
-    ruinRecreate.asMoveWeight); one such move costs ~ruinCount * station count
+    ruin_recreate.as_move_weight); one such move costs ~ruinCount * station count
     score evaluations. 0 = off."""
     ruin_recreate_as_move_max_ruin: int
     change_move_weight: float

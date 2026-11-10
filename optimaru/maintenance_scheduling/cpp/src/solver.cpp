@@ -93,15 +93,15 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     engineConfig.search.moves.swap_weight = config.swap_weight;
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     engineConfig.search.descent_weight = config.descent_weight;
     engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
     return engineConfig;
@@ -115,8 +115,8 @@ void Solver::solve(MaintenanceSchedule& schedule) {
         ScoreCalculator::score(schedule);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     // Independent parallel starts (the school-timetabling pattern): worker i
@@ -124,7 +124,7 @@ void Solver::solve(MaintenanceSchedule& schedule) {
     // selection hooks below read live calculator state, so the engine's
     // built-in multi-start (which shares one config across threads) cannot be
     // used. The best final score wins.
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         std::vector<MaintenanceSchedule> candidates(workerCount, schedule);
         std::vector<std::exception_ptr> failures(workerCount);
@@ -137,7 +137,7 @@ void Solver::solve(MaintenanceSchedule& schedule) {
                                      [this, &candidates, &failures, &stop](int i) {
                                          try {
                                              Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.parallel_solver_count = 1;
                                              workerConfig.stop_flag = stop;
                                              workerConfig.seed += static_cast<std::uint64_t>(i);
                                              if (i != 0) workerConfig.on_new_best = nullptr;
@@ -175,13 +175,13 @@ void Solver::solve(MaintenanceSchedule& schedule) {
     // `top` (a min-of-k bias) was measured clearly worse: the same start
     // dates then pile up and the tagConflictCost term degrades.
     std::shared_ptr<const DateWindows> windows;
-    if (config_.windowValueProbability > 0.0) {
+    if (config_.window_value_probability > 0.0) {
         windows = std::make_shared<const DateWindows>(buildDateWindows(schedule));
-        const double probability = config_.windowValueProbability;
+        const double probability = config_.window_value_probability;
         const int crewCount = schedule.crewCount();
-        const int freeCrewCandidates = config_.freeCrewCandidates;
+        const int free_crew_candidates = config_.free_crew_candidates;
         const MaintenanceSchedule* s = &schedule;
-        engineConfig.search.value_hint = [windows, probability, crewCount, freeCrewCandidates, s,
+        engineConfig.search.value_hint = [windows, probability, crewCount, free_crew_candidates, s,
                                           &calculator](std::mt19937_64& rng, int jobIndex) -> int {
             if (probability < 1.0) {
                 std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -192,14 +192,14 @@ void Solver::solve(MaintenanceSchedule& schedule) {
             const unsigned span = static_cast<unsigned>(top - lo) + 1u;
             const int dateIndex = lo + static_cast<int>(rng() % span);
             int crewIndex = static_cast<int>(rng() % crewCount);
-            if (freeCrewCandidates > 0) {
+            if (free_crew_candidates > 0) {
                 // Prefer a crew with no job on any day of this placement:
                 // crewConflictCost is hard, so a colliding crew makes the whole
                 // proposal dead on arrival.
                 const int begin = static_cast<int>(s->startDates[dateIndex] - s->dayBase);
                 const int end = static_cast<int>(
                         s->endDateFor(s->jobs[jobIndex].durationInDays, dateIndex) - s->dayBase);
-                for (int attempt = 0; attempt < freeCrewCandidates; ++attempt) {
+                for (int attempt = 0; attempt < free_crew_candidates; ++attempt) {
                     if (calculator.crewFree(crewIndex, begin, end)) break;
                     crewIndex = static_cast<int>(rng() % crewCount);
                 }
@@ -208,14 +208,14 @@ void Solver::solve(MaintenanceSchedule& schedule) {
         };
     }
 
-    // Violation-guided entity selection: with probability hotJobProbability
+    // Violation-guided entity selection: with probability hot_job_probability
     // the moved job is drawn from the jobs currently sitting in a
     // tagConflictCost — the dominant soft term. A hot (tag, day) cell is
     // picked from the calculator's live hot set, then a job carrying that tag
     // and covering that day. Once tagConflictCost is 0 the hot set is empty
     // and this falls back to uniform exploration by itself.
     std::shared_ptr<const std::vector<std::vector<int>>> tagJobs;
-    if (config_.hotJobProbability > 0.0 && schedule.tagCount > 0) {
+    if (config_.hot_job_probability > 0.0 && schedule.tagCount > 0) {
         auto lists = std::make_shared<std::vector<std::vector<int>>>(schedule.tagCount);
         for (int j = 0; j < static_cast<int>(schedule.jobs.size()); ++j) {
             for (int tag : schedule.jobs[j].tagIds) (*lists)[tag].push_back(j);
@@ -224,7 +224,7 @@ void Solver::solve(MaintenanceSchedule& schedule) {
         // Integer coin flip: this hook runs on every move, so the probability
         // test is a single 64-bit compare instead of a double distribution.
         const std::uint64_t hotThreshold = static_cast<std::uint64_t>(
-                config_.hotJobProbability *
+                config_.hot_job_probability *
                 static_cast<double>(std::numeric_limits<std::uint64_t>::max()));
         const MaintenanceSchedule* s = &schedule;
         engineConfig.search.entity_hint = [&calculator, tagJobs, hotThreshold,
@@ -264,8 +264,8 @@ void Solver::solve(MaintenanceSchedule& schedule) {
 void Solver::solve(MaintenanceSchedule& schedule,
                    optimaru::DecomposedObjective<MaintenanceSchedule>& calculator) {
     ScoreCalculator::prepare(schedule);  // intern tags / build date tables
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!schedule.jobs.empty() && schedule.crewDateCount() != 0) {
         // No guided value/entity hooks here: both read the monolithic

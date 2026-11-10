@@ -42,13 +42,13 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     engineConfig.search.moves.swap_weight = config.swap_weight;
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
 
     return engineConfig;
 }
@@ -61,12 +61,12 @@ void Solver::solve(FlightCrewSchedule& schedule) {
         ScoreCalculator::score(schedule);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     optimaru::Solver<FlightCrewSchedule> engine(
-            buildEngineConfig(config_, schedule, std::max(1, config_.parallelSolverCount)));
+            buildEngineConfig(config_, schedule, std::max(1, config_.parallel_solver_count)));
     engine.solve_multistart(
             schedule, [] { return std::make_unique<FlightCrewIncrementalScoreCalculator>(); });
 
@@ -77,8 +77,8 @@ void Solver::solve(FlightCrewSchedule& schedule) {
 void Solver::solve(FlightCrewSchedule& schedule,
                    optimaru::DecomposedObjective<FlightCrewSchedule>& calculator) {
     ScoreCalculator::prepare(schedule);
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!schedule.flightAssignments.empty() && !schedule.employees.empty()) {
         // Single-start: the caller-owned calculator cannot be cloned, so the

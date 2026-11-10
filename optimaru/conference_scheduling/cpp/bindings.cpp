@@ -291,40 +291,41 @@ PYBIND11_MODULE(_core, m) {
             // Consecutive local-search runs sharing the one time limit; each
             // restarts from the previous run's best (see cs/solver.hpp).
             .def_property(
-                    "restart_segments", [](const Solver::Config& c) { return c.restartSegments; },
+                    "restart_segments", [](const Solver::Config& c) { return c.restart_segments; },
                     [](Solver::Config& c, int segments) {
                         if (segments <= 0)
                             throw py::value_error("restart_segments must be positive");
-                        c.restartSegments = segments;
+                        c.restart_segments = segments;
                     })
             .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
             .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
             .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
+                           &Solver::Config::ruin_recreate_min_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
+                           &Solver::Config::ruin_recreate_max_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
+                           &Solver::Config::ruin_recreate_max_ruin_count)
             .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+                           &Solver::Config::ruin_recreate_operator_decay)
+            .def_readwrite("ruin_recreate_polish_steps",
+                           &Solver::Config::ruin_recreate_polish_steps)
             // Destroy-and-repair as an ordinary acceptor-judged move; negative =
             // auto (0.2 / slotRoomCount, the budget-share rule), 0 disables.
             .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruinRecreateAsMoveWeight)
+                           &Solver::Config::ruin_recreate_as_move_weight)
             .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruinRecreateAsMoveMaxRuin)
+                           &Solver::Config::ruin_recreate_as_move_max_ruin)
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             // Violation-guided entity selection probability (0 = off; see
             // cs/solver.hpp).
-            .def_readwrite("hot_talk_probability", &Solver::Config::hotTalkProbability)
+            .def_readwrite("hot_talk_probability", &Solver::Config::hot_talk_probability)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Bias change moves toward the talk's type-compatible cells (see
             // cs/solver.hpp).
             .def_readwrite("compatible_value_probability",
-                           &Solver::Config::compatibleValueProbability)
+                           &Solver::Config::compatible_value_probability)
             // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
             // stops at the first feasible solution.
             .def_property(

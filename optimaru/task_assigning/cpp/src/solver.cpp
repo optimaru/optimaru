@@ -47,13 +47,13 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     moves.tail_swap_weight = config.tail_swap_weight;
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
     return engineConfig;
 }
 
@@ -79,16 +79,16 @@ void Solver::solve(TaskAssigningSolution& solution) {
         ScoreCalculator::score(solution);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     // Cheapest-insertion construction + late-acceptance local search over
     // the sequence moves (+ ALNS kicks), multi-start parallel when
-    // parallelSolverCount > 1. Each start gets its own calculator instance
+    // parallel_solver_count > 1. Each start gets its own calculator instance
     // (the calculators are stateful).
     optimaru::Solver<TaskAssigningSolution> engine(
-            buildEngineConfig(config_, solution, std::max(1, config_.parallelSolverCount)));
+            buildEngineConfig(config_, solution, std::max(1, config_.parallel_solver_count)));
     engine.solve_multistart(
             solution, [] { return std::make_unique<TaskAssigningIncrementalScoreCalculator>(); });
 
@@ -99,8 +99,8 @@ void Solver::solve(TaskAssigningSolution& solution) {
 
 void Solver::solve(TaskAssigningSolution& solution,
                    optimaru::DecomposedObjective<TaskAssigningSolution>& calculator) {
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!solution.tasks.empty() && !solution.employees.empty()) {
         // Single-start: the caller-owned calculator cannot be cloned, so the

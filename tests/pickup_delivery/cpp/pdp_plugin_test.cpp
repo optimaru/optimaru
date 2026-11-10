@@ -270,8 +270,8 @@ void verifyFullAssertSolve() {
     config.time_limit = std::chrono::seconds(2);
     config.seed = 3;
     config.score_checks = optimaru::ScoreChecks::Full;
-    config.ruinRecreateUnimprovedStepTrigger = 200;
-    config.ruinRecreatePolishSteps = 100;
+    config.ruin_recreate_unimproved_step_trigger = 200;
+    config.ruin_recreate_polish_steps = 100;
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
@@ -313,7 +313,7 @@ void verifyRepairHonoursRequiredVehicle() {
         config.step_limit = 8;
         config.time_limit = std::chrono::minutes(1);  // safety net only
         config.seed = static_cast<std::uint64_t>(seed);
-        config.pairAssignmentProbability = 0.0;
+        config.pair_assignment_probability = 0.0;
         config.relocate_weight = 0.0;
         config.list_swap_weight = 0.0;
         config.two_opt_weight = 0.0;
@@ -1088,8 +1088,8 @@ void verifyRepeatsAndOffsets() {
         config.time_limit = std::chrono::seconds(2);
         config.seed = 3;
         config.score_checks = optimaru::ScoreChecks::Full;
-        config.ruinRecreateUnimprovedStepTrigger = 200;
-        config.ruinRecreatePolishSteps = 100;
+        config.ruin_recreate_unimproved_step_trigger = 200;
+        config.ruin_recreate_polish_steps = 100;
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
         bool corrupted = false;
@@ -1174,8 +1174,8 @@ void verifyNegativeThresholds() {
         config.time_limit = std::chrono::seconds(2);
         config.seed = 11;
         config.score_checks = optimaru::ScoreChecks::Full;
-        config.ruinRecreateUnimprovedStepTrigger = 200;
-        config.ruinRecreatePolishSteps = 100;
+        config.ruin_recreate_unimproved_step_trigger = 200;
+        config.ruin_recreate_polish_steps = 100;
         DecomposedCalculator calculator;
         negativeThresholdAssembly().into(calculator);
         bool corrupted = false;

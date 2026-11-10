@@ -48,7 +48,7 @@ public:
         // Independent parallel starts: worker i solves its own copy of the
         // constructed problem with seed + i and the full budget; the
         // best score wins. Ignored by the constraint-assembly overload.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).
@@ -57,18 +57,18 @@ public:
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS).
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
         // Destroy-and-repair as an ordinary acceptor-judged move (engine
         // ruin_recreate.as_move_weight); one costs ~ruinCount * station count
         // evaluations. 0 disables it.
-        double ruinRecreateAsMoveWeight = 0.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = 0.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Assignment move mix. Weights are relative; 0 disables a move. Swaps move
         // load across a station boundary without opening a station.
@@ -81,7 +81,7 @@ public:
         // earliest successor station] intersected with its own
         // [min_station, max_station] (and max_stations) — instead of
         // uniformly over all stations. 0 = off.
-        double valueRecommenderProbability = 0.5;
+        double value_recommender_probability = 0.5;
 
         // Assignment best-improvement descent strategy weight (engine
         // local_search.descent_weight); ~2 * station count evaluations per
@@ -96,7 +96,7 @@ public:
         // CloseStationMove: empty one used station in a single move (see
         // solver.cpp). usedStationsCost is a step function no single-task
         // move can cross.
-        bool closeStationMoves = true;
+        bool close_station_moves = true;
 
         std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
@@ -122,7 +122,7 @@ public:
     // problem.score is computed by THIS calculator and the calculator is left
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
-    // so parallelSolverCount is ignored.
+    // so parallel_solver_count is ignored.
     void solve(AssemblyLineBalancingProblem& problem,
                optimaru::DecomposedObjective<AssemblyLineBalancingProblem>& calculator);
 

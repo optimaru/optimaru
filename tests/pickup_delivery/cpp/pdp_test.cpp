@@ -226,8 +226,8 @@ void testFullAssert() {
     config.time_limit = std::chrono::seconds(3);
     config.seed = 9;
     config.score_checks = optimaru::ScoreChecks::Full;
-    config.ruinRecreateUnimprovedStepTrigger = 50;
-    config.ruinRecreatePolishSteps = 20;
+    config.ruin_recreate_unimproved_step_trigger = 50;
+    config.ruin_recreate_polish_steps = 20;
 
     bool threw = false;
     try {
@@ -293,8 +293,8 @@ void testPairOperatorsMatter() {
         base.seed = static_cast<std::uint64_t>(seed);
 
         Solver::Config withoutConfig = base;
-        withoutConfig.pairMoves = false;
-        withoutConfig.pairRuin = false;
+        withoutConfig.pair_moves = false;
+        withoutConfig.pair_ruin = false;
         Solver(withoutConfig).solve(without);
 
         Solver(base).solve(with);

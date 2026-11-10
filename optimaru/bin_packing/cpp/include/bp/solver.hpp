@@ -48,7 +48,7 @@ public:
         // constructs in weight-descending order, worker i > 0 shuffles the
         // items of equal weight (a seed is completed the same way in every
         // worker).
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
@@ -59,19 +59,19 @@ public:
         // engine's ALNS); the recreate places each ruined item in its best
         // bin.
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
 
         // Destroy-and-repair as an ORDINARY acceptor-judged move (the
         // engine's ruin_recreate.as_move_weight); one costs ~ruinCount * n score
         // evaluations. 0 disables it.
-        double ruinRecreateAsMoveWeight = 0.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = 0.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
@@ -82,7 +82,7 @@ public:
         // the bin of a uniformly drawn item — a bin in use, weighted by how
         // many items it holds — instead of uniformly over all n bins, most of
         // which are empty in a good packing. 0 = off.
-        double valueRecommenderProbability = 0.5;
+        double value_recommender_probability = 0.5;
 
         // Assignment best-improvement descent strategy (engine
         // local_search.descent_weight). 0 (default) = off.
@@ -97,19 +97,19 @@ public:
         // EmptyBinMove: empty one light bin in a single move (see
         // bp/moves.hpp). usedBinsCost is a step function no single-item move
         // can cross, so without it the search rarely closes a bin.
-        bool emptyBinMoves = true;
+        bool empty_bin_moves = true;
         // Both macro moves empty one of this many lightest non-empty bins
         // (drawn uniformly; 1 = always the lightest).
-        int emptyBinCandidates = 3;
+        int empty_bin_candidates = 3;
 
         // RepackMove (bp/moves.hpp): empty a light bin together with 1 to
-        // repackPartnerBins other light bins and put their items back best
+        // repack_partner_bins other light bins and put their items back best
         // fit decreasing, only where they add no capacity, colour or
         // conflict violation. EmptyBinMove checks the capacity only, so on
         // instances with colours or conflicts this is the move that closes
-        // bins. repackPartnerBins 0 = the source bin alone.
-        bool repackMoves = true;
-        int repackPartnerBins = 2;
+        // bins. repack_partner_bins 0 = the source bin alone.
+        bool repack_moves = true;
+        int repack_partner_bins = 2;
 
         std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
@@ -139,7 +139,7 @@ public:
     // problem.score is computed by THIS calculator and the calculator is left
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be
-    // cloned, so parallelSolverCount is ignored.
+    // cloned, so parallel_solver_count is ignored.
     void solve(BinPackingProblem& problem,
                optimaru::DecomposedObjective<BinPackingProblem>& calculator);
 

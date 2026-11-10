@@ -73,18 +73,18 @@ void runEngine(const Solver::Config& config, MeetingSchedule& schedule,
     engineConfig.search.moves.swap_weight = config.swap_weight;
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
 
     // Guided value selection over the composite (grain x room) value range:
-    // with probability dayFitValueProbability a change move draws its start
+    // with probability day_fit_value_probability a change move draws its start
     // from the meeting's day-fit grains, so the search never wanders into the
     // hard 2 (overtime) / hard 5 (day crossing) region; the room half stays
     // uniform because every room is legal. Returning -1 (hook disabled, or the
@@ -98,9 +98,9 @@ void runEngine(const Solver::Config& config, MeetingSchedule& schedule,
     // would have to move to hand-rolled workers (the school-timetabling
     // pattern).
     std::vector<std::vector<int>> dayFitStarts;
-    if (config.dayFitValueProbability > 0.0) {
+    if (config.day_fit_value_probability > 0.0) {
         dayFitStarts = buildDayFitStarts(schedule);
-        const double dayFitProbability = config.dayFitValueProbability;
+        const double dayFitProbability = config.day_fit_value_probability;
         const MeetingSchedule* working = &schedule;
         const std::vector<std::vector<int>>* starts = &dayFitStarts;
         engineConfig.search.value_hint = [working, starts, dayFitProbability](
@@ -129,12 +129,12 @@ void Solver::solve(MeetingSchedule& schedule) {
         ScoreCalculator::score(schedule);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     MeetingSchedulingIncrementalScoreCalculator calculator;
-    runEngine(config_, schedule, calculator, std::max(1, config_.parallelSolverCount));
+    runEngine(config_, schedule, calculator, std::max(1, config_.parallel_solver_count));
 
     // The authoritative final score: a full recompute on the best solution.
     schedule.score = ScoreCalculator::score(schedule);
@@ -143,8 +143,8 @@ void Solver::solve(MeetingSchedule& schedule) {
 void Solver::solve(MeetingSchedule& schedule,
                    optimaru::DecomposedObjective<MeetingSchedule>& calculator) {
     ScoreCalculator::prepare(schedule);
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!schedule.meetingAssignments.empty() && schedule.grainRoomCount() != 0) {
         // Single-start: the caller-owned calculator cannot be cloned, so the

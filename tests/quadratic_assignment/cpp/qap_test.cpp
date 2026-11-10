@@ -402,10 +402,10 @@ void verifySolver() {
         check(throws<std::invalid_argument>([&] { Solver(budget(10)).solve(partial); }),
               "a partial warm start throws");
         Solver::Config bad = budget(10);
-        bad.parallelSolverCount = 0;
+        bad.parallel_solver_count = 0;
         QuadraticAssignmentProblem q = threeFacilities();
         check(throws<std::invalid_argument>([&] { Solver(bad).solve(q); }),
-              "parallelSolverCount 0 throws");
+              "parallel_solver_count 0 throws");
     }
     {
         QuadraticAssignmentProblem empty = emptyInstance(0);
@@ -428,7 +428,7 @@ void verifySolver() {
               "single solve: a bijection, score = full recompute");
         QuadraticAssignmentProblem q = randomInstance(15, 5);
         Solver::Config parallel = budget(3000, 3);
-        parallel.parallelSolverCount = 4;
+        parallel.parallel_solver_count = 4;
         Solver(parallel).solve(q);
         check(q.isBijection(), "4 parallel starts: a bijection");
         QuadraticAssignmentProblem f = randomInstance(10, 8);

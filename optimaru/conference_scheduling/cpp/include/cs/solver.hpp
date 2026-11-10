@@ -24,7 +24,7 @@ namespace cs {
 // engine's value range is the whole grid for every talk, with the
 // talkTypeIncompatibilityCost hard constraint penalizing the stragglers
 // (see cs/domain.hpp) — and it spends the
-// budget as a sequence of restarted local-search runs (see restartSegments).
+// budget as a sequence of restarted local-search runs (see restart_segments).
 class Solver {
 public:
     struct Config {
@@ -55,12 +55,12 @@ public:
         // whole budget instead of settling in the first third of it. 1 = a
         // single run. Ignored when a step- or unimproved-based termination is
         // configured (those count per run).
-        int restartSegments = 8;
+        int restart_segments = 8;
 
         // Independent parallel starts: each worker receives seed + i
         // and the full wall-clock budget (segmented as above); the best
         // solution wins.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
@@ -70,13 +70,13 @@ public:
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS).
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
 
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
@@ -92,8 +92,8 @@ public:
         // budget-share value, which this domain's quality bench confirmed
         // (10s, 6 seeds: soft +0.9-1.4% on every scaled size, 6-0 wins on
         // scaled:45, no regressions — see benchmarks/school-timetabling/RESULTS.md). 0 disables.
-        double ruinRecreateAsMoveWeight = -1.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = -1.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Best-improvement descent over one entity pair (engine
         // SearchSettings::descent_weight); same budget-share arithmetic as
@@ -107,14 +107,14 @@ public:
         // ConferenceSchedulingIncrementalScoreCalculator::isHotTalk), by
         // rejection-sampling a few uniform draws. Once feasible no talk is
         // hot and selection falls back to uniform by itself. 0 disables.
-        double hotTalkProbability = 0.0;
+        double hot_talk_probability = 0.0;
 
         // Probability that a change move's target value is drawn from the
         // talk's type-compatible (timeslot, room) cells instead of the whole
         // grid. 1.0 never proposes incompatible cells by change move (swaps
         // between talks of different types still can — the hard
         // constraint cleans those up). 0 disables the bias.
-        double compatibleValueProbability = 0.9;
+        double compatible_value_probability = 0.9;
 
         std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
@@ -138,7 +138,7 @@ public:
     // calculator and the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score.
     //
-    // Two knobs do not apply on this path: parallelSolverCount and the
+    // Two knobs do not apply on this path: parallel_solver_count and the
     // segmented restarts. Both need a calculator per start / per segment, and
     // a caller-owned assembly cannot be cloned; the plugin path runs one
     // segment, one start. Note also that this path re-costs the whole

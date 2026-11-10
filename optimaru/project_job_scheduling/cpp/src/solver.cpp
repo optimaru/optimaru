@@ -69,15 +69,15 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
     engineConfig.search.moves.swap_weight = config.swap_weight;
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
 
-    // Guided value selection (see Config::nearCurrentDelayProbability): a
+    // Guided value selection (see Config::near_current_delay_probability): a
     // recommended change-move value keeps the delay within a small geometric
     // delta of the entity's current delay — the delay-major composite
     // encoding makes uniform draws jump delays wildly, and almost all of
@@ -86,8 +86,8 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
     // a clamped delay 0 the +-delta draws degenerate to mode switches too,
     // which is where good schedules live). Returning -1 falls back to the
     // engine's uniform draw.
-    if (config.nearCurrentDelayProbability > 0.0) {
-        const double guidedProbability = config.nearCurrentDelayProbability;
+    if (config.near_current_delay_probability > 0.0) {
+        const double guidedProbability = config.near_current_delay_probability;
         const ProjectJobSchedule* working = &schedule;
         engineConfig.search.value_hint = [working, guidedProbability](std::mt19937_64& rng,
                                                                       int allocationIndex) -> int {
@@ -132,15 +132,15 @@ void Solver::solve(ProjectJobSchedule& schedule) {
         ScoreCalculator::score(schedule);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     // Multi-start at the domain level instead of the engine's
     // solve_multistart: the guided value selection below captures the working
     // solution, so every start needs its own schedule copy AND its own
     // recommender wiring.
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         std::vector<ProjectJobSchedule> candidates(workerCount, schedule);
         std::vector<std::exception_ptr> failures(workerCount);
@@ -153,7 +153,7 @@ void Solver::solve(ProjectJobSchedule& schedule) {
                                      [this, &candidates, &failures, &stop](int i) {
                                          try {
                                              Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.parallel_solver_count = 1;
                                              workerConfig.stop_flag = stop;
                                              workerConfig.seed += static_cast<std::uint64_t>(i);
                                              if (i != 0) workerConfig.on_new_best = nullptr;
@@ -195,8 +195,8 @@ void Solver::solve(ProjectJobSchedule& schedule,
             schedule.allocations[a].modeDelay = schedule.valueOf(0, 0);
         }
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!schedule.allocations.empty()) {
         // The engine reports a new best right after the working solution

@@ -19,8 +19,8 @@ namespace ks {
 namespace {
 
 void requireRewards(const Solver::Config& config) {
-    if (config.ruinRecreateRewards.size() != 4)
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config.ruin_recreate_rewards.size() != 4)
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
 }
 
 // The engine configuration shared by both solve() overloads: late-acceptance
@@ -50,11 +50,11 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackPr
     // Nearby swap partners: items of similar weight. The weights are copied,
     // so the meter stays valid in the multi-start worker threads, whose
     // problems are copies.
-    if (config.nearbyProbability > 0.0 && config.nearbySize > 0) {
+    if (config.nearby_probability > 0.0 && config.nearby_size > 0) {
         auto weights = std::make_shared<std::vector<std::int64_t>>();
         for (const Item& item : problem.items) weights->push_back(item.weight);
-        engineConfig.search.nearby.probability = config.nearbyProbability;
-        engineConfig.search.nearby.size = config.nearbySize;
+        engineConfig.search.nearby.probability = config.nearby_probability;
+        engineConfig.search.nearby.size = config.nearby_size;
         engineConfig.search.nearby.distance = [weights](int a, int b) {
             return static_cast<double>(std::llabs((*weights)[a] - (*weights)[b]));
         };
@@ -62,15 +62,15 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackPr
 
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     return engineConfig;
 }
 
@@ -90,7 +90,7 @@ void Solver::solve(KnapsackProblem& problem) {
         // Independent parallel starts through the engine's own multi-start:
         // no custom operator or variable listener is registered, so the
         // worker threads run exactly the same search (seed + i each).
-        const int starts = std::max(1, config_.parallelSolverCount);
+        const int starts = std::max(1, config_.parallel_solver_count);
         optimaru::Solver<KnapsackProblem> engine(engineConfigOf(config_, problem, starts));
         engine.solve_multistart(
                 problem, [] { return std::make_unique<KnapsackIncrementalScoreCalculator>(); });

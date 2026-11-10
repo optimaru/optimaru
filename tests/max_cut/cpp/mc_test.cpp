@@ -289,9 +289,9 @@ void verifySolver() {
         MaxCutProblem p = randomInstance(30, 77, 0.0, /*bounds=*/false);
         Solver::Config config = steps(4000, 3);
         config.score_checks = optimaru::ScoreChecks::Full;
-        config.ruinRecreateUnimprovedStepTrigger = 200;
-        config.ruinRecreatePolishSteps = 200;
-        config.ruinRecreateAsMoveWeight = 0.05;
+        config.ruin_recreate_unimproved_step_trigger = 200;
+        config.ruin_recreate_polish_steps = 200;
+        config.ruin_recreate_as_move_weight = 0.05;
         check(solvesCleanly(p, config), "FULL_ASSERT solve with ALNS kicks: no score corruption");
     }
     {
@@ -301,7 +301,7 @@ void verifySolver() {
         Solver::Config config = steps(4000, 4);
         config.score_checks = optimaru::ScoreChecks::Full;
         config.change_weight = 1.0;
-        config.ruinRecreateUnimprovedStepTrigger = 50;
+        config.ruin_recreate_unimproved_step_trigger = 50;
         check(solvesCleanly(p, config), "FULL_ASSERT exact-size solve: no score corruption");
     }
     {
@@ -317,7 +317,7 @@ void verifySolver() {
         Solver::Config config = steps(500, 1);
         config.change_weight = 1.0;
         config.swap_weight = 0.0;
-        config.ruinRecreateUnimprovedStepTrigger = 10;
+        config.ruin_recreate_unimproved_step_trigger = 10;
         Solver(config).solve(right);
         Solver(config).solve(wrong);
         check(right.sideSize(1) == 2 && right.score.hard == 0, "a right-size seed stays at 2 + 2");
@@ -334,7 +334,7 @@ void verifySolver() {
             p.fixedSide = {1, kUnassigned, 1, kUnassigned};
             p.minPartitionSize = p.maxPartitionSize = 2;
             Solver::Config config = steps(200, seed);
-            config.parallelSolverCount = 3;
+            config.parallel_solver_count = 3;
             Solver(config).solve(p);
             kept = kept && p.side[0] == 1 && p.side[2] == 1;
         }
@@ -342,8 +342,8 @@ void verifySolver() {
         MaxCutProblem free = randomInstance(20, 5, 0.0, false, /*offFixed=*/false);
         const std::vector<int> fixedSide = free.fixedSide;
         Solver::Config config = steps(3000, 9);
-        config.parallelSolverCount = 3;
-        config.ruinRecreateUnimprovedStepTrigger = 100;
+        config.parallel_solver_count = 3;
+        config.ruin_recreate_unimproved_step_trigger = 100;
         Solver(config).solve(free);
         bool pinned = true;
         for (int v = 0; v < free.vertexCount(); ++v)
@@ -357,7 +357,7 @@ void verifySolver() {
         // workers, which would otherwise run the whole 30 s budget.
         MaxCutProblem p = randomInstance(40, 31, 0.0, /*bounds=*/false);
         Solver::Config config;
-        config.parallelSolverCount = 3;
+        config.parallel_solver_count = 3;
         config.on_new_best = [](std::int64_t, const Score&) {
             throw std::runtime_error("onNewBest failed");
         };
@@ -423,7 +423,7 @@ void verifySolver() {
             // first, so plain late acceptance can stall on such an instance.
             // The ruin-and-recreate as-move unassigns a few vertices at once
             // and puts them back greedily, which moves a whole cluster.
-            config.ruinRecreateAsMoveWeight = 0.05;
+            config.ruin_recreate_as_move_weight = 0.05;
             Solver(config).solve(p);
             reached += sameScore(p.score, optimum) ? 1 : 0;
         }
@@ -441,7 +441,7 @@ void verifySolver() {
               "same seed and step limit: same partition");
         MaxCutProblem multi = randomInstance(40, 21, 0.0, false);
         Solver::Config config = steps(3000, 7);
-        config.parallelSolverCount = 3;
+        config.parallel_solver_count = 3;
         Solver(config).solve(multi);
         check(a.score <= multi.score,
               "3 parallel starts (seed 7 included) score >= the single start");
@@ -490,14 +490,14 @@ void verifySolver() {
         p.fixedSide.clear();
         check(!rejects(p), "empty side / fixedSide vectors mean all -1");
         Solver::Config bad;
-        bad.ruinRecreateRewards = {1.0};
+        bad.ruin_recreate_rewards = {1.0};
         bool threw = false;
         try {
             Solver(bad).solve(base);
         } catch (const std::invalid_argument&) {
             threw = true;
         }
-        check(threw, "ruinRecreateRewards must hold 4 values");
+        check(threw, "ruin_recreate_rewards must hold 4 values");
     }
     std::printf("\n");
 }

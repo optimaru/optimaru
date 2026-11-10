@@ -42,7 +42,7 @@ inline void logPhase(const char* name, Clock::time_point start) {
 // Split the total budget: local search gets time_limit*(1-fraction), the rest
 // is left for the greedy hard-repair (bounded by the solve-wide deadline).
 inline std::chrono::milliseconds localSearchLimit(const Solver::Config& config) {
-    const double fraction = std::clamp(config.greedyRepairBudgetFraction, 0.0, 0.9);
+    const double fraction = std::clamp(config.greedy_repair_budget_fraction, 0.0, 0.9);
     const auto ms = static_cast<std::int64_t>(
             std::chrono::duration<double, std::milli>(config.time_limit).count() *
             (1.0 - fraction));
@@ -448,7 +448,7 @@ std::vector<std::vector<int>> buildEligibleEmployees(const EmployeeSchedule& sch
 }
 
 void seedDayAwareInitialRoster(const Solver::Config& config, EmployeeSchedule& schedule) {
-    if (!config.guidedMoves || !config.employeeGreedyConstruction || schedule.shifts.empty() ||
+    if (!config.guided_moves || !config.employee_greedy_construction || schedule.shifts.empty() ||
         schedule.employees.empty()) {
         return;
     }
@@ -501,7 +501,8 @@ void seedDayAwareInitialRoster(const Solver::Config& config, EmployeeSchedule& s
             int bestLoad = std::numeric_limits<int>::max();
             for (int employee : eligible[shift]) {
                 if (employee < 0 || employee >= employeeCount || workedToday[employee]) continue;
-                const bool wouldExceed = consecutive[employee] >= config.employeeRunRepairMaxDays;
+                const bool wouldExceed =
+                        consecutive[employee] >= config.employee_run_repair_max_days;
                 // Prefer NOT starting a worker on a day they would rather have
                 // off, so the initial roster does not create preference
                 // violations the search then has to undo. Ranked just under the
@@ -777,7 +778,7 @@ RelocationRepair bestRunSwapRepair(optimaru::Editor<EmployeeSchedule>& editor,
 template <typename Calculator>
 void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
                       Calculator& calculator, Clock::time_point deadline) {
-    if (!config.guidedMoves || schedule.shifts.empty() || schedule.employees.empty()) return;
+    if (!config.guided_moves || schedule.shifts.empty() || schedule.employees.empty()) return;
     // Respect the solve-wide wall-clock budget. Run to convergence with no time
     // check, this final repair could overshoot the limit many times over on a
     // many-constraint instance where local search never reaches feasibility
@@ -799,7 +800,7 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
     for (int cycle = 0;
          cycle < 4 && steps < maxSteps && current.hard < 0 && Clock::now() < deadline; ++cycle) {
         bool changed = false;
-        if (config.employeeDayRepairMoves) {
+        if (config.employee_day_repair_moves) {
             while (steps < maxSteps && Clock::now() < deadline) {
                 RelocationRepair day = bestDayRepair(editor, eligible, scanDeadline);
                 if (!day.found || !(day.score > current)) break;
@@ -810,12 +811,12 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
             }
             if (current.hard >= 0) break;
         }
-        if (config.employeeRunRepairMoves) {
+        if (config.employee_run_repair_moves) {
             while (steps < maxSteps && current.hard < 0 && Clock::now() < deadline) {
                 RelocationRepair run = bestRunSwapRepair(
-                        editor, eligible, config.employeeRunRepairMaxDays, scanDeadline);
+                        editor, eligible, config.employee_run_repair_max_days, scanDeadline);
                 RelocationRepair relocate = bestRunRepair(
-                        editor, eligible, config.employeeRunRepairMaxDays, scanDeadline);
+                        editor, eligible, config.employee_run_repair_max_days, scanDeadline);
                 if (relocate.found && (!run.found || relocate.score > run.score)) {
                     run = relocate;
                 }
@@ -859,18 +860,18 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
     engineConfig.search.moves.tail_swap_weight = config.tail_swap_weight;
     auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    if (config.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    if (config.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     engineConfig.search.descent_weight = config.descent_weight;
     engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
     engineConfig.search.custom_move_probability = config.custom_move_probability;
@@ -881,7 +882,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
     // Guided move selection: the domain heuristics plugged into the engine's
     // recommender hooks (returning -1 falls back to uniform-random selection).
     std::vector<std::vector<int>> eligible;
-    if (config.guidedMoves) {
+    if (config.guided_moves) {
         // Axis A precompute: for each shift, the employees that can work it
         // without a hard violation (required skill AND available on the days).
         eligible = buildEligibleEmployees(schedule);
@@ -916,7 +917,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
     // pairwise hard constraints (overlap, one-per-day, min-rest) interact.
     // The meter reads an immutable start-time table, so it is safe across
     // multi-start threads.
-    if (config.nearbyShifts && shiftCount >= 2) {
+    if (config.nearby_shifts && shiftCount >= 2) {
         auto starts = std::make_shared<std::vector<Minutes>>();
         starts->reserve(shiftCount);
         for (const Shift& sh : schedule.shifts) starts->push_back(sh.start);
@@ -935,26 +936,26 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
             return static_cast<double>(d < 0 ? -d : d);
         };
         engineConfig.search.nearby.size = std::min(shiftCount - 1, maxWindow);
-        engineConfig.search.nearby.probability = config.nearbyShiftsProbability;
+        engineConfig.search.nearby.probability = config.nearby_shifts_probability;
     }
 
     optimaru::Solver<EmployeeSchedule> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
     PenalizedGetter penalizedRef = penalized;
     ShiftsOfGetter shiftsOfRef = shiftsOf;
-    if (config.guidedMoves && config.smartChangeMoves) {
+    if (config.guided_moves && config.smart_change_moves) {
         engine.add_move_operator(std::make_unique<SmartChangeMove>(
-                eligible, config.smartChangeCandidateCount, penalizedRef, shiftsOfRef));
+                eligible, config.smart_change_candidate_count, penalizedRef, shiftsOfRef));
     }
-    if (config.guidedMoves && config.employeeWindowMoves) {
+    if (config.guided_moves && config.employee_window_moves) {
         engine.add_move_operator(std::make_unique<EmployeeWindowSwapMove>(
-                schedule, config.employeeWindowMaxDays, penalizedRef, shiftsOfRef));
+                schedule, config.employee_window_max_days, penalizedRef, shiftsOfRef));
     }
-    if (config.guidedMoves && config.employeeRuinMoves) {
+    if (config.guided_moves && config.employee_ruin_moves) {
         engine.add_ruin_operator(std::make_unique<EmployeeHotRuinOperator>(
-                config.employeeWindowMaxDays, penalizedRef, shiftsOfRef));
+                config.employee_window_max_days, penalizedRef, shiftsOfRef));
     }
-    if (config.employeeUnassignMoves) {
+    if (config.employee_unassign_moves) {
         engine.add_move_operator(std::make_unique<UnassignMove>(schedule));
     }
     engine.solve(schedule, calculator);
@@ -973,7 +974,7 @@ void Solver::solve(EmployeeSchedule& schedule) {
     ScoreCalculator::prepare(schedule);  // intern skills / precompute day indices
     seedDayAwareInitialRoster(config_, schedule);
 
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         std::vector<EmployeeSchedule> candidates(workerCount, schedule);
         std::vector<std::exception_ptr> failures(workerCount);
@@ -986,7 +987,7 @@ void Solver::solve(EmployeeSchedule& schedule) {
                                      [this, &candidates, &failures, &stop](int i) {
                                          try {
                                              Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.parallel_solver_count = 1;
                                              workerConfig.stop_flag = stop;
                                              workerConfig.seed += static_cast<std::uint64_t>(i);
                                              if (i != 0) workerConfig.on_new_best = nullptr;

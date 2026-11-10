@@ -162,22 +162,23 @@ PYBIND11_MODULE(_core, m) {
             // Ruin-and-recreate (kicks and the as-move) is off in exact-size mode.
             .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
             .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
             .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
+                           &Solver::Config::ruin_recreate_min_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
+                           &Solver::Config::ruin_recreate_max_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
+                           &Solver::Config::ruin_recreate_max_ruin_count)
             .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+                           &Solver::Config::ruin_recreate_operator_decay)
+            .def_readwrite("ruin_recreate_polish_steps",
+                           &Solver::Config::ruin_recreate_polish_steps)
             // Destroy-and-repair as an ordinary acceptor-judged move (engine
             // ruin_recreate.as_move_weight). 0 (default) disables it.
             .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruinRecreateAsMoveWeight)
+                           &Solver::Config::ruin_recreate_as_move_weight)
             .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruinRecreateAsMoveMaxRuin)
+                           &Solver::Config::ruin_recreate_as_move_max_ruin)
             // A change move flips one vertex; a swap move exchanges a side-0 and a
             // side-1 vertex. Exact-size mode forces 0 / 1 (swaps only).
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)

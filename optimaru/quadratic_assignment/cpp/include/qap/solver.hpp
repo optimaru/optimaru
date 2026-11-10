@@ -50,20 +50,20 @@ public:
         std::size_t history_length = 0;
         int tabu_tenure = 7;  // ENTITY_TABU
         // SIMULATED_ANNEALING's starting temperature (hard, soft). (0, 0), the
-        // default, = auto: hard 0, soft = simulatedAnnealingTemperatureFraction
+        // default, = auto: hard 0, soft = simulated_annealing_temperature_fraction
         // * |the start's soft score| (at least 1), the semiconductor-scheduling
         // rule. The engine's own default (0, 0) would make SA reject every
         // worsening swap, i.e. hill climbing. It cools to 0 over the time
         // limit, or over step_limit when that is further along.
         Score start_temperature{0, 0.0};
-        double simulatedAnnealingTemperatureFraction = 0.01;
+        double simulated_annealing_temperature_fraction = 0.01;
         std::uint64_t seed = 0;
 
         // Independent parallel starts (the engine's multi-start): worker i
         // searches its own copy of the start with seed + i and the full
         // budget; the best score wins. Ignored by the constraint-assembly
         // overload.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; much slower).
@@ -88,7 +88,7 @@ public:
     // is computed by THIS calculator and the calculator is left primed on the
     // final solution, so constraint_totals() explains exactly that score.
     // Single-start: the caller-owned calculator cannot be cloned, so
-    // parallelSolverCount is ignored.
+    // parallel_solver_count is ignored.
     void solve(QuadraticAssignmentProblem& problem,
                optimaru::DecomposedObjective<QuadraticAssignmentProblem>& calculator);
 

@@ -46,7 +46,7 @@ public:
         // Independent parallel starts (the engine's multi-start): each
         // worker receives seed + i and the full wall-clock budget; the
         // best solution wins.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
@@ -60,13 +60,13 @@ public:
         // selection narrows the neighborhood, so the search converges sooner
         // and needs bigger, but absolutely bounded, kicks to keep escaping.
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.20;
-        double ruinRecreateMaxRuinFraction = 0.60;
-        int ruinRecreateMaxRuinCount = 24;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.20;
+        double ruin_recreate_max_ruin_fraction = 0.60;
+        int ruin_recreate_max_ruin_count = 24;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
 
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
@@ -79,8 +79,8 @@ public:
         // change/swap; a rejected one is rolled back like any other move.
         // 0 disables (measured: no win on the demo instances at 10s), a
         // positive value is the per-step draw probability.
-        double ruinRecreateAsMoveWeight = 0.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = 0.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Best-improvement descent over one entity pair (engine
         // SearchSettings::descent_weight): enumerate every crewDate for
@@ -95,14 +95,14 @@ public:
         // value from the job's own [minStart, idealEnd] window instead of the
         // whole (date x crew) grid. 1.0 (the default, measured best) always
         // guides; 0 disables the guidance.
-        double windowValueProbability = 1.0;
+        double window_value_probability = 1.0;
         // Probability that a move seeds on a "hot" job — one currently inside
         // a tagConflictCost (two jobs sharing a tag on one day). 0 disables.
-        double hotJobProbability = 0.5;
+        double hot_job_probability = 0.5;
         // How many random crews a guided change move tries before settling
         // for a random one, looking for a crew that is free for the job's
         // whole span. 0 disables (uniform crew).
-        int freeCrewCandidates = 4;
+        int free_crew_candidates = 4;
 
         std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
@@ -127,9 +127,9 @@ public:
     // the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score.
     //
-    // Three knobs do not apply on this path: parallelSolverCount (the
+    // Three knobs do not apply on this path: parallel_solver_count (the
     // caller-owned calculator cannot be cloned across workers) and the two
-    // guided-selection hooks (windowValueProbability / hotJobProbability),
+    // guided-selection hooks (window_value_probability / hot_job_probability),
     // which read the monolithic calculator's live occupancy and hot-cell
     // state. The search is the engine's construction heuristic +
     // late-acceptance local search + ALNS kicks.

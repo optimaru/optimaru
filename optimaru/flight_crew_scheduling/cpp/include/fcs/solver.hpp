@@ -41,7 +41,7 @@ public:
         // Independent parallel starts (the engine's multi-start): each worker
         // receives seed + i and the full wall-clock budget; the best
         // solution wins.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
@@ -52,13 +52,13 @@ public:
         // engine's ALNS). Without this the LA acceptor can lock into a local
         // optimum within milliseconds on small instances and never escape.
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
 
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
@@ -81,7 +81,7 @@ public:
     // defaults. The final schedule.score is computed by THIS calculator and
     // the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score. Single-start: the
-    // caller-owned calculator cannot be cloned, so parallelSolverCount is
+    // caller-owned calculator cannot be cloned, so parallel_solver_count is
     // ignored.
     void solve(FlightCrewSchedule& schedule,
                optimaru::DecomposedObjective<FlightCrewSchedule>& calculator);

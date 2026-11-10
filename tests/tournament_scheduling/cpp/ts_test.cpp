@@ -280,8 +280,8 @@ void verifyFullAssertSolve() {
     config.seed = 3;
     config.score_checks = optimaru::ScoreChecks::Full;
     // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
-    config.ruinRecreateUnimprovedStepTrigger = 200;
-    config.ruinRecreatePolishSteps = 100;
+    config.ruin_recreate_unimproved_step_trigger = 200;
+    config.ruin_recreate_polish_steps = 100;
 
     bool corrupted = false;
     Score final{};
@@ -337,7 +337,7 @@ void verifyPinnedSolve() {
 // unfairness sqrt(10/7), while the same 72 over 4 teams (18 each, every pair
 // meeting 18 times) scores a perfect 0hard/0soft. Reaching it means emptying
 // three whole teams, which no change/swap move can do — every intermediate
-// state is far worse than both ends. Without Config::teamCountMoves the
+// state is far worse than both ends. Without Config::team_count_moves the
 // solver stalls at -1195232.563480soft here.
 // -------------------------------------------------------------------------
 void verifyTeamCountMove() {

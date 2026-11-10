@@ -163,7 +163,7 @@ Two changed defaults / structures:
   by the full-vs-incremental 3000-move random walk / ScoreChecks::Full / plugin equivalence
   gates); moves/s go up ~7-10x at scaled:200, which accounts for most of the quality gain
   in the table above, especially at 120/200.
-- **Automatic `ruinRecreateAsMoveWeight` default** — ruin & recreate also runs as an
+- **Automatic `ruin_recreate_as_move_weight` default** — ruin & recreate also runs as an
   ordinary move judged by the acceptor (engine `RuinRecreateSettings::as_move_weight`). The
   default negative value = automatic `0.2 / slotRoomCount` (the budget-share rule of
   benchmarks/school-timetabling/RESULTS.md; 1.6e-3 for this domain's 126 cells). Sweeping

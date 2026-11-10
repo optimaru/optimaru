@@ -46,7 +46,7 @@ public:
         // Independent parallel starts (the engine's multi-start): each worker
         // receives seed + i and the full wall-clock budget; the best
         // solution wins.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
@@ -64,13 +64,13 @@ public:
         // stalled at the step-703 record; 50000 kept both the kicks' order
         // diversification and the full descent).
         bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 50000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        std::int64_t ruin_recreate_unimproved_step_trigger = 50000;
+        double ruin_recreate_min_ruin_fraction = 0.10;
+        double ruin_recreate_max_ruin_fraction = 0.30;
+        int ruin_recreate_max_ruin_count = 60;
+        double ruin_recreate_operator_decay = 0.8;
+        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
+        std::int64_t ruin_recreate_polish_steps = 5000;
 
         // Sequence move mix. Weights are relative; 0 disables a move. Or-opt
         // (short-segment relocate) and tail swap (2-opt*) are on: both are
@@ -87,9 +87,9 @@ public:
         // measured best across the demo and the 2x/4x bench instances — the
         // wider neighborhood keeps enough cross-trolley partners for the
         // split-structure improvements that a tight 12-pick one misses.
-        bool distanceNearby = true;
-        double distanceNearbyProbability = 0.5;
-        int distanceNearbySize = 24;
+        bool distance_nearby = true;
+        double distance_nearby_probability = 0.5;
+        int distance_nearby_size = 24;
 
         // Custom order-level move operator (adaptive selection alongside the
         // built-in list moves). The order-split penalty (1000 per extra
@@ -98,7 +98,7 @@ public:
         // at whole-order granularity instead — gather a split order onto one
         // trolley, and once none is split, relocate or swap whole orders
         // between trolleys. See OrderConsolidateMove in solver.cpp.
-        bool orderConsolidateMoves = true;
+        bool order_consolidate_moves = true;
 
         std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
@@ -124,9 +124,9 @@ public:
     // the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score.
     //
-    // Two knobs do not apply on this path: parallelSolverCount (the
+    // Two knobs do not apply on this path: parallel_solver_count (the
     // caller-owned calculator cannot be cloned across workers) and
-    // orderConsolidateMoves (that operator reads the monolithic calculator's
+    // order_consolidate_moves (that operator reads the monolithic calculator's
     // live per-(trolley, order) volume table).
     void solve(OrderPickingSolution& solution,
                optimaru::DecomposedObjective<OrderPickingSolution>& calculator);

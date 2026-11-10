@@ -186,22 +186,23 @@ PYBIND11_MODULE(_core, m) {
             .def(py::init<>())
             .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
             .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
             .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
+                           &Solver::Config::ruin_recreate_min_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
+                           &Solver::Config::ruin_recreate_max_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
+                           &Solver::Config::ruin_recreate_max_ruin_count)
             .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+                           &Solver::Config::ruin_recreate_operator_decay)
+            .def_readwrite("ruin_recreate_polish_steps",
+                           &Solver::Config::ruin_recreate_polish_steps)
             // Destroy-and-repair as an ordinary acceptor-judged move: probability
             // per step (0 disables; default 2e-4, tuned on the quality bench).
             .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruinRecreateAsMoveWeight)
+                           &Solver::Config::ruin_recreate_as_move_weight)
             .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruinRecreateAsMoveMaxRuin)
+                           &Solver::Config::ruin_recreate_as_move_max_ruin)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Guided value selection: probability that a change move draws a
@@ -209,11 +210,11 @@ PYBIND11_MODULE(_core, m) {
             // (0 disables the hook).
             .def_property(
                     "day_fit_value_probability",
-                    [](const Solver::Config& c) { return c.dayFitValueProbability; },
+                    [](const Solver::Config& c) { return c.day_fit_value_probability; },
                     [](Solver::Config& c, double probability) {
                         if (probability < 0.0 || probability > 1.0)
                             throw py::value_error("day_fit_value_probability must be in [0, 1]");
-                        c.dayFitValueProbability = probability;
+                        c.day_fit_value_probability = probability;
                     })
             // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
             // stops at the first feasible solution.

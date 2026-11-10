@@ -368,16 +368,16 @@ void configureEngine(const Solver::Config& config, const TournamentSchedule& sch
     engineConfig.search.descent_weight = config.descent_weight;
     engineConfig.search.custom_move_probability = config.custom_move_probability;
     auto& lns = engineConfig.search.ruin_recreate;
-    lns.as_move_weight = config.ruinRecreateAsMoveWeight;
-    lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
+    lns.as_move_weight = config.ruin_recreate_as_move_weight;
+    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
+    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
+    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
+    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
+    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
+    lns.operator_decay = config.ruin_recreate_operator_decay;
+    lns.rewards = config.ruin_recreate_rewards;
+    lns.polish_steps = config.ruin_recreate_polish_steps;
 }
 
 // Builds the macro-move operator for this instance, or nullptr when reshaping
@@ -441,8 +441,8 @@ void Solver::solve(TournamentSchedule& schedule) {
         ScoreCalculator::score(schedule);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
 
     // Independent parallel starts: worker i
@@ -450,7 +450,7 @@ void Solver::solve(TournamentSchedule& schedule) {
     // move operator reads live calculator state, so the engine's built-in
     // multi-start (which shares one config across threads) cannot be used.
     // The best final score wins.
-    const int workerCount = std::max(1, config_.parallelSolverCount);
+    const int workerCount = std::max(1, config_.parallel_solver_count);
     if (workerCount > 1) {
         std::vector<TournamentSchedule> candidates(workerCount, schedule);
         std::vector<std::exception_ptr> failures(workerCount);
@@ -463,7 +463,7 @@ void Solver::solve(TournamentSchedule& schedule) {
                                      [this, &candidates, &failures, &stop](int i) {
                                          try {
                                              Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.parallel_solver_count = 1;
                                              workerConfig.stop_flag = stop;
                                              workerConfig.seed += static_cast<std::uint64_t>(i);
                                              if (i != 0) workerConfig.on_new_best = nullptr;
@@ -520,7 +520,7 @@ void Solver::solve(TournamentSchedule& schedule) {
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     optimaru::Solver<TournamentSchedule> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.teamCountMoves) {
+    if (config_.team_count_moves) {
         std::unique_ptr<TeamCountMove> teamCount = makeTeamCountMove(schedule, &calculator);
         if (teamCount) engine.add_move_operator(std::move(teamCount));
     }
@@ -532,8 +532,8 @@ void Solver::solve(TournamentSchedule& schedule) {
 
 void Solver::solve(TournamentSchedule& schedule,
                    optimaru::DecomposedObjective<TournamentSchedule>& calculator) {
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
+    if (config_.ruin_recreate_rewards.size() != 4) {
+        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
     }
     if (!schedule.teamAssignments.empty() && schedule.teamCount() != 0) {
         // No TeamCountMove here: that operator reads the monolithic

@@ -362,37 +362,40 @@ PYBIND11_MODULE(_core, m) {
             // temperature = this fraction of the start's |soft| (hard 0).
             .def_property(
                     "simulated_annealing_temperature_fraction",
-                    [](const Solver::Config& c) { return c.simulatedAnnealingTemperatureFraction; },
+                    [](const Solver::Config& c) {
+                        return c.simulated_annealing_temperature_fraction;
+                    },
                     [](Solver::Config& c, double f) {
                         if (!(f > 0.0))
                             throw py::value_error(
                                     "simulated_annealing_temperature_fraction must be > 0");
-                        c.simulatedAnnealingTemperatureFraction = f;
+                        c.simulated_annealing_temperature_fraction = f;
                     })
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             .def_property(
                     "machine_move_probability",
-                    [](const Solver::Config& c) { return c.machineMoveProbability; },
+                    [](const Solver::Config& c) { return c.machine_move_probability; },
                     [](Solver::Config& c, double p) {
                         if (!(p >= 0.0 && p <= 1.0))
                             throw py::value_error("machine_move_probability must be in [0, 1]");
-                        c.machineMoveProbability = p;
+                        c.machine_move_probability = p;
                     })
-            .def_readwrite("priority_swap_moves", &Solver::Config::prioritySwapMoves)
+            .def_readwrite("priority_swap_moves", &Solver::Config::priority_swap_moves)
             .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
             .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
             .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
+                           &Solver::Config::ruin_recreate_min_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
+                           &Solver::Config::ruin_recreate_max_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
+                           &Solver::Config::ruin_recreate_max_ruin_count)
             .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+                           &Solver::Config::ruin_recreate_operator_decay)
+            .def_readwrite("ruin_recreate_polish_steps",
+                           &Solver::Config::ruin_recreate_polish_steps)
             // Early termination once bestScore >= (hard, soft); (0, -inf) stops
             // at the first feasible schedule.
             .def_property(

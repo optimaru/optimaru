@@ -356,8 +356,8 @@ void verifyFullAssertSolve() {
     config.time_limit = std::chrono::seconds(2);
     config.seed = 3;
     config.score_checks = optimaru::ScoreChecks::Full;
-    config.ruinRecreateUnimprovedStepTrigger = 200;
-    config.ruinRecreatePolishSteps = 100;
+    config.ruin_recreate_unimproved_step_trigger = 200;
+    config.ruin_recreate_polish_steps = 100;
 
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
@@ -947,8 +947,8 @@ void verifyRepeatsAndOffsets() {
         config.time_limit = std::chrono::seconds(2);
         config.seed = 5;
         config.score_checks = optimaru::ScoreChecks::Full;
-        config.ruinRecreateUnimprovedStepTrigger = 200;
-        config.ruinRecreatePolishSteps = 100;
+        config.ruin_recreate_unimproved_step_trigger = 200;
+        config.ruin_recreate_polish_steps = 100;
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
         bool corrupted = false;

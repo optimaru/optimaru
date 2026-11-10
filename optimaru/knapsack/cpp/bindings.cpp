@@ -168,22 +168,23 @@ PYBIND11_MODULE(_core, m) {
             .def(py::init<>())
             .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
             .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
             .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
+                           &Solver::Config::ruin_recreate_min_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
+                           &Solver::Config::ruin_recreate_max_ruin_fraction)
             .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
+                           &Solver::Config::ruin_recreate_max_ruin_count)
             .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+                           &Solver::Config::ruin_recreate_operator_decay)
+            .def_readwrite("ruin_recreate_polish_steps",
+                           &Solver::Config::ruin_recreate_polish_steps)
             // Destroy-and-repair as an ordinary acceptor-judged move (engine
             // ruin_recreate.as_move_weight). 0 disables it.
             .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruinRecreateAsMoveWeight)
+                           &Solver::Config::ruin_recreate_as_move_weight)
             .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruinRecreateAsMoveMaxRuin)
+                           &Solver::Config::ruin_recreate_as_move_max_ruin)
             // A change move flips one item; a swap move trades a selected item
             // for an unselected one.
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
@@ -191,8 +192,8 @@ PYBIND11_MODULE(_core, m) {
             // Assignment best-improvement descent strategy weight. 0 = off.
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             // Nearby swap partners: items of similar weight. probability 0 = off.
-            .def_readwrite("nearby_probability", &Solver::Config::nearbyProbability)
-            .def_readwrite("nearby_size", &Solver::Config::nearbySize)
+            .def_readwrite("nearby_probability", &Solver::Config::nearby_probability)
+            .def_readwrite("nearby_size", &Solver::Config::nearby_size)
             // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
             // stops at the first feasible solution.
             .def_property(

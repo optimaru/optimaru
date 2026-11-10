@@ -572,8 +572,8 @@ void verifyFullAssertSolve() {
     config.seed = 3;
     config.score_checks = optimaru::ScoreChecks::Full;
     // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
-    config.ruinRecreateUnimprovedStepTrigger = 200;
-    config.ruinRecreatePolishSteps = 100;
+    config.ruin_recreate_unimproved_step_trigger = 200;
+    config.ruin_recreate_polish_steps = 100;
 
     bool corrupted = false;
     Score final{};
@@ -818,7 +818,7 @@ void verifySampleScaleSolve() {
     config.time_limit = std::chrono::seconds(20);
     config.target_score = Score{0, -std::numeric_limits<double>::infinity()};
     config.seed = 1;
-    config.parallelSolverCount = 4;
+    config.parallel_solver_count = 4;
     config.weights = ObjectiveWeights{};  // CP-SAT default weights
 
     const auto start = std::chrono::steady_clock::now();
