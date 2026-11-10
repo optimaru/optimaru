@@ -121,8 +121,13 @@ def _config(steps=400, seed=1):
 
 
 def solve(constraints=None):
+    # The tests that call this compare scores with the optimum, and a seeded search does
+    # not take the same path with every C++ standard library: 400 steps from seed 1 reach
+    # it with libstdc++ and stop one station short with libc++. 5,000 steps reached it
+    # from every seed tried (1 to 40) with libc++. _solved() below keeps 400: its callers
+    # compare the engine with the Python mirror on whatever solution comes out.
     problem = build_problem()
-    alb.solve(problem, config=_config(), constraints=constraints)
+    alb.solve(problem, config=_config(steps=5000), constraints=constraints)
     return problem.score
 
 

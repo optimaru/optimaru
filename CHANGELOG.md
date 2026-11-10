@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Notebooks.** The notebooks in `examples/` are saved with outputs from optimaru 0.4.1 again.
+  The conference-scheduling notebook read a `hard` key that `constraint_costs()` no longer
+  returns and did not run; a few sentences that named a result the outputs no longer show are
+  reworded, and the food-packaging rounds use 50,000 steps.
+
 ## 0.4.1
 
 - **One `solve()` for every use case (breaking for seven).**
