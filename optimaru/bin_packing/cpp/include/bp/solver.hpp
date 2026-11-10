@@ -1,18 +1,12 @@
 #ifndef BP_SOLVER_HPP
 #define BP_SOLVER_HPP
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
 #include <utility>
-#include <vector>
 
 #include "bp/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace bp {
 
@@ -23,50 +17,19 @@ namespace bp {
 // (bp/moves.hpp) and the engine's adaptive ruin-and-recreate (ALNS).
 class Solver {
 public:
-    struct Config {
-        // Wall-clock budget. 0 = no search: the construction (or the seed,
-        // completed where an item is still -1) comes back as it is.
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires (termination is by time_limit).
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        // Late-acceptance history length. 0 (the default) = auto:
-        // clamp(8 * itemCount, 400, 3200).
-        std::size_t history_length = 0;
-        std::uint64_t seed = 0;
-
-        // Independent parallel starts: worker i searches its own
-        // construction with seed + i and the full wall-clock budget;
-        // the best solution wins (the lowest worker on ties). Worker 0
-        // constructs in weight-descending order, worker i > 0 shuffles the
-        // items of equal weight (a seed is completed the same way in every
-        // worker).
-        int parallel_solver_count = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; orders of magnitude
-        // slower).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS); the recreate places each ruined item in its best
-        // bin.
-        bool ruin_recreate = true;
-        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
-        double ruin_recreate_min_ruin_fraction = 0.10;
-        double ruin_recreate_max_ruin_fraction = 0.30;
-        int ruin_recreate_max_ruin_count = 60;
-        double ruin_recreate_operator_decay = 0.8;
-        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruin_recreate_polish_steps = 5000;
-
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   time_limit 0           no search: the construction (or the seed,
+    //                          completed where an item is still -1) comes back
+    //                          as it is
+    //   history_length 0       clamp(8 * itemCount, 400, 3200)
+    //   parallel_solver_count  start i searches its own construction: start 0
+    //                          constructs in weight-descending order, start
+    //                          i > 0 shuffles the items of equal weight (a seed
+    //                          is completed the same way in every start)
+    //   ruin_recreate          the recreate places each ruined item in its best
+    //                          bin
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ORDINARY acceptor-judged move (the
         // engine's ruin_recreate.as_move_weight); one costs ~ruinCount * n score
         // evaluations. 0 disables it.
@@ -110,13 +73,6 @@ public:
         // bins. repack_partner_bins 0 = the source bin alone.
         bool repack_moves = true;
         int repack_partner_bins = 2;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
-        // Set by solve() on each parallel worker's copy, not by a caller (and
-        // not bound to Python): the first worker that fails raises it, and the
-        // other workers' engines stop at their next step instead of running out
-        // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;

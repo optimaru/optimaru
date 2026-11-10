@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <exception>
 #include <memory>
 #include <random>
 #include <stdexcept>
@@ -16,18 +15,11 @@
 #include "bp/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/worker_threads.hpp"
 #include "optimaru/search/operators.hpp"
 
 namespace bp {
 
 namespace {
-
-void requireRewards(const Solver::Config& config) {
-    if (config.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
-}
 
 // The problem checks, in a fixed order and wording.
 void validate(const BinPackingProblem& problem) {
@@ -58,15 +50,7 @@ void prepareSolve(BinPackingProblem& problem) {
 // finds nothing left to place: constructBins assigned every item.
 void runEngine(const Solver::Config& config, BinPackingProblem& problem,
                optimaru::Objective<BinPackingProblem>& calculator) {
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
-    engineConfig.on_new_best = config.on_new_best;
-    engineConfig.limits.time_limit = config.time_limit;
-    engineConfig.limits.target_score = config.target_score;
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
     // history_length 0 = auto-scale with the instance (see Config).
     engineConfig.search.acceptance.history_length =
             config.history_length != 0
@@ -93,18 +77,6 @@ void runEngine(const Solver::Config& config, BinPackingProblem& problem,
             return live.items[other].bin;  // may be -1 inside a ruin: uniform
         };
     }
-
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
-    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
-    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
-    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
-    lns.operator_decay = config.ruin_recreate_operator_decay;
-    lns.rewards = config.ruin_recreate_rewards;
-    lns.polish_steps = config.ruin_recreate_polish_steps;
-    lns.as_move_weight = config.ruin_recreate_as_move_weight;
-    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
 
     optimaru::Solver<BinPackingProblem> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
@@ -139,7 +111,7 @@ void searchOneStart(const Solver::Config& config, BinPackingProblem& problem,
 }  // namespace
 
 void Solver::solve(BinPackingProblem& problem) {
-    requireRewards(config_);
+    optimaru::check_config(config_);
     prepareSolve(problem);
     problem.warmStart = false;  // a seed is used once
     if (problem.items.empty()) {
@@ -147,57 +119,28 @@ void Solver::solve(BinPackingProblem& problem) {
         return;
     }
 
-    // Independent parallel starts: worker i constructs and searches its own
-    // copy with seed + i. The engine's own multi-start cannot be used,
-    // because a registered custom operator like EmptyBinMove is per-Solver
-    // and stateful, so it would silently vanish in the worker threads. The
-    // best score wins (the lowest worker index on ties).
-    const int workerCount = std::max(1, config_.parallel_solver_count);
+    // Independent parallel starts of this solver's own construction and
+    // search. The engine's multi-start cannot be used: a registered custom
+    // operator like EmptyBinMove is per-Solver and stateful, so it would
+    // silently vanish in the worker threads. Start 0, and every start of a
+    // seeded run, constructs in the descending order; start i > 0 shuffles
+    // the items of equal weight with an rng of its own seed.
     const std::vector<int> descending = descendingOrder(problem);
     const bool seeded = std::any_of(problem.items.begin(), problem.items.end(),
                                     [](const Item& item) { return item.bin >= 0; });
-    if (workerCount == 1) {
-        searchOneStart(config_, problem, descending);
-        return;
-    }
-
-    std::vector<BinPackingProblem> candidates(workerCount, problem);
-    std::vector<std::exception_ptr> failures(workerCount);
-    // Raised by the first worker that fails: every worker's engine checks
-    // it once a step, so the others stop instead of using up their budget.
-    auto stop = std::make_shared<std::atomic<bool>>(false);
-    // A worker that cannot be started (std::system_error) stops and joins
-    // the ones already running before the error is rethrown here.
-    optimaru::run_worker_threads(
-            workerCount, *stop, [this, seeded, &descending, &candidates, &failures, &stop](int i) {
-                try {
-                    Config workerConfig = config_;
-                    workerConfig.parallel_solver_count = 1;
-                    workerConfig.stop_flag = stop;
-                    workerConfig.seed += static_cast<std::uint64_t>(i);
-                    if (i != 0) workerConfig.on_new_best = nullptr;
-                    std::mt19937_64 rng(workerConfig.seed);
-                    const std::vector<int> order =
-                            (i == 0 || seeded) ? descending : tieShuffledOrder(candidates[i], rng);
-                    searchOneStart(workerConfig, candidates[i], order);
-                } catch (...) {
-                    failures[i] = std::current_exception();
-                    stop->store(true);
-                }
+    optimaru::solve_parallel_starts(
+            config_, problem,
+            [seeded, &descending](const Config& config, BinPackingProblem& candidate, int i) {
+                std::mt19937_64 rng(config.seed);
+                const std::vector<int> order =
+                        (i == 0 || seeded) ? descending : tieShuffledOrder(candidate, rng);
+                searchOneStart(config, candidate, order);
             });
-    for (const std::exception_ptr& failure : failures) {
-        if (failure) std::rethrow_exception(failure);
-    }
-    int best = 0;
-    for (int i = 1; i < workerCount; ++i) {
-        if (candidates[i].score > candidates[best].score) best = i;
-    }
-    problem = std::move(candidates[best]);
 }
 
 void Solver::solve(BinPackingProblem& problem,
                    optimaru::DecomposedObjective<BinPackingProblem>& calculator) {
-    requireRewards(config_);
+    optimaru::check_config(config_);
     prepareSolve(problem);
     problem.warmStart = false;  // a seed is used once
     if (!problem.items.empty()) {
