@@ -49,7 +49,7 @@ An unassigned task contributes nothing. `SolverConfig` holds the engine's knobs
 (`spent_limit_seconds`, `step_count_limit`, ...); see the
 [use-case README](README.md#python-api).
 
-## Install / test
+## Install and test
 
 ```bash
 OPTIMARU_USE_CASES=assembly_line_balancing uv sync   # builds only this use case's C++ extension

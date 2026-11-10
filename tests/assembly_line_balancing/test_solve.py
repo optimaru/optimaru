@@ -25,7 +25,7 @@ def lower_bound(problem):
 
 def test_solve_assigns_everything_feasibly():
     problem = salbp()
-    score = alb.solve(problem, time_limit_seconds=2.0, random_seed=7)
+    score = alb.solve(problem, time_limit_seconds=2.0, random_seed=7).score
     assert score.is_feasible() and score.hard == 0
     stations = problem.assignment()
     assert all(station >= 0 for station in stations)
@@ -49,7 +49,7 @@ def test_the_web_demo_reaches_the_lower_bound():
 
 def test_solver_score_matches_recompute():
     problem = salbp()
-    score = alb.solve(problem, time_limit_seconds=1.0, random_seed=7)
+    score = alb.solve(problem, time_limit_seconds=1.0, random_seed=7).score
     recomputed = alb.calculate_score(problem)
     assert (score.hard, score.soft) == (recomputed.hard, recomputed.soft)
     assert score.soft == -problem.stations_used()
@@ -75,7 +75,7 @@ def test_parallel_multi_start_returns_the_best_worker():
     config.step_count_limit = 2000
     config.random_seed = 5
     config.parallel_solver_count = 3
-    score = alb.solve(problem, config=config)
+    score = alb.solve(problem, config=config).score
     assert score.hard == 0
     recomputed = alb.calculate_score(problem)
     assert (score.hard, score.soft) == (recomputed.hard, recomputed.soft)
@@ -83,7 +83,7 @@ def test_parallel_multi_start_returns_the_best_worker():
 
 def test_stop_at_first_feasible():
     problem = salbp()
-    score = alb.solve(problem, time_limit_seconds=10.0, random_seed=1, stop_at_first_feasible=True)
+    score = alb.solve(problem, time_limit_seconds=10.0, random_seed=1, stop_at_first_feasible=True).score
     assert score.hard == 0
 
 
@@ -102,7 +102,7 @@ def test_on_new_best_callback_fires():
 
 def test_empty_problem():
     problem = alb.AssemblyLineBalancingProblem(5, [])
-    score = alb.solve(problem, time_limit_seconds=0.1)
+    score = alb.solve(problem, time_limit_seconds=0.1).score
     assert (score.hard, score.soft) == (0, 0.0)
     assert problem.station_loads() == [] and problem.stations_used() == 0
 

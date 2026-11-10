@@ -21,7 +21,7 @@ def test_constraint_costs_match_hand_calculation() -> None:
 
 def test_metaheuristic_finds_two_bin_optimum() -> None:
     candidate = problem()
-    solved = solve(candidate, time_limit_seconds=0.1, random_seed=7)
+    solved = solve(candidate, time_limit_seconds=0.1, random_seed=7).score
     assert solved.hard == 0
     assert candidate.bins_used() == 2
     assert sorted(candidate.bin_loads()) == [10, 10]

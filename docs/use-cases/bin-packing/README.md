@@ -4,6 +4,40 @@ Uniform-capacity one-dimensional bin packing, based on the standard
 item-to-bin assignment model (Martello & Toth 1990), with optional item colours and conflict pairs, on this repository's C++ engine
 (`optimaru/cpp/optimaru/`).
 
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=bin_packing uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/bin_packing
+```
+
+```python
+from optimaru import bin_packing as bp
+
+problem = bp.BinPackingProblem(10, [bp.Item("A", 8), bp.Item("B", 7), bp.Item("C", 3), bp.Item("D", 2)])
+print(bp.solve(problem, time_limit_seconds=1.0, random_seed=42).score)   # 0hard/-2soft
+print(problem.bins_used(), problem.bin_loads(), problem.assignment())
+```
+
+`solve` returns the problem it was given, solved in place; the score is its `score`
+(`.hard`, `.soft`). It takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
+`stop_at_first_feasible`, `on_new_best`, a full `config` (`bin_packing.SolverConfig`)
+and `constraints`:
+
+```python
+from optimaru.bin_packing.constraints import UsedBinsCost, get_constraints, score
+
+bp.constraint_info()                    # the catalog: name, default level / weight, flags
+bp.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:3], UsedBinsCost(weight=2)])
+raw = bp.constraint_costs(problem)      # raw per-bin costs, re-priced in pure Python
+score(raw), score(raw, [UsedBinsCost(exponent=2.0)])
+score(raw, [UsedBinsCost(), UsedBinsCost(weight=100, offset=10)])   # a repeat, shifted
+```
+
+The JSON contract is `optimaru.bin_packing.models` (`BinPackingProblemModel.model_validate(...)
+.to_core()` / `.from_core(problem)`, with the outputs `score_hard`, `score_soft`,
+`bins_used`, `bin_loads`).
+
 ## Domain (assignment shape)
 
 - `Item.bin` — the only decision variable: a 0-based index into n identical bins
@@ -14,7 +48,9 @@ item-to-bin assignment model (Martello & Toth 1990), with optional item colours 
   reversed, counts per listing).
 - `warm_start` — start the search from the items' bins (see below); every solve clears it.
 
-## Constraints (Score — the engine score type as-is, no mapping)
+## Constraints
+
+The score is the engine's `Score` type as it is, with no mapping.
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
@@ -171,39 +207,6 @@ bins used:
 
 The full table is in [`benchmarks/bin-packing`](../../../benchmarks/bin-packing/README.md).
 
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=bin_packing uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/bin_packing
-```
-
-```python
-from optimaru import bin_packing as bp
-
-problem = bp.BinPackingProblem(10, [bp.Item("A", 8), bp.Item("B", 7), bp.Item("C", 3), bp.Item("D", 2)])
-print(bp.solve(problem, time_limit_seconds=1.0, random_seed=42))   # 0hard/-2soft
-print(problem.bins_used(), problem.bin_loads(), problem.assignment())
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `on_new_best`, a full `config` (`bin_packing.SolverConfig`)
-and `constraints`:
-
-```python
-from optimaru.bin_packing.constraints import UsedBinsCost, get_constraints, score
-
-bp.constraint_info()                    # the catalog: name, default level / weight, flags
-bp.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:3], UsedBinsCost(weight=2)])
-raw = bp.constraint_costs(problem)      # raw per-bin costs, re-priced in pure Python
-score(raw), score(raw, [UsedBinsCost(exponent=2.0)])
-score(raw, [UsedBinsCost(), UsedBinsCost(weight=100, offset=10)])   # a repeat, shifted
-```
-
-The JSON contract is `optimaru.bin_packing.models` (`BinPackingProblemModel.model_validate(...)
-.to_core()` / `.from_core(problem)`, with the outputs `score_hard`, `score_soft`,
-`bins_used`, `bin_loads`).
-
 ## Starting from an existing solution
 
 `with_initial_solution(problem, solution)` returns a copy of a
@@ -221,7 +224,7 @@ from optimaru.bin_packing.models import BinPackingProblemModel
 
 solved = BinPackingProblemModel.from_core(problem)
 warm = with_initial_solution(solved, solved.model_dump(mode="json")).to_core()
-print(bp.solve(warm, time_limit_seconds=1.0, random_seed=42), warm.bin_loads())
+print(bp.solve(warm, time_limit_seconds=1.0, random_seed=42).score, warm.bin_loads())
 ```
 
 ## Extending

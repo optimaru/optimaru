@@ -40,7 +40,7 @@ hard 0 must mean no violation: `ValueError: constraint 'bin_capacity_cost': clip
 a non-zero offset cannot be hard, because hard 0 must mean no violation; use clip=True (a
 threshold) or another level`. On soft it is allowed.
 
-## Install / test
+## Install and test
 
 ```bash
 OPTIMARU_USE_CASES=bin_packing uv sync   # builds only this use case's C++ extension

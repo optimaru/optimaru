@@ -83,8 +83,8 @@ def test_solved_result_feeds_back(as_dict):
 def test_search_from_a_seed_never_scores_below_it():
     seeded = with_initial_solution(_problem(), {"items": [{"id": item_id, "selected": False} for item_id in "ABC"]})
     seed_score = calculate_score(seeded.model_copy(deep=True))
-    result = solve(seeded, config=_steps(500, seed=1))
-    assert (result.hard, result.soft) >= (seed_score.hard, seed_score.soft)
+    solve(seeded, config=_steps(500, seed=1))
+    assert (seeded.score_hard, seeded.score_soft) >= (seed_score.hard, seed_score.soft)
 
 
 def test_partial_seed_keeps_its_part_and_fills_the_rest_around_its_load():

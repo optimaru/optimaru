@@ -159,3 +159,23 @@ def test_score_and_item_are_plain_values():
     assert len({bp.Score(0, -2.0), bp.Score(0, -2.0)}) == 1
     assert str(bp.Score(-1, -2.5)) == "-1hard/-2.5soft"
     assert repr(bp.Item("A", 3, 1, "red")) == "Item(id='A', weight=3, bin=1, color='red')"
+
+
+def _steps(steps):
+    config = bp.SolverConfig()
+    config.step_count_limit = steps
+    return config
+
+
+def test_solve_takes_the_model_and_returns_a_solved_model():
+    model = rich_model()
+    solved = bp.solve(model, config=_steps(500), random_seed=3)
+    assert isinstance(solved, BinPackingProblemModel)
+    core = model.to_core()
+    bp.solve(core, config=_steps(500), random_seed=3)
+    assert (solved.score_hard, solved.score_soft) == (core.score.hard, core.score.soft)
+
+
+def test_solve_refuses_anything_but_the_problem_or_its_model():
+    with pytest.raises(TypeError, match="must be a"):
+        bp.solve(3)

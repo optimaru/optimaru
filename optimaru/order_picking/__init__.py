@@ -94,6 +94,7 @@ def solve(
     random_seed: int | None = None,
     parallel_solver_count: int | None = None,
     stop_at_first_feasible: bool = False,
+    full_assert: bool = False,
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
@@ -105,6 +106,9 @@ def solve(
     soon as hard 0 is reached (best_score_limit=(0, -inf)). The default time
     budget is the engine's 30s.
 
+    ``full_assert`` re-verifies every incremental score against a full recompute
+    (a debugging aid; much slower).
+
     ``constraints`` picks the cost function (see `optimaru.order_picking.constraints`).
     Only the constraints in the list are scored, a name picked several times
     once per pick; None keeps all four defaults::
@@ -112,6 +116,10 @@ def solve(
         from optimaru.order_picking.constraints import get_constraints
         op.solve(solution, constraints=get_constraints())
     """
+    if not isinstance(solution, OrderPickingSolution):
+        raise TypeError(
+            f"solution must be an instance of OrderPickingSolution: {type(solution)!r} (models.solve_request solves a models.OrderPickingRequest)"
+        )
     # A copy: the keyword overrides below must not leak into the caller's config.
     cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:
@@ -122,6 +130,8 @@ def solve(
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
         cfg.best_score_limit = (0, float("-inf"))
+    if full_assert:
+        cfg.full_assert = True
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
     if constraints is None:

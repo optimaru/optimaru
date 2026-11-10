@@ -6,7 +6,7 @@ Sports league scheduling, derived from the Timefold Quickstarts `sports-league-s
 Assigns a round (`Round`) to every match (`Match`) of the league — `Match.round`
 is the decision variable (-1 = unassigned; the value is a position in the `rounds` list).
 
-## Install / test
+## Install and test
 
 ```sh
 OPTIMARU_USE_CASES=sports_league_scheduling uv sync      # builds only this use case's C++ extension

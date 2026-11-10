@@ -176,7 +176,7 @@ def _require_same_order(solved: dict, name: str, ids: list, key: str = "id") -> 
 def with_initial_solution(problem, solution):
     """Return a copy of `problem` whose search starts from `solution`.
 
-    `solution` is what a solve returns (`FacilityLocationProblemModel.from_core`), or a
+    `solution` is a solved problem (`FacilityLocationProblemModel.from_core`), or a
     plain dict of that shape (the JSON the API returned). Consumers are matched by id.
     A consumer left out becomes unassigned and the construction heuristic places it,
     and only it, so a complete solution starts the search exactly from it. `problem`

@@ -3,7 +3,7 @@
 The pybind11 package of the maintenance-scheduling use case (`optimaru/maintenance_scheduling/cpp`).
 For the detailed domain/constraint description see [`../README.md`](README.md).
 
-## Install / test
+## Install and test
 
 ```sh
 OPTIMARU_USE_CASES=maintenance_scheduling uv sync      # builds only this use case's C++ extension

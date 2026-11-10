@@ -32,10 +32,10 @@ Where a use case differs from the table:
   `st/constraints/`, and its plugin tests in `canonical_plugin_test.cpp`.
 - Employee scheduling has `es_plugin_test.cpp` only, and a second catalog of
   opt-in rules (see [step 3](#3-add-it-to-the-assembly) of adding a cost).
-- Employee scheduling and school timetabling solve picked constraints through
-  `Solver.solve(x, calculator)` instead of `solve_with_constraints`.
-- `SolverConfig.full_assert` is not bound for employee scheduling, pickup &
-  delivery and vehicle routing: use `config.score_checks` in their C++ tests.
+- Employee scheduling and school timetabling have no
+  `Solver.solve_with_constraints`: their `Solver.solve(x, calculator)` takes the
+  picks as a calculator. The package-level `solve(x, constraints=picks)` is the
+  same for all 22.
 
 The engine is header-only, in `optimaru/cpp/optimaru/`. You never edit it to add a
 move or a cost: both plug in from the use case.
@@ -188,8 +188,8 @@ binding.
 ### 4. Test it
 
 - **Score consistency.** Solve once with `ScoreChecks::Full`
-  (`config.score_checks` in C++; `SolverConfig.full_assert = True` in Python,
-  where the use case binds it).
+  (`config.score_checks` in C++; `SolverConfig.full_assert = True` or
+  `solve(..., full_assert=True)` in Python).
   Every incremental score is then compared with a full recompute, and the solve
   throws `ScoreMismatchError` if the move leaves the score stale. Add such a
   solve to `tests/<uc>/cpp/<ns>_test.cpp`.

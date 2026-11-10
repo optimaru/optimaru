@@ -67,18 +67,18 @@ def test_unknown_config_knobs_are_refused():
 def test_solve_on_the_engine_object_and_on_the_model_agree():
     core = demo().to_core()
     model = demo()
-    by_core = knapsack.solve(core, config=steps(3000, seed=7))
-    by_model = knapsack.solve(model, config=steps(3000, seed=7))
-    assert isinstance(by_core, knapsack.Score)
-    assert (by_core.hard, by_core.soft) == (by_model.hard, by_model.soft)
+    assert knapsack.solve(core, config=steps(3000, seed=7)) is core
+    assert knapsack.solve(model, config=steps(3000, seed=7)) is model
+    assert isinstance(core.score, knapsack.Score)
+    assert (core.score.hard, core.score.soft) == (model.score_hard, model.score_soft)
     assert [item.selected for item in model.items] == [value == 1 for value in core.assignment()]
     assert (model.total_weight, model.total_value) == (core.total_weight(), core.total_value())
 
 
 def test_the_web_demo_solves_to_a_feasible_selection():
     model = demo()
-    result = knapsack.solve(model, time_limit_seconds=1.0, random_seed=1)
-    assert result.is_feasible()
+    assert knapsack.solve(model, time_limit_seconds=1.0, random_seed=1) is model
+    assert model.score_hard >= 0  # feasible
     assert model.total_weight <= model.capacity
     chosen = {item.id for item in model.items if item.selected}
     assert "first-aid" in chosen
@@ -169,7 +169,7 @@ def test_calculate_score_fills_the_model():
 
 def test_an_empty_problem_solves():
     core = knapsack.KnapsackProblem(5, [])
-    score = knapsack.solve(core, time_limit_seconds=1)
+    score = knapsack.solve(core, time_limit_seconds=1).score
     assert (score.hard, score.soft) == (0, 0.0)
 
 

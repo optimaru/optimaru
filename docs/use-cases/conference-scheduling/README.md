@@ -26,6 +26,28 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=conference_schedu
 ./build/conference_scheduling/cs_demo 10
 ```
 
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=conference_scheduling uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/conference_scheduling
+```
+
+```python
+from optimaru import conference_scheduling as cs
+
+schedule = cs.demo_conference()
+cs.solve(schedule, time_limit_seconds=5.0, random_seed=42)   # solves in place
+print(schedule.score)
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`conference_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+
+```sh
+cmake -B build -DOPTIMARU_USE_CASES=conference_scheduling && cmake --build build -j
+ctest --test-dir build
+```
+
 ## Constraints
 
 37 constraints: 17 hard and 20 soft. Every one is global (one
@@ -109,7 +131,7 @@ Each repeated pick carries its own level, so `RoomConflictCost()` and
 soft beyond ten minutes. This use case has no medium level: `level="medium"` raises
 `ValueError` before the solve starts, on both solvers and in `score()`.
 
-## Quality benchmark and solver defaults (2026-08)
+## Quality benchmark and solver defaults
 
 `optimaru/conference_scheduling/cpp/bench/quality_bench.cpp` (`cs_quality_bench <demo|scaled:N> <seed> <seconds>
 [knobs]`) solves demo-like scaled instances (a fixed 14 slots x 9 rooms = 126 cells,
@@ -163,29 +185,7 @@ Knobs that were measured but stay off by default (bench key = config field):
   `clamp(8 x talk, 800, 3200)`. Kept automatic.
 
 Protocol: 6-seed interleaved A/B; per-seed win/loss is a lexicographic
-hard-then-soft comparison. The raw campaign logs are not checked in.
-
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=conference_scheduling uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/conference_scheduling
-```
-
-```python
-from optimaru import conference_scheduling as cs
-
-schedule = cs.demo_conference()
-cs.solve(schedule, time_limit_seconds=5.0, random_seed=42)   # solves in place
-print(schedule.score)
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`conference_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
-
-```sh
-cmake -B build -DOPTIMARU_USE_CASES=conference_scheduling && cmake --build build -j
-ctest --test-dir build
-```
+hard-then-soft comparison. The measurements are from 2026-08. The raw campaign logs are not checked in.
 
 ## Starting from an existing solution
 

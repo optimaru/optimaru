@@ -36,15 +36,20 @@ shifts = [
     es.Shift("Shift 2", es.minutes(1, 9), es.minutes(1, 12), required_skill="Skill B"),
 ]
 
-config = es.SolverConfig()
-config.spent_limit_seconds = 1.0
 schedule = es.EmployeeSchedule([first, second], shifts)
-es.Solver(config).solve(schedule)        # solves in place
+es.solve(schedule, time_limit_seconds=1.0, random_seed=42)   # solves in place and returns the schedule
 
 for shift, who in zip(schedule.shifts, schedule.assignment()):
-    print(shift.id, "→", schedule.employees[who].name)
-print(schedule.score)                    # 0hard means no must-rule is broken
+    print(shift.id, "→", schedule.employees[who].name)   # Shift 1 → Worker 01, Shift 2 → Worker 02
+print(schedule.score)                    # 0hard/-180soft; 0hard means no must-rule is broken
 ```
+
+`es.solve` also takes `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert`, `on_new_best`, `constraints` (a list of rule specs or a
+`DecomposedCalculator`, see [The rules](#the-rules)) and a full `config`, an
+`es.SolverConfig` (see [Solver options](#solver-options)) whose fields the keywords
+override on a copy. `es.Solver(config).solve(schedule)` is the same solve one level
+down.
 
 Three things to know about time:
 
@@ -372,6 +377,8 @@ config.step_count_limit = 100_000       # 0 disables step-count termination
 config.no_improvement_limit_seconds = 0.5   # stop after no new best
 config.no_improvement_step_count_limit = 50_000
 config.random_seed = 42                 # same seed, same search
+config.parallel_solver_count = 1        # independent parallel starts (seed + i each); ignored with a calculator
+config.full_assert = False              # re-verify every incremental score (a debugging aid; much slower)
 config.guided_moves = True
 config.employee_greedy_construction = True
 config.late_acceptance_size = 400

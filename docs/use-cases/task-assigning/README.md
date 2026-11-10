@@ -28,7 +28,9 @@ cmake -B build -DOPTIMARU_USE_CASES=task_assigning && cmake --build build -j
 ctest --test-dir build
 ```
 
-## Constraints (Four-level score, [1]hard/[3]soft on the engine's hard / medium / soft levels)
+## Constraints
+
+The score has four levels, [1]hard/[3]soft, on the engine's hard / medium / soft levels.
 
 | Constraint (Python name) | C++ component | Score level | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|---|

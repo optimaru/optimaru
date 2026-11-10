@@ -39,6 +39,6 @@ def test_a_short_step_limited_solve_is_no_worse_than_the_baseline() -> None:
     config.random_seed = 1
     for name, reference in quality.BASELINE_BINS.items():
         core = BinPackingProblemModel.model_validate(quality.instances()[name]()).to_core()
-        score = bin_packing.solve(core, config=config)
+        score = bin_packing.solve(core, config=config).score
         assert score.hard == 0, name
         assert core.bins_used() <= reference, name

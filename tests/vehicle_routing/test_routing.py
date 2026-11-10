@@ -232,3 +232,67 @@ def test_routes_are_open_unless_the_vehicle_returns_to_depot():
     assert vehicle.return_to_depot is False
     vehicle.return_to_depot = True
     assert vehicle.return_to_depot is True
+
+
+def _steps(steps):
+    config = vrp.SolverConfig()
+    config.step_count_limit = steps
+    return config
+
+
+def test_package_solve_solves_in_place_and_returns_the_plan():
+    plan = small_plan()
+    config = _steps(2000)
+    assert vrp.solve(plan, config=config, random_seed=7, full_assert=True) is plan
+    assert plan.score.hard == 0
+    # The keyword overrides go to a copy of the caller's config.
+    assert config.full_assert is False
+
+
+def test_package_solve_with_constraints_equals_solve_with_constraints():
+    from optimaru.vehicle_routing.constraints import get_constraints
+
+    by_package, by_solver = small_plan(), small_plan()
+    vrp.solve(by_package, config=_steps(2000), random_seed=7, constraints=get_constraints())
+    config = _steps(2000)
+    config.random_seed = 7
+    vrp.Solver(config).solve_with_constraints(by_solver, get_constraints())
+    assert str(by_package.score) == str(by_solver.score)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("parallel_solver_count", 0, "must be positive"),
+        ("late_acceptance_size", -1, "must be >= 0"),
+        ("ruin_recreate_rewards", [1.0, 2.0], "exactly 4 values"),
+    ],
+)
+def test_config_rejects_out_of_range_values(field, value, message):
+    with pytest.raises(ValueError, match=message):
+        setattr(vrp.SolverConfig(), field, value)
+
+
+def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
+    seen = {}
+
+    class Recorder:
+        def __init__(self, config):
+            seen["limit"] = config.best_score_limit
+            seen["callback"] = config.on_new_best
+
+        def solve(self, problem):
+            seen["solved"] = problem
+
+    monkeypatch.setattr(vrp, "Solver", Recorder)
+    callback = lambda step, score: None  # noqa: E731
+    problem = small_plan()
+    vrp.solve(problem, stop_at_first_feasible=True, on_new_best=callback)
+    assert seen["limit"] == (0, -(2**63), -(2**63))
+    assert seen["callback"] is not None and seen["solved"] is problem
+
+
+def test_package_solve_reports_new_bests():
+    calls = []
+    vrp.solve(small_plan(), config=_steps(300), on_new_best=lambda step, score: calls.append(step))
+    assert calls

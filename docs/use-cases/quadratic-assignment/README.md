@@ -11,6 +11,46 @@ The exact CP-SAT reference is external-solver's `external_solver.quadratic_assig
 [`benchmarks/quadratic-assignment/cpsat`](../../../benchmarks/quadratic-assignment/cpsat)
 holds the engine vs CP-SAT comparison.
 
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=quadratic_assignment uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/quadratic_assignment
+```
+
+```python
+from optimaru import quadratic_assignment as qap
+from optimaru.quadratic_assignment.models import QuadraticAssignmentProblemModel
+
+problem = QuadraticAssignmentProblemModel(
+    facilities=["F1", "F2"], locations=["L1", "L2"],
+    flows=[[0, 3], [2, 0]], distances=[[0, 4], [5, 0]],
+)
+qap.solve(problem, time_limit_seconds=1.0, random_seed=42)          # the model, in place (and returned)
+print(problem.score_hard, problem.score_soft)                       # 0 -22.0
+print(problem.assignment, problem.total_cost)
+
+core = problem.to_core()                                             # or the engine object
+print(qap.solve(core, time_limit_seconds=1.0, random_seed=42).score)   # 0hard/-22soft
+print(core.assignment(), core.total_cost())                          # per location: the facility index
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
+`stop_at_first_feasible`, `on_new_best`, a full `config`
+(`quadratic_assignment.SolverConfig`) and `constraints`:
+
+```python
+from optimaru.quadratic_assignment.constraints import FlowDistanceCost, PinnedAssignmentsCost, get_constraints, score
+
+qap.constraint_info()      # [ConstraintInfo(name='pinned_assignments_cost', default_level='hard', ...), ...]
+qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
+raw = qap.constraint_costs(problem)                  # raw costs, re-priced in pure Python:
+score(raw), score(raw, [PinnedAssignmentsCost(level="soft"), *get_constraints()[1:]])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping (clip=True: only the flow cost beyond 20 counts for the second pick).
+score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=20)])
+```
+
 ## Domain (assignment shape)
 
 - `Facility.location` — the only decision variable: an index into `locations`,
@@ -36,7 +76,9 @@ holds the engine vs CP-SAT comparison.
   model's assignment must be representable (known ids, no facility twice):
   `to_core()` raises `ValueError` otherwise, so `solve(model)` does too.
 
-## Constraints (Score — the engine score type as-is, no mapping)
+## Constraints
+
+The score is the engine's `Score` type as it is, with no mapping.
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
@@ -141,7 +183,7 @@ The package is the C++ engine with pybind11 bindings, like the other C++ use cas
   time limit generous enough for the step budget; once the clock leads, the
   run depends on timing. `ENTITY_TABU` accepts only non-worsening swaps (a hill
   climber), and `GREAT_DELUGE` keeps the start score as its water level.
-- `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`) and takes the engine object or the model (written back in place).
+- `solve()` returns the problem it was given, solved: the engine object (its `score` is the engine `Score`: `.hard`, `.soft`, `is_feasible()`) or the model (written back in place, with `score_hard` / `score_soft`).
   `calculate_score(problem, constraints)` returns the engine `Score` for the
   defaults and a `constraints.Score(hard, soft)` named tuple for a selection.
   Use `constraints.get_constraints()` / `constraints.score()` for selections. With `constraints=...` a solve is single-start
@@ -192,45 +234,6 @@ literal offsets by hand, the scoped side constraints charging only their locatio
 the literal formula refused on hard at reset and kept on soft, incremental == a fresh
 recompute over a walk with accepted and undone moves, a ScoreChecks::Full solve).
 
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=quadratic_assignment uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/quadratic_assignment
-```
-
-```python
-from optimaru import quadratic_assignment as qap
-from optimaru.quadratic_assignment.models import QuadraticAssignmentProblemModel
-
-problem = QuadraticAssignmentProblemModel(
-    facilities=["F1", "F2"], locations=["L1", "L2"],
-    flows=[[0, 3], [2, 0]], distances=[[0, 4], [5, 0]],
-)
-print(qap.solve(problem, time_limit_seconds=1.0, random_seed=42))   # 0hard/-22soft; the model, in place
-print(problem.assignment, problem.total_cost)
-
-core = problem.to_core()                                             # or the engine object
-qap.solve(core, time_limit_seconds=1.0, random_seed=42)
-print(core.assignment(), core.total_cost())                          # per location: the facility index
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `on_new_best`, a full `config`
-(`quadratic_assignment.SolverConfig`) and `constraints`:
-
-```python
-from optimaru.quadratic_assignment.constraints import FlowDistanceCost, PinnedAssignmentsCost, get_constraints, score
-
-qap.constraint_info()      # [ConstraintInfo(name='pinned_assignments_cost', default_level='hard', ...), ...]
-qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
-raw = qap.constraint_costs(problem)                  # raw costs, re-priced in pure Python:
-score(raw), score(raw, [PinnedAssignmentsCost(level="soft"), *get_constraints()[1:]])
-# A constraint may be picked several times, each pick with its own knobs; offset / clip
-# shift the shaping (clip=True: only the flow cost beyond 20 counts for the second pick).
-score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=20)])
-```
-
 ## Starting from an existing solution
 
 `with_initial_solution(problem, solution)` returns a copy of `problem` whose
@@ -247,25 +250,6 @@ warm = with_initial_solution(problem, problem.model_dump(mode="json"))
 qap.solve(warm, time_limit_seconds=1.0, random_seed=42)
 print(warm.assignment, warm.total_cost)
 ```
-
-## QAPLIB benchmark
-
-`benchmarks/quadratic-assignment/bench/run_bench.py` downloads the QAPLIB
-instance and solution archives, verifies both SHA-256 checksums, then re-scores every result with this
-package's `constraint_costs()` (`flow_distance_cost`). Downloaded files stay in
-`benchmarks/quadratic-assignment/bench/.cache/` and are not committed.
-
-```sh
-cd benchmarks/quadratic-assignment
-uv sync --project cpsat --all-groups
-uv run --project cpsat python -m bench.run_bench --seconds 60
-# Select more instances; CP-SAT is optional because its reference QAP model is O(n^4).
-uv run --project cpsat python -m bench.run_bench \
-  --instance nug30 --instance lipa40a --exact-max-size 32 --seconds 60
-```
-
-The report shows the raw objective and gap to the QAPLIB best-known solution.
-The checked-in local snapshot is [`bench/RESULTS.md`](../../../benchmarks/quadratic-assignment/bench/RESULTS.md).
 
 ## Extending
 
@@ -317,4 +301,23 @@ full bijection.
 
 [`benchmarks/quadratic-assignment`](../../../benchmarks/quadratic-assignment) compares this
 use case with OR-Tools CP-SAT on the same small instances, rescored by the same
-evaluator, and runs the QAPLIB instances above.
+evaluator, and runs the QAPLIB instances below.
+
+### QAPLIB benchmark
+
+`benchmarks/quadratic-assignment/bench/run_bench.py` downloads the QAPLIB
+instance and solution archives, verifies both SHA-256 checksums, then re-scores every result with this
+package's `constraint_costs()` (`flow_distance_cost`). Downloaded files stay in
+`benchmarks/quadratic-assignment/bench/.cache/` and are not committed.
+
+```sh
+cd benchmarks/quadratic-assignment
+uv sync --project cpsat --all-groups
+uv run --project cpsat python -m bench.run_bench --seconds 60
+# Select more instances; CP-SAT is optional because its reference QAP model is O(n^4).
+uv run --project cpsat python -m bench.run_bench \
+  --instance nug30 --instance lipa40a --exact-max-size 32 --seconds 60
+```
+
+The report shows the raw objective and gap to the QAPLIB best-known solution.
+The checked-in local snapshot is [`bench/RESULTS.md`](../../../benchmarks/quadratic-assignment/bench/RESULTS.md).

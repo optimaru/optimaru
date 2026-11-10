@@ -369,6 +369,12 @@ class SolverConfig:
     """Steps since last best-score improvement; 0 disables it."""
     random_seed: int
     """Seed of the search; the same seed reproduces the same search."""
+    parallel_solver_count: int
+    """Independent parallel starts (seed + i each); the best final score wins.
+    Ignored when a calculator is passed to `Solver.solve`."""
+    full_assert: bool
+    """Re-verify every incremental score against a full recompute after every
+    move (a debugging aid; much slower)."""
     guided_moves: bool
     """Violation/skill-guided move selection (default True). False = uniform
     random moves."""

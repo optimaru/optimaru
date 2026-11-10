@@ -223,6 +223,7 @@ def solve(
     random_seed: int | None = None,
     parallel_solver_count: int | None = None,
     stop_at_first_feasible: bool = False,
+    full_assert: bool = False,
     weights: dict | None = None,
     constraints=None,
     on_new_best=None,
@@ -298,6 +299,9 @@ def solve(
     `unassigned_lessons_cost` — a solution that drops every lesson is hard 0
     too and would stop there.
 
+    ``full_assert`` re-verifies every incremental score against a full recompute
+    (a debugging aid; much slower).
+
     The returned dict follows API_SPEC.md's response shape (status/lessons/
     objective_value/best_objective_bound/wall_time_seconds/penalties/notes).
     In canonical mode penalties are the raw soft counts keyed by the soft
@@ -321,6 +325,8 @@ def solve(
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
         cfg.best_score_limit = (0, float("-inf"))
+    if full_assert:
+        cfg.full_assert = True
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
     if weights is not None:

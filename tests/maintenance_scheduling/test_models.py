@@ -99,3 +99,23 @@ def test_solve_via_models():
     solved = MaintenanceScheduleModel.from_core(rebuilt)
     assert solved.score_hard == 0
     assert all(j.crew_id is not None and j.start_date is not None for j in solved.jobs)
+
+
+def _steps(steps):
+    config = mnt.SolverConfig()
+    config.step_count_limit = steps
+    return config
+
+
+def test_solve_takes_the_model_and_returns_a_solved_model():
+    model = MaintenanceScheduleModel.from_core(mnt.generate_demo_data("SMALL", 20000))
+    solved = mnt.solve(model, config=_steps(500), random_seed=3)
+    assert isinstance(solved, MaintenanceScheduleModel)
+    core = model.to_core()
+    mnt.solve(core, config=_steps(500), random_seed=3)
+    assert (solved.score_hard, solved.score_soft) == (core.score.hard, core.score.soft)
+
+
+def test_solve_refuses_anything_but_the_problem_or_its_model():
+    with pytest.raises(TypeError, match="must be a"):
+        mnt.solve(3)

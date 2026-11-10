@@ -131,15 +131,19 @@ def solve(
     random_seed: int | None = None,
     parallel_solver_count: int | None = None,
     stop_at_first_feasible: bool = False,
+    full_assert: bool = False,
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> Score:
-    """Solve `problem` in place and return the final `Score`.
+):
+    """Solve `problem` and return it, solved.
 
     `problem` is the engine object (solved in place; the server path is ``to_core()`` ->
     ``solve`` -> ``from_core()``) or the pydantic model (converted, solved, and the
     assignment, ``total_cost``, score and ``warm_start=False`` written back into it).
+
+    `solve` returns the same object. The score is on it: ``problem.score`` (`Score`) on the engine
+    object, ``score_hard`` / ``score_soft`` on the model.
 
     The search starts from the identity (facility i at location i) or, with
     ``warm_start`` (see `with_initial_solution`), from the problem's assignment, which must
@@ -150,6 +154,9 @@ def solve(
     budget (``time_limit_seconds=0``) returns the start unchanged; ``SolverConfig.step_count_limit
     = N`` bounds the search to N steps (0 = no step limit). ``stop_at_first_feasible`` stops as
     soon as hard 0 is reached. ``on_new_best(step, score)`` is called on every new best solution.
+
+    ``full_assert`` re-verifies every incremental score against a full recompute
+    (a debugging aid; much slower).
 
     ``constraints`` picks the cost function directly (see `optimaru.quadratic_assignment.constraints`);
     only the listed constraints are scored, a name picked several times once per pick, and
@@ -169,6 +176,8 @@ def solve(
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
         cfg.best_score_limit = (0, float("-inf"))
+    if full_assert:
+        cfg.full_assert = True
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
 
@@ -179,6 +188,4 @@ def solve(
         Solver(cfg).solve_with_constraints(core, constraints)
     if isinstance(problem, QuadraticAssignmentProblemModel):
         problem._update_from_core(core)
-    score = core.score
-    assert score is not None  # every solve ends by scoring the result
-    return score
+    return problem

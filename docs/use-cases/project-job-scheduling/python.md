@@ -5,7 +5,7 @@ Multi-project / multi-mode RCPSP, derived from the Timefold Quickstarts
 the `optimaru/project_job_scheduling/cpp` implementation on the generic C++ engine in
 `optimaru/cpp/optimaru/`.
 
-## Install / test
+## Install and test
 
 ```sh
 OPTIMARU_USE_CASES=project_job_scheduling uv sync      # builds only this use case's C++ extension

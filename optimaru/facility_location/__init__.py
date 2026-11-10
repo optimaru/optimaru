@@ -70,21 +70,30 @@ def with_initial_solution(problem, solution):
 
 
 def solve(
-    problem: FacilityLocationProblem,
+    problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
     parallel_solver_count: int | None = None,
     stop_at_first_feasible: bool = False,
+    full_assert: bool = False,
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> Score:
-    """High-level API that solves `problem` in place and returns the final `Score`.
+):
+    """High-level API that solves `problem` in place and returns it.
+
+    `problem` is a `FacilityLocationProblem` (solved in place and returned) or a
+    `models.FacilityLocationProblemModel` (converted, solved, and returned as a new model).
+
+    The score is on the result: ``solve(problem).score`` (``.hard``, ``.soft``).
 
     ``config`` becomes the base settings (None = engine defaults: 30 s budget, ALNS
     on). Explicit keyword arguments override config.
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached.
+
+    ``full_assert`` re-verifies every incremental score against a full recompute
+    (a debugging aid; much slower).
 
     ``constraints`` picks the cost function directly
     (see `optimaru.facility_location.constraints`). Only the listed constraints are scored;
@@ -103,11 +112,26 @@ def solve(
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
         cfg.best_score_limit = (0, float("-inf"))
+    if full_assert:
+        cfg.full_assert = True
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
 
-    if constraints is None:
-        Solver(cfg).solve(problem)
-    else:
-        Solver(cfg).solve_with_constraints(problem, constraints)
-    return problem.score
+    def _solve(core):
+        if constraints is None:
+            Solver(cfg).solve(core)
+        else:
+            Solver(cfg).solve_with_constraints(core, constraints)
+
+    if isinstance(problem, FacilityLocationProblem):
+        _solve(problem)
+        return problem
+
+    # pydantic model (lazy import: pydantic is an optional dependency).
+    from .models import FacilityLocationProblemModel
+
+    if isinstance(problem, FacilityLocationProblemModel):
+        core = problem.to_core()
+        _solve(core)
+        return FacilityLocationProblemModel.from_core(core)
+    raise TypeError(f"problem must be a FacilityLocationProblem or a models.FacilityLocationProblemModel: {type(problem)!r}")

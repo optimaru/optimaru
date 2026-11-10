@@ -140,7 +140,8 @@ def test_seed_the_decoder_cannot_keep_is_never_lost_to_the_search():
         seeded = with_initial_solution(_queue_problem(), {"assignments": QUEUE_SEED})
         seed_score = calculate_score(seeded.model_copy(deep=True))
         config = _config(step_count_limit=200, random_seed=random_seed)
-        assert tuple(solve(seeded, config=config)) >= tuple(seed_score)
+        solve(seeded, config=config)
+        assert (seeded.score_hard, seeded.score_soft) >= tuple(seed_score)
 
 
 def test_decoder_merges_runs_that_the_seed_keeps_apart_but_solve_returns_the_seed():
@@ -159,7 +160,8 @@ def test_seed_with_idle_time_stays_as_given_until_the_search_runs():
     assert seeded.assignments == [AssignmentModel(**row) for row in idle]
 
     searched = with_initial_solution(_choice_problem(), {"assignments": idle})
-    assert tuple(solve(searched, config=_config(step_count_limit=100, random_seed=1))) > tuple(seed_score)
+    solve(searched, config=_config(step_count_limit=100, random_seed=1))
+    assert (searched.score_hard, searched.score_soft) > tuple(seed_score)
 
 
 @pytest.mark.parametrize("as_dict", [False, True])

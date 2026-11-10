@@ -419,7 +419,7 @@ def with_initial_solution(problem, solution):
 
     Guaranteed for a complete seed, one that assigns every operation: `solve` scores the supplied assignments directly
     without decoding them, returns them unchanged, batch ids included, unless the search finds a strictly better
-    schedule, and so never returns a score worse than the seed's.
+    schedule, and so never ends with a score worse than the seed's.
 
     Not guaranteed: that the search stays close to the seed or can improve it. Every schedule it visits after the seed
     is decoded, and a seed the decoder cannot reproduce may have no accepted neighbour, in which case it comes back

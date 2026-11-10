@@ -17,6 +17,27 @@ literature (machine flexibility, Brucker & Schlie 1990) with the features of
 wafer-fab scheduling listed above.
 The implementation is original and does not depend on a commercial runtime.
 
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=semiconductor_scheduling uv sync --python 3.14   # builds only this use case's C++ extension
+uv run --python 3.14 --with pytest python -m pytest -q tests/semiconductor_scheduling
+```
+
+```python
+from optimaru import semiconductor_scheduling as fab
+from optimaru.semiconductor_scheduling.models import SemiconductorScheduleModel
+
+problem = SemiconductorScheduleModel.model_validate_json(open("fab.json").read())
+fab.solve(problem, time_limit_seconds=2.0, random_seed=42)   # fills problem.assignments (and returns problem)
+print(problem.score_hard, problem.score_soft, problem.makespan)
+print([(a.lot_id, a.operation_id, a.machine_id, a.start, a.batch_id) for a in problem.assignments])
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
+`stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config`
+(`fab.SolverConfig`) and `constraints`. See [python.md](python.md).
+
 ## Domain (assignment shape, decoded schedule)
 
 - One **operation row** per (lot, route step), lot order then route order. Its decision
@@ -36,7 +57,9 @@ The implementation is original and does not depend on a commercial runtime.
   data mode) or, inside `solve`, as the **decode of its decision values** (search mode;
   a complete warm-start seed stands for itself while the values are the seed's).
 
-## Constraints (Score — the engine score type as is)
+## Constraints
+
+The score is the engine's `Score` type as it is.
 
 Every constraint is a `GlobalConstraint` (the schedule is a function of all values) and
 reports its total as one raw cost:
@@ -128,9 +151,11 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
   start. A complete warm-start seed is recognised by its values (not by object identity),
   so returning to the seed's values later in the search scores the supplied schedule
   again.
-- `solve` / `calculate_score` return a `Score` (iterable and comparable as `(hard, soft)`)
-  and accept the Pydantic model (written back in place) or the engine object
-  `_core.SemiconductorSchedule` (`to_core()` / `from_core()` convert to and from it).
+- `solve` / `calculate_score` accept the Pydantic model (written back in place) or the
+  engine object `_core.SemiconductorSchedule` (`to_core()` / `from_core()` convert to and
+  from it). `solve` returns the problem it was given, solved: the score is `score_hard` /
+  `score_soft` on the model and `score` on the engine object. `calculate_score` returns a
+  `Score` (iterable and comparable as `(hard, soft)`).
 - **Integer range**: times, durations, priorities and costs are int64 in the engine.
   `to_core()` refuses an input beyond |2**62| with `ValueError`; a derived time or a cost
   (a tardiness product, an overload area, a sum) that leaves int64 raises `OverflowError`
@@ -180,27 +205,6 @@ hand, the catalog, and repeated / shifted components (a hand-calculated repeat, 
 and literal offsets by hand, the literal formula refused on hard at reset and kept on soft,
 incremental == a fresh recompute over random walks, ScoreChecks::Full solves).
 
-## Python
-
-```sh
-OPTIMARU_USE_CASES=semiconductor_scheduling uv sync --python 3.14   # builds only this use case's C++ extension
-uv run --python 3.14 --with pytest python -m pytest -q tests/semiconductor_scheduling
-```
-
-```python
-from optimaru import semiconductor_scheduling as fab
-from optimaru.semiconductor_scheduling.models import SemiconductorScheduleModel
-
-problem = SemiconductorScheduleModel.model_validate_json(open("fab.json").read())
-score = fab.solve(problem, time_limit_seconds=2.0, random_seed=42)   # fills problem.assignments
-print(score, problem.makespan)
-print([(a.lot_id, a.operation_id, a.machine_id, a.start, a.batch_id) for a in problem.assignments])
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config`
-(`fab.SolverConfig`) and `constraints`. See [python.md](python.md).
-
 ## Starting from an existing solution
 
 `with_initial_solution(problem, solution)` returns a copy of `problem` whose
@@ -211,8 +215,8 @@ durations raise `ValueError`.
 
 ```python
 warm = fab.with_initial_solution(problem, problem.model_dump(mode="json"))
-print(fab.solve(warm, time_limit_seconds=2.0, random_seed=42))
-print(warm.makespan, warm.total_weighted_tardiness)
+fab.solve(warm, time_limit_seconds=2.0, random_seed=42)
+print(warm.score_hard, warm.score_soft, warm.makespan, warm.total_weighted_tardiness)
 ```
 
 The search works on machine choices and priority ranks that the decoder turns into

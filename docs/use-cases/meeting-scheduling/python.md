@@ -101,7 +101,7 @@ allowed. Each pick is its own instance with its own knobs, the instances add up,
 `level` is `Level.HARD` / `Level.MEDIUM` / `Level.SOFT` (or the names), any constraint may move onto medium (its
 weight then in medium units, folded at 1e6), and each repeated pick carries its own level.
 
-## Build / test
+## Install and test
 
 ```sh
 OPTIMARU_USE_CASES=meeting_scheduling uv sync      # builds only this use case's C++ extension
@@ -117,7 +117,7 @@ uv run pytest -q tests/meeting_scheduling
 - `demo_data()` is deterministic: its draws come from a seeded `std::mt19937_64` and the
   calendar dates are pinned to dayOfYear 200..203.
 
-## Solver defaults and quality bench (2026-08-18)
+## Solver defaults and quality bench
 
 The default search settings were tuned with `optimaru/meeting_scheduling/cpp/bench/ms_quality_bench.cpp`
 (monolithic incremental fast path, 10 s / single thread, 6-12 seeds interleaved

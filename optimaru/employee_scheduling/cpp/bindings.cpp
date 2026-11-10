@@ -695,6 +695,25 @@ PYBIND11_MODULE(_core, m)
                 c.stall_step_limit = steps;
             })
         .def_readwrite("random_seed", &Solver::Config::seed)
+        .def_property(
+            "parallel_solver_count",
+            [](const Solver::Config &c) { return c.parallelSolverCount; },
+            [](Solver::Config &c, int count)
+            {
+                if (count <= 0)
+                    throw py::value_error("parallel_solver_count must be positive");
+                c.parallelSolverCount = count;
+            })
+        // ScoreChecks::Full re-verifies the incremental score against a full
+        // recompute after every move (debugging aid; much slower).
+        .def_property(
+            "full_assert",
+            [](const Solver::Config &c) { return c.score_checks == optimaru::ScoreChecks::Full; },
+            [](Solver::Config &c, bool on)
+            {
+                c.score_checks
+                    = on ? optimaru::ScoreChecks::Full : optimaru::ScoreChecks::Off;
+            })
         .def_readwrite("guided_moves", &Solver::Config::guidedMoves)
         .def_readwrite("employee_greedy_construction",
                        &Solver::Config::employeeGreedyConstruction)

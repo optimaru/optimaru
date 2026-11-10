@@ -94,7 +94,7 @@ def test_the_model_and_the_core_solve_alike():
     alb.solve(core, config=config)
     assert [t.station for t in model.tasks] == core.assignment()
     assert (model.score_hard, model.score_soft) == (core.score.hard, core.score.soft)
-    assert (returned.hard, returned.soft) == (core.score.hard, core.score.soft)
+    assert returned is model
     assert model == AssemblyLineBalancingProblemModel.from_core(core)
 
 

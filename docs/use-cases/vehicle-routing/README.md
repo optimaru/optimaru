@@ -22,32 +22,17 @@ visits = [vrp.Visit("C1", "Customer 1", location_index=1, demand=3,
                     min_start_time=8 * 3600, max_end_time=18 * 3600, service_duration=600)]
 plan = vrp.VehicleRoutePlan("demo", locations, vehicles, visits)
 
-config = vrp.SolverConfig()
-config.spent_limit_seconds = 5.0
-config.random_seed = 42
-vrp.Solver(config).solve(plan)                  # solves in place
-print(plan.score, plan.routes())
+solved = vrp.solve(plan, time_limit_seconds=5.0, random_seed=42)   # solves in place and returns the plan
+print(solved.score, solved.routes())            # 0hard/0medium/-38soft {'V1': ['C1']}
 ```
 
-`Solver(config).solve(plan)` works on the engine objects; for JSON in/out use `optimaru.vehicle_routing.models.solve_request(...)`, which also takes `constraints=` (see below). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`vrp.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out use `optimaru.vehicle_routing.models.solve_request(...)`, which also takes `constraints=`. The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
 ctest --test-dir build   # vrp_test, vrp_plugin_test (assembly == monolith,
                                          # raw costs by hand, catalog, medium level)
 ```
-
-## Starting from an existing solution
-
-```python
-from optimaru.vehicle_routing.models import solve_request, with_initial_solution
-
-solution = solve_request(request)                        # request: a RoutePlanRequest
-next_request = with_initial_solution(request, solution)  # or solution.model_dump(mode="json")
-better = solve_request(next_request)
-```
-
-`with_initial_solution` returns a new request whose vehicles carry `initial_route`, a list of visit ids. The solve keeps those routes as its starting point and construction places only the visits in no route, so a partial solution works and the `unassigned` visits get another try. With `timelimit=0` a complete solution comes back as it went in. An unknown id or a visit routed twice raises `ValueError`.
 
 ## Constraints
 
@@ -116,7 +101,7 @@ per second. Each pick is its own instance with its own knobs, and the instances 
 ```python
 from optimaru.vehicle_routing.constraints import TravelTimeCost, UnassignedVisitsCost, VehicleCapacityCost
 
-vrp.Solver(config).solve_with_constraints(plan, [
+vrp.solve(plan, time_limit_seconds=5.0, random_seed=42, constraints=[
     VehicleCapacityCost(),
     UnassignedVisitsCost(),
     TravelTimeCost(),                                         # driving seconds
@@ -137,6 +122,18 @@ names (`max_travel_time`, `max_route_duration`, `max_end_time`, `max_stops`,
 `unassigned_visits_cost` defaults to weight 1 in medium units: `level="soft"` demotes it to
 soft and `level="hard"` charges 1 hard unit per penalty minute. `enclosing_circle_radius_cost`
 defaults to weight 0 (opt-in).
+
+## Starting from an existing solution
+
+```python
+from optimaru.vehicle_routing.models import solve_request, with_initial_solution
+
+solution = solve_request(request)                        # request: a RoutePlanRequest
+next_request = with_initial_solution(request, solution)  # or solution.model_dump(mode="json")
+better = solve_request(next_request)
+```
+
+`with_initial_solution` returns a new request whose vehicles carry `initial_route`, a list of visit ids. The solve keeps those routes as its starting point and construction places only the visits in no route, so a partial solution works and the `unassigned` visits get another try. With `timelimit=0` a complete solution comes back as it went in. An unknown id or a visit routed twice raises `ValueError`.
 
 ## Extending
 

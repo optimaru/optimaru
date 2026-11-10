@@ -56,7 +56,8 @@ def test_solving_a_core_schedule_writes_it_back_through_from_core():
     """The server path: to_core() -> solve(core) -> from_core(core)."""
     model = SemiconductorScheduleModel.model_validate(instance(11))
     core = model.to_core()
-    result = fab.solve(core, time_limit_seconds=5, random_seed=1, config=_steps(100))
+    assert fab.solve(core, time_limit_seconds=5, random_seed=1, config=_steps(100)) is core
+    result = core.score
     solved = SemiconductorScheduleModel.from_core(core)
     assert (solved.score_hard, solved.score_soft) == tuple(result)
     assert len(solved.assignments) == sum(len(lot.operations) for lot in solved.lots)

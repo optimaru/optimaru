@@ -59,7 +59,7 @@ def test_complete_seed_comes_back_unchanged_with_zero_budget():
 def test_complete_seed_keeps_an_overloaded_bin_with_zero_budget():
     solution = {"items": [{"id": item_id, "bin": 0} for item_id in "ABCD"]}
     seeded = with_initial_solution(_problem(), solution).to_core()
-    score = solve(seeded, config=_no_search())
+    score = solve(seeded, config=_no_search()).score
     assert _bins(seeded) == {"A": 0, "B": 0, "C": 0, "D": 0}
     assert score.hard == -10
 
@@ -71,7 +71,7 @@ def test_solved_result_feeds_back(as_dict):
     solved = BinPackingProblemModel.from_core(core)
     solution = solved.model_dump(mode="json") if as_dict else solved
     seeded = with_initial_solution(_problem(), solution).to_core()
-    assert solve(seeded, config=_no_search()) == core.score
+    assert solve(seeded, config=_no_search()).score == core.score
     assert _bins(seeded) == _bins(core)
 
 
@@ -79,7 +79,7 @@ def test_search_from_a_seed_never_scores_below_it():
     solution = {"items": [{"id": item_id, "bin": index} for index, item_id in enumerate("ABCD")]}
     seeded = with_initial_solution(_problem(), solution).to_core()
     seed_score = _core.calculate_score(seeded)
-    assert solve(seeded, config=_steps(500, 1)) >= seed_score
+    assert solve(seeded, config=_steps(500, 1)).score >= seed_score
 
 
 def test_partial_seed_is_completed_by_best_fit_before_the_search():
@@ -110,7 +110,7 @@ def test_seeded_zero_budget_result_stays_inside_the_bins_and_feeds_back():
     solve(seeded, config=_no_search())
     assert _bins(seeded) == {"A": 1, "B": 0}
     again = with_initial_solution(problem, BinPackingProblemModel.from_core(seeded)).to_core()
-    assert solve(again, config=_no_search()) == seeded.score
+    assert solve(again, config=_no_search()).score == seeded.score
     assert _bins(again) == _bins(seeded)
 
 
@@ -129,7 +129,7 @@ def test_gapped_seed_bins_are_kept_and_searched():
     solve(seeded, config=_no_search())
     assert _bins(seeded) == {"A": 3, "B": 1, "C": 1, "D": 3}
     searched = with_initial_solution(_problem(), solution).to_core()
-    assert solve(searched, config=_steps(300, 1)).hard == 0
+    assert solve(searched, config=_steps(300, 1)).score.hard == 0
 
 
 def test_item_at_minus_one_counts_as_left_out_and_prior_bins_are_replaced():
@@ -171,10 +171,10 @@ def test_malformed_solution_raises(solution):
 def test_hard_infeasible_result_feeds_back_unchanged():
     problem = BinPackingProblemModel(bin_capacity=5, items=[{"id": "A", "weight": 9}, {"id": "B", "weight": 2}])
     core = problem.to_core()
-    score = solve(core, config=_steps(50, 1))
+    score = solve(core, config=_steps(50, 1)).score
     assert score.hard < 0
     seeded = with_initial_solution(problem, BinPackingProblemModel.from_core(core).model_dump(mode="json")).to_core()
-    assert solve(seeded, config=_no_search()) == score
+    assert solve(seeded, config=_no_search()).score == score
     assert _bins(seeded) == _bins(core)
 
 
@@ -195,7 +195,7 @@ def test_plain_solve_still_ignores_input_bins():
     preset = BinPackingProblem(10, [Item("A", 8, 0), Item("B", 7, 0), Item("C", 3, 0), Item("D", 2, 0)])
     assert preset.warm_start is False
     # A step limit, not a wall clock, so the two searches are identical.
-    assert solve(fresh, config=_steps(2000, 5)) == solve(preset, config=_steps(2000, 5))
+    assert solve(fresh, config=_steps(2000, 5)).score == solve(preset, config=_steps(2000, 5)).score
     assert _bins(fresh) == _bins(preset)
 
 

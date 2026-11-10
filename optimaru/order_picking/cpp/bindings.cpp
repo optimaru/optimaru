@@ -305,8 +305,15 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::ruinRecreateMaxRuinCount)
         .def_readwrite("ruin_recreate_operator_decay",
                        &Solver::Config::ruinRecreateOperatorDecay)
-        .def_readwrite("ruin_recreate_rewards",
-                       &Solver::Config::ruinRecreateRewards)
+        .def_property(
+            "ruin_recreate_rewards",
+            [](const Solver::Config &c) { return c.ruinRecreateRewards; },
+            [](Solver::Config &c, std::vector<double> rewards)
+            {
+                if (rewards.size() != 4)
+                    throw py::value_error("ruin_recreate_rewards must contain exactly 4 values");
+                c.ruinRecreateRewards = std::move(rewards);
+            })
         .def_readwrite("ruin_recreate_polish_steps",
                        &Solver::Config::ruinRecreatePolishSteps)
         .def_readwrite("relocate_move_weight",

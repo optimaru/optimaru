@@ -6,6 +6,28 @@ assigns a crew (Crew) and a start date to maintenance jobs (Job) to minimize ear
 maintenance. A C++ domain on top of the generic engine in `optimaru/cpp/optimaru/` (late acceptance
 + ALNS), with a Python package (`maintenance_scheduling`) via pybind11.
 
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=maintenance_scheduling uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/maintenance_scheduling
+```
+
+```python
+from optimaru import maintenance_scheduling as mnt
+
+schedule = mnt.generate_demo_data()
+result = mnt.solve(schedule, time_limit_seconds=5.0, random_seed=42)
+print(result.score)
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`maintenance_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+
+```sh
+cmake -B build -DOPTIMARU_USE_CASES=maintenance_scheduling && cmake --build build -j
+ctest --test-dir build
+```
+
 ## Domain encoding
 
 A `Job` has two decisions — its crew and its start date (weekdays only) — and
@@ -109,28 +131,6 @@ uv run pytest -q tests/maintenance_scheduling
 The demo data is drawn from a seeded
 `std::mt19937_64` (seed 17), so it is the same on every platform (SMALL: 3 crews/8 weeks/14 jobs, LARGE: 5 crews/16 weeks/
 48 jobs; starting next Monday). Both SMALL and LARGE reach hard 0 within seconds.
-
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=maintenance_scheduling uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/maintenance_scheduling
-```
-
-```python
-from optimaru import maintenance_scheduling as mnt
-
-schedule = mnt.generate_demo_data()
-result = mnt.solve(schedule, time_limit_seconds=5.0, random_seed=42)
-print(result.score)
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`maintenance_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
-
-```sh
-cmake -B build -DOPTIMARU_USE_CASES=maintenance_scheduling && cmake --build build -j
-ctest --test-dir build
-```
 
 ## Starting from an existing solution
 

@@ -7,7 +7,7 @@ Assigns every talk (`Talk`) a (timeslot, room) — `Talk.slot_room` is the
 decision variable (-1 = unassigned; the value is the composite encoding
 `timeslot_index * room_count + room_index`, the same pattern as school-timetabling).
 
-## Install / test
+## Install and test
 
 ```sh
 OPTIMARU_USE_CASES=conference_scheduling uv sync      # builds only this use case's C++ extension

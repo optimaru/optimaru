@@ -69,3 +69,23 @@ def test_a_facility_edited_after_validation_is_refused_by_to_core():
     model.consumers[0].facility = 99999999
     with pytest.raises(ValueError, match="out of range"):
         model.to_core()
+
+
+def _steps(steps):
+    config = fl.SolverConfig()
+    config.step_count_limit = steps
+    return config
+
+
+def test_solve_takes_the_model_and_returns_a_solved_model():
+    model = models.FacilityLocationProblemModel.from_core(sample_problem())
+    solved = fl.solve(model, config=_steps(500), random_seed=3)
+    assert isinstance(solved, models.FacilityLocationProblemModel)
+    core = model.to_core()
+    fl.solve(core, config=_steps(500), random_seed=3)
+    assert (solved.score_hard, solved.score_soft) == (core.score.hard, core.score.soft)
+
+
+def test_solve_refuses_anything_but_the_problem_or_its_model():
+    with pytest.raises(TypeError, match="must be a"):
+        fl.solve(3)

@@ -72,8 +72,8 @@ def test_solved_result_feeds_back(as_dict):
 def test_search_from_a_seed_never_scores_below_it():
     seeded = with_initial_solution(_problem(), {"assignment": {"L1": "F3", "L2": "F1", "L3": "F2"}})
     seed_score = calculate_score(seeded.model_copy(deep=True))
-    result = solve(seeded, config=_steps(200, seed=1))
-    assert (result.hard, result.soft) >= (seed_score.hard, seed_score.soft)
+    solve(seeded, config=_steps(200, seed=1))
+    assert (seeded.score_hard, seeded.score_soft) >= (seed_score.hard, seed_score.soft)
 
 
 def test_partial_assignment_raises_and_names_the_location():

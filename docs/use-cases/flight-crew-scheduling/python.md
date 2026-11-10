@@ -4,7 +4,7 @@ The Python package wrapping, with pybind11, the C++ implementation (`optimaru/fl
 flight-crew-scheduling use case. Solves the assignment-shaped problem of picking a crew member for every
 crew seat of a flight with late-acceptance local search + ALNS.
 
-## Install
+## Install and test
 
 ```bash
 OPTIMARU_USE_CASES=flight_crew_scheduling uv sync      # builds only this use case's C++ extension

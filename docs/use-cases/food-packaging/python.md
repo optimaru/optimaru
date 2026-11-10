@@ -4,7 +4,7 @@ The pybind11 package of the food-packaging C++ implementation (`optimaru/food_pa
 Times are exchanged as **minutes** (int64) from a shared origin, and the pydantic
 mirror (`optimaru.food_packaging.models`) handles conversion to and from `datetime`.
 
-## Install/test
+## Install and test
 
 ```sh
 OPTIMARU_USE_CASES=food_packaging uv sync      # builds only this use case's C++ extension

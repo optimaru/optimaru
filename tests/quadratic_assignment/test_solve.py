@@ -66,10 +66,10 @@ def test_no_permutation_breaking_knob_is_exposed():
 def test_solve_on_the_engine_object_and_on_the_model_agree():
     core = demo().to_core()
     model = demo()
-    by_core = qap.solve(core, config=steps(3000, seed=7))
-    by_model = qap.solve(model, config=steps(3000, seed=7))
-    assert isinstance(by_core, qap.Score)
-    assert (by_core.hard, by_core.soft) == (by_model.hard, by_model.soft)
+    assert qap.solve(core, config=steps(3000, seed=7)) is core
+    assert qap.solve(model, config=steps(3000, seed=7)) is model
+    assert isinstance(core.score, qap.Score)
+    assert (core.score.hard, core.score.soft) == (model.score_hard, model.score_soft)
     ids = [facility.id for facility in core.facilities]
     assert model.assignment == {location: ids[f] for location, f in zip(model.locations, core.assignment())}
     assert model.total_cost == core.total_cost()
@@ -77,8 +77,8 @@ def test_solve_on_the_engine_object_and_on_the_model_agree():
 
 def test_the_web_demo_solves_to_a_feasible_bijection():
     model = demo()
-    result = qap.solve(model, time_limit_seconds=1.0, random_seed=1)
-    assert result.is_feasible()
+    assert qap.solve(model, time_limit_seconds=1.0, random_seed=1) is model
+    assert model.score_hard >= 0  # feasible
     assert sorted(model.assignment) == sorted(model.locations)
     assert sorted(model.assignment.values()) == sorted(model.facilities)
     assert model.assignment["Annex"] == "Office"  # pinned
@@ -95,8 +95,8 @@ def test_the_web_demo_reaches_its_brute_force_optimum():
         result = qap.calculate_score(candidate)
         key = (result.hard, result.soft)
         best = key if best is None or key > best else best
-    result = qap.solve(model, config=steps(20000, seed=3))
-    assert (result.hard, result.soft) == best
+    qap.solve(model, config=steps(20000, seed=3))
+    assert (model.score_hard, model.score_soft) == best
 
 
 def test_a_step_limit_reproduces_the_same_solve():
@@ -191,10 +191,10 @@ def test_a_warm_start_must_be_a_bijection():
 
 def test_empty_and_single_problems_solve():
     empty = qap.QuadraticAssignmentProblem([], [], [], [])
-    score = qap.solve(empty, time_limit_seconds=1)
+    score = qap.solve(empty, time_limit_seconds=1).score
     assert (score.hard, score.soft) == (0, 0.0)
     one = qap.QuadraticAssignmentProblem([qap.Facility("F")], [qap.Location("L")], [[2]], [[3]])
-    score = qap.solve(one, time_limit_seconds=1)
+    score = qap.solve(one, time_limit_seconds=1).score
     assert one.assignment() == [0] and (score.hard, score.soft) == (0, -6.0)
 
 

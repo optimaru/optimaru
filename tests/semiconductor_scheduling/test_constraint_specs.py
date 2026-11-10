@@ -284,10 +284,9 @@ def test_default_solve_equals_explicit_default_constraints():
 def test_picks_score_the_result_and_the_totals_stay_complete():
     problem = _problem(8)
     picks = [specs.machine_eligibility_cost, WeightedTardinessCost(weight=3)]
-    result = fab.solve(problem, time_limit_seconds=5, random_seed=1, config=_steps(200), constraints=picks)
+    assert fab.solve(problem, time_limit_seconds=5, random_seed=1, config=_steps(200), constraints=picks) is problem
     raw = fab.constraint_costs(problem)
-    assert result == score(raw, picks)
-    assert (problem.score_hard, problem.score_soft) == tuple(result)
+    assert (problem.score_hard, problem.score_soft) == tuple(score(raw, picks))
     assert problem.makespan == raw["makespan_cost"]["costs"][0]
     assert problem.total_cycle_time == raw["cycle_time_cost"]["costs"][0]
 
@@ -516,12 +515,12 @@ def test_score_equals_the_engine_with_repeats_and_offsets():
 def test_full_assert_solves_with_repeats_and_offsets(picks):
     """ScoreChecks::Full re-checks the incremental score against a full recompute after every move."""
     problem = _problem(8)
-    result = fab.solve(problem, random_seed=3, full_assert=True, config=_steps(300), constraints=picks)
+    fab.solve(problem, random_seed=3, full_assert=True, config=_steps(300), constraints=picks)
     raw = fab.constraint_costs(problem, picks)
     assert len(raw) == len(picks)
     python = score(raw, picks)
-    assert python.hard == result.hard
-    assert python.soft == pytest.approx(result.soft)
+    assert python.hard == problem.score_hard
+    assert python.soft == pytest.approx(problem.score_soft)
     assert score(fab.constraint_costs(problem), picks) == python  # the default costs score the repeats too
 
 
@@ -648,8 +647,8 @@ def test_the_same_literal_pick_on_soft_is_accepted(offset):
     assert engine == score(fab.constraint_costs(problem), picks)
     assert (engine.hard, engine.soft) == (defaults.hard, pytest.approx(defaults.soft + offset))
     solved = problem.model_copy(deep=True)
-    result = fab.solve(solved, random_seed=1, config=_steps(50), constraints=picks)
-    assert tuple(score(fab.constraint_costs(solved), picks)) == pytest.approx(tuple(result))
+    fab.solve(solved, random_seed=1, config=_steps(50), constraints=picks)
+    assert tuple(score(fab.constraint_costs(solved), picks)) == pytest.approx((solved.score_hard, solved.score_soft))
 
 
 @pytest.mark.parametrize(

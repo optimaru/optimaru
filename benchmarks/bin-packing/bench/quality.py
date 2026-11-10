@@ -165,7 +165,7 @@ def run(data: dict, seconds: float, seed: int) -> dict:
     started = time.perf_counter()
     score = bin_packing.solve(
         core, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1
-    )
+    ).score
     costs = bin_packing.constraint_costs(core)
     return {
         "seed": seed,
