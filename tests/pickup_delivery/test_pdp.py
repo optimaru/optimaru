@@ -145,6 +145,56 @@ def test_alns_knobs_are_settable():
         config.regret_k = "three"
 
 
+def test_request_move_knobs_are_settable():
+    config = pdp.SolverConfig()
+    assert config.request_ruin_recreate is True
+    assert config.bundle_moves is True
+    assert config.request_ruin_max_requests == 20
+    assert config.bundle_max_requests == 3
+    config.request_ruin_recreate = False
+    config.bundle_moves = False
+    config.request_ruin_max_requests = 5
+    config.bundle_max_requests = 2
+    assert (config.request_ruin_recreate, config.bundle_moves) == (False, False)
+    assert (config.request_ruin_max_requests, config.bundle_max_requests) == (5, 2)
+
+
+@pytest.mark.parametrize(
+    "switches",
+    [
+        {"request_ruin_recreate": True, "bundle_moves": False},
+        {"request_ruin_recreate": False, "bundle_moves": True},
+    ],
+)
+def test_request_moves_alone_keep_every_request_whole(switches):
+    """Only the operators under test: no stop-granular kick, no older pair move."""
+    plan = pdp.build_random_instance(request_count=20, vehicle_count=3, seed=7)
+    config = pdp.SolverConfig()
+    config.step_count_limit = 3000
+    config.random_seed = 7
+    config.full_assert = True
+    config.ruin_recreate = False
+    config.pair_moves = False
+    config.pair_exchange_moves = False
+    config.pair_ruin = False
+    for name, value in switches.items():
+        setattr(config, name, value)
+    pdp.Solver(config).solve(plan)
+
+    assert plan.score.is_feasible()
+    position = {}
+    for vehicle_index, vehicle in enumerate(plan.vehicles):
+        for at, node_index in enumerate(vehicle.node_indices):
+            position[node_index] = (vehicle_index, at)
+    assert sorted([*position, *plan.unassigned_node_indices]) == list(range(len(plan.nodes)))
+    for delivery in plan.deliveries:
+        pickup = position.get(delivery.pickup_node_index)
+        dropoff = position.get(delivery.dropoff_node_index)
+        assert (pickup is None) == (dropoff is None)
+        if pickup is not None:
+            assert pickup[0] == dropoff[0] and pickup[1] < dropoff[1]
+
+
 def test_request_uses_explicit_driving_matrix():
     data = models.PdpInput(
         vehicles=[models.VehicleModel(id="V", capacity=1, home=(0, 0))],

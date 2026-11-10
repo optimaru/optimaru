@@ -11,6 +11,8 @@
 #include <vector>
 
 #include "pdp/incremental_calculator.hpp"
+#include "pdp/request_insertion.hpp"
+#include "pdp/request_moves.hpp"
 #include "pdp/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
@@ -55,9 +57,9 @@ bool pairIntact(const PdpRoutePlan& plan, const optimaru::OperatorContext<PdpRou
 //  3. Relocate — the ordinary move: take an arbitrary request and re-insert
 //     it into a random vehicle at random positions with the pickup first.
 //
-// Positions are random rather than cheapest-insertion on purpose: this runs
-// once per local-search step, so an O(route^2) scan of insertion pairs would
-// cost more than the acceptor saves. The ALNS repair does the greedy work.
+// A relocate takes its positions from nearby stops rather than from a scan of
+// every slot pair: placing a request at its cheapest slot is what the request
+// moves (pdp/request_moves.hpp) do. This move is here for the first two tiers.
 class PairRelocateMove final : public optimaru::MoveOperator<PdpRoutePlan> {
 public:
     PairRelocateMove(double repairProbability, double assignmentProbability)
@@ -118,8 +120,13 @@ public:
             // insertion misses almost every feasible pickup/dropoff slot on
             // large PDPTW routes, so scan the pair slots and take the least
             // added travel among capacity/time-window-feasible candidates.
-            if (!bestInsertion(plan, delivery, target, greedyPickupPos, greedyDropoffPos))
-                return false;
+            timelines_.rebuild(plan);
+            Blinker every;
+            const RequestInsertion insertion = timelines_.best(plan, delivery, every);
+            if (!insertion.found()) return false;
+            target = insertion.vehicle;
+            greedyPickupPos = insertion.pickupPosition;
+            greedyDropoffPos = insertion.dropoffPosition;
         } else if (unit(rng) < assignmentProbability_) {
             target = pool;  // drop the request
         } else {
@@ -211,81 +218,7 @@ public:
         saved_.clear();
     }
 
-    static bool findBestInsertion(const PdpRoutePlan& plan, const Delivery& delivery,
-                                  int& bestVehicle, int& bestPickup, int& bestDropoff) {
-        return bestInsertion(plan, delivery, bestVehicle, bestPickup, bestDropoff);
-    }
-
 private:
-    static bool routeFeasible(const PdpRoutePlan& plan, int vehicleIndex,
-                              const std::vector<int>& route) {
-        const Vehicle& vehicle = plan.vehicles[static_cast<std::size_t>(vehicleIndex)];
-        std::int64_t load = 0;
-        Seconds departure = vehicle.departureTime;
-        int previous = vehicle.homeLocationIndex;
-        for (int nodeIndex : route) {
-            const Node& node = plan.nodes[static_cast<std::size_t>(nodeIndex)];
-            const Delivery& request = plan.deliveries[static_cast<std::size_t>(node.deliveryIndex)];
-            load += node.pickup ? request.demand : -request.demand;
-            if (load > vehicle.capacity) return false;
-            const Seconds arrival = departure + plan.drivingTime(previous, node.locationIndex);
-            if (arrival + node.serviceDuration > node.maxEndTime) return false;
-            departure = std::max(arrival, node.minStartTime) + node.serviceDuration;
-            previous = node.locationIndex;
-        }
-        return true;
-    }
-
-    static Seconds routeTravel(const PdpRoutePlan& plan, int vehicleIndex,
-                               const std::vector<int>& route) {
-        if (route.empty()) return 0;
-        const Vehicle& vehicle = plan.vehicles[static_cast<std::size_t>(vehicleIndex)];
-        Seconds travel = 0;
-        int previous = vehicle.homeLocationIndex;
-        for (int nodeIndex : route) {
-            const int location = plan.nodes[static_cast<std::size_t>(nodeIndex)].locationIndex;
-            travel += plan.drivingTime(previous, location);
-            previous = location;
-        }
-        return travel + vehicle.homeLeg(plan.drivingSeconds, previous);
-    }
-
-    static bool bestInsertion(const PdpRoutePlan& plan, const Delivery& delivery, int& bestVehicle,
-                              int& bestPickup, int& bestDropoff) {
-        Seconds bestAdded = std::numeric_limits<Seconds>::max();
-        std::vector<int> candidate;
-        for (std::size_t vehicleIndex = 0; vehicleIndex < plan.vehicles.size(); ++vehicleIndex) {
-            // A bound request has no other vehicle to fall back on: with no
-            // feasible slot on its own it stays unassigned.
-            if (delivery.requiredVehicleIndex >= 0 &&
-                delivery.requiredVehicleIndex != static_cast<int>(vehicleIndex))
-                continue;
-            const std::vector<int>& route = plan.vehicles[vehicleIndex].nodeIndices;
-            const Seconds before = routeTravel(plan, static_cast<int>(vehicleIndex), route);
-            const auto firstFree =
-                    static_cast<int>(plan.vehicles[vehicleIndex].pinnedNodeIndices.size());
-            for (int pickupPos = firstFree; pickupPos <= static_cast<int>(route.size());
-                 ++pickupPos) {
-                for (int dropoffPos = pickupPos + 1;
-                     dropoffPos <= static_cast<int>(route.size()) + 1; ++dropoffPos) {
-                    candidate = route;
-                    candidate.insert(candidate.begin() + pickupPos, delivery.pickupNodeIndex);
-                    candidate.insert(candidate.begin() + dropoffPos, delivery.dropoffNodeIndex);
-                    if (!routeFeasible(plan, static_cast<int>(vehicleIndex), candidate)) continue;
-                    const Seconds added =
-                            routeTravel(plan, static_cast<int>(vehicleIndex), candidate) - before;
-                    if (added < bestAdded) {
-                        bestAdded = added;
-                        bestVehicle = static_cast<int>(vehicleIndex);
-                        bestPickup = pickupPos;
-                        bestDropoff = dropoffPos;
-                    }
-                }
-            }
-        }
-        return bestVehicle >= 0;
-    }
-
     // A random nearby stop of `node` that is currently on some vehicle.
     static int routedNeighbor(const optimaru::OperatorContext<PdpRoutePlan>& ctx,
                               const PdpRoutePlan& plan, int node, int pool, std::mt19937_64& rng) {
@@ -352,6 +285,7 @@ private:
     double repairProbability_;
     double assignmentProbability_;
     std::vector<std::pair<int, std::vector<int>>> saved_;
+    PlanTimelines timelines_;  // for routing a request that waits in the pool
 };
 
 // Places the requests no route holds yet. Routes already in the plan are the
@@ -387,15 +321,17 @@ void constructPairs(PdpRoutePlan& plan, bool decreasing) {
         return plan.deliveries[deliveryIndex].requiredVehicleIndex >= 0;
     });
 
+    PlanTimelines timelines;
+    timelines.rebuild(plan);
+    Blinker every;
     for (int deliveryIndex : order) {
         const Delivery& delivery = plan.deliveries[deliveryIndex];
-        int vehicle = -1;
-        int pickup = -1;
-        int dropoff = -1;
-        if (PairRelocateMove::findBestInsertion(plan, delivery, vehicle, pickup, dropoff)) {
-            std::vector<int>& route = plan.vehicles[vehicle].nodeIndices;
-            route.insert(route.begin() + pickup, delivery.pickupNodeIndex);
-            route.insert(route.begin() + dropoff, delivery.dropoffNodeIndex);
+        const RequestInsertion insertion = timelines.best(plan, delivery, every);
+        if (insertion.found()) {
+            std::vector<int>& route = plan.vehicles[insertion.vehicle].nodeIndices;
+            route.insert(route.begin() + insertion.pickupPosition, delivery.pickupNodeIndex);
+            route.insert(route.begin() + insertion.dropoffPosition, delivery.dropoffNodeIndex);
+            timelines.rebuildRoute(plan, insertion.vehicle, route);
         } else {
             plan.unassignedNodeIndices.push_back(delivery.pickupNodeIndex);
             plan.unassignedNodeIndices.push_back(delivery.dropoffNodeIndex);
@@ -651,6 +587,30 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
     return engineConfig;
 }
 
+// The request-level operators both solve() overloads register. They read the
+// plan (which request a stop belongs to, the windows, the vehicle limits),
+// never the calculator, so a caller's constraint assembly keeps them.
+void addRequestOperators(optimaru::Solver<PdpRoutePlan>& engine, const Solver::Config& config,
+                         const PdpRoutePlan& plan) {
+    if (config.pair_moves) {
+        engine.add_move_operator(std::make_unique<PairRelocateMove>(
+                config.pair_repair_probability, config.pair_assignment_probability));
+    }
+    if (config.pair_exchange_moves &&
+        static_cast<int>(plan.nodes.size()) >= config.pair_exchange_min_nodes) {
+        engine.add_move_operator(std::make_unique<PairExchangeMove>());
+    }
+    RequestMoveSettings moves;
+    moves.ruinRecreate = config.request_ruin_recreate;
+    moves.ruinMaxRequests = config.request_ruin_max_requests;
+    moves.regretK = config.regret_k;
+    moves.blinkRate = config.blink_rate;
+    moves.bundleMoves = config.bundle_moves;
+    moves.bundleMaxRequests = config.bundle_max_requests;
+    for (auto& move : makeRequestMoves(moves)) engine.add_move_operator(std::move(move));
+    if (config.pair_ruin) engine.add_ruin_operator(std::make_unique<PairRuin>());
+}
+
 // The domain Score of a plugin calculator, read from its three accumulators
 // (level_scores(), before the medium fold) rather than decoded from the folded
 // engine soft, which would file a soft total of 10^9 or more under medium.
@@ -693,14 +653,7 @@ void Solver::solve(PdpRoutePlan& plan) {
     PdpIncrementalScoreCalculator calculator;
     optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.pair_moves) {
-        engine.add_move_operator(std::make_unique<PairRelocateMove>(
-                config_.pair_repair_probability, config_.pair_assignment_probability));
-    }
-    if (config_.pair_exchange_moves &&
-        static_cast<int>(plan.nodes.size()) >= config_.pair_exchange_min_nodes)
-        engine.add_move_operator(std::make_unique<PairExchangeMove>());
-    if (config_.pair_ruin) engine.add_ruin_operator(std::make_unique<PairRuin>());
+    addRequestOperators(engine, config_, plan);
     engine.solve(plan, calculator);
 
     plan.score = ScoreCalculator::score(plan);
@@ -729,14 +682,7 @@ void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePla
         // plugin path keeps them — they are what makes a PDP search work.
         optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
         if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-        if (config_.pair_moves) {
-            engine.add_move_operator(std::make_unique<PairRelocateMove>(
-                    config_.pair_repair_probability, config_.pair_assignment_probability));
-        }
-        if (config_.pair_exchange_moves &&
-            static_cast<int>(plan.nodes.size()) >= config_.pair_exchange_min_nodes)
-            engine.add_move_operator(std::make_unique<PairExchangeMove>());
-        if (config_.pair_ruin) engine.add_ruin_operator(std::make_unique<PairRuin>());
+        addRequestOperators(engine, config_, plan);
         engine.solve(plan, calculator);
     }
 

@@ -16,21 +16,27 @@ namespace pdp {
 // ---------------------------------------------------------------------------
 // Solver
 // ---------------------------------------------------------------------------
-// The same engine as vehicle-routing, plus the two extension points that a
-// pickup-and-delivery problem actually needs:
+// The same engine as vehicle-routing, plus the operators a pickup-and-delivery
+// problem needs: ones whose unit is the request, not the stop.
 //
-//   * PairRelocateMove (a custom MoveOperator) — moves a request's pickup and
-//     dropoff together, and repairs requests whose coupling is currently
-//     broken. Without it the engine's element-granular moves have to break a
-//     pair to move it and climb back out through a hard-infeasible state,
-//     which late acceptance almost never tolerates; the assignment then
-//     freezes at whatever the construction heuristic produced.
+//   * The request moves (pdp/request_moves.hpp) — requestRuinRecreate takes
+//     requests out of their routes and puts each back, pickup and dropoff
+//     together, at its cheapest feasible slot pair; bundleRelocate and
+//     bundleExchange carry several requests between two routes in one step.
+//     They are what improves a plan: every candidate they offer the acceptor
+//     has its requests whole.
 //
-//   * PairRuin (a custom RuinOperator) — ruins whole requests rather than
-//     individual stops, so a kick never leaves a pickup stranded without its
-//     dropoff.
+//   * PairRelocateMove (a custom MoveOperator) — repairs requests whose
+//     coupling is currently broken, and moves a whole request to or from the
+//     unassigned pool. The engine's element-granular moves and its
+//     ruin-and-recreate kick have no notion of a pair, so they leave such
+//     requests behind.
 //
-// Both join the engine's adaptive selection alongside the built-ins, so their
+//   * PairRuin (a custom RuinOperator) — makes the engine's kick ruin whole
+//     requests rather than individual stops, so it never leaves a pickup
+//     stranded without its dropoff.
+//
+// All join the engine's adaptive selection alongside the built-ins, so their
 // weight is learned rather than fixed.
 class Solver {
 public:
@@ -89,6 +95,18 @@ public:
         // Share of pair moves that drop a request into the unassigned pool or
         // pull one back out — how the medium level gets optimized at all.
         double pair_assignment_probability = 0.1;
+
+        // --- request-level moves (pdp/request_moves.hpp) ---
+        // requestRuinRecreate: take up to request_ruin_max_requests requests
+        // out and reinsert each at its cheapest feasible slot pair (in random
+        // order, or by regret_k; blink_rate applies).
+        bool request_ruin_recreate = true;
+        int request_ruin_max_requests = 20;
+        // bundleRelocate / bundleExchange: move up to bundle_max_requests
+        // requests of one route to another route together, or swap two such
+        // bundles.
+        bool bundle_moves = true;
+        int bundle_max_requests = 3;
 
         // --- adaptive ruin & recreate (ALNS) ---
         bool pair_ruin = true;

@@ -269,6 +269,11 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("pair_repair_probability", &Solver::Config::pair_repair_probability)
             .def_readwrite("pair_assignment_probability",
                            &Solver::Config::pair_assignment_probability)
+            // --- request-level moves ---
+            .def_readwrite("request_ruin_recreate", &Solver::Config::request_ruin_recreate)
+            .def_readwrite("request_ruin_max_requests", &Solver::Config::request_ruin_max_requests)
+            .def_readwrite("bundle_moves", &Solver::Config::bundle_moves)
+            .def_readwrite("bundle_max_requests", &Solver::Config::bundle_max_requests)
             .def_readwrite("pair_ruin", &Solver::Config::pair_ruin)
             // --- adaptive ruin & recreate (ALNS) ---
             // (bind_solver_config binds the shared ruin_recreate* knobs.)

@@ -20,7 +20,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--no-pair-moves") == 0) pair_moves = false;
     }
 
-    std::printf("== PDPTW: %d requests, %d vehicles, %ds (pair operators %s) ==\n", requests,
+    std::printf("== PDPTW: %d requests, %d vehicles, %ds (request operators %s) ==\n", requests,
                 vehicles, seconds, pair_moves ? "on" : "off");
     PdpRoutePlan plan = buildRandomInstance(requests, vehicles, /*seed=*/2);
 
@@ -30,8 +30,12 @@ int main(int argc, char** argv) {
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = 2;
+    // The control run keeps the engine's stop-granular moves only.
     config.pair_moves = pair_moves;
+    config.pair_exchange_moves = pair_moves;
     config.pair_ruin = pair_moves;
+    config.request_ruin_recreate = pair_moves;
+    config.bundle_moves = pair_moves;
     config.on_new_best = [](std::int64_t step, const Score& s) {
         std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step),
                     s.str().c_str());

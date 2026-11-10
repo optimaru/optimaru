@@ -8,7 +8,7 @@ must serve, pickup first, without ever exceeding its capacity in between. Each
 stop has a time window and a service duration. Decide which vehicle serves which
 requests, in what order, driving as little as possible. Routes are open by
 default — a vehicle ends its day at its last stop; set `return_to_depot=True` on
-a vehicle to charge and time the leg back home. The constraints, the pair-aware
+a vehicle to charge and time the leg back home. The constraints, the request-level
 operators and the scoring are explained in the [use-case README](README.md).
 
 ## Install and test
@@ -73,7 +73,9 @@ print(plan.unassigned_delivery_ids())  # []
   `pdp.Solver(config).solve_with_constraints(plan, constraints)` are the same
   solves one level down. `SolverConfig` fields include `spent_limit_seconds`,
   `step_count_limit`, `random_seed`, `parallel_solver_count`, `full_assert`,
-  `best_score_limit`, `on_new_best` and the pair-aware switches `pair_moves`,
+  `best_score_limit`, `on_new_best` and the switches of the request-level
+  operators: `request_ruin_recreate` (with `request_ruin_max_requests`),
+  `bundle_moves` (with `bundle_max_requests`), `pair_moves`,
   `pair_exchange_moves` and `pair_ruin`; the stubs in `_core.pyi` list them all.
 - `pdp.calculate_score(plan)` recomputes the derived fields and the score of the
   routes as they are, and stores it in `plan.score`.
