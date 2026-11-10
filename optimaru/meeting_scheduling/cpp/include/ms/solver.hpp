@@ -51,9 +51,8 @@ public:
     //                          clamp(8n, 400, 3200) was far too short here
     //                          (scaled:48 -26.7% objective, scaled:96 -13.6%
     //                          against this setting)
-    //   parallel_solver_count  one start whatever it says: runEngine() calls
-    //                          the engine's solve(), and only its
-    //                          solve_multistart() reads Settings::parallel_starts
+    //   parallel_solver_count  the engine's multi-start; ignored by the
+    //                          constraint-assembly overload
     //   ruin_recreate          without the kicks the LA acceptor can lock into
     //                          a local optimum within milliseconds on small
     //                          instances and never escape

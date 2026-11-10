@@ -103,6 +103,11 @@ def solve(
     explicit keyword arguments override config. ``stop_at_first_feasible``
     stops as soon as hard 0 is reached (best_score_limit=(0, -inf)).
 
+    ``parallel_solver_count`` runs that many independent starts, start i with
+    ``random_seed + i``, and returns the best one. ``on_new_best`` reports the first start
+    only, so the result can be better than the last score it was called with. With
+    ``constraints`` a solve runs one start.
+
     ``full_assert`` re-verifies every incremental score against a full recompute
     (a debugging aid; much slower).
 

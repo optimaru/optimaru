@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <random>
 #include <utility>
 #include <vector>
@@ -50,10 +51,12 @@ namespace {
 
 // Shared engine wiring for both solve() overloads: termination, late
 // acceptance, the move mix, the ALNS knobs and the day-fit value recommender
-// (which reads only fixed input, so it applies to the plugin path too),
-// driven by whichever calculator the caller brought.
-void runEngine(const Solver::Config& config, MeetingSchedule& schedule,
-               optimaru::Objective<MeetingSchedule>& calculator, int parallel_starts) {
+// (which reads only fixed input, so it applies to the plugin path too).
+// search(engine) then runs it: the engine's multi-start with a calculator per
+// start, or one start on the calculator the caller brought.
+template <typename Search>
+void runEngine(const Solver::Config& config, MeetingSchedule& schedule, int parallel_starts,
+               const Search& search) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     // history_length 0 = auto-scale with the instance (see Config).
     engineConfig.search.acceptance.history_length =
@@ -97,8 +100,11 @@ void runEngine(const Solver::Config& config, MeetingSchedule& schedule,
     }
 
     engineConfig.parallel_starts = parallel_starts;
-    auto engine = optimaru::Solver<MeetingSchedule>(std::move(engineConfig));
-    engine.solve(schedule, calculator);
+    // Everything above travels in the Settings, which every start copies. A
+    // custom move, ruin or derived state registered on this engine would not:
+    // solve_multistart() runs its starts with the built-ins only.
+    optimaru::Solver<MeetingSchedule> engine(std::move(engineConfig));
+    search(engine);
 }
 
 }  // namespace
@@ -111,8 +117,14 @@ void Solver::solve(MeetingSchedule& schedule) {
     }
     optimaru::check_config(config_);
 
-    MeetingSchedulingIncrementalScoreCalculator calculator;
-    runEngine(config_, schedule, calculator, std::max(1, config_.parallel_solver_count));
+    // Multi-start when parallel_solver_count > 1. Each start gets a calculator
+    // of its own (the calculators are stateful).
+    runEngine(config_, schedule, std::max(1, config_.parallel_solver_count),
+              [&schedule](optimaru::Solver<MeetingSchedule>& engine) {
+                  engine.solve_multistart(schedule, [] {
+                      return std::make_unique<MeetingSchedulingIncrementalScoreCalculator>();
+                  });
+              });
 
     // The authoritative final score: a full recompute on the best solution.
     schedule.score = ScoreCalculator::score(schedule);
@@ -125,7 +137,10 @@ void Solver::solve(MeetingSchedule& schedule,
     if (!schedule.meetingAssignments.empty() && schedule.grainRoomCount() != 0) {
         // Single-start: the caller-owned calculator cannot be cloned, so the
         // multi-start workers would have nothing to score with.
-        runEngine(config_, schedule, calculator, 1);
+        runEngine(config_, schedule, 1,
+                  [&schedule, &calculator](optimaru::Solver<MeetingSchedule>& engine) {
+                      engine.solve(schedule, calculator);
+                  });
     }
 
     // Score the final solution with the caller's constraint assembly (custom
