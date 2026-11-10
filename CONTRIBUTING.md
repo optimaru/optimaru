@@ -9,7 +9,8 @@ step-by-step guide with real code to copy from.
 
 ```sh
 git clone https://github.com/optimaru/optimaru && cd optimaru
-OPTIMARU_USE_CASES=<uc> uv sync          # builds optimaru.<uc>._core in place
+export OPTIMARU_USE_CASES=<uc>           # build and test one use case
+uv sync                                  # builds optimaru.<uc>._core in place
 uv run pytest -q tests/<uc>
 
 cmake -B build -DOPTIMARU_USE_CASES=<uc> && cmake --build build -j
@@ -17,8 +18,10 @@ ctest --test-dir build --output-on-failure   # the engine tests and <uc>'s C++ t
 ```
 
 `<uc>` is the subpackage name, such as `vehicle_routing` or `bin_packing`. Leave
-`OPTIMARU_USE_CASES` out to build all 22. You need a C++17 compiler, CMake and
-uv.
+`OPTIMARU_USE_CASES` unset to build all 22, and keep it exported while you test:
+uv rebuilds when it changes, and the two contract tests
+(`tests/test_solve_contract.py`, `tests/test_solver_config_contract.py`) skip
+only the use cases it leaves out. You need a C++17 compiler, CMake and uv.
 
 ## Where things are
 
