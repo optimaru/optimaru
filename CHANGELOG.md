@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **A parallel start that reaches the target stops the others.** With
+  `parallel_solver_count` above 1 and a target (`stop_at_first_feasible`, `best_score_limit`),
+  each start used to stop on its own, so `solve()` returned only when the slowest start had
+  reached the target or run out the time limit. Now the first start to reach it ends the run:
+  the others stop at their next step and hand over their best so far, and the best of all
+  starts is returned. Which start gets there first depends on the threads, so in that
+  combination the same seed can give a different solution from run to run; without a target,
+  or with one start, a seeded solve is as reproducible as before. C++: the same holds for
+  `Solver::solve_multistart()` and `optimaru::solve_parallel_starts()`.
 - **Benchmarks on whole public data sets.** The public-instance harnesses now run
   whole sets or stated samples instead of a few instances, and every results
   block is measured again on 0.4.1: CVRPLIB Set X (all 100) and Augerat's Set A

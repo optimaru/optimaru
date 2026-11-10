@@ -71,9 +71,11 @@ It returns the solved problem, and the score is on it.
 `parallel_solver_count=N` runs N independent starts, start *i* with
 `random_seed + i`, and returns the best of them (a solve with `constraints=...`
 runs one start). `on_new_best` reports the first start only, so the returned
-score can be better than the last one it was called with. A target
-(`stop_at_first_feasible`, `best_score_limit`) stops each start on its own: the
-solve returns once every start has reached it or run out its budget.
+score can be better than the last one it was called with. A start that reaches
+a target (`stop_at_first_feasible`, `best_score_limit`) stops the others: they
+hand over their best so far, and the best of all starts is returned. Which start
+gets there first depends on the threads, so with a target and more than one
+start the same seed can give a different solution from run to run.
 
 Four use cases model a whole request (input, time limit, seed) in pydantic
 instead of the problem alone: employee scheduling, order picking, pickup &

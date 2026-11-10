@@ -106,6 +106,27 @@ def test_parallel_starts_return_the_best_single_start(use_case):
         assert score(seed, 3) == max(singles)
 
 
+@pytest.mark.parametrize("use_case", sorted(set(optimaru.__all__) - NO_SCORE_ON_THE_RESULT))
+def test_a_multi_start_solve_with_a_target_returns_the_score_of_its_solution(use_case):
+    """A start that reaches the target stops the others, and the best candidate wins, one that
+    was stopped on the way included. Whichever start that is, the score on the result is the
+    score of the solution on it: a stopped start hands over a scored candidate."""
+    module = use_case_module(use_case)
+    for seed in (0, 1, 2):
+        started = time.monotonic()
+        solved = module.solve(
+            small_problem(use_case),
+            time_limit_seconds=20.0,
+            random_seed=seed,
+            parallel_solver_count=4,
+            stop_at_first_feasible=True,
+        )
+        assert time.monotonic() - started < 10.0
+        assert score_of(solved)[0] == 0
+        compiled = solved.to_core() if hasattr(solved, "to_core") else solved
+        assert levels_of(module.calculate_score(compiled)) == score_of(solved)
+
+
 @pytest.mark.parametrize("use_case", optimaru.__all__)
 def test_importing_a_use_case_imports_its_models(use_case):
     """pydantic is a dependency, so a package imports its models with itself and hands out the

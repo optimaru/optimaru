@@ -64,7 +64,8 @@ struct SolverConfigBase {
 
     // Independent parallel starts: start i searches its own copy of the
     // constructed problem with seed + i and the full budget; the best score
-    // wins (the lowest start on ties).
+    // wins (the lowest start on ties). A start that reaches target_score
+    // stops the others, which hand over their best so far.
     int parallel_solver_count = 1;
 
     // ScoreChecks::Full re-verifies the incremental score against a full
@@ -76,10 +77,11 @@ struct SolverConfigBase {
     std::function<void(std::int64_t, const ScoreT&)> on_new_best;
 
     // Internal to solve_parallel_starts, which sets it on each start's copy of
-    // the Config: the first start that fails raises it, and every start's
-    // engine checks it once a step. Not for a caller to set: a flag set from
-    // outside is replaced when there is more than one start, and a solver on
-    // the engine's own multi-start never reads it. Null in any other solve.
+    // the Config: the first start that fails or reaches the target raises it,
+    // and every start's engine checks it once a step. Not for a caller to
+    // set: a flag set from outside is replaced when there is more than one
+    // start, and a solver on the engine's own multi-start never reads it.
+    // Null in any other solve.
     std::shared_ptr<std::atomic<bool>> stop_flag;
 };
 
@@ -106,6 +108,19 @@ struct HasSolverConfigBase : std::false_type {};
 template <typename Config>
 struct HasSolverConfigBase<Config, std::void_t<typename Config::score_type>>
     : std::is_base_of<SolverConfigBase<typename Config::score_type>, Config> {};
+
+// Whether a solved candidate has reached its Config's target. A Config that
+// keeps its target outside SolverConfigBase has none the pool can read.
+template <typename Config, typename Problem>
+bool reached_target(const Config& config, const Problem& candidate) {
+    if constexpr (HasSolverConfigBase<Config>::value) {
+        return candidate.score >= config.target_score;
+    } else {
+        (void)config;
+        (void)candidate;
+        return false;
+    }
+}
 
 template <typename Config, typename = void>
 struct HasAsMoveKnobs : std::false_type {};
@@ -172,9 +187,16 @@ Settings settings_from(const Config& config) {
 //
 // Start i runs solve_one(start_config, candidate, i) on a copy of `problem`,
 // where start_config is `config` with seed + i, one start, the run's stop flag
-// and (for i > 0) no on_new_best. solve_one leaves candidate.score set. The
-// best score wins, the lowest start on ties. With one start, solve_one runs on
-// `problem` itself with `config` as it is.
+// and (for i > 0) no on_new_best. solve_one leaves candidate.score set, also
+// when the stop flag ended its search early. The best score wins, the lowest
+// start on ties. With one start, solve_one runs on `problem` itself with
+// `config` as it is.
+//
+// A start whose candidate reaches config.target_score ends the run, as in
+// solve_multistart: the other starts stop at their next step and hand over
+// their best so far, and the best of all starts wins. Which start gets there
+// first depends on the threads, so with a reachable target two runs with the
+// same seed can return different solutions.
 //
 // Exception-safe like solve_multistart: a start that throws stops the others at
 // their next step, every thread is joined, and the first failure (in start
@@ -198,6 +220,7 @@ void solve_parallel_starts(const Config& config, Problem& problem, const SolveOn
             start.seed += static_cast<std::uint64_t>(i);
             if (i != 0) start.on_new_best = nullptr;  // only start 0 reports
             solve_one(start, candidates[index], i);
+            if (detail::reached_target(start, candidates[index])) stop->store(true);
         } catch (...) {
             failures[index] = std::current_exception();
             stop->store(true);
