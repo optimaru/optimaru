@@ -36,6 +36,13 @@ def test_the_package_lists_every_use_case():
     assert set(optimaru.__all__) == USE_CASES
 
 
+def test_the_contract_tests_solve_every_use_case():
+    """tests/test_solve_contract.py solves one small problem per use case."""
+    from ._problems import SMALL_PROBLEMS
+
+    assert set(SMALL_PROBLEMS) == USE_CASES
+
+
 def test_cmake_builds_every_use_case():
     text = (ROOT / "CMakeLists.txt").read_text()
     block = re.search(r"set\(OPTIMARU_ALL_USE_CASES\s+([^)]*)\)", text)

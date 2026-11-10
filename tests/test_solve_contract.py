@@ -1,12 +1,14 @@
 """The contract docs/use-cases/README.md states under "One way to solve"."""
 
 import inspect
+import time
 
 import pytest
 
 import optimaru
 
 from ._build import use_case_module
+from ._problems import score_of, small_problem
 
 SHARED_KEYWORDS = {
     "time_limit_seconds",
@@ -21,6 +23,10 @@ SHARED_KEYWORDS = {
 
 # Their pydantic layer models a whole request: solve() takes the compiled problem only.
 REQUEST_MODEL_USE_CASES = ["employee_scheduling", "order_picking", "pickup_delivery", "vehicle_routing"]
+
+# solve() answers with the solution document of its API there, not with a problem that carries
+# a score: an infeasible document does not say how infeasible, so two of them cannot be ordered.
+NO_SCORE_ON_THE_RESULT = {"school_timetabling"}
 
 
 @pytest.mark.parametrize("use_case", optimaru.__all__)
@@ -38,3 +44,49 @@ def test_solve_takes_the_shared_keywords(use_case):
 def test_solve_points_a_request_model_at_solve_request(use_case):
     with pytest.raises(TypeError, match="solve_request"):
         use_case_module(use_case).solve(object())
+
+
+def _feasible(solved) -> bool:
+    if isinstance(solved, dict):  # school timetabling's solution document
+        return solved["status"] == "FEASIBLE"
+    return score_of(solved)[0] == 0
+
+
+@pytest.mark.parametrize("use_case", optimaru.__all__)
+def test_solve_stops_at_the_first_feasible_solution_and_reports_it(use_case):
+    """The target and the callback reach the engine: a 30 s solve of a small problem ends as
+    soon as it is feasible, and on_new_best was called on the way. A use case with a score of
+    its own hands both to the engine itself, and one that forgot would run out the 30 s."""
+    module = use_case_module(use_case)
+    reported = []
+    started = time.monotonic()
+    solved = module.solve(
+        small_problem(use_case),
+        time_limit_seconds=30.0,
+        random_seed=1,
+        stop_at_first_feasible=True,
+        on_new_best=lambda step, score: reported.append((step, score)),
+    )
+    assert time.monotonic() - started < 15.0
+    assert _feasible(solved)
+    assert reported and all(isinstance(step, int) for step, _ in reported)
+    assert reported[-1][1].hard == 0
+
+
+@pytest.mark.parametrize("use_case", sorted(set(optimaru.__all__) - NO_SCORE_ON_THE_RESULT))
+def test_parallel_starts_return_the_best_single_start(use_case):
+    """Start i searches with random_seed + i and the best score wins, so three step-limited
+    starts return what the best of the three single-start solves does. A solver that ran one
+    start whatever the count says would return the first one's score."""
+    module = use_case_module(use_case)
+
+    def score(seed, starts):
+        config = module.SolverConfig()
+        config.spent_limit_seconds = 60.0  # the step limit ends the solve
+        config.step_count_limit = 2000
+        config.random_seed = seed
+        config.parallel_solver_count = starts
+        return score_of(module.solve(small_problem(use_case), config=config))
+
+    for seed in (0, 10, 20):
+        assert score(seed, 3) == max(score(seed + start, 1) for start in range(3))
