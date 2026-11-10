@@ -46,7 +46,7 @@ std::string formatDate(std::int64_t epochDay) {
     const unsigned mp = (5 * doy + 2) / 153;
     const unsigned d = doy - (153 * mp + 2) / 5 + 1;
     const unsigned m = mp < 10 ? mp + 3 : mp - 9;
-    char buf[16];
+    char buf[48];  // room for any year, so no output is ever cut short
     std::snprintf(buf, sizeof(buf), "%04lld-%02u-%02u",
                   static_cast<long long>(y + (m <= 2 ? 1 : 0)), m, d);
     return buf;
