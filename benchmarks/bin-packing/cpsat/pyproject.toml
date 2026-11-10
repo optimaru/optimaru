@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest", "ruff"]
+dev = ["pytest"]
 
 [project.scripts]
 bin-packing-compare = "bin_packing_cpsat.benchmark:main"

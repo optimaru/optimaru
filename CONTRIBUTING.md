@@ -102,7 +102,7 @@ them correct and as fast as before.
 - Format before you push; CI's `lint` job checks all three:
 
   ```sh
-  uv run ruff format . && uv run ruff check --fix .                 # Python
+  uv run ruff check --fix . && uv run ruff format .                 # Python
   git ls-files '*.cpp' '*.hpp' | xargs uv run clang-format -i       # C++ (.clang-format)
   ```
 

@@ -17,4 +17,4 @@ repos:
         name: clang-format
         entry: uv run --no-sync clang-format -i
         language: system
-        types_or: [c++]
+        files: \.(cpp|hpp)$

@@ -236,8 +236,13 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.5" }]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "clang-format" },
     { name = "numpy" },
     { name = "pytest" },
+    { name = "ruff" },
+]
+lint = [
+    { name = "clang-format" },
     { name = "ruff" },
 ]
 

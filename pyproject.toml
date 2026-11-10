@@ -72,6 +72,8 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 120
+# The excludes below also hold for a path named on the command line (pre-commit names every file).
+force-exclude = true
 
 [tool.ruff.format]
 # Guide samples and notebook cells are laid out by hand for reading (aligned comments,
