@@ -240,21 +240,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("inter_exchange_move_weight", &Solver::Config::cross_exchange_weight)
             .def_readwrite("inter_exchange_max_segment", &Solver::Config::cross_exchange_max_run)
             // --- adaptive ruin & recreate (ALNS) ---
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruin_recreate_min_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruin_recreate_max_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruin_recreate_max_ruin_count)
-            .def_readwrite("ruin_recreate_polish_steps",
-                           &Solver::Config::ruin_recreate_polish_steps)
-            .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruin_recreate_as_move_weight)
-            .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruin_recreate_as_move_max_ruin)
+            // (bind_solver_config binds the shared ruin_recreate* knobs.)
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             .def_readwrite("descent_max_sweeps", &Solver::Config::descent_max_sweeps)
             .def_readwrite("granular_descent", &Solver::Config::granular_descent)
@@ -283,8 +269,6 @@ PYBIND11_MODULE(_core, m) {
                            &Solver::Config::iterated_local_search_max_evaluations)
             .def_readwrite("ruin_recreate_selection_type",
                            &Solver::Config::ruin_recreate_selection_type)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruin_recreate_operator_decay)
             .def_readwrite("ruin_recreate_selection_segment_length",
                            &Solver::Config::ruin_recreate_selection_segment_length)
             .def_readwrite("ruin_recreate_selection_alpha",
@@ -299,8 +283,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("driving_time_nearby", &Solver::Config::driving_time_nearby)
             .def_readwrite("driving_time_nearby_size", &Solver::Config::driving_time_nearby_size)
             .def_readwrite("driving_time_nearby_probability",
-                           &Solver::Config::driving_time_nearby_probability)
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+                           &Solver::Config::driving_time_nearby_probability);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

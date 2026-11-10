@@ -3,62 +3,17 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <exception>
 #include <limits>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/worker_threads.hpp"
 #include "vrp/incremental_calculator.hpp"
 #include "vrp/score_calculator.hpp"
 
 namespace vrp {
-
-namespace {
-
-// Multi-start: independent workers on copies of the plan, best final score
-// wins. The engine has its own solve_multistart(), but it runs the threads with
-// the built-in configuration only; going through Solver keeps every worker on
-// the exact config the caller asked for.
-void solveInParallel(const Solver::Config& config, VehicleRoutePlan& plan, int workerCount) {
-    std::vector<VehicleRoutePlan> candidates(static_cast<std::size_t>(workerCount), plan);
-    std::vector<std::exception_ptr> failures(static_cast<std::size_t>(workerCount));
-    // Raised by the first worker that fails: every worker's engine checks
-    // it once a step, so the others stop instead of using up their budget.
-    auto stop = std::make_shared<std::atomic<bool>>(false);
-    // A worker that cannot be started (std::system_error) stops and joins
-    // the ones already running before the error is rethrown here.
-    optimaru::run_worker_threads(
-            workerCount, *stop, [&config, &candidates, &failures, &stop](int i) {
-                try {
-                    Solver::Config workerConfig = config;
-                    workerConfig.parallel_solver_count = 1;
-                    workerConfig.stop_flag = stop;
-                    workerConfig.seed += static_cast<std::uint64_t>(i);
-                    if (i != 0) workerConfig.on_new_best = nullptr;  // only worker 0 reports
-                    Solver worker(std::move(workerConfig));
-                    worker.solve(candidates[static_cast<std::size_t>(i)]);
-                } catch (...) {
-                    failures[static_cast<std::size_t>(i)] = std::current_exception();
-                    stop->store(true);
-                }
-            });
-    for (const std::exception_ptr& failure : failures) {
-        if (failure) std::rethrow_exception(failure);
-    }
-
-    std::size_t best = 0;
-    for (std::size_t i = 1; i < candidates.size(); ++i) {
-        if (candidates[i].score > candidates[best].score) best = i;
-    }
-    plan = std::move(candidates[best]);
-}
-
-}  // namespace
 
 namespace {
 
@@ -67,9 +22,7 @@ namespace {
 // selection (all pure problem-fact lookups, so they apply to the plugin path
 // too).
 optimaru::Settings buildEngineConfig(const Solver::Config& config, const VehicleRoutePlan& plan) {
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.parallel_starts = 1;
     if (config.on_new_best) {
         auto callback = config.on_new_best;
@@ -78,16 +31,12 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
         };
     }
 
-    engineConfig.limits.time_limit = config.time_limit;
     // The "never fires" sentinel is int64 max on every level, which would
     // overflow the medium*10^9 packing; leave the engine's own never-fires
     // default in place instead.
     if (config.target_score.medium != std::numeric_limits<std::int64_t>::max()) {
         engineConfig.limits.target_score = toEngineScoreLimit(config.target_score);
     }
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
 
     // First Fit Decreasing: place the hardest visits while the routes are
     // still empty enough to accommodate them. "Hardest" is the tightest time
@@ -131,15 +80,6 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
     moves.cross_exchange_weight = config.cross_exchange_weight;
     moves.cross_exchange_max_run = config.cross_exchange_max_run;
 
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
-    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
-    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
-    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
-    lns.polish_steps = config.ruin_recreate_polish_steps;
-    lns.as_move_weight = config.ruin_recreate_as_move_weight;
-    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     engineConfig.search.descent_weight = config.descent_weight;
     engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
     engineConfig.search.descent_list_advanced = config.granular_descent;
@@ -165,9 +105,10 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
     engineConfig.search.iterated_local_search_max_evaluations =
             config.iterated_local_search_max_evaluations;
     engineConfig.search.ejection_chain_max_evaluations = config.ejection_chain_max_evaluations;
+    // The ruin & recreate knobs that are this use case's own (settings_from
+    // set the shared ones).
+    auto& lns = engineConfig.search.ruin_recreate;
     lns.selection_type = config.ruin_recreate_selection_type;
-    lns.operator_decay = config.ruin_recreate_operator_decay;
-    lns.rewards = config.ruin_recreate_rewards;
     lns.selection_segment_length = config.ruin_recreate_selection_segment_length;
     lns.selection_alpha = config.ruin_recreate_selection_alpha;
     lns.sisr_ruin = config.sisr_ruin;
@@ -223,13 +164,19 @@ void Solver::solve(VehicleRoutePlan& plan) {
         ScoreCalculator::score(plan);
         return;
     }
-    if (config_.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
 
-    const int workerCount = std::max(1, config_.parallel_solver_count);
-    if (workerCount > 1) {
-        solveInParallel(config_, plan, workerCount);
+    // Multi-start: independent starts on copies of the plan, best final score
+    // wins. The engine has its own solve_multistart(), but it runs the threads
+    // with the built-in configuration only; going through Solver keeps every
+    // start on the exact config the caller asked for. Each start is this whole
+    // solve again, on its copy, with one start (so it takes the single-start
+    // path below).
+    if (config_.parallel_solver_count > 1) {
+        const auto solveOne = [](const Config& config, VehicleRoutePlan& candidate, int) {
+            Solver(config).solve(candidate);
+        };
+        optimaru::solve_parallel_starts(config_, plan, solveOne);
         return;
     }
 
@@ -246,9 +193,7 @@ void Solver::solve(VehicleRoutePlan& plan) {
 
 void Solver::solve(VehicleRoutePlan& plan,
                    optimaru::DecomposedObjective<VehicleRoutePlan>& calculator) {
-    if (config_.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
     if (!plan.visits.empty() && !plan.vehicles.empty()) {
         optimaru::Settings engineConfig = buildEngineConfig(config_, plan);
         if (config_.on_new_best) {

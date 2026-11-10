@@ -64,6 +64,12 @@ struct Score {
 
     bool feasible() const { return hard >= 0; }
 
+    // Above every score: as a target, it is never reached.
+    static Score unreachable() {
+        return {std::numeric_limits<std::int64_t>::max(), std::numeric_limits<std::int64_t>::max(),
+                std::numeric_limits<std::int64_t>::max()};
+    }
+
     // Lexicographic ordering. a < b means a is a *worse* solution than b.
     bool operator<(const Score& o) const {
         if (hard != o.hard) return hard < o.hard;
