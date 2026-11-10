@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Docs and messages.** The guides, docstrings and comments describe each use
+  case in its own terms and no longer compare it with the examples it was
+  derived from. Two `optimaru.project_job_scheduling` error messages changed
+  wording with them (a non-renewable global resource, a standard job with no
+  execution mode). No behaviour changes.
 - **Repository layout.** The source tree now has the shape of the package it
   builds. `optimaru/` is the one Python package. The engine headers moved from
   `include/optimaru/` to `optimaru/cpp/optimaru/` (the include path stays
