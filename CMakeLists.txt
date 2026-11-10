@@ -47,14 +47,15 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         semiconductor_scheduling sports_league_scheduling task_assigning
         tournament_scheduling vehicle_routing)
     set(OPTIMARU_USE_CASES "all" CACHE STRING
-        "Use cases to build: \"all\", \"none\" or a list such as knapsack,vehicle_routing (commas or ;)")
+        "Use cases to build: \"all\", \"none\" or a list such as knapsack,vehicle_routing")
     if(OPTIMARU_USE_CASES STREQUAL "all")
         set(selected ${OPTIMARU_ALL_USE_CASES})
     elseif(OPTIMARU_USE_CASES STREQUAL "none")
         set(selected "")
     else()
-        # The same spelling setup.py takes: commas (or CMake's ;) between names.
-        string(REPLACE "," ";" selected "${OPTIMARU_USE_CASES}")
+        # The same spelling setup.py takes: commas, spaces (or CMake's ;) between names.
+        string(REGEX REPLACE "[ ,;]+" ";" selected "${OPTIMARU_USE_CASES}")
+        string(REGEX REPLACE "^;|;$" "" selected "${selected}")
     endif()
     foreach(use_case IN LISTS selected)
         if(NOT use_case IN_LIST OPTIMARU_ALL_USE_CASES)

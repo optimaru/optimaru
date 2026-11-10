@@ -31,6 +31,10 @@ on:
       - main
     paths:
       - "optimaru/cpp/**"
+      - "optimaru/__init__.py"
+      - "optimaru/_constraint.py"
+      - "setup.py"
+      - "pyproject.toml"
       - "optimaru/school_timetabling/**"
       - "tests/school_timetabling/**"
       - "benchmarks/school-timetabling/**"
@@ -38,6 +42,10 @@ on:
   pull_request:
     paths:
       - "optimaru/cpp/**"
+      - "optimaru/__init__.py"
+      - "optimaru/_constraint.py"
+      - "setup.py"
+      - "pyproject.toml"
       - "optimaru/school_timetabling/**"
       - "tests/school_timetabling/**"
       - "benchmarks/school-timetabling/**"
