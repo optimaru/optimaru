@@ -6,11 +6,11 @@
 #include <functional>
 #include <limits>
 #include <utility>
-#include <vector>
 
 #include "fp/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace fp {
 
@@ -45,7 +45,14 @@ bool improveOperatorAssignment(PackagingSchedule& schedule);
 // jointly move-by-move).
 class Solver {
 public:
-    struct Config {
+    // Only the ruin & recreate knobs are the shared ones of
+    // optimaru/solver_config.hpp (RuinRecreateConfig); the kicks are
+    // auto-disabled for tiny instances (< 4 movable jobs). The limits, the seed
+    // and the callback stay declared here, because SolverConfigBase<S> gives
+    // target_score and on_new_best the same score type S and here they differ:
+    // target_score is the ENGINE score, on_new_best reports this use case's
+    // three-level Score.
+    struct Config : optimaru::RuinRecreateConfig {
         // Wall-clock budget (default 30s). Shared across all engine legs.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
@@ -80,18 +87,6 @@ public:
         // fire), else 5 (adopted R4: 5 legs beat 3 and 2 on the shared-
         // operator bench).
         int operator_rounds = 0;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS). Auto-disabled for tiny instances (< 4 movable
-        // jobs).
-        bool ruin_recreate = true;
-        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
-        double ruin_recreate_min_ruin_fraction = 0.10;
-        double ruin_recreate_max_ruin_fraction = 0.30;
-        int ruin_recreate_max_ruin_count = 60;
-        double ruin_recreate_operator_decay = 0.8;
-        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruin_recreate_polish_steps = 5000;
 
         // Sequence move mix. Weights are relative; 0 disables a move. Or-opt
         // (segment relocate) and tail swap (2-opt*) are enabled here on top
