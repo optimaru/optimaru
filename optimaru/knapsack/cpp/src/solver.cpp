@@ -18,27 +18,14 @@ namespace ks {
 
 namespace {
 
-void requireRewards(const Solver::Config& config) {
-    if (config.ruin_recreate_rewards.size() != 4)
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-}
-
 // The engine configuration shared by both solve() overloads: late-acceptance
 // local search over the built-in assignment moves, plus the ALNS kicks. The
 // engine's construction heuristic finds nothing left to place: the domain
 // construction decided every item.
 optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackProblem& problem,
                                   int starts) {
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.parallel_starts = starts;
-    engineConfig.on_new_best = config.on_new_best;
-    engineConfig.limits.time_limit = config.time_limit;
-    engineConfig.limits.target_score = config.target_score;
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
     engineConfig.search.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
@@ -60,17 +47,6 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackPr
         };
     }
 
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
-    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
-    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
-    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
-    lns.operator_decay = config.ruin_recreate_operator_decay;
-    lns.rewards = config.ruin_recreate_rewards;
-    lns.polish_steps = config.ruin_recreate_polish_steps;
-    lns.as_move_weight = config.ruin_recreate_as_move_weight;
-    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     return engineConfig;
 }
 
@@ -84,7 +60,7 @@ void construct(KnapsackProblem& problem) {
 }  // namespace
 
 void Solver::solve(KnapsackProblem& problem) {
-    requireRewards(config_);
+    optimaru::check_config(config_);
     construct(problem);
     if (!problem.items.empty()) {
         // Independent parallel starts through the engine's own multi-start:
@@ -101,7 +77,7 @@ void Solver::solve(KnapsackProblem& problem) {
 
 void Solver::solve(KnapsackProblem& problem,
                    optimaru::DecomposedObjective<KnapsackProblem>& calculator) {
-    requireRewards(config_);
+    optimaru::check_config(config_);
     construct(problem);
     if (!problem.items.empty()) {
         // Single-start: the caller-owned calculator cannot be cloned.

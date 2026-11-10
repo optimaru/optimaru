@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
-#include <exception>
 #include <memory>
 #include <random>
 #include <stdexcept>
@@ -15,7 +14,6 @@
 #include "alb/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/worker_threads.hpp"
 #include "optimaru/search/operators.hpp"
 
 namespace alb {
@@ -194,15 +192,7 @@ std::shared_ptr<const std::vector<int>> construct(AssemblyLineBalancingProblem& 
 void runEngine(const Solver::Config& config, AssemblyLineBalancingProblem& problem,
                const std::shared_ptr<const std::vector<int>>& rank,
                optimaru::Objective<AssemblyLineBalancingProblem>& calculator) {
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
-    engineConfig.on_new_best = config.on_new_best;
-    engineConfig.limits.time_limit = config.time_limit;
-    engineConfig.limits.target_score = config.target_score;
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.search.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
@@ -232,28 +222,11 @@ void runEngine(const Solver::Config& config, AssemblyLineBalancingProblem& probl
         };
     }
 
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
-    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
-    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
-    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
-    lns.operator_decay = config.ruin_recreate_operator_decay;
-    lns.rewards = config.ruin_recreate_rewards;
-    lns.polish_steps = config.ruin_recreate_polish_steps;
-    lns.as_move_weight = config.ruin_recreate_as_move_weight;
-    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
-
     optimaru::Solver<AssemblyLineBalancingProblem> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
     if (config.close_station_moves && problem.stationCount >= 2)
         engine.add_move_operator(std::make_unique<CloseStationMove>(rank));
     engine.solve(problem, calculator);
-}
-
-void requireRewards(const Solver::Config& config) {
-    if (config.ruin_recreate_rewards.size() != 4)
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
 }
 
 // One start on an already constructed problem, scored by the monolithic
@@ -269,7 +242,7 @@ void searchConstructed(const Solver::Config& config, AssemblyLineBalancingProble
 }  // namespace
 
 void Solver::solve(AssemblyLineBalancingProblem& problem) {
-    requireRewards(config_);
+    optimaru::check_config(config_);
     const std::shared_ptr<const std::vector<int>> rank = construct(problem);
     problem.warmStart = false;  // a seed is used once
     if (problem.tasks.empty()) {
@@ -277,51 +250,20 @@ void Solver::solve(AssemblyLineBalancingProblem& problem) {
         return;
     }
 
-    // Independent parallel starts: worker i searches its own copy of the
-    // constructed problem with seed + i. The engine's own multi-start cannot
-    // be used, because a registered custom operator like CloseStationMove is
-    // per-Solver and stateful, so it would silently vanish in the worker
-    // threads. The best score wins (the lowest worker index on ties).
-    const int workerCount = std::max(1, config_.parallel_solver_count);
-    if (workerCount > 1) {
-        std::vector<AssemblyLineBalancingProblem> candidates(workerCount, problem);
-        std::vector<std::exception_ptr> failures(workerCount);
-        // Raised by the first worker that fails: every worker's engine checks
-        // it once a step, so the others stop instead of using up their budget.
-        auto stop = std::make_shared<std::atomic<bool>>(false);
-        // A worker that cannot be started (std::system_error) stops and joins
-        // the ones already running before the error is rethrown here.
-        optimaru::run_worker_threads(workerCount, *stop,
-                                     [this, &candidates, &failures, &stop, &rank](int i) {
-                                         try {
-                                             Config workerConfig = config_;
-                                             workerConfig.parallel_solver_count = 1;
-                                             workerConfig.stop_flag = stop;
-                                             workerConfig.seed += static_cast<std::uint64_t>(i);
-                                             if (i != 0) workerConfig.on_new_best = nullptr;
-                                             searchConstructed(workerConfig, candidates[i], rank);
-                                         } catch (...) {
-                                             failures[i] = std::current_exception();
-                                             stop->store(true);
-                                         }
-                                     });
-        for (const std::exception_ptr& failure : failures) {
-            if (failure) std::rethrow_exception(failure);
-        }
-        int best = 0;
-        for (int i = 1; i < workerCount; ++i) {
-            if (candidates[i].score > candidates[best].score) best = i;
-        }
-        problem = std::move(candidates[best]);
-        return;
-    }
-
-    searchConstructed(config_, problem, rank);
+    // Independent parallel starts of this solver's own search. The engine's
+    // multi-start cannot be used: a registered custom operator like
+    // CloseStationMove is per-Solver and stateful, so it would silently vanish
+    // in the worker threads.
+    optimaru::solve_parallel_starts(
+            config_, problem,
+            [&rank](const Config& config, AssemblyLineBalancingProblem& candidate, int) {
+                searchConstructed(config, candidate, rank);
+            });
 }
 
 void Solver::solve(AssemblyLineBalancingProblem& problem,
                    optimaru::DecomposedObjective<AssemblyLineBalancingProblem>& calculator) {
-    requireRewards(config_);
+    optimaru::check_config(config_);
     const std::shared_ptr<const std::vector<int>> rank = construct(problem);
     problem.warmStart = false;  // a seed is used once
     if (!problem.tasks.empty()) runEngine(config_, problem, rank, calculator);

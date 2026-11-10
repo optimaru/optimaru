@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -22,6 +23,11 @@ struct Score {
     double soft = 0.0;
 
     bool feasible() const { return hard >= 0; }
+
+    // Above every score: as a target, it is never reached.
+    static Score unreachable() {
+        return {std::numeric_limits<std::int64_t>::max(), std::numeric_limits<double>::infinity()};
+    }
 
     bool operator<(const Score& o) const {
         if (hard != o.hard) return hard < o.hard;
