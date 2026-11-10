@@ -33,7 +33,7 @@ path); `constraints=` selects a plugin assembly instead (see `constraints.py`)::
         constraints=Assembly().add("teacher_gap_cost", weight=40).drop("teacher_workday_cost"),
     )
 
-Pydantic mirrors (for serialization) live in `optimaru.school_timetabling.models` (optional dependency).
+Pydantic mirrors (for serialization) live in `optimaru.school_timetabling.models`.
 """
 
 import time

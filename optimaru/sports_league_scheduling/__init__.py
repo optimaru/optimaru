@@ -21,7 +21,7 @@ every constraint (the only per-constraint surface); `constraint_info()`
 lists every constraint with its default level and weight. Change a weight or a level
 through a constraint selection (see `optimaru.sports_league_scheduling.constraints`).
 
-The pydantic mirror (for serialization) is in `optimaru.sports_league_scheduling.models` (optional dependency).
+The pydantic mirror (for serialization) is in `optimaru.sports_league_scheduling.models`.
 """
 
 from typing import TypeVar
@@ -42,6 +42,7 @@ from ._core import (
     list_constraints,
 )
 from .demo import demo_schedule
+from .models import LeagueScheduleModel, with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -60,16 +61,6 @@ __all__ = [
     "solve",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`. Lazy import: pydantic is an optional dependency.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 # solve() returns what it was given: the compiled problem, or its pydantic model.
@@ -128,10 +119,6 @@ def solve(
     if isinstance(schedule, LeagueSchedule):
         solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
-
-    # pydantic model (lazy import: pydantic is an optional dependency).
-    from .models import LeagueScheduleModel
-
     if isinstance(schedule, LeagueScheduleModel):
         core = schedule.to_core()
         solve_in_place(Solver(cfg), core, constraints)

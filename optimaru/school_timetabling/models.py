@@ -9,8 +9,6 @@ store or send the engine's own shape (debug dumps, regression snapshots, ...)::
     model = TimetableModel.from_core(table)     # engine -> pydantic
     clone = TimetableModel.model_validate_json(model.model_dump_json())
     table2 = clone.to_core()                    # pydantic -> engine
-
-`pydantic` is an optional dependency (`pip install st-timetabling[models]`).
 """
 
 from typing import Any

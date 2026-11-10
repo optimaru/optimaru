@@ -67,7 +67,7 @@ nearby route pairs are searched with best-improvement relocate, swap, 2-opt,
 2-opt* and bounded CROSS-exchange moves. Set `granular_descent = False` (or
 lower `descent_weight`) when a cheaper sampled neighbourhood is preferred.
 
-## JSON in, JSON out (pydantic, optional)
+## JSON in, JSON out (pydantic)
 
 ```python
 from optimaru.vehicle_routing.models import (RoutePlanRequest, RoutingInput, VehicleModel,
@@ -95,7 +95,7 @@ Everything round-trips through JSON (`model_validate_json` /
 optimaru/vehicle_routing/
 ├── __init__.py       re-exports the core
 ├── constraints.py    the constraint specs (one class per C++ component), built on optimaru/_constraint.py
-├── models.py         pydantic request/response layer (optional)
+├── models.py         pydantic request/response layer
 ├── _core.pyi         stubs of the compiled module
 └── cpp/              bindings.cpp (the _core module, a thin wrapper), optimaru/vehicle_routing/cpp/include/vrp/, src/
 tests/vehicle_routing/   correctness + model tests (pytest); cpp/ holds the C++ tests

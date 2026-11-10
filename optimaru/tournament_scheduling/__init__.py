@@ -16,7 +16,7 @@ models/_core docs). ``constraint_info()`` lists each constraint's default level 
 
 `solve` accepts both the pydantic mirror (`models.TournamentScheduleModel`) and `_core`
 objects (`TournamentSchedule`). The pydantic mirror (for serialization) is in
-`optimaru.tournament_scheduling.models` (optional dependency).
+`optimaru.tournament_scheduling.models`.
 """
 
 from typing import TypeVar
@@ -39,6 +39,7 @@ from ._core import (
     list_constraints,
     unfairness,
 )
+from .models import TournamentScheduleModel, with_initial_solution
 
 __all__ = [
     "MEDIUM_SCALE",
@@ -59,16 +60,6 @@ __all__ = [
     "unfairness",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`. Lazy import: pydantic is an optional dependency.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 # solve() returns what it was given: the compiled problem, or its pydantic model.
@@ -120,10 +111,6 @@ def solve(
     if isinstance(schedule, TournamentSchedule):
         solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
-
-    # pydantic mirror (lazy import: optional dependency).
-    from .models import TournamentScheduleModel
-
     if isinstance(schedule, TournamentScheduleModel):
         core = schedule.to_core()
         solve_in_place(Solver(cfg), core, constraints)

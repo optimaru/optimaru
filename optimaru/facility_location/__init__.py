@@ -21,7 +21,7 @@ Basic usage::
     fl.solve(problem, time_limit_seconds=5.0, random_seed=42)
     print(problem.score, problem.total_cost(), problem.total_distance_meters())
 
-The pydantic mirror (for serialization) is in `optimaru.facility_location.models` (optional dependency).
+The pydantic mirror (for serialization) is in `optimaru.facility_location.models`.
 """
 
 from typing import TypeVar
@@ -41,6 +41,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .models import FacilityLocationProblemModel, with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -58,16 +59,6 @@ __all__ = [
     "solve",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`. Lazy import: pydantic is an optional dependency.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 # solve() returns what it was given: the compiled problem, or its pydantic model.
@@ -121,10 +112,6 @@ def solve(
     if isinstance(problem, FacilityLocationProblem):
         solve_in_place(Solver(cfg), problem, constraints)
         return problem
-
-    # pydantic model (lazy import: pydantic is an optional dependency).
-    from .models import FacilityLocationProblemModel
-
     if isinstance(problem, FacilityLocationProblemModel):
         core = problem.to_core()
         solve_in_place(Solver(cfg), core, constraints)

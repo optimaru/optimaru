@@ -41,7 +41,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .models import with_initial_solution
+from .models import BinPackingProblemModel, with_initial_solution
 
 __all__ = [
     "BinPackingProblem",
@@ -115,10 +115,6 @@ def solve(
     if isinstance(problem, BinPackingProblem):
         solve_in_place(Solver(cfg), problem, constraints)
         return problem
-
-    # pydantic model (lazy import: pydantic is an optional dependency).
-    from .models import BinPackingProblemModel
-
     if isinstance(problem, BinPackingProblemModel):
         core = problem.to_core()
         solve_in_place(Solver(cfg), core, constraints)

@@ -429,7 +429,7 @@ optimaru/employee_scheduling/
 ├── __init__.py       re-exports core + constraints + helpers
 ├── _core.pyi         type stub with full API docs
 ├── constraints.py    constraint spec classes, one per rule (declarative assembly)
-├── models.py         pydantic request/response layer, rule models generated from the specs (optional)
+├── models.py         pydantic request/response layer, rule models generated from the specs
 ├── demo.py           generate_demo_data, a made-up sample request
 ├── helpers.py        pure-Python conveniences (list_constraints, make_random_roster, ...)
 └── cpp/              bindings.cpp (the _core module), optimaru/employee_scheduling/cpp/include/es/, src/

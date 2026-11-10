@@ -75,6 +75,17 @@
   The conference-scheduling notebook read a `hard` key that `constraint_costs()` no longer
   returns and did not run; a few sentences that named a result the outputs no longer show are
   reworded, and the food-packaging rounds use 50,000 steps.
+- **Importing a use case imports its models.** In 15 use cases `import optimaru.<use case>`
+  left `optimaru.<use case>.models`, and with it pydantic, for the first call that needed a
+  model. They now import it with the package, as `assembly_line_balancing`, `bin_packing`,
+  `knapsack`, `max_cut`, `pickup_delivery` and `quadratic_assignment` already did (school
+  timetabling, whose `solve()` takes dicts, still does not). pydantic is a dependency of
+  `optimaru`, so nothing new has to be installed; the first import of one of the 15 takes
+  about 35 ms longer (`vehicle_routing` 15 ms to 48 ms, `employee_scheduling` 25 ms to
+  72 ms, measured with `python -X importtime` on one machine), which is the time the first
+  model call used to take. On the package,
+  `with_initial_solution` (and `vehicle_routing.solve_request`) is now the `models` function
+  itself, with its docstring and annotations, instead of a wrapper around it.
 - **A star import of five modules binds their own names only.** `models` in `knapsack`,
   `max_cut`, `quadratic_assignment` and `semiconductor_scheduling`, and
   `employee_scheduling.helpers`, had no `__all__`, so `from ... import *` also bound the names

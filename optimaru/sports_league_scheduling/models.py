@@ -9,8 +9,6 @@ store or transfer the engine shape as-is (debug dumps, regression snapshots,
     model = LeagueScheduleModel.from_core(schedule)   # engine -> pydantic
     clone = LeagueScheduleModel.model_validate_json(model.model_dump_json())
     schedule2 = clone.to_core()                       # pydantic -> engine
-
-`pydantic` is an optional dependency (`pip install optimaru.sports_league_scheduling[models]`).
 """
 
 from pydantic import Field, model_validator

@@ -11,8 +11,6 @@ indices from the Unix epoch::
     model = FlightCrewScheduleModel.model_validate(problem_dict)
     schedule = model.to_core()                    # pydantic -> engine
     solved = FlightCrewScheduleModel.from_core(schedule)  # engine -> pydantic
-
-`pydantic` is an optional dependency (`pip install optimaru.flight_crew_scheduling[models]`).
 """
 
 from datetime import date, datetime, timedelta, timezone

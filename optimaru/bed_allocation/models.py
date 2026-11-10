@@ -13,7 +13,6 @@ dates into integer days (day ordinals)::
     solved = BedPlanModel.from_core(plan)               # engine -> pydantic
 
 `stays[i].bed_id` is the assigned bed id, or None when unassigned (including "no bed").
-`pydantic` is an optional dependency (`pip install bed_allocation[models]`).
 """
 
 from datetime import date

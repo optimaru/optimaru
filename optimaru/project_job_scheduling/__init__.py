@@ -47,7 +47,7 @@ The high-level entry point is `solve`::
     result = pj.solve(schedule, time_limit_seconds=10.0, random_seed=42)
     print(result.score_hard, result.score_medium, result.score_soft)
 
-The pydantic mirror (for serialization) is in `optimaru.project_job_scheduling.models` (optional dependency).
+The pydantic mirror (for serialization) is in `optimaru.project_job_scheduling.models`.
 """
 
 from typing import TypeVar
@@ -71,6 +71,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .models import ProjectJobScheduleModel, with_initial_solution
 
 __all__ = [
     "Allocation",
@@ -92,16 +93,6 @@ __all__ = [
     "solve",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`. Lazy import: pydantic is an optional dependency.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 def _build_config(**settings) -> SolverConfig:
@@ -131,7 +122,7 @@ def solve(
 
     ``schedule`` is a `_core.ProjectJobSchedule` (solved in place and
     returned) or a `models.ProjectJobScheduleModel` (converted to the engine shape,
-    solved, and returned as a new model, the one passed in left as it was; needs pydantic).
+    solved, and returned as a new model, the one passed in left as it was).
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine default
     30 s budget). Explicit keyword arguments override config.
@@ -162,10 +153,6 @@ def solve(
     if isinstance(schedule, ProjectJobSchedule):
         solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
-
-    # pydantic model path (lazy import: pydantic is an optional dependency).
-    from .models import ProjectJobScheduleModel
-
     if not isinstance(schedule, ProjectJobScheduleModel):
         raise TypeError(
             f"schedule must be a ProjectJobSchedule or a models.ProjectJobScheduleModel: {type(schedule)!r}"

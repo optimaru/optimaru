@@ -1,8 +1,6 @@
 """Starting a solve from an earlier solution."""
 
 import json
-import subprocess
-import sys
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -261,9 +259,3 @@ def test_the_package_exports_it():
     seeded = fp.with_initial_solution(problem(), seed_of(NOT_GREEDY))
 
     assert lines_of(seeded) == NOT_GREEDY
-
-
-def test_the_package_still_imports_without_pydantic():
-    code = "import sys; sys.modules['pydantic'] = None; import optimaru.food_packaging; optimaru.food_packaging.Solver"
-
-    subprocess.run([sys.executable, "-c", code], check=True)

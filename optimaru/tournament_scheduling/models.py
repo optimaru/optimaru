@@ -14,8 +14,6 @@ Score mapping (hard / medium / soft -> engine Score):
     model = demo_data()                          # the demo instance
     clone = TournamentScheduleModel.model_validate_json(model.model_dump_json())
     schedule = clone.to_core()                   # pydantic -> engine
-
-`pydantic` is an optional dependency (`pip install tournament_scheduling[models]`).
 """
 
 import random

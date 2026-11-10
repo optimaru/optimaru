@@ -1,6 +1,8 @@
 """The contract docs/use-cases/README.md states under "One way to solve"."""
 
 import inspect
+import subprocess
+import sys
 import time
 
 import pytest
@@ -23,6 +25,9 @@ SHARED_KEYWORDS = {
 
 # Their pydantic layer models a whole request: solve() takes the compiled problem only.
 REQUEST_MODEL_USE_CASES = ["employee_scheduling", "order_picking", "pickup_delivery", "vehicle_routing"]
+
+# Its solve() takes and returns dicts, so the package does not import its pydantic models.
+NO_MODELS_ON_IMPORT = {"school_timetabling"}
 
 # solve() answers with the solution document of its API there, not with a problem that carries
 # a score: an infeasible document does not say how infeasible, so two of them cannot be ordered.
@@ -99,3 +104,19 @@ def test_parallel_starts_return_the_best_single_start(use_case):
         singles = [score(seed + start, 1) for start in range(3)]
         assert score(seed, 1) == singles[0], "a step-limited start is not reproducible"
         assert score(seed, 3) == max(singles)
+
+
+@pytest.mark.parametrize("use_case", optimaru.__all__)
+def test_importing_a_use_case_imports_its_models(use_case):
+    """pydantic is a dependency, so a package imports its models with itself and hands out the
+    models functions as they are, not wrappers that import them on the first call."""
+    module = use_case_module(use_case)
+    loaded = subprocess.run(
+        [sys.executable, "-c", f"import sys, optimaru.{use_case} as m; print(m.__name__ + '.models' in sys.modules)"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert loaded == str(use_case not in NO_MODELS_ON_IMPORT)
+    if hasattr(module, "with_initial_solution"):
+        assert module.with_initial_solution is module.models.with_initial_solution

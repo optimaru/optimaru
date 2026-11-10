@@ -2,8 +2,6 @@
 
 import json
 import re
-import subprocess
-import sys
 
 import pytest
 
@@ -151,9 +149,3 @@ def test_the_package_exports_it():
     seeded = op.with_initial_solution(problem(), solution_of(NOT_GREEDY))
 
     assert routes(solve_request(seeded)) == NOT_GREEDY
-
-
-def test_the_package_still_imports_without_pydantic():
-    code = "import sys; sys.modules['pydantic'] = None; import optimaru.order_picking; optimaru.order_picking.Solver"
-
-    subprocess.run([sys.executable, "-c", code], check=True)

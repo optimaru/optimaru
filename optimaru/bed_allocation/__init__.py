@@ -31,7 +31,7 @@ The high-level entry point is `solve`::
     result = ba.solve(plan, time_limit_seconds=10.0, random_seed=42)
     print(result.score_hard, result.score_medium, result.score_soft)
 
-The pydantic mirror (for serialization) is in `optimaru.bed_allocation.models` (optional dependency).
+The pydantic mirror (for serialization) is in `optimaru.bed_allocation.models`.
 """
 
 from typing import TypeVar
@@ -54,6 +54,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .models import BedPlanModel, with_initial_solution
 
 __all__ = [
     "Bed",
@@ -74,16 +75,6 @@ __all__ = [
     "solve",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`. Lazy import: pydantic is an optional dependency.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 def _build_config(**settings) -> SolverConfig:
@@ -113,7 +104,7 @@ def solve(
 
     ``plan`` is a `_core.BedPlan` (solved in place and returned) or a
     `models.BedPlanModel` (converted to the engine shape, solved, and returned as a new
-    model, the one passed in left as it was; needs pydantic).
+    model, the one passed in left as it was).
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine default
     30 s budget). Explicit keyword arguments override config.
@@ -145,10 +136,6 @@ def solve(
     if isinstance(plan, BedPlan):
         solve_in_place(Solver(cfg), plan, constraints)
         return plan
-
-    # pydantic model path (lazy import: pydantic is an optional dependency).
-    from .models import BedPlanModel
-
     if not isinstance(plan, BedPlanModel):
         raise TypeError(f"plan must be a BedPlan or a models.BedPlanModel: {type(plan)!r}")
     core_plan = plan.to_core()

@@ -21,8 +21,8 @@ The weights are the C++ components' defaults; change one through a constraint se
 `optimaru.flight_crew_scheduling.constraints`). `constraint_info()` lists every constraint with its default level
 and weight.
 
-The high-level entry point is `solve`. It takes a pydantic model (optional dependency)
-or a dict and returns the solved model::
+The high-level entry point is `solve`. It takes a pydantic model or a dict and returns
+the solved model::
 
     import optimaru.flight_crew_scheduling as fc
 
@@ -30,7 +30,7 @@ or a dict and returns the solved model::
     print(result.score_hard, result.score_soft)
 
 There is also a low-level path that builds engine objects (`FlightCrewSchedule`) directly
-and uses `Solver` (no pydantic needed). The pydantic mirror is in `optimaru.flight_crew_scheduling.models`.
+and uses `Solver`. The pydantic mirror is in `optimaru.flight_crew_scheduling.models`.
 """
 
 from typing import TypeVar
@@ -51,6 +51,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .models import FlightCrewScheduleModel, with_initial_solution
 
 __all__ = [
     "Airport",
@@ -69,16 +70,6 @@ __all__ = [
     "solve",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`. Lazy import: pydantic is an optional dependency.
-    """
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 # solve() returns what it was given: the compiled problem, or its pydantic model.
@@ -139,9 +130,6 @@ def solve(
     if isinstance(schedule, FlightCrewSchedule):
         solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
-
-    from .models import FlightCrewScheduleModel  # pydantic (optional dependency)
-
     model = (
         schedule if isinstance(schedule, FlightCrewScheduleModel) else FlightCrewScheduleModel.model_validate(schedule)
     )

@@ -72,6 +72,7 @@ from ._core import (
     improve_operator_assignment,
     list_constraints,
 )
+from .models import PackagingScheduleModel, with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -93,17 +94,6 @@ __all__ = [
     "solve",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`.
-    """
-    # Lazy import: pydantic is an optional dependency.
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 # solve() returns what it was given: the compiled problem, or its pydantic model.
@@ -161,10 +151,6 @@ def solve(
     if isinstance(schedule, PackagingSchedule):
         solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
-
-    # pydantic model (lazy import: pydantic is an optional dependency).
-    from .models import PackagingScheduleModel
-
     if isinstance(schedule, PackagingScheduleModel):
         core = schedule.to_core()
         solve_in_place(Solver(cfg), core, constraints)

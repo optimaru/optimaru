@@ -26,7 +26,7 @@ Quick start::
     print(solution.score, solution.routes())
 
 pydantic request/response models (JSON in/out) live in
-`optimaru.order_picking.models` (optional dependency).
+`optimaru.order_picking.models`.
 """
 
 from .._solve import solve_in_place, solver_config
@@ -50,6 +50,7 @@ from ._core import (
     list_constraints,
     update_shadow_variables,
 )
+from .models import with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -73,17 +74,6 @@ __all__ = [
     "update_shadow_variables",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`.
-    """
-    # Lazy import: pydantic is an optional dependency.
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 def solve(

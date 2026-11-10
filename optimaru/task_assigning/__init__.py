@@ -36,7 +36,7 @@ The high-level entry point is `solve`::
     result = ta.solve(solution, time_limit_seconds=10.0, random_seed=42)
     print(result.score_hard, result.score_soft0, result.score_soft1, result.score_soft2)
 
-The pydantic mirror (for serialization) is in `optimaru.task_assigning.models` (optional dependency).
+The pydantic mirror (for serialization) is in `optimaru.task_assigning.models`.
 """
 
 from typing import TypeVar
@@ -59,6 +59,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .models import TaskAssigningSolutionModel, with_initial_solution
 
 __all__ = [
     "Affinity",
@@ -79,17 +80,6 @@ __all__ = [
     "solve",
     "with_initial_solution",
 ]
-
-
-def with_initial_solution(problem, solution):
-    """Return a copy of `problem` whose search starts from `solution`.
-
-    See `models.with_initial_solution`.
-    """
-    # Lazy import: pydantic is an optional dependency.
-    from . import models
-
-    return models.with_initial_solution(problem, solution)
 
 
 def _build_config(**settings) -> SolverConfig:
@@ -119,7 +109,7 @@ def solve(
 
     ``solution`` is a `_core.TaskAssigningSolution` (solved in place and
     returned) or a `models.TaskAssigningSolutionModel` (converted to the engine shape,
-    solved, and returned as a new model, the one passed in left as it was; needs pydantic).
+    solved, and returned as a new model, the one passed in left as it was).
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine default
     30 s budget). Explicit keyword arguments override config.
@@ -145,10 +135,6 @@ def solve(
     if isinstance(solution, TaskAssigningSolution):
         solve_in_place(Solver(cfg), solution, constraints)
         return solution
-
-    # pydantic model path (lazy import: pydantic is an optional dependency).
-    from .models import TaskAssigningSolutionModel
-
     if not isinstance(solution, TaskAssigningSolutionModel):
         raise TypeError(
             f"solution must be a TaskAssigningSolution or a models.TaskAssigningSolutionModel: {type(solution)!r}"
