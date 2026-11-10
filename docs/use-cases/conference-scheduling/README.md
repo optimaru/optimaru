@@ -173,7 +173,7 @@ Two changed defaults / structures:
 
 Knobs that were measured but stay off by default (bench key = config field):
 
-- `hot=` / `hotTalkProbability` — targets talks with hard violations (type-incompatible
+- `hot=` / `hot_talk_probability` — targets talks with hard violations (type-incompatible
   cell, tag violations, speaker/room unavailable, shared cell — O(1) checks) via rejection
   sampling. Wins hard 4-2 at scaled:120 but loses 1-5 at scaled:200 (the hot set is 70%+
   of talks, so the bias goes blunt); 45/60 tie. Too few data points for a per-size rule,

@@ -182,7 +182,7 @@ class SolverConfig:
     random_seed: int
     parallel_solver_count: int
     late_acceptance_size: int
-    """0 = automatic: clamp(8 * allocations, 400, 3200)."""
+    """0 = automatic: clamp(16 * allocations, 400, 3200)."""
     full_assert: bool
     """Full score checks: compares the incremental score to a full recompute after every move
     (for debugging; very slow)."""

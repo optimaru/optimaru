@@ -201,7 +201,7 @@ class SolverConfig:
     # --- acceptance ---
     acceptor_type: AcceptorType
     late_acceptance_size: int
-    """0 = auto: clamp(4 * len(nodes), 200, 1600)."""
+    """0 = auto: clamp(4 * len(nodes), 200, 1600) up to 60 nodes, 5 above."""
     record_to_record_start_gap: float
     record_to_record_end_gap: float
 

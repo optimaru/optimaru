@@ -36,8 +36,10 @@ class Solver {
 public:
     // The limits, the seed, the parallel starts, the callback and the ruin &
     // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
-    //   on_new_best  reports each new best in the same levels as the final
-    //                plan.score of the solve() overload in use
+    //   history_length 0  clamp(4 * nodeCount, 200, 1600) up to 60 nodes, 5
+    //                     above
+    //   on_new_best       reports each new best in the same levels as the
+    //                     final plan.score of the solve() overload in use
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Two ruin & recreate defaults differ from the shared ones: a kick
         // ruins up to 40% (30% there), and the rewards are {3, 2, 1, 0.5}

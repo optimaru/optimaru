@@ -40,8 +40,11 @@ class Solver {
 public:
     // The limits, the seed, the parallel starts, the callback and the ruin &
     // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
-    //   target_score      the optimum is 0/0/0. To stop as soon as a feasible,
-    //                     fully-assigned solution is found, set {0, 0, min}.
+    //   target_score      the optimum is 0/0/0. {0, kNoLevelFloor, kNoLevelFloor}
+    //                     stops at the first feasible solution: kNoLevelFloor on
+    //                     the medium or the soft level lifts the floor from
+    //                     both (see toEngineScoreLimit), so that solution may
+    //                     still leave visits unassigned.
     //   history_length 0  clamp(60000 / visitCount, 100, 400): the horizon
     //                     SHRINKS as the instance grows, keeping it roughly
     //                     constant in wall-time as the per-step cost rises
