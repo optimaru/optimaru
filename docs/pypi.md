@@ -104,7 +104,8 @@ own knobs, and the instances add up: `TravelTimeCost(exponent=2)` and
 `TravelTimeCost(exponent=3)` together cost `x**2 + x**3`. Picking a constraint
 again adds a second instance, so to change a default pick, replace it in the list
 rather than appending: `[*get_constraints(), TravelTimeCost(weight=10)]` charges
-the travel time 11 times. The examples write
+the travel time 11 times. A further pick usually reuses the raw cost computed
+for the first one, so it costs much less than a new constraint. The examples write
 every pick as a class call; the `constraints` module also has ready-made default
 instances such as `vehicle_capacity_cost`, which is `VehicleCapacityCost()`.
 `constraint_info()` on a use case lists its constraints with their default level

@@ -2681,9 +2681,11 @@ void testSharedRepeats() {
         calc.rebuild(s);
         for (int t = 0; t < 6; ++t) move(calc, s, t, t % 4);
         auto calls = [&](std::size_t i) { return component<LoadCost<Loads>>(calc, i).costCalls; };
-        check(calls(0) == 4 && calls(1) == 0,
-              "a repeat on the delta path is never asked for its cost: the first instance's serves");
-        check(calls(2) == 4 + 6 && calls(3) == 0,
+        // Each repeat is asked once per worker at the reset, which checks it
+        // against its class (verify_share_classes), and never after.
+        check(calls(0) == 4 && calls(1) == 4,
+              "a repeat on the delta path is asked at the reset only, like the first instance");
+        check(calls(2) == 4 + 6 && calls(3) == 4,
               "two repeats that re-cost share one cost() call per touched worker");
         check(calls(4) == 4, "an instance added with add_instance() is asked on its own");
         LoadCalc plain;
@@ -2733,6 +2735,38 @@ void testSharedRepeats() {
             refused = true;
         }
         check(refused, "a repeat of another component type is refused at reset");
+
+        // The same type with another parameter: its raw cost differs from
+        // the first instance's, which the reset notices.
+        struct ScaledLoadCost final : LoadCost<Loads> {
+            double scale;
+            explicit ScaledLoadCost(double s) : scale(s) {}
+            double cost(const Loads& loads, int unit, const std::vector<int>& members) const override {
+                return scale * LoadCost<Loads>::cost(loads, unit, members);
+            }
+        };
+        auto scaled = [](double scale) {
+            LoadAssembly first;
+            first.emplace<ScaledLoadCost>(1.0);
+            LoadAssembly repeat;
+            repeat.emplace<ScaledLoadCost>(scale);
+            first.add_repeats(std::move(repeat));
+            return first;
+        };
+        auto resets = [&](double scale) {
+            LoadCalc other;
+            scaled(scale).into(other);
+            Loads loads;
+            loads.assignment[0] = 0;
+            try {
+                other.rebuild(loads);
+            } catch (const std::logic_error&) {
+                return false;
+            }
+            return true;
+        };
+        check(resets(1.0) && !resets(2.0),
+              "a repeat built with another parameter is refused at reset, when its raw cost differs");
     }
     std::printf("\n");
 }

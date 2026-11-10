@@ -675,6 +675,7 @@ public:
         saved_soft_.resize(cells);
         saved_unit_hard_.resize(unit_count_);
         for (int u = 0; u < unit_count_; ++u) refresh_unit(u);
+        verify_share_classes();
         for (const auto& g : global_constraints_) g->reset(solution, members_);
         // Every constraint, unit and global, has seen the solution: the shared
         // contexts may now build whatever they keep per list.
@@ -1315,15 +1316,21 @@ private:
     //   - the same scope (scoped_units()), so both sit in the same units'
     //     dispatch entries.
     // Instances that match no earlier one stay on their own, as before.
-    // Declaring a repeat of a component of another type is a programming
-    // error and throws.
+    // Declaring a repeat whose first instance is a component of another type
+    // is a programming error and throws (other instances of the name that
+    // are neither the first nor repeats are simply not shared with). A repeat
+    // of the right type built with other domain parameters is caught by
+    // verify_share_classes at every reset.
+    //
+    // Runs after has_full_recost_ was read off the unshared kinds, and turns
+    // kFullRecost into kSharedFullRecost: test a kind with is_full_recost().
     void compile_share_classes(std::vector<UnitDispatchEntry>& metas) {
         const std::size_t C = unit_constraints_.size();
         share_class_.resize(C);
         share_stamp_.assign(C, 0);
         share_value_.assign(C, 0.0);
         share_pass_ = 0;
-        std::vector<std::size_t> members(C, 1);
+        std::vector<std::size_t> class_size(C, 1);
         auto same_scope = [](const std::vector<int>* a, const std::vector<int>* b) {
             return (a == nullptr) == (b == nullptr) && (a == nullptr || *a == *b);
         };
@@ -1352,13 +1359,40 @@ private:
                     continue;
                 }
                 share_class_[c] = static_cast<std::uint32_t>(f);
-                ++members[f];
+                ++class_size[f];
                 break;
             }
         }
         for (std::size_t c = 0; c < C; ++c) {
-            if (members[share_class_[c]] < 2) continue;
+            if (class_size[share_class_[c]] < 2) continue;
             metas[c].kind = metas[c].kind == kVirtualDelta ? kSharedVirtualDelta : kSharedFullRecost;
+        }
+    }
+
+    // The check behind the sharing, at every reset (after the units were
+    // re-costed): each instance of a share class is asked its own cost() and
+    // must return the raw cost its class computed, bit for bit. A component
+    // declared a repeat although its parameters differ from the first
+    // instance's fails here on the first solution where they matter, which
+    // ScoreChecks::Full (a reset per check) turns into a check of every step.
+    // A reset costs every instance once, as it did before sharing.
+    void verify_share_classes() const {
+        for (int unit = 0; unit < unit_count_; ++unit) {
+            const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
+            const UnitDispatchEntry* const end = dispatch_end(unit);
+            for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
+                if (!is_shared(entry->kind) || share_class_[entry->c] == entry->c) continue;
+                const double own = entry->constraint->cost(*solution_, unit, members_[unit]);
+                if (own != cache_raw_[base + entry->c]) {
+                    throw std::logic_error(
+                            "Constraint '" + entry->constraint->name +
+                            "' is declared a repeat of the first instance of its name "
+                            "(add_repeats), but its raw cost differs from that instance's (" +
+                            std::to_string(own) + " against " +
+                            std::to_string(cache_raw_[base + entry->c]) + " on unit " +
+                            std::to_string(unit) + "); add it with add_instances()");
+                }
+            }
         }
     }
 
@@ -1939,7 +1973,8 @@ private:
     bool has_full_recost_ = false;  // some dispatch entry is kFullRecost (compile_unit_dispatch)
     // Share classes ("Repeats share the raw cost"), per unit constraint:
     // the class, and per class the pass its value belongs to and the value.
-    // Mutable because a preview (const) shares within its own passes.
+    // Mutable because a preview (const) shares within its own passes; like
+    // preview_scratch_, that makes an objective single-threaded.
     std::vector<std::uint32_t> share_class_;
     mutable std::vector<std::uint64_t> share_stamp_;
     mutable std::vector<double> share_value_;

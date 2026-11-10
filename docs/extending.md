@@ -226,6 +226,11 @@ A constraint is one named component. Its level (hard / medium / soft), weight
 and the shaping knobs (`exponent`, `offset`, `clip`) are defaults a caller may
 override per solve, and a caller may pick it several times. See
 [Constraints: names and knobs](use-cases/README.md#constraints-names-and-knobs).
+The engine computes the raw cost of a repeated pick once and shapes it per
+pick, so `cost()`, `delta_cost()` and `piecewise_cost()` must not read the
+component's own knobs, and a default factory must build the same components
+every time it is called. A constraint with domain parameters of its own per
+pick is built by the domain's factory instead (employee scheduling).
 The raw cost is positive for a penalty and `0` for no violation. A reward (a
 quantity to maximize) has a raw cost `<= 0`.
 
