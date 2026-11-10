@@ -36,8 +36,8 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Mathematics",
   "Typing :: Typed",
 ]
-# The pure-Python use cases need pydantic for their models; the extension
-# packages use it for their optional serialization mirrors.
+# Every use case's models.py (the JSON request and response models) is pydantic;
+# the compiled solvers themselves import without it.
 dependencies = ["pydantic>=2.5"]
 
 [project.urls]

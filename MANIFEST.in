@@ -2,9 +2,9 @@
 # headers and, per use case, the bindings and C++ sources its extension compiles.
 include LICENSE NOTICE pyproject.toml setup.py docs/pypi.md
 recursive-include optimaru *.py *.pyi py.typed
-recursive-include optimaru/cpp *.hpp
-recursive-include optimaru/*/cpp/include *.hpp
-recursive-include optimaru/*/cpp/src *.cpp *.hpp
+recursive-include optimaru/cpp *.hpp *.h *.inl
+recursive-include optimaru/*/cpp/include *.hpp *.h *.inl
+recursive-include optimaru/*/cpp/src *.cpp *.hpp *.h *.inl
 include optimaru/*/cpp/bindings.cpp
 global-exclude *.so *.pyd __pycache__ *.pyc
 prune tests

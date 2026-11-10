@@ -96,21 +96,21 @@ monolithic calculator. The CP-SAT reference takes integral offsets.
 
 ## C++
 
-- `include/bp/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `include/bp/constraints/` — one component per constraint: `bin_capacity_cost.hpp`,
+- `optimaru/bin_packing/cpp/include/bp/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/bin_packing/cpp/include/bp/constraints/` — one component per constraint: `bin_capacity_cost.hpp`,
   `color_conflict_cost.hpp`, `item_conflict_cost.hpp`, `used_bins_cost.hpp`
-  (+ `common.hpp`); `include/bp/constraints.hpp` assembles the default set
+  (+ `common.hpp`); `optimaru/bin_packing/cpp/include/bp/constraints.hpp` assembles the default set
   (`defaultConstraints()`)
 - `score_calculator` — full recompute (the reference) and `prepare()` (fact checks,
   colour classes, resolved conflict pairs)
 - `incremental_calculator` — before/after hooks, O(1) plus the moved item's conflict
   partners per move
 - `construction` — best-fit decreasing around a seed, compaction
-- `include/bp/moves.hpp` — the domain's macro moves, `EmptyBinMove` and `RepackMove`
+- `optimaru/bin_packing/cpp/include/bp/moves.hpp` — the domain's macro moves, `EmptyBinMove` and `RepackMove`
   (header-only, so the tests drive them directly)
 - `solver` — engine wrapper (construction + Late Acceptance + the macro moves + adaptive
   ruin & recreate, parallel starts)
-- `src/main.cpp` — demo on the web sample (20 items, colours, conflicts; 8 bins)
+- `optimaru/bin_packing/cpp/src/main.cpp` — demo on the web sample (20 items, colours, conflicts; 8 bins)
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=bin_packing

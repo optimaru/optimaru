@@ -27,11 +27,11 @@ crewDate = startDateIndex * crewCount + crewIndex     # -1 == unassigned
 
 ## C++
 
-- `include/mnt/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `include/mnt/constraints/` — one component per constraint: `min_start_date_cost.hpp`,
+- `optimaru/maintenance_scheduling/cpp/include/mnt/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/maintenance_scheduling/cpp/include/mnt/constraints/` — one component per constraint: `min_start_date_cost.hpp`,
   `max_end_date_cost.hpp`, `before_ideal_end_date_cost.hpp`, `after_ideal_end_date_cost.hpp`,
   `crew_conflict_cost.hpp`, `tag_conflict_cost.hpp` (+ `common.hpp`: the per-job and
-  day-overlap bases); `include/mnt/constraints.hpp` assembles the default set
+  day-overlap bases); `optimaru/maintenance_scheduling/cpp/include/mnt/constraints.hpp` assembles the default set
   (`defaultConstraints()`)
 - `score_calculator` — full recompute (the reference)
 - `incremental_calculator` — before/after hooks, O(job calendar length) per move

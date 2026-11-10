@@ -77,7 +77,7 @@ why a good schedule can show a positive soft score. A reward is always soft:
 `level="hard"` on it raises `ValueError`.
 
 **Worked example.** `-602hard/357.34soft`, the fixed instance in
-`tests/_reference.py`:
+`tests/employee_scheduling/_reference.py`:
 
 | rule (hard) | raw cost | | rule (soft) | raw cost |
 |---|---|---|---|---|
@@ -425,6 +425,6 @@ optimaru/employee_scheduling/
 ├── models.py         pydantic request/response layer, rule models generated from the specs (optional)
 ├── demo.py           generate_demo_data, a made-up sample request
 ├── helpers.py        pure-Python conveniences (list_constraints, make_random_roster, ...)
-└── cpp/              bindings.cpp (the _core module), include/es/, src/
+└── cpp/              bindings.cpp (the _core module), optimaru/employee_scheduling/cpp/include/es/, src/
 tests/employee_scheduling/   correctness, raw costs by hand, catalog + model tests (pytest)
 ```

@@ -110,13 +110,13 @@ integral offsets.
 
 ## C++
 
-- `include/alb/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `include/alb/constraints/` — one component per constraint: `station_capacity_cost.hpp`,
+- `optimaru/assembly_line_balancing/cpp/include/alb/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/assembly_line_balancing/cpp/include/alb/constraints/` — one component per constraint: `station_capacity_cost.hpp`,
   `task_precedence_cost.hpp`, `max_stations_cost.hpp`, `task_station_bounds_cost.hpp`,
   `fixed_task_stations_cost.hpp`, `forbidden_task_stations_cost.hpp`,
   `same_station_groups_cost.hpp`, `different_station_pairs_cost.hpp`,
   `used_stations_cost.hpp`, `workload_imbalance_cost.hpp` (+ `common.hpp`);
-  `include/alb/constraints.hpp` assembles the default set (`defaultConstraints()`) and
+  `optimaru/assembly_line_balancing/cpp/include/alb/constraints.hpp` assembles the default set (`defaultConstraints()`) and
   states the catalog order once (`forEachDefaultConstraint`)
 - `construction` — level-synchronous Kahn order, first fit on a station pointer that
   never moves down, fixed-station override (identical to the pure-Python reference in
@@ -125,7 +125,7 @@ integral offsets.
 - `incremental_calculator` — before/after hooks, O(degree) per move
 - `solver` — engine wrapper (construction + Late Acceptance + adaptive ruin & recreate
   + `CloseStationMove` + the precedence-window value recommender)
-- `src/main.cpp` — a 100-task demo against the trivial lower bound
+- `optimaru/assembly_line_balancing/cpp/src/main.cpp` — a 100-task demo against the trivial lower bound
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=assembly_line_balancing

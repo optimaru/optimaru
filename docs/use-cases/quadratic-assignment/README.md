@@ -154,19 +154,19 @@ The package is the C++ engine with pybind11 bindings, like the other C++ use cas
 
 ## C++
 
-- `include/qap/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `include/qap/constraints/` — one component per constraint:
+- `optimaru/quadratic_assignment/cpp/include/qap/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/quadratic_assignment/cpp/include/qap/constraints/` — one component per constraint:
   `pinned_assignments_cost.hpp`, `forbidden_assignments_cost.hpp`,
   `location_capacity_cost.hpp`, `assignment_cost.hpp`, `flow_distance_cost.hpp`
   (+ `common.hpp`: the aliases, the `prepare()` guard and the member-change global
-  base); `include/qap/constraints.hpp` assembles the default set
+  base); `optimaru/quadratic_assignment/cpp/include/qap/constraints.hpp` assembles the default set
   (`defaultConstraints()`, also the catalog order)
 - `score_calculator` — `prepare()` (validation + flat matrices, the deduplicated
   forbidden mask, the pin lookups) and the full recompute (the reference)
 - `incremental_calculator` — O(n) per moved facility (the flow term), O(1) for the rest
 - `solver` — engine wrapper (identity or warm-start permutation + Late Acceptance over
   swap moves; multi-start through the engine; the bijection asserted after every solve)
-- `src/main.cpp` — the web demo's plant layout and a random 25-facility instance
+- `optimaru/quadratic_assignment/cpp/src/main.cpp` — the web demo's plant layout and a random 25-facility instance
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=quadratic_assignment

@@ -150,7 +150,7 @@ Rules:
   shaping. Each repeated pick carries its own level: `[TeacherGapCost(), TeacherGapCost(level="hard",
   offset=2)]` charges every gap on soft and the gaps beyond two on hard.
 - The default assembly matches the monolithic score **bit for bit** (gated by
-  `tests/test_constraints.py` and the C++ `canonical_plugin_test`).
+  `tests/school_timetabling/test_constraints.py` and the C++ `canonical_plugin_test`).
 - `penalties` in the `solve` response are always the canonical rescore (raw
   soft counts, independent of the assembly); `objective_value` uses the
   assembly's effective soft weights (a picked soft constraint its weight, the

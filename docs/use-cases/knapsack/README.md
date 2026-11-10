@@ -105,13 +105,13 @@ rejects an exponent other than 1).
 
 ## C++
 
-- `include/ks/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `include/ks/constraints/` — one component per constraint:
+- `optimaru/knapsack/cpp/include/ks/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/knapsack/cpp/include/ks/constraints/` — one component per constraint:
   `knapsack_capacity_cost.hpp`, `resource_capacity_cost.hpp`,
   `mandatory_items_cost.hpp`, `forbidden_items_cost.hpp`,
   `selection_group_bounds_cost.hpp`, `item_dependency_cost.hpp`,
   `selected_value_cost.hpp` (+ `common.hpp`: the aliases and the unit-1
-  `SelectionConstraint` base); `include/ks/constraints.hpp` assembles the default
+  `SelectionConstraint` base); `optimaru/knapsack/cpp/include/ks/constraints.hpp` assembles the default
   set (`defaultConstraints()`, also the catalog order)
 - `construction` — the greedy construction (stable descending value / weight order,
   weight capacity only; decided items kept), matching the Python reference
@@ -122,7 +122,7 @@ rejects an exponent other than 1).
 - `solver` — engine wrapper (greedy construction + Late Acceptance over flip / swap
   moves + adaptive ruin & recreate, also as an ordinary move; multi-start through
   the engine)
-- `src/main.cpp` — the web demo (camping trip) solved and explained per constraint
+- `optimaru/knapsack/cpp/src/main.cpp` — the web demo (camping trip) solved and explained per constraint
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=knapsack

@@ -55,14 +55,14 @@ fl.solve(problem, constraints=[
 
 ## C++
 
-- `include/fl/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `include/fl/constraints/` — one component per constraint: `facility_capacity_cost.hpp`,
+- `optimaru/facility_location/cpp/include/fl/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/facility_location/cpp/include/fl/constraints/` — one component per constraint: `facility_capacity_cost.hpp`,
   `facility_setup_cost.hpp`, `distance_from_facility_cost.hpp` (+ `common.hpp`);
-  `include/fl/constraints.hpp` assembles the default set (`defaultConstraints()`)
+  `optimaru/facility_location/cpp/include/fl/constraints.hpp` assembles the default set (`defaultConstraints()`)
 - `score_calculator` — full recompute (the reference)
 - `incremental_calculator` — before/after hooks, O(1) per move
 - `solver` — engine wrapper (CH + Late Acceptance + adaptive ruin & recreate)
-- `src/main.cpp` — demo reproducing the Java `DemoDataGenerator` scale
+- `optimaru/facility_location/cpp/src/main.cpp` — demo reproducing the Java `DemoDataGenerator` scale
   (30 facilities x capacity 150, 60 consumers x demand 15, London box, setup cost N(50000, 10000²))
 
 ```bash

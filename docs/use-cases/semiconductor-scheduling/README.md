@@ -140,11 +140,11 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
 
 ## C++
 
-- `include/fab/domain.hpp` — facts, `OperationRow`, `SemiconductorSchedule`, the
+- `optimaru/semiconductor_scheduling/cpp/include/fab/domain.hpp` — facts, `OperationRow`, `SemiconductorSchedule`, the
   `optimaru::SolutionTraits` specialization
-- `include/fab/decoder.hpp` — the serial schedule-generation decoder (incremental:
+- `optimaru/semiconductor_scheduling/cpp/include/fab/decoder.hpp` — the serial schedule-generation decoder (incremental:
   truncate to a step and decode on), `defaultChoices`, `seedState`
-- `include/fab/constraints/` — one component per constraint, each owning its unit
+- `optimaru/semiconductor_scheduling/cpp/include/fab/constraints/` — one component per constraint, each owning its unit
   formula: `machine_eligibility_cost.hpp`, `lot_route_precedence_cost.hpp`,
   `machine_capacity_cost.hpp`, `batch_capacity_cost.hpp`, `batch_family_conflict_cost.hpp`,
   `missing_setup_time_cost.hpp`, `machine_unavailability_cost.hpp`,
@@ -154,14 +154,14 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
   `min_batch_size_cost.hpp`, `machine_load_imbalance_cost.hpp`,
   `weighted_tardiness_cost.hpp`, `cycle_time_cost.hpp`, `makespan_cost.hpp`
   (+ `common.hpp`: the shared `ScheduleView` and the global base);
-  `include/fab/constraints.hpp` assembles the default set (`defaultConstraints()`)
+  `optimaru/semiconductor_scheduling/cpp/include/fab/constraints.hpp` assembles the default set (`defaultConstraints()`)
 - `score_calculator` — the monolithic full recompute (`rawCostsOf`)
 - `evaluator` + `incremental_calculator` — lazy suffix re-decode from the earliest
   `readyStep` of the changed rows, re-costing only the rows, lots, machines, groups,
   resources and pins whose placements moved
 - `moves/priority_swap.hpp`, `solver` — the engine wrapper (simulated annealing, the
   value recommender, the priority swap, multi-start)
-- `src/main.cpp` — a 12-lot demo
+- `optimaru/semiconductor_scheduling/cpp/src/main.cpp` — a 12-lot demo
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=semiconductor_scheduling
@@ -249,7 +249,7 @@ assign.
    penalty, 0 = no violation);
 2. add the `Term` (`score_terms.hpp`), the include and the `emplace` in
    `optimaru/semiconductor_scheduling/cpp/include/fab/constraints.hpp`, and call the unit function in `rawCostsOf`
-   (`src/score_calculator.cpp`) and in the evaluator's re-cost (`src/evaluator.cpp`);
+   (`optimaru/semiconductor_scheduling/cpp/src/score_calculator.cpp`) and in the evaluator's re-cost (`optimaru/semiconductor_scheduling/cpp/src/evaluator.cpp`);
    the monolithic default score (`ScoreCalculator::scoreOf`) reads `kDefaultWeight`;
 3. a hand-calculated positive and zero case in `tests/semiconductor_scheduling/cpp/fab_test.cpp` (and the catalog
    row in `fab_plugin_test.cpp`);

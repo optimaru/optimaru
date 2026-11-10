@@ -71,7 +71,7 @@ for a, v in zip(result.meeting_assignments, result.assignment()):
 
 The pydantic mirror (serialization) is `optimaru.meeting_scheduling.models`; per-constraint
 raw costs come from `constraint_costs` (the Java ConstraintVerifier tests are ported onto
-these costs, in `tests/test_constraints.py` and the C++ tests).
+these costs, in `tests/meeting_scheduling/test_constraints.py` and the C++ tests).
 
 Picking the cost function (see `optimaru.meeting_scheduling.constraints`):
 

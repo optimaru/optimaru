@@ -12,8 +12,8 @@ one composite assignment variable `slotRoom = timeslotIndex * roomCount + roomIn
   `ScoreCalculator` (+ the C++ per-constraint `Breakdown`, one member per registry name),
   O(delta) incremental calculator, ALNS solver wrapper, a demo modelled on the
   quickstart's demo data (`cs_demo`), tests (`cs_test`, `cs_plugin_test`).
-  `include/cs/constraints/` holds one component per constraint (`<subject>_cost.hpp`, plus
-  `common.hpp`); `include/cs/constraints.hpp` assembles the default set
+  `optimaru/conference_scheduling/cpp/include/cs/constraints/` holds one component per constraint (`<subject>_cost.hpp`, plus
+  `common.hpp`); `optimaru/conference_scheduling/cpp/include/cs/constraints.hpp` assembles the default set
   (`defaultConstraints()`).
 - `optimaru/conference_scheduling/` — pybind11 package `conference_scheduling`
   (`_core` extension + pydantic mirror + demo + pytest). For the score mapping and the

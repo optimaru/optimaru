@@ -50,8 +50,8 @@ OPTIMARU_USE_CASES=semiconductor_scheduling uv sync --python 3.14   # builds onl
 uv run --python 3.14 --with pytest python -m pytest -q tests
 ```
 
-`tests/reference_semiconductor_scheduling.py` is a pure-Python reference scorer and
-decoder: `tests/test_reference_parity.py` checks the C++ raw costs, per-item lists, default
+`tests/semiconductor_scheduling/reference_semiconductor_scheduling.py` is a pure-Python reference scorer and
+decoder: `tests/semiconductor_scheduling/test_reference_parity.py` checks the C++ raw costs, per-item lists, default
 score, decoded schedules and seed states against it on every sample and on 200 seeded
 random instances.
 

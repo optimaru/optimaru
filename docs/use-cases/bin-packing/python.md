@@ -47,8 +47,8 @@ OPTIMARU_USE_CASES=bin_packing uv sync   # builds only this use case's C++ exten
 uv run pytest -q tests/bin_packing
 ```
 
-`tests/reference_bin_packing.py` is an independent pure-Python scorer and
-construction; `tests/test_reference_parity.py` checks the C++ domain against it.
+`tests/bin_packing/reference_bin_packing.py` is an independent pure-Python scorer and
+construction; `tests/bin_packing/test_reference_parity.py` checks the C++ domain against it.
 
 ## Usage
 

@@ -123,14 +123,14 @@ offsets; it rejects an exponent other than 1).
 
 ## C++
 
-- `include/mc/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/max_cut/cpp/include/mc/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
   (with `is_pinned` for fixed vertices) and the `-1` rules
-- `include/mc/constraints/` — one component per constraint:
+- `optimaru/max_cut/cpp/include/mc/constraints/` — one component per constraint:
   `fixed_partition_cost.hpp`, `same_partition_pairs_cost.hpp`,
   `different_partition_pairs_cost.hpp`, `partition_size_bounds_cost.hpp`,
   `partition_imbalance_cost.hpp`, `cut_weight_cost.hpp` (+ `common.hpp`: the
   aliases, the prepare guard and the member-change base of the globals);
-  `include/mc/constraints.hpp` assembles the default set (`defaultConstraints()`,
+  `optimaru/max_cut/cpp/include/mc/constraints.hpp` assembles the default set (`defaultConstraints()`,
   also the catalog order)
 - `score_calculator` — `prepare()` (validation + CSR adjacency / pair incidence)
   and the full recompute (the reference, `rawCosts()`)
@@ -139,7 +139,7 @@ offsets; it rejects an exponent other than 1).
   swap moves + adaptive ruin & recreate; swaps only under exact size bounds;
   independent parallel starts on worker threads, an exception in one of them is
   rethrown by `solve()`)
-- `src/main.cpp` — the web demo solved and explained per constraint
+- `optimaru/max_cut/cpp/src/main.cpp` — the web demo solved and explained per constraint
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=max_cut
