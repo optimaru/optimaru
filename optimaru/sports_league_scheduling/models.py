@@ -115,9 +115,11 @@ class LeagueScheduleModel(StrictModel):
 
 
 class SolveConfig(SolveConfigBase):
-    """Serializable mirror of `_core.SolverConfig` (for `solve(config=...)`)."""
+    """Serializable mirror of `_core.SolverConfig` (for `solve(config=...)`).
 
-    # late_acceptance_size 0 = automatic (clamp(8 * matches, 400, 3200)). A positive value is used as-is.
+    ``late_acceptance_size`` 0 is automatic: ``clamp(8 * matches, 400, 3200)``. A positive value
+    is used as it is.
+    """
 
     def to_core(self) -> "_core.SolverConfig":
         return self._apply_to(_core.SolverConfig())

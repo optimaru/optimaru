@@ -220,9 +220,11 @@ class FlightCrewScheduleModel(StrictModel):
 
 
 class SolveConfig(SolveConfigBase):
-    """Serializable mirror of `_core.SolverConfig`."""
+    """Serializable mirror of `_core.SolverConfig`.
 
-    # late_acceptance_size 0 = automatic (clamp(4 * seats, 400, 3200)). A positive value is used as-is.
+    ``late_acceptance_size`` 0 is automatic: ``clamp(4 * seats, 400, 3200)``. A positive value
+    is used as it is.
+    """
 
     def to_core(self) -> "_core.SolverConfig":
         return self._apply_to(_core.SolverConfig())

@@ -22,9 +22,13 @@ import copy
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-__all__ = ["solve_in_place", "solver_config"]
+__all__ = ["FIRST_FEASIBLE_LIMIT", "solve_in_place", "solver_config"]
 
 _Config = TypeVar("_Config")
+
+#: ``best_score_limit`` for "stop at the first feasible solution" on a (hard, soft) score:
+#: hard 0, and no floor on soft. A use case with more score levels has its own.
+FIRST_FEASIBLE_LIMIT: tuple[float, ...] = (0, float("-inf"))
 
 
 def solver_config(
@@ -37,7 +41,7 @@ def solver_config(
     stop_at_first_feasible: bool = False,
     full_assert: bool = False,
     on_new_best: Callable[..., Any] | None = None,
-    first_feasible_limit: tuple = (0, float("-inf")),
+    first_feasible_limit: tuple[float, ...] = FIRST_FEASIBLE_LIMIT,
 ) -> _Config:
     """The ``SolverConfig`` of one ``solve()`` call: ``config`` with the keyword arguments applied.
 

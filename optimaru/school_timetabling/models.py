@@ -160,10 +160,12 @@ class SolveConfig(SolveConfigBase):
     The common engine fields are the same in both modes; ``weights`` (the fast
     path's soft weights, keyed by the soft constraint names) applies to
     canonical mode only (`to_canon()`) — the quickstart config (`to_core()`)
-    has no such field."""
+    has no such field.
 
-    # late_acceptance_size 0 = auto (canonical: clamp(4 * lesson count, 400, 3200), quickstart:
-    # clamp(8 * lesson count, 400, 3200)). A positive value is used as is.
+    ``late_acceptance_size`` 0 is automatic: ``clamp(4 * lesson count, 400, 3200)`` in
+    canonical mode and ``clamp(8 * lesson count, 400, 3200)`` in quickstart mode. A positive
+    value is used as it is.
+    """
 
     weights: ObjectiveWeightsModel = Field(default_factory=ObjectiveWeightsModel)
 

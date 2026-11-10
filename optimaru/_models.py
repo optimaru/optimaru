@@ -16,6 +16,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ._solve import FIRST_FEASIBLE_LIMIT
+
 __all__ = [
     "SolveConfigBase",
     "StrictModel",
@@ -101,7 +103,8 @@ class SolveConfigBase(StrictModel):
         cfg.change_move_weight = self.change_move_weight
         cfg.swap_move_weight = self.swap_move_weight
         if self.stop_at_first_feasible:
-            cfg.best_score_limit = (0, float("-inf"))
+            # The use cases built on this base all score (hard, soft).
+            cfg.best_score_limit = FIRST_FEASIBLE_LIMIT
         if self.best_score_limit is not None:
             cfg.best_score_limit = self.best_score_limit
         return cfg
