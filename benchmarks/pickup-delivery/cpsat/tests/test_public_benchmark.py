@@ -134,4 +134,4 @@ def test_out_holds_the_results_after_every_instance(tmp_path, capsys) -> None:
     assert main(["--synthetic", "2", "--seconds", "1", "--backend", "engine", "--out", str(out)]) == 0
     (result,) = json.loads(out.read_text())
     assert result["requests"] == 2 and result["runs"][0]["outcome"] == "ok"
-    assert not out.with_name("synthetic.json.part").exists()
+    assert list(out.parent.iterdir()) == [out]

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from external_solver.pickup_delivery import solve_request as solve_cpsat_request
 
-from cpsat_plugins.results import write_results
+from cpsat_plugins.results import write_results, write_whole
 from optimaru.pickup_delivery.constraints import (
     max_end_time_cost,
     paired_request_cost,
@@ -163,10 +163,7 @@ def _download(cache_dir: Path) -> bytes:
     if digest != ARCHIVE_SHA256:
         # Nothing is cached: a transient error page must not stick.
         raise ValueError(f"{archive.name} checksum mismatch: {digest}")
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    partial = archive.with_suffix(".zip.part")
-    partial.write_bytes(payload)
-    partial.replace(archive)
+    write_whole(archive, payload)
     return payload
 
 

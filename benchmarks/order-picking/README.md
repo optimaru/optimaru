@@ -25,7 +25,7 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
-| tiny | 10 picks / 1 trolleys | **0hard/-4134soft** | **0hard/-4134soft** |
+| tiny | 10 picks / 1 trolley | **0hard/-4134soft** | **0hard/-4134soft** |
 | small | 22 picks / 2 trolleys | **0hard/-8244soft** | **0hard/-8244soft** |
 | medium | 56 picks / 4 trolleys | **0hard/-20478soft** | 0hard/-20488soft |
 | large | 137 picks / 8 trolleys | **0hard/-40940soft** | 0hard/-41132soft |

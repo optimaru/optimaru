@@ -221,6 +221,10 @@ def test_a_use_case_that_scores_a_reward_is_shown_as_scores() -> None:
     assert section["rows"][0]["best"] == ["ortools"] and section["rows"][1]["best"] == ["engine", "ortools"]
     assert reward["command"] == "uv run knapsack-compare --seconds 30 --workers 8"
 
+    penalty = publish.compare_dataset("bed-allocation", [_compared([0, -30], [-2, -10]), _compared([0, 0], [0, 0])], 30)
+    assert penalty["sections"][0]["metric"] == "penalty"
+    assert penalty["sections"][0]["rows"][0]["cells"]["ortools"]["value"] == 2.0
+
 
 def test_a_reward_table_stays_one_when_a_row_is_decided_on_a_hard_rule() -> None:
     # A roster scores a reward; on the largest instance one solver breaks hard rules.
@@ -250,10 +254,6 @@ def test_a_penalty_table_has_no_negative_value() -> None:
     assert section["metric"] == "penalty"
     values = [cell["value"] for row in section["rows"] for cell in row["cells"].values()]
     assert values == [0.0, 0.0, 0.0, 2.0, 7.0, 9.0]
-
-    penalty = publish.compare_dataset("bed-allocation", [_compared([0, -30], [-2, -10]), _compared([0, 0], [0, 0])], 30)
-    assert penalty["sections"][0]["metric"] == "penalty"
-    assert penalty["sections"][0]["rows"][0]["cells"]["ortools"]["value"] == 2.0
 
 
 def test_pickup_delivery_cells_follow_the_recorded_outcome() -> None:

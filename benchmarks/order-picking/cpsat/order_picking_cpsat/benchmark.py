@@ -84,7 +84,8 @@ def instances() -> dict[str, Callable[[], Any]]:
 
 
 def describe(problem: Any) -> str:
-    return f"{len(problem.pick_tasks)} picks / {len(problem.trolleys)} trolleys"
+    trolleys = len(problem.trolleys)
+    return f"{len(problem.pick_tasks)} picks / {trolleys} {'trolley' if trolleys == 1 else 'trolleys'}"
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:

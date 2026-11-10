@@ -17,7 +17,7 @@ from pathlib import Path
 from external_solver.project_job_scheduling import solve as solve_cpsat
 
 import optimaru.project_job_scheduling as pjs
-from cpsat_plugins.results import write_results
+from cpsat_plugins.results import write_results, write_whole
 from optimaru.project_job_scheduling.models import (
     AllocationModel,
     ExecutionModeModel,
@@ -113,10 +113,7 @@ def _download(cache_dir: Path) -> bytes:
     if not _verified(payload):
         # Nothing is cached: a transient error page must not stick.
         raise ValueError(f"{archive.name}: the downloaded archive does not hold the pinned instance files")
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    partial = archive.with_suffix(".zip.part")
-    partial.write_bytes(payload)
-    partial.replace(archive)
+    write_whole(archive, payload)
     return payload
 
 
