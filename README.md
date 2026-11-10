@@ -222,6 +222,8 @@ optimaru/cpp/optimaru/
 ├── explain.hpp                   explain_score / rescore
 ├── settings.hpp                  Settings, Limits, AcceptanceSettings, MoveMix,
 │                                 NeighborSettings, RuinRecreateSettings, ...
+├── solver_config.hpp             what every use case's Solver::Config shares:
+│                                 its bases, their Settings, parallel starts
 ├── portable_random.hpp           random_index, and seeded draws that match on
 │                                 every standard library
 ├── worker_threads.hpp            thread start-up / shutdown for parallel pools

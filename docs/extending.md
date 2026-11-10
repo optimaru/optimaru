@@ -160,7 +160,7 @@ In `optimaru/<uc>/cpp/src/solver.cpp`, where the use case builds its
 `optimaru::Solver<MyProblem> engine(...)`:
 
 ```cpp
-if (config.myMoves)
+if (config.my_moves)
     engine.add_move_operator(std::make_unique<MyMove>());
 ```
 
@@ -171,16 +171,21 @@ a weight for it.
 **Multi-start caveat.** Registered operators belong to one `optimaru::Solver`.
 `engine.solve_multistart(...)` runs its parallel starts with the built-in moves
 only, so a custom move would silently vanish from them. A use case with custom
-moves runs its parallel starts itself, with one `optimaru::Solver` per worker,
-each registering its own operators. `bin_packing/cpp/src/solver.cpp` shows the
-pattern. If the use case you extend calls `solve_multistart` (knapsack does, for
-example), switch it to that pattern before adding a move.
+moves runs its parallel starts through `optimaru::solve_parallel_starts`
+(`optimaru/solver_config.hpp`) instead: every start gets an `optimaru::Solver` of
+its own and registers its own operators.
+`assembly_line_balancing/cpp/src/solver.cpp` shows the pattern. If the use case
+you extend calls `solve_multistart` (knapsack does, for example), switch it to
+that pattern before adding a move.
 
 ### 3. Expose a switch (recommended)
 
-Add a field to the use case's `Solver::Config` (`myMoves = true`), bind it in
-`optimaru/<uc>/cpp/bindings.cpp` (`.def_readwrite("my_moves", &Solver::Config::myMoves)`)
-and declare it in `optimaru/<uc>/_core.pyi`. This lets you turn the move off for an
+Add a field to the use case's `Solver::Config` (`my_moves = true`), bind it in
+`optimaru/<uc>/cpp/bindings.cpp` (`.def_readwrite("my_moves", &Solver::Config::my_moves)`)
+and declare it in `optimaru/<uc>/_core.pyi`. A Config holds only the use case's own
+knobs: the limits, the seed, the parallel starts, the callback and the ruin &
+recreate knobs come from the bases in `optimaru/solver_config.hpp`, and
+`bind_solver_config` binds those. This lets you turn the move off for an
 A/B comparison and keeps Python users in control. Bin packing's `empty_bin_moves` /
 `empty_bin_candidates` are a complete example, including value checks in the
 binding.
