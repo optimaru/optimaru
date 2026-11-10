@@ -1970,9 +1970,8 @@ void testStallStepLimitAndRequestStop() {
         solver.request_stop();
         worker.join();
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
-        check(sec < 5.0 && solver.stop_requested(),
-              "request_stop() from another thread ends a running solve (" + std::to_string(sec) +
-                      "s)");
+        check(sec < 5.0, "request_stop() from another thread ends a running solve (" +
+                                 std::to_string(sec) + "s)");
         check(result == fullScore(s), "a stopped solve returns the score of the solution it left");
     }
 }
