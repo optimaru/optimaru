@@ -28,5 +28,5 @@ Every cell is the score of that solver's final solution under the use case's own
 | small | 22 picks / 2 trolleys | **0hard/-8244soft** | **0hard/-8244soft** |
 | medium | 56 picks / 4 trolleys | **0hard/-20478soft** | 0hard/-20488soft |
 
-Measured 2026-11-04 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — treat small differences as noise.
+Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
 <!-- results:end -->

@@ -1,9 +1,11 @@
 """CVRP benchmark: optimaru vs OR-Tools Routing.
 
-Every backend gets the same instance, fleet size (`-kN`), rounded integer
-distance matrix, wall-clock budget and seed, runs single-threaded, and its
-routes go through the same independent `rescore()`. The gap is measured
-against the CVRPLIB best-known solution.
+Every backend gets the same instance, fleet, rounded integer distance matrix,
+wall-clock budget and seed, runs single-threaded, and its routes go through
+the same independent `rescore()`. The gap is measured against the CVRPLIB
+best-known solution. The fleet is the `-kN` of the name on Augerat's Set A,
+which fixes the number of routes, and a bound that cannot bind on Set X, which
+leaves it open (`instance.free_fleet`).
 """
 
 from __future__ import annotations
@@ -23,9 +25,10 @@ from .cvrplib import (
     load_x_catalog,
     resolve_mirror_bks,
 )
-from .instance import CvrpInstance, load_augerat_instance, parse_instance, rescore
+from .instance import AUGERAT_A, CvrpInstance, load_augerat_instance, parse_instance, rescore
 
 DEFAULT_INSTANCE = "A-n32-k5"
+SERIES_TITLES = {"x": "CVRPLIB Set X", "a": "CVRPLIB Set A (Augerat)"}
 SIZE_BUCKETS = (
     ("100-200", 100, 200),
     ("200-400", 200, 400),
@@ -157,19 +160,25 @@ def markdown_summary(
     def cell(value: float | None) -> str:
         return "-" if value is None else f"{value:.2f}%"
 
+    series = getattr(args, "series", None) or "x"
+    selection = (
+        f"{args.limit_per_bucket or 'all'} instance(s) per bucket, catalog `{args.catalog_source}`"
+        if series == "x"
+        else "every instance of the set"
+    )
     lines = [
-        "## CVRPLIB Set X: " + " vs ".join(backends),
+        f"## {SERIES_TITLES[series]}: " + " vs ".join(backends),
         "",
-        f"{args.seconds:g}s per run, seed {args.seed}, single-threaded, "
-        f"{args.limit_per_bucket or 'all'} instance(s) per bucket, "
-        f"catalog `{args.catalog_source}`. Gap = (distance - BKS) / BKS over runs "
+        f"{args.seconds:g}s per run, seed {args.seed}, single-threaded, {selection}. "
+        "Gap = (distance - BKS) / BKS over runs "
         "that served every customer within capacity; every route re-verified by "
         "the harness.",
         "",
         "| Instance | Customers | " + " | ".join(backends) + " |",
         "|---|---:|" + "|".join("---:" for _ in backends) + "|",
     ]
-    for name in sorted({r.instance for r in results}, key=lambda n: int(n.split("-")[1][1:])):
+    customers_of = {r.instance: r.customer_count for r in results}
+    for name in sorted(customers_of, key=lambda n: (customers_of[n], n)):
         cells = []
         for backend in backends:
             match = [r for r in results if r.instance == name and r.backend == backend]
@@ -179,8 +188,9 @@ def markdown_summary(
                 cells.append(status(match[0]))
             else:
                 cells.append(cell(match[0].gap))
-        customers = next(r.customer_count for r in results if r.instance == name)
-        lines.append(f"| {name} | {customers} | " + " | ".join(cells) + " |")
+        lines.append(f"| {name} | {customers_of[name]} | " + " | ".join(cells) + " |")
+    if not rows:
+        return "\n".join(lines) + "\n"
     lines += [
         "",
         "| Bucket | " + " | ".join(backends) + " |",
@@ -199,24 +209,28 @@ def write_outputs(
     args: argparse.Namespace,
     results: list[BenchmarkResult],
     backends: tuple[str, ...],
-    catalog_sizes: dict[str, int],
+    catalog_sizes: dict[str, int] | None,
 ) -> None:
     """Write --out / --summary-markdown from what has finished so far. Called
     after every result, so a mid-series failure or a CI timeout still leaves
-    the completed runs on disk."""
+    the completed runs on disk. `catalog_sizes` is the Set X bucket sizes;
+    None (Set A) leaves the bucket table out."""
     if args.out is None and args.summary_markdown is None:
         return
-    rows = bucket_table(results, backends, catalog_sizes)
+    rows = [] if catalog_sizes is None else bucket_table(results, backends, catalog_sizes)
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         protocol = {
-            "series": "x",
+            "series": args.series,
             "seconds": args.seconds,
             "seed": args.seed,
-            "limit_per_bucket": args.limit_per_bucket,
-            "catalog_source": args.catalog_source,
             "backends": list(backends),
+            # The instances `--only` named: a run of them is not a run of the series.
+            "only": args.only,
         }
+        if args.series == "x":
+            protocol["limit_per_bucket"] = args.limit_per_bucket
+            protocol["catalog_source"] = args.catalog_source
         args.out.write_text(
             json.dumps(
                 {"protocol": protocol, "results": [asdict(r) for r in results], "buckets": rows},
@@ -246,6 +260,9 @@ def run_series(args: argparse.Namespace) -> int:
     }
     catalog_sizes = {label: len(entries) for label, entries in by_bucket.items()}
     selected = [entry for label, _, _ in SIZE_BUCKETS for entry in even_sample(by_bucket[label], args.limit_per_bucket)]
+    if args.only:
+        known = {entry.name: entry for entry in catalog}
+        selected = [known[name] for name in _only(args.only, known)]
     if not selected:
         # A catalog page that parsed to nothing must not pass as a clean run.
         raise RuntimeError(f"catalog source {args.catalog_source!r} yielded no Set X instances")
@@ -258,6 +275,7 @@ def run_series(args: argparse.Namespace) -> int:
             load_instance_text(entry, args.cache_dir),
             best_known_distance=entry.best_known_distance,
             proven_optimal=entry.proven_optimal,
+            fixed_fleet=False,
         )
         for backend in args.backend:
             result = benchmark(backend, instance, seconds=args.seconds, seed=args.seed)
@@ -270,6 +288,41 @@ def run_series(args: argparse.Namespace) -> int:
         mean = "-" if row["mean_gap"] is None else f"{row['mean_gap']:.2f}%"
         print(f"{row['backend']:8} {row['bucket']:9} {mean:>8} ({row['solved']}/{row['runs']})")
 
+    return _incomplete_exit(args, results)
+
+
+def run_set_a(args: argparse.Namespace) -> int:
+    """Every Augerat Set A instance, smallest first; each file carries its optimum."""
+    # Load everything first: a download that fails fails the run before any
+    # budget is spent.
+    names = _only(args.only, AUGERAT_A) if args.only else list(AUGERAT_A)
+    instances = [load_augerat_instance(name, args.cache_dir) for name in names]
+    results: list[BenchmarkResult] = []
+    for instance in instances:
+        for backend in args.backend:
+            result = benchmark(backend, instance, seconds=args.seconds, seed=args.seed)
+            results.append(result)
+            write_outputs(args, results, args.backend, None)
+            print_result(result)
+
+    print("\nSet A mean gap to the optimum (complete runs / runs)")
+    for backend in args.backend:
+        runs = [r for r in results if r.backend == backend]
+        solved = [r.gap for r in runs if r.gap is not None]
+        mean = f"{statistics.fmean(solved):.2f}%" if solved else "-"
+        print(f"{backend:8} {mean:>8} ({len(solved)}/{len(runs)})")
+    return _incomplete_exit(args, results)
+
+
+def _only(names: list[str], known) -> list[str]:
+    """The `--only` names in the series' own order; an unknown name is an error."""
+    unknown = sorted(set(names) - set(known))
+    if unknown:
+        raise SystemExit(f"--only: not in this series: {', '.join(unknown)}")
+    return [name for name in known if name in names]
+
+
+def _incomplete_exit(args: argparse.Namespace, results: list[BenchmarkResult]) -> int:
     incomplete = [r for r in results if r.backend == "engine" and r.gap is None]
     if args.fail_on_incomplete and incomplete:
         print("engine left an incomplete plan on: " + ", ".join(r.instance for r in incomplete))
@@ -281,7 +334,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     target = parser.add_mutually_exclusive_group()
     target.add_argument("--instance", default=None, help=f"Augerat instance (default {DEFAULT_INSTANCE})")
-    target.add_argument("--series", choices=("x",), help="CVRPLIB Set X")
+    target.add_argument(
+        "--series",
+        choices=tuple(SERIES_TITLES),
+        help="x: CVRPLIB Set X (100 instances); a: Augerat Set A (27 instances)",
+    )
     parser.add_argument("--seconds", type=float, default=10.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
@@ -295,6 +352,13 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=0,
         help="Set X only: evenly sample N instances per size bucket; 0 runs all",
+    )
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=None,
+        metavar="NAME",
+        help="with --series: run only this instance of the series; repeat for several",
     )
     parser.add_argument("--refresh-catalog", action="store_true")
     parser.add_argument(
@@ -314,9 +378,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.fail_on_incomplete and "engine" not in args.backend:
         parser.error("--fail-on-incomplete inspects engine results; add engine to --backend")
+    if args.only and not args.series:
+        parser.error("--only selects instances of a --series; use --instance for a single Augerat instance")
+    if args.limit_per_bucket and (args.series != "x" or args.only):
+        parser.error("--limit-per-bucket samples Set X by size; it does not go with --only or another series")
 
-    if args.series:
+    if args.series == "x":
         return run_series(args)
+    if args.series == "a":
+        return run_set_a(args)
 
     instance = load_augerat_instance(args.instance or DEFAULT_INSTANCE, args.cache_dir)
     print(

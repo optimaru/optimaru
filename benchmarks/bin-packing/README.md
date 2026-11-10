@@ -10,6 +10,7 @@ cd benchmarks/bin-packing
 OPTIMARU_USE_CASES=bin_packing uv sync --project cpsat --all-groups --all-extras   # also builds this checkout's optimaru (bin_packing only)
 uv run --project cpsat pytest -q cpsat/tests
 uv run --project cpsat python -m bench.run_bench --seconds 60
+uv run --project cpsat python -m bench.run_bench --sample-per-class 3 --seconds 30   # instances 00, 10 and 19 of each class
 # offline: generated instances, the shared engine-vs-CP-SAT runner
 uv run --project cpsat python -m bin_packing_cpsat.benchmark --seconds 1 --workers 2 --cpsat-grace 20
 # offline: search quality against a recorded baseline on generated coloured instances (exit 1 = regression)
@@ -37,18 +38,36 @@ objective is built.
 <!-- results:start -->
 ## Results
 
-Falkenauer instances. Lower is better; the best value is bold.
+Falkenauer: instances 00, 10 and 19 of each class. Bins used; lower is better and the best value is bold.
 
-| Instance | Items | Capacity lower bound | optimaru engine | CP-SAT |
-| --- | --- | --- | --- | --- |
+| Instance | Items | Best known | optimaru engine | CP-SAT |
+| --- | ---: | ---: | ---: | ---: |
+| u120_00 | 120 | 48 | **48** | 49 |
+| u120_10 | 120 | 52 | **52** | 53 |
+| u120_19 | 120 | 50 | **50** | **50** |
+| u250_00 | 250 | 99 | 100 | not run (size cap) |
+| u250_10 | 250 | 105 | 105 | not run (size cap) |
+| u250_19 | 250 | 102 | 102 | not run (size cap) |
+| u500_00 | 500 | 198 | 200 | not run (size cap) |
+| u500_10 | 500 | 200 | 200 | not run (size cap) |
+| u500_19 | 500 | 196 | 198 | not run (size cap) |
+| u1000_00 | 1000 | 399 | 400 | not run (size cap) |
+| u1000_10 | 1000 | 400 | 401 | not run (size cap) |
+| u1000_19 | 1000 | 400 | 401 | not run (size cap) |
 | t60_00 | 60 | 20 | 21 | **20** |
-| u120_04 | 120 | 50 | **50** | 51 |
-| u250_03 | 250 | 100 | **100** | not run (size cap) |
+| t60_10 | 60 | 20 | 21 | **20** |
+| t60_19 | 60 | 20 | 21 | **20** |
+| t120_00 | 120 | 40 | 41 | **40** |
+| t120_10 | 120 | 40 | 41 | **40** |
+| t120_19 | 120 | 40 | 41 | **40** |
+| t249_00 | 249 | 83 | 84 | not run (size cap) |
+| t249_10 | 249 | 83 | 85 | not run (size cap) |
+| t249_19 | 249 | 83 | 85 | not run (size cap) |
+| t501_00 | 501 | 167 | 173 | not run (size cap) |
+| t501_10 | 501 | 167 | 169 | not run (size cap) |
+| t501_19 | 501 | 167 | 173 | not run (size cap) |
 
-Bins used. CP-SAT runs only up to the exact-model size cap (`--exact-max-size`). Measured 2026-11-10
-with the C++ engine on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs
-single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — a
-snapshot, not a statistical study.
+CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, 120 items). Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->
 
 ## Search quality against a recorded baseline

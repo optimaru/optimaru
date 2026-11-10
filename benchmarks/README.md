@@ -9,13 +9,13 @@ taken as the result.
 
 | Benchmark | Compared against | Instances |
 | --- | --- | --- |
-| [vehicle-routing](vehicle-routing) | OR-Tools Routing | CVRPLIB Set X, Augerat |
+| [vehicle-routing](vehicle-routing) | OR-Tools Routing | CVRPLIB Set X (100), Augerat Set A (27) |
 | [school-timetabling](school-timetabling) | OR-Tools CP-SAT | generated S/M/L schools |
-| [pickup-delivery](pickup-delivery) | OR-Tools CP-SAT | Li & Lim PDPTW |
-| [project-job-scheduling](project-job-scheduling) | OR-Tools CP-SAT | RG30 RCPSP (Patterson format) + generated |
-| [bin-packing](bin-packing) | OR-Tools CP-SAT | Falkenauer u/t (OR-Library) |
-| [quadratic-assignment](quadratic-assignment) | OR-Tools CP-SAT | QAPLIB |
-| [assembly-line-balancing](assembly-line-balancing) | OR-Tools CP-SAT | SALBP-1 |
+| [pickup-delivery](pickup-delivery) | OR-Tools CP-SAT | Li & Lim PDPTW, 100 customers (56) + generated |
+| [project-job-scheduling](project-job-scheduling) | OR-Tools CP-SAT | RG30 RCPSP Pat1–Pat5 (Patterson format) + generated |
+| [bin-packing](bin-packing) | OR-Tools CP-SAT | Falkenauer u/t (OR-Library), three per class |
+| [quadratic-assignment](quadratic-assignment) | OR-Tools CP-SAT | QAPLIB, 30–50 facilities (33, engine only) + generated |
+| [assembly-line-balancing](assembly-line-balancing) | OR-Tools CP-SAT | SALBP-1 (Otto et al.), five per data set |
 | [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated |
 | [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | demo instance |
 | [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated) |
@@ -73,4 +73,19 @@ The `<slug>-compare` commands in the READMEs use `--seconds 10` for a quick
 check, and the public-instance runners show their own budgets. Every results
 block and `RESULTS.md` states the budget it was measured with (30 s per solver
 and instance for most); pass that `--seconds` to reproduce it.
+
+## Publishing results
+
+[`scripts/publish_benchmarks.py`](../scripts/publish_benchmarks.py) writes the
+results blocks of these READMEs (between `<!-- results:start -->` and
+`<!-- results:end -->`) and the homepage's benchmark data from the JSON the
+harnesses print; its docstring lists the file each harness's output goes in.
+A refresh may cover some data sets only: the others keep their text and their
+date.
+
+The published numbers are single runs on one machine. The harnesses were run
+side by side, each on its own performance cores: one CP-SAT job at a time
+(8 workers) beside two single-threaded jobs, at most ten solver threads on
+twelve performance cores, with builds and other work kept to the efficiency
+cores (`taskpolicy -b` on macOS).
 

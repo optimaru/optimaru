@@ -8,7 +8,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import bench.data
-from bench.data import apply_permutation, parse_qap_data, parse_qap_solution
+from bench.data import QapReference, apply_permutation, parse_qap_data, parse_qap_solution
+from bench.run_bench import REFERENCE_ERRATA, reference_objective
 from optimaru.quadratic_assignment import constraint_costs
 
 
@@ -62,3 +63,24 @@ def test_load_suite_keeps_only_the_suite(tmp_path, monkeypatch) -> None:
     assert list(suite) == list(bench.data.SUITE)
     assert suite["nug30"][1].objective == 30
     assert suite["tai30a"][1] is None
+
+
+def test_reference_objective_reads_a_solution_file_in_either_index_convention(monkeypatch) -> None:
+    # Asymmetric matrices, so a permutation and its inverse score differently.
+    problem = parse_qap_data("3  0 1 2  3 0 4  5 6 0   0 7 1  2 0 3  4 5 0")
+
+    def score(permutation: tuple[int, ...]) -> int:
+        placed = problem.model_copy(deep=True)
+        apply_permutation(placed, permutation)
+        return constraint_costs(placed)["flow_distance_cost"]["costs"][0]
+
+    permutation, inverse = (1, 2, 0), (2, 0, 1)
+    assert score(permutation) != score(inverse)
+    for stated in (score(permutation), score(inverse)):
+        assert reference_objective("any", problem, QapReference(stated, permutation)) == stated
+    # A file known to state another value than its permutation scores.
+    monkeypatch.setitem(REFERENCE_ERRATA, "misprint", score(inverse))
+    assert reference_objective("misprint", problem, QapReference(1, permutation)) == score(inverse)
+    # Any other mismatch is a parsing or scoring bug, not a reference.
+    with pytest.raises(AssertionError, match="reference mismatch for other: the solution file states 1"):
+        reference_objective("other", problem, QapReference(1, permutation))

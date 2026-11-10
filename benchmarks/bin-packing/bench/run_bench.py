@@ -12,6 +12,22 @@ from optimaru import bin_packing
 DEFAULT_INSTANCES = ("t60_00", "u120_04", "u250_03")
 
 
+def sample_per_class(names: list[str], count: int) -> list[str]:
+    """`count` instances of each class (the stem before `_`), evenly spread from its first to its last."""
+    classes: dict[str, list[str]] = {}
+    for name in names:
+        classes.setdefault(name.rsplit("_", 1)[0], []).append(name)
+    selected = []
+    for members in classes.values():
+        last = len(members) - 1
+        if count <= 1 or last == 0:
+            picks = {last // 2}
+        else:
+            picks = {(index * last + (count - 1) // 2) // (count - 1) for index in range(count)}
+        selected += [members[pick] for pick in sorted(picks)]
+    return selected
+
+
 def _lower_bound(problem) -> int:
     return math.ceil(sum(item.weight for item in problem.items) / problem.bin_capacity)
 
@@ -73,6 +89,13 @@ def main(argv: list[str] | None = None) -> int:
         help="instance stem; repeat to select multiple instances",
     )
     parser.add_argument("--all", action="store_true")
+    parser.add_argument(
+        "--sample-per-class",
+        type=int,
+        default=0,
+        metavar="N",
+        help="N instances of each of the eight classes, evenly spread (3: instances 00, 10 and 19)",
+    )
     parser.add_argument("--seconds", type=float, default=60.0)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--workers", type=int, default=8)
@@ -80,9 +103,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cache-dir", type=Path, default=Path(__file__).resolve().parent / ".cache")
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
+    if sum(bool(choice) for choice in (args.all, args.sample_per_class, args.instance)) > 1:
+        parser.error("--all, --sample-per-class and --instance are mutually exclusive")
 
     suite = load_suite(args.cache_dir)
-    selected = list(suite) if args.all else (args.instance or list(DEFAULT_INSTANCES))
+    if args.all:
+        selected = list(suite)
+    elif args.sample_per_class:
+        # The classes in the order of the OR-Library files: uniform, then triplets, smallest first.
+        by_size = sorted(suite, key=lambda name: (name[0] != "u", len(suite[name].problem.items), name))
+        selected = sample_per_class(by_size, args.sample_per_class)
+    else:
+        selected = args.instance or list(DEFAULT_INSTANCES)
     unknown = sorted(set(selected) - suite.keys())
     if unknown:
         parser.error(f"unknown instance(s): {', '.join(unknown)}")
@@ -108,6 +140,10 @@ def main(argv: list[str] | None = None) -> int:
                 "items": len(source.items),
                 "lower_bound": lower_bound,
                 "best_known": best_known,
+                "budget": args.seconds,
+                "seed": args.seed,
+                "workers": args.workers,
+                "exact_max_size": args.exact_max_size,
                 "runs": runs,
             }
         )

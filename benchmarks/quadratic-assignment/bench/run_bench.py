@@ -22,6 +22,39 @@ def _gap(value: int, reference: int | None) -> float | None:
     return (value - reference) / abs(reference) * 100.0
 
 
+#: Solution files whose stated value their own permutation does not reproduce, and what
+#: the permutation scores. The kra32 file states 88900, the value of kra30a.
+REFERENCE_ERRATA = {"kra32": 88700}
+
+
+def reference_objective(name: str, source, reference) -> int:
+    """What the QAPLIB reference permutation of instance `name` scores under the use
+    case's evaluator.
+
+    A solution file lists either the facility of each location or the location
+    of each facility, and the archive does not say which, so both readings are
+    scored. One of them must give the value the file states, or the value
+    `REFERENCE_ERRATA` records for a file known to state another: anything else
+    is a parsing or scoring bug and stops the run.
+    """
+    inverse = [0] * len(reference.permutation)
+    for index, value in enumerate(reference.permutation):
+        inverse[value] = index
+    scores = []
+    for permutation in (reference.permutation, tuple(inverse)):
+        problem = source.model_copy(deep=True)
+        apply_permutation(problem, permutation)
+        scores.append(_objective(problem))
+    if reference.objective in scores:
+        return reference.objective
+    if REFERENCE_ERRATA.get(name) in scores:
+        return REFERENCE_ERRATA[name]
+    raise AssertionError(
+        f"QAPLIB reference mismatch for {name}: the solution file states {reference.objective}, "
+        f"its permutation scores {' or '.join(map(str, scores))}"
+    )
+
+
 def _run_engine(problem, seconds: float, seed: int) -> dict:
     config = quadratic_assignment.SolverConfig()
     config.spent_limit_seconds = seconds
@@ -110,22 +143,18 @@ def main(argv: list[str] | None = None) -> int:
         runs = [_run_engine(source.model_copy(deep=True), args.seconds, args.seed)]
         if args.exact_max_size and len(source.facilities) <= args.exact_max_size:
             runs.append(_run_cpsat(source.model_copy(deep=True), args.seconds, args.seed, args.workers))
-        reference_objective = reference.objective if reference else None
-        if reference is not None:
-            reference_problem = source.model_copy(deep=True)
-            apply_permutation(reference_problem, reference.permutation)
-            rescored = _objective(reference_problem)
-            if rescored != reference.objective:
-                raise AssertionError(f"QAPLIB reference mismatch for {name}: {rescored} != {reference.objective}")
+        best_known = None if reference is None else reference_objective(name, source, reference)
         for run in runs:
-            run["gap_to_qaplib_percent"] = (
-                None if run["objective"] is None else _gap(run["objective"], reference_objective)
-            )
+            run["gap_to_qaplib_percent"] = None if run["objective"] is None else _gap(run["objective"], best_known)
         results.append(
             {
                 "instance": name,
                 "size": len(source.facilities),
-                "qaplib_best_known": reference_objective,
+                "qaplib_best_known": best_known,
+                "budget": args.seconds,
+                "seed": args.seed,
+                "workers": args.workers,
+                "exact_max_size": args.exact_max_size,
                 "runs": runs,
             }
         )

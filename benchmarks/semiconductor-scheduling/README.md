@@ -26,7 +26,7 @@ Every cell is the score of that solver's final solution under the use case's own
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
 | lots6 | 6 lots / 6 machines | **0hard/-163soft** | **0hard/-163soft** |
-| lots12 | 12 lots / 6 machines | 0hard/-415soft | **0hard/-411soft** |
+| lots12 | 12 lots / 6 machines | 0hard/-413soft | **0hard/-411soft** |
 
-Measured 2026-11-04 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its time includes model construction. Single runs — treat small differences as noise.
+Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
 <!-- results:end -->
