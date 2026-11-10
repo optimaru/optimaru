@@ -14,7 +14,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "food-packaging"
-PACKAGE = "food_packaging"
+PACKAGE = "optimaru.food_packaging"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

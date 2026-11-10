@@ -16,7 +16,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "assembly-line-balancing"
-PACKAGE = "assembly_line_balancing"
+PACKAGE = "optimaru.assembly_line_balancing"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

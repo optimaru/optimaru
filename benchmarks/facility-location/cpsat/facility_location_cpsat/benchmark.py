@@ -14,7 +14,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "facility-location"
-PACKAGE = "facility_location"
+PACKAGE = "optimaru.facility_location"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

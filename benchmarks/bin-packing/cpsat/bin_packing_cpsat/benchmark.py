@@ -16,7 +16,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "bin-packing"
-PACKAGE = "bin_packing"
+PACKAGE = "optimaru.bin_packing"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

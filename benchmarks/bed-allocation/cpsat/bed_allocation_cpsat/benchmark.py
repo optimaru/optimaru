@@ -15,7 +15,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "bed-allocation"
-PACKAGE = "bed_allocation"
+PACKAGE = "optimaru.bed_allocation"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

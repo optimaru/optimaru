@@ -14,7 +14,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "conference-scheduling"
-PACKAGE = "conference_scheduling"
+PACKAGE = "optimaru.conference_scheduling"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

@@ -15,7 +15,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "semiconductor-scheduling"
-PACKAGE = "semiconductor_scheduling"
+PACKAGE = "optimaru.semiconductor_scheduling"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

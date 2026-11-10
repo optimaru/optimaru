@@ -13,7 +13,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "maintenance-scheduling"
-PACKAGE = "maintenance_scheduling"
+PACKAGE = "optimaru.maintenance_scheduling"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

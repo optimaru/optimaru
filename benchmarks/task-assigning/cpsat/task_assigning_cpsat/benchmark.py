@@ -14,7 +14,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "task-assigning"
-PACKAGE = "task_assigning"
+PACKAGE = "optimaru.task_assigning"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

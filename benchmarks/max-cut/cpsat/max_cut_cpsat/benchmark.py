@@ -15,7 +15,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "max-cut"
-PACKAGE = "max_cut"
+PACKAGE = "optimaru.max_cut"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

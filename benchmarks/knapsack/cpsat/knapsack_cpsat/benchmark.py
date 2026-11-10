@@ -15,7 +15,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "knapsack"
-PACKAGE = "knapsack"
+PACKAGE = "optimaru.knapsack"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 

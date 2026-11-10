@@ -17,7 +17,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "quadratic-assignment"
-PACKAGE = "quadratic_assignment"
+PACKAGE = "optimaru.quadratic_assignment"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
