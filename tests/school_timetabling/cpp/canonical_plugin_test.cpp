@@ -49,17 +49,14 @@
 #include "st/canonical_score_calculator.hpp"
 #include "st/canonical_solver.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/testing/check.hpp"
 
 using namespace st::canon;
 
 namespace {
 
-int failures = 0;
-
-void check(bool ok, const std::string& label) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok) ++failures;
-}
+using optimaru::testing::check;
+using optimaru::testing::failures;
 
 void checkCount(const std::string& label, std::int64_t got, std::int64_t expected) {
     const bool ok = got == expected;

@@ -17,17 +17,14 @@
 #include "pdp/incremental_calculator.hpp"
 #include "pdp/score_calculator.hpp"
 #include "pdp/solver.hpp"
+#include "optimaru/testing/check.hpp"
 
 using namespace pdp;
 
 namespace {
 
-int failures = 0;
-
-void check(bool ok, const std::string& label) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok) ++failures;
-}
+using optimaru::testing::check;
+using optimaru::testing::failures;
 
 // A vehicle with the four fields these tests set; every other field keeps its
 // default (no route policy, an empty route).

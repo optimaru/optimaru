@@ -20,17 +20,14 @@
 #include "cs/score_calculator.hpp"
 #include "cs/solver.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/testing/check.hpp"
 
 using namespace cs;
 
 namespace {
 
-int failures = 0;
-
-void check(bool ok, const std::string& label) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok) ++failures;
-}
+using optimaru::testing::check;
+using optimaru::testing::failures;
 
 void checkUnits(const std::string& label, std::int64_t actual, std::int64_t expected) {
     const bool ok = actual == expected;

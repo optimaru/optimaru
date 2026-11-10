@@ -44,17 +44,14 @@
 #include "fp/score_calculator.hpp"
 #include "fp/solver.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/testing/check.hpp"
 
 using namespace fp;
 
 namespace {
 
-int failures = 0;
-
-void check(bool ok, const std::string& label) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok) ++failures;
-}
+using optimaru::testing::check;
+using optimaru::testing::failures;
 
 bool sameScore(const Score& a, const Score& b) {
     return a.hard == b.hard && a.medium == b.medium && a.soft == b.soft;

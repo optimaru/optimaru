@@ -14,17 +14,14 @@
 #include <vector>
 
 #include "qap/domain.hpp"
+#include "optimaru/testing/check.hpp"
 
 namespace qap_test {
 
 using namespace qap;
 
-inline int failures = 0;
-
-inline void check(bool ok, const std::string& label) {
-    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok) ++failures;
-}
+using optimaru::testing::check;
+using optimaru::testing::failures;
 
 inline bool sameScore(const Score& a, const Score& b) {
     return a.hard == b.hard && std::fabs(a.soft - b.soft) < 1e-9;

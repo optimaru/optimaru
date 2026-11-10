@@ -276,7 +276,8 @@ optimaru/cpp/optimaru/
 ├── python/                       pybind11 helpers: constraint specs ->
 │                                 ConstraintAssembly, constraint_info(),
 │                                 constraint_costs(), names, the level guard
-└── testing/                      preview-vs-applied-score harness for a use
+└── testing/                      for the C++ tests: check(), and the
+                                  preview-vs-applied-score harness for a use
                                   case's objective tests
 ```
 
