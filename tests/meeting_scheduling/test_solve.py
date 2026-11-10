@@ -1,5 +1,9 @@
-"""Demo solve: the demo instance reaches feasible
-and pinned assignments are kept."""
+"""Demo solve: the demo instance reaches feasible, pinned assignments are kept
+and parallel starts run."""
+
+import time
+
+import pytest
 
 import optimaru.meeting_scheduling as ms
 from optimaru.meeting_scheduling.models import MeetingScheduleModel, demo_data
@@ -70,7 +74,6 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     30 s. A limit of (0, -1e18) would never be reached by such a score.
     """
     import dataclasses
-    import time
 
     import optimaru.meeting_scheduling as package
     from optimaru.meeting_scheduling.constraints import get_constraints
@@ -94,3 +97,55 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     )
     assert time.monotonic() - started < 20.0
     assert seen[-1].hard == 0 and seen[-1].soft < -1e18
+
+
+def test_parallel_starts_return_the_best_single_start():
+    """Start i of a multi-start solve searches with random_seed + i and the best score wins,
+    so four step-limited starts return what the best of the four single-start solves does.
+    A solve that ran one start whatever the count says returns the first one's score instead,
+    and the first start is not the best one for every seed below."""
+
+    def score(seed, starts):
+        config = ms.SolverConfig()
+        config.spent_limit_seconds = 60.0  # the step limit ends the solve
+        config.step_count_limit = 2000
+        config.random_seed = seed
+        config.parallel_solver_count = starts
+        solved = ms.solve(ms.demo_data(), config=config)
+        return (solved.score.hard, solved.score.soft)
+
+    first_was_best = []
+    for seed in range(0, 60, 10):
+        singles = [score(seed + start, 1) for start in range(4)]
+        assert score(seed, 4) == max(singles)
+        first_was_best.append(singles[0] == max(singles))
+    assert not all(first_was_best)
+
+
+def _boom(_step, _score):
+    raise RuntimeError("boom")
+
+
+def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
+    """Four parallel starts: the callback's exception reaches Python instead of aborting the
+    process, and the other starts stop at once instead of running out their 30 s budget."""
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="boom"):
+        ms.solve(ms.demo_data(), time_limit_seconds=30.0, parallel_solver_count=4, on_new_best=_boom)
+    assert time.monotonic() - started < 10.0
+
+
+def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
+    """Creating worker thread 1 fails (std::system_error, injected through the module's test
+    seam): the worker already running is stopped and joined, and the error reaches the caller
+    at once. A joinable std::thread destroyed on that path would call std::terminate."""
+    from optimaru.meeting_scheduling import _core
+
+    _core._fail_worker_thread_start(1)
+    try:
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
+            ms.solve(ms.demo_data(), time_limit_seconds=30.0, parallel_solver_count=4)
+        assert time.monotonic() - started < 10.0
+    finally:
+        _core._fail_worker_thread_start(-1)

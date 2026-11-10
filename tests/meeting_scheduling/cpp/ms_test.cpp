@@ -4,11 +4,13 @@
 //       (on the Breakdown of the full recompute)
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's Editor protocol (before/set/after)
-//   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
+//   (c) a small instance solved under ScoreChecks::Full
 //   (d) pinned assignments keep their value through a solve; the demo data
 //       reaches hard 0
+//   (e) parallel starts return the best of the single-start solves
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <random>
 #include <string>
@@ -498,6 +500,42 @@ void verifyPinnedAndDemoSolve() {
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (e) Parallel starts: start i searches with seed + i and the best score
+// wins, so four step-limited starts return what the best of the four
+// single-start solves returns. A solver that ran one start whatever the count
+// says would return the first one's score, which is not the best for every
+// seed below.
+// -------------------------------------------------------------------------
+void verifyParallelStarts() {
+    std::printf("== (e) Parallel starts ==\n");
+    auto solved = [](std::uint64_t seed, int starts) {
+        MeetingSchedule s = buildDemoData();
+        Solver::Config config;
+        config.time_limit = std::chrono::seconds(60);  // the step limit ends the solve
+        config.step_limit = 2000;
+        config.seed = seed;
+        config.parallel_solver_count = starts;
+        Solver(config).solve(s);
+        return s.score;
+    };
+    bool returnsTheBest = true;
+    bool firstIsAlwaysBest = true;
+    for (std::uint64_t seed = 0; seed < 60; seed += 10) {
+        const Score first = solved(seed, 1);
+        Score best = first;
+        for (int start = 1; start < 4; ++start) {
+            const Score single = solved(seed + static_cast<std::uint64_t>(start), 1);
+            if (single > best) best = single;
+        }
+        if (!(solved(seed, 4) == best)) returnsTheBest = false;
+        if (!(first == best)) firstIsAlwaysBest = false;
+    }
+    check(returnsTheBest, "four starts return the best of the four single-start solves");
+    check(!firstIsAlwaysBest, "the first start is not the best one for every seed");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main() {
@@ -505,6 +543,7 @@ int main() {
     verifyIncremental();
     verifyFullAssertSolve();
     verifyPinnedAndDemoSolve();
+    verifyParallelStarts();
 
     if (failures == 0) {
         std::printf("All meeting-scheduling checks PASSED.\n");

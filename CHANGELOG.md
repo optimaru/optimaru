@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Meeting scheduling: `parallel_solver_count` runs that many starts.** It was ignored: the
+  solver set the engine's start count and then called the engine's single-start entry point,
+  so `solve(..., parallel_solver_count=4)` searched once, on one thread. It now runs the
+  engine's multi-start, as the other use cases do: start *i* searches with `random_seed + i`
+  and the best score wins. A solve with one start, and one with `constraints=...` (always
+  single-start), returns what it returned before.
 - **C++: every `Solver::Config` field is snake_case, and the common ones come from a shared
   base (breaking for C++ callers).** A `Config` mixed `time_limit` and `seed` with
   `parallelSolverCount`, `ruinRecreateMaxRuinCount` and `nearbyProbability`; every camelCase
