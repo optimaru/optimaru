@@ -15,7 +15,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "knapsack"
-PACKAGE = "knapsack"
+PACKAGE = "optimaru.knapsack"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
@@ -27,7 +27,7 @@ def self_report(problem: Any) -> tuple[float, ...]:
 
 
 def _build(item_count: int, seed: int) -> Any:
-    from knapsack.models import ItemModel, KnapsackProblemModel
+    from optimaru.knapsack.models import ItemModel, KnapsackProblemModel
 
     rng = random.Random(seed)
     items = [ItemModel(id=f"I{i}", weight=rng.randint(5, 60), value=rng.randint(10, 100)) for i in range(item_count)]
@@ -47,7 +47,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import knapsack
+    from optimaru import knapsack
 
     knapsack.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 

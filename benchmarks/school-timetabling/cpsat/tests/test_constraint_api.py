@@ -170,7 +170,7 @@ def test_catalog_covers_every_registered_constraint():
 
 def test_catalog_defaults_are_the_engine_defaults():
     """The catalog reads the engine's constraint_info(): same names, order, levels, weights, flippability."""
-    import st_timetabling as st
+    import optimaru.school_timetabling as st
 
     engine = st.constraint_info()
     assert [spec.name for spec in catalog()] == [row.name for row in engine] == list(st.list_constraints())

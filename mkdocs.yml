@@ -1,0 +1,81 @@
+site_name: optimaru
+site_description: Metaheuristic optimization engine for routing, scheduling, timetabling and allocation, with 22 ready-to-use models.
+# The homepage builds the same site under its own /engine-docs/ and sets the URL.
+site_url: !ENV [OPTIMARU_DOCS_SITE_URL, "https://optimaru.github.io/optimaru/"]
+repo_url: https://github.com/optimaru/optimaru
+repo_name: optimaru/optimaru
+edit_uri: edit/main/docs/
+copyright: Copyright 2026 The optimaru Authors. Apache-2.0.
+
+docs_dir: docs
+exclude_docs: |
+  pypi.md
+  requirements.txt
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: { icon: material/weather-sunny, name: Light mode }
+
+plugins:
+  - search
+  # scripts/gen_docs_pages.py writes the API reference pages and the navigation
+  # (SUMMARY.md) on every build, from the packages under optimaru/.
+  - gen-files:
+      scripts:
+        - scripts/gen_docs_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - mkdocstrings:
+      handlers:
+        python:
+          # Static analysis of the sources and the _core.pyi stubs: the docs
+          # build needs no compiled extension.
+          paths: [.]  # relative to this file
+          options:
+            allow_inspection: false
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: true
+            members_order: source
+            show_signature_annotations: true
+            separate_signature: true
+            filters: ["!^_[^_]"]
+
+hooks:
+  - scripts/mkdocs_hooks.py
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+      # GitHub's heading anchors, so a #fragment works on GitHub and on the site.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.snippets:
+      base_path: !relative $config_dir
+      check_paths: true
+
+# Broken links and anchors fail the strict build. Links that leave docs/ are
+# rewritten to GitHub by scripts/mkdocs_hooks.py before validation.
+validation:
+  omitted_files: info
+  absolute_links: info
+  unrecognized_links: warn
+  anchors: warn

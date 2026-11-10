@@ -14,7 +14,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "tournament-scheduling"
-PACKAGE = "tournament_scheduling"
+PACKAGE = "optimaru.tournament_scheduling"
 CPSAT_EXACT = False
 CPSAT_CAVEAT = (
     "the two imbalance costs are sqrt(ssd) rounded to 6 significant figures; CP-SAT "
@@ -30,7 +30,7 @@ def _build(
 ) -> Any:
     """A tournament with `penalty_count` distinct (team, day) unavailabilities
     drawn from a seeded ``random.Random`` (the same instance on every run)."""
-    import tournament_scheduling as ts
+    import optimaru.tournament_scheduling as ts
 
     rng = random.Random(0)
     teams = [ts.Team(name) for name in team_names]
@@ -93,7 +93,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import tournament_scheduling as ts
+    import optimaru.tournament_scheduling as ts
 
     config = ts.SolverConfig()
     config.spent_limit_seconds = seconds
@@ -103,7 +103,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.tournament_scheduling import solve
-    from tournament_scheduling.models import TournamentScheduleModel
+    from optimaru.tournament_scheduling.models import TournamentScheduleModel
 
     solved = solve(
         TournamentScheduleModel.from_core(problem),

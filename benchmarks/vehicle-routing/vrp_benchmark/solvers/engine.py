@@ -1,8 +1,8 @@
-"""optimaru's vehicle-routing use case (`vrp_routing`), default configuration."""
+"""optimaru's vehicle-routing use case (`optimaru.vehicle_routing`), default configuration."""
 
 from __future__ import annotations
 
-from vrp_routing.models import (
+from optimaru.vehicle_routing.models import (
     RoutePlanRequest,
     RoutingInput,
     VehicleModel,

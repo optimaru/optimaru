@@ -1,0 +1,71 @@
+# The documentation site: mkdocs.yml, built from docs/ plus an API reference
+# generated from the sources and the _core.pyi stubs (no compiled extension is
+# needed). PRs build it strictly; a push to main also publishes it on GitHub
+# Pages (Settings > Pages > Source: GitHub Actions).
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "optimaru/**/*.py"
+      - "optimaru/**/*.pyi"
+      - "mkdocs.yml"
+      - "CHANGELOG.md"
+      - "scripts/gen_docs_pages.py"
+      - "scripts/mkdocs_hooks.py"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "optimaru/**/*.py"
+      - "optimaru/**/*.pyi"
+      - "mkdocs.yml"
+      - "CHANGELOG.md"
+      - "scripts/gen_docs_pages.py"
+      - "scripts/mkdocs_hooks.py"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DISABLE_MKDOCS_2_WARNING: "true"
+  NO_MKDOCS_2_WARNING: "1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build (strict)
+        run: uv run --no-project --python 3.14 --with-requirements docs/requirements.txt mkdocs build --strict --site-dir site
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    # One Pages deployment at a time; a newer push waits instead of cancelling it.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

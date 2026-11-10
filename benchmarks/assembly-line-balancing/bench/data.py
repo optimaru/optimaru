@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-from assembly_line_balancing.models import (
+from optimaru.assembly_line_balancing.models import (
     AssemblyLineBalancingProblemModel,
     PrecedenceModel,
     TaskModel,

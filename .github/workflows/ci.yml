@@ -19,15 +19,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=none
       - name: Build
         run: cmake --build build -j4
       - name: Test
         run: ctest --test-dir build --output-on-failure --no-tests=error
-      - name: Constraint-spec base copies in sync
-        run: python3 scripts/check_constraint_base.py --require-all
       - name: Engine license headers present
         run: python3 scripts/check_license_headers.py
+      - uses: astral-sh/setup-uv@v5
+      - name: Constraint-spec base and use-case lists (pure Python, no extension needed)
+        run: uv run --no-project --python 3.14 --with pytest --with numpy python -m pytest -q tests/test_constraint.py tests/test_layout.py
+
+  # The release path, which wheels.yml only exercises on a version bump: the sdist
+  # must carry every source, and a wheel built from it must import.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build the sdist
+        run: uvx --python 3.14 --from build pyproject-build --sdist -o dist .
+      - name: The sdist has every file a wheel build needs, and no tests
+        run: python3 scripts/check_sdist.py dist/*.tar.gz
+      - name: Build a wheel from the sdist (one extension) and import it
+        env:
+          OPTIMARU_USE_CASES: knapsack
+        run: |
+          uv run --no-project --python 3.14 --with pip python -m pip wheel --no-deps -w wheelhouse dist/*.tar.gz
+          cd "$RUNNER_TEMP"
+          uv run --no-project --python 3.14 --with "$GITHUB_WORKSPACE"/wheelhouse/*.whl --with pydantic \
+            python -c "import optimaru, optimaru.knapsack as k; assert 'knapsack_capacity_cost' in k.list_constraints(); print(optimaru.__file__)"
 
   use-case-cpp:
     name: ${{ matrix.use_case }} (C++)
@@ -36,28 +57,28 @@ jobs:
       fail-fast: false
       matrix:
         use_case:
-          - assembly-line-balancing
-          - bed-allocation
-          - bin-packing
-          - conference-scheduling
-          - employee-scheduling
-          - facility-location
-          - flight-crew-scheduling
-          - food-packaging
+          - assembly_line_balancing
+          - bed_allocation
+          - bin_packing
+          - conference_scheduling
+          - employee_scheduling
+          - facility_location
+          - flight_crew_scheduling
+          - food_packaging
           - knapsack
-          - maintenance-scheduling
-          - max-cut
-          - meeting-scheduling
-          - order-picking
-          - pickup-delivery
-          - project-job-scheduling
-          - quadratic-assignment
-          - school-timetabling
-          - semiconductor-scheduling
-          - sports-league-scheduling
-          - task-assigning
-          - tournament-scheduling
-          - vehicle-routing
+          - maintenance_scheduling
+          - max_cut
+          - meeting_scheduling
+          - order_picking
+          - pickup_delivery
+          - project_job_scheduling
+          - quadratic_assignment
+          - school_timetabling
+          - semiconductor_scheduling
+          - sports_league_scheduling
+          - task_assigning
+          - tournament_scheduling
+          - vehicle_routing
     steps:
       - uses: actions/checkout@v4
       - uses: hendrikmuhs/ccache-action@v1.2
@@ -65,8 +86,8 @@ jobs:
           key: cpp-${{ matrix.use_case }}
       - name: Configure
         run: >-
-          cmake -S use-cases/${{ matrix.use_case }}/cpp -B build -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DOPTIMARU_ENGINE_TESTS=OFF -DOPTIMARU_USE_CASES=${{ matrix.use_case }}
       - name: Build
         run: cmake --build build -j4
       - name: Test
@@ -79,31 +100,31 @@ jobs:
       fail-fast: false
       matrix:
         use_case:
-          - assembly-line-balancing
-          - bed-allocation
-          - bin-packing
-          - conference-scheduling
-          - employee-scheduling
-          - facility-location
-          - flight-crew-scheduling
-          - food-packaging
+          - assembly_line_balancing
+          - bed_allocation
+          - bin_packing
+          - conference_scheduling
+          - employee_scheduling
+          - facility_location
+          - flight_crew_scheduling
+          - food_packaging
           - knapsack
-          - maintenance-scheduling
-          - max-cut
-          - meeting-scheduling
-          - order-picking
-          - pickup-delivery
-          - project-job-scheduling
-          - quadratic-assignment
-          - school-timetabling
-          - semiconductor-scheduling
-          - sports-league-scheduling
-          - task-assigning
-          - tournament-scheduling
-          - vehicle-routing
-    defaults:
-      run:
-        working-directory: use-cases/${{ matrix.use_case }}/python
+          - maintenance_scheduling
+          - max_cut
+          - meeting_scheduling
+          - order_picking
+          - pickup_delivery
+          - project_job_scheduling
+          - quadratic_assignment
+          - school_timetabling
+          - semiconductor_scheduling
+          - sports_league_scheduling
+          - task_assigning
+          - tournament_scheduling
+          - vehicle_routing
+    env:
+      # setup.py builds only this use case's extension.
+      OPTIMARU_USE_CASES: ${{ matrix.use_case }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -113,12 +134,12 @@ jobs:
         with:
           key: py-${{ matrix.use_case }}
       - name: Install (builds the C++ extension)
-        run: uv sync --python 3.14 --all-groups --all-extras
+        run: uv sync --python 3.14 --all-groups
         env:
           CC: ccache cc
           CXX: ccache c++
       - name: Test
-        run: uv run --python 3.14 --with pytest python -m pytest -q tests
+        run: uv run --python 3.14 python -m pytest -q tests/${{ matrix.use_case }}
 
   benchmark-cpsat:
     name: ${{ matrix.benchmark }} (CP-SAT benchmark)
@@ -159,6 +180,10 @@ jobs:
           key: bench-${{ matrix.benchmark }}
       - name: Locate the project
         run: |
+          # setup.py builds only the benchmarked use case's extension
+          # (cpsat-common is the shared runner, not a use case).
+          slug="${{ matrix.benchmark }}"
+          if [ "$slug" != cpsat-common ]; then echo "OPTIMARU_USE_CASES=${slug//-/_}" >> "$GITHUB_ENV"; fi
           if [ -f benchmarks/${{ matrix.benchmark }}/cpsat/pyproject.toml ]; then
             echo "PROJECT=benchmarks/${{ matrix.benchmark }}/cpsat" >> "$GITHUB_ENV"
           else
@@ -184,6 +209,8 @@ jobs:
     defaults:
       run:
         working-directory: benchmarks/vehicle-routing
+    env:
+      OPTIMARU_USE_CASES: vehicle_routing
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

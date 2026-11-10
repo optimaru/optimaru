@@ -16,7 +16,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "assembly-line-balancing"
-PACKAGE = "assembly_line_balancing"
+PACKAGE = "optimaru.assembly_line_balancing"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
@@ -24,7 +24,7 @@ CPSAT_CAVEAT = ""
 def _build(task_count: int, cycle_time: int, seed: int) -> Any:
     """A layered precedence graph (each task depends on up to three of the 12 before it),
     durations 1..30 with a few long ones, the given cycle time; no zoning."""
-    import assembly_line_balancing as alb
+    import optimaru.assembly_line_balancing as alb
 
     rng = random.Random(seed)
     tasks = [
@@ -52,13 +52,13 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import assembly_line_balancing as alb
+    import optimaru.assembly_line_balancing as alb
 
     alb.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from assembly_line_balancing.models import AssemblyLineBalancingProblemModel
+    from optimaru.assembly_line_balancing.models import AssemblyLineBalancingProblemModel
     from external_solver.assembly_line_balancing import solve
 
     solved = solve(

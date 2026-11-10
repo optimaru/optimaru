@@ -1,6 +1,6 @@
 # Facility location CP-SAT
 
-OR-Tools CP-SAT alternative for the canonical `facility_location.models`
+OR-Tools CP-SAT alternative for the canonical `optimaru.facility_location.models`
 contract, `external_solver.facility_location` from
 [external-solver](https://github.com/optimaru/external-solver); this project runs it
 against the engine in this checkout.  It assigns every consumer, minimizes capacity overflow first, then

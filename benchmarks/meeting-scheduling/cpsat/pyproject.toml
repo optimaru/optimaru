@@ -3,7 +3,7 @@ name = "meeting-scheduling-cpsat"
 version = "0.1.0"
 description = "OR-Tools CP-SAT backend for meeting scheduling."
 requires-python = ">=3.11,<4.0"
-dependencies = ["external-solver", "meeting_scheduling[models]", "cpsat-plugins>=0.1.0", "ortools>=9.10", "pydantic>=2"]
+dependencies = ["external-solver", "optimaru", "cpsat-plugins>=0.1.0", "ortools>=9.10", "pydantic>=2"]
 
 [project.scripts]
 meeting-scheduling-compare = "meeting_scheduling_cpsat.benchmark:main"
@@ -18,11 +18,11 @@ packages = ["meeting_scheduling_cpsat"]
 testpaths = ["tests"]
 
 [tool.uv]
-# external-solver depends on the published optimaru; the benchmarks measure the
-# engine in this checkout instead (cpsat_plugins.checkout), so it is not installed.
-override-dependencies = ["optimaru; sys_platform == 'never'"]
+# external-solver pins the published optimaru; the benchmarks measure the engine in
+# this checkout instead (the path source below, checked by cpsat_plugins.checkout).
+override-dependencies = ["optimaru"]
 
 [tool.uv.sources]
 external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.1.0" }
-meeting_scheduling = { path = "../../../use-cases/meeting-scheduling/python", editable = true }
+optimaru = { path = "../../..", editable = true }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }

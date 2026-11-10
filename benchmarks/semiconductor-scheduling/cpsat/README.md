@@ -1,6 +1,6 @@
 # Semiconductor fab scheduling CP-SAT
 
-OR-Tools CP-SAT reference for the canonical `semiconductor_scheduling.models` contract:
+OR-Tools CP-SAT reference for the canonical `optimaru.semiconductor_scheduling.models` contract:
 external-solver's `external_solver.semiconductor_scheduling`. This package holds the engine
 vs CP-SAT comparison; importing it points external-solver at the engine in this checkout.
 An interval model: per operation a start and an end, and per eligible machine an optional

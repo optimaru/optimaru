@@ -5,7 +5,7 @@ import json
 import time
 from pathlib import Path
 
-import quadratic_assignment
+from optimaru import quadratic_assignment
 
 from bench.data import apply_permutation, load_suite
 

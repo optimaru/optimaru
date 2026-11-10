@@ -14,7 +14,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "project-job-scheduling"
-PACKAGE = "project_job"
+PACKAGE = "optimaru.project_job_scheduling"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
@@ -31,7 +31,7 @@ def _build(project_count: int, jobs_per_project: int, seed: int) -> Any:
     """Structural transcription of the C++ demo's ``generateDemoData``
     (itself the Java generator). Python's RNG stream differs, so the instance
     matches in scale and distribution rather than bit-for-bit."""
-    import project_job as pjs
+    import optimaru.project_job_scheduling as pjs
 
     rng = random.Random(seed)
     projects = [pjs.Project("0", 0, 10), pjs.Project("1", 4, 19)]
@@ -132,7 +132,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import project_job as pjs
+    import optimaru.project_job_scheduling as pjs
 
     config = pjs.SolverConfig()
     config.spent_limit_seconds = seconds
@@ -143,7 +143,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 def self_report(problem: Any) -> tuple[float, ...]:
     """The engine's own score, folded the way the package's scorer reports it.
 
-    `problem.score` exposes three levels, but `project_job.constraints.score`
+    `problem.score` exposes three levels, but `optimaru.project_job_scheduling.constraints.score`
     returns the engine's two: medium rides in soft at 1e9 (see the package
     docstring). The crosscheck compares like with like, so fold here rather
     than let a three-vs-two comparison silently truncate.
@@ -154,7 +154,7 @@ def self_report(problem: Any) -> tuple[float, ...]:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.project_job_scheduling import solve
-    from project_job.models import ProjectJobScheduleModel
+    from optimaru.project_job_scheduling.models import ProjectJobScheduleModel
 
     solved = solve(
         ProjectJobScheduleModel.from_core(problem),

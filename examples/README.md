@@ -83,6 +83,6 @@ explained notebook, and the others follow the same outline:
 
 ## Going further
 
-- [`use-cases/README.md`](../use-cases/README.md) explains how to add a move, change the construction
+- [`docs/extending.md`](../docs/extending.md) explains how to add a move, change the construction
   heuristic, or add a hard or soft cost.
-- Each use case's README covers its usage and how to extend it.
+- Each use case's guide in [`docs/use-cases/`](../docs/use-cases) covers its usage and how to extend it.

@@ -18,3 +18,4 @@ wheelhouse/
 .bench-cache/
 benchmarks/vehicle-routing/bench/
 benchmarks/school-timetabling/out/
+site/

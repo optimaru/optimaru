@@ -29,18 +29,10 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-import bin_packing
-from bin_packing.models import BinPackingProblemModel
+from optimaru import bin_packing
+from optimaru.bin_packing.models import BinPackingProblemModel
 
-WEB_DEMO = (
-    Path(__file__).resolve().parents[3]
-    / "use-cases"
-    / "bin-packing"
-    / "python"
-    / "tests"
-    / "fixtures"
-    / "web_demo.json"
-)
+WEB_DEMO = Path(__file__).resolve().parents[3] / "tests" / "bin_packing" / "fixtures" / "web_demo.json"
 
 # Generator seeds: 20261031 is the review's instance; 11, 22 and 33 are the ones that
 # show the gap is not specific to one instance.

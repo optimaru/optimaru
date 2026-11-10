@@ -17,7 +17,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "quadratic-assignment"
-PACKAGE = "quadratic_assignment"
+PACKAGE = "optimaru.quadratic_assignment"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
@@ -55,13 +55,13 @@ def self_report(problem: Any) -> tuple[float, ...]:
 
 
 def _plant() -> Any:
-    from quadratic_assignment.models import QuadraticAssignmentProblemModel
+    from optimaru.quadratic_assignment.models import QuadraticAssignmentProblemModel
 
     return QuadraticAssignmentProblemModel.model_validate(PLANT)
 
 
 def _random(size: int, seed: int) -> Any:
-    from quadratic_assignment.models import QuadraticAssignmentProblemModel
+    from optimaru.quadratic_assignment.models import QuadraticAssignmentProblemModel
 
     rng = random.Random(seed)
     facilities = [f"F{i}" for i in range(size)]
@@ -95,7 +95,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import quadratic_assignment
+    from optimaru import quadratic_assignment
 
     quadratic_assignment.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 

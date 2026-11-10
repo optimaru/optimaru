@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Require the Apache-2.0 SPDX header and the origin notice on every engine header.
 
-Each file under ``include/optimaru/`` starts with these two lines::
+Each file under ``optimaru/cpp/optimaru/`` starts with these two lines::
 
     // SPDX-License-Identifier: Apache-2.0
     // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ENGINE = ROOT / "include" / "optimaru"
+ENGINE = ROOT / "optimaru" / "cpp" / "optimaru"
 HEADER = (
     "// SPDX-License-Identifier: Apache-2.0\n"
     "// Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.\n"

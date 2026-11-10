@@ -1,0 +1,10 @@
+# The documentation site (mkdocs.yml). It reads the sources and stubs
+# statically, so the compiled extensions are not needed:
+#   uv run --no-project --with-requirements docs/requirements.txt mkdocs serve
+# Pinned: the CI build is --strict, so a plugin release must not break it unseen.
+mkdocs==1.6.1
+mkdocs-material==9.8.1
+mkdocstrings==1.0.8
+mkdocstrings-python==2.0.10
+mkdocs-gen-files==0.6.1
+mkdocs-literate-nav==0.6.3

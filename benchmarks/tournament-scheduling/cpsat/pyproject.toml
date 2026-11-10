@@ -6,7 +6,7 @@ requires-python = ">=3.11,<4.0"
 dependencies = [
     "external-solver",
     "cpsat-plugins",
-    "tournament_scheduling",
+    "optimaru",
     "ortools>=9.10",
     "pydantic>=2",
 ]
@@ -18,13 +18,13 @@ dev = ["pytest"]
 tournament-scheduling-compare = "tournament_scheduling_cpsat.benchmark:main"
 
 [tool.uv]
-# external-solver depends on the published optimaru; the benchmarks measure the
-# engine in this checkout instead (cpsat_plugins.checkout), so it is not installed.
-override-dependencies = ["optimaru; sys_platform == 'never'"]
+# external-solver pins the published optimaru; the benchmarks measure the engine in
+# this checkout instead (the path source below, checked by cpsat_plugins.checkout).
+override-dependencies = ["optimaru"]
 
 [tool.uv.sources]
 external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.1.0" }
-tournament_scheduling = { path = "../../../use-cases/tournament-scheduling/python", editable = true }
+optimaru = { path = "../../..", editable = true }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
 
 [tool.setuptools]

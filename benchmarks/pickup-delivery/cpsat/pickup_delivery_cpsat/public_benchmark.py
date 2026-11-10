@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from external_solver.pickup_delivery import solve_request as solve_cpsat_request
-from pdp_routing.constraints import (
+from optimaru.pickup_delivery.constraints import (
     max_end_time_cost,
     paired_request_cost,
     pickup_before_dropoff_cost,
@@ -24,14 +24,14 @@ from pdp_routing.constraints import (
     vehicle_capacity_cost,
     vehicle_max_end_time_cost,
 )
-from pdp_routing.models import (
+from optimaru.pickup_delivery.models import (
     DeliveryModel,
     PdpInput,
     PdpRequest,
     StopModel,
     VehicleModel,
 )
-from pdp_routing.models import (
+from optimaru.pickup_delivery.models import (
     solve_request as solve_engine_request,
 )
 

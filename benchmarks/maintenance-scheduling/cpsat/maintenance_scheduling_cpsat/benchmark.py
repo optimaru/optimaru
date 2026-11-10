@@ -13,7 +13,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "maintenance-scheduling"
-PACKAGE = "maintenance_scheduling"
+PACKAGE = "optimaru.maintenance_scheduling"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
@@ -23,7 +23,7 @@ FROM_DATE = 20_454
 
 
 def _build(size: str) -> Any:
-    import maintenance_scheduling as mnt
+    import optimaru.maintenance_scheduling as mnt
 
     return mnt.generate_demo_data(size, FROM_DATE)
 
@@ -40,7 +40,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import maintenance_scheduling as mnt
+    import optimaru.maintenance_scheduling as mnt
 
     config = mnt.SolverConfig()
     config.spent_limit_seconds = seconds
@@ -50,7 +50,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.maintenance_scheduling import solve
-    from maintenance_scheduling.models import MaintenanceScheduleModel
+    from optimaru.maintenance_scheduling.models import MaintenanceScheduleModel
 
     solved = solve(
         MaintenanceScheduleModel.from_core(problem),

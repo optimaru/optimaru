@@ -4,7 +4,7 @@ from conference_scheduling_cpsat import benchmark
 
 
 def test_external_solver_uses_the_engine_in_this_checkout():
-    import conference_scheduling
+    from optimaru import conference_scheduling
     import external_solver.conference_scheduling
 
     assert sys.modules["optimaru.conference_scheduling"] is conference_scheduling

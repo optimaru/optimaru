@@ -3,7 +3,7 @@
 Transcribes the Timefold Quickstarts `facility-location` example's demo data generator (Apache-2.0),
 with modifications; see the repository [NOTICE](../../NOTICE).
 
-The [`facility-location`](../../use-cases/facility-location) use case against **OR-Tools CP-SAT**
+The [`facility-location`](../../docs/use-cases/facility-location) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `facility_location_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
 rescored by the use case's own evaluator; parity tests in external-solver
@@ -11,7 +11,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/facility-location/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+OPTIMARU_USE_CASES=facility_location uv sync --all-groups --all-extras   # also builds this checkout's optimaru (facility_location only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run facility-location-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

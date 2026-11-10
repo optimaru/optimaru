@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from st_timetabling import constraint_info
+from optimaru.school_timetabling import constraint_info
 
 from teacher_scheduling.config import env
 
@@ -33,7 +33,7 @@ def _weight_field(name: str, description: str):
 class ObjectiveWeights(BaseModel):
     """Soft-constraint weights, keyed by the soft constraint names. 0 removes the term from the objective.
 
-    The defaults are the engine's (`st_timetabling.constraint_info()`). Weights
+    The defaults are the engine's (`optimaru.school_timetabling.constraint_info()`). Weights
     of custom SoftTerms beyond the six declared ones are passed as extra fields
     named after the term, e.g. `ObjectiveWeights(first_period_load=2)`. A custom
     term without a weight counts as 1 (see `weight_for`).

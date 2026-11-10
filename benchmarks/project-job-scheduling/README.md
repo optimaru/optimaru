@@ -3,7 +3,7 @@
 Transcribes the Timefold Quickstarts `project-job-scheduling` example's
 demo data generator (Apache-2.0), with modifications; see the repository [NOTICE](../../NOTICE).
 
-The [`project-job-scheduling`](../../use-cases/project-job-scheduling) use case against **OR-Tools CP-SAT**
+The [`project-job-scheduling`](../../docs/use-cases/project-job-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `project_job_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
 rescored by the use case's own evaluator; parity tests in external-solver
@@ -11,7 +11,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/project-job-scheduling/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+OPTIMARU_USE_CASES=project_job_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (project_job_scheduling only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run project-job-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 uv run project-job-public-bench --help              # RG30 RCPSP instances (Patterson format)

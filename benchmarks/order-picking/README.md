@@ -1,6 +1,6 @@
 # Order picking benchmark
 
-The [`order-picking`](../../use-cases/order-picking) use case against **OR-Tools CP-SAT**
+The [`order-picking`](../../docs/use-cases/order-picking) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `order_picking_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
 rescored by the use case's own evaluator; parity tests in external-solver
@@ -8,7 +8,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/order-picking/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+OPTIMARU_USE_CASES=order_picking uv sync --all-groups --all-extras   # also builds this checkout's optimaru (order_picking only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run order-picking-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

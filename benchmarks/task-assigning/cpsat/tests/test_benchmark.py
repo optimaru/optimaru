@@ -5,7 +5,7 @@ from task_assigning_cpsat import benchmark
 
 def test_external_solver_uses_the_engine_in_this_checkout():
     import external_solver.task_assigning
-    import task_assigning
+    from optimaru import task_assigning
 
     assert sys.modules["optimaru.task_assigning"] is task_assigning
     assert callable(external_solver.task_assigning.catalog)

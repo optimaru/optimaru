@@ -1,6 +1,6 @@
 # Food packaging benchmark
 
-The [`food-packaging`](../../use-cases/food-packaging) use case against **OR-Tools CP-SAT**
+The [`food-packaging`](../../docs/use-cases/food-packaging) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `food_packaging_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
 rescored by the use case's own evaluator; parity tests in external-solver
@@ -8,7 +8,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/food-packaging/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+OPTIMARU_USE_CASES=food_packaging uv sync --all-groups --all-extras   # also builds this checkout's optimaru (food_packaging only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run food-packaging-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

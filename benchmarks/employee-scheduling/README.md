@@ -1,6 +1,6 @@
 # Employee scheduling benchmark
 
-The [`employee-scheduling`](../../use-cases/employee-scheduling) use case against **OR-Tools CP-SAT**
+The [`employee-scheduling`](../../docs/use-cases/employee-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `employee_scheduling_cpsat`). The CP-SAT model implements the
 same rules under the same names and units, so both answers are
 rescored by the engine's own score calculator; parity tests in external-solver
@@ -8,14 +8,14 @@ rescored by the engine's own score calculator; parity tests in external-solver
 
 ```sh
 cd benchmarks/employee-scheduling/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+OPTIMARU_USE_CASES=employee_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (employee_scheduling only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run employee-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```
 
 CP-SAT formulation notes, and what the model refuses: [`cpsat/README.md`](cpsat/README.md).
 
-The instances are `es_scheduling.demo.generate_demo_data` at fixed seeds. The
+The instances are `optimaru.employee_scheduling.demo.generate_demo_data` at fixed seeds. The
 engine runs single-threaded; CP-SAT gets `--workers` search workers and its time
 includes model construction.
 

@@ -1,7 +1,7 @@
 # Benchmarks
 
 Reproducible comparisons of the engine's use cases against other open-source
-solvers. The competing solvers live only here, never in `use-cases/`.
+solvers. The competing solvers live only here, never in the `optimaru` package.
 Instance data is generated deterministically or downloaded on demand
 (checksum-verified, kept out of Git), and every returned solution is rescored
 by the use case's own evaluator; a solver's self-reported objective is never
@@ -40,13 +40,15 @@ keeps its CP-SAT model (`teacher_scheduling`) and its parity test in
 [`school-timetabling/cpsat`](school-timetabling/cpsat), and vehicle-routing is
 the single `uv` project [`vehicle-routing`](vehicle-routing), which runs the
 OR-Tools Routing solver. Every other comparison is a `uv` project in
-`benchmarks/<slug>/cpsat` that depends on `use-cases/<slug>/python` by path, so
-a run always measures the engine in this checkout. Importing the project's
-package calls `cpsat_plugins.checkout.use_checkout_engine`, which registers that
-checkout package as `optimaru.<subpackage>`, so external-solver builds and scores
-with the same engine module; the published `optimaru` wheel is not installed
-(`override-dependencies`). [`cpsat-common`](cpsat-common) holds that helper and
-the comparison runner (`run_cli`). To pick up a new external-solver release,
+`benchmarks/<slug>/cpsat` that installs `optimaru` from this checkout (an
+editable path dependency, `optimaru = { path = "../../.." }`), so a run always
+measures the engine in this checkout. external-solver's pin on the published
+release is overridden (`override-dependencies`), so external-solver builds and
+scores with the same `optimaru.<subpackage>` modules. Importing the project's
+package calls `cpsat_plugins.checkout.use_checkout_engine`, which fails fast if
+`optimaru.<subpackage>` comes from anywhere else. `OPTIMARU_USE_CASES=<subpackage>`
+before `uv sync` builds only that extension. [`cpsat-common`](cpsat-common) holds
+that check and the comparison runner (`run_cli`). To pick up a new external-solver release,
 bump the `tag` in each project's `[tool.uv.sources]` and run `uv lock`.
 
 A CP-SAT constraint is a plugin that subclasses the use case's own constraint

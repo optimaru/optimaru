@@ -13,8 +13,12 @@ on:
     # Only commits that can move the numbers: the engine, the VRP use case
     # and the benchmark itself.
     paths:
-      - "include/**"
-      - "use-cases/vehicle-routing/**"
+      - "optimaru/cpp/**"
+      - "optimaru/__init__.py"
+      - "optimaru/_constraint.py"
+      - "setup.py"
+      - "pyproject.toml"
+      - "optimaru/vehicle_routing/**"
       - "benchmarks/vehicle-routing/**"
       - ".github/workflows/vrp-public-bench.yml"
     tags:
@@ -64,6 +68,7 @@ jobs:
       - name: Install the benchmark project (builds the pybind extension)
         run: uv sync --python 3.14 --extra dev
         env:
+          OPTIMARU_USE_CASES: vehicle_routing
           CC: ccache cc
           CXX: ccache c++
 

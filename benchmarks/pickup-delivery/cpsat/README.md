@@ -4,13 +4,13 @@ Pickup/dropoff-coupled optional circuits with same-vehicle assignment,
 pickup-first precedence, running capacity, time windows, optional requests,
 and travel minimization. Routes are open by default; a vehicle with
 `return_to_depot=True` also drives (and is timed) back to its home. The package
-shares `pdp_routing.models` with the C++ backend.
+shares `optimaru.pickup_delivery.models` with the C++ backend.
 
 ## Constraints
 
 Each plugin in [`external_solver.pickup_delivery.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/pickup_delivery/constraints.py) subclasses the engine spec of
-the same name (`pdp_routing.constraints`) and only builds its CP-SAT expression; the
-default level and weight come from `pdp_routing.constraint_info()`, so the two
+the same name (`optimaru.pickup_delivery.constraints`) and only builds its CP-SAT expression; the
+default level and weight come from `optimaru.pickup_delivery.constraint_info()`, so the two
 solvers cannot disagree on a default. Selections use the engine's names and knobs
 (`weight=None` = default, `level=None` = default level, `level="hard"`, `"medium"` or
 `"soft"` moves a pick onto that level, as in the engine). `exponent != 1` and non-integer

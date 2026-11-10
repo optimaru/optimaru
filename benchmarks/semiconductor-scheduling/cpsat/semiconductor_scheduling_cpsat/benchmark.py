@@ -15,7 +15,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "semiconductor-scheduling"
-PACKAGE = "semiconductor_scheduling"
+PACKAGE = "optimaru.semiconductor_scheduling"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
@@ -27,7 +27,7 @@ def self_report(problem: Any) -> None:
 
 
 def _build(lot_count: int, seed: int) -> Any:
-    from semiconductor_scheduling.models import (
+    from optimaru.semiconductor_scheduling.models import (
         LotModel,
         MachineModel,
         MachineOptionModel,
@@ -73,7 +73,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import semiconductor_scheduling
+    from optimaru import semiconductor_scheduling
 
     semiconductor_scheduling.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 

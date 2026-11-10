@@ -3,7 +3,7 @@
 Transcribes the Timefold Quickstarts `tournament-scheduling` example's
 demo data generator (Apache-2.0), with modifications; see the repository [NOTICE](../../NOTICE).
 
-The [`tournament-scheduling`](../../use-cases/tournament-scheduling) use case against **OR-Tools CP-SAT**
+The [`tournament-scheduling`](../../docs/use-cases/tournament-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `tournament_scheduling_cpsat`). The CP-SAT model implements the
 same four constraints under the same names, with the defaults read from the engine's
 `constraint_info()`, and both answers are rescored by the use case's own evaluator.
@@ -17,7 +17,7 @@ pin both down: [`cpsat/README.md`](cpsat/README.md#constraints-and-parity-with-t
 
 ```sh
 cd benchmarks/tournament-scheduling/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+OPTIMARU_USE_CASES=tournament_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (tournament_scheduling only)
 uv run pytest -q                       # benchmark harness tests
 uv run tournament-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

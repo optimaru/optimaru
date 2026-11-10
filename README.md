@@ -6,6 +6,9 @@ assignment, with 22 ready-to-use models you call from Python.
 optimaru comes in a free edition and a paid edition; this repository is the
 free, open-source edition.
 
+Documentation: <https://optimaru.github.io/optimaru/> (built from [`docs/`](docs)
+with MkDocs; the API reference is generated from the sources).
+
 ## Quick start
 
 ```bash
@@ -49,15 +52,17 @@ print(plan.score)                       # 0hard/0medium/-9660soft
 Every constraint takes the same knobs — `weight`, `level` (`"hard"`,
 `"medium"`, `"soft"`), `exponent`, `offset` and `clip` — and may be picked
 several times. `constraint_info()` on a use case lists its constraints and
-their defaults. More in [`python/README.md`](python/README.md) and the
+their defaults. More in [`docs/pypi.md`](docs/pypi.md) and the
 [notebooks](examples).
 
 ## Use cases
 
-[`use-cases/README.md`](use-cases/README.md) lists all 22 use cases and
-explains how to extend one — adding a move, changing the construction
-heuristic, adding a hard or soft cost. Each use case's README has a short
-usage example and the same guide with its own file names.
+[`docs/use-cases/README.md`](docs/use-cases/README.md) lists all 22 use cases
+and the constraint contract they share, and
+[`docs/extending.md`](docs/extending.md) walks through extending one: adding a
+move, changing the construction heuristic, adding a hard or soft cost. Each use
+case's guide in `docs/use-cases/<slug>/` has a short usage example and the same
+steps with its own file names.
 
 Scheduling: bed allocation, conference, employee shifts, flight crew, food
 packaging, maintenance, meeting, project-job (RCPSP), school timetabling,
@@ -67,7 +72,11 @@ facility location, bin packing, knapsack, quadratic assignment, max-cut,
 assembly-line balancing.
 
 ```sh
-cd use-cases/<slug>/python && uv sync --all-groups --all-extras && uv run pytest
+uv sync                                    # editable install; builds all 22 extensions in place
+uv run pytest                              # every Python test
+OPTIMARU_USE_CASES=knapsack uv sync        # build only the use cases you work on
+uv run pytest tests/knapsack
+cmake -B build && cmake --build build -j && ctest --test-dir build   # engine + use-case C++ tests
 ```
 
 ## Benchmarks
@@ -151,78 +160,101 @@ exhaustive/partitioned search and REST layers.
 
 ## Repository layout
 
-The engine is dependency-free, header-only C++17 and contains **no domain
-code** — problems consume it as a library. Worked use cases live in
-[`use-cases/`](use-cases), runnable notebooks with visualizations in
-[`examples/`](examples) and public benchmark harnesses in
-[`benchmarks/`](benchmarks).
+The layout follows the usual pattern for a compiled Python package: one package,
+`optimaru/`, with the C++ next to the Python it backs, and one `tests/` tree that
+mirrors it. The engine is dependency-free, header-only C++17 and contains **no
+domain code**; every use case is a subpackage that consumes it as a library.
 
 ```
-include/optimaru/     the engine (header-only)
-test/                 engine tests
-use-cases/<slug>/     22 problems built on the engine: C++ domain + solver
-                      and a pybind11 package
-examples/             one Jupyter notebook per use case, with visualizations
-benchmarks/<slug>/    the same problems against OR-Tools (CP-SAT, or the
-                      Routing solver for VRP);
-                      competing solvers live only here
-benchmarks/cpsat-common/  comparison runner; points external-solver at this checkout
+optimaru/                          the Python package (pip install optimaru)
+├── __init__.py                    loads each use case on first access
+├── _constraint.py                 the constraint-spec base every use case shares
+├── cpp/optimaru/                  the engine (header-only C++17), below
+└── <use case>/                    22 subpackages, e.g. vehicle_routing/
+    ├── __init__.py, models.py,    the Python API: solve, pydantic models,
+    │   constraints.py, _core.pyi  constraint specs, stubs of the extension
+    └── cpp/
+        ├── bindings.cpp           the pybind11 module optimaru.<use case>._core
+        ├── include/<ns>/          domain, calculators, constraints/, solver
+        ├── src/                   the core library sources (main.cpp: demo)
+        └── CMakeLists.txt         core library, demo and C++ tests
+tests/                             mirrors the package
+├── engine/                        engine tests (C++)
+├── test_constraint.py             the constraint-spec base
+└── <use case>/                    pytest suite; cpp/ holds the C++ tests
+docs/                              the documentation site (mkdocs.yml): the
+                                   extending guide, one guide per use case
+                                   (docs/use-cases/<slug>/), the PyPI page
+examples/                          one Jupyter notebook per use case
+benchmarks/<slug>/                 the same problems against OR-Tools (CP-SAT,
+                                   or the Routing solver for VRP); competing
+                                   solvers live only here
+benchmarks/cpsat-common/           comparison runner; checks external-solver
+                                   runs against this checkout
+setup.py, CMakeLists.txt           the wheel's extensions; the C++ build
 ```
 
 ## Engine layout
 
 ```
-include/optimaru/
-├── optimaru.hpp            umbrella include for consumers
-├── solver.hpp              Solver: construction, then search; multi-start
-├── background_solve.hpp    solve_in_background / BackgroundSolve
-├── explain.hpp             explain_score / rescore
-├── settings.hpp            Settings, Limits, AcceptanceSettings, MoveMix,
-│                           NeighborSettings, RuinRecreateSettings, ...
-├── worker_threads.hpp      thread start-up / shutdown for parallel pools
-├── model/                  the solution as the engine sees it
-│   ├── solution_traits.hpp SolutionTraits, Shape (Assignment | Sequence | Chain),
-│   │                       pinning, chain link encoding
-│   ├── derived_state.hpp   values derived from the decisions
-│   ├── editor.hpp          every write, bracketed by the objective's hooks
-│   ├── chain_view.hpp      the list view a chain solve runs on
-│   ├── element_index.hpp   element -> (list, position)
-│   ├── snapshot.hpp        whole and list-wise restore
-│   └── neighborhoods.hpp   k-nearest-neighbour lists
-├── score/                  scoring
-│   ├── score.hpp           Score, ScoreChecks, ScoreMismatchError
-│   ├── levels.hpp          Level (hard / medium / soft), MediumFold
-│   ├── objective.hpp       Objective: the incremental scoring contract
-│   ├── chain_objective.hpp, weighted_objective.hpp
-│   ├── decomposed_objective.hpp   per-unit and global constraint plugins
-│   ├── constraint_assembly.hpp    default constraint set: weight / level /
-│   │                              exponent / offset / clip / drop by name,
-│   │                              repeated instances, info() catalog
-│   └── breakdown.hpp       ScoreBreakdown / ConstraintScore
-├── construct/              the initial solution: first fit (decreasing),
-│                           cheapest insertion
-├── accept/                 Acceptor and one file per rule: hill climbing, late
-│                           acceptance, entity tabu, simulated annealing, great
-│                           deluge, step counting, record-to-record travel
-├── select/                 adaptive operator selection: MoveOutcome, roulette
-│                           wheel, segmented roulette, alpha-UCB, uniform
-├── stop/                   when a solve ends (StopCondition) and the throttle
-│                           long-running moves consult it through
-├── search/                 the step loop (local_search) and the plugin points
-│                           for custom operators (MoveOperator / RuinOperator)
-├── moves/                  every move the step loop draws: the sequence moves
-│                           (list_move) and their previews, descent, ejection
-│                           chain, iterated local search, route elimination
-├── ruin_recreate/          one destroy-and-repair unit: the ruin operators
-│                           (random, related, worst, SISR, route), the greedy /
-│                           regret-k recreate, and ruin_recreate_move, which
-│                           applies them as an ordinary move (the stagnation
-│                           kick uses the same parts)
-├── python/                 pybind11 helpers: constraint specs ->
-│                           ConstraintAssembly, constraint_info(),
-│                           constraint_costs(), names, the level guard
-└── testing/                preview-vs-applied-score harness for a use case's
-                            objective tests
+optimaru/cpp/optimaru/
+├── optimaru.hpp                  umbrella include for consumers
+├── solver.hpp                    Solver: construction, then search; multi-start
+├── background_solve.hpp          solve_in_background / BackgroundSolve
+├── explain.hpp                   explain_score / rescore
+├── settings.hpp                  Settings, Limits, AcceptanceSettings, MoveMix,
+│                                 NeighborSettings, RuinRecreateSettings, ...
+├── portable_random.hpp           seeded draws that match on every standard library
+├── worker_threads.hpp            thread start-up / shutdown for parallel pools
+├── model/                        the solution as the engine sees it
+│   ├── solution_traits.hpp       SolutionTraits, Shape (Assignment | Sequence |
+│   │                             Chain), pinning, chain link encoding
+│   ├── derived_state.hpp         values derived from the decisions
+│   ├── editor.hpp                every write, bracketed by the objective's hooks
+│   ├── chain_view.hpp            the list view a chain solve runs on
+│   ├── element_index.hpp         element -> (list, position)
+│   ├── snapshot.hpp              whole and list-wise restore
+│   └── neighborhoods.hpp         k-nearest-neighbour lists
+├── score/                        scoring
+│   ├── score.hpp                 Score, ScoreChecks, ScoreMismatchError
+│   ├── levels.hpp                Level (hard / medium / soft), MediumFold
+│   ├── objective.hpp             Objective: the incremental scoring contract
+│   ├── chain_objective.hpp       the objective contract for chain solutions
+│   ├── weighted_objective.hpp    sums independent objectives into one score
+│   ├── decomposed_objective.hpp  per-unit and global constraint plugins
+│   ├── constraint_assembly.hpp   default constraint set: weight / level /
+│   │                             exponent / offset / clip / drop by name,
+│   │                             repeated instances, info() catalog
+│   └── breakdown.hpp             ScoreBreakdown / ConstraintScore
+├── construct/                    the initial solution: first fit (decreasing),
+│                                 cheapest insertion
+├── accept/                       Acceptor and one file per rule: hill climbing,
+│                                 late acceptance, entity tabu, simulated
+│                                 annealing, great deluge, step counting,
+│                                 record-to-record travel
+├── select/                       adaptive operator selection: MoveOutcome,
+│                                 roulette wheel, segmented roulette, alpha-UCB,
+│                                 uniform
+├── stop/                         when a solve ends (StopCondition) and the
+│                                 throttle long-running moves consult it through
+├── search/                       the step loop (local_search) and the plugin
+│                                 points for custom operators (MoveOperator /
+│                                 RuinOperator)
+├── moves/                        every move the step loop draws: the sequence
+│                                 moves (list_move) and their previews, descent,
+│                                 ejection chain, iterated local search, route
+│                                 elimination
+├── ruin_recreate/                one destroy-and-repair unit: the ruin operators
+│                                 (random, related, worst, SISR, route), the
+│                                 greedy / regret-k recreate, and
+│                                 ruin_recreate_move, which applies them as an
+│                                 ordinary move (the stagnation kick uses the
+│                                 same parts)
+├── python/                       pybind11 helpers: constraint specs ->
+│                                 ConstraintAssembly, constraint_info(),
+│                                 constraint_costs(), names, the level guard
+└── testing/                      preview-vs-applied-score harness for a use
+                                  case's objective tests
 ```
 
 `optimaru::` is one flat namespace apart from the `optimaru::testing` and
@@ -232,13 +264,13 @@ members are snake_case, types PascalCase.
 
 ## Tests
 
-`test/engine_test.cpp` verifies every feature against brute force on two toy
+`tests/engine/engine_test.cpp` verifies every feature against brute force on two toy
 domains (task assignment, TSP): six of the seven acceptors (all but
 record-to-record travel), all five limits, FFD ordering, multi-start
 (and its exception safety), `ScoreChecks::Full` catching a deliberately
 corrupted objective, list moves under `ScoreChecks::Full`, adaptive operator-weight
 convergence, LNS escaping a local optimum that traps hill climbing, and the
-nearby+LNS quality win on 100-city random TSP. `test/constraint_level_test.cpp`
+nearby+LNS quality win on 100-city random TSP. `tests/engine/constraint_level_test.cpp`
 covers the constraint contract: levels and both medium folds, the knob guards
 (rewards, structural levels, the literal offset kept off the hard score,
 weight, exponent, offset and clip checks), the
@@ -248,13 +280,20 @@ repeated and shifted components, and the score range (a saturating hard total,
 out-of-range contributions).
 
 ```sh
-cmake -B build && cmake --build build && ctest --test-dir build
+cmake -B build -DOPTIMARU_USE_CASES=none && cmake --build build && ctest --test-dir build
 ```
+
+`OPTIMARU_USE_CASES` takes `all` (the default), `none` or a `;`-separated list
+such as `knapsack;vehicle_routing`; each use case adds its core library, demo
+and the C++ tests in `tests/<use case>/cpp/`, built under `build/<use case>/`.
 
 ## Building and releasing
 
-The distribution is built from this repository by [`setup.py`](setup.py), which
-reuses each use case's own `python/setup.py`.
+The distribution is built from this repository by [`setup.py`](setup.py): one
+extension per use case, from its `cpp/bindings.cpp` and every `cpp/src/*.cpp`
+except `main.cpp` (the demo).
+`OPTIMARU_USE_CASES=knapsack,vehicle_routing` builds only those extensions (CI
+tests one use case per job that way); a release builds all of them.
 
 **Releasing:** bump `version` in [`pyproject.toml`](pyproject.toml) in a PR and
 merge it. On the push to `main`, if there is no `v<version>` tag yet,

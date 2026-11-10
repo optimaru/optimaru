@@ -1,55 +1,40 @@
-import importlib
 import sys
-import types
 
 import pytest
 from cpsat_plugins import checkout
 
 
 @pytest.fixture
-def fake_case(tmp_path, monkeypatch):
-    """A use-case-shaped package that imports its submodules relatively."""
-    package = tmp_path / "fake_case"
-    package.mkdir()
-    (package / "__init__.py").write_text("from .models import Problem\n")
-    (package / "models.py").write_text("class Problem:\n    pass\n")
-    (package / "constraints.py").write_text("from .models import Problem\n")
-    monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.setitem(checkout.SUBPACKAGES, "fake_case", "fake_subpackage")
-    names = ("optimaru", "fake_case", "fake_case.models", "fake_case.constraints")
-    saved = {name: sys.modules.pop(name, None) for name in names}
-    yield
-    for name in list(sys.modules):
-        if name.startswith(("optimaru.fake_subpackage", "fake_case")):
-            del sys.modules[name]
-    for name, module in saved.items():
-        if module is not None:
-            sys.modules[name] = module
-        else:
-            sys.modules.pop(name, None)
+def fake_engine(tmp_path, monkeypatch):
+    """An ``optimaru`` package with one use case, ``fake_case``, under tmp_path/repo."""
+    repo = tmp_path / "repo"
+    package = repo / "optimaru" / "fake_case"
+    package.mkdir(parents=True)
+    (repo / "optimaru" / "__init__.py").write_text("")
+    (package / "__init__.py").write_text("")
+    monkeypatch.syspath_prepend(str(repo))
+    saved = {name: sys.modules.pop(name) for name in list(sys.modules) if name.split(".")[0] == "optimaru"}
+    yield repo
+    for name in [name for name in sys.modules if name.split(".")[0] == "optimaru"]:
+        del sys.modules[name]
+    sys.modules.update(saved)
 
 
-def test_the_checkout_package_answers_to_the_published_names(fake_case):
-    checkout.use_checkout_engine("fake_case")
-    import fake_case
+def test_the_checkout_engine_is_accepted(fake_engine):
+    module = checkout.use_checkout_engine("fake_case", repo_root=fake_engine)
 
-    published = importlib.import_module("optimaru.fake_subpackage")
-    assert published is fake_case
-    # Submodules not imported by the package itself are registered too, so the
-    # library never loads a second copy of a class.
-    assert (
-        importlib.import_module("optimaru.fake_subpackage.constraints")
-        is sys.modules["fake_case.constraints"]
-    )
-    from optimaru.fake_subpackage.models import Problem
-
-    assert Problem is fake_case.Problem
-    checkout.use_checkout_engine("fake_case")  # idempotent
+    assert module is sys.modules["optimaru.fake_case"]
+    assert checkout.use_checkout_engine("fake_case", repo_root=fake_engine) is module  # idempotent
 
 
-def test_an_engine_imported_from_elsewhere_is_refused(fake_case):
-    sys.modules["optimaru.fake_subpackage"] = types.ModuleType(
-        "optimaru.fake_subpackage"
-    )
-    with pytest.raises(RuntimeError, match="before importing external_solver"):
-        checkout.use_checkout_engine("fake_case")
+def test_an_engine_from_elsewhere_is_refused(fake_engine, tmp_path):
+    elsewhere = tmp_path / "another-checkout"
+    elsewhere.mkdir()
+
+    with pytest.raises(RuntimeError, match="not from the checkout"):
+        checkout.use_checkout_engine("fake_case", repo_root=elsewhere)
+
+
+def test_the_repo_root_is_this_checkout():
+    assert (checkout.REPO_ROOT / "optimaru" / "__init__.py").is_file()
+    assert (checkout.REPO_ROOT / "benchmarks" / "cpsat-common").is_dir()
