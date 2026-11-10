@@ -86,8 +86,8 @@ assembly-line balancing, quadratic assignment, max-cut.
 ```sh
 uv sync                                    # editable install; builds all 22 extensions in place
 uv run pytest                              # every Python test
-OPTIMARU_USE_CASES=knapsack uv sync        # build only the use cases you work on
-uv run pytest tests/knapsack
+export OPTIMARU_USE_CASES=knapsack         # or build only the use cases you work on
+uv sync && uv run pytest tests/knapsack    # (uv rebuilds when the variable changes)
 cmake -B build && cmake --build build -j && ctest --test-dir build   # engine + use-case C++ tests
 ```
 

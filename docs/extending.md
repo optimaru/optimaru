@@ -49,7 +49,8 @@ changing:
 cmake -B build -DOPTIMARU_USE_CASES=<uc> && cmake --build build -j
 ctest --test-dir build --output-on-failure      # the engine tests and <uc>'s C++ tests
 
-OPTIMARU_USE_CASES=<uc> uv sync                 # builds optimaru.<uc>._core in place
+export OPTIMARU_USE_CASES=<uc>                  # keep it exported for the test run too
+uv sync                                         # builds optimaru.<uc>._core in place
 uv run pytest -q tests/<uc>
 ```
 
