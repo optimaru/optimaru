@@ -1,19 +1,13 @@
 #ifndef ST_CANONICAL_SOLVER_HPP
 #define ST_CANONICAL_SOLVER_HPP
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
 #include <utility>
-#include <vector>
 
 #include "st/canonical_domain.hpp"
 #include "st/objective_weights.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace st::canon {
 
@@ -35,51 +29,23 @@ namespace st::canon {
 // (each with its own calculator + operator instances, seed + i).
 class Solver {
 public:
-    struct Config {
-        // Wall-clock budget (the CP-SAT package's SOLVER_TIME_LIMIT_SECONDS
-        // analog).
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires (termination is by time_limit).
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        // Late-acceptance history length. 0 (the default) = auto: clamp(4 *
-        // lessonCount, 400, 3200) — on the track-2 bench the small instance
-        // prefers ~800 while the mid/large ones profit from 1600+, and 4x
-        // the lesson count tracks that optimum across sizes.
-        std::size_t history_length = 0;
-        std::uint64_t seed = 0;
-
-        // Independent parallel starts (the engine's multi-start): each worker
-        // receives seed + i and the full wall-clock budget; the best
-        // solution wins.
-        int parallel_solver_count = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; orders of magnitude
-        // slower).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS) — essential on dense instances where plain LA local
-        // search locks into a local optimum.
-        bool ruin_recreate = true;
-        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
-        double ruin_recreate_min_ruin_fraction = 0.10;
-        double ruin_recreate_max_ruin_fraction = 0.30;
-        int ruin_recreate_max_ruin_count = 60;
-        double ruin_recreate_operator_decay = 0.8;
-        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruin_recreate_polish_steps = 5000;
-
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   time_limit             the CP-SAT package's SOLVER_TIME_LIMIT_SECONDS
+    //                          analog
+    //   history_length 0       clamp(4 * lessonCount, 400, 3200): on the
+    //                          track-2 bench the small instance prefers ~800
+    //                          while the mid/large ones profit from 1600+, and
+    //                          4x the lesson count tracks that optimum across
+    //                          sizes
+    //   parallel_solver_count  starts of this solver's own solve (see above),
+    //                          not the engine's multi-start; ignored by the
+    //                          constraint-assembly overload
+    //   ruin_recreate          essential on dense instances, where plain LA
+    //                          local search locks into a local optimum
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
-        // the stagnation kick above (engine
+        // the stagnation kick (engine
         // RuinRecreateSettings::as_move_weight). Probability that a step is a
         // small ruin + greedy repair instead of a sampled change/swap; a
         // rejected one is rolled back like any other move.
@@ -146,13 +112,6 @@ public:
         // kDefaultWeight. solve(table, calculator) ignores them — the
         // assembly's components carry their own weights.
         ObjectiveWeights weights;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
-        // Set by solve() on each parallel worker's copy, not by a caller (and
-        // not bound to Python): the first worker that fails raises it, and the
-        // other workers' engines stop at their next step instead of running out
-        // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;

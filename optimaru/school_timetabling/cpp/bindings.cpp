@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -39,44 +38,18 @@ namespace cn = st::canon;
 
 namespace {
 
-// The quickstart and canonical Solver::Config structs share every engine
-// field, so both bindings come from this one helper; the mode-specific
-// fields (the canonical fast-path `weights` and guided-search knobs, the
-// quickstart same-group nearby knobs) are bound next to each class below.
+// What the quickstart and the canonical Solver::Config share on top of the
+// fields optimaru::python::bind_solver_config binds for every use case: the
+// descent knobs and the move mix. The mode-specific fields (the canonical
+// fast-path `weights` and guided-search knobs, the quickstart same-group
+// nearby knobs) are bound next to each class below.
 template <typename Config>
 void bindSolverConfigCommon(py::class_<Config>& cls) {
     cls.def(py::init<>())
-            .def_readwrite("ruin_recreate", &Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Config::ruin_recreate_unimproved_step_trigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Config::ruin_recreate_min_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Config::ruin_recreate_max_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_count", &Config::ruin_recreate_max_ruin_count)
-            .def_readwrite("ruin_recreate_operator_decay", &Config::ruin_recreate_operator_decay)
-            .def_readwrite("ruin_recreate_polish_steps", &Config::ruin_recreate_polish_steps)
-            .def_readwrite("ruin_recreate_as_move_weight", &Config::ruin_recreate_as_move_weight)
-            .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Config::ruin_recreate_as_move_max_ruin)
             .def_readwrite("descent_weight", &Config::descent_weight)
             .def_readwrite("descent_max_sweeps", &Config::descent_max_sweeps)
             .def_readwrite("change_move_weight", &Config::change_weight)
-            .def_readwrite("swap_move_weight", &Config::swap_weight)
-            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-            // stops at the first feasible solution.
-            .def_property(
-                    "best_score_limit",
-                    [](const Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // Callback fired on every new best solution: on_new_best(step, score).
-            // The pybind11 wrapper re-acquires the GIL, so it is safe from the
-            // engine's multi-start worker threads too.
-            .def_readwrite("on_new_best", &Config::on_new_best);
+            .def_readwrite("swap_move_weight", &Config::swap_weight);
 }
 
 // ---------------------------------------------------------------------------

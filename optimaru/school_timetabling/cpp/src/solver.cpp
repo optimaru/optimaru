@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -19,20 +18,10 @@ void Solver::solve(Timetable& table) {
         ScoreCalculator::score(table);
         return;
     }
-    if (config_.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
 
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config_.seed;
-    engineConfig.score_checks = config_.score_checks;
+    optimaru::Settings engineConfig = optimaru::settings_from(config_);
     engineConfig.parallel_starts = std::max(1, config_.parallel_solver_count);
-    engineConfig.on_new_best = config_.on_new_best;
-    engineConfig.limits.time_limit = config_.time_limit;
-    engineConfig.limits.target_score = config_.target_score;
-    engineConfig.limits.stall_time_limit = config_.stall_time_limit;
-    engineConfig.limits.step_limit = config_.step_limit;
-    engineConfig.limits.stall_step_limit = config_.stall_step_limit;
     // history_length 0 = auto-scale with the instance (see Config).
     engineConfig.search.acceptance.history_length =
             config_.history_length != 0
@@ -40,24 +29,14 @@ void Solver::solve(Timetable& table) {
                     : std::clamp<std::size_t>(8 * table.lessons.size(), 400, 3200);
     engineConfig.search.moves.change_weight = config_.change_weight;
     engineConfig.search.moves.swap_weight = config_.swap_weight;
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config_.ruin_recreate;
-    lns.unimproved_step_trigger = config_.ruin_recreate_unimproved_step_trigger;
-    lns.min_ruin_fraction = config_.ruin_recreate_min_ruin_fraction;
-    lns.max_ruin_fraction = config_.ruin_recreate_max_ruin_fraction;
-    lns.max_ruin_count = config_.ruin_recreate_max_ruin_count;
-    lns.operator_decay = config_.ruin_recreate_operator_decay;
-    lns.rewards = config_.ruin_recreate_rewards;
-    lns.polish_steps = config_.ruin_recreate_polish_steps;
     // AUTO as-move weight (negative sentinel): budget-share 0.2 inside the
     // measured [900, 1300]-cell pay-off window, off outside it (see Config).
+    // settings_from() copied a weight >= 0 as it is.
     if (config_.ruin_recreate_as_move_weight < 0.0) {
         const int cells = table.slotRoomCount();
-        lns.as_move_weight = (cells >= 900 && cells <= 1300) ? 0.2 / cells : 0.0;
-    } else {
-        lns.as_move_weight = config_.ruin_recreate_as_move_weight;
+        engineConfig.search.ruin_recreate.as_move_weight =
+                (cells >= 900 && cells <= 1300) ? 0.2 / cells : 0.0;
     }
-    lns.as_move_max_ruin = config_.ruin_recreate_as_move_max_ruin;
     engineConfig.search.descent_weight = config_.descent_weight;
     engineConfig.search.descent_max_sweeps = config_.descent_max_sweeps;
 

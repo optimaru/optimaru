@@ -1,10 +1,8 @@
 #include "st/canonical_solver.hpp"
 
 #include <algorithm>
-#include <exception>
 #include <memory>
 #include <random>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -16,7 +14,6 @@
 #include "st/moves/unassign.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/worker_threads.hpp"
 
 namespace st::canon {
 
@@ -38,14 +35,7 @@ struct GuidedSetup {
 // solve() overload wires it separately.
 GuidedSetup configureEngine(const Solver::Config& config, const Timetable& table,
                             optimaru::Settings& engineConfig) {
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
-    engineConfig.on_new_best = config.on_new_best;
-    engineConfig.limits.time_limit = config.time_limit;
-    engineConfig.limits.target_score = config.target_score;
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
+    engineConfig = optimaru::settings_from(config);
     // history_length 0 = auto-scale with the instance (see Config).
     engineConfig.search.acceptance.history_length =
             config.history_length != 0
@@ -53,17 +43,6 @@ GuidedSetup configureEngine(const Solver::Config& config, const Timetable& table
                     : std::clamp<std::size_t>(4 * table.lessons.size(), 400, 3200);
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
-    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
-    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
-    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
-    lns.operator_decay = config.ruin_recreate_operator_decay;
-    lns.rewards = config.ruin_recreate_rewards;
-    lns.polish_steps = config.ruin_recreate_polish_steps;
-    lns.as_move_weight = config.ruin_recreate_as_move_weight;
-    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     engineConfig.search.descent_weight = config.descent_weight;
     engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
 
@@ -146,47 +125,18 @@ void Solver::solve(Timetable& table) {
         ScoreCalculator::score(table, config_.weights);
         return;
     }
-    if (config_.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
 
-    // Independent parallel starts: worker i
-    // solves its own copy with seed + i and a per-worker calculator — the
+    // Independent parallel starts: start i runs this solve() on its own copy
+    // with seed + i, one start and a calculator of its own — the
     // guided-selection hooks below read live calculator state, so the engine's
     // built-in multi-start (which shares the config across threads) cannot be
     // used. The best final score wins.
-    const int workerCount = std::max(1, config_.parallel_solver_count);
-    if (workerCount > 1) {
-        std::vector<Timetable> candidates(workerCount, table);
-        std::vector<std::exception_ptr> failures(workerCount);
-        // Raised by the first worker that fails: every worker's engine checks
-        // it once a step, so the others stop instead of using up their budget.
-        auto stop = std::make_shared<std::atomic<bool>>(false);
-        // A worker that cannot be started (std::system_error) stops and joins
-        // the ones already running before the error is rethrown here.
-        optimaru::run_worker_threads(workerCount, *stop,
-                                     [this, &candidates, &failures, &stop](int i) {
-                                         try {
-                                             Config workerConfig = config_;
-                                             workerConfig.parallel_solver_count = 1;
-                                             workerConfig.stop_flag = stop;
-                                             workerConfig.seed += static_cast<std::uint64_t>(i);
-                                             if (i != 0) workerConfig.on_new_best = nullptr;
-                                             Solver worker(std::move(workerConfig));
-                                             worker.solve(candidates[i]);
-                                         } catch (...) {
-                                             failures[i] = std::current_exception();
-                                             stop->store(true);
-                                         }
-                                     });
-        for (const std::exception_ptr& failure : failures) {
-            if (failure) std::rethrow_exception(failure);
-        }
-        int best = 0;
-        for (int i = 1; i < workerCount; ++i) {
-            if (candidates[i].score > candidates[best].score) best = i;
-        }
-        table = std::move(candidates[best]);
+    if (config_.parallel_solver_count > 1) {
+        optimaru::solve_parallel_starts(config_, table,
+                                        [](const Config& config, Timetable& candidate, int) {
+                                            Solver(config).solve(candidate);
+                                        });
         return;
     }
 
@@ -233,9 +183,7 @@ void Solver::solve(Timetable& table, optimaru::DecomposedObjective<Timetable>& c
         table.score = calculator.score();
         return;
     }
-    if (config_.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
 
     optimaru::Settings engineConfig;
     const GuidedSetup setup = configureEngine(config_, table, engineConfig);
