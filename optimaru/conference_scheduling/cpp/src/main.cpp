@@ -1,4 +1,4 @@
-// Demo: builds the demo conference (modelled on the quickstart's demo; the
+// Demo: builds the demo conference (the
 // tags are drawn from a seeded std::mt19937_64), solves for N seconds and
 // asserts the result is feasible (hard == 0).
 #include <cstdint>

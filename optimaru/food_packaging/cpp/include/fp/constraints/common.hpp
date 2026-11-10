@@ -18,8 +18,7 @@ namespace fp
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The five constraints of the reference food-packaging
-// FoodPackagingConstraintProvider, split into one small component each on the
+// The five food-packaging constraints, one small component each on the
 // engine's DecomposedObjective — an optional assembly path NEXT TO the
 // monolithic FoodPackagingIncrementalScoreCalculator, which stays the tuned
 // default fast path.
@@ -34,14 +33,14 @@ namespace fp
 // unassignedJobsCost counts the jobs in no list at all — both are
 // GlobalConstraints.
 //
-// A component never reads the Job shadow variables (lineIndex,
+// A component never reads the Job derived fields (lineIndex,
 // startCleaning/startProduction/endDateTime): LineChain below re-derives the
 // cleaning-and-production chain from a unit's own member order, which is what
 // makes each cost a pure function of (solution, unit, members) as the
 // engine's contract requires. The LIST path re-costs a touched list whole, so
 // no delta contract is needed.
 //
-// Score levels: the quickstart scores with HardMediumSoftScore, which this
+// Score levels: the score has three levels (hard / medium / soft), which this
 // domain folds into the engine's Score as
 // `soft = medium * kMediumUnit + soft` (kMediumUnit = 10^10; kMediumFold and
 // the MediumFoldOf<PackagingSchedule> specialization in domain.hpp). The two
@@ -147,7 +146,7 @@ inline const std::vector<int> &jobsOfUnit(const PackagingSchedule &schedule,
     return schedule.rawList(unit);
 }
 
-// The Java shadow chain of one line, re-derived from its member order:
+// The job times of one line, derived from its member order:
 //   first job:  startCleaning = startProduction = line.startDateTime
 //   later job:  startCleaning = previous end
 //               startProduction = startCleaning + cleanup(previous, this)

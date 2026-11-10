@@ -1,10 +1,10 @@
 """Type stubs for `optimaru.vehicle_routing._core` — the vehicle-routing C++ solver.
 
-Times are integer seconds from a common day start. The plan is the planning
-solution: each vehicle's ordered `visit_indices` is the planning list
-variable; a visit in no route is unassigned.
+Times are integer seconds from a common day start. Each vehicle's ordered
+`visit_indices` (its route) is the decision; a visit in no route is
+unassigned.
 
-Score (HardMediumSoft, lexicographic), at the default weights: hard =
+Score (hard / medium / soft, lexicographic), at the default weights: hard =
 capacity excess + time-window lateness (0 = feasible), medium = -(penalty
 minutes of unassigned visits), folded into the engine's soft as
 medium * 10^9; soft = -(total driving seconds). The weights are the C++
@@ -53,7 +53,7 @@ class Location:
         """Row/column into the driving-time matrix; set by VehicleRoutePlan."""
 
 class Visit:
-    """Planning entity: one customer stop (demand, time window, service)."""
+    """One customer stop (demand, time window, service)."""
     def __init__(
         self,
         id: str,
@@ -76,10 +76,10 @@ class Visit:
     def unassigned_penalty(self) -> int: ...
     @property
     def vehicle_index(self) -> int:
-        """Shadow: index of the serving vehicle; -1 == unassigned."""
+        """Derived: index of the serving vehicle; -1 == unassigned."""
     @property
     def arrival_time(self) -> int:
-        """Shadow: arrival seconds; -1 == unassigned."""
+        """Derived: arrival seconds; -1 == unassigned."""
 
 class Vehicle:
     def __init__(
@@ -112,10 +112,10 @@ class Vehicle:
     """Whether the route ends back home. False (the default) leaves the route
     open at its last stop: no closing leg is driven or timed."""
     visit_indices: list[int]
-    """The planning list variable: the ordered route (indices into visits)."""
+    """The decision: the ordered route (indices into visits)."""
 
 class VehicleRoutePlan:
-    """Planning solution. Constructing it assigns location indices and
+    """The problem and its routes. Constructing it assigns location indices and
     accepts an explicit matrix or precomputes the haversine fallback."""
     def __init__(
         self,
@@ -147,7 +147,7 @@ class VehicleRoutePlan:
         """Recompute unassigned_visit_indices from the current routes."""
 
 def calculate_score(plan: VehicleRoutePlan) -> Score:
-    """Recompute shadow variables and the score (also stores plan.score)."""
+    """Recompute the derived fields and the score (also stores plan.score)."""
 
 class SolverConfig:
     def __init__(self) -> None: ...
@@ -243,7 +243,7 @@ class SolverConfig:
 class Solver:
     """Construction heuristic + local search + adaptive ruin & recreate
     (ALNS). Solves IN PLACE: fills vehicle.visit_indices, the unassigned
-    pool, the shadow variables and plan.score."""
+    pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: VehicleRoutePlan) -> None: ...
     def solve_with_constraints(

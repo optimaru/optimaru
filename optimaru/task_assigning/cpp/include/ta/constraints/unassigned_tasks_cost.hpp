@@ -8,10 +8,9 @@ namespace ta
 
 // Medium, weight 1: unassignedTasksCost — the tasks in no employee's list.
 // Raw cost = the number of unassigned tasks, so 0 = every task is assigned.
-// The Bendable soft[0] level, the domain's medium level: the below-hard fold
+// The soft[0] level, the domain's medium level: the below-hard fold
 // (domain.hpp, kMediumFold) reports engine.hard = hard * 10^9 + medium, so it
-// stays lexicographically below the missing-skill count exactly like in
-// Java. Its weight is in medium units; hard() makes it 1 hard unit per task,
+// stays lexicographically below the missing-skill count. Its weight is in medium units; hard() makes it 1 hard unit per task,
 // soft() 1 soft unit per task (outside the fold).
 //
 // Global because an unassigned task belongs to no unit (the

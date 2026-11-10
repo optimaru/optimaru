@@ -1,7 +1,7 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (`mnt.solve(schedule)`) enables all six constraints at their default
-weights (the quickstart's). This module is the alternative path next to it: pick
+weights. This module is the alternative path next to it: pick
 constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(schedule, constraints=...)`.
 

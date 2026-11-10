@@ -10,9 +10,9 @@ namespace pjs
 // last project finishes. Raw cost (one global value, a max rather than a
 // total) = max over SINK allocations of endDate, a day index counted from
 // day 0 (release dates do not move it), so 0 = every project ends on day 0
-// (or there is no SINK at all). One penalty for the whole schedule (the Java
-// groupBy(max)), not one per project, so shortening any project other than
-// the last one is free on this term. The exponent shapes that value.
+// (or there is no SINK at all). One penalty for the whole schedule, not one
+// per project, so shortening any project other than the last one is free on
+// this term. The exponent shapes that value.
 struct MakespanCost final : ScheduleAggregateConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

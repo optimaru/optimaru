@@ -6,12 +6,11 @@
 namespace pdp
 {
 
-// The same driving-time model as the vehicle-routing port's
-// HaversineDrivingTimeCalculator (a port of
-// org.acme.vehiclerouting.domain.geo.HaversineDrivingTimeCalculator):
+// The same driving-time model as the vehicle-routing use case's
+// HaversineDrivingTimeCalculator:
 // haversine distance in meters at a fixed average speed. Duplicated rather
 // than shared so the two use cases stay independently buildable, exactly like
-// every other pair of quickstarts in this repo.
+// every other pair of use cases in this repo.
 class HaversineDrivingTimeCalculator
 {
 public:

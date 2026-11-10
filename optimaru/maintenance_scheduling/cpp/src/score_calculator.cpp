@@ -21,7 +21,7 @@ namespace
 
 // The monolithic score is the default assembly, so it reads the same
 // constants the components carry. Integral, so both levels are computed in
-// int64 exactly like the Java long arithmetic.
+// int64 exactly.
 constexpr auto kCrewWeight
     = static_cast<std::int64_t>(CrewConflictCost::kDefaultWeight);
 constexpr auto kMinStartWeight
@@ -60,8 +60,8 @@ void ScoreCalculator::prepare(MaintenanceSchedule &schedule)
         return;
 
     // Intern tags into dense ids so the scoring loops index flat count
-    // arrays instead of hashing strings. Java's SequencedSet is unique, but
-    // the C++ tags vector is deduplicated defensively.
+    // arrays instead of hashing strings. A job's tags are
+    // a set, so the tags vector is deduplicated.
     std::unordered_map<std::string, int> tagId;
     for (Job &job : schedule.jobs)
     {
@@ -89,7 +89,7 @@ void ScoreCalculator::prepare(MaintenanceSchedule &schedule)
     schedule.tagCount = static_cast<int>(tagId.size());
 
     // The date half of the value range: every non-weekend day in
-    // [fromDate, toDate) — Java's MaintenanceSchedule.createStartDateList().
+    // [fromDate, toDate).
     schedule.startDates.clear();
     for (std::int64_t day = schedule.fromDate; day < schedule.toDate; ++day)
     {
@@ -97,7 +97,7 @@ void ScoreCalculator::prepare(MaintenanceSchedule &schedule)
             schedule.startDates.push_back(day);
     }
 
-    // The endDate shadow table: end for every (duration, startDateIndex).
+    // The endDate table: end for every (duration, startDateIndex).
     schedule.maxDuration = 0;
     for (const Job &job : schedule.jobs)
     {

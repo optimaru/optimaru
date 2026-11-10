@@ -323,7 +323,7 @@ PYBIND11_MODULE(_core, m)
                      a.push_back(talk.slotRoom);
                  return a;
              })
-        // Bulk write of the planning variable (talk access via .talks
+        // Bulk write of the decision variable (talk access via .talks
         // returns copies, so per-talk writes would be lost).
         .def(
             "set_assignment",
@@ -456,8 +456,8 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::hotTalkProbability)
         .def_readwrite("change_move_weight", &Solver::Config::change_weight)
         .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
-        // Bias change moves toward the talk's type-compatible cells (the
-        // quickstart's per-TalkType value ranges; see cs/solver.hpp).
+        // Bias change moves toward the talk's type-compatible cells (see
+        // cs/solver.hpp).
         .def_readwrite("compatible_value_probability",
                        &Solver::Config::compatibleValueProbability)
         // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)

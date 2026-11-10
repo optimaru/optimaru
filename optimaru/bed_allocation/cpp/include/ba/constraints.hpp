@@ -33,8 +33,7 @@ namespace ba
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider, every component at its own defaults (the quickstart's
-// weights):
+// The full constraint set, every component at its own defaults:
 //
 //   bedConflictCost                   hard,   weight 1000
 //   femaleInMaleRoomCost              hard,   weight 50

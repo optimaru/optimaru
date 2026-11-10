@@ -1,5 +1,4 @@
-"""Constraint spot checks: reproduces Java TaskAssigningConstraintProviderTest cases
-with `calculate_score` (full recompute)."""
+"""Constraint spot checks with `calculate_score` (full recompute)."""
 
 import optimaru.task_assigning as ta
 

@@ -1,14 +1,13 @@
-"""Order picking — C++ core (C++ port of the order-picking example model) with Python helpers.
+"""Order picking — C++ core with Python helpers.
 
 `Side`, `WarehouseLocation`, `Order`, `PickTask`, `Trolley`,
 `OrderPickingSolution`, `Score`, `ConstraintInfo`, `Solver`, `SolverConfig`
-and the module functions come from the compiled C++ core (`_core`). The
-solution is the planning solution: each trolley's ordered `pick_task_indices`
-list is the planning list variable; `trolley_index` / `previous_pick_task` /
-`next_pick_task` on a pick task are the shadow variables derived from it.
+and the module functions come from the compiled C++ core (`_core`). Each
+trolley's ordered `pick_task_indices` list is the decision; `trolley_index` /
+`previous_pick_task` / `next_pick_task` on a pick task are derived from the
+lists.
 
-Score convention (HardSoft, mirroring the Java quickstart 1:1), at the default
-weights:
+Score convention (hard / soft), at the default weights:
   hard = -(missing trolley buckets)                     # trolley_capacity_cost
   soft = -(travel distance in meters                    # distance_from_previous_pick_task_cost
                                                         #   + distance_from_last_pick_task_to_path_origin_cost

@@ -11,8 +11,7 @@ namespace ms
 {
 
 // The meeting-scheduling implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective.
 //
 // All overlap-weighted pair constraints decompose over grain-index units:
 // two meetings' overlap == the number of grain offsets they both occupy, so
@@ -22,7 +21,7 @@ namespace ms
 //   - hard 1 (roomConflictCost):  per (room, offset) cell counts
 //   - hard 3 (requiredAttendanceConflictCost): per (person, offset) required
 //     counts; the two-phase insert order (required first, then preferred)
-//     also reproduces the Java same-meeting (required, preferred) join
+//     also counts the same-meeting (required, preferred) pairs
 //   - medium 6/7 (requiredAndPreferredAttendanceConflictCost /
 //     preferredAttendanceConflictCost): per (person, offset) preferred
 //     counts and required x preferred cross products
@@ -96,7 +95,7 @@ private:
 
     // roomChangeCost pair test between the changed assignment (start grain
     // position posA, room roomA, meeting meetingA) and another assigned
-    // assignment (posB, roomB, meetingB); returns true when the Java
+    // assignment (posB, roomB, meetingB); returns true when the
     // constraint matches. Reads only the flat caches above.
     bool roomChangePairMatches(int posA,
                                int roomA,

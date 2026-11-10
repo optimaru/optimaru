@@ -17,9 +17,9 @@ double toRadians(double degrees) {
     return degrees * kPi / 180.0;
 }
 
-// Java's Math.round(double): floor(x + 0.5), returned as long. All inputs here
+// Rounds half up: floor(x + 0.5), returned as long. All inputs here
 // are non-negative, for which std::llround (round-half-away-from-zero) agrees.
-long javaRound(double value) {
+long roundToLong(double value) {
     return static_cast<long>(std::llround(value));
 }
 
@@ -38,14 +38,14 @@ long calculateDistanceMeters(const CartesianCoordinate& from,
     double dY = from.y - to.y;
     double dZ = from.z - to.z;
     double r = std::sqrt((dX * dX) + (dY * dY) + (dZ * dZ));
-    return javaRound(HaversineDrivingTimeCalculator::TWICE_EARTH_RADIUS_IN_M *
-                     std::asin(r));
+    return roundToLong(HaversineDrivingTimeCalculator::TWICE_EARTH_RADIUS_IN_M *
+                       std::asin(r));
 }
 
 }  // namespace
 
 Seconds HaversineDrivingTimeCalculator::metersToDrivingSeconds(long meters) {
-    return javaRound(static_cast<double>(meters) / AVERAGE_SPEED_KMPH * 3.6);
+    return roundToLong(static_cast<double>(meters) / AVERAGE_SPEED_KMPH * 3.6);
 }
 
 Seconds HaversineDrivingTimeCalculator::calculateDrivingTime(const Location& from,

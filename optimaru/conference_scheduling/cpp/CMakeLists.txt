@@ -24,8 +24,8 @@ add_executable(cs_quality_bench bench/quality_bench.cpp)
 target_link_libraries(cs_quality_bench PRIVATE cs_core)
 target_compile_options(cs_quality_bench PRIVATE -Wall -Wextra)
 
-# Plugin-assembly path (cs/constraints.hpp): the same 36 provider constraints
-# (plus the port's synthetic one) projected into one component each on the
+# Plugin-assembly path (cs/constraints.hpp): the same 37 constraints,
+# projected into one component each on the
 # engine's DecomposedObjective, checked against the monolithic
 # calculators.
 add_executable(cs_plugin_test ${OPTIMARU_TESTS_DIR}/conference_scheduling/cpp/cs_plugin_test.cpp)

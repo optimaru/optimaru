@@ -60,7 +60,7 @@ namespace
 
 // Shared engine wiring for both solve() overloads: termination, late
 // acceptance, the move mix, the ALNS knobs and the day-fit value recommender
-// (which reads only problem facts, so it applies to the plugin path too),
+// (which reads only fixed input, so it applies to the plugin path too),
 // driven by whichever calculator the caller brought.
 void runEngine(
     const Solver::Config &config,
@@ -108,8 +108,8 @@ void runEngine(
     // remaining probability mass) falls back to the engine's uniform draw,
     // which is what keeps the day-crossing states available as stepping
     // stones — forcing day-fit on every draw measured worse than 0.8.
-    // The hook reads only problem facts (room count, the precomputed start
-    // lists), never a planning variable, so the engine's multi-start — which
+    // The hook reads only fixed input (room count, the precomputed start
+    // lists), never a decision variable, so the engine's multi-start — which
     // copies this config into every worker thread while the workers mutate
     // their own solution copies — stays safe. A hook reading live variables
     // would have to move to hand-rolled workers (the school-timetabling

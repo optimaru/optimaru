@@ -1,7 +1,7 @@
 """Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
 Mirrors `_core`'s Airport/Employee/Flight/FlightAssignment/FlightCrewSchedule and
-SolverConfig 1:1, but like the Java quickstart, references are identifiers instead of
+SolverConfig 1:1, but references are identifiers instead of
 indices (airport code, flight flight_number, employee id), times are
 `datetime` (naive == UTC) and dates are `date`. The engine-side units are minute/day
 indices from the Unix epoch::
@@ -93,7 +93,7 @@ class FlightModel(BaseModel):
 
 
 class FlightAssignmentModel(BaseModel):
-    """Planning entity: one crew seat of a flight. employee is the planning
+    """One crew seat of a flight. employee is the decision
     variable (None == unassigned; references a crew member id)."""
 
     model_config = ConfigDict(extra="forbid")
@@ -107,7 +107,7 @@ class FlightAssignmentModel(BaseModel):
 
 
 class FlightCrewScheduleModel(BaseModel):
-    """Planning solution mirror. score is a read-only result, kept as a separate field."""
+    """Solution mirror. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 

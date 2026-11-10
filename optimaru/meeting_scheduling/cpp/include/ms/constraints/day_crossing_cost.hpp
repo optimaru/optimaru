@@ -7,9 +7,9 @@ namespace ms
 {
 
 // Hard, weight 1: dayCrossingCost — a meeting whose last grain falls on a
-// different day than its first. Raw cost per meeting = the TimeGrain facts at
+// different day than its first. Raw cost per meeting = the TimeGrains at
 // its last grain index that sit on another day than its start (normally 0 or
-// 1), which is the Java join's shape; 0 = the meeting starts and ends on the
+// 1); 0 = the meeting starts and ends on the
 // same day. A meeting that overruns the calendar entirely also costs 0 here —
 // overtimeCost prices that case instead.
 struct DayCrossingCost final : PerAssignmentConstraint

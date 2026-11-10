@@ -2,7 +2,7 @@
 
 The 0/1 knapsack with multidimensional resource capacities, mandatory and
 forbidden items, selection-group bounds and item dependencies: one assignment-shape
-planning variable (`Item.selected`, 1 = selected, 0 = not) per item.
+decision variable (`Item.selected`, 1 = selected, 0 = not) per item.
 
 Score, at the default weights:
   hard = -(weight over capacity + resource overflow + unselected mandatory items

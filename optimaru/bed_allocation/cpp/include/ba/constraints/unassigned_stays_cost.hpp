@@ -7,11 +7,10 @@ namespace ba
 {
 
 // Medium, weight 1: unassignedStaysCost — every night a stay spends in the
-// "no bed" sentinel (the quickstart's null bed). Raw cost (on the sentinel
+// "no bed" sentinel (the stay is left unassigned). Raw cost (on the sentinel
 // unit only) = the summed nights of the stays left without a bed, so 0 =
 // every stay has a bed. An uninitialized stay (bed == -1) is not on the
-// sentinel and costs nothing. The Java quickstart calls it
-// assignEveryPatientToABed and charges it soft at weight 10^9.
+// sentinel and costs nothing.
 //
 // The weight is in MEDIUM units: the domain folds the medium level into the
 // engine's soft level as `medium * kMediumUnit` (kMediumFold in domain.hpp),

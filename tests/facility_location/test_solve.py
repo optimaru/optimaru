@@ -10,7 +10,7 @@ import optimaru.facility_location as fl
 
 
 def demo_problem(facility_count=15, consumer_count=30, seed=0):
-    """The Java DemoDataGenerator shape at half scale: uniform locations over
+    """The demo instance shape at half scale: uniform locations over
     the London box, equal capacity/demand shares (5x capacity slack),
     setup cost ~ N(50000, 10000^2)."""
     rng = random.Random(seed)

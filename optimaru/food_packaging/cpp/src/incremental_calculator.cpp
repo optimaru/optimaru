@@ -62,7 +62,7 @@ void FoodPackagingIncrementalScoreCalculator::deriveLine(int l,
     for (const int j : line.jobs)
     {
         const Job &job = s.jobs[j];
-        // The shadow chain (see Job in domain.hpp): the first job cleans and
+        // The job times (see Job in domain.hpp): the first job cleans and
         // produces from the line start; later jobs clean from the previous
         // end for cleanup(previous product -> product) minutes.
         const Minutes startCleaning = previousEnd;
@@ -123,7 +123,7 @@ void FoodPackagingIncrementalScoreCalculator::rebuild(
     // The operator assignment is fixed for the duration of one engine run
     // (fp::Solver re-optimizes it BETWEEN runs), so the same-operator line
     // groups can be precomputed here. Lines without an operator group
-    // together, like Java's null-keyed Joiners.equal.
+    // together.
     sameOperatorLines_.assign(lineCount, {});
     for (int l = 0; l < lineCount; ++l)
     {

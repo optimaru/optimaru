@@ -44,7 +44,7 @@ print(plan.routes())                   # {"V1": ["C1"]}
 - Times are integer **seconds from a common day start** (`8 * 3600` = 08:00).
 - The driving-time matrix is precomputed from the haversine distance when the
   plan is constructed.
-- Score (`HardMediumSoft`, lexicographic), at the default weights: **hard** =
+- Score (hard, medium, soft; lexicographic), at the default weights: **hard** =
   capacity excess (`vehicle_capacity_cost`) + time-window lateness
   (`max_end_time_cost`) (0 = feasible), **medium** = −(penalty minutes of
   unassigned visits, `unassigned_visits_cost`; folded into the engine's soft as

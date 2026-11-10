@@ -8,8 +8,8 @@
 namespace st
 {
 
-// Port of the reference school-timetabling TimeTableConstraintProvider, plus
-// one extension (teacherUnavailabilityCost). The quickstart model has no
+// The quickstart model's score as one monolithic function: six pairwise
+// terms plus teacherUnavailabilityCost. The quickstart model has no
 // constraint registry (solve(mode="quickstart") takes no constraints=); the
 // terms carry the same *Cost names as the canonical model where they mean the
 // same thing (teacherConflictCost, classConflictCost).
@@ -25,8 +25,8 @@ namespace st
 //   hard 3. classConflictCost         -1 per same-group (class) lesson pair
 //                                        in the same timeslot
 //   hard 4. teacherUnavailabilityCost -1 per lesson in a timeslot its
-//                                        teacher is unavailable (extension;
-//                                        zero when the map is empty)
+//                                        teacher is unavailable (zero when
+//                                        the map is empty)
 //   soft 5. teacherRoomChangeCost     -1 per same-teacher lesson pair in
 //                                        different rooms
 //   soft 6. teacherTimeEfficiencyCost +1 per same-teacher lesson pair on the

@@ -1,7 +1,7 @@
 """Type stubs for `optimaru.bin_packing._core` — the bin-packing C++ solver.
 
-The problem is the planning solution: each item's `bin` (a 0-based bin index
-into the n identical bins, -1 == unassigned) is the single assignment-shape planning
+The problem object holds the solution: each item's `bin` (a 0-based bin index
+into the n identical bins, -1 == unassigned) is the single assignment-shape decision
 variable.
 
 Score (hard/soft, lexicographic), at the default weights (1 each): hard =
@@ -30,18 +30,18 @@ class Score:
     def __hash__(self) -> int: ...
 
 class Item:
-    """Planning entity: one item packed into exactly one bin."""
+    """One item packed into exactly one bin."""
 
     def __init__(self, id: str, weight: int, bin: int = -1, color: str | None = None) -> None: ...
     id: str
     weight: int
     bin: int
-    """The planning variable: a 0-based bin index (0..item count - 1); -1 == unassigned."""
+    """The decision variable: a 0-based bin index (0..item count - 1); -1 == unassigned."""
     color: str | None
     def is_assigned(self) -> bool: ...
 
 class BinPackingProblem:
-    """Planning solution. NOTE: `items` element access returns copies; use
+    """Problem and solution in one object. NOTE: `items` element access returns copies; use
     set_assignment for bin writes. Replacing `items` or `conflicts` is fine."""
 
     def __init__(
@@ -66,7 +66,7 @@ class BinPackingProblem:
     def assignment(self) -> list[int]:
         """The current bin per item (-1 == unassigned)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """Bulk write of the planning variable (range-checked when scored or solved)."""
+        """Bulk write of the decision variable (range-checked when scored or solved)."""
 
 def calculate_score(problem: BinPackingProblem, constraints: Iterable[Any] | None = ...) -> Score:
     """Full recompute of the score (also stores problem.score). None scores the

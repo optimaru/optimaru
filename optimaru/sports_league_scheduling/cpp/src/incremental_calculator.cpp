@@ -28,7 +28,7 @@ constexpr std::int64_t kAwayAwayHopWeight = kSoftWeight<AwayToAwayHopCost>;
 constexpr std::int64_t kAwayHomeHopWeight = kSoftWeight<AwayToHomeHopCost>;
 constexpr std::int64_t kEndHopWeight = kSoftWeight<AwayToEndHopCost>;
 // Soft weight of one classic match outside a weekend/holiday round (the
-// quickstart's 1000-per-match penalty, workdayClassicMatchesCost's default).
+// 1000-per-match penalty, workdayClassicMatchesCost's default).
 constexpr std::int64_t kClassicWeight
     = kSoftWeight<WorkdayClassicMatchesCost>;
 
@@ -122,7 +122,7 @@ void SportsLeagueIncrementalScoreCalculator::bumpRun(std::vector<int> &cnt,
     consecutive_ += regionPenalty(cnt, base, l, r) - before;
 }
 
-// Adds match `matchIndex` at planning value `round`, accumulating the deltas
+// Adds match `matchIndex` at round position `round`, accumulating the deltas
 // against the OTHER matches already registered. The match enters the
 // roundMatches_ bucket only at the very end, so every scan below sees
 // everyone but itself.
@@ -205,7 +205,7 @@ void SportsLeagueIncrementalScoreCalculator::insert(int matchIndex, int round)
 
     // hard 4: the match's own predicate (a reversed fixture on ri + 1), plus
     // the reversed fixtures on ri - 1 that this match newly satisfies (their
-    // ifExists flips only when no same-pair match sat on ri before).
+    // predicate flips only when no same-pair match sat on ri before).
     if (match.reversePairId >= 0)
     {
         if (ri + 1 < indexCount_

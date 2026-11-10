@@ -274,7 +274,7 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) Single-component assemblies on the Java ConstraintVerifier shapes.
+// (c) Single-component assemblies on hand-computed cases.
 // -------------------------------------------------------------------------
 void verifyPartialAssemblies()
 {

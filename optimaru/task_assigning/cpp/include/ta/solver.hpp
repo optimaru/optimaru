@@ -25,8 +25,7 @@ class Solver
 public:
     struct Config
     {
-        // Wall-clock budget, mirroring termination.spent-limit (30s in the
-        // quickstart's application.properties).
+        // Wall-clock budget (30s by default).
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above
@@ -84,8 +83,8 @@ public:
     Solver() = default;
     explicit Solver(Config config) : config_(std::move(config)) {}
 
-    // Solves in place: mutates employees[*].tasks, re-derives the task
-    // shadow variables (employee, startTime) and stores the best score found
+    // Solves in place: mutates employees[*].tasks, recomputes the derived
+    // task fields (employee, startTime) and stores the best score found
     // in solution.score. After construction every task is assigned; a task
     // list order is the employee's execution order.
     void solve(TaskAssigningSolution &solution);
@@ -94,9 +93,9 @@ public:
     // ta/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies — cheapest-insertion
     // construction, late-acceptance local search over the LIST moves and
-    // ALNS kicks. Weights come from the assembly, NOT from the quickstart
-    // Bendable defaults. The final solution.score is computed by THIS
-    // calculator (decoded back into the Bendable levels) and the calculator
+    // ALNS kicks. Weights come from the assembly, NOT from the
+    // default weights. The final solution.score is computed by THIS
+    // calculator (decoded back into the score levels) and the calculator
     // is left primed on the final solution, so constraint_totals() explains
     // exactly that score. Single-start: the caller-owned calculator cannot be
     // cloned, so parallelSolverCount is ignored.

@@ -633,7 +633,7 @@ void Solver::solve(OrderPickingSolution &solution)
     engine.solve(solution, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
-    // Also refreshes the shadow variables (trolley / previous / next).
+    // Also refreshes the derived fields (trolley / previous / next).
     solution.score = ScoreCalculator::score(solution);
 }
 
@@ -657,7 +657,7 @@ void Solver::solve(
         engine.solve(solution, calculator);
     }
 
-    // Refresh the shadow variables (trolley / previous / next) on the best
+    // Refresh the derived fields (trolley / previous / next) on the best
     // solution, then score it with the caller's constraint assembly, leaving
     // the calculator primed on it so constraint_totals() explains exactly this
     // score.

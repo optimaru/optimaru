@@ -26,8 +26,7 @@ namespace mnt
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider, every component at its own defaults (the quickstart's
-// weights):
+// The full set, every component at its own defaults:
 //
 //   crewConflictCost             hard, weight 1
 //   minStartDateCost             hard, weight 1

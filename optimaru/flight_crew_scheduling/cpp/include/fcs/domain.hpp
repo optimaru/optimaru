@@ -15,12 +15,11 @@ namespace fcs
 // ---------------------------------------------------------------------------
 // Time
 // ---------------------------------------------------------------------------
-// The Java quickstart uses java.time.LocalDateTime (UTC) / LocalDate. A
-// timestamp is int64 minutes from an arbitrary reference (day 0, 00:00 UTC),
-// so overlap and ordering are plain integer math. A calendar date is the day
-// index = floor(minutes / MINUTES_PER_DAY) — matching LocalDateTime
-// .toLocalDate() as long as one consistent reference is used (the Python
-// models use the Unix epoch).
+// A timestamp is int64 minutes from an arbitrary reference (day 0, 00:00
+// UTC), so overlap and ordering are plain integer math. A calendar date is
+// the day index = floor(minutes / MINUTES_PER_DAY) — the UTC calendar date
+// as long as one consistent reference is used (the Python models use the
+// Unix epoch).
 using Minutes = std::int64_t;
 using DayIndex = std::int64_t;
 
@@ -36,10 +35,9 @@ inline DayIndex dayOf(Minutes m)
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart scores with Score (both levels int) — exactly
-// the engine's Score(int64 hard, double soft), so the mapping is the
-// identity and there is no medium level (no optimaru::MediumFoldOf
-// specialization). The Java FlightCrewSchedulingConstraintProvider weights
+// The domain scores with the engine's Score(int64 hard, double soft)
+// directly; there is no medium level (no optimaru::MediumFoldOf
+// specialization). The default weights
 // (100 / 10 / 1 / 10 hard, 1000 / 1000 soft) are the components'
 // kDefaultWeight (fcs/constraints/*_cost.hpp), declared there once; the
 // monolithic calculators read the same constants.
@@ -48,10 +46,8 @@ using Score = optimaru::Score;
 // ---------------------------------------------------------------------------
 // Airport  (problem fact)
 // ---------------------------------------------------------------------------
-// Referenced everywhere by index into FlightCrewSchedule::airports (the Java
-// domain compares Airport objects by IATA code; an index plays that role).
-// The Java Airport also carries taxiTimeInMinutes, which no constraint and no
-// demo data uses — it is deliberately omitted here.
+// Referenced everywhere by index into FlightCrewSchedule::airports; two
+// airports are the same airport iff their indices are equal.
 struct Airport
 {
     std::string code;  // IATA 3-letter code
@@ -85,10 +81,10 @@ struct Flight
 };
 
 // ---------------------------------------------------------------------------
-// FlightAssignment  (@PlanningEntity)
+// FlightAssignment  (entity)
 // ---------------------------------------------------------------------------
-// One crew seat on one flight. `employee` is the basic @PlanningVariable:
-// which employee fills the seat. -1 means unassigned (employee == null).
+// One crew seat on one flight. `employee` is the decision variable:
+// which employee fills the seat. -1 means unassigned.
 struct FlightAssignment
 {
     std::string id;
@@ -96,10 +92,9 @@ struct FlightAssignment
     int indexInFlight = 0;
     std::string requiredSkill;
 
-    int employee = -1;  // planning variable; -1 == unassigned
+    int employee = -1;  // decision variable; -1 == unassigned
 
-    // Pinned assignments keep their employee fixed (extension over the
-    // quickstart, e.g. a captain confirmed on a leg). They are scored like
+    // Pinned assignments keep their employee fixed (e.g. a captain confirmed on a leg). They are scored like
     // any assignment but never moved/reassigned by the solver.
     bool pinned = false;
 
@@ -109,7 +104,7 @@ struct FlightAssignment
 };
 
 // ---------------------------------------------------------------------------
-// FlightCrewSchedule  (@PlanningSolution)
+// FlightCrewSchedule  (solution)
 // ---------------------------------------------------------------------------
 struct FlightCrewSchedule
 {
@@ -155,7 +150,7 @@ struct FlightCrewSchedule
                != 0;
     }
 
-    // --- assignment-side convenience (mirrors the Java getters) ---
+    // --- assignment-side convenience ---
     Minutes departureOf(int assignmentIndex) const
     {
         return flights[flightAssignments[assignmentIndex].flight].departureUTC;
@@ -179,9 +174,8 @@ struct FlightCrewSchedule
 }  // namespace fcs
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
-// annotations of the C++ engine): entities are flight assignments, the
-// planning variable is FlightAssignment::employee, the value range is the
+// SolutionTraits specialization: entities are flight assignments, the
+// decision variable is FlightAssignment::employee, the value range is the
 // employee list.
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<fcs::FlightCrewSchedule>

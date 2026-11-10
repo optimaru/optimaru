@@ -15,23 +15,22 @@ namespace fl
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The quickstart scores with Score, exactly the engine's score type,
-// so the mapping is the identity and there is no medium level (no
+// The domain scores with the engine's hard/soft Score directly, so there is
+// no mapping and no medium level (no
 // optimaru::MediumFoldOf specialization; a domain WITH a medium level declares
 // its fold next to its Score adapter, see optimaru/api/score/level.hpp):
 //   hard = -(sum over used facilities of max(0, usedDemand - capacity))
 //   soft = -(2 * sum of used facilities' setup cost
 //            + 6 * sum of consumer->facility meters)
 // The weights are the components' kDefaultWeight (fl/constraints/*.hpp); the
-// problem carries none. Both levels are integral (Java uses long); the engine
+// problem carries none. Both levels are integral; the engine
 // stores soft in a double, which is exact for these magnitudes (< 2^53).
 using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
 // Location  (problem fact)
 // ---------------------------------------------------------------------------
-// Straight port of org.acme.facilitylocation.domain.Location: latitude and
-// longitude in degrees, distance approximated with 1 degree = 111 km.
+// Latitude and longitude in degrees, distance approximated with 1 degree = 111 km.
 struct Location
 {
     // Approximate metric equivalent of one degree (valid for latitude
@@ -41,8 +40,8 @@ struct Location
     double latitude = 0.0;
     double longitude = 0.0;
 
-    // Distance in meters, Java's getDistanceTo: ceil of the Euclidean
-    // degree-distance scaled to meters.
+    // Distance in meters: ceil of the Euclidean degree-distance scaled to
+    // meters.
     std::int64_t distanceTo(const Location &other) const
     {
         const double latitudeDiff = other.latitude - latitude;
@@ -57,10 +56,9 @@ struct Location
 // ---------------------------------------------------------------------------
 // Facility  (problem fact)
 // ---------------------------------------------------------------------------
-// In the quickstart Facility is a shadow planning entity whose `consumers`
-// inverse-relation list feeds the capacity/setup-cost constraints. Here the
-// aggregates (used demand, consumer count) live in the score calculators,
-// so the C++ Facility is a plain fact.
+// A plain fact: the per-facility aggregates the capacity/setup-cost
+// constraints need (used demand, consumer count) live in the score
+// calculators, not here.
 struct Facility
 {
     std::string id;
@@ -70,39 +68,36 @@ struct Facility
 };
 
 // ---------------------------------------------------------------------------
-// Consumer  (@PlanningEntity)
+// Consumer  (entity)
 // ---------------------------------------------------------------------------
-// `facility` is the single BASIC planning variable: the index into
-// FacilityLocationProblem::facilities, -1 == unassigned (Java null).
+// `facility` is the single BASIC decision variable: the index into
+// FacilityLocationProblem::facilities, -1 == unassigned.
 struct Consumer
 {
     std::string id;
     Location location;
     std::int64_t demand = 0;
 
-    int facility = -1;  // planning variable; -1 == unassigned
+    int facility = -1;  // decision variable; -1 == unassigned
 
     bool isAssigned() const { return facility >= 0; }
 };
 
 // ---------------------------------------------------------------------------
-// FacilityLocationProblem  (@PlanningSolution)
+// FacilityLocationProblem  (solution)
 // ---------------------------------------------------------------------------
 struct FacilityLocationProblem
 {
     std::vector<Facility> facilities;
     std::vector<Consumer> consumers;
 
-    // Bounding box (kept for parity with the Java solution's getBounds();
-    // not used by any constraint).
+    // Bounding box (informational; not used by any constraint).
     Location southWestCorner{-90.0, -180.0};
     Location northEastCorner{90.0, 180.0};
 
     // No constraint weights here: the defaults are the
-    // components' kDefaultWeight (setup 2 = the provider's ofSoft(2); distance
-    // 6 = the quickstart solution's ConstraintWeightOverrides value over the
-    // provider's ofSoft(5)), and a caller re-weights through a constraint
-    // assembly instead.
+    // components' kDefaultWeight (setup 2, distance 6), and a caller
+    // re-weights through a constraint assembly instead.
 
     Score score;
 
@@ -124,10 +119,9 @@ struct FacilityLocationProblem
                               + facilityIndex];
     }
 
-    // --- convenience mirrors of the Java solution's summary getters ---
+    // --- summary getters ---
 
-    // Sum of the setup costs of facilities serving at least one consumer
-    // (Java getTotalCost).
+    // Sum of the setup costs of facilities serving at least one consumer.
     std::int64_t totalCost() const
     {
         std::vector<char> used(facilities.size(), 0);
@@ -145,7 +139,7 @@ struct FacilityLocationProblem
         return cost;
     }
 
-    // Sum of every facility's setup cost (Java getPotentialCost).
+    // Sum of every facility's setup cost.
     std::int64_t potentialCost() const
     {
         std::int64_t cost = 0;
@@ -154,8 +148,7 @@ struct FacilityLocationProblem
         return cost;
     }
 
-    // Total consumer->facility distance in meters (Java getTotalDistance
-    // reports this divided by 1000 as km).
+    // Total consumer->facility distance in meters.
     std::int64_t totalDistanceMeters() const
     {
         std::int64_t distance = 0;
@@ -188,10 +181,9 @@ struct FacilityLocationProblem
 }  // namespace fl
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
-// annotations of the C++ engine): entities are consumers, the planning
+// SolutionTraits specialization: entities are consumers, the decision
 // variable is Consumer::facility, the value range is the facility list
-// (@ValueRangeProvider on FacilityLocationProblem::facilities).
+// (FacilityLocationProblem::facilities).
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<fl::FacilityLocationProblem>
 {

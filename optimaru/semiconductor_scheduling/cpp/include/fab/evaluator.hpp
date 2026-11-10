@@ -19,7 +19,7 @@ namespace fab
 // plugin assembly). Data mode: the raw costs of `assignments`, computed once
 // per reset. Search mode (schedule.searching):
 //
-//   1. a planning-value change only records the row (markChanged);
+//   1. a decision-value change only records the row (markChanged);
 //   2. totals() re-decodes lazily, once, from the earliest readyStep of the
 //      changed rows (Decoder: the steps before it cannot change);
 //   3. every row whose placement changed (machine, start, end or list
@@ -37,7 +37,7 @@ class ScheduleEvaluator
 {
 public:
     void reset(const SemiconductorSchedule &schedule);
-    // `row`'s planning value is changing (or has changed): before or after
+    // `row`'s decision value is changing (or has changed): before or after
     // the write, any number of times.
     void markChanged(int row);
     void markAllChanged();

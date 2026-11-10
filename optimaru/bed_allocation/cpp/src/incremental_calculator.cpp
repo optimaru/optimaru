@@ -82,7 +82,7 @@ void BedAllocationIncrementalScoreCalculator::rebuild(
         for (int r = 0; r < roomCount_; ++r)
         {
             if (firstBedOfRoom[r] < 0)
-                continue;  // bed-less room: no planning value maps to it
+                continue;  // bed-less room: no value maps to it
             const ScoreCalculator::SingleImpact impact
                 = ScoreCalculator::singleStayImpact(
                     *plan_, static_cast<int>(s), firstBedOfRoom[r]);

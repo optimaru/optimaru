@@ -11,7 +11,7 @@ namespace fab
 // ---------------------------------------------------------------------------
 // SemiconductorIncrementalScoreCalculator — the default fast path
 // ---------------------------------------------------------------------------
-// The ScheduleEvaluator at the default weights: a planning-value change only
+// The ScheduleEvaluator at the default weights: a decision-value change only
 // records the row; score() re-decodes the suffix that can change
 // (from the earliest readyStep of the changed rows) and re-costs only the
 // units whose placements moved. A swap's two writes therefore cost one

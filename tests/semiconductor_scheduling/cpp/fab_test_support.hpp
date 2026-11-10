@@ -365,7 +365,7 @@ inline SemiconductorSchedule randomInstance(std::uint64_t seed)
     return b.build();
 }
 
-// A random planning value per row: (rank, slot) with ties, occasionally -1.
+// A random decision value per row: (rank, slot) with ties, occasionally -1.
 inline int randomValue(const SemiconductorSchedule &s, std::mt19937_64 &rng, bool allowUnassigned)
 {
     if (allowUnassigned && rng() % 25 == 0)

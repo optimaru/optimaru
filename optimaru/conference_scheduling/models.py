@@ -75,7 +75,7 @@ class SpeakerModel(BaseModel):
 
 
 class TalkModel(BaseModel):
-    """Planning entity. slot_room is the composite timeslot*room variable (-1 = unassigned)."""
+    """Slot_room is the composite timeslot*room variable (-1 = unassigned)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -106,7 +106,7 @@ class TalkModel(BaseModel):
 
 
 class ConferenceScheduleModel(BaseModel):
-    """Planning solution mirror. score is a read-only result, kept as a separate field."""
+    """Solution mirror. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -280,7 +280,7 @@ class SolveConfig(BaseModel):
     change_move_weight: float = Field(default=0.75, ge=0)
     swap_move_weight: float = Field(default=0.25, ge=0)
     # Probability of steering change moves to type-compatible (timeslot, room) cells
-    # (replaces Java's per-TalkType value range; see cs/solver.hpp).
+    # (see cs/solver.hpp).
     compatible_value_probability: float = Field(default=0.9, ge=0, le=1)
 
     def to_core(self) -> "_core.SolverConfig":

@@ -21,7 +21,7 @@ namespace fp
 // component recomputes them lazily once per score rather than maintaining a
 // delta: any notification marks it dirty, and cost() rebuilds the windows and
 // the pair sum. cost() runs once per score, so a move costs O(jobs) plus the
-// provider's own O(jobs^2) pair scan — the same shape as the full recompute,
+// constraint's own O(jobs^2) pair scan — the same shape as the full recompute,
 // which is the trade this assembly path is for.
 struct OperatorCleaningConflictCost final : FpGlobalConstraint
 {
@@ -74,9 +74,8 @@ struct OperatorCleaningConflictCost final : FpGlobalConstraint
                                   lineOf_[jobIndex] = line;
                               });
         }
-        // forEachUniquePair, verbatim: every unordered pair of assigned jobs
-        // whose lines share an operator (the unassigned operator groups with
-        // itself too, exactly like the Java Joiners.equal).
+        // Every unordered pair of assigned jobs whose lines share an
+        // operator (lines with no operator count as sharing one, too).
         std::int64_t overlap = 0;
         for (int a = 0; a < jobCount; ++a)
         {

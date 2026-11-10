@@ -23,7 +23,7 @@ namespace pjs
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the components' default weights and levels
+// The full constraint set at the components' default weights and levels
 // (kDefaultWeight / kDefaultLevel; constraint_info() reads them off this
 // assembly). It scores bit-for-bit like ScoreCalculator::score and
 // the monolithic incremental calculator.

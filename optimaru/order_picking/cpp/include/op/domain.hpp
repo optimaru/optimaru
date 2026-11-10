@@ -16,15 +16,14 @@ namespace op
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart uses plain Score (int levels): hard = missing
-// trolley buckets, soft = travel distance + 1000 * order-split count. The
-// engine's optimaru::Score(int64 hard, double soft) holds both levels
-// exactly (all penalties are integral counts/meters), so the mapping is 1:1 —
-// no level folding needed.
+// Two levels: hard = missing trolley buckets, soft = travel distance +
+// 1000 * order-split count. The engine's optimaru::Score(int64 hard,
+// double soft) holds both exactly (all penalties are integral
+// counts/meters).
 using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
-// Warehouse  (static layout, port of org.acme.orderpicking.domain.Warehouse)
+// Warehouse  (static layout)
 // ---------------------------------------------------------------------------
 // The warehouse is a fixed grid of shelvings: 5 columns (A..E) x 3 rows
 // (1..3). Every shelving is SHELVING_WIDTH wide and SHELVING_HEIGHT tall,
@@ -42,9 +41,8 @@ using Score = optimaru::Score;
 //  |    ...
 //  y
 //
-// Java identifies a shelving by the string id "(A,1)"; here a shelving is the
-// (column, shelvingRow) integer pair and the id string is derived for
-// display/serialization.
+// A shelving is the (column, shelvingRow) integer pair; its string id
+// "(A,1)" is derived for display/serialization.
 
 // Available shelving sides where the products can be located.
 enum class Side
@@ -58,16 +56,15 @@ struct Warehouse
     static constexpr int COLUMN_COUNT = 5;  // columns A..E
     static constexpr int ROW_COUNT = 3;     // rows 1..3
 
-    // Shelving geometry in meters (Warehouse.SHELVING_* in Java).
+    // Shelving geometry in meters.
     static constexpr int SHELVING_WIDTH = 2;
     static constexpr int SHELVING_HEIGHT = 10;
     static constexpr int SHELVING_PADDING = 3;
 
-    // Product rows available on each shelving side (Shelving.ROWS_SIZE).
+    // Product rows available on each shelving side.
     static constexpr int SHELVING_ROWS_SIZE = 10;
 
-    // Absolute position of a shelving's top-left corner (the Java static
-    // SHELVING_MAP is this closed-form grid).
+    // Absolute position of a shelving's top-left corner.
     static constexpr int shelvingX(int column)
     {
         return column * (SHELVING_WIDTH + SHELVING_PADDING);
@@ -79,18 +76,18 @@ struct Warehouse
 };
 
 // ---------------------------------------------------------------------------
-// WarehouseLocation  (problem fact)
+// WarehouseLocation  (fixed input)
 // ---------------------------------------------------------------------------
 // A spot in the warehouse where a product is stored (or a trolley parks):
 // which shelving, which side of it, and the row within that side.
 struct WarehouseLocation
 {
-    int column = 0;       // 0..4 == Warehouse.Column A..E
-    int shelvingRow = 0;  // 0..2 == Warehouse.Row 1..3
+    int column = 0;       // 0..4 == columns A..E
+    int shelvingRow = 0;  // 0..2 == rows 1..3
     Side side = Side::LEFT;
     int row = 0;  // row within the shelving side, 0..SHELVING_HEIGHT
 
-    // The Java shelving id, e.g. "(A,1)".
+    // The shelving id, e.g. "(A,1)".
     std::string shelvingId() const
     {
         return std::string("(") + static_cast<char>('A' + column) + ","
@@ -99,7 +96,7 @@ struct WarehouseLocation
 };
 
 // Distance in meters between two locations considering the warehouse
-// structure — a literal port of Warehouse.calculateDistance.
+// structure.
 inline int calculateDistance(const WarehouseLocation &start,
                              const WarehouseLocation &end)
 {
@@ -166,19 +163,19 @@ inline int calculateDistance(const WarehouseLocation &start,
 }
 
 // ---------------------------------------------------------------------------
-// Order  (problem fact)
+// Order  (fixed input)
 // ---------------------------------------------------------------------------
 // The customer order. Its items are flattened into the PickTasks that
-// reference it by index (Java keeps Order -> OrderItem -> Product object
-// links; the constraints only ever need the order identity, the item volume
-// and the product location, which live denormalized on PickTask below).
+// reference it by index (the constraints only ever need the order identity,
+// the item volume and the product location, which live denormalized on
+// PickTask below).
 struct Order
 {
     std::string id;
 };
 
 // ---------------------------------------------------------------------------
-// PickTask  (@PlanningEntity — the LIST element)
+// PickTask  (the LIST element)
 // ---------------------------------------------------------------------------
 // The picking of one order item by a trolley. The Solver assigns each
 // PickTask to a position in a Trolley's pick list:
@@ -186,22 +183,20 @@ struct Order
 //   Trolley1: [PickTaskA, PickTaskB, PickTaskC]
 //   Trolley2: [PickTaskD, PickTaskE]
 //
-// The shadow fields mirror the Java shadow variables — trolley
-// (@InverseRelationShadowVariable), previousPickTask
-// (@PreviousElementShadowVariable) and nextPickTask
-// (@NextElementShadowVariable) — as indices, -1 standing in for null. They
-// are derived from the trolleys' pick lists by
+// The derived fields — trolleyIndex (the trolley whose list holds the task),
+// previousPickTask and nextPickTask (its neighbours in that list) — are
+// indices, -1 meaning none. They are derived from the trolleys' pick lists by
 // ScoreCalculator::updateShadowVariables (score refreshes them, and
 // Solver::solve leaves them consistent with the final solution).
 struct PickTask
 {
     std::string id;
     int orderIndex = -1;         // index into OrderPickingSolution::orders
-    std::string productName;     // informational (Java product.getName())
-    int volume = 0;              // orderItem.getVolume() == product volume, cm3
-    WarehouseLocation location;  // product location (PickTask.getLocation())
+    std::string productName;     // informational
+    int volume = 0;              // the order item's (== product's) volume, cm3
+    WarehouseLocation location;  // product location
 
-    // --- shadow variables (indices into trolleys / pickTasks; -1 == null) ---
+    // --- derived fields (indices into trolleys / pickTasks; -1 == none) ---
     int trolleyIndex = -1;
     int previousPickTask = -1;
     int nextPickTask = -1;
@@ -210,10 +205,10 @@ struct PickTask
 };
 
 // ---------------------------------------------------------------------------
-// Trolley  (@PlanningEntity — the LIST owner)
+// Trolley  (the LIST owner)
 // ---------------------------------------------------------------------------
 // The trolley that will be filled with the order items. pickTaskIndices is
-// the @PlanningListVariable: the ordered indices of the PickTasks the trolley
+// the decision: the ordered indices of the PickTasks the trolley
 // picks along its path, which starts and ends at `location`.
 struct Trolley
 {
@@ -225,7 +220,7 @@ struct Trolley
 };
 
 // ---------------------------------------------------------------------------
-// OrderPickingSolution  (@PlanningSolution)
+// OrderPickingSolution
 // ---------------------------------------------------------------------------
 struct OrderPickingSolution
 {
@@ -237,7 +232,7 @@ struct OrderPickingSolution
 };
 
 // Distance travelled by a trolley along its current pick list, including the
-// return to the path origin (Warehouse.calculateDistanceToTravel).
+// return to the path origin.
 inline int calculateDistanceToTravel(const OrderPickingSolution &solution,
                                      const Trolley &trolley)
 {
@@ -257,12 +252,11 @@ inline int calculateDistanceToTravel(const OrderPickingSolution &solution,
 }  // namespace op
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the C++ analog of the @PlanningEntity /
-// @PlanningListVariable annotations): the trolleys are the list owners, the
+// SolutionTraits specialization: the trolleys are the list owners, the
 // pick tasks are the elements. Every pick task appears in at most one
 // trolley's list; a task missing from all lists is unassigned (only during
-// construction — the quickstart does not allow unassigned values, and the
-// engine's moves keep every element assigned after the construction phase).
+// construction — the engine's moves keep every element assigned after the
+// construction phase).
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<op::OrderPickingSolution>
 {

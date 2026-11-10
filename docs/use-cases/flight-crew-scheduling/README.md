@@ -1,16 +1,14 @@
 # Flight Crew Scheduling (C++ / Python)
 
-The Timefold Quickstarts `flight-crew-scheduling` example model
-(Apache-2.0; see the repository [NOTICE](../../../NOTICE))
-ported, with modifications,
-onto this repository's C++ engine (`optimaru/cpp/optimaru/`). An **assignment-shaped** problem
+Derived from the Timefold Quickstarts `flight-crew-scheduling` example
+(Apache-2.0; see the repository [NOTICE](../../../NOTICE)),
+built on this repository's C++ engine (`optimaru/cpp/optimaru/`). An **assignment-shaped** problem
 that picks a crew member (`employee`) for every crew seat of a flight (`FlightAssignment`).
 
-## Score mapping
+## Score
 
-The Java original uses `Score` (two integer levels), so it maps onto the engine's
-`Score(int64 hard, double soft)` **as-is (identity)**. No level folding (no medium
-level). The default weights are exactly those of the Java `ConstraintProvider`:
+The score has two levels, the engine's `Score(int64 hard, double soft)`; there is no
+medium level. The constraints and their defaults:
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per employee (0 = no violation) |
 |---|---|---|---|---|
@@ -53,7 +51,7 @@ fc.solve(problem, constraints=[
 `problem.to_core()`) keys the second pick `flight_conflict_cost#2`. The
 CP-SAT reference takes integral offsets.
 
-"Consecutive" follows the Java stream semantics: a pair (a, b) is consecutive when
+"Consecutive" is defined on departure times: a pair (a, b) is consecutive when
 dep(a) < dep(b) and no other assignment c of the same crew member satisfies
 dep(a) <= dep(c) < dep(b) — with tied departure times, assignments at that time cannot
 start a pair, and all ties at the later end count. first/last also count all ties.
@@ -71,7 +69,7 @@ OPTIMARU_USE_CASES=flight_crew_scheduling uv sync      # builds only this use ca
 uv run pytest -q tests/flight_crew_scheduling
 ```
 
-The demo generates an instance at the scale of the quickstart's demo (6 airports, 5 days, 14 flights, ~60
+The demo generates an instance (6 airports, 5 days, 14 flights, ~60
 seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 
 ## Layout
@@ -94,14 +92,11 @@ seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 - `optimaru/flight_crew_scheduling/` — pybind11 package `optimaru.flight_crew_scheduling` (with the pydantic v2 mirror;
   see [`python.md`](python.md) for usage)
 
-## Differences from the original (caveat)
+## Notes
 
-- Java `Airport.taxiTimeInMinutes` is a field no constraint or demo uses even in the
-  original, so it was omitted.
-- The demo data follows the quickstart's generation logic and scale, drawn from a seeded
-  `std::mt19937_64`.
-- `pinned` is an extension of this port (not in the original quickstart; the same pattern
-  as the es/st ports).
+- The demo data is drawn from a seeded `std::mt19937_64`.
+- A seat with `pinned` set keeps its crew member: it is scored like any other seat but
+  never moved (the same pattern as employee scheduling and school timetabling).
 
 ## Usage
 

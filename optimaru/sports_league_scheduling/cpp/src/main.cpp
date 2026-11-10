@@ -1,4 +1,4 @@
-// Demo: the demo league, modelled on the quickstart's demo — 14 South
+// Demo: the demo league — 14 South
 // American teams, 32 rounds, 182 matches (every ordered pair), ~5% classic
 // matches drawn from a seeded std::mt19937_64 plus the symmetric closure.
 // Round 0 is pinned to a Wednesday so the instance is deterministic.

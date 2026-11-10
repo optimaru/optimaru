@@ -1,10 +1,10 @@
 """Type stubs for `optimaru.pickup_delivery._core` — the pickup-and-delivery C++ solver.
 
-Times are integer seconds from a common day start. The plan is the planning
-solution: each vehicle's ordered `node_indices` is the planning list variable;
+Times are integer seconds from a common day start. Each vehicle's ordered
+`node_indices` (its route) is the decision;
 a stop in no route is unassigned and lands in `unassigned_node_indices`.
 
-Score (HardMediumSoft, lexicographic), at the default weights: hard =
+Score (hard / medium / soft, lexicographic), at the default weights: hard =
 capacity peak + time-window lateness + the coupling rules (a request is
 routed whole, on one vehicle, pickup before dropoff); medium = -(service
 minutes of unrouted requests), folded into the engine's soft as
@@ -74,9 +74,9 @@ class Node:
     pickup: bool
     """True for the pickup half, False for the dropoff half."""
     vehicle_index: int
-    """Shadow: index of the serving vehicle; -1 == unassigned."""
+    """Derived: index of the serving vehicle; -1 == unassigned."""
     arrival_time: int
-    """Shadow: arrival seconds; -1 == unassigned."""
+    """Derived: arrival seconds; -1 == unassigned."""
 
 class Delivery:
     """One transport request: a pickup, a dropoff, and the load between them."""
@@ -134,10 +134,10 @@ class Vehicle:
     open at its last stop: no closing leg is driven or timed."""
     node_indices: list[int]
     pinned_node_indices: list[int]
-    """The planning list variable: the ordered route (indices into nodes)."""
+    """`node_indices` is the decision: the ordered route (indices into nodes)."""
 
 class PdpRoutePlan:
-    """Planning solution. Constructing it assigns location indices and
+    """The problem and its routes. Constructing it assigns location indices and
     accepts an explicit matrix or precomputes the haversine fallback."""
     def __init__(
         self,
@@ -168,7 +168,7 @@ class PdpRoutePlan:
         """Recompute unassigned_node_indices from the current routes."""
 
 def calculate_score(plan: PdpRoutePlan) -> Score:
-    """Recompute shadow variables and the score (also stores plan.score)."""
+    """Recompute the derived fields and the score (also stores plan.score)."""
 
 def build_random_instance(
     request_count: int, vehicle_count: int, seed: int = 0
@@ -264,7 +264,7 @@ class SolverConfig:
 class Solver:
     """Construction heuristic + local search + adaptive ruin & recreate, with
     pair-aware move and ruin operators. Solves IN PLACE: fills
-    vehicle.node_indices, the unassigned pool, the shadows and plan.score."""
+    vehicle.node_indices, the unassigned pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: PdpRoutePlan) -> None: ...
     def solve_with_constraints(

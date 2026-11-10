@@ -1,9 +1,8 @@
-"""Track-1 shared evaluator: recomputes the quickstart's six-constraint score from the instance JSON + an assignment.
+"""Track-1 shared evaluator: recomputes the quickstart model's six-constraint score from the instance JSON + an assignment.
 
 Rescores the solutions of both solvers (C++ engine / CP-SAT) with the same
 function and compares them with each solver's self-reported score. The rules
-are identical to the Java quickstart's
-``TimetableConstraintProvider`` (= C++ ``score_calculator.cpp``):
+are identical to the C++ ``score_calculator.cpp``:
 
 - hard: room_conflict_cost / teacher_conflict_cost / class_conflict_cost —
   -1 times the sum of C(c, 2) over the lessons sharing a cell of that key.
@@ -42,7 +41,7 @@ def _pairs(n: int) -> int:
 
 def score_assignment(instance: dict, assignment: list[tuple[int, int]]) -> dict:
     """Scores ``assignment[i] = (timeslot index, room index)`` (unassigned is (-1, -1))
-    with the quickstart's six constraints. Returns a dict with hard/soft and the per-constraint breakdown."""
+    with the quickstart model's six constraints. Returns a dict with hard/soft and the per-constraint breakdown."""
     timeslots = instance["timeslots"]
     lessons = instance["lessons"]
     if len(assignment) != len(lessons):
@@ -61,7 +60,7 @@ def score_assignment(instance: dict, assignment: list[tuple[int, int]]) -> dict:
 
     for lesson, (ts, room) in zip(lessons, assignment):
         if ts < 0 or room < 0:
-            continue  # an unassigned lesson contributes nothing (same as Java's forEach)
+            continue  # an unassigned lesson contributes nothing
         cell_cnt[(ts, room)] += 1
         teacher_slot[(lesson["teacher"], ts)] += 1
         group_slot[(lesson["studentGroup"], ts)] += 1

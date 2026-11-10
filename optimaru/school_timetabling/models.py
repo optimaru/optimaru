@@ -49,7 +49,7 @@ class RoomModel(BaseModel):
 
 
 class LessonModel(BaseModel):
-    """Planning entity. slot_room is the timeslot*room composite variable (-1 = unassigned)."""
+    """Slot_room is the timeslot*room composite variable (-1 = unassigned)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -62,7 +62,7 @@ class LessonModel(BaseModel):
 
 
 class TimetableModel(BaseModel):
-    """Planning-solution mirror. The score is a read-only result and has its own field."""
+    """Solution mirror. The score is a read-only result and has its own field."""
 
     model_config = ConfigDict(extra="forbid")
 

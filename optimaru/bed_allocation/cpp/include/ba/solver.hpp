@@ -26,8 +26,7 @@ class Solver
 public:
     struct Config
     {
-        // Wall-clock budget, mirroring termination.spent-limit (30s in the
-        // quickstart's application.properties).
+        // Wall-clock budget (30s by default).
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above every

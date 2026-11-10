@@ -1,6 +1,6 @@
 # food_packaging — Python bindings
 
-The pybind11 package of the `food-packaging` example-model C++ port (`optimaru/food_packaging/cpp`).
+The pybind11 package of the food-packaging C++ implementation (`optimaru/food_packaging/cpp`).
 Times are exchanged as **minutes** (int64) from a shared origin, and the pydantic
 mirror (`optimaru.food_packaging.models`) handles conversion to and from `datetime`.
 
@@ -81,7 +81,7 @@ schedule2 = PackagingScheduleModel.model_validate_json(text).to_core()
 
 ## Score semantics
 
-Java uses `HardMediumSoftScore` and the engine `Score(int64, double)`, so the
+The score has three levels (hard / medium / soft) and the engine's is `Score(int64, double)`, so the
 mapping is `engine.soft = medium * 10^10 + soft` (the domain's medium fold; every
 `constraint_costs()` entry carries it as `medium_fold`, and
 `optimaru.food_packaging.constraints.score()` returns the folded engine-level `(hard, soft)`).
@@ -90,6 +90,6 @@ weights are in medium units (default 1): `level="hard"` on a medium constraint c
 per minute, `level="soft"` 1 soft per minute, and `level="medium"` puts a hard or soft
 constraint on medium with its weight in medium units. For the order-preservation conditions and domain
 details see [`cpp.md`](cpp.md) and the `fp/domain.hpp` comments.
-`Line.operator` (Java's basic planning variable) is reassigned by the solver with hill
-climbing between engine legs — exactly equivalent to Java with operators >= lines,
-an alternating heuristic otherwise (caveat).
+`Line.operator_index` (each line's operator, the second decision next to the job order)
+is reassigned by the solver with hill climbing between engine legs — exact when there
+are at least as many operators as lines, an alternating heuristic otherwise (caveat).

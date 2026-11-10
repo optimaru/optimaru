@@ -1,7 +1,8 @@
 # conference_scheduling — Conference Scheduling (C++ engine + pybind11)
 
-The `conference-scheduling` example model (Apache-2.0; see the repository NOTICE)
-C++ port (`optimaru/conference_scheduling/cpp`, namespace `cs`) for use from Python.
+The conference-scheduling use case (C++ in `optimaru/conference_scheduling/cpp`, namespace `cs`)
+for use from Python. Derived from the Timefold Quickstarts `conference-scheduling` example
+(Apache-2.0; see the repository NOTICE).
 Assigns every talk (`Talk`) a (timeslot, room) — `Talk.slot_room` is the
 decision variable (-1 = unassigned; the value is the composite encoding
 `timeslot_index * room_count + room_index`, the same pattern as school-timetabling).
@@ -36,16 +37,16 @@ print(cs.constraint_costs(schedule)["content_conflict_cost"]["costs"])  # raw, b
 - Serialization is the pydantic v2 mirror in `optimaru.conference_scheduling.models`
   (`ConferenceScheduleModel.from_core / to_core`, `SolveConfig`).
 
-## Score mapping
+## Score
 
-The Java original already uses `Score`, so it maps identically onto the engine's
+The score is the engine's
 `Score(int64 hard, double soft)`: hard = minus the weighted violation-minute sum
 (0 == feasible), soft = weighted rewards (diversity) − penalties (preferences/conflicts)
 (always integer-valued, held in the engine's double field).
 
-## Constraints (all of Java `ConferenceSchedulingConstraintProvider`, 16 hard + 20 soft, plus the synthetic one)
+## Constraints (17 hard + 20 soft)
 
-hard: `talk_type_incompatibility_cost` (100k/min, synthetic, see below)
+hard: `talk_type_incompatibility_cost` (100k/min, see below)
 `room_unavailability_cost` (100k/min) `room_conflict_cost` (1k/overlap min)
 `speaker_unavailability_cost` (100/min·speaker) `speaker_conflict_cost` (10/overlap min·shared speaker)
 `talk_prerequisite_talks_cost` (10/summed min) `talk_mutually_exclusive_talks_tags_cost`
@@ -61,7 +62,7 @@ soft: `theme_track_conflict_cost` `theme_track_room_change_cost` `sector_conflic
 `speaker_makespan_cost` (-20)
 
 The full table (C++ component, default level and weight, raw cost) is in the
-[use-case README](README.md#constraints-score--the-engine-score-type-as-is);
+[use-case README](README.md#constraints);
 `cs.constraint_info()` reports the same defaults. Pick, re-weight or flip constraints
 with `optimaru.conference_scheduling.constraints`:
 
@@ -99,17 +100,16 @@ the reward further; a threshold offset rewards only the part beyond it. `level` 
 `Level.HARD` / `Level.SOFT` (or `"hard"` / `"soft"`), each repeated pick carries its own, and `level="medium"` raises
 `ValueError`, as this use case has no medium level.
 
-### Value range replacement (the only semantic difference)
+### Talk-type compatibility
 
-Java restricts a Talk's value range to TalkType-compatible timeslots/rooms with
-`@ValueRangeProvider`. This engine's assignment variable is one global (timeslot × room)
-grid, so the port gets the same effect with the synthetic hard constraint
-`talk_type_incompatibility_cost` (100k × max(min,1), per incompatible slot/room) — it never fires
-on a solution that is feasible in Java, and the search is biased toward compatible
+A talk may only use timeslots and rooms that admit its talk type. The assignment variable
+is one global (timeslot × room) grid, so this is enforced by the hard constraint
+`talk_type_incompatibility_cost` (100k × max(min,1), per incompatible slot/room) rather than
+by narrowing each talk's choices, and the search is biased toward compatible
 cells by `compatible_value_probability` (default 0.9).
 
 ## Demo data
 
-`demo_conference()` builds the demo conference, modelled on the quickstart's demo, with
+`demo_conference()` builds the demo conference, with
 its tags drawn from a seeded `random.Random` (the same instance on every run): 2 Lab + 13 Breakout talks, 6 timeslots in a day,
 5 rooms, 12 speakers. A 10 s solve reaches hard 0.

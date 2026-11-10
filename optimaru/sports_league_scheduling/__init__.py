@@ -2,7 +2,7 @@
 
 `Team`/`Round`/`Match`/`LeagueSchedule`/`Score`/`Solver`/`SolverConfig`/
 `calculate_score`/`constraint_costs`/`constraint_info` come from the compiled C++ core
-(`_core`). `Match.round` is the planning variable (-1 == unassigned; the value is a
+(`_core`). `Match.round` is the decision variable (-1 == unassigned; the value is a
 position in `LeagueSchedule.rounds`), and solve changes it and `score`
 in place::
 

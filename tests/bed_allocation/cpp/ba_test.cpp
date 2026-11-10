@@ -1,8 +1,7 @@
 // Bed-allocation unit tests (engine test/ style: check() + non-zero exit on any
 // failure):
 //   (a) every constraint verified in isolation against hand-computed scores
-//       (the Java BedAllocationConstraintProviderTest cases, scaled by the
-//       constraint weights)
+//       (6-night cases, scaled by the constraint weights)
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's Editor protocol (before/set/after)
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
@@ -98,7 +97,7 @@ int addBed(BedPlan &plan, int roomIndex)
     return static_cast<int>(plan.beds.size()) - 1;
 }
 
-// Days 0..5 == the Java tests' ZERO_NIGHT..FIVE_NIGHT (nightCount 6).
+// Days 0..5 are a 6-night stay (nightCount 6).
 int addStay(BedPlan &plan,
             int arrivalDay,
             int departureDay,
@@ -121,8 +120,8 @@ int addStay(BedPlan &plan,
 
 // -------------------------------------------------------------------------
 // (a) Each constraint in isolation, full recompute vs hand-computed scores.
-// The Java ConstraintProvider tests all use a 6-night stay (penalizesBy 6);
-// here the expectations are multiplied by the constraint weights.
+// Every case uses a 6-night stay; the expectations are 6 nights multiplied
+// by the constraint weights.
 // -------------------------------------------------------------------------
 void verifyConstraints()
 {
@@ -266,8 +265,8 @@ void verifyConstraints()
                    0);
     }
     // hard 7: requiredPatientEquipmentCost — the room misses "television" but
-    // has "telemetry": 50 * 6 nights * 1 present (the quickstart's
-    // test-pinned semantics: weigh by the PRESENT required equipment).
+    // has "telemetry": 50 * 6 nights * 1 present (the intended
+    // semantics: weigh by the PRESENT required equipment).
     {
         BedPlan plan = makeBase();
         const int bed = addBed(
@@ -281,8 +280,8 @@ void verifyConstraints()
                    0,
                    0);
     }
-    // hard 7: a room with NONE of the required equipment costs 0 (the Java
-    // match weigher counts the present ones, which is 0 here).
+    // hard 7: a room with NONE of the required equipment costs 0 (the
+    // weight is the count of present ones, which is 0 here).
     {
         BedPlan plan = makeBase();
         const int bed = addBed(plan, addRoom(plan));
@@ -359,8 +358,8 @@ void verifyConstraints()
                    0);
     }
     // soft 10: departmentSpecialtyCost — 10 * 6 nights for the stay whose
-    // specialty the department does not offer (the Java test's two-stay
-    // setup: spec1 offered, spec2 not).
+    // specialty the department does not offer (a two-stay setup: spec1
+    // offered, spec2 not).
     {
         BedPlan plan = makeBase();
         plan.departments[0].specialtyToPriority = {{"spec1", 1}};

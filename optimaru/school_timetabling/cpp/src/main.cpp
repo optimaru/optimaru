@@ -17,7 +17,7 @@ constexpr int PERIODS_PER_DAY = 7;
 int slotOf(int day, int period) { return day * PERIODS_PER_DAY + (period - 1); }
 
 // -------------------------------------------------------------------------
-// A demo middle school in code, quickstart-demo sized: 5 days x 7 periods,
+// A demo middle school in code: 5 days x 7 periods,
 // 6 classes (1-1..3-2), 13 teachers, 10 subjects, 6 homerooms + 3 special
 // rooms. Every class has exactly 35 weekly hours, so a feasible timetable
 // packs each class grid perfectly.

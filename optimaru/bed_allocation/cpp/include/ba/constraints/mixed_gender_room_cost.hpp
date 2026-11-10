@@ -12,7 +12,6 @@ namespace ba
 // one SAME_GENDER room on the same night. Raw cost (one global total) = the
 // summed shared nights over every opposite-gender pair of stays in one
 // SAME_GENDER room, so 0 = every SAME_GENDER room holds one gender per night.
-// The Java quickstart calls it differentGenderInSameGenderRoomInSameNight.
 //
 // Global because its pairs share a ROOM while the calculator's unit is a BED,
 // and a room holds several beds. It maintains the occupant list of every

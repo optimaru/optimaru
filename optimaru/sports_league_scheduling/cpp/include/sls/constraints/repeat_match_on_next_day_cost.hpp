@@ -9,7 +9,7 @@ namespace sls
 // Hard, weight 1: repeatMatchOnNextDayCost — a match whose REVERSED fixture is
 // played on the very next round index. Raw cost (one global total) = the
 // number of such matches: at most one per match however many reversed
-// fixtures sit there (the Java ifExists), which is what keeps this from being
+// fixtures sit there, which is what keeps this from being
 // a pair sum and gives it its own state instead of the
 // RoundIndexPairConstraint base. 0 = no return fixture follows on the next
 // round index.

@@ -29,7 +29,7 @@ Every spec takes five knobs:
                (``Level.MEDIUM`` or ``"medium"``). Any flippable constraint may
                take any of the three levels.
                ``UnassignedTasksCost`` is the one **medium** constraint by default
-               (Bendable soft[0], folded into the engine's hard level BELOW the
+               (soft[0], folded into the engine's hard level BELOW the
                missing skills: ``engine.hard = hard * 10^9 + medium``): ``level="hard"`` charges one hard unit
                (10^9 engine-hard units) per unassigned task, ``level="soft"`` one
                soft unit per unassigned task, and a ``weight`` is in units of the level in effect.
@@ -61,7 +61,7 @@ square of the part beyond 120 minutes::
 ``ta.constraint_costs(solution, picks)`` keys the second pick
 ``"critical_priority_task_end_time_cost#2"``.
 
-This domain scores four Bendable levels (hard[0], soft[0..2]) on the engine's
+This domain scores four score levels (hard[0], soft[0..2]) on the engine's
 three: hard (``required_skill_cost``), medium (``unassigned_tasks_cost``) and soft
 (the other four). soft[1] and soft[2] share the soft level; the default weight 10^7 of
 ``squared_makespan_cost`` is what keeps the makespan term above the priority end
@@ -100,7 +100,7 @@ __all__ = [
 class RequiredSkillCost(Constraint):
     """Skills the task type requires that the assigned employee lacks. Default: hard, weight 1.
 
-    Bendable hard[0]; the domain's below-hard fold puts one missing skill 10^9 engine-hard
+    hard[0]; the domain's below-hard fold puts one missing skill 10^9 engine-hard
     units above one unassigned task, so the weight is in plain hard units."""
 
     name = "required_skill_cost"
@@ -122,7 +122,7 @@ class SquaredMakespanCost(Constraint):
     """The **square** of each employee's end time. Default: soft, weight 10^7.
 
     Squaring pushes toward taking work off the busiest employee rather than just
-    shrinking the total. An employee without tasks ends at 0 and costs nothing. Bendable
+    shrinking the total. An employee without tasks ends at 0 and costs nothing. Level
     soft[1]: the default weight 10^7 keeps it above the priority end-time terms on the
     shared soft level.
 
@@ -197,9 +197,9 @@ class MinorPriorityTaskEndTimeCost(Constraint):
 class UnassignedTasksCost(Constraint):
     """Tasks on no employee's list. Default: medium, weight 1.
 
-    Bendable soft[0], the domain's medium level: it folds into the engine's hard level
-    **below** the missing-skill count (``engine.hard = hard * 10^9 + medium``) — the same
-    lexicographically dominated spot as in Java. Unassigned tasks belong to no unit, so
+    soft[0], the domain's medium level: it folds into the engine's hard level
+    **below** the missing-skill count (``engine.hard = hard * 10^9 + medium``), which
+    dominates it lexicographically. Unassigned tasks belong to no unit, so
     this is a global constraint."""
 
     name = "unassigned_tasks_cost"

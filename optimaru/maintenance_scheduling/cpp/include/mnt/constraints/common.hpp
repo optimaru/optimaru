@@ -17,8 +17,7 @@ namespace mnt
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The six constraints of the reference maintenance-scheduling
-// MaintenanceScheduleConstraintProvider, split into one small component each
+// The six constraints of this use case, split into one small component each
 // on the engine's DecomposedObjective — an optional assembly path NEXT
 // TO the monolithic MaintenanceSchedulingIncrementalScoreCalculator, which
 // stays the tuned default fast path.
@@ -52,7 +51,7 @@ namespace mnt
 // kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent`, or by name through ConstraintAssembly. The Java soft weights
+// `exponent`, or by name through ConstraintAssembly. The soft weights
 // (x 1 beforeIdealEndDateCost, x 1'000 tagConflictCost, x 1'000'000
 // afterIdealEndDateCost) are exactly these defaults, so re-pricing a term is
 // a one-argument change; the monolithic calculators read the same
@@ -89,7 +88,7 @@ inline void requirePrepared(const MaintenanceSchedule &schedule)
 }
 
 // The [start, end) epoch-day interval a job occupies when placed in `unit`
-// (a composite crewDate). end is exclusive, exactly Java's shadow endDate.
+// (a composite crewDate). end is exclusive.
 inline void occupancyOf(const MaintenanceSchedule &schedule,
                         int unit,
                         int jobIndex,

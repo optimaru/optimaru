@@ -15,9 +15,9 @@ namespace pjs
 {
 
 // ---------------------------------------------------------------------------
-// Score  (HardMediumSoftScore mirror)
+// Score  (hard / medium / soft)
 // ---------------------------------------------------------------------------
-// The Java quickstart scores with HardMediumSoftScore; the generic engine
+// The domain scores on hard / medium / soft levels; the generic engine
 // (optimaru/cpp/optimaru/) only knows Score(int64 hard, double soft). Mapping rule
 // (the bed-allocation / meeting-scheduling precedent):
 //
@@ -27,7 +27,7 @@ namespace pjs
 // All project-job-scheduling constraints penalize whole days, so medium
 // (projectDelayCost, the summed project delay) and soft (makespanCost) are
 // integers. The engine's double is exact up to 2^53, so the mapping
-// preserves the HardMediumSoft lexicographic order as long as
+// preserves the hard / medium / soft lexicographic order as long as
 // |medium| < ~9.0 * 10^6 and |soft| < 10^9 — both are bounded by
 // allocationCount * (maxDelay + maxDuration), far below those limits for any
 // realistic instance.
@@ -108,11 +108,11 @@ inline Score fromEngineScore(const optimaru::Score &e)
 }
 
 // ---------------------------------------------------------------------------
-// JobType  (org.acme.projectjobschedule.domain.JobType)
+// JobType
 // ---------------------------------------------------------------------------
 // Every project has one SOURCE job (the start milestone) and one SINK job
 // (the end milestone); both carry a single zero-duration execution mode and
-// their allocations are always pinned (Java's Allocation.setPinned).
+// their allocations are always pinned.
 enum class JobType
 {
     SOURCE,
@@ -124,8 +124,8 @@ enum class JobType
 // Project  (problem fact)
 // ---------------------------------------------------------------------------
 // Dates are integer day indices. releaseDate only feeds the projectDelayCost
-// constraint through criticalPathEndDate(); like the Java quickstart it does
-// NOT constrain the schedule's start dates.
+// constraint through criticalPathEndDate(); it does NOT constrain the
+// schedule's start dates.
 struct Project
 {
     std::string id;
@@ -141,9 +141,8 @@ struct Project
 // ---------------------------------------------------------------------------
 // Resource  (problem fact)
 // ---------------------------------------------------------------------------
-// Java models GlobalResource (always renewable) and LocalResource (per
-// project, renewable flag) as subclasses; here one struct carries both:
-// project < 0 == global. Only `capacity` and `renewable` feed the
+// One struct carries both global resources (always renewable) and local
+// ones (per project, renewable flag): project < 0 == global. Only `capacity` and `renewable` feed the
 // constraints; `project` is informational (a local resource is simply never
 // referenced by another project's execution modes).
 //
@@ -179,11 +178,9 @@ struct ExecutionMode
 // ---------------------------------------------------------------------------
 // Job  (problem fact)
 // ---------------------------------------------------------------------------
-// Every job needs at least one execution mode (Java's SOURCE/SINK carry one
+// Every job needs at least one execution mode (SOURCE/SINK carry one
 // zero-duration mode). Precedence is stored on the allocations
-// (predecessorAllocations), not here — the Java Job.successorJobs list is a
-// data-loading convenience that DemoDataGenerator folds into the allocation
-// graph, and this port keeps only the folded form.
+// (predecessorAllocations), not here.
 struct Job
 {
     std::string id;
@@ -193,13 +190,13 @@ struct Job
 };
 
 // ---------------------------------------------------------------------------
-// Allocation  (@PlanningEntity)
+// Allocation  (the entity the solver assigns)
 // ---------------------------------------------------------------------------
-// The Java entity has TWO basic planning variables — executionMode (value
-// range = the job's own executionModes) and delay (value range = [0, 500)) —
-// plus a shadow chain predecessorsDoneDate -> startDate -> endDate. The C++
+// An allocation has TWO decisions — executionMode (value range = the job's
+// own executionModes) and delay (value range = [0, delayRangeSize)) — plus
+// the derived dates predecessorsDoneDate -> startDate -> endDate. The
 // engine supports one BASIC int variable per entity with one global value
-// range, so both variables are composed into a single value:
+// range, so both decisions are composed into a single value:
 //
 //   modeDelay = delay * maxModeCount + modeSlot,   modeDelay in
 //               [0, delayRangeSize * maxModeCount)
@@ -208,15 +205,13 @@ struct Job
 // by prepare()). Jobs with fewer modes than maxModeCount decode the slot
 // modulo their own mode count (executionModeIndexOfValue), so every value in
 // the global range is valid for every entity — the encoding is redundant for
-// those jobs but never produces an out-of-range mode, exactly preserving the
-// Java per-entity value range semantics. -1 means unassigned (both Java
-// variables null).
+// those jobs but never produces an out-of-range mode. -1 means unassigned
+// (neither a mode nor a delay).
 //
-// The Java shadow variables are ported as derived state: the score
-// calculators recompute predecessorsDoneDate/startDate/endDate in topological
-// order (the incremental calculator re-propagates only the successor
-// subgraph of a changed allocation). Like the Java suppliers, an unassigned
-// allocation passes dates through with delay 0 / duration 0 and contributes
+// The dates are derived state: the score calculators recompute
+// predecessorsDoneDate/startDate/endDate in topological order (the
+// incremental calculator re-propagates only the successor subgraph of a
+// changed allocation). An unassigned allocation passes dates through with delay 0 / duration 0 and contributes
 // no resource usage. The fields below hold the last full recompute
 // (ScoreCalculator::score fills them; Solver::solve leaves them
 // consistent with the final assignment).
@@ -229,21 +224,21 @@ struct Allocation
     // prepare(). Must be acyclic.
     std::vector<int> predecessorAllocations;
 
-    int modeDelay = -1;  // composite planning variable; -1 == unassigned
+    int modeDelay = -1;  // composite decision variable; -1 == unassigned
 
     // Pinned allocations keep their modeDelay fixed. SOURCE/SINK allocations
-    // are ALWAYS pinned regardless of this flag (Java's setPinned); the flag
-    // additionally pins STANDARD allocations.
+    // are ALWAYS pinned regardless of this flag; the flag additionally pins
+    // STANDARD allocations.
     bool pinned = false;
 
-    // Derived state (the Java shadow variables); see the class comment.
+    // Derived state; see the class comment.
     int predecessorsDoneDate = 0;
     int startDate = 0;
     int endDate = 0;
 };
 
 // ---------------------------------------------------------------------------
-// ProjectJobSchedule  (@PlanningSolution)
+// ProjectJobSchedule  (the problem and its solution)
 // ---------------------------------------------------------------------------
 struct ProjectJobSchedule
 {
@@ -252,8 +247,7 @@ struct ProjectJobSchedule
     std::vector<Job> jobs;
     std::vector<Allocation> allocations;
 
-    // Java's Allocation.getDelayRange() is IntStream.range(0, 500): delays
-    // 0..delayRangeSize-1.
+    // The delay range: delays 0..delayRangeSize-1.
     int delayRangeSize = 500;
 
     Score score;
@@ -281,7 +275,7 @@ struct ProjectJobSchedule
     }
     int delayOfValue(int value) const { return value / maxModeCount; }
     int modeSlotOfValue(int value) const { return value % maxModeCount; }
-    // The Java executionMode planning variable: slot modulo the job's own
+    // The execution mode a value selects: slot modulo the job's own
     // mode count, so every global value decodes to a valid mode.
     int executionModeIndexOfValue(int allocationIndex, int value) const
     {
@@ -297,7 +291,7 @@ struct ProjectJobSchedule
     {
         return jobs[allocations[allocationIndex].job].jobType;
     }
-    // Java's Allocation.getProjectCriticalPathEndDate().
+    // The critical-path end date of the allocation's project.
     int projectCriticalPathEndDateOf(int allocationIndex) const
     {
         return projects[jobs[allocations[allocationIndex].job].project]
@@ -308,10 +302,9 @@ struct ProjectJobSchedule
 }  // namespace pjs
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
-// annotations of the C++ engine): entities are allocations, the planning
-// variable is Allocation::modeDelay, the value range is the (delay x
-// executionMode) grid. is_pinned mirrors Java's @PlanningPin + setPinned:
+// SolutionTraits specialization  (how the engine sees the domain): entities
+// are allocations, the decision variable is Allocation::modeDelay, the value
+// range is the (delay x executionMode) grid. is_pinned:
 // SOURCE/SINK allocations are always pinned, STANDARD ones when the user
 // flags them. value_count reads maxModeCount, so ScoreCalculator::prepare must
 // have run (Solver::solve and both calculators call it).

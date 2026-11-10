@@ -1,6 +1,5 @@
-"""Constraint spot checks: reproduces the hand-computed cases of Java
-ProjectJobSchedulingConstraintProviderTest through the pydantic model -> engine conversion,
-and reads the same cases' raw per-constraint costs through constraint_costs()."""
+"""Constraint spot checks: hand-computed cases run through the pydantic model -> engine
+conversion, and reads the same cases' raw per-constraint costs through constraint_costs()."""
 
 import optimaru.project_job_scheduling as pj
 from optimaru.project_job_scheduling.models import (
@@ -52,7 +51,7 @@ def _raw(core):
 
 
 def test_non_renewable_resource_capacity_cost():
-    # Java: demand 7 + 6, capacity 10 (non-renewable, date-independent) -> hard -3.
+    # Demand 7 + 6, capacity 10 (non-renewable, date-independent) -> hard -3.
     model = _schedule(
         [_job("1", 10, 7), _job("2", 10, 6)],
         {"1": 100, "2": 100},
@@ -77,7 +76,7 @@ def test_non_renewable_resource_capacity_cost_within_capacity():
 
 
 def test_renewable_resource_capacity_cost():
-    # Java: predecessorsDoneDate 1/2 (here predecessor jobs of duration 1/2), delay
+    # predecessorsDoneDate 1/2 (predecessor jobs of duration 1/2), delay
     # 100, duration 10, demand 7/5, capacity 10 -> 9 overlapping days x 2 = hard -18.
     model = _schedule(
         [
@@ -93,7 +92,7 @@ def test_renewable_resource_capacity_cost():
     score = pj.calculate_score(core)
     assert (score.hard, score.medium, score.soft) == (-18, 0, 0)
     assert _raw(core)["renewable_resource_capacity_cost"] == [18.0]
-    # The ported shadow chain: predecessorsDoneDate -> startDate -> endDate.
+    # The derived dates: predecessorsDoneDate -> startDate -> endDate.
     solved = type(model).from_core(core)
     by_id = {a.id: a for a in solved.allocations}
     assert (by_id["1"].start_date, by_id["1"].end_date) == (101, 111)
@@ -101,7 +100,7 @@ def test_renewable_resource_capacity_cost():
 
 
 def test_project_delay_cost_and_makespan_cost():
-    # The Java provider test's project-delay case (project_delay_cost): SINK end 111/112,
+    # The project-delay case (project_delay_cost): SINK end 111/112,
     # critical path end 100 -> medium -(11 + 12) = -23; makespan_cost: soft -112;
     # renewable overlap is hard -18 as above.
     model = _schedule(
@@ -127,7 +126,7 @@ def test_project_delay_cost_and_makespan_cost():
 
 
 def test_project_delay_cost_not_positive():
-    # The Java provider test's makespan case (criticalPathDuration 155): a negative delay gives
+    # The makespan case (criticalPathDuration 155): a negative delay gives
     # no medium penalty (project_delay_cost 0); the makespan stays.
     model = _schedule(
         [
@@ -161,8 +160,7 @@ def test_makespan_cost_zero():
 
 
 def test_unassigned_contributes_nothing():
-    # Uninitialized allocations use no resources and only pass dates through (Java's null
-    # executionMode/delay semantics).
+    # Uninitialized allocations use no resources and only pass dates through.
     model = _schedule(
         [_job("a", 2, 1, successors=["b"]), _job("b", 5, 9), _job("c", 3, 9)],
         {"a": 1, "b": None, "c": None},

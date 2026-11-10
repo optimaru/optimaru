@@ -1,9 +1,9 @@
 // pybind11 bindings for the bed-allocation C++ domain wrappers.
 // The Python extension links the existing ba::* implementations and imports
 // the generic optimaru engine from ../../../include; the engine itself
-// is not modified here. One domain is exposed: the quickstart port
-// (ba::BedPlan, BASIC bed variable with a "no bed" sentinel for
-// allowsUnassigned semantics), as the module optimaru.bed_allocation._core.
+// is not modified here. One domain is exposed
+// (ba::BedPlan, BASIC bed variable with a "no bed" sentinel for stays left
+// unassigned), as the module optimaru.bed_allocation._core.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::map / std::optional / std::string
@@ -184,7 +184,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("arrival_day", &Stay::arrivalDay)
         .def_readwrite("departure_day", &Stay::departureDay)
         .def_readwrite("specialty", &Stay::specialty)
-        // The planning variable: -1 uninitialized, [0, bed_count) a real
+        // The decision variable: -1 uninitialized, [0, bed_count) a real
         // bed, bed_count (== BedPlan.no_bed_value()) the "no bed" sentinel.
         .def_readwrite("bed", &Stay::bed)
         .def("night_count", &Stay::nightCount)
@@ -218,8 +218,8 @@ PYBIND11_MODULE(_core, m)
         .def("bed_count", &BedPlan::bedCount)
         .def("no_bed_value",
              &BedPlan::noBedValue,
-             "The \"no bed\" sentinel planning value (== bed_count()); the "
-             "quickstart's null bed, penalized per night on the medium "
+             "The \"no bed\" sentinel value (== bed_count()); a stay on it "
+             "is unassigned, penalized per night on the medium "
              "level (unassigned_stays_cost).")
         // Convenience: the current bed value per stay (the solution).
         .def("assignment",
@@ -231,7 +231,7 @@ PYBIND11_MODULE(_core, m)
                      assignment.push_back(stay.bed);
                  return assignment;
              })
-        // Bulk write of the planning variable (stay access via .stays
+        // Bulk write of the decision variable (stay access via .stays
         // returns copies, so per-stay writes would be lost).
         .def(
             "set_assignment",
@@ -248,7 +248,7 @@ PYBIND11_MODULE(_core, m)
     m.def("calculate_score",
           &ScoreCalculator::score,
           py::arg("plan"),
-          "Full recompute of the HardMediumSoft score (also stores "
+          "Full recompute of the hard / medium / soft score (also stores "
           "plan.score).");
 
     optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
@@ -390,7 +390,7 @@ PYBIND11_MODULE(_core, m)
     // The raw per-unit costs of an assembly on `plan` — the input
     // optimaru.bed_allocation.constraints.score() turns into a score. Scoring once is
     // enough: re-pricing any assembly is pure Python arithmetic on these.
-    // Units are the planning values (beds in order, then the "no bed"
+    // Units are the assignable values (beds in order, then the "no bed"
     // sentinel); a global constraint has one entry. "units" lists what a unit
     // constraint evaluates: the real beds for the per-bed rules, the sentinel
     // for unassigned_stays_cost. Every entry carries the domain's medium fold (into_soft,

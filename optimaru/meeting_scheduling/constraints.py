@@ -108,8 +108,8 @@ __all__ = [
 class OvertimeCost(Constraint):
     """Meetings ending past the end of the calendar. Default: hard, weight 1.
 
-    The case where no TimeGrain fact exists at the last grain index. The raw cost is
-    that index (the Java provider's weigher, kept as it is), not the overrun, so
+    The case where no TimeGrain exists at the last grain index. The raw cost is
+    that index, not the overrun, so
     running further over costs more."""
 
     name = "overtime_cost"
@@ -147,8 +147,7 @@ class RoomCapacityCost(Constraint):
 class DayCrossingCost(Constraint):
     """Meetings whose last grain falls on a different day than the first. Default: hard, weight 1.
 
-    Counted per TimeGrain fact at the last index on another day (the shape of the
-    Java join). Running off the calendar entirely gives 0 — `overtime_cost`
+    Counted per TimeGrain at the last index on another day. Running off the calendar entirely gives 0 — `overtime_cost`
     values that."""
 
     name = "day_crossing_cost"

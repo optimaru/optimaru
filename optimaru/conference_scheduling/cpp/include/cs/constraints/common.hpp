@@ -17,18 +17,16 @@ namespace cs
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The 36 constraints of the reference conference-scheduling
-// ConferenceSchedulingConstraintProvider (16 hard + 20 soft, plus the port's
-// synthetic talkTypeIncompatibilityCost), split into one small component each
-// on the engine's DecomposedObjective — an optional assembly path NEXT TO
-// the monolithic ConferenceSchedulingIncrementalScoreCalculator, which stays
+// The 37 conference-scheduling constraints (17 hard + 20 soft), one small
+// component each on the engine's DecomposedObjective — an optional assembly
+// path NEXT TO the monolithic ConferenceSchedulingIncrementalScoreCalculator, which stays
 // the tuned default fast path.
 //
 // Decomposition strategy: BY PROJECTION, not by re-derivation.
 // -------------------------------------------------------------------------
 // Most of these 36 rules relate talks PAIRWISE — same room, same speaker,
 // overlapping timeslots, shared tags, prerequisite chains, same-day grouping,
-// per-speaker makespans — so almost none of them decomposes per planning
+// per-speaker makespans — so almost none of them decomposes per decision
 // value, and the pair semantics (which of `overlap`, `combined duration`,
 // `prevailing tags` a rule weighs, and over which join) are intricate enough
 // that re-deriving each one independently would be 36 chances to drift from
@@ -64,8 +62,8 @@ namespace cs
 // scratch than start from the defaults.
 //
 // Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor — the Java
-// provider's own weights and levels. They are assembly-time metadata, not part
+// kDefaultWeight / kDefaultLevel passed to the base constructor.
+// They are assembly-time metadata, not part
 // of the cost. Override them per instance with the constructor's weight
 // argument or the mutable `level` / `weight` / `exponent`, or by name through
 // ConstraintAssembly. The monolithic calculators (Breakdown::hardTotal() /
@@ -78,7 +76,7 @@ namespace cs
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation, NEGATIVE = reward. The three *DiversityCost rules
-// are rewards in the Java provider and return negative costs here (they are
+// are rewards and return negative costs (they are
 // marked `reward = true; level_flippable = false;`, so hard() and any level
 // change are refused), which is why an assembly of all 37 components at their
 // default weights reproduces ScoreCalculator::score bit-for-bit,
@@ -95,8 +93,8 @@ using CsGlobalConstraint = optimaru::GlobalConstraint<ConferenceSchedule>;
 
 // A component's kDefaultWeight as an exact integer, for the monolithic
 // calculators (Breakdown's weighted totals and the incremental calculator),
-// which are the default assembly computed in int64 like the Java long
-// arithmetic. Fails to compile if a default weight stops being integral or if
+// which are the default assembly computed exactly, in
+// int64. Fails to compile if a default weight stops being integral or if
 // a component leaves the level the monolith sums it into.
 template <typename Component, optimaru::Level kLevel>
 constexpr std::int64_t monolithicWeight()

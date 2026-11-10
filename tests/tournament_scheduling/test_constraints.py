@@ -1,6 +1,6 @@
 """Constraint spot checks: re-verifies the hand-computed cases of the C++ tests through the Python bindings.
 
-Expected values (Java TournamentScheduleConstraintProviderTest scenarios):
+Expected values:
   unfairness = round6(sqrt(sum(load^2) - sum(load)^2 / n)),
   soft = -(medium unfairness * 1e6 + soft unfairness).
 """
@@ -42,7 +42,7 @@ def test_unfairness_spot_values():
 
 
 def test_team_conflict_cost():
-    # Java test: T0 on D0 three times (3 pairs), T1 on D1/D2 (0 pairs) -> hard -3.
+    # T0 on D0 three times (3 pairs), T1 on D1/D2 (0 pairs) -> hard -3.
     # medium: loads {3, 2} -> 0.707107; no head-to-heads (same-team pairs are excluded).
     schedule = make_schedule([(0, 0), (0, 0), (0, 0), (1, 1), (2, 1)])
     score = calculate_score(schedule)
@@ -51,7 +51,7 @@ def test_team_conflict_cost():
 
 
 def test_team_unavailability_cost():
-    # Java test: unavailable (T0,D0)/(T1,D1) both hit + T1 twice on D1 (1 pair).
+    # Unavailable (T0,D0)/(T1,D1) both hit + T1 twice on D1 (1 pair).
     schedule = make_schedule(
         [(0, 0), (1, 1), (1, 1), (2, 1)],
         penalties=[(0, 0), (1, 1)],
@@ -69,7 +69,7 @@ def test_team_unavailability_cost_miss():
 
 
 def test_assignment_count_imbalance_cost():
-    # Java test: once per team -> perfectly fair.
+    # Once per team -> perfectly fair.
     schedule = make_schedule([(0, 0), (1, 1), (2, 2)])
     score = calculate_score(schedule)
     assert score.hard == 0
@@ -82,7 +82,7 @@ def test_assignment_count_imbalance_cost():
 
 
 def test_confrontation_count_imbalance_cost():
-    # Java test: three teams meet each other once on D0 -> perfectly even.
+    # Three teams meet each other once on D0 -> perfectly even.
     schedule = make_schedule([(0, 0), (0, 1), (0, 2)])
     score = calculate_score(schedule)
     assert score.hard == 0

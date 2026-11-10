@@ -20,7 +20,7 @@ namespace
 
 // The monolithic score is the default assembly, so it reads the same
 // constants the components carry. Integral, so every level is computed in
-// int64 exactly like the Java long arithmetic. The medium weights are in
+// int64, exactly. The medium weights are in
 // medium units; toEngineScore folds the medium level (kMediumFold).
 constexpr auto kMaxEndWeight
     = static_cast<std::int64_t>(MaxEndTimeCost::kDefaultWeight);
@@ -52,8 +52,8 @@ static_assert(MaxEndTimeCost::kDefaultLevel == optimaru::Level::Hard
               "the monolithic calculator scores each term on its default "
               "level");
 
-// The queried cleanup duration; throws like Java's
-// Product.getCleanupDuration when the map has no entry for the pair.
+// The queried cleanup duration; throws std::invalid_argument when there is
+// no entry for the pair.
 Minutes
 cleanupOrThrow(const PackagingSchedule &s, int previousProduct, int product)
 {
@@ -136,8 +136,8 @@ void ScoreCalculator::prepare(PackagingSchedule &schedule)
 
     // Pinned jobs must form a prefix of their line: the engine's list moves
     // insert/remove at arbitrary positions, so a pinned job after an
-    // unpinned one could not keep its exact slot. (The quickstart pins jobs
-    // already started — always a prefix.)
+    // unpinned one could not keep its exact slot. (Pinning the jobs
+    // already started always gives a prefix.)
     schedule.pinnedPrefixLen.assign(schedule.listCountWithPool(), 0);
     for (int l = 0; l < schedule.listCountWithPool(); ++l)
     {
@@ -187,7 +187,7 @@ void ScoreCalculator::updateShadowVariables(PackagingSchedule &schedule)
             job.lineIndex = l;
             if (previousJob < 0)
             {
-                // Java: the first job starts cleaning AND production at the
+                // The first job starts cleaning AND production at the
                 // line start (zero-length cleaning window).
                 job.startCleaningDateTime = line.startDateTime;
                 job.startProductionDateTime = line.startDateTime;
@@ -239,9 +239,9 @@ ConstraintBreakdown ScoreCalculator::analyze(PackagingSchedule &schedule)
     }
 
     // operatorCleaningConflictCost (hard): every unique pair of assigned jobs
-    // whose lines share an operator (Java's Joiners.equal groups the null
-    // operator with itself too) and whose cleaning windows overlap. The
-    // deliberately naive O(n^2) pair loop mirrors forEachUniquePair.
+    // whose lines share an operator (lines with no operator count as
+    // sharing one, too) and whose cleaning windows overlap. A deliberately
+    // naive O(n^2) loop over the pairs.
     const int jobCount = static_cast<int>(schedule.jobs.size());
     for (int a = 0; a < jobCount; ++a)
     {

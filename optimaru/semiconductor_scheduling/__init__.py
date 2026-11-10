@@ -3,7 +3,7 @@
 Lots follow re-entrant routes over alternative tools (batch tools included), with
 sequence-dependent setups, inter-tool transport, queue-time windows, maintenance windows,
 auxiliary resources and pinned operations. The search state is one machine choice and one
-priority rank per operation, folded into one assignment-shape planning value per operation row
+priority rank per operation, folded into one assignment-shape decision value per operation row
 (``rank * K + slot``); the C++ serial schedule-generation decoder turns it into the
 schedule (``assignments``).
 

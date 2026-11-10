@@ -154,7 +154,7 @@ class OrderSplitByTrolleyCost(Constraint):
     trolley. Deliberately expensive relative to the distance terms — orders arriving
     in pieces become a packing problem downstream. Unlike the other constraints the
     raw cost is never 0 while picks are assigned: an order carried whole by one
-    trolley still counts 1 (the quickstart's definition, kept)."""
+    trolley still counts 1."""
 
     name = "order_split_by_trolley_cost"
     label_en = "Order-trolley pairs (order splits)"

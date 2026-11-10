@@ -16,9 +16,8 @@ namespace vrp {
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
 // ---------------------------------------------------------------------------
-// The constraints of the reference vehicle-routing
-// VehicleRoutingConstraintProvider plus the optional route policies, one small
-// component each on the engine's DecomposedObjective -- an optional
+// The four core vehicle-routing constraints plus the optional route policies,
+// one small component each on the engine's DecomposedObjective -- an optional
 // assembly path NEXT TO ScoreCalculator::score, which stays the
 // default path for the four core rules.
 //
@@ -29,7 +28,7 @@ namespace vrp {
 // one of their units). Only unassignedVisitsCost counts the visits in NO
 // route at all, which belongs to no unit, so it runs as a GlobalConstraint.
 //
-// A component never reads the Visit shadow variables (vehicleIndex,
+// A component never reads the Visit derived fields (vehicleIndex,
 // arrivalTime): walkRoute below re-derives the arrival chain from the unit's
 // own member order, which is what makes each cost a pure function of
 // (solution, unit, members) as the engine's contract requires. The LIST path
@@ -55,7 +54,7 @@ namespace vrp {
 // (ConstraintAssembly::add_instances): each instance has its own knobs and the
 // instances add up.
 //
-// Score levels: the quickstart scores with HardMediumSoftScore. The medium
+// Score levels: hard, medium and soft. The medium
 // level (unassignedVisitsCost) is folded into the engine's Score by
 // the calculator as `soft = medium * kMediumUnit + soft` (kMediumFold in
 // domain.hpp), so a medium weight is in medium units: weight 1 = one medium
@@ -120,7 +119,7 @@ private:
     std::vector<int> vehicles_;
 };
 
-// The Java arrivalTimeSupplier / getDepartureTime chain of one route,
+// The arrival / departure chain of one route,
 // re-derived from its member order:
 //   arrival      = previous departure + drivingTime(previous -> this)
 //   startService = max(arrival, minStartTime)

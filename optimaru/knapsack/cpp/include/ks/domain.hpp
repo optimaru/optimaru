@@ -28,7 +28,7 @@ namespace ks
 // a double, exact below 2^53.
 using Score = optimaru::Score;
 
-// The planning variable's values. -1 exists only transiently (the engine's
+// The decision variable's values. -1 exists only transiently (the engine's
 // ruin-and-recreate, or a C++ caller leaving an item undecided); every
 // calculator counts it as "not selected".
 constexpr int kUndecided = -1;
@@ -48,9 +48,9 @@ struct Resource
 };
 
 // ---------------------------------------------------------------------------
-// Item  (@PlanningEntity)
+// Item  (entity)
 // ---------------------------------------------------------------------------
-// `selected` is the single BASIC planning variable: 1 = selected, 0 = not
+// `selected` is the single BASIC decision variable: 1 = selected, 0 = not
 // selected, -1 = undecided (counted as not selected).
 struct Item
 {
@@ -65,7 +65,7 @@ struct Item
     // self-dependency is never violated.
     std::vector<int> requiredItems;
 
-    int selected = kNotSelected;  // planning variable
+    int selected = kNotSelected;  // decision variable
 
     bool isSelected() const { return selected == kSelected; }
 };
@@ -97,7 +97,7 @@ struct Dependency
 };
 
 // ---------------------------------------------------------------------------
-// KnapsackProblem  (@PlanningSolution)
+// KnapsackProblem  (solution)
 // ---------------------------------------------------------------------------
 struct KnapsackProblem
 {
@@ -163,7 +163,7 @@ struct KnapsackProblem
         return total;
     }
 
-    // The planning variable of every item, in item order (-1 / 0 / 1).
+    // The decision variable of every item, in item order (-1 / 0 / 1).
     std::vector<int> assignment() const
     {
         std::vector<int> out;
@@ -177,7 +177,7 @@ struct KnapsackProblem
 }  // namespace ks
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization: entities are the items, the planning
+// SolutionTraits specialization: entities are the items, the decision
 // variable is Item::selected, the value range is {0 = not selected,
 // 1 = selected}. With two values the engine's change move is a flip and its
 // swap move trades a selected item for an unselected one.

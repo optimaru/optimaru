@@ -48,7 +48,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("longitude"))
         .def_readwrite("latitude", &Location::latitude)
         .def_readwrite("longitude", &Location::longitude)
-        // Java Location.getDistanceTo: ceil(Euclidean degrees * 111 km).
+        // Meters: ceil(Euclidean degrees * 111 km).
         .def("distance_to", &Location::distanceTo, py::arg("other"));
 
     py::class_<Facility>(m, "Facility", py::module_local())
@@ -90,8 +90,8 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("id", &Consumer::id)
         .def_readwrite("location", &Consumer::location)
         .def_readwrite("demand", &Consumer::demand)
-        // The planning variable: index into problem.facilities, -1 ==
-        // unassigned (Java null).
+        // The decision variable: index into problem.facilities, -1 ==
+        // unassigned.
         .def_readwrite("facility", &Consumer::facility)
         .def("is_assigned", &Consumer::isAssigned);
 
@@ -127,7 +127,7 @@ PYBIND11_MODULE(_core, m)
         .def_readonly("score", &FacilityLocationProblem::score)
         .def("facility_count", &FacilityLocationProblem::facilityCount)
         .def("consumer_count", &FacilityLocationProblem::consumerCount)
-        // Summary mirrors of the Java solution's getters.
+        // Summary getters.
         .def("total_cost", &FacilityLocationProblem::totalCost)
         .def("potential_cost", &FacilityLocationProblem::potentialCost)
         .def("total_distance_meters",
@@ -143,7 +143,7 @@ PYBIND11_MODULE(_core, m)
                      a.push_back(consumer.facility);
                  return a;
              })
-        // Bulk write of the planning variable (consumer access via
+        // Bulk write of the decision variable (consumer access via
         // .consumers returns copies, so per-consumer writes would be lost).
         .def(
             "set_assignment",

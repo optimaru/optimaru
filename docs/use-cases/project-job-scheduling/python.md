@@ -1,8 +1,9 @@
 # optimaru.project_job_scheduling — project job scheduling (multi-project RCPSP) Python package
 
-The `project-job-scheduling` example model (Apache-2.0; see the repository NOTICE)
-(multi-project / multi-mode RCPSP): pybind11 bindings of the `optimaru/project_job_scheduling/cpp` implementation
-ported onto the generic C++ engine in `optimaru/cpp/optimaru/`.
+Multi-project / multi-mode RCPSP, derived from the Timefold Quickstarts
+`project-job-scheduling` example (Apache-2.0; see the repository NOTICE): pybind11 bindings of
+the `optimaru/project_job_scheduling/cpp` implementation on the generic C++ engine in
+`optimaru/cpp/optimaru/`.
 
 ## Install / test
 
@@ -49,7 +50,7 @@ pj.solve(core, time_limit_seconds=5.0, constraints=[*others, ProjectDelayCost(le
 score(raw), score(raw, [*others, ProjectDelayCost(weight=2)])        # re-priced in pure Python
 ```
 
-## Domain (as in the Java quickstart)
+## Domain
 
 - **Project** — `release_date` + `critical_path_duration`. Used only as the reference date
   for delay (the critical path end); does not force the start.
@@ -57,16 +58,19 @@ score(raw), score(raw, [*others, ProjectDelayCost(weight=2)])        # re-priced
   global (always renewable) or project-local.
 - **Job** — SOURCE / STANDARD / SINK. One or more execution modes (duration + resource
   demand); SOURCE/SINK have one zero-duration mode.
-- **Allocation** (planning entity) — 1:1 with jobs. Java's two planning variables
-  `(executionMode, delay∈[0, 500))` are ported as one composite-encoded assignment variable
+- **Allocation** (the decision) — 1:1 with jobs. The solver chooses an execution mode and a
+  delay in `[0, delay_range_size)` (500 by default) per allocation:
+  `AllocationModel.execution_mode_id` / `delay` (both `None` == uninitialized). In `_core`
+  the pair is one composite-encoded assignment variable
   `mode_delay = delay * max_mode_count + mode_slot`
   (real mode index = `mode_slot % the job's mode count`, -1 == uninitialized).
-  SOURCE/SINK allocations are always pinned (Java's `@PlanningPin` + `setPinned`).
-- **Shadow chain** — Java's `predecessorsDoneDate → startDate → endDate` shadow variables
-  are reproduced as derived state: recomputed in topological order, and the incremental
+  SOURCE/SINK allocations are always pinned; `pinned` also fixes a STANDARD one.
+- **Derived dates** — `predecessors_done_date → start_date → end_date` are derived, not
+  decided: an allocation starts `delay` days after its last predecessor ends and runs for
+  its mode's duration. They are recomputed in topological order, and the incremental
   calculator re-propagates only the successor subgraph of changed nodes.
 
-## Constraints (HardMediumSoftScore, all penalties)
+## Constraints (hard / medium / soft, all penalties)
 
 | Python name | C++ component | Default | Raw cost (0 = no violation) |
 |---|---|---|---|
@@ -90,8 +94,8 @@ k-th pick `<name>#<k>`: `score(raw, [MakespanCost(), MakespanCost(exponent=2, of
 
 ## Score mapping
 
-Java uses `HardMediumSoftScore`; the engine only knows `Score(int64 hard, double
-soft)`. The same offset mapping as bed-allocation/meeting-scheduling is used, declared once
+The score has three levels (hard / medium / soft); the engine only knows
+`Score(int64 hard, double soft)`. The same offset mapping as bed-allocation/meeting-scheduling is used, declared once
 as the domain's medium fold (`kMediumFold` in `optimaru/project_job_scheduling/cpp/include/pjs/domain.hpp`; every
 `constraint_costs()` entry carries it as `medium_fold`, and
 `optimaru.project_job_scheduling.constraints.score()` returns the folded engine-level `(hard, soft)`):
@@ -106,19 +110,15 @@ lexicographic order holds while `|medium| < ~9.0x10^6` and `|soft| < 10^9` (both
 `allocations x (max delay + max duration)` — plenty of headroom on realistic
 instances). Rule details are in `optimaru/project_job_scheduling/cpp/include/pjs/domain.hpp`.
 
-## Differences from the Java original (caveats)
+## Caveats
 
-- **Composite encoding**: two variables → one. Jobs with fewer modes than `max_mode_count`
-  get duplicate encodings where several values decode to the same (mode, delay)
-  (`slot % mode count`), but every value is valid, so Java's per-entity value range
-  semantics are preserved. The demo (every STANDARD job has 3 modes) has no duplicates.
-- **Initialization order / heuristic**: Java's `DelayStrengthComparator` (ascending delay
-  strength) is reproduced equivalently by the engine CH scanning values upward from 0
-  (no separate port).
+- **Composite encoding**: the mode and the delay share one variable. Jobs with fewer modes
+  than `max_mode_count` get duplicate encodings where several values decode to the same
+  (mode, delay) (`slot % mode count`), but every value is valid for every job. The demo
+  (every STANDARD job has 3 modes) has no duplicates.
+- **Initialization order**: the construction heuristic scans values upward from 0, so it
+  tries the smallest delays first.
 - **Pinned uninitialized allocations**: the engine refuses an unassigned pinned entity,
-  so `Solver.solve` first fixes uninitialized pinned allocations to (first mode, delay 0)
-  (the SOURCE/SINK convention of the Java demo).
-- **Allocation's sourceAllocation/sinkAllocation fields**: references unused by any Java
-  constraint, so not ported (REST shape only).
-- **Demo data**: scale and distributions follow the quickstart's demo, drawn from a
-  seeded `random.Random`.
+  so `Solver.solve` first fixes uninitialized pinned allocations to (first mode, delay 0).
+- **Demo data**: `generate_demo_data(seed)` draws the instance from a seeded
+  `random.Random`.

@@ -78,7 +78,7 @@ namespace
 // Leaves search mode without touching the assignment list, for a solve that
 // failed after beginSearch() (for example the decoder giving up). Otherwise
 // the schedule would stay in search mode, and the plugin path would re-decode
-// the planning values while the monolithic calculator scores `assignments`.
+// the decision values while the monolithic calculator scores `assignments`.
 void abandonSearch(SemiconductorSchedule &schedule)
 {
     schedule.searching = false;

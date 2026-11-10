@@ -13,7 +13,7 @@ namespace sls
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart already uses Score, so the mapping onto the
+// This use case scores hard and soft only, so the mapping onto the
 // engine's Score(int64 hard, double soft) is the identity: hard is
 // the violation count sum, soft is the (integral) travel-distance / classic
 // penalty sum stored in the engine's double field. No level remapping needed.
@@ -22,9 +22,9 @@ using Score = optimaru::Score;
 // ---------------------------------------------------------------------------
 // Team  (problem fact)
 // ---------------------------------------------------------------------------
-// The quickstart's Team. Its Map<Team, Integer> distanceToTeam becomes the
-// solution-level distance matrix LeagueSchedule::distanceToTeam (indexed by
-// team position), so Team itself is plain data.
+// Distances between teams live in the solution-level distance matrix
+// LeagueSchedule::distanceToTeam (indexed by team position), so Team itself
+// is plain data.
 struct Team
 {
     std::string id;
@@ -32,13 +32,13 @@ struct Team
 };
 
 // ---------------------------------------------------------------------------
-// Round  (problem fact, the planning value)
+// Round  (problem fact, the value a match is assigned)
 // ---------------------------------------------------------------------------
-// `index` is the quickstart's @PlanningId round number: every constraint
+// `index` is the round number: every constraint
 // compares/offsets round *indices* (same day, next day, first/last round),
 // not positions in the rounds vector. Indices must be >= 0 and are normally
 // contiguous 0..N-1, but sparse indices work too (a missing index simply has
-// no round, like the quickstart's ifNotExists(Round) joins).
+// no round).
 struct Round
 {
     int index = 0;
@@ -47,9 +47,9 @@ struct Round
 };
 
 // ---------------------------------------------------------------------------
-// Match  (@PlanningEntity)
+// Match  (the entity the solver assigns)
 // ---------------------------------------------------------------------------
-// `round` is the only planning variable: the position of the assigned Round
+// `round` is the only decision variable: the position of the assigned Round
 // in LeagueSchedule::rounds, or -1 while unassigned. Teams are referenced by
 // their position in LeagueSchedule::teams.
 struct Match
@@ -60,7 +60,7 @@ struct Match
     // A classic/important match (e.g. derby): prefers weekend/holiday rounds.
     bool classicMatch = false;
 
-    int round = -1;  // planning variable; -1 == unassigned
+    int round = -1;  // decision variable; -1 == unassigned
 
     // Precomputed by ScoreCalculator::prepare (kept at the end so 4-field
     // brace initializers elsewhere still compile): dense ids of the ordered
@@ -72,7 +72,7 @@ struct Match
 };
 
 // ---------------------------------------------------------------------------
-// LeagueSchedule  (@PlanningSolution)
+// LeagueSchedule  (the problem and its solution)
 // ---------------------------------------------------------------------------
 struct LeagueSchedule
 {
@@ -80,8 +80,7 @@ struct LeagueSchedule
     std::vector<Round> rounds;
     std::vector<Match> matches;
 
-    // distanceToTeam[from][to] in km (the quickstart's Team.distanceToTeam
-    // maps, flattened to the solution). Directional lookups are preserved
+    // distanceToTeam[from][to] in km. Directional lookups are preserved
     // (dist(a, b) may differ from dist(b, a)); an empty matrix means all
     // distances are zero (prepare() fills it).
     std::vector<std::vector<int>> distanceToTeam;
@@ -95,8 +94,7 @@ struct LeagueSchedule
     // Filled by ScoreCalculator::prepare:
     int maxRoundIndex = -1;
     int pairCount = 0;
-    // roundIndexExists[i] != 0 iff some Round has index i (the quickstart's
-    // ifNotExists(Round, index == ...) probes).
+    // roundIndexExists[i] != 0 iff some Round has index i.
     std::vector<char> roundIndexExists;
 
     int teamCount() const { return static_cast<int>(teams.size()); }
@@ -106,7 +104,7 @@ struct LeagueSchedule
     {
         return distanceToTeam[fromTeam][toTeam];
     }
-    // The constraint-facing round number of a planning value (see Round).
+    // The constraint-facing round number of a round position (see Round).
     int roundIndexOf(int roundPosition) const
     {
         return rounds[roundPosition].index;
@@ -116,8 +114,8 @@ struct LeagueSchedule
 }  // namespace sls
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
-// annotations of the C++ engine): entities are matches, the planning variable
+// SolutionTraits specialization  (describes the solution's shape to the
+// engine): entities are matches, the decision variable
 // is Match::round, the value range is the rounds vector.
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<sls::LeagueSchedule>

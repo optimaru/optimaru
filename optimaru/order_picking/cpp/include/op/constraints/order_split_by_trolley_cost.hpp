@@ -13,7 +13,7 @@ namespace op
 // downstream.
 //
 // Raw cost per trolley = the number of distinct orders with a pick on it.
-// NOT "0 = no split" (kept as the quickstart defines it): an order carried
+// NOT "0 = no split": an order carried
 // whole by one trolley still costs 1, so the total is never below the number
 // of orders that have assigned picks; only an empty trolley costs 0.
 //

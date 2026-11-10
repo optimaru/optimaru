@@ -8,12 +8,10 @@
 namespace ms
 {
 
-// Per-constraint violation totals (raw, unweighted, counted positive) — the
-// exact quantities the Java MeetingSchedulingConstraintProvider penalizes.
+// Per-constraint violation totals (raw, unweighted, counted positive).
 // Each member is named after its constraint's registry name
 // (ms/constraints/<subject>_cost.hpp). Used by the monolithic score, the C++
-// tests (hand-computed per-constraint cases like the Java ConstraintVerifier
-// tests) and the demo output; Python reads the same per-constraint values
+// tests (hand-computed per-constraint cases) and the demo output; Python reads the same per-constraint values
 // through constraint_costs().
 struct Breakdown
 {
@@ -42,7 +40,7 @@ struct Breakdown
     std::int64_t softTotal() const;
 };
 
-// Port of the reference meeting-scheduling MeetingSchedulingConstraintProvider.
+// The meeting-scheduling constraints, scored in one pass.
 //
 // score does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under ScoreChecks::Full).
@@ -74,11 +72,9 @@ struct Breakdown
 //                                        meeting (gap <= 2 grains) switches
 //                                        rooms
 // Unassigned assignments (grainRoom == -1) contribute nothing: the
-// construction heuristic scores partially initialized solutions. (Java's
-// forEachIncludingUnassigned variants score some half-assigned states — e.g.
-// roomCapacityCost with room == null — but with the composite encoding
-// both Java variables are assigned or neither, and on fully assigned
-// solutions the semantics match exactly.)
+// construction heuristic scores partially initialized solutions. (With the
+// composite encoding a meeting has both its grain and its room or neither,
+// so there is no half-assigned state to score.)
 class ScoreCalculator
 {
 public:
@@ -86,7 +82,7 @@ public:
 
     // --- shared building blocks (also used by the plugin components) ---
 
-    // Java MeetingAssignment::calculateOverlap: overlap of two grain-index
+    // Overlap of two grain-index
     // intervals [start, end) (start inclusive, end exclusive).
     static std::int64_t
     overlapGrains(int start1, int end1, int start2, int end2)
@@ -96,7 +92,7 @@ public:
         return hi > lo ? hi - lo : 0;
     }
 
-    // Java TimeGrain::compareTo: by dayOfYear, then startingMinuteOfDay.
+    // Orders TimeGrains by dayOfYear, then startingMinuteOfDay.
     static int compareTimeGrains(const TimeGrain &a, const TimeGrain &b)
     {
         if (a.dayOfYear != b.dayOfYear)

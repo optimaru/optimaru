@@ -3,7 +3,7 @@
 The compiled module wraps the C++ domain in `optimaru/tournament_scheduling/cpp`,
 which imports the generic engine in `optimaru/cpp/optimaru`.
 
-Constraints of the Java quickstart (HardMediumSoftBigDecimalScore) and the score mapping
+Constraints (hard / medium / soft levels) and the score mapping
 (registry names; default weights per raw unit, all 1):
   hard 1. team_conflict_cost                  -1 per pair of same-team assignments on one day
   hard 2. team_unavailability_cost            -1 when a (team, day) unavailability fact has an
@@ -26,7 +26,7 @@ from typing import Any, Literal, NamedTuple
 MEDIUM_SCALE: float
 
 class Score:
-    """HardSoft score. `hard` is the integer violation sum (0 == feasible); `soft`
+    """Two-level score (hard, soft). `hard` is the integer violation sum (0 == feasible); `soft`
     is the folded medium/soft objective. Lexicographic comparison (hard first)."""
     @property
     def hard(self) -> int: ...
@@ -36,7 +36,7 @@ class Score:
         """True if hard == 0."""
 
 class Team:
-    """Problem fact: a participating team. The list index is the planning variable's value."""
+    """Problem fact: a participating team. Its list index is the value assigned to `TeamAssignment.team`."""
     def __init__(self, name: str) -> None: ...
     name: str
 
@@ -47,14 +47,14 @@ class Day:
 
 class UnavailabilityPenalty:
     """Problem fact: (team, day) unavailable — one hard point of team_unavailability_cost
-    when the cell has at least one assignment (one point per fact; Java's forEach + ifExists)."""
+    when the cell has at least one assignment (one point per fact, however many assignments the cell holds)."""
     def __init__(self, team: int, day: int) -> None: ...
     team: int
     day: int
 
 class TeamAssignment:
-    """Planning entity: one match slot of a day. `team` is the planning variable
-    (-1 == unassigned), written by the solver. ids must be unique (Java @PlanningId)."""
+    """One match slot of a day. `team` is the decision variable
+    (-1 == unassigned), written by the solver. ids must be unique."""
     def __init__(
         self,
         id: int,
@@ -72,7 +72,7 @@ class TeamAssignment:
     """If True, team is fixed (it counts in the score but never moves)."""
 
 class TournamentSchedule:
-    """Planning solution: teams (value range) + days + unavailability + assignments (entities).
+    """The problem and its solution: teams (the values) + days + unavailability + assignments.
     solve changes the team_assignments' `team` and `score` in place.
 
     Note: list attributes such as `team_assignments` return copies, so use
@@ -96,7 +96,7 @@ class TournamentSchedule:
         """Current team index per assignment (-1 == unassigned)."""
 
     def set_assignment(self, assignment: Sequence[int]) -> None:
-        """Bulk-write planning variables (length must equal the number of assignments)."""
+        """Bulk-write the team of every assignment (length must equal the number of assignments)."""
 
 def calculate_score(schedule: TournamentSchedule) -> Score:
     """Full recalculation (also stored in schedule.score)."""

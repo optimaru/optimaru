@@ -17,7 +17,7 @@ def test_demo_data_shape():
     assert schedule.to_minute - schedule.from_minute == 14 * 24 * 60
 
     names = [job.name for job in schedule.jobs]
-    assert names == sorted(names)  # Java: jobs.sort(comparing(getName))
+    assert names == sorted(names)  # jobs come sorted by name
     for job in schedule.jobs:
         assert 120 <= job.duration_minutes < 300
         assert job.min_start_minute % (24 * 60) == 0
@@ -51,7 +51,7 @@ def test_demo_solve_reaches_feasible():
     assert schedule.score.hard == 0
     assert steps  # on_new_best fired
 
-    # Assignment consistency: every job is in exactly one list, the shadow chain is
+    # Assignment consistency: every job is in exactly one list, the derived times are
     # sequential, and the hard constraints really hold.
     membership = [0] * len(schedule.jobs)
     for line in schedule.lines:

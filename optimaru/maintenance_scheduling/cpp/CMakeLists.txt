@@ -19,7 +19,7 @@ add_executable(mnt_test ${OPTIMARU_TESTS_DIR}/maintenance_scheduling/cpp/mnt_tes
 target_link_libraries(mnt_test PRIVATE mnt_core)
 target_compile_options(mnt_test PRIVATE -Wall -Wextra)
 
-# Plugin-assembly path (mnt/constraints.hpp): the same provider decomposed
+# Plugin-assembly path (mnt/constraints.hpp): the same constraints decomposed
 # into one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(mnt_plugin_test ${OPTIMARU_TESTS_DIR}/maintenance_scheduling/cpp/mnt_plugin_test.cpp)

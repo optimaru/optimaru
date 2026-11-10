@@ -54,7 +54,7 @@ class FacilityModel(BaseModel):
 
 
 class ConsumerModel(BaseModel):
-    """Planning entity. facility is a facility index (-1 = unassigned)."""
+    """Facility is a facility index (-1 = unassigned)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -65,7 +65,7 @@ class ConsumerModel(BaseModel):
 
 
 class FacilityLocationProblemModel(BaseModel):
-    """Planning solution mirror. score is a read-only result, kept as a separate field.
+    """Solution mirror. score is a read-only result, kept as a separate field.
 
     The canonical problem carries no constraint weights: weights
     come only from constraint selections, and the defaults (setup 2, distance 6)

@@ -2,7 +2,7 @@
 
 Mirrors `_core`'s Product/Operator/Line/Job/PackagingSchedule 1:1, but times are
 `datetime.datetime` (naive, converted to epoch minutes) and cleaning times are a
-"previous product id -> timedelta" map as in Java. The line's `job_ids` order is the
+"previous product id -> timedelta" map. The line's `job_ids` order is the
 source of truth for the assignment, and each job's line_id / start_cleaning_date_time /
 start_production_date_time / end_date_time are result-only fields
 (ignored by `to_core`)::
@@ -52,9 +52,9 @@ def _opt_to_datetime(minute: int | None) -> datetime | None:
 
 
 class ProductModel(BaseModel):
-    """A product. cleaning_durations mirrors Java's Map<Product, Duration>:
+    """A product. cleaning_durations maps a previous product to the cleaning time:
     keys are the id of the product made on the line 'just before'. When a (previous,
-    current) pair without an entry actually ends up adjacent, it errors as in Java."""
+    current) pair without an entry actually ends up adjacent, it is an error."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -70,10 +70,10 @@ class OperatorModel(BaseModel):
 
 
 class JobModel(BaseModel):
-    """Planning entity (an element of the list variable). LineModel.job_ids is the source
+    """A packaging job (an element of a line's job list). LineModel.job_ids is the source
     of truth for the assignment; line_id and start_cleaning/start_production/end are
-    result-only shadow fields (ignored by to_core). min_start_time and priority are read
-    by no constraint, the same as in Java."""
+    result-only derived fields (ignored by to_core). min_start_time and priority are read
+    by no constraint."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -94,8 +94,8 @@ class JobModel(BaseModel):
 
 
 class LineModel(BaseModel):
-    """Planning entity. job_ids is the @PlanningListVariable (order matters),
-    operator_id is Java's basic @PlanningVariable Line.operator."""
+    """A production line. job_ids is the decision (the line's jobs, order matters);
+    operator_id is the second decision, the line's operator."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -107,10 +107,9 @@ class LineModel(BaseModel):
 
 
 class PackagingScheduleModel(BaseModel):
-    """Planning solution mirror. score is a read-only result, kept as a separate field.
+    """The whole schedule. The score is a read-only result, kept as separate fields.
     Jobs in no line's job_ids are unassigned (the solver leaves pinned unassigned
-    jobs alone, and the rest can get assigned on a re-solve — the same as
-    Java)."""
+    jobs alone, and the rest can get assigned on a re-solve)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -135,7 +134,7 @@ class PackagingScheduleModel(BaseModel):
             raise ValueError("duplicate job id")
 
         count = len(self.products)
-        cleanup = [-1] * (count * count)  # -1 == missing, like Java's map
+        cleanup = [-1] * (count * count)  # -1 == no entry for the pair
         for cur, product in enumerate(self.products):
             for prev_id, duration in product.cleaning_durations.items():
                 if prev_id not in product_index:
@@ -189,7 +188,7 @@ class PackagingScheduleModel(BaseModel):
 
     @classmethod
     def from_core(cls, schedule: "_core.PackagingSchedule") -> "PackagingScheduleModel":
-        """engine object -> pydantic (including the current assignment, shadows and score)."""
+        """engine object -> pydantic (including the current assignment, derived times and score)."""
         schedule.update_shadow_variables()
         # Accessing a pybind vector field copies the whole list, so read it
         # only once.
@@ -259,7 +258,7 @@ def with_initial_solution(
     line's `job_ids` and `operator_id` become the ones it has there, replacing
     what `problem` had; a line the solution leaves out starts empty, with no
     operator. Lines and jobs are matched by id. Only those two fields are read:
-    the jobs' pins, the facts and the shadow fields stay as `problem` has them.
+    the jobs' pins, the facts and the derived fields stay as `problem` has them.
 
     Jobs in no line are placed by construction, which may also leave them in the
     unassigned pool when that scores best. A solution that assigns every job is

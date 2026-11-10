@@ -5,8 +5,6 @@
 
 namespace vrp {
 
-// Port of org.acme.vehiclerouting.domain.geo.HaversineDrivingTimeCalculator.
-//
 // Driving time (seconds) between two locations = Haversine distance in meters
 // at an average speed of AVERAGE_SPEED_KMPH.
 class HaversineDrivingTimeCalculator {
@@ -18,8 +16,7 @@ public:
     // Driving time between two individual locations, in seconds.
     static Seconds calculateDrivingTime(const Location& from, const Location& to);
 
-    // Fills plan.drivingSeconds with an N x N matrix over plan.locations,
-    // mirroring DrivingTimeCalculator::initDrivingTimeMaps.
+    // Fills plan.drivingSeconds with an N x N matrix over plan.locations.
     static void initDrivingTimeMatrix(VehicleRoutePlan& plan);
 
     static Seconds metersToDrivingSeconds(long meters);

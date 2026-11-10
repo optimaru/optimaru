@@ -1,10 +1,9 @@
 // Maintenance-scheduling unit tests (engine test/ style: check() + non-zero
 // exit on any failure):
-//   (a) every constraint verified against hand-computed scores — the same
-//       cases as the Java MaintenanceSchedulingConstraintProviderTest, with
-//       expectations widened to the FULL score (the Java ConstraintVerifier
-//       isolates one constraint per assertion; a full-score calculator
-//       cannot, so cross-firing constraints are accounted for in comments)
+//   (a) every constraint verified against hand-computed scores, with
+//       expectations on the FULL score (a full-score calculator cannot
+//       isolate one constraint, so cross-firing constraints are accounted
+//       for in comments)
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's Editor protocol (before/set/after)
 //   (b2) the incrementally maintained hot (tag, day) set (the solver's
@@ -60,7 +59,7 @@ void checkScore(const std::string &label,
         ++failures;
 }
 
-// 2021-02-01 (a Monday) == epoch day 18659, the Java test's DAY_1.
+// 2021-02-01 (a Monday) == epoch day 18659.
 constexpr std::int64_t DAY_1 = 18659;
 constexpr std::int64_t DAY_2 = DAY_1 + 1;  // Tuesday
 constexpr std::int64_t DAY_3 = DAY_1 + 2;  // Wednesday
@@ -121,11 +120,11 @@ Score scoreOf(const std::vector<JobSpec> &specs)
 }
 
 // -------------------------------------------------------------------------
-// (a) The Java ConstraintProviderTest cases, full-score expectations.
+// (a) One constraint at a time, full-score expectations.
 // -------------------------------------------------------------------------
 void verifyConstraints()
 {
-    std::printf("== (a) Verifying each constraint (Java test cases) ==\n");
+    std::printf("== (a) Verifying each constraint ==\n");
     const std::vector<std::string> none;
 
     // crewConflictCost: same crew + overlapping days, -overlap hard.
@@ -196,15 +195,15 @@ void verifyConstraints()
                -2,
                0);
 
-    // beforeIdealEndDateCost: -days ended early, soft x1 (duration 0 cases,
-    // exactly the Java test; end == start).
+    // beforeIdealEndDateCost: -days ended early, soft x1 (duration 0 cases;
+    // end == start).
     checkScore("beforeIdealEndDateCost on time",
                scoreOf({{0, kNoDate, kNoDate, DAY_2, none, 0, DAY_2}}),
                0,
                0);
     // end(=DAY_3) is AFTER ideal DAY_1: the afterIdealEndDateCost constraint
-    // cross-fires with 2 days x 1'000'000 (the Java verifier isolates
-    // beforeIdealEndDateCost and sees 0).
+    // cross-fires with 2 days x 1'000'000 (beforeIdealEndDateCost
+    // alone is 0).
     checkScore("beforeIdealEndDateCost later (after fires)",
                scoreOf({{0, kNoDate, kNoDate, DAY_1, none, 0, DAY_3}}),
                0,
@@ -224,7 +223,7 @@ void verifyConstraints()
                0,
                -3'000'000);
     // end(dur 1 @ Mon) = Tue, 1 day BEFORE ideal Wed: beforeIdealEndDateCost
-    // cross-fires with -1 (the Java verifier sees after == 0).
+    // cross-fires with -1 (afterIdealEndDateCost alone is 0).
     checkScore("afterIdealEndDateCost earlier (before fires)",
                scoreOf({{1, kNoDate, kNoDate, DAY_3, none, 0, DAY_1}}),
                0,
@@ -235,7 +234,7 @@ void verifyConstraints()
                -2'000'000);
 
     // tagConflictCost: -1'000 x shared tags x overlapping days, soft. Both jobs
-    // are on the SAME crew like in the Java test, so crewConflictCost adds
+    // are on the SAME crew, so crewConflictCost adds
     // -overlap hard on the overlapping cases.
     checkScore(
         "tagConflictCost no overlap",
@@ -281,7 +280,7 @@ void verifyConstraints()
                -2,
                0);
 
-    // The weekend jump of the endDate shadow: dur 5 @ Mon ends Saturday,
+    // The weekend jump of the endDate: dur 5 @ Mon ends Saturday,
     // dur 6 @ Mon ends the NEXT Tuesday (Sat/Sun skipped). ideal = next
     // Monday -> dur 5 is 2 days early (Sat->Mon), dur 6 is 1 day late.
     checkScore("endDate skips weekend (before)",

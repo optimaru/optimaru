@@ -12,8 +12,7 @@ namespace mnt
 {
 
 // The maintenance-scheduling implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective.
 //
 // Every constraint is a function of per-day occupancy counts or of the job's
 // own dates, so a single variable change is O(span + |tags| * span) where
@@ -27,7 +26,7 @@ namespace mnt
 //     unary terms of the job's own start/end — O(1) add/subtract.
 //   - soft 6 (tagConflictCost): the same pair-count identity over (tag, day)
 //     cells; a pair sharing k tags and overlapping d days is counted k*d
-//     times, exactly Java's intersection.size() * overlap.
+//     times (shared tags x overlapping days).
 //
 // before_assign retracts the job's contribution while crewDate still
 // holds the OLD value; after_assign inserts the NEW value.

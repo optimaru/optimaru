@@ -212,7 +212,7 @@ BedPlan buildRandomInstance(int stayCount, std::uint64_t seed)
 }
 
 // Scores `plan`'s current assignment with a freshly reset assembly, decoded
-// back into the domain's HardMediumSoft levels.
+// back into the domain's hard / medium / soft levels.
 Score scoreWith(DecomposedCalculator &calculator, BedPlan &plan)
 {
     calculator.rebuild(plan);
@@ -331,8 +331,8 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) Partial assemblies: each component in isolation on the hand-computed
-// instances of the Java ConstraintProvider tests (6-night stays).
+// (c) Partial assemblies: each component in isolation on hand-computed
+// instances (6-night stays).
 // -------------------------------------------------------------------------
 void verifyPartialAssemblies()
 {
@@ -704,7 +704,7 @@ void verifyRawCostsByHand()
         },
         none);
     // The room has telemetry and oxygen, the stay needs television too: one
-    // item missing, so the quickstart charges the 2 PRESENT items x 6 nights.
+    // item missing, so the charge is the 2 PRESENT items x 6 nights.
     byHand(
         "requiredPatientEquipmentCost",
         []

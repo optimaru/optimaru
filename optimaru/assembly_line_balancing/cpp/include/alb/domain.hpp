@@ -31,9 +31,9 @@ namespace alb
 using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
-// Task  (@PlanningEntity)
+// Task  (entity)
 // ---------------------------------------------------------------------------
-// `station` is the single BASIC planning variable: a station index
+// `station` is the single BASIC decision variable: a station index
 // (0-based), -1 == unassigned. Stations are not bounded above by the facts:
 // the value range is AssemblyLineBalancingProblem::stationCount (see there).
 struct Task
@@ -47,7 +47,7 @@ struct Task
     // reads the sorted unique copy built by prepare().
     std::vector<int> forbiddenStations;
 
-    int station = -1;  // planning variable; -1 == unassigned
+    int station = -1;  // decision variable; -1 == unassigned
 
     bool isAssigned() const { return station >= 0; }
 };
@@ -78,7 +78,7 @@ struct TaskPair
 };
 
 // ---------------------------------------------------------------------------
-// AssemblyLineBalancingProblem  (@PlanningSolution)
+// AssemblyLineBalancingProblem  (solution)
 // ---------------------------------------------------------------------------
 struct AssemblyLineBalancingProblem
 {
@@ -157,7 +157,7 @@ struct AssemblyLineBalancingProblem
 }  // namespace alb
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization: entities are tasks, the planning
+// SolutionTraits specialization: entities are tasks, the decision
 // variable is Task::station, the value range is the frozen station count.
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<alb::AssemblyLineBalancingProblem>

@@ -1,8 +1,8 @@
 // Project-job-scheduling unit tests (engine test/ style: check() + non-zero
 // exit on any failure):
-//   (a) every constraint verified against the hand-computed scores of the
-//       Java ProjectJobSchedulingConstraintProviderTest cases (the shadow
-//       chain included), plus composite-encoding and pass-through checks
+//   (a) every constraint verified against hand-computed scores (the
+//       derived dates included), plus composite-encoding and pass-through
+//       checks
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's Editor protocol (before/set/after)
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
@@ -104,10 +104,9 @@ int addJob(ProjectJobSchedule &schedule,
 }
 
 // -------------------------------------------------------------------------
-// (a) The Java ProjectJobSchedulingConstraintProviderTest cases, hand
-// checked against the full recompute (which also exercises the ported
-// shadow chain: the Java tests preset predecessorsDoneDate = 1 / 2, here a
-// duration-1 / duration-2 predecessor produces the same dates).
+// (a) Hand-computed constraint cases, checked against the full recompute
+// (which also exercises the derived dates: a duration-1 / duration-2
+// predecessor gives predecessorsDoneDate = 1 / 2).
 // -------------------------------------------------------------------------
 void verifyConstraints()
 {
@@ -139,7 +138,7 @@ void verifyConstraints()
     // hard 2: renewableResourceCapacityCost — requirements 7 (days 101..110)
     // and 5 (days 102..111) against capacity 10: 9 overlap days x 2 = 18.
     // predecessorsDoneDate 1 / 2 comes from duration-1 / duration-2
-    // predecessors (the Java test presets the shadow directly).
+    // predecessors.
     {
         ProjectJobSchedule s = makeBase(10, /*renewable*/ true, 0);
         const int p1 = addJob(s, JobType::STANDARD, 1, 0, {}, 0);
@@ -151,18 +150,18 @@ void verifyConstraints()
                    -18,
                    0,
                    0);
-        // The ported shadow chain (predecessorsDoneDate -> start -> end).
+        // The derived dates (predecessorsDoneDate -> start -> end).
         check(s.allocations[a1].predecessorsDoneDate == 1
                   && s.allocations[a1].startDate == 101
                   && s.allocations[a1].endDate == 111,
-              "shadow chain of allocation 1 (done=1, start=101, end=111)");
+              "derived dates of allocation 1 (done=1, start=101, end=111)");
         check(s.allocations[a2].predecessorsDoneDate == 2
                   && s.allocations[a2].startDate == 102
                   && s.allocations[a2].endDate == 112,
-              "shadow chain of allocation 2 (done=2, start=102, end=112)");
+              "derived dates of allocation 2 (done=2, start=102, end=112)");
     }
-    // medium 3 + soft 4 (+ hard 2): the Java provider test's project-delay
-    // case (projectDelayCost + makespanCost) — SINK ends 111 and 112 against
+    // medium 3 + soft 4 (+ hard 2): the project-delay case
+    // (projectDelayCost + makespanCost) — SINK ends 111 and 112 against
     // criticalPathEndDate 100 -> medium 11 + 12 = 23; makespan
     // max(111, 112) = 112; the renewable overlap is 18 again.
     {
@@ -178,8 +177,7 @@ void verifyConstraints()
                    -112);
     }
     // medium 3: no penalty when the sinks end before the critical path end
-    // (the Java provider test's makespan case, makespanCost:
-    // criticalPathDuration 155).
+    // (the makespan case, makespanCost: criticalPathDuration 155).
     {
         ProjectJobSchedule s = makeBase(10, /*renewable*/ true, 155);
         const int p1 = addJob(s, JobType::STANDARD, 1, 0, {}, 0);
@@ -231,7 +229,7 @@ void verifyConstraints()
               "slot 1 of a 2-mode job decodes to mode 1 (end 11)");
     }
     // Unassigned allocations pass dates through (delay 0 / duration 0) and
-    // contribute no resource usage — the Java suppliers' null-handling.
+    // contribute no resource usage.
     {
         ProjectJobSchedule s = makeBase(1, /*renewable*/ true, 0);
         const int a = addJob(s, JobType::STANDARD, 2, 1, {}, 1);
@@ -374,7 +372,7 @@ ProjectJobSchedule buildRandomInstance(int projectCount,
 // swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the
 // engine. Every move can shift whole successor subgraphs, so this covers the
-// shadow-chain re-propagation.
+// re-propagation of the derived dates.
 // -------------------------------------------------------------------------
 void verifyIncremental()
 {

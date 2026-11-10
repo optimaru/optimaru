@@ -1,7 +1,8 @@
 # optimaru.sports_league_scheduling — Sports League Scheduling (C++ engine + pybind11)
 
-The `sports-league-scheduling` example model (Apache-2.0; see the repository NOTICE)
-C++ port (`optimaru/sports_league_scheduling/cpp`, namespace `sls`) for use from Python.
+Sports league scheduling, derived from the Timefold Quickstarts `sports-league-scheduling` example
+(Apache-2.0; see the repository NOTICE): the C++ implementation
+(`optimaru/sports_league_scheduling/cpp`, namespace `sls`) for use from Python.
 Assigns a round (`Round`) to every match (`Match`) of the league — `Match.round`
 is the decision variable (-1 = unassigned; the value is a position in the `rounds` list).
 
@@ -40,12 +41,12 @@ print(sum(sl.constraint_costs(schedule)["away_to_away_hop_cost"]["costs"]))  # r
 
 ## Score mapping
 
-The Java original already uses `Score`, so it maps identically onto the engine's
+This use case scores hard and soft only, so it maps identically onto the engine's
 `Score(int64 hard, double soft)`: hard = minus the violation count (0 == feasible),
 soft = minus the travel distance (km) plus workday derby penalties (1000 per match) (soft is
 always integer-valued, held in the engine's double field).
 
-## Constraints (same semantics as Java `SportsLeagueSchedulingConstraintProvider`)
+## Constraints
 
 In `list_constraints()` order (the three unit constraints first, then the globals); the
 level and weight are the defaults `constraint_info()` reports:
@@ -92,11 +93,11 @@ clip=False with a non-zero offset cannot be hard, because hard 0 must mean no vi
 use clip=True (a threshold) or another level`. On soft it is allowed.
 
 Round adjacency is all based on `Round.index`, so with sparse indices (e.g. 0,1,4) the
-gap is treated as "no round" (the same as Java's `ifNotExists(Round)`).
+gap is treated as "no round".
 
 ## Demo data
 
-`demo_schedule()` builds the demo league, modelled on the quickstart's demo: the measured
+`demo_schedule()` builds the demo league: the measured
 distance matrix of 14 South American teams, 32 rounds, 182 matches over all ordered pairs, and
 a 5% classic draw from a seeded `random.Random` (+ symmetric closure, 18 matches in total).
 Round 0 is pinned to a Wednesday, so the instance is the same on every run. (The C++ demo

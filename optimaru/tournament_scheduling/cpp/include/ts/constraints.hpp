@@ -24,7 +24,7 @@ namespace ts
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the components' default weights and levels
+// The full set at the components' default weights and levels
 // (kDefaultWeight / kDefaultLevel). This assembly scores bit-for-bit like
 // ScoreCalculator::score and the monolithic incremental calculator —
 // both unfairness values go through the same

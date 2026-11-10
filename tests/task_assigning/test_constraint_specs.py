@@ -93,7 +93,7 @@ def test_default_constraints_reproduce_the_monolithic_cost_function():
 def test_picking_a_subset_drops_the_other_terms():
     """Unlisted constraints are not scored — that level is emptied entirely.
 
-    Four Bendable levels: hard = missing skills, soft0 = unassigned,
+    Four score levels: hard = missing skills, soft0 = unassigned,
     soft1 = makespan, soft2 = priority end times."""
     baseline = solve()
     assert baseline.soft1 < 0 and baseline.soft2 < 0
@@ -118,7 +118,7 @@ def test_level_can_be_flipped():
     As long as every task is assigned, priority end times can never be 0. Raising the
     level charges its weight in HARD units (the 10^9 between the hard and the
     medium level is the domain's fold, not a weight), so the penalty moves from soft2
-    to the Bendable hard level wholesale."""
+    to the hard level wholesale."""
     picks = [unassigned_tasks_cost]
 
     soft_level = solve([*picks, critical_priority_task_end_time_cost])
@@ -854,7 +854,7 @@ def test_levels_by_hand_on_both_paths(picks, expected):
 
 
 def test_a_repeat_on_medium_reports_its_level_unfolded():
-    """solution.score reports each Bendable level on its own: the repeat's medium term is soft0."""
+    """solution.score reports each score level on its own: the repeat's medium term is soft0."""
     picks = [MinorPriorityTaskEndTimeCost(), MinorPriorityTaskEndTimeCost(level="medium")]
     solution = _hand()
     _zero_budget(solution, picks)

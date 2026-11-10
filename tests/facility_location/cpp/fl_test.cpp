@@ -113,7 +113,7 @@ void verifyConstraints()
                    0,
                    0);
     }
-    // hard 1: Java groups consumers by facility, so a facility no consumer
+    // hard 1: a facility no consumer
     // uses is never penalized — even with a pathological negative capacity.
     {
         FacilityLocationProblem p;
@@ -381,7 +381,7 @@ void verifyFullAssertSolve()
 }
 
 // -------------------------------------------------------------------------
-// (d) Demo-scale solve: the Java demo instance shape (30 facilities x 150
+// (d) Demo-scale solve: the demo instance shape (30 facilities x 150
 // capacity, 60 consumers x 15 demand) must reach 0hard with every consumer
 // assigned, well inside a few seconds.
 // -------------------------------------------------------------------------

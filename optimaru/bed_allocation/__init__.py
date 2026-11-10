@@ -2,14 +2,14 @@
 
 `Department`/`Room`/`Bed`/`Stay`/`BedPlan`/`Score`/`Solver`/`SolverConfig` and
 `calculate_score` come from the compiled C++ core (`_core`). `Stay.bed` is the
-planning variable::
+decision variable::
 
     -1                          uninitialized (no score contribution)
     0..bed_count()-1            real bed index
-    bed_count() (no_bed_value)  "no bed" — the quickstart's null bed
-                                (allowsUnassigned; penalized at the medium level)
+    bed_count() (no_bed_value)  "no bed" — the stay is left unassigned
+                                (penalized at the medium level)
 
-Score convention (HardMediumSoftScore, as in the Java quickstart): hard is bed/gender/
+Score convention (three levels, hard / medium / soft): hard is bed/gender/
 age/required-equipment violations (0 == feasible), medium is the nights of unassigned
 stays (`unassigned_stays_cost`), soft is preference penalties (room size/specialty/
 preferred equipment). Lexicographic comparison (hard first). Internally it maps onto

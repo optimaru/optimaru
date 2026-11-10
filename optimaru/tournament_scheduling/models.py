@@ -1,11 +1,11 @@
 """Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
 Mirrors `_core`'s Team/Day/UnavailabilityPenalty/TeamAssignment/TournamentSchedule
-1:1. Teams/days are referenced by list index (instead of Java's object references; by
-convention Team's @PlanningId == teams index and Day's dateIndex == days index).
+1:1. Teams/days are referenced by list index (a team is identified by its teams index,
+a day by its days index).
 
-Score mapping (Java HardMediumSoftBigDecimalScore -> engine Score):
-``score_hard`` is the Java hard as-is, ``score_soft`` is
+Score mapping (hard / medium / soft -> engine Score):
+``score_hard`` is the hard level as-is, ``score_soft`` is
 ``-(medium unfairness * 1e6 + soft unfairness)`` — folded with a 1e6 offset so medium
 (per-team assignment balance) always dominates soft (head-to-head balance)::
 
@@ -41,7 +41,7 @@ def _valid_positions(count: int) -> str:
 
 
 class TeamModel(BaseModel):
-    """A participating team. The list index plays the role of Java's @PlanningId."""
+    """A participating team, identified by its list index."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -66,8 +66,8 @@ class UnavailabilityPenaltyModel(BaseModel):
 
 
 class TeamAssignmentModel(BaseModel):
-    """Planning entity: one match slot of a day. team is the planning variable
-    (None == unassigned); ids must be unique (Java @PlanningId)."""
+    """One match slot of a day. team is the decision variable
+    (None == unassigned); ids must be unique."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -79,7 +79,7 @@ class TeamAssignmentModel(BaseModel):
 
 
 class TournamentScheduleModel(BaseModel):
-    """Planning solution mirror. score is a read-only result, kept as a separate field."""
+    """Pydantic mirror of the schedule. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -167,7 +167,7 @@ def _pick(rng: random.Random, n: int) -> int:
 
 
 def demo_data() -> TournamentScheduleModel:
-    """The demo instance, modelled on the quickstart's demo: 7 teams, 18 days x 4 slots = 72
+    """The demo instance: 7 teams, 18 days x 4 slots = 72
     assignments, 12 unavailable days drawn from a seeded ``random.Random`` (deterministic)."""
     rng = random.Random(0)
     teams = ["Maarten", "Geoffrey", "Lukas", "Chris", "Fred", "Radek", "Maciej"]

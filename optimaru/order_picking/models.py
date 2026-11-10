@@ -22,7 +22,7 @@ JSON-friendly in/out (snake_case fields, PascalCase classes), same pattern as
     print(solution.routes)                  # {"1": [stops...]}
     print(solution.distance_by_trolley)     # {"1": meters}
 
-A shelving is addressed the Java way: column letter A..E + shelving row 1..3
+A shelving is addressed by column letter A..E + shelving row 1..3
 (the id "(A,1)"), a side (LEFT/RIGHT) and a row 0..10 within the shelving.
 Requires the optional ``pydantic`` dependency.
 """
@@ -155,13 +155,12 @@ class OrderPickingResponse(_Model):
     score: str
     feasible: bool
     total_distance: int  # meters
-    order_split_count: int  # (order, trolley) pairs = sum of countDistinct(trolley) over orders
+    order_split_count: int  # (order, trolley) pairs = sum over orders of the distinct trolleys carrying it
 
 
 def to_solution(request: OrderPickingRequest) -> "_core.OrderPickingSolution":
     """Build the C++ OrderPickingSolution from the pydantic request: one
-    Order per OrderModel and one PickTask per order item (ids "<order>-<i>",
-    like the Java DemoDataGenerator.buildPickTasks)."""
+    Order per OrderModel and one PickTask per order item (ids "<order>-<i>")."""
     orders = [_core.Order(o.id) for o in request.orders]
     pick_tasks = []
     for order_index, order in enumerate(request.orders):
@@ -184,7 +183,7 @@ def to_solution(request: OrderPickingRequest) -> "_core.OrderPickingSolution":
 
 def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPickingResponse:
     """Solve the request and shape the response (routes per trolley plus the
-    per-trolley travel distance, mirroring the Java OrderPickingPlanning)."""
+    per-trolley travel distance)."""
     solution = to_solution(request)
     config = _core.SolverConfig()
     config.spent_limit_seconds = request.timelimit

@@ -1,7 +1,9 @@
-// Bed-allocation demo: rebuilds the Java quickstart's DemoDataGenerator
-// instance (1 department, 10 SAME_GENDER rooms with 13 beds, 28 nights,
-// ~75 stays with the generator's gender/age/equipment distributions), solves
-// for N seconds and asserts the result is feasible (hard == 0).
+// Bed-allocation demo: builds the demo instance (1 department, 10
+// SAME_GENDER rooms with 13 beds, 28 nights, ~75 stays with fixed
+// gender/age/equipment distributions), solves for N seconds and asserts the
+// result is feasible (hard == 0). The instance is derived from the Timefold
+// Quickstarts `bed-allocation` example's demo data (Apache-2.0; see the
+// repository NOTICE).
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -22,8 +24,7 @@ const std::vector<std::string> SPECIALTIES
 const std::vector<std::string> EQUIPMENT_TYPES
     = {"telemetry", "television", "oxygen", "nitrogen"};
 
-// Draws the index of the first cumulative threshold >= a unit draw
-// (the Java generator's Pair<Float, T> tables).
+// Draws the index of the first cumulative threshold >= a unit draw.
 int drawIndex(std::mt19937_64 &rng, const std::vector<double> &cumulative)
 {
     std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -137,7 +138,7 @@ BedPlan generateDemoData()
         }
     }
 
-    // Patients: 50/50 gender; the generator's age buckets; preferred maximum
+    // Patients: 50/50 gender; the age buckets below; preferred maximum
     // room capacity 34% -> 1 / 34% -> 2 / 32% -> 3; required equipment 12%
     // none / 47% one / 41% two; preferred equipment 29% one / 53% two /
     // 16% three / 2% four.

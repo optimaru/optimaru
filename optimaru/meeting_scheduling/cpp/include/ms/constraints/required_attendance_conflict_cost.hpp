@@ -13,8 +13,8 @@ namespace ms
 // 0 = nobody required anywhere is double-booked.
 //
 // The same-meeting term (a meeting listing one person as required twice) is
-// folded in here rather than split off, so this component is exactly the
-// provider's one rule.
+// folded in here rather than split off, so this component is exactly
+// one rule.
 struct RequiredAttendanceConflictCost final : AttendanceArcConstraint
 {
     static constexpr double kDefaultWeight = 1.0;

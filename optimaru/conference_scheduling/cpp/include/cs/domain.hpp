@@ -14,29 +14,28 @@ namespace cs
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart already uses Score, so the mapping onto the
-// engine's Score(int64 hard, double soft) is the identity: hard is
+// The domain scores with the engine's Score(int64 hard, double soft)
+// directly: hard is
 // the weighted violation-minute sum (0 == feasible), soft is the (always
 // integral) weighted preference/diversity balance stored in the engine's
-// double field. No level remapping needed.
+// double field.
 using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
-// Timeslot  (problem fact, half of the planning value)
+// Timeslot  (problem fact, half of the decision value)
 // ---------------------------------------------------------------------------
-// The quickstart's Timeslot (LocalDateTime start/end + talk types + tags),
+// A start/end pair plus the talk types and tags the slot carries,
 // with the date-times flattened to minutes since an arbitrary common origin
 // whose day boundaries fall on multiples of 1440 (e.g. minutes since the
 // conference's first midnight). Day-of assertions ("same day", makespan day
-// spans) are startMinute / 1440, exactly LocalDateTime::toLocalDate().
+// spans) are startMinute / 1440.
 struct Timeslot
 {
     std::string id;
     std::int64_t startMinute = 0;
     std::int64_t endMinute = 0;
     // Indices into ConferenceSchedule::talkTypes: which talk types this slot
-    // may host (the quickstart's per-TalkType compatible-timeslot value
-    // range; see the talkTypeIncompatibilityCost note on ScoreCalculator).
+    // may host (see the talkTypeIncompatibilityCost note on ScoreCalculator).
     std::vector<int> talkTypes;
     std::vector<std::string> tags;
 
@@ -47,7 +46,7 @@ struct Timeslot
 };
 
 // ---------------------------------------------------------------------------
-// Room  (problem fact, the other half of the planning value)
+// Room  (problem fact, the other half of the decision value)
 // ---------------------------------------------------------------------------
 struct Room
 {
@@ -81,13 +80,13 @@ struct Speaker
 };
 
 // ---------------------------------------------------------------------------
-// Talk  (@PlanningEntity)
+// Talk  (entity)
 // ---------------------------------------------------------------------------
-// slotRoom is the only planning variable. The engine supports one BASIC int
-// variable per entity, so the quickstart's two variables (timeslot, room)
+// slotRoom is the only decision variable. The engine supports one BASIC int
+// variable per entity, so the two decisions per talk (timeslot, room)
 // are composed into a single value (the school-timetabling encoding):
 //   slotRoom = timeslotIndex * roomCount + roomIndex
-// -1 means unassigned (both quickstart variables null). Decoding helpers
+// -1 means unassigned (no timeslot and no room). Decoding helpers
 // live on ConferenceSchedule, which knows roomCount.
 struct Talk
 {
@@ -114,9 +113,9 @@ struct Talk
     int favoriteCount = 0;
     int crowdControlRisk = 0;
 
-    int slotRoom = -1;  // planning variable; -1 == unassigned
+    int slotRoom = -1;  // decision variable; -1 == unassigned
 
-    // Extension over the quickstart (which has no @PlanningPin): pinned
+    // Pinned
     // talks keep their slotRoom fixed — scored like any talk but never
     // moved/swapped/ruined by the solver.
     bool pinned = false;
@@ -137,7 +136,7 @@ struct PreferenceTagIds
 };
 
 // ---------------------------------------------------------------------------
-// ConferenceSchedule  (@PlanningSolution)
+// ConferenceSchedule  (solution)
 // ---------------------------------------------------------------------------
 struct ConferenceSchedule
 {
@@ -148,7 +147,7 @@ struct ConferenceSchedule
     std::vector<Speaker> speakers;
     std::vector<Talk> talks;
 
-    // The quickstart's ConferenceConstraintProperties problem fact.
+    // Constraint parameters of the conference.
     int minimumConsecutiveTalksPauseInMinutes = 30;
 
     Score score;
@@ -203,14 +202,12 @@ struct ConferenceSchedule
 }  // namespace cs
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
-// annotations of the C++ engine): entities are talks, the planning variable
+// SolutionTraits specialization: entities are talks, the decision variable
 // is Talk::slotRoom, the value range is the (timeslot x room) grid.
 //
-// NOTE on value ranges: the Java quickstart restricts each Talk's value
-// ranges to its TalkType's compatible timeslots/rooms (@ValueRangeProvider on
-// the entity). The engine's BASIC variable has one global range, so the port
-// enforces compatibility with the synthetic hard constraint
+// NOTE on value ranges: a talk may only use the timeslots/rooms compatible
+// with its TalkType. The engine's BASIC variable has one global range, so
+// compatibility is enforced with the hard constraint
 // talkTypeIncompatibilityCost instead (see cs/score_calculator.hpp) and biases
 // the search toward compatible values (see cs/solver.hpp).
 // ---------------------------------------------------------------------------

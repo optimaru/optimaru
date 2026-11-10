@@ -1,6 +1,6 @@
 # Food Packaging (C++ / Python)
 
-A C++ engine port of the Timefold Quickstarts `food-packaging` example model
+Derived from the Timefold Quickstarts `food-packaging` example model
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)), with modifications.
 Assigns packaging jobs (Job) to production lines (Line) **in order** — every product change
 inserts a cleanup time that depends on the previous product, and the cleaning windows of
@@ -16,15 +16,17 @@ lines run by the same operator must not overlap.
 
 ## Model summary
 
-| Java | Port |
-|---|---|
-| `Line.jobs` `@PlanningListVariable(allowsUnassignedValues=true)` | the engine's sequence shape. Unassigned is an unassigned pool exposed to the engine as one more list |
-| `Line.operator` `@PlanningVariable` | reassigned by the solver wrapper with hill climbing between engine legs (alternating optimization) |
-| `Job` shadow chain (`startCleaning/startProduction/end`) | derived from list positions, O(length) incremental recompute per line |
-| `@PlanningPin` | structural pinning that hides the line's pinned prefix from the engine view |
-| `HardMediumSoftScore` | `engine.soft = medium * 10^10 + soft` mapping, the domain's medium fold (see the domain header comments) |
+Python names are those of the pydantic mirror, `optimaru.food_packaging.models`.
 
-## Constraints (HardMediumSoftScore, folded into the engine's Score)
+| Part of the model | How it works |
+|---|---|
+| Job order: `LineModel.job_ids` (decision) | an ordered list of jobs per line, the engine's sequence shape. Jobs in no list are unassigned; the engine sees them as one more list, the unassigned pool |
+| Operator: `LineModel.operator_id` (decision) | reassigned by the solver wrapper with hill climbing between engine legs (alternating optimization) |
+| Job times: `JobModel.start_cleaning_date_time` / `start_production_date_time` / `end_date_time`, and `line_id` (derived output) | derived from list positions, O(length) incremental recompute per line |
+| Pinning: `JobModel.pinned` | a pinned job keeps its line and position; the pinned jobs of a line must be its prefix, which is hidden from the engine view |
+| Score: `score_hard` / `score_medium` / `score_soft` | three levels, hard / medium / soft; internally `engine.soft = medium * 10^10 + soft`, the domain's medium fold (see the domain header comments) |
+
+## Constraints (hard / medium / soft, folded into the engine's Score)
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|

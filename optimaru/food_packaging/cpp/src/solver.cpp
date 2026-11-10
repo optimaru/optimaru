@@ -192,8 +192,8 @@ void Solver::solve(PackagingSchedule &schedule)
     const int movableJobs = static_cast<int>(schedule.engineToJob.size());
     if (schedule.jobs.empty() || schedule.lines.empty() || movableJobs == 0)
     {
-        // Nothing searchable: score the instance as-is (Java would leave
-        // the jobs unassigned too when there are no lines).
+        // Nothing searchable: score the instance as-is (with no
+        // lines the jobs simply stay unassigned).
         ScoreCalculator::score(schedule);
         return;
     }
@@ -319,7 +319,7 @@ void Solver::solve(PackagingSchedule &schedule)
     improveOperatorAssignment(schedule);
 
     // The authoritative final score: a full recompute on the best solution
-    // (also refreshes the job shadow variables for the caller).
+    // (also refreshes the jobs' derived fields for the caller).
     schedule.score = ScoreCalculator::score(schedule);
 }
 
@@ -415,7 +415,7 @@ void Solver::solve(
         engine.solve(schedule, calculator);
     }
 
-    // Refresh the job shadow variables on the best solution (the plugin
+    // Refresh the jobs' derived fields on the best solution (the plugin
     // components derive their own chain and never write these), then score it
     // with the caller's constraint assembly (custom weights and levels
     // included), leaving the calculator primed on it so constraint_totals()

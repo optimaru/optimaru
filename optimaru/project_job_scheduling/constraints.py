@@ -155,7 +155,7 @@ class ProjectDelayCost(Constraint):
 class MakespanCost(Constraint):
     """Latest SINK end date — when the last project finishes. Default: soft, weight 1.
 
-    One penalty for the whole schedule, not per project (Java's groupBy(max)), so
+    One penalty for the whole schedule, not per project (a max, not a sum), so
     pulling in a project that is not last is free in this term. The value is a
     day index counted from day 0 (release dates do not move it), not a duration."""
 

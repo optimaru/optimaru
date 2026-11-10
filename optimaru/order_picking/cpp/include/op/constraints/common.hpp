@@ -15,8 +15,7 @@ namespace op
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The four constraints of the reference order-picking
-// OrderPickingConstraintProvider, split into one small component each on the
+// The four order-picking constraints, one small component each on the
 // engine's DecomposedObjective — an optional assembly path NEXT TO the
 // monolithic OrderPickingIncrementalScoreCalculator, which stays the tuned
 // default fast path.
@@ -29,7 +28,7 @@ namespace op
 // this order" summed over orders is the same number as "how many distinct
 // orders sit on this trolley" summed over trolleys.
 //
-// A component never reads the PickTask shadow variables (trolleyIndex,
+// A component never reads the PickTask derived fields (trolleyIndex,
 // previousPickTask, nextPickTask): it walks the unit's own member order,
 // which is what makes each cost a pure function of (solution, unit, members)
 // as the engine's contract requires. The LIST path re-costs a touched list
@@ -74,8 +73,8 @@ using OpGlobalConstraint = optimaru::GlobalConstraint<OrderPickingSolution>;
 
 // A component's kDefaultWeight as an exact integer, for the monolithic
 // calculators (ScoreCalculator's ConstraintTotals and the incremental
-// calculator), which are the default assembly computed in int64 like the
-// Java long arithmetic. Fails to compile if a default weight stops being
+// calculator), which are the default assembly computed in int64. Fails to
+// compile if a default weight stops being
 // integral or if a component leaves the level the monolith sums it into.
 template <typename Component, optimaru::Level kLevel>
 constexpr std::int64_t monolithicWeight()

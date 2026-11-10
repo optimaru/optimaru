@@ -1,7 +1,7 @@
 """Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-Mirrors `_core`'s Department/Room/Bed/Stay/BedPlan 1:1, but like the REST shape of the
-Java quickstart, references are id strings (`department_id`/`room_id`/`bed_id`) and
+Mirrors `_core`'s Department/Room/Bed/Stay/BedPlan 1:1, but in a
+JSON-friendly shape: references are id strings (`department_id`/`room_id`/`bed_id`) and
 dates are `datetime.date`. The engine conversion (`to_core`) turns ids into indices and
 dates into integer days (day ordinals)::
 
@@ -71,7 +71,7 @@ class RoomModel(_Model):
 
 
 class BedModel(_Model):
-    """A bed (planning value)."""
+    """A bed (the value a stay is assigned)."""
 
     id: str
     room_id: str
@@ -79,7 +79,7 @@ class BedModel(_Model):
 
 
 class StayModel(_Model):
-    """Planning entity: one patient stay. `bed_id` is the planning variable
+    """One patient stay. `bed_id` is the decision variable
     (None == unassigned)."""
 
     id: str
@@ -104,7 +104,7 @@ class StayModel(_Model):
 
 
 class BedPlanModel(_Model):
-    """Planning solution mirror. score_* are read-only results, kept as separate fields."""
+    """Mirror of `BedPlan` (the whole problem and its solution). score_* are read-only results, kept as separate fields."""
 
     departments: list[DepartmentModel]
     rooms: list[RoomModel]

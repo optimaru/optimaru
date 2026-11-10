@@ -1,7 +1,7 @@
 // pybind11 bindings for the project-job-scheduling C++ domain wrappers.
 // The Python extension links the existing pjs::* implementations and imports
 // the generic optimaru engine from ../../../include; the engine itself
-// is not modified here. One domain is exposed: the quickstart port
+// is not modified here. One domain is exposed
 // (pjs::ProjectJobSchedule, BASIC composite (executionMode, delay) variable),
 // as the module optimaru.project_job_scheduling._core.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
@@ -171,14 +171,13 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("job", &Allocation::job)
         .def_readwrite("predecessor_allocations",
                        &Allocation::predecessorAllocations)
-        // The composite planning variable: -1 unassigned, otherwise
+        // The composite decision variable: -1 unassigned, otherwise
         // delay * max_mode_count() + mode_slot (see the module docstring).
         .def_readwrite("mode_delay", &Allocation::modeDelay)
         // SOURCE/SINK allocations are always pinned; this flag additionally
         // pins a STANDARD allocation.
         .def_readwrite("pinned", &Allocation::pinned)
-        // Derived dates (the Java shadow variables), refreshed by
-        // calculate_score / Solver.solve.
+        // Derived dates, refreshed by calculate_score / Solver.solve.
         .def_readonly("predecessors_done_date",
                       &Allocation::predecessorsDoneDate)
         .def_readonly("start_date", &Allocation::startDate)
@@ -257,7 +256,7 @@ PYBIND11_MODULE(_core, m)
                      assignment.push_back(allocation.modeDelay);
                  return assignment;
              })
-        // Bulk write of the planning variable (allocation access via
+        // Bulk write of the decision variable (allocation access via
         // .allocations returns copies, so per-allocation writes would be
         // lost).
         .def(
@@ -275,8 +274,8 @@ PYBIND11_MODULE(_core, m)
     m.def("calculate_score",
           &ScoreCalculator::score,
           py::arg("schedule"),
-          "Full recompute of the HardMediumSoft score; also refreshes every "
-          "allocation's derived dates and stores schedule.score.");
+          "Full recompute of the hard / medium / soft score; also refreshes "
+          "every allocation's derived dates and stores schedule.score.");
 
     optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())

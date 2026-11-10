@@ -12,7 +12,7 @@ namespace vrp
 // the smallest circle enclosing its visits (the depot is deliberately not a
 // point, unlike maxRouteRadiusCost which measures from the depot); 0 for a
 // route with fewer than two visits (and for the pool list). Opt-in so adding
-// it does not change the default quickstart: give it a weight to prefer
+// it does not change the default scoring: give it a weight to prefer
 // compact routes.
 struct EnclosingCircleRadiusCost final : detail::PerVehicleConstraint
 {

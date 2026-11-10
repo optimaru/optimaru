@@ -1,9 +1,7 @@
 // Task-assigning unit tests (engine test/ style: check() + non-zero exit on any
 // failure):
 //   (a) every constraint verified in isolation against hand-computed scores
-//       (the Java TaskAssigningConstraintProviderTest cases; where the Java
-//       fixture set inconsistent explicit shadow values, the expectation is
-//       re-derived with consistent chained start times — same formulas)
+//       (expectations use consistent chained start times)
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's Editor protocol (before/mutate/after),
 //       including unassigned tasks
@@ -119,7 +117,7 @@ void verifyConstraints()
     std::printf("== (a) Constraints vs hand-computed scores ==\n");
 
     {
-        // requiredSkillCost (the Java provider test): employee has skill "3";
+        // requiredSkillCost: employee has skill "3";
         // tasks require
         // {1,2} / {3} / {5} -> 3 missing skills in total.
         Builder b;
@@ -134,7 +132,7 @@ void verifyConstraints()
                   + std::to_string(-b.solution.score.hard) + ")");
     }
     {
-        // unassignedTasksCost (the Java provider test): 3 tasks, 1 assigned
+        // unassignedTasksCost: 3 tasks, 1 assigned
         // -> penalty 2 on the medium level (soft[0]).
         Builder b;
         const int e = b.addEmployee({});
@@ -148,7 +146,7 @@ void verifyConstraints()
                   + std::to_string(-b.solution.score.soft0) + ")");
     }
     {
-        // criticalPriorityTaskEndTimeCost (the Java provider test): HIGH
+        // criticalPriorityTaskEndTimeCost: HIGH
         // affinity (x1), duration 10,
         // minStartTime 1 -> endTime 11, penalty 11 * 4 = 44. The given MINOR
         // task stays unassigned (it contributes nothing to soft[2]).
@@ -163,7 +161,7 @@ void verifyConstraints()
                   + std::to_string(-b.solution.score.soft2) + ")");
     }
     {
-        // majorPriorityTaskEndTimeCost (the Java provider test): endTime 11,
+        // majorPriorityTaskEndTimeCost: endTime 11,
         // x2 = 22.
         Builder b;
         const int e = b.addEmployee({}, {Affinity::HIGH});
@@ -176,7 +174,7 @@ void verifyConstraints()
                   + std::to_string(-b.solution.score.soft2) + ")");
     }
     {
-        // minorPriorityTaskEndTimeCost (the Java provider test): endTime 11,
+        // minorPriorityTaskEndTimeCost: endTime 11,
         // x1 = 11.
         Builder b;
         const int e = b.addEmployee({}, {Affinity::HIGH});
@@ -189,8 +187,7 @@ void verifyConstraints()
                   + std::to_string(-b.solution.score.soft2) + ")");
     }
     {
-        // squaredMakespanCost, re-derived with consistent chained start times
-        // (the Java test fixed startTime shadows by hand):
+        // squaredMakespanCost, with chained start times:
         //   employee1 (MEDIUM = x2): task1 dur 10 minStart 1 -> start 1,
         //     end 21; task2 dur 20 minStart 2 -> start max(21,2)=21, end 61.
         //     endTime 61 -> 61^2 = 3721.
@@ -208,7 +205,7 @@ void verifyConstraints()
         check(b.solution.score.soft1 == -3725,
               "squaredMakespanCost penalizes 61^2 + 2^2 = 3725 (got "
                   + std::to_string(-b.solution.score.soft1) + ")");
-        // Shadow variables re-derived like the Java supplier chain.
+        // Derived fields recomputed along the chain.
         check(b.solution.tasks[t2].startTime == 21
                   && b.solution.tasks[t2].employee == e1,
               "chained startTime = max(previous end, minStartTime)");
@@ -395,7 +392,7 @@ void verifyIncremental()
         }
 
         const optimaru::Score incremental = editor.score();
-        // Full recompute on the same lists (only rewrites shadow fields the
+        // Full recompute on the same lists (only rewrites derived fields the
         // incremental calculator never reads).
         const optimaru::Score full
             = ScoreCalculator::calculateEngineScore(solution);
@@ -489,7 +486,7 @@ void verifyFeasibleSolve()
             eachOnce = false;
     }
     check(eachOnce, "every task appears in exactly one employee list");
-    // Shadow variables are consistent on the returned best solution.
+    // Derived task fields are consistent on the returned best solution.
     bool shadowsConsistent = true;
     for (std::size_t e = 0; e < solution.employees.size(); ++e)
     {
@@ -509,7 +506,7 @@ void verifyFeasibleSolve()
             first = false;
         }
     }
-    check(shadowsConsistent, "task shadow variables (employee, startTime)");
+    check(shadowsConsistent, "derived task fields (employee, startTime)");
     std::printf("\n");
 }
 

@@ -13,7 +13,7 @@ namespace ms
 // for every such pair of meetings, the shared-attendance multiplicity
 // (attendee room switches); 0 = nobody changes rooms between close meetings.
 //
-// "Next" is the Java TimeGrain comparator (day, then starting minute) and
+// "Next" orders TimeGrains by (day, then starting minute) and
 // must be strict — two meetings starting at the same grain have no earlier
 // one, so nobody walks between them.
 struct RoomChangeCost final : AttendanceArcConstraint

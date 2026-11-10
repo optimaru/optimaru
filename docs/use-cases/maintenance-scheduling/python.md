@@ -1,6 +1,6 @@
 # maintenance_scheduling (Python)
 
-The pybind11 package of the maintenance-scheduling example-model port (`optimaru/maintenance_scheduling/cpp`).
+The pybind11 package of the maintenance-scheduling use case (`optimaru/maintenance_scheduling/cpp`).
 For the detailed domain/constraint description see [`../README.md`](README.md).
 
 ## Install / test
@@ -59,7 +59,7 @@ violation: `ValueError: constraint 'min_start_date_cost': clip=False with a non-
 cannot be hard, because hard 0 must mean no violation; use clip=True (a threshold) or
 another level`. On soft it is allowed.
 
-Dates are epoch day integers (Java `LocalDate.toEpochDay`). To work with `datetime.date`,
+Dates are epoch day integers (days since 1970-01-01). To work with `datetime.date`,
 use the pydantic mirror (optional dependency `pydantic`):
 
 ```python

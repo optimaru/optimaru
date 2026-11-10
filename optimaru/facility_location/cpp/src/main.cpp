@@ -1,4 +1,4 @@
-// Facility-location demo at the scale of the quickstart's demo: 30 facilities / 60 consumers spread
+// Facility-location demo: 30 facilities / 60 consumers spread
 // uniformly over a London bounding box, total capacity 4500 vs total demand
 // 900, setup cost ~ N(50000, 10000^2). Solves for N seconds (default 10) and
 // asserts a feasible (0hard) result.
@@ -17,7 +17,7 @@ using namespace fl;
 namespace
 {
 
-// DemoDataBuilder parameters (bootstrap/DemoDataGenerator.java).
+// Demo instance parameters.
 constexpr std::int64_t kTotalCapacity = 4500;
 constexpr std::int64_t kTotalDemand = 900;
 constexpr int kFacilityCount = 30;
@@ -27,7 +27,7 @@ constexpr std::int64_t kSetupCostStdDev = 10000;
 const Location kSouthWest{51.44, -0.16};
 const Location kNorthEast{51.56, -0.01};
 
-// Same structure as DemoDataBuilder.build(): uniform locations inside the
+// Uniform locations inside the
 // bounding box, equal capacity/demand shares, Gaussian setup costs, drawn
 // from a seeded std::mt19937_64.
 FacilityLocationProblem buildDemoProblem()

@@ -57,7 +57,7 @@ public:
     // resolved conflict pairs and partner lists) the calculators and the
     // components read. The lookups are rebuilt only while
     // BinPackingProblem::prepared is false; the capacity check and the
-    // checks on the planning variable run on every call. Throws
+    // checks on the decision variable run on every call. Throws
     // std::invalid_argument for:
     //   - binCapacity <= 0 ("bin_capacity must be positive"),
     //   - a repeated item id ("item ids must be unique"),
@@ -69,7 +69,7 @@ public:
     // constraint_costs call it.
     static void prepare(BinPackingProblem &problem);
 
-    // The checks on the planning variable alone (the last bullet above).
+    // The checks on the decision variable alone (the last bullet above).
     static void requireBinsInRange(const BinPackingProblem &problem);
 };
 

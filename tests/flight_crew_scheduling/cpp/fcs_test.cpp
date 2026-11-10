@@ -2,8 +2,7 @@
 // on any failure):
 //   (a) every constraint verified in isolation against hand-computed scores
 //       at the components' kDefaultWeight (100 / 10 / 1 / 10 / 1000 / 1000),
-//       a violating (positive) and a clean (zero) case each (including the
-//       Java ConstraintProviderTest cases)
+//       a violating (positive) and a clean (zero) case each
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's Editor protocol (before/set/after)
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
@@ -109,8 +108,7 @@ void verifyConstraints()
 {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
-    // hard 1: requiredSkillCost — the Java provider test case (skill
-    // mismatch).
+    // hard 1: requiredSkillCost — skill mismatch.
     {
         FlightCrewSchedule s = makeBase(2, 1);
         s.employees[0].skills = {"2"};
@@ -131,7 +129,7 @@ void verifyConstraints()
                    0);
     }
 
-    // hard 2: flightConflictCost — the Java provider test case: [0,10) and
+    // hard 2: flightConflictCost — [0,10) and
     // [1,11) overlap -> one pair (-10). The pair is also a departure-
     // consecutive pair, but its connection (arr airport 0 -> dep airport 0)
     // holds, and both flights start/end at home, so nothing else fires.
@@ -177,7 +175,7 @@ void verifyConstraints()
                    0);
     }
 
-    // hard 3: transferBetweenTwoFlightsCost — the Java provider test case:
+    // hard 3: transferBetweenTwoFlightsCost —
     // three flights 0->1 at deps 0, 11, 13; consecutive pairs (0,11) and
     // (11,13) both break the connection (arr airport 1 != dep airport 0) -> -2.
     // Flights: [0,10), [11,12), [13,14): no overlap. Soft: first departs 0
@@ -187,7 +185,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
         addAssignment(s, addFlight(s, 0, 11, 1, 12), 0);
         addAssignment(s, addFlight(s, 0, 13, 1, 14), 0);
-        checkScore("transferBetweenTwoFlightsCost two broken (Java case)",
+        checkScore("transferBetweenTwoFlightsCost two broken",
                    ScoreCalculator::score(s),
                    -2,
                    -1000);
@@ -218,7 +216,7 @@ void verifyConstraints()
                    0);
     }
     // Departure-time tie on the EARLIER side: a and b tied at dep 0 mean
-    // neither starts a consecutive pair (the Java ifNotExists matches the
+    // neither starts a consecutive pair (each is ruled out by the
     // other tied assignment) -> no transfer penalty even though the
     // connection to c (dep 20) is broken. a,b overlap -> -10. Ties: both a
     // and b are first assignments departing from home; c is the last,
@@ -234,7 +232,7 @@ void verifyConstraints()
                    0);
     }
 
-    // hard 4: employeeUnavailabilityCost — the Java provider test case.
+    // hard 4: employeeUnavailabilityCost.
     {
         FlightCrewSchedule s = makeBase(2, 1);
         s.employees[0].unavailableDays = {5};
@@ -275,8 +273,7 @@ void verifyConstraints()
                    0);
     }
 
-    // soft 5/6: firstAssignmentNotDepartingFromHomeCost — the Java provider
-    // test case. Employee 0
+    // soft 5/6: firstAssignmentNotDepartingFromHomeCost. Employee 0
     // (home airport 0) flies 1->2 at deps 0, 1, 1; employee 1 (home 2) flies
     // 2->3 at dep 0. Isolate the FIRST constraint by keeping every arrival
     // "home-looking" impossible — instead assert the combined soft exactly:
@@ -295,13 +292,12 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 1, 1, 2, 10), 0);
         addAssignment(s, addFlight(s, 1, 1, 2, 10), 0);
         addAssignment(s, addFlight(s, 2, 0, 3, 10), 1);
-        checkScore("first/last not home (Java case, combined)",
+        checkScore("first/last not home (combined)",
                    ScoreCalculator::score(s),
                    -32,
                    -4000);
     }
-    // soft 6 isolated: lastAssignmentNotArrivingAtHomeCost — the Java
-    // provider test case.
+    // soft 6 isolated: lastAssignmentNotArrivingAtHomeCost.
     // Employee 0 (home 0): 1->2 [0,10), 2->3 [11,12): connected, no overlap.
     // first departs 1 != 0 -> -1000; last arrives 3 != 0 -> -1000.
     // Employee 1 (home 1): 1->2 [0,10), 2->1 [11,12): first departs home,
@@ -314,7 +310,7 @@ void verifyConstraints()
         addAssignment(s, addFlight(s, 2, 11, 3, 12), 0);
         addAssignment(s, addFlight(s, 1, 0, 2, 10), 1);
         addAssignment(s, addFlight(s, 2, 11, 1, 12), 1);
-        checkScore("last not arriving home (Java case)",
+        checkScore("last not arriving home",
                    ScoreCalculator::score(s),
                    0,
                    -2000);

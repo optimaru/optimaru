@@ -15,8 +15,8 @@
 namespace fp
 {
 
-// Java-CH stand-in for the Line.operator basic variable: every line without
-// an operator gets the least-used operator so far (ties: lowest index) —
+// Construction for the operator variable (Line::operator_index): every line
+// without an operator gets the least-used operator so far (ties: lowest index) —
 // injective whenever operators >= lines. No-op when there are no operators.
 void assignMissingOperators(PackagingSchedule &schedule);
 
@@ -34,14 +34,14 @@ bool improveOperatorAssignment(PackagingSchedule &schedule);
 // moves (relocate/swap/2-opt/or-opt/tail-swap) and adaptive
 // ruin-and-recreate (ALNS) enabled.
 //
-// The Java model has a SECOND genuine variable, Line.operator, which the
-// single-variable-model engine cannot search jointly. The wrapper reproduces
-// its semantics with an alternating scheme: assignMissingOperators seeds the
+// The model has a SECOND decision variable, Line::operator_index, which the
+// single-variable-model engine cannot search jointly. The wrapper handles
+// it with an alternating scheme: assignMissingOperators seeds the
 // assignment, then (only when lines actually share operators — otherwise the
 // conflict constraint is identically 0 and one engine run suffices) it
 // alternates engine legs over the job lists with improveOperatorAssignment
-// steps, splitting the time budget. The score semantics are identical to
-// Java's; only the traversal of the operator dimension differs (caveat: for
+// steps, splitting the time budget. The score is the same either way; only
+// the traversal of the operator dimension differs (caveat: for
 // operators < lines the operator assignment is optimized between legs, not
 // jointly move-by-move).
 class Solver
@@ -49,13 +49,11 @@ class Solver
 public:
     struct Config
     {
-        // Wall-clock budget, mirroring termination.spent-limit (30s in the
-        // quickstart's application.properties). Shared across all
-        // engine legs.
+        // Wall-clock budget (default 30s). Shared across all engine legs.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score, as the ENGINE score
-        // (hard = Java hard; soft = medium * kMediumUnit + soft). E.g.
+        // (hard = hard; soft = medium * kMediumUnit + soft). E.g.
         // {0, -inf} stops at the first hard-feasible solution. The default
         // never fires.
         optimaru::Score target_score{
@@ -131,7 +129,7 @@ public:
         double nearbyProbability = 0.8;
         int nearbySize = 10;
 
-        // New-best callback with the HardMediumSoft score, in the same levels
+        // New-best callback with the hard/medium/soft score, in the same levels
         // as the final schedule.score of the solve() overload in use: the
         // default path decodes the engine score (exact while |soft| < 10^10,
         // the range in which the fold keeps the level order); the plugin path
@@ -146,7 +144,7 @@ public:
 
     // Solves in place: mutates lines[*].jobs / unassignedJobs (and
     // lines[*].operator_index where sharing forces alternation), refreshes
-    // every job's shadow variables and stores the best score found in
+    // every job's derived fields and stores the best score found in
     // schedule.score. Pinned jobs keep their exact position (or stay
     // unassigned).
     void solve(PackagingSchedule &schedule);

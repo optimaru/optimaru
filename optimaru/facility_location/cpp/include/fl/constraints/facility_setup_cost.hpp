@@ -8,8 +8,7 @@ namespace fl
 
 // Soft, weight 2: facilitySetupCost — a facility serving at least one
 // consumer costs its setup price once. Raw cost per facility = its setup cost
-// while used, 0 while unused. The weight 2 is the provider's fixed
-// Score.ofSoft(2).
+// while used, 0 while unused.
 //
 // A step function of "is this facility used at all", which is why the domain
 // ships CloseFacilityMove: no single-consumer move can cross the step.

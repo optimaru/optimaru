@@ -64,11 +64,11 @@ struct Employee {
 };
 
 // ---------------------------------------------------------------------------
-// Shift  (planning entity)
+// Shift  (entity)
 // ---------------------------------------------------------------------------
-// employeeIndex is the basic planning variable: which employee works this shift.
-// -1 means unassigned. There is no list variable and there are no shadow
-// variables.
+// employeeIndex is the basic decision variable: which employee works this shift.
+// -1 means unassigned. There is no list variable and no derived
+// state.
 struct Shift {
     std::string id;
     Minutes start = 0;
@@ -76,7 +76,7 @@ struct Shift {
     std::string location;
     std::string requiredSkill;
 
-    int employeeIndex = -1;  // planning variable; -1 == unassigned
+    int employeeIndex = -1;  // decision variable; -1 == unassigned
 
     // Pinned shifts keep their employeeIndex fixed (history from the previous
     // planning period carried in for week-spanning rules, or an assignment that
@@ -94,7 +94,7 @@ struct Shift {
 };
 
 // ---------------------------------------------------------------------------
-// EmployeeSchedule  (planning solution)
+// EmployeeSchedule  (solution)
 // ---------------------------------------------------------------------------
 struct EmployeeSchedule {
     std::vector<Employee> employees;
@@ -105,7 +105,7 @@ struct EmployeeSchedule {
 }  // namespace es
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization: entities are shifts, the planning variable
+// SolutionTraits specialization: entities are shifts, the decision variable
 // is Shift::employeeIndex, the value range is the employee list.
 // ---------------------------------------------------------------------------
 template <>

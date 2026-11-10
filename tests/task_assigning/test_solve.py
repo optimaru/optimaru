@@ -37,7 +37,7 @@ def test_solve_core_solution_in_place():
     assert returned is solution
     assert solution.score.is_feasible()
     assert solution.score.soft0 == 0
-    # The start_time shadow must be filled in (the first task gets min_start_time).
+    # The derived start_time must be filled in (the first task gets min_start_time).
     for task in solution.tasks:
         assert task.employee >= 0
         assert task.start_time >= 0

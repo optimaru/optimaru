@@ -1,7 +1,7 @@
 #ifndef TA_DEMO_DATA_HPP
 #define TA_DEMO_DATA_HPP
 
-// Reproduction of the Java quickstart's DemoDataGenerator: 4 task types,
+// The demo instance: 4 task types,
 // 4 customers, 8 employees with skill sets and per-customer affinities, and
 // 28 tasks. Shared by the demo executable and the tests.
 
@@ -16,7 +16,7 @@ namespace ta
 namespace demo
 {
 
-// Skill names (DemoDataGenerator).
+// Skill names.
 inline const char *const kProblemSolving = "Problem Solving";
 inline const char *const kTeamBuilding = "Team Building";
 inline const char *const kBusinessStorytelling = "Business Storytelling";
@@ -120,7 +120,7 @@ inline TaskAssigningSolution generateDemoData()
                 {kStrategicPlanning, kProblemSolving, kTeamBuilding},
                 {A::NONE, A::MEDIUM, A::NONE, A::LOW});
 
-    // Tasks 1..28 (DemoDataGenerator.generateTasks, same order).
+    // Tasks 1..28.
     addTask(solution, kShrinkVat, 1, kPaperCorp, Priority::MINOR);
     addTask(solution, kApproveLegal, 1, kWoodExpress, Priority::MAJOR);
     addTask(solution, kShrinkVat, 2, kWoodExpress, Priority::MAJOR);

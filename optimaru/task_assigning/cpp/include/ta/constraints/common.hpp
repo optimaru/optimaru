@@ -16,9 +16,8 @@ namespace ta
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The six constraints of the reference task-assigning
-// TaskAssigningConstraintProvider, split into one small component each on the
-// engine's DecomposedObjective — an optional assembly path NEXT TO the
+// The six constraints of this use case, split into one small component each
+// on the engine's DecomposedObjective — an optional assembly path NEXT TO the
 // monolithic TaskAssigningIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
@@ -29,13 +28,13 @@ namespace ta
 // in NO list at all, which belongs to no unit, so it runs as a
 // GlobalConstraint (the school-timetabling UnassignedLessonsCost pattern).
 //
-// A component never reads the Task shadow variables (employee, startTime):
+// A component never reads the derived Task fields (employee, startTime):
 // walkChain below re-derives the start/end chain from the unit's own member
 // order, which is what makes each cost a pure function of (solution, unit,
 // members) as the engine's contract requires. The LIST path re-costs a
 // touched list whole, so no delta contract is needed.
 //
-// Score levels: the quickstart scores with BendableScore(1 hard, 3 soft).
+// Score levels: this use case scores four score levels (1 hard, 3 soft).
 // The components score on the engine's three levels and the domain folds
 // them into Score (domain.hpp, kMediumFold and toEngineScore):
 //   hard[0] requiredSkillCost         Level::Hard,   weight 1
@@ -89,12 +88,12 @@ namespace detail
 
 // Walks one employee's task chain in execution order, calling
 // `onTaskEnd(taskIndex, endTime)` for each task, and returns the employee's
-// end time (0 for an empty list — Employee.getEndTime).
+// end time (0 for an empty list).
 //
-// This is Task.startTimeSupplier verbatim: the first task starts at its own
+// The first task starts at its own
 // minStartTime, every later one waits for the previous end. Re-deriving it
 // here (instead of reading Task::startTime) keeps every component a pure
-// function of the unit's members, so a partially updated shadow state can
+// function of the unit's members, so a partially updated derived state can
 // never leak into a score.
 template <typename F>
 inline Minutes walkChain(const TaskAssigningSolution &solution,

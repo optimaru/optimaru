@@ -9,7 +9,7 @@ namespace sls
 // Hard, weight 1: consecutiveHomeMatchesCost — a team playing at home on four
 // or more consecutive round indices. Raw cost (one global total) = summed over
 // teams, the WHOLE length of every such run (a run of 4 costs 4, not the
-// excess over 3; kept from the reference model). Several home matches on one
+// excess over 3). Several home matches on one
 // index count once (the presence of the index is what forms the run). 0 = no
 // team has a home run of 4 or more.
 struct ConsecutiveHomeMatchesCost final : TeamSideRunConstraint

@@ -630,13 +630,13 @@ void verifyRawCostsByHand()
     }
     {
         // E0 lands at 1 twice and leaves from 0 next: 0->1, 0->1, 0->1 ->
-        // two broken connections (the Java case); E1 has no flights.
+        // two broken connections; E1 has no flights.
         FlightCrewSchedule s = makeBase(2, 2);
         addAssignment(s, addFlight(s, 0, 0, 1, 10), 0);
         addAssignment(s, addFlight(s, 0, 11, 1, 12), 0);
         addAssignment(s, addFlight(s, 0, 13, 1, 14), 0);
         check(rawCosts(s, "transferBetweenTwoFlightsCost") == Costs{2.0, 0.0},
-              "transferBetweenTwoFlightsCost: [2, 0] (Java case)");
+              "transferBetweenTwoFlightsCost: [2, 0] (two broken)");
     }
     {
         // A connected chain 0->1, 1->0.

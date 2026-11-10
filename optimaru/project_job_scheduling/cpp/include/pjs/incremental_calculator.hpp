@@ -12,10 +12,9 @@ namespace pjs
 {
 
 // The project-job-scheduling implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective.
 //
-// The hard part of this domain is the Java shadow-variable chain
+// The hard part of this domain is the derived date chain
 // (predecessorsDoneDate -> startDate -> endDate): changing one allocation's
 // (executionMode, delay) can shift the dates of its whole successor
 // subgraph, and with them the renewable resource profile, the project delays
@@ -35,10 +34,9 @@ namespace pjs
 // move costs O(delta), not O(solution).
 //
 // Unassigned allocations (modeDelay == -1) pass dates through with delay 0 /
-// duration 0 and contribute no resource usage (the Java suppliers'
-// null-handling), so the construction heuristic scores partially
-// initialized solutions. The full-recompute reference is
-// ScoreCalculator::score (checked in the tests and under
+// duration 0 and contribute no resource usage, so the construction
+// heuristic scores partially initialized solutions. The full-recompute
+// reference is ScoreCalculator::score (checked in the tests and under
 // ScoreChecks::ScoreChecks::Full).
 class ProjectJobSchedulingIncrementalScoreCalculator final
     : public optimaru::Objective<ProjectJobSchedule>
@@ -53,7 +51,7 @@ private:
     ProjectJobSchedule *schedule_ = nullptr;
 
     // Recorded state per allocation (as of the last processed hook).
-    std::vector<int> assign_;   // planning value (-1 unassigned)
+    std::vector<int> assign_;   // assigned value (-1 unassigned)
     std::vector<int> modeIdx_;  // decoded execution mode index (-1 unassigned)
     std::vector<int> start_;
     std::vector<int> end_;
@@ -95,8 +93,8 @@ private:
     // Rewrites the recorded dates of an allocation, maintaining the sink
     // aggregates (mediumTotal_, sinkEndDates_).
     void setRecordedDates(int allocationIndex, int startDate, int endDate);
-    // max(0, max over predecessors of recorded end) — the Java
-    // predecessorsDoneDateSupplier against the recorded state.
+    // max(0, max over predecessors of recorded end), against the recorded
+    // state.
     int predecessorsDoneDate(int allocationIndex) const;
 };
 

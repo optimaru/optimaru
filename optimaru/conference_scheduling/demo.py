@@ -1,4 +1,4 @@
-"""The demo conference: 15 talks / 6 timeslots / 5 rooms, modelled on the quickstart's demo.
+"""The demo conference: 15 talks / 6 timeslots / 5 rooms.
 
 The theme/sector/audience/content tags are drawn from a seeded ``random.Random``, so the
 instance is the same on every run (it is not the same draw as cpp/src/main.cpp's)."""

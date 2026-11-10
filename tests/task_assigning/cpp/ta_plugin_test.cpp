@@ -159,7 +159,7 @@ buildRandomInstance(int taskCount, int employeeCount, unsigned seed)
 }
 
 // Scores the current lists with a freshly reset assembly, decoded back into
-// the domain's Bendable levels.
+// the domain's score levels.
 Score scoreWith(DecomposedCalculator &calculator, TaskAssigningSolution &s)
 {
     calculator.rebuild(s);
@@ -334,7 +334,7 @@ void verifyPartialAssemblies()
     std::printf("== (c) Single-component assemblies ==\n");
 
     {  // requiredSkillCost alone: the employee has none of the two required
-        // skills -> 2 points on the Bendable hard level.
+        // skills -> 2 points on the hard level.
         Builder b;
         b.addEmployee({});
         const int task = b.addTask(/*baseDuration*/ 10, {"s0", "s1"});
@@ -416,7 +416,7 @@ void verifyOverrides()
 
     {
         // Re-weighted to 3 hard units per missing skill: 2 missing skills
-        // -> -6 on the Bendable hard level (the fold keeps the 10^9).
+        // -> -6 on the hard level (the fold keeps the 10^9).
         DecomposedCalculator calculator;
         calculator.emplace<RequiredSkillCost>(3.0);
         checkScore("requiredSkillCost re-weighted to 3",
@@ -574,7 +574,7 @@ void verifyFullAssertSolve()
 
 
 // -------------------------------------------------------------------------
-// (g) The medium level: unassignedTasksCost (Bendable soft[0]) folds below
+// (g) The medium level: unassignedTasksCost (soft[0]) folds below
 // hard (engine.hard = hard * 10^9 + medium). Its weight is in medium units;
 // hard() gives 1 hard unit per task, soft() 1 soft unit per task (outside
 // the fold). A selection without any medium term still folds hard * 10^9.

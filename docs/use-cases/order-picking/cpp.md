@@ -3,12 +3,12 @@
 The C++ lives in [`optimaru/order_picking/cpp/`](../../../optimaru/order_picking/cpp); the paths below are relative to it,
 and its C++ tests are in [`tests/order_picking/cpp/`](../../../tests/order_picking/cpp).
 
-The `order-picking` example model (Apache-2.0; see the repository NOTICE)
-Port: only the domain and constraints are implemented, on top of the generic engine (`optimaru/cpp/optimaru`, header-only).
+Derived from the Timefold Quickstarts `order-picking` example (Apache-2.0; see the repository NOTICE).
+Only the domain and constraints are implemented here, on top of the generic engine (`optimaru/cpp/optimaru`, header-only).
 
 - `include/op/domain.hpp` — warehouse layout (5 shelf columns x 3 rows, left/right sides, rows 0-10),
   `calculateDistance`, domain structs, the sequence-shape `SolutionTraits` specialization
-  (the trolley's `pickTaskIndices` is the `@PlanningListVariable`).
+  (the trolley's `pickTaskIndices` is the decision: the ordered list of pick tasks it visits).
 - `include/op/score_calculator.hpp` — full recompute + derived values
   (`trolleyIndex`/`previousPickTask`/`nextPickTask`) recalculation + per-constraint totals
   (`ConstraintTotals`, members named after the registry names, at the components'
@@ -22,7 +22,7 @@ Port: only the domain and constraints are implemented, on top of the generic eng
 - `include/op/incremental_calculator.hpp` — before/after_list_edit hooks for
   per-trolley O(list) incremental scoring (checked against full recompute under ScoreChecks::Full).
 - `include/op/solver.hpp` — engine wrapper (sequence move mix + ALNS + warehouse-distance nearby).
-- `src/demo_data.cpp` — the demo warehouse, modelled on the quickstart's demo and drawn
+- `src/demo_data.cpp` — the demo warehouse, drawn
   from a seeded `std::mt19937_64` (seed 37): 37-product catalog, 8 orders, 5 trolleys x 4 buckets x 48000 cm3).
 
 ## Build / run

@@ -18,7 +18,7 @@ add_executable(pjs_test ${OPTIMARU_TESTS_DIR}/project_job_scheduling/cpp/pjs_tes
 target_link_libraries(pjs_test PRIVATE pjs_core)
 target_compile_options(pjs_test PRIVATE -Wall -Wextra)
 
-# Plugin-assembly path (pjs/constraints.hpp): the same provider decomposed
+# Plugin-assembly path (pjs/constraints.hpp): the same constraints decomposed
 # into one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(pjs_plugin_test ${OPTIMARU_TESTS_DIR}/project_job_scheduling/cpp/pjs_plugin_test.cpp)

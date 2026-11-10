@@ -11,14 +11,14 @@ namespace fl
 {
 
 // The facility-location implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective: one hand-written incremental calculator for all
+// three constraints.
 //
 // Every constraint is a function of per-facility aggregates, so a single
 // variable change is O(1):
 //   - hard 1 (facilityCapacityCost): contribution(f) = max(0, usedDemand_f -
-//     capacity_f) while facility f serves >= 1 consumer, else 0 (Java's
-//     groupBy only sees used facilities). Moving one consumer in/out changes
+//     capacity_f) while facility f serves >= 1 consumer, else 0 (an
+//     unused facility is never penalized). Moving one consumer in/out changes
 //     only that facility's term.
 //   - soft 2 (facilitySetupCost): setupCost_f enters when consumerCnt_f goes
 //     0 -> 1 and leaves when it drops back to 0.

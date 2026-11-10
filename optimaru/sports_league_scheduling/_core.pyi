@@ -3,15 +3,15 @@
 The compiled module wraps the C++ domain in `optimaru/sports_league_scheduling/cpp`,
 which imports the generic engine in `optimaru/cpp/optimaru`.
 
-Domain: assign a round (Round, planning value) to every match of the league (Match,
-planning entity). `Match.round` is the planning variable and holds a position in the
+Domain: assign a round (Round) to every match of the league (Match).
+`Match.round` is the decision variable and holds a position in the
 `LeagueSchedule.rounds` list (-1 == unassigned). Round adjacency (same day / next day /
 first / last) is all based on `Round.index`.
 
 Score convention: `hard` is the number of constraint violations (0 == feasible), `soft`
 is minus the sum of travel distance (km) and classic penalties. Both are maximized.
 
-Constraints (hard/soft, same semantics as the Java quickstart), at the default
+Constraints (hard/soft), at the default
 weights (the C++ components' defaults, reported by constraint_info()):
   hard 1. team_conflict_cost            -1 per pair of matches in the same round index
                                         sharing a team (once per pair even if both teams match)
@@ -20,7 +20,7 @@ weights (the C++ components' defaults, reported by constraint_info()):
                                         (duplicate matches on one index count as 1)
   hard 3. consecutive_away_matches_cost the same for away matches
   hard 4. repeat_match_on_next_day_cost -1 per match whose return fixture is in the next round
-                                        index (ifExists: at most once per match)
+                                        index (at most once per match)
   soft 5. start_to_away_hop_cost        per match with no previous round index,
                                         -dist(away, home)
   soft 6. home_to_away_hop_cost         for consecutive-index pairs (m1, m2) with m2.away ==
@@ -39,7 +39,7 @@ from collections.abc import Callable, Iterable
 from typing import Any, Literal, NamedTuple
 
 class Score:
-    """HardSoft score. `hard` is the integer violation sum (0 == feasible); `soft`
+    """Two-level score (hard, soft). `hard` is the integer violation sum (0 == feasible); `soft`
     is the objective. Lexicographic comparison (hard first)."""
     @property
     def hard(self) -> int: ...
@@ -55,14 +55,14 @@ class Team:
     name: str
 
 class Round:
-    """Problem fact and planning value. `index` is the round number the constraints use
+    """A round, the value a match is assigned. `index` is the round number the constraints use
     (>= 0; usually consecutive 0..N-1, but sparse is fine)."""
     def __init__(self, index: int, weekend_or_holiday: bool = False) -> None: ...
     index: int
     weekend_or_holiday: bool
 
 class Match:
-    """Planning entity: one match to get a round. `round` is the planning
+    """One match to get a round. `round` is the decision
     variable (-1 == unassigned; the value is a position in the rounds list), written by the solver."""
     def __init__(
         self,
@@ -79,7 +79,7 @@ class Match:
     round: int
 
 class LeagueSchedule:
-    """Planning solution: teams/rounds (value range) + matches (entities) + the distance
+    """The problem and its solution: teams/rounds (value range) + matches + the distance
     matrix. solve changes the matches' `round` and `score` in place.
 
     Note: list attributes such as `matches` return copies, so to change assignments use

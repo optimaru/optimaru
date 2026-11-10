@@ -69,7 +69,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("max_station", &Task::maxStation)
         .def_readwrite("fixed_station", &Task::fixedStation)
         .def_readwrite("forbidden_stations", &Task::forbiddenStations)
-        // The planning variable: a station index, -1 == unassigned.
+        // The decision variable: a station index, -1 == unassigned.
         .def_readwrite("station", &Task::station)
         .def("is_assigned", &Task::isAssigned);
 

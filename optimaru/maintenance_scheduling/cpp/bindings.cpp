@@ -3,8 +3,8 @@
 // the generic optimaru engine from ../../../include; the engine itself
 // is not modified here.
 //
-// Dates cross the boundary as epoch days (days since 1970-01-01, Java's
-// LocalDate.toEpochDay); the pydantic mirrors in
+// Dates cross the boundary as epoch days (days since 1970-01-01);
+// the pydantic mirrors in
 // maintenance_scheduling/models.py convert to/from datetime.date. The
 // optional min/max/ideal dates are std::optional here (None <-> mnt::kNoDate).
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
@@ -196,7 +196,7 @@ PYBIND11_MODULE(_core, m)
                 return s.startDates;
             },
             "The start-date value range: every non-weekend epoch day in "
-            "[from_date, to_date) — Java's createStartDateList().")
+            "[from_date, to_date).")
         .def(
             "job_start_date",
             [](MaintenanceSchedule &s,
@@ -223,7 +223,7 @@ PYBIND11_MODULE(_core, m)
                                     s.dateIndexOf(job.crewDate));
             },
             py::arg("job_index"),
-            "The shadow endDate (exclusive epoch day; weekends skipped), or "
+            "The derived end date (exclusive epoch day; weekends skipped), or "
             "None if unassigned.")
         // Convenience: the current crewDate per job (the solution).
         .def("assignment",
@@ -235,7 +235,7 @@ PYBIND11_MODULE(_core, m)
                      a.push_back(job.crewDate);
                  return a;
              })
-        // Bulk write of the planning variable (job access via .jobs returns
+        // Bulk write of the decision variable (job access via .jobs returns
         // copies, so per-job writes would be lost).
         .def(
             "set_assignment",
@@ -258,7 +258,7 @@ PYBIND11_MODULE(_core, m)
           &plusBusinessDays,
           py::arg("start_date"),
           py::arg("business_days"),
-          "Java Job.calculateEndDate: the exclusive end epoch day after "
+          "The exclusive end epoch day after "
           "walking `business_days` non-weekend days from `start_date`.");
 
     m.def(

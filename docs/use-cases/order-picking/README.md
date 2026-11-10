@@ -12,7 +12,7 @@ Domain model, constraints and API details: [`python.md`](python.md) and [`optima
 | `trolley_capacity_cost` | `TrolleyCapacityCost` | hard | 1 | buckets short: `max(0, sum over its orders of ceil(order volume / bucket capacity) - bucket count)` (orders never share a bucket) |
 | `distance_from_previous_pick_task_cost` | `DistanceFromPreviousPickTaskCost` | soft | 1 | warehouse distance (m) start -> first pick -> ... -> last pick |
 | `distance_from_last_pick_task_to_path_origin_cost` | `DistanceFromLastPickTaskToPathOriginCost` | soft | 1 | warehouse distance (m) from the last pick back to the start; 0 for an empty trolley |
-| `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders with a pick on the trolley — summed, the (order, trolley) pairs. **Not** 0 for an unsplit order: an order on one trolley counts 1, so the minimum is the number of orders with assigned picks (the Java quickstart's definition, kept) |
+| `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders with a pick on the trolley — summed, the (order, trolley) pairs. **Not** 0 for an unsplit order: an order on one trolley counts 1, so the minimum is the number of orders with assigned picks |
 
 Every constraint is flippable (`level="hard"` / `level="soft"`, or `Level.HARD` /
 `Level.SOFT`; `level="medium"` raises `ValueError`, the domain has no medium level),

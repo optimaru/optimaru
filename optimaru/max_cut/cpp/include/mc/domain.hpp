@@ -27,7 +27,7 @@ namespace mc
 // a double, exact below 2^53.
 using Score = optimaru::Score;
 
-// The planning variable's values: side 0 or side 1. -1 exists only
+// The decision variable's values: side 0 or side 1. -1 exists only
 // transiently (the engine's ruin-and-recreate) or in a problem a C++ caller
 // builds; see "Unassigned vertices" below.
 constexpr int kUnassigned = -1;
@@ -56,7 +56,7 @@ struct VertexPair
 };
 
 // ---------------------------------------------------------------------------
-// MaxCutProblem  (@PlanningSolution; the vertices are the entities)
+// MaxCutProblem  (solution; the vertices are the entities)
 // ---------------------------------------------------------------------------
 // Unassigned vertices (side == -1) follow one rule everywhere — the
 // monolithic calculators, the plugin components and Python's raw _core
@@ -84,7 +84,7 @@ struct MaxCutProblem
     std::optional<int> minPartitionSize;
     std::optional<int> maxPartitionSize;
 
-    // --- planning variable -------------------------------------------------
+    // --- decision variable -------------------------------------------------
     // Per vertex: 0 / 1, or -1 = unassigned. Empty = every vertex unassigned
     // (prepare() sizes it).
     std::vector<int> side;
@@ -192,7 +192,7 @@ struct MaxCutProblem
 }  // namespace mc
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization: entities are the vertices, the planning
+// SolutionTraits specialization: entities are the vertices, the decision
 // variable is MaxCutProblem::side, the value range is {0, 1} (unit = value =
 // side). With two values the engine's change move is a flip and its swap
 // move exchanges a side-0 and a side-1 vertex (the side sizes stay). A

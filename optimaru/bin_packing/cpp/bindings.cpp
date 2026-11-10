@@ -85,7 +85,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("color") = py::none())
         .def_readwrite("id", &Item::id)
         .def_readwrite("weight", &Item::weight)
-        // The planning variable: a 0-based bin index, -1 == unassigned.
+        // The decision variable: a 0-based bin index, -1 == unassigned.
         .def_readwrite("bin", &Item::bin)
         .def_readwrite("color", &Item::color)
         .def("is_assigned", &Item::isAssigned)
@@ -142,7 +142,7 @@ PYBIND11_MODULE(_core, m)
         .def("bin_loads", &BinPackingProblem::binLoads)
         // Convenience: the current bin per item (the solution).
         .def("assignment", &BinPackingProblem::assignment)
-        // Bulk write of the planning variable (item access via .items
+        // Bulk write of the decision variable (item access via .items
         // returns copies, so per-item writes would be lost).
         .def(
             "set_assignment",

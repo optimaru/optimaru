@@ -299,7 +299,7 @@ def _solved(constraints=None):
 
 
 def test_weight_none_means_the_component_default():
-    """weight=None scores exactly like the explicit default weights of the Java provider."""
+    """weight=None scores exactly like the explicit default weights."""
     explicit = [
         constraints.TalkTypeIncompatibilityCost(weight=100000),
         constraints.RoomUnavailabilityCost(weight=100000),

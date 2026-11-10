@@ -89,8 +89,8 @@ void MeetingSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
 
     // The counter loops below are all split into a pure sum pass over the
     // occupied interval followed by a pure increment pass (per attendee, so a
-    // person listed twice still sees their first pass's marks — the Java
-    // same-meeting join). Same integer arithmetic, but each pass is a
+    // person listed twice still sees their first pass's marks — the
+    // same-meeting pairs). Same integer arithmetic, but each pass is a
     // straight-line loop over contiguous int cells the compiler vectorizes.
 
     // hard 1 + soft 10: per occupied offset, pair deltas against the other
@@ -116,8 +116,8 @@ void MeetingSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
 
     // hard 3 + medium 6 phase 1 (required attendances): counting required
     // occupancy first means the preferred phase below sees this meeting's
-    // own required marks — reproducing Java's same-meeting (required,
-    // preferred) join.
+    // own required marks — which counts the same-meeting (required,
+    // preferred) pairs.
     for (int person : meeting.requiredAttendees)
     {
         int *reqCells = personReqCnt_.data() + personOffset(person, 0);
@@ -306,7 +306,7 @@ bool MeetingSchedulingIncrementalScoreCalculator::roomChangePairMatches(
 {
     if (roomA == roomB)
         return false;
-    // Java TimeGrain comparator: (dayOfYear, startingMinuteOfDay), strict.
+    // TimeGrain order: (dayOfYear, startingMinuteOfDay), strict.
     int order = 0;
     if (dayOfPos_[posA] != dayOfPos_[posB])
         order = dayOfPos_[posA] < dayOfPos_[posB] ? -1 : 1;

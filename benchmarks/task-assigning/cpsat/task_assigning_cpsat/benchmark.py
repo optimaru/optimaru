@@ -32,7 +32,7 @@ def instances() -> dict[str, Callable[[], Any]]:
 
 
 def describe(problem: Any) -> str:
-    return "quickstart-scale demo"
+    return "demo instance"
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:

@@ -145,7 +145,7 @@ std::vector<Assignment> decode(const SemiconductorSchedule &schedule,
                                const std::vector<int> &option,
                                const std::vector<std::int64_t> &rank);
 
-// Decode the planning values of schedule.rows.
+// Decode the decision values of schedule.rows.
 std::vector<Assignment> decodeValues(const SemiconductorSchedule &schedule);
 
 // The per-row (option, rank) arrays of a value vector.

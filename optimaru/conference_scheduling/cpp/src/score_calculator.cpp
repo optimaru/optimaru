@@ -323,7 +323,7 @@ ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
         const int r = schedule.roomIndexOf(talk.slotRoom);
         const std::int64_t dur = schedule.slotDur[s];
 
-        // h0 (synthetic): the quickstart's per-TalkType value ranges.
+        // h0: talkTypeIncompatibilityCost (type-compatible timeslot and room).
         if (!typeAllowsSlot(schedule, talk.talkType, s))
             b.talkTypeIncompatibilityCost += std::max<std::int64_t>(dur, 1);
         if (!typeAllowsRoom(schedule, talk.talkType, r))
@@ -333,8 +333,8 @@ ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
         if (roomUnavailableAt(schedule, r, s))
             b.roomUnavailabilityCost += dur;
 
-        // h3: speakerUnavailabilityCost (per distinct unavailable speaker —
-        // a Speaker-fact join in Java).
+        // h3: speakerUnavailabilityCost (per distinct unavailable
+        // speaker).
         for (int k : schedule.talkSpeakersSorted[i])
         {
             if (speakerUnavailableAt(schedule, k, s))
@@ -405,7 +405,7 @@ ScoreCalculator::breakdownOfPrepared(const ConferenceSchedule &schedule)
     }
 
     // h8: crowdControlRiskCost — a risk>0 talk sharing its timeslot with >= 2
-    // other risk>0 talks (Java: the groupBy count exists and differs from 1).
+    // other risk>0 talks.
     for (int i = 0; i < talkCount; ++i)
     {
         const Talk &talk = schedule.talks[i];

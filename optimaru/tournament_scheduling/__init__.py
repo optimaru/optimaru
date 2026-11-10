@@ -1,8 +1,7 @@
 """Tournament scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the Java quickstart "tournament-scheduling": assigns teams to daily match slots
-(TeamAssignment). Constraints have the same semantics as the Java ConstraintProvider
-(2 hard + 1 medium + 1 soft; HardMediumSoftBigDecimalScore is folded as
+Assigns teams to daily match slots (TeamAssignment). Four constraints
+(2 hard + 1 medium + 1 soft; the three score levels are folded as
 ``soft = -(medium * MEDIUM_SCALE + raw soft)``, MEDIUM_SCALE == 1e6; for the details see the
 models/_core docs). ``constraint_info()`` lists each constraint's default level and weight
 (``assignment_count_imbalance_cost`` is medium at weight 1, in medium units);

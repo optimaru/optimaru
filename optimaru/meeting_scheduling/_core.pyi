@@ -3,7 +3,7 @@
 The compiled module wraps the C++ domain in `optimaru/meeting_scheduling/cpp`,
 which imports the generic engine in `optimaru/cpp/optimaru`.
 
-Constraints of the Java quickstart (HardMediumSoftScore) and the score mapping
+Constraints (hard / medium / soft levels) and the score mapping
 (registry names; default weights per raw unit):
   hard 1. room_conflict_cost        -1 per overlapping grain of two meetings in one room
   hard 2. overtime_cost             -lastTimeGrainIndex when no TimeGrain exists at the
@@ -28,8 +28,8 @@ The engine score is Score(hard int, soft float), so medium is folded into
 soft: ``soft = -(medium penalty * MEDIUM_SCALE + raw soft penalty)``
 (MEDIUM_SCALE == 1e6; medium always dominates soft).
 
-The Java entity's two planning variables (startingTimeGrain, room) become one assignment-shape
-variable via the composite encoding ``grain_room = time_grain_pos * room_count + room_index``
+A meeting's starting time grain and room are one decision
+variable, the composite encoding ``grain_room = time_grain_pos * room_count + room_index``
 (-1 == unassigned). A meeting occupies duration_in_grains consecutive grain indices
 from its start grain, and every overlap constraint is computed over that whole span.
 """
@@ -41,7 +41,7 @@ MEDIUM_SCALE: float
 GRAIN_LENGTH_IN_MINUTES: int
 
 class Score:
-    """HardSoft score. `hard` is the integer violation sum (0 == feasible); `soft`
+    """Two-level score (hard, soft). `hard` is the integer violation sum (0 == feasible); `soft`
     is the folded medium/soft objective. Lexicographic comparison (hard first)."""
     @property
     def hard(self) -> int: ...
@@ -51,13 +51,13 @@ class Score:
         """True if hard == 0."""
 
 class Person:
-    """Problem fact: an attendee. Referenced by index into the people list."""
+    """An attendee (fixed input). Referenced by index into the people list."""
     def __init__(self, id: str, full_name: str = "") -> None: ...
     id: str
     full_name: str
 
 class TimeGrain:
-    """Problem fact: a 15-minute time grain. grain_index is the unit of duration/overlap,
+    """A 15-minute time grain (fixed input). grain_index is the unit of duration/overlap,
     and (day_of_year, starting_minute_of_day) is the calendar position."""
     def __init__(
         self,
@@ -72,15 +72,15 @@ class TimeGrain:
     starting_minute_of_day: int
 
 class Room:
-    """Problem fact: a meeting room (capacity is used by room_capacity_cost / larger_room_capacity_cost)."""
+    """A meeting room, fixed input (capacity is used by room_capacity_cost / larger_room_capacity_cost)."""
     def __init__(self, id: str, name: str = "", capacity: int = 0) -> None: ...
     id: str
     name: str
     capacity: int
 
 class Meeting:
-    """Problem fact: a meeting. required/preferred_attendees are lists of people
-    indices — one element is one Java Attendance fact."""
+    """A meeting (fixed input). required/preferred_attendees are lists of people
+    indices — one element is one attendance."""
     def __init__(
         self,
         id: str,
@@ -97,11 +97,11 @@ class Meeting:
     preferred_attendees: list[int]
     entire_group_meeting: bool
     def required_capacity(self) -> int:
-        """Required + preferred attendee count (Java getRequiredCapacity)."""
+        """Required + preferred attendee count."""
 
 class MeetingAssignment:
-    """Planning entity: the (start grain, room) assignment of one meeting. `grain_room` is
-    the composite planning variable (-1 == unassigned); meeting is a meetings index, and
+    """The (start grain, room) assignment of one meeting. `grain_room` is
+    the composite decision variable (-1 == unassigned); meeting is a meetings index, and
     meetings and assignments must be 1:1."""
     def __init__(
         self,
@@ -118,7 +118,7 @@ class MeetingAssignment:
     """If True, grain_room is fixed (it counts in the score but never moves)."""
 
 class MeetingSchedule:
-    """Planning solution: people + time_grains/rooms (value ranges) + meetings +
+    """The schedule: people + time_grains/rooms (value ranges) + meetings +
     meeting_assignments (entities). solve changes the assignments' `grain_room` and
     `score` in place.
 
@@ -155,7 +155,7 @@ class MeetingSchedule:
         """Current grain_room per assignment (-1 == unassigned)."""
 
     def set_assignment(self, assignment: Sequence[int]) -> None:
-        """Bulk-write planning variables (length must equal the number of assignments)."""
+        """Bulk-write every grain_room (length must equal the number of assignments)."""
 
 def calculate_score(schedule: MeetingSchedule) -> Score:
     """Full recalculation (also stored in schedule.score)."""

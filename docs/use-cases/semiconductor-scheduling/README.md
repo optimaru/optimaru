@@ -19,7 +19,7 @@ The implementation is original and does not depend on a commercial runtime.
 
 ## Domain (assignment shape, decoded schedule)
 
-- One **operation row** per (lot, route step), lot order then route order. Its planning
+- One **operation row** per (lot, route step), lot order then route order. Its decision
   value folds the two decisions of the search into one int:
   `value = rank * K + slot` (`K` = the most eligible machines of any operation),
   `rank` = the decode priority, `slot % options` = the machine option; `-1` = unassigned
@@ -33,7 +33,7 @@ The implementation is original and does not depend on a commercial runtime.
   `tests/semiconductor_scheduling/reference_semiconductor_scheduling.py`) on every sample and on random
   instances.
 - Two modes: a schedule is scored **as given** (`calculate_score`, `constraint_costs`:
-  data mode) or, inside `solve`, as the **decode of its planning values** (search mode;
+  data mode) or, inside `solve`, as the **decode of its decision values** (search mode;
   a complete warm-start seed stands for itself while the values are the seed's).
 
 ## Constraints (Score — the engine score type as is)

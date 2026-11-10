@@ -184,7 +184,7 @@ def convert_problem(problem: dict) -> ConvertedProblem:
             lessons.append(lesson)
             lesson_courses.append(course_id)
 
-    # --- teacher unavailability (hard 4 extension) ---
+    # --- teacher unavailability (hard 4) ---
     teacher_unavailable: dict[str, set[int]] = {}
     caps: list[str] = []
     free_days: list[str] = []

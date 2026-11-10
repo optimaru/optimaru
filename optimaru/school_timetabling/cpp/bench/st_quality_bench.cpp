@@ -1,10 +1,10 @@
-// Quality benchmark driver for the C++ school-timetabling port.
+// Quality benchmark driver for the C++ school-timetabling solver.
 //
-// Track-1 comparison logic is the Java quickstart's SIX constraints
+// Track-1 comparison logic is the quickstart model's SIX constraints
 // (roomConflictCost / teacherConflictCost / classConflictCost hard,
 // teacherRoomChangeCost / teacherTimeEfficiencyCost / classSubjectRepeatCost
-// soft). This repo's teacherUnavailabilityCost extension (the
-// teacherUnavailable map) is deliberately left EMPTY
+// soft). The model's seventh term, teacherUnavailabilityCost (the
+// teacherUnavailable map), is deliberately left EMPTY
 // in every generated instance so it contributes 0 and the comparison against
 // the CP-SAT model stays fair.
 //

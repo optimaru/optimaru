@@ -9,7 +9,7 @@ namespace ta
 // Hard, weight 1: requiredSkillCost — the skills a task's type requires that
 // its employee does not have. Raw cost per employee = the number of missing
 // required skills summed over the employee's tasks (one task can add more
-// than 1), so 0 = every assigned task is fully skilled. The Bendable hard[0]
+// than 1), so 0 = every assigned task is fully skilled. The hard[0]
 // level: the domain's below-hard medium fold (domain.hpp, kMediumFold) puts
 // one hard unit kMissingSkillUnit (10^9) engine-hard units above one
 // unassigned task, so the weight stays in plain hard units.

@@ -8,12 +8,12 @@
 namespace ba
 {
 
-// Port of the reference bed-allocation BedAllocationConstraintProvider.
+// The bed-allocation constraints as one monolithic calculator.
 //
 // score does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under ScoreChecks::Full).
 //
-// Constraints (HardMediumSoftScore; every one penalizes stay-nights), the
+// Constraints (hard / medium / soft; every one penalizes stay-nights), the
 // default assembly of ba/constraints.hpp at the components' kDefaultWeight
 // (the numbers below; ba/constraints/*.hpp is where they live):
 //   hard 1. bedConflictCost                -1000 * sameNightCount per pair of
@@ -34,16 +34,14 @@ namespace ba
 //                                          required equipment:
 //                                          -50 * nightCount * (# of required
 //                                          equipment the room DOES have) —
-//                                          the quickstart counts the present
-//                                          ones, verbatim from the Java
-//                                          ConstraintProvider (its unit test
-//                                          pins this down), so a room with
-//                                          none of the required equipment
-//                                          costs 0
+//                                          the present ones are counted (the
+//                                          unit tests pin this down), so a
+//                                          room with none of the required
+//                                          equipment costs 0
 //   medium 8. unassignedStaysCost          -1 * nightCount per stay left in
-//                                          the "no bed" sentinel (the
-//                                          quickstart's null bed); folded
-//                                          into the engine soft level by
+//                                          the "no bed" sentinel (left
+//                                          unassigned); folded into the
+//                                          engine soft level by
 //                                          toEngineScore (kMediumFold)
 //   soft 9. preferredMaxRoomCapacityCost   -8 * nightCount when the room is
 //                                          larger than the patient prefers
@@ -54,7 +52,7 @@ namespace ba
 //                                          -10 * (priority - 1) * nightCount
 //                                          when the department offers it at
 //                                          priority > 1 (skipped when not
-//                                          offered — Java would throw there)
+//                                          offered)
 //   soft 12. preferredPatientEquipmentCost -50 * nightCount * (# of preferred
 //                                          equipment the room lacks)
 //
@@ -80,7 +78,7 @@ public:
 
     // --- shared building blocks (positive penalty units) ---
 
-    // Per-stay penalties of assigning stay `stayIndex` to planning value
+    // Per-stay penalties of assigning stay `stayIndex` to value
     // `value` (a real bed or the "no bed" sentinel; -1 contributes nothing).
     struct SingleImpact
     {

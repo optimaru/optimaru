@@ -144,7 +144,7 @@ void Solver::solve(ProjectJobSchedule &schedule)
     ScoreCalculator::prepare(schedule);  // validate + topological order
     // Pinned allocations must be initialized before solving (the engine
     // refuses an unassigned pinned entity): fix stragglers at
-    // (first mode, delay 0), like the Java demo data does for SOURCE/SINK.
+    // (first mode, delay 0).
     using Descriptor = optimaru::SolutionTraits<ProjectJobSchedule>;
     for (int a = 0; a < schedule.allocationCount(); ++a)
     {
@@ -259,7 +259,7 @@ void Solver::solve(
                   { return levelScoreOf(calculator); });
     }
 
-    // Refresh the shadow dates on the best solution (the plugin components
+    // Refresh the derived dates on the best solution (the plugin components
     // derive their own chain and never write these), then score it with the
     // caller's constraint assembly (custom weights and levels included),
     // leaving the calculator primed on it so constraint_totals() explains

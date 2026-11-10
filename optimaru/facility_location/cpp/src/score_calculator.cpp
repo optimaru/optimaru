@@ -16,8 +16,8 @@ namespace
 {
 
 // The monolithic score is the default assembly, so it reads the same
-// constants the components carry. Integral, so the soft level is computed in
-// int64 exactly like the Java long arithmetic.
+// constants the components carry. Integral, so the soft level is computed
+// exactly, in int64.
 constexpr auto kCapacityWeight
     = static_cast<std::int64_t>(FacilityCapacityCost::kDefaultWeight);
 constexpr auto kSetupWeight
@@ -57,8 +57,7 @@ Score ScoreCalculator::score(FacilityLocationProblem &problem)
 {
     prepare(problem);
 
-    // Per-facility aggregates of the assigned consumers — the C++ stand-in
-    // for the Java Facility's inverse-relation `consumers` shadow list.
+    // Per-facility aggregates of the assigned consumers.
     std::vector<std::int64_t> usedDemand(problem.facilities.size(), 0);
     std::vector<int> consumerCnt(problem.facilities.size(), 0);
 
@@ -73,8 +72,8 @@ Score ScoreCalculator::score(FacilityLocationProblem &problem)
         distance += problem.distanceOf(c, consumer.facility);
     }
 
-    // hard 1: facilityCapacityCost — Java groups consumers by facility, so
-    // only facilities with at least one assigned consumer are penalized.
+    // hard 1: facilityCapacityCost — only facilities with at least one
+    // assigned consumer are penalized.
     std::int64_t overCapacity = 0;
     // soft 2: facilitySetupCost — each used facility once (unweighted).
     std::int64_t setupCost = 0;

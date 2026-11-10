@@ -1,7 +1,7 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (`cs.solve(schedule)`) enables all thirty-seven constraints at their
-default weights (the Java provider's). This module is the alternative path next to it:
+default weights. This module is the alternative path next to it:
 pick constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(schedule, constraints=...)`.
 
@@ -24,7 +24,7 @@ is ``RoomConflictCost()``, and so on.)
 Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
-               default (the Java provider's weight; ``cs.constraint_info()`` reports
+               default (``cs.constraint_info()`` reports
                every default level and weight).
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
@@ -151,9 +151,9 @@ __all__ = [
 
 
 class TalkTypeIncompatibilityCost(Constraint):
-    """Talks placed in a timeslot or room that does not accept their talk type. A synthetic
-    constraint — the Java quickstart never builds such assignments, while here the
-    same prohibition is expressed as a cost. Default: hard, weight 100'000."""
+    """Talks placed in a timeslot or room that does not accept their talk type. Every
+    (timeslot, room) cell is open to every talk in the search, so the prohibition
+    is expressed as a cost. Default: hard, weight 100'000."""
 
     name = "talk_type_incompatibility_cost"
     label_en = "Talk type incompatibility"

@@ -9,7 +9,7 @@ namespace ta
 // Soft, weight 2: majorPriorityTaskEndTimeCost — the end time of every MAJOR
 // task, weighed twice as heavily as a minor one. Raw cost per employee = the
 // summed end times (minutes) of its MAJOR tasks, so 0 = the employee does no
-// MAJOR task. The Bendable soft[2] level.
+// MAJOR task. The soft[2] level.
 struct MajorPriorityTaskEndTimeCost final : PriorityTaskEndTimeCostBase
 {
     static constexpr double kDefaultWeight = 2.0;

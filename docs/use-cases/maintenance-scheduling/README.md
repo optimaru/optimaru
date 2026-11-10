@@ -1,29 +1,28 @@
 # Maintenance Scheduling (C++ / Python)
 
-The Timefold Quickstarts `maintenance-scheduling` example model
-(Apache-2.0; see the repository [NOTICE](../../../NOTICE))
-port, with modifications:
+Derived from the Timefold Quickstarts `maintenance-scheduling` example
+(Apache-2.0; see the repository [NOTICE](../../../NOTICE)), with modifications:
 assigns a crew (Crew) and a start date to maintenance jobs (Job) to minimize early/late
 maintenance. A C++ domain on top of the generic engine in `optimaru/cpp/optimaru/` (late acceptance
 + ALNS), with a Python package (`maintenance_scheduling`) via pybind11.
 
 ## Domain encoding
 
-The Java original's `Job` has two planning variables — `crew` and `startDate`
-(a TimeGrain pattern excluding weekends) — plus the shadow variable `endDate`.
-The engine supports one assignment-shape int value per entity, so it follows the
-composite encoding pattern of school-timetabling:
+A `Job` has two decisions — its crew and its start date (weekdays only) — and
+its end date is derived from them.
+The engine supports one assignment-shape int value per entity, so both are packed into one
+value, the composite encoding pattern of school-timetabling:
 
 ```
 crewDate = startDateIndex * crewCount + crewIndex     # -1 == unassigned
 ```
 
 - `startDateIndex` indexes the list of weekdays (Mon-Fri) of the calendar `[fromDate, toDate)`
-  (`MaintenanceSchedule::startDates`, Java `createStartDateList()`).
-- The shadow `endDate` is a pure function of `(duration, startDateIndex)`, so it is
-  precomputed into a table (`endDateByDur`) in the prepare step without listeners. Like Java
-  `Job.calculateEndDate`, it is the exclusive end date skipping weekends.
-- All dates are epoch days (Java `LocalDate.toEpochDay`).
+  (`MaintenanceSchedule::startDates`; `start_dates()` in Python).
+- The end date is a pure function of `(duration, startDateIndex)`, so it is
+  precomputed into a table (`endDateByDur`) in the prepare step. It is the
+  exclusive end date skipping weekends (`plus_business_days` in Python).
+- All dates are epoch days (days since 1970-01-01).
 
 ## C++
 
@@ -37,7 +36,7 @@ crewDate = startDateIndex * crewCount + crewIndex     # -1 == unassigned
 - `incremental_calculator` — before/after hooks, O(job calendar length) per move
 - `solver` — engine wrapper (CH + Late Acceptance + ALNS, guided selection)
 
-## Constraints (full port of the Java ConstraintProvider)
+## Constraints
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
@@ -84,14 +83,14 @@ mnt.solve(schedule, constraints=[
 `mnt.constraint_costs(schedule, picks)` keys the second pick `tag_conflict_cost#2`. The
 CP-SAT reference takes integral offsets.
 
-Score mapping: the Java original already uses `Score`, so it maps 1:1 onto the
-engine's Score(int64 hard, double soft), and the soft weights
-(1 / 1,000 / 1,000,000) are the original ones. The two pairwise constraints reduce to sums
+Score mapping: this use case scores hard and soft only, so it maps 1:1 onto the
+engine's Score(int64 hard, double soft), with the soft weights
+1 / 1,000 / 1,000,000. The two pairwise constraints reduce to sums
 of C(n,2) over per-day occupancy counts (equivalent to summing pairwise overlapping days,
 since the intervals are contiguous) and are scored incrementally in O(job calendar length)
 per move.
 
-An extension not in the original: `Job::pinned` (the engine's pinning hook) — counts in
+`Job::pinned` (the engine's pinning hook) — counts in
 the score, but the solver never moves it.
 
 ## Build / run
@@ -107,7 +106,7 @@ OPTIMARU_USE_CASES=maintenance_scheduling uv sync      # builds only this use ca
 uv run pytest -q tests/maintenance_scheduling
 ```
 
-The demo data is modelled on the quickstart's demo and drawn from a seeded
+The demo data is drawn from a seeded
 `std::mt19937_64` (seed 17), so it is the same on every platform (SMALL: 3 crews/8 weeks/14 jobs, LARGE: 5 crews/16 weeks/
 48 jobs; starting next Monday). Both SMALL and LARGE reach hard 0 within seconds.
 

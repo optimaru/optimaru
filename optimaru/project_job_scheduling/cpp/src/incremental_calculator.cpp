@@ -222,7 +222,7 @@ void ProjectJobSchedulingIncrementalScoreCalculator::after_assign(
     if (!endChanged)
         return;
 
-    // Re-propagate the shadow chain over the successor subgraph, in
+    // Re-propagate the derived dates over the successor subgraph, in
     // topological order (min-heap on the topological position, so every
     // node is recomputed after all of its changed predecessors). A node
     // whose end date is unchanged stops the propagation. The heap/touched

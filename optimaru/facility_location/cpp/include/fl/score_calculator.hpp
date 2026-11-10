@@ -6,7 +6,7 @@
 namespace fl
 {
 
-// Port of the reference facility-location FacilityLocationConstraintProvider.
+// The facility-location score as one monolithic function.
 //
 // score does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under ScoreChecks::Full).
@@ -15,15 +15,11 @@ namespace fl
 // the components' kDefaultWeight:
 //   hard 1. facilityCapacityCost       -(usedDemand - capacity) per used
 //                                      facility whose assigned demand exceeds
-//                                      its capacity (groupBy(facility,
-//                                      sum(demand)) in Java, so only
-//                                      facilities with >= 1 consumer count)
+//                                      its capacity (only facilities with
+//                                      >= 1 consumer count)
 //   soft 2. facilitySetupCost          -2 * setupCost per facility serving at
 //                                      least one consumer
 //   soft 3. distanceFromFacilityCost   -6 * meters per assigned consumer
-//                                      (provider default 5, overridden to 6
-//                                      by the solution's
-//                                      ConstraintWeightOverrides)
 // Unassigned consumers (facility == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
 class ScoreCalculator

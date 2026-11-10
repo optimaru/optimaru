@@ -28,9 +28,9 @@ namespace qap
 using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
-// Facility  (@PlanningEntity)
+// Facility  (entity)
 // ---------------------------------------------------------------------------
-// `location` is the single BASIC planning variable: the index into
+// `location` is the single BASIC decision variable: the index into
 // QuadraticAssignmentProblem::locations, -1 == unassigned. The solver keeps
 // the facilities a permutation of the locations (swap moves only), so -1
 // appears only in a partial state a caller wrote.
@@ -40,7 +40,7 @@ struct Facility
     // facility_demands[id]; nullopt = not listed (scored as demand 0).
     std::optional<std::int64_t> demand;
 
-    int location = -1;  // planning variable; -1 == unassigned
+    int location = -1;  // decision variable; -1 == unassigned
 
     bool isAssigned() const { return location >= 0; }
 };
@@ -73,7 +73,7 @@ struct ForbiddenAssignment
 };
 
 // ---------------------------------------------------------------------------
-// QuadraticAssignmentProblem  (@PlanningSolution)
+// QuadraticAssignmentProblem  (solution)
 // ---------------------------------------------------------------------------
 struct QuadraticAssignmentProblem
 {
@@ -221,7 +221,7 @@ struct QuadraticAssignmentProblem
 }  // namespace qap
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization: entities are facilities, the planning
+// SolutionTraits specialization: entities are facilities, the decision
 // variable is Facility::location, the value range is the location list. A
 // DecomposedObjective unit is therefore one LOCATION, its members the
 // facilities standing there (exactly one in a bijection).

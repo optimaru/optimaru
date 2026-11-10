@@ -17,8 +17,7 @@ namespace ts
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The four constraints of the reference tournament-scheduling
-// TournamentScheduleConstraintProvider, split into one small component each on
+// The four constraints of this use case, split into one small component each on
 // the engine's DecomposedObjective — an optional assembly path NEXT TO
 // the monolithic TournamentSchedulingIncrementalScoreCalculator, which stays
 // the tuned default fast path.
@@ -48,7 +47,7 @@ namespace ts
 //   assignmentCountImbalanceCost     medium, 1  unfairness of per-team counts
 //   confrontationCountImbalanceCost  soft,   1  unfairness of per-pair counts
 //
-// Score levels: the quickstart scores with HardMediumSoftBigDecimalScore. This
+// Score levels: this use case scores on hard / medium / soft levels. This
 // domain keeps the engine's Score and declares how its medium level
 // folds into soft ONCE, in domain.hpp (kMediumFold = into_soft(kMediumScale =
 // 1e6), registered through optimaru::MediumFoldOf<TournamentSchedule>). The

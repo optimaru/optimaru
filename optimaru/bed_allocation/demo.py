@@ -1,4 +1,5 @@
-"""The demo instance, modelled on the quickstart's demo data.
+"""The demo instance, derived from the Timefold Quickstarts `bed-allocation` example's
+demo data (Apache-2.0; see the repository NOTICE).
 
 Builds a demo instance of the same scale and distributions: 1 department (3 specialties),
 10 SAME_GENDER rooms (capacity 8x1 + 1x2 + 1x3 = 13 beds), 28 nights, ~75 sequential
@@ -21,7 +22,7 @@ BASE_DATE = date(2026, 8, 3)
 
 
 def _draw_index(rng: random.Random, cumulative: list[float]) -> int:
-    """Pick an index from a cumulative distribution table with one unit random draw (Java's Pair table)."""
+    """Pick an index from a cumulative distribution table with one unit random draw."""
     draw = rng.random()
     for i, threshold in enumerate(cumulative):
         if draw <= threshold:

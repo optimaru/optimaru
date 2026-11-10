@@ -1,8 +1,8 @@
 """Type stubs for `optimaru.facility_location._core` — the facility-location C++
 solver.
 
-The problem is the planning solution: each consumer's `facility` (an index
-into `problem.facilities`, -1 == unassigned) is the single assignment-shape planning
+The problem object holds the solution: each consumer's `facility` (an index
+into `problem.facilities`, -1 == unassigned) is the single assignment-shape decision
 variable.
 
 Score (hard/soft, lexicographic), at the default weights: hard =
@@ -27,8 +27,7 @@ class Location:
     latitude: float
     longitude: float
     def distance_to(self, other: Location) -> int:
-        """Meters: ceil(Euclidean degree distance * 111 km) (Java
-        Location.getDistanceTo)."""
+        """Meters: ceil(Euclidean degree distance * 111 km)."""
 
 class Facility:
     """Problem fact: a candidate facility with a setup cost and capacity."""
@@ -40,18 +39,18 @@ class Facility:
     capacity: int
 
 class Consumer:
-    """Planning entity: demand served by exactly one facility."""
+    """Demand served by exactly one facility."""
 
     def __init__(self, id: str, location: Location, demand: int) -> None: ...
     id: str
     location: Location
     demand: int
     facility: int
-    """The planning variable: index into problem.facilities; -1 == unassigned."""
+    """The decision variable: index into problem.facilities; -1 == unassigned."""
     def is_assigned(self) -> bool: ...
 
 class FacilityLocationProblem:
-    """Planning solution. NOTE: `facilities` / `consumers` element access
+    """Problem and solution in one object. NOTE: `facilities` / `consumers` element access
     returns copies; use set_assignment for bulk facility writes."""
 
     def __init__(
@@ -70,16 +69,16 @@ class FacilityLocationProblem:
     def facility_count(self) -> int: ...
     def consumer_count(self) -> int: ...
     def total_cost(self) -> int:
-        """Setup cost of the used facilities (Java getTotalCost)."""
+        """Setup cost of the used facilities."""
     def potential_cost(self) -> int:
-        """Setup cost of every facility (Java getPotentialCost)."""
+        """Setup cost of every facility."""
     def total_distance_meters(self) -> int:
         """Total consumer->facility distance in meters."""
     def used_facility_count(self) -> int: ...
     def assignment(self) -> list[int]:
         """The current facility index per consumer (-1 == unassigned)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """Bulk write of the planning variable."""
+        """Bulk write of the decision variable."""
 
 def calculate_score(problem: FacilityLocationProblem) -> Score:
     """Full recompute of the score (also stores problem.score)."""

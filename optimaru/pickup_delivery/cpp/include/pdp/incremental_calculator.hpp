@@ -47,7 +47,7 @@ public:
     void after_list_edit(int listIndex) override;
     optimaru::Score score() override;
 
-    // The HardMediumSoft view of the current state.
+    // The hard / medium / soft view of the current state.
     Score current_score() const;
 
 private:

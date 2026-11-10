@@ -1,17 +1,15 @@
 """Maintenance scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the `maintenance-scheduling` example model: assigns maintenance jobs (Job)
-a crew and a start date (TimeGrain excluding weekends). The Java domain's two planning
-variables (crew, startDate) are composite-encoded into one engine assignment-shape variable::
+Assigns maintenance jobs (Job) a crew and a start date (weekdays only). The two
+decisions (crew, start date) are composite-encoded into one engine assignment-shape variable::
 
     crew_date = start_date_index * crew_count + crew_index   # -1 == unassigned
 
-Dates are exchanged as epoch days (days since 1970-01-01, Java LocalDate.toEpochDay).
+Dates are exchanged as epoch days (days since 1970-01-01).
 The pydantic mirror (`optimaru.maintenance_scheduling.models`, optional dependency) converts to
 and from `datetime.date`.
 
-Constraints (Score — same semantics as the Java ConstraintProvider), at the
-default weights:
+Constraints, at the default weights:
   hard 1. crew_conflict_cost          -overlapping days per overlapping job pair on the same crew
   hard 2. min_start_date_cost         -1 per day started before min_start_date
   hard 3. max_end_date_cost           -1 per day ended after max_end_date

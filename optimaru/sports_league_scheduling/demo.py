@@ -1,4 +1,4 @@
-"""The demo league, modelled on the quickstart's demo: 14 South American teams, 32 rounds, 182 matches.
+"""The demo league: 14 South American teams, 32 rounds, 182 matches.
 
 The classic matches are drawn from a seeded ``random.Random``, so the instance is the same
 on every run (it is not the same draw as the C++ demo's). Round 0 is pinned to a Wednesday

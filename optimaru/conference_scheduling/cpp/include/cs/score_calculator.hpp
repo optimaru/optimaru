@@ -13,16 +13,15 @@ namespace cs
 
 // Per-constraint match-unit totals of one full recompute. Each member is named
 // after its constraint's registry name (cs/constraints/<subject>_cost.hpp) and
-// holds the sum of the Java constraint's matchWeigher over all matches, all
+// holds the sum of the constraint's match units over all matches, all
 // counted positive (the reward members too; their components negate them).
 // The constraint weights are applied only in hardTotal() / softPenaltyTotal()
 // / softRewardTotal(), which read each component's kDefaultWeight
-// (score_calculator.cpp), mirroring `penalize(Score.ofHard(w),
-// weigher)` one to one.
+// (score_calculator.cpp).
 struct Breakdown
 {
     // Hard units.
-    std::int64_t talkTypeIncompatibilityCost = 0;  // synthetic; see below
+    std::int64_t talkTypeIncompatibilityCost = 0;  // see h0 below
     std::int64_t roomUnavailabilityCost = 0;       // duration
     std::int64_t roomConflictCost = 0;             // overlap minutes
     std::int64_t speakerUnavailabilityCost = 0;    // duration per speaker
@@ -66,7 +65,7 @@ struct Breakdown
     std::int64_t languageDiversityCost = 0;       // slot duration
 
     // Weighted totals at the components' kDefaultWeight (all integral, so the
-    // sums are exact int64 like the Java long arithmetic).
+    // sums are exact in int64).
     std::int64_t hardTotal() const;
     std::int64_t softPenaltyTotal() const;
     std::int64_t softRewardTotal() const;
@@ -78,10 +77,8 @@ struct Breakdown
     }
 };
 
-// Port of the reference conference-scheduling
-// ConferenceSchedulingConstraintProvider (16 hard + 20 soft constraints),
-// plus one synthetic hard constraint replacing the quickstart's per-TalkType
-// value ranges.
+// The conference-scheduling score as one monolithic function: 17 hard +
+// 20 soft constraints.
 //
 // score does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under ScoreChecks::Full).
@@ -90,11 +87,9 @@ struct Breakdown
 // the weights are the components' kDefaultWeight):
 //   h0. talkTypeIncompatibilityCost
 //           100000 x max(duration, 1) per talk whose timeslot or room does
-//           not admit its talk type. SYNTHETIC: the Java quickstart makes
-//           such assignments impossible via @ValueRangeProvider
-//           (talkType-compatible timeslots/rooms); the engine's single global
-//           value range cannot, so the port forbids them by penalty instead.
-//           Never fires on a Java-feasible solution.
+//           not admit its talk type. The engine's single global
+//           value range cannot restrict a talk to its type-compatible
+//           timeslots/rooms, so such assignments are forbidden by penalty.
 //   h1. roomUnavailabilityCost         100000 x duration
 //   h2. roomConflictCost               1000 x overlap per same-room pair
 //   h3. speakerUnavailabilityCost      100 x duration per unavailable speaker
@@ -176,7 +171,7 @@ public:
         return hi > lo ? hi - lo : 0;
     }
 
-    // Timeslot::pauseExists of the quickstart: false when the slots overlap
+    // Whether a pause exists between two slots: false when the slots overlap
     // (same slot included), true on different days, otherwise the same-day
     // gap must reach pauseInMinutes.
     static bool pauseExists(const ConferenceSchedule &s,

@@ -3,15 +3,15 @@
 The compiled module wraps the C++ domain in `optimaru/bed_allocation/cpp`,
 which imports the generic engine in `optimaru/cpp/optimaru`.
 
-The only planning variable is `Stay.bed` (assignment-shape int)::
+The only decision variable is `Stay.bed` (assignment-shape int)::
 
     -1                            uninitialized (no score contribution)
     0..bed_count()-1              real bed index
-    bed_count() == no_bed_value() "no bed" sentinel — the quickstart's
-                                  null bed (allowsUnassigned = true);
-                                  penalized per night at the medium level
+    bed_count() == no_bed_value() "no bed" sentinel — the stay is left
+                                  unassigned; penalized per night at the
+                                  medium level
 
-Score convention (HardMediumSoftScore, as in the Java quickstart; all penalties),
+Score convention (hard / medium / soft levels; all penalties),
 at the default weights (the C++ components' kDefaultWeight, see constraint_info()):
   hard 1.  bed_conflict_cost                  overlapping nights in one bed x -1000
   hard 2.  female_in_male_room_cost           female in a MALE_ONLY room, nights x -50
@@ -22,8 +22,7 @@ at the default weights (the C++ components' kDefaultWeight, see constraint_info(
   hard 6.  department_max_age_cost            above department maximum age, nights x -100
   hard 7.  required_patient_equipment_cost    room short of required equipment: nights x
                                               (required equipment the room HAS) x -50
-                                              (the semantics pinned by the Java
-                                              original's unit test, kept)
+                                              (so a room with none costs 0)
   medium 8. unassigned_stays_cost             nights of "no bed" stays x -1 (medium units)
   soft 9.  preferred_max_room_capacity_cost   room above preferred capacity, nights x -8
   soft 10. department_specialty_cost          specialty not offered by the department,
@@ -43,7 +42,7 @@ from enum import Enum
 from typing import Any, Literal, NamedTuple
 
 class Score:
-    """HardMediumSoft score. hard 0 == feasible. Lexicographic comparison (hard first)."""
+    """Hard / medium / soft score. hard 0 == feasible. Lexicographic comparison (hard first)."""
     @property
     def hard(self) -> int: ...
     @property
@@ -98,14 +97,14 @@ class Room:
     equipment: list[str]
 
 class Bed:
-    """Problem fact (planning value): a bed. `room` is an index into BedPlan.rooms."""
+    """Problem fact (the value a stay is assigned): a bed. `room` is an index into BedPlan.rooms."""
     def __init__(self, id: str, room: int, index_in_room: int = 0) -> None: ...
     id: str
     room: int
     index_in_room: int
 
 class Stay:
-    """Planning entity: one patient stay. `bed` is the planning variable
+    """One patient stay. `bed` is the decision variable
     (see the encoding in the module docstring), written by the solver. Dates are integer
     day indices (only differences matter; night_count = departure - arrival + 1)."""
     def __init__(
@@ -137,7 +136,7 @@ class Stay:
     def same_night_count(self, other: Stay) -> int: ...
 
 class BedPlan:
-    """Planning solution. solve changes the stays' `bed` and `score` in
+    """The whole problem and its solution. solve changes the stays' `bed` and `score` in
     place.
 
     Note: list attributes such as `stays` return copies, so use `set_assignment`
@@ -161,15 +160,15 @@ class BedPlan:
     def score(self) -> Score: ...
     def bed_count(self) -> int: ...
     def no_bed_value(self) -> int:
-        """The "no bed" sentinel planning value (== bed_count())."""
+        """The "no bed" sentinel value (== bed_count())."""
     def assignment(self) -> list[int]:
         """Current bed value per stay (the solution)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """Bulk-write the planning variable (`stays` returns copies, so writing
+        """Bulk-write the decision variable (`stays` returns copies, so writing
         individual elements has no effect)."""
 
 def calculate_score(plan: BedPlan) -> Score:
-    """Full recompute of the HardMediumSoft score (also stored in plan.score)."""
+    """Full recompute of the hard / medium / soft score (also stored in plan.score)."""
 
 class SolverConfig:
     def __init__(self) -> None: ...
@@ -232,7 +231,7 @@ def constraint_costs(plan: BedPlan, constraints: Iterable[Any] | None = ...) -> 
     "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
     "default_weight": float, "default_level": str,
-    "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. Units are the planning values
+    "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. Units are the assignable values
     (beds in order, then the "no bed" sentinel); a global constraint has one entry. A unit
     constraint's "units" lists the units it evaluates, where a literal offset (clip=False)
     charges a raw 0: the real beds for the per-bed constraints (never the sentinel),

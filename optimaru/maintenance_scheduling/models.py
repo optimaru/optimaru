@@ -3,7 +3,7 @@
 Mirrors `_core`'s Crew/Job/MaintenanceSchedule 1:1, but dates are handled as
 `datetime.date` (epoch day integers on the engine side). Assignments are stored as a
 human-readable (crew_id, start_date) pair instead of the composite crew_date, and end_date
-(the weekend-skipping shadow) is a result-only field::
+(derived, weekends skipped) is a result-only field::
 
     from optimaru.maintenance_scheduling.models import MaintenanceScheduleModel
 
@@ -34,7 +34,7 @@ _START_DATE = TypeAdapter(date | None)
 
 
 def date_to_epoch(d: date) -> int:
-    """datetime.date -> epoch day (Java LocalDate.toEpochDay)."""
+    """datetime.date -> epoch day (days since 1970-01-01)."""
     return (d - _EPOCH).days
 
 
@@ -61,8 +61,8 @@ class CrewModel(BaseModel):
 
 
 class JobModel(BaseModel):
-    """Planning entity. crew_id/start_date are the assignment (both set means assigned),
-    end_date is the weekend-skipping shadow (result only, ignored by to_core)."""
+    """A maintenance job. crew_id/start_date are the assignment (both set means assigned),
+    end_date is derived, weekends skipped (result only, ignored by to_core)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -80,7 +80,7 @@ class JobModel(BaseModel):
 
 
 class MaintenanceScheduleModel(BaseModel):
-    """Planning solution mirror. score is a read-only result, kept as a separate field."""
+    """Pydantic mirror of the schedule. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -136,7 +136,7 @@ class MaintenanceScheduleModel(BaseModel):
 
     @classmethod
     def from_core(cls, schedule: "_core.MaintenanceSchedule") -> "MaintenanceScheduleModel":
-        """engine object -> pydantic (including the current assignment, the end_date shadow and score)."""
+        """engine object -> pydantic (including the current assignment, the derived end_date and score)."""
         crews = [CrewModel(id=c.id, name=c.name) for c in schedule.crews]
         jobs = []
         for i, job in enumerate(schedule.jobs):
@@ -206,7 +206,7 @@ def with_initial_solution(problem, solution):
 
     Raises ValueError naming the job for an unknown or repeated id, for a crew_id or
     start_date set without the other, for an unknown crew and for a start_date that is
-    not a weekday inside the work calendar. `end_date` is a shadow: it is cleared here
+    not a weekday inside the work calendar. `end_date` is derived: it is cleared here
     and the solve fills it in again.
     """
     if not isinstance(problem, MaintenanceScheduleModel):

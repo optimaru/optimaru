@@ -15,16 +15,16 @@ namespace ts
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart scores with HardMediumSoftBigDecimalScore; the engine
+// This use case scores on hard / medium / soft levels; the engine
 // provides Score(int64 hard, double soft). Mapping rule (also in the
 // README):
 //
-//   hard  = Java hard, unchanged (whole violation counts; 0 == feasible)
+//   hard  = the hard level, unchanged (whole violation counts; 0 == feasible)
 //   soft  = -(medium_unfairness * kMediumScale + soft_unfairness)
 //
 // i.e. the medium level (assignmentCountImbalanceCost) is folded into the
 // engine's soft as an offset of kMediumScale = 1e6 per medium unit, keeping
-// the level priority: both unfairness values are BigDecimal-style decimals
+// the level priority: both unfairness values are decimals
 // rounded to 6 significant figures, and for this domain's instance sizes the
 // soft-level unfairness stays far below kMediumScale times the smallest
 // representable medium difference, so medium always dominates soft.
@@ -43,8 +43,8 @@ constexpr optimaru::MediumFold kMediumFold
     = optimaru::MediumFold::into_soft(kMediumScale);
 
 // ---------------------------------------------------------------------------
-// Team  (problem fact, @PlanningId id == its index in TournamentSchedule::
-// teams — the value range of the planning variable)
+// Team  (problem fact, identified by its index in TournamentSchedule::
+// teams — the value range of the decision variable)
 // ---------------------------------------------------------------------------
 struct Team
 {
@@ -54,7 +54,7 @@ struct Team
 // ---------------------------------------------------------------------------
 // Day  (problem fact)
 // ---------------------------------------------------------------------------
-// The quickstart's Day only carries dateIndex; assignments and penalties
+// A Day only carries dateIndex; assignments and penalties
 // reference days by index into TournamentSchedule::days.
 struct Day
 {
@@ -65,9 +65,8 @@ struct Day
 // UnavailabilityPenalty  (problem fact)
 // ---------------------------------------------------------------------------
 // "team cannot play on day": one hard point of teamUnavailabilityCost per
-// fact whose (team, day) cell holds at least one assignment (Java's
-// forEach(UnavailabilityPenalty).ifExists(TeamAssignment) — per fact, not per
-// assignment).
+// fact whose (team, day) cell holds at least one assignment (per fact, not
+// per assignment).
 struct UnavailabilityPenalty
 {
     int team = 0;  // index into teams
@@ -75,27 +74,26 @@ struct UnavailabilityPenalty
 };
 
 // ---------------------------------------------------------------------------
-// TeamAssignment  (@PlanningEntity)
+// TeamAssignment  (the entity the solver assigns)
 // ---------------------------------------------------------------------------
 // One match slot on a day; the solver assigns which team fills it. `team` is
-// the only planning variable (-1 == unassigned). `id` mirrors the Java
-// @PlanningId: it must be unique (teamConflictCost counts unordered pairs,
-// the lessThan(getId) join of the Java original).
+// the only decision variable (-1 == unassigned). `id` must be unique
+// (teamConflictCost counts each unordered pair of assignments once).
 struct TeamAssignment
 {
     std::int64_t id = 0;
     int day = 0;         // index into days (problem fact)
-    int indexInDay = 0;  // informational, like the Java indexInDate
+    int indexInDay = 0;  // informational
 
-    int team = -1;  // planning variable; -1 == unassigned
+    int team = -1;  // decision variable; -1 == unassigned
 
-    // Pinned assignments keep their team fixed (@PlanningPin): scored like
+    // Pinned assignments keep their team fixed: scored like
     // any assignment but never selected for a move.
     bool pinned = false;
 };
 
 // ---------------------------------------------------------------------------
-// TournamentSchedule  (@PlanningSolution)
+// TournamentSchedule  (the problem and its solution)
 // ---------------------------------------------------------------------------
 struct TournamentSchedule
 {
@@ -113,10 +111,10 @@ struct TournamentSchedule
 }  // namespace ts
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization (the @PlanningEntity/@PlanningVariable
-// annotations of the C++ engine): entities are the team assignments, the
-// planning variable is TeamAssignment::team, the value range is the teams
-// list (@ValueRangeProvider on TournamentSchedule::teams).
+// SolutionTraits specialization (describes the solution's shape to the
+// engine): entities are the team assignments, the
+// decision variable is TeamAssignment::team, the value range is the teams
+// list (TournamentSchedule::teams).
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<ts::TournamentSchedule>
 {

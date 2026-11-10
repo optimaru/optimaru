@@ -150,7 +150,7 @@ PYBIND11_MODULE(_core, m)
         .def("is_exact_size", &MaxCutProblem::exactSize)
         // Every vertex on side 0 or 1 (no -1).
         .def("is_complete", &MaxCutProblem::isComplete)
-        // The planning variable: the side per vertex, -1 = unassigned.
+        // The decision variable: the side per vertex, -1 = unassigned.
         .def("assignment", [](const MaxCutProblem &problem) { return problem.side; })
         .def(
             "set_assignment",

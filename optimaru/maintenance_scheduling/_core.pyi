@@ -3,21 +3,21 @@
 The compiled module wraps the C++ domain in `optimaru/maintenance_scheduling/cpp`,
 which imports the generic engine in `optimaru/cpp/optimaru`.
 
-The Java quickstart's two planning variables (crew, startDate) are composite-encoded
+The two decisions per job (crew, start date) are composite-encoded
 into one assignment-shape int variable per entity (Job)::
 
     crew_date = start_date_index * crew_count + crew_index   # -1 == unassigned
 
 start_date_index indexes the list of weekdays (Mon-Fri) of the calendar [from_date, to_date)
 (`MaintenanceSchedule.start_dates()`). All dates are epoch days (days since
-1970-01-01, Java LocalDate.toEpochDay), and the endDate shadow is the exclusive end date
+1970-01-01), and a job's derived end date is the exclusive end date
 reached by advancing duration days while skipping weekends
 (`plus_business_days`).
 
 Score convention: `hard` is the sum of constraint-violating days (0 == feasible), `soft` is
 the optimization objective. Both are maximized (less negative is better).
 
-Constraints (hard/soft; days are calendar days, like Java ChronoUnit.DAYS), at the
+Constraints (hard/soft; days are calendar days), at the
 default weights:
   hard 1. crew_conflict_cost          -overlapping days per overlapping job pair on the same crew
   hard 2. min_start_date_cost         -1 per day started before min_start_date
@@ -32,7 +32,7 @@ from collections.abc import Callable, Iterable
 from typing import Any, Literal, NamedTuple
 
 class Score:
-    """HardSoft score. `hard` is the integer violation sum (0 == feasible); `soft`
+    """Two-level score (hard, soft). `hard` is the integer violation sum (0 == feasible); `soft`
     is the objective. Lexicographic comparison (hard first)."""
     @property
     def hard(self) -> int: ...
@@ -48,7 +48,7 @@ class Crew:
     name: str
 
 class Job:
-    """Planning entity: a maintenance job to assign. `crew_date` is the planning
+    """A maintenance job to assign. `crew_date` is the decision
     variable (-1 == unassigned), written by the solver. Dates are epoch days."""
     def __init__(
         self,
@@ -74,12 +74,11 @@ class Job:
     crew_date: int
     """start_date_index * crew_count + crew_index; -1 == unassigned."""
     pinned: bool
-    """If True, crew_date is fixed (it counts in the score but never moves).
-    An engine extension the quickstart does not have."""
+    """If True, crew_date is fixed (it counts in the score but never moves)."""
 
 class MaintenanceSchedule:
-    """Planning solution: the calendar [from_date, to_date) x crews grid (value range)
-    + jobs (entities). solve changes the jobs' `crew_date` and `score` in
+    """The problem and its solution: the calendar [from_date, to_date) x crews grid
+    (value range) + jobs. solve changes the jobs' `crew_date` and `score` in
     place.
 
     Note: list attributes such as `jobs` return copies, so to change assignments use
@@ -105,12 +104,11 @@ class MaintenanceSchedule:
     def date_index_of(self, crew_date: int) -> int: ...
     def crew_index_of(self, crew_date: int) -> int: ...
     def start_dates(self) -> list[int]:
-        """Start date value range: the weekday epoch days of [from_date, to_date)
-        (Java createStartDateList())."""
+        """Start date value range: the weekday epoch days of [from_date, to_date)."""
     def job_start_date(self, job_index: int) -> int | None:
         """Assigned start epoch day; None when unassigned."""
     def job_end_date(self, job_index: int) -> int | None:
-        """endDate shadow (exclusive; skips weekends); None when unassigned."""
+        """Derived end date (exclusive; skips weekends); None when unassigned."""
     def assignment(self) -> list[int]: ...
     def set_assignment(self, assignment: list[int]) -> None: ...
 
@@ -118,7 +116,7 @@ def calculate_score(schedule: MaintenanceSchedule) -> Score:
     """Full recalculation (also stored in schedule.score)."""
 
 def plus_business_days(start_date: int, business_days: int) -> int:
-    """Java Job.calculateEndDate: the exclusive end epoch day reached by advancing
+    """The exclusive end epoch day reached by advancing
     business_days while skipping weekends."""
 
 def generate_demo_data(size: str = "SMALL", from_date: int | None = None) -> MaintenanceSchedule:

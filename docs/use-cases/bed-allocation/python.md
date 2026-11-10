@@ -1,8 +1,8 @@
-# bed_allocation — bed allocation (C++ port)
+# bed_allocation — bed allocation
 
-The `bed-allocation` example model (Apache-2.0; see the repository NOTICE)
-(hospital bed allocation, PAS): the pybind11 package of the `optimaru/bed_allocation/cpp` implementation ported
-onto the generic C++ engine in `optimaru/cpp/optimaru/`. An assignment-shaped domain that picks one bed (Bed) per stay (Stay).
+Hospital bed allocation (PAS), derived from the Timefold Quickstarts `bed-allocation` example
+(Apache-2.0; see the repository NOTICE): the pybind11 package of the `optimaru/bed_allocation/cpp` implementation
+on the generic C++ engine in `optimaru/cpp/optimaru/`. An assignment-shaped domain that picks one bed (Bed) per stay (Stay).
 
 ## Install / test
 
@@ -34,16 +34,16 @@ Passing a hand-built `_core.BedPlan` solves it in place. For JSON serialization 
 |---|---|
 | `-1` | uninitialized — no score contribution (input state) |
 | `0..bed_count()-1` | real bed index |
-| `bed_count()` (= `no_bed_value()`) | **"no bed" sentinel** — the quickstart's null bed |
+| `bed_count()` (= `no_bed_value()`) | **"no bed" sentinel** — the stay is left unassigned |
 
-The Java original's `@PlanningVariable(allowsUnassigned = true)` is reproduced by
-adding one sentinel to the value range: the search can move a stay to "no bed", and
+A stay may be left unassigned: the value range carries one extra sentinel value, so
+the search can move a stay to "no bed", and
 that stay is penalized per night at the medium level (`unassigned_stays_cost`). So hard 0
 is always reachable (every hard violation can be resolved by giving up the assignment).
 
-## Score mapping (HardMediumSoftScore -> engine Score)
+## Score mapping (hard / medium / soft -> engine Score)
 
-The original score type is `HardMediumSoftScore`; the engine only has `Score(int64 hard,
+The domain scores on three levels (hard / medium / soft); the engine only has `Score(int64 hard,
 double soft)`. The mapping rule (`optimaru/bed_allocation/cpp/include/ba/domain.hpp`):
 
 ```
@@ -61,7 +61,7 @@ declared once in `domain.hpp`); it is not part of any weight. Every
 and `optimaru.bed_allocation.constraints.score()` applies it, so `score(raw)` equals
 `(score.hard, score.medium * 10**9 + score.soft)`.
 
-## Constraints (same semantics as Java `BedAllocationConstraintProvider`, 12 of them)
+## Constraints (12 of them)
 
 In `list_constraints()` order; `constraint_info()` reports the default level and weight of
 each from the C++ components (`kDefaultLevel` / `kDefaultWeight`):
@@ -98,24 +98,22 @@ its own knobs, its level included, the instances add up, and
 to soft in the engine as well. The package re-exports `ConstraintInfo` /
 `constraint_info()`.
 
-Caveats (kept exactly as in the original):
+Caveats:
 
 - **`required_patient_equipment_cost` weighs by the required equipment the room HAS.**
   The filter fires when any required equipment is missing, and the match weight is the
   count present, not the count missing — a room with none costs 0. Counterintuitive, but
-  the Java original's unit test (`penalizesBy(6)`) pins these semantics, so they were
-  ported as-is.
+  intended: the tests pin these semantics.
 - `department_specialty_priority_cost` applies only when the department offers that
-  specialty. (In Java, `getSpecialtyPriority()` throws an NPE when it is not offered, so
-  that path has no defined semantics — here it is skipped, and a missing specialty only
-  gets the `department_specialty_cost` penalty.)
+  specialty. When it does not, the constraint is skipped, and the missing specialty only
+  gets the `department_specialty_cost` penalty.
 - Dates are integer day indices (`models` uses `datetime.date.toordinal()`).
-  `night_count = departure - arrival + 1` (the original's `+ 1` is kept).
+  `night_count = departure - arrival + 1` (arrival and departure day both count).
 
 ## Demo
 
-`optimaru.bed_allocation.demo.generate_demo_data()` builds a demo instance modelled on the quickstart's demo:
+`optimaru.bed_allocation.demo.generate_demo_data()` builds the demo instance:
 1 department (3 specialties), 10 rooms, all SAME_GENDER (13 beds), 28 nights, 80 stays
-(the default seed) laid out sequentially along each room's timeline, with the original's gender/age/equipment
-distributions, drawn from a seeded `random.Random`. The C++ demo (`build/bed_allocation/ba_demo`, built as shown in
+(the default seed) laid out sequentially along each room's timeline, with gender/age/equipment
+distributions drawn from a seeded `random.Random`. The C++ demo (`build/bed_allocation/ba_demo`, built as shown in
 ../README.md) reaches hard 0 / medium 0 (everyone assigned) within 10 s.

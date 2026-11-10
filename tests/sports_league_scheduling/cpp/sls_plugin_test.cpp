@@ -714,7 +714,7 @@ void verifyRawCostsByHand()
         checkRaw(s,
                  "repeatMatchOnNextDayCost",
                  {1.0},
-                 "{1} (ifExists: once per match)");
+                 "{1} (once per match)");
     }
     {  // The reversed fixture two indices later.
         LeagueSchedule s = makeBaseContiguous(3, 3);

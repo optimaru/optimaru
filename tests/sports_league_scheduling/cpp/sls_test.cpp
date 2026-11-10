@@ -1,8 +1,7 @@
 // Sports-league-scheduling unit tests (engine test/ style: check() + non-zero
 // exit on any failure):
-//   (a) every constraint verified against hand-computed scores (the Java
-//       SportsLeagueSchedulingConstraintProviderTest cases, adapted to the
-//       full-score world: each case isolates its constraint by construction)
+//   (a) every constraint verified against hand-computed scores (each case
+//       isolates its constraint by construction)
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's Editor protocol (before/set/after)
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
@@ -208,7 +207,7 @@ void verifyConstraints()
                    0);
     }
     // hard 2 + hard 1: two home matches on one round index count once in the
-    // run (the reference model's consecutive-sequence collector dedupes the Round values), so
+    // run (the presence of the index is what forms the run), so
     // indices {0, 0, 1, 2} form a length-3 run — no consecutive penalty; only
     // the same-round pair costs one.
     {
@@ -251,8 +250,7 @@ void verifyConstraints()
                    0);
     }
 
-    // hard 4: repeatMatchOnNextDayCost, the Java repeatMatchOnTheNextDay
-    // case — only the round-0 match is followed by its reversed fixture on
+    // hard 4: repeatMatchOnNextDayCost — only the round-0 match is followed by its reversed fixture on
     // the next round index.
     {
         LeagueSchedule s = makeBaseContiguous(2, 7);
@@ -265,14 +263,14 @@ void verifyConstraints()
                    -1,
                    0);
     }
-    // hard 4: ifExists semantics — two reversed fixtures on the next index
+    // hard 4: once per match — two reversed fixtures on the next index
     // still penalize the match only once.
     {
         LeagueSchedule s = makeBaseContiguous(3, 3);
         addMatch(s, 0, 1, 0);
         addMatch(s, 1, 0, 1);
         addMatch(s, 1, 0, 1);
-        // repeat: 1 (the round-0 match; ifExists counts once). teamConflict:
+        // repeat: 1 (the round-0 match; counted once). teamConflict:
         // the two identical round-1 matches pair up once. away run of team 0 at
         // indices {0? no — team 0 is home at 0} — home0@{0}, away1@{0},
         // home1@{1,1}, away0@{1,1}: 2 items < 4. No hops (zero distances).
@@ -359,7 +357,7 @@ void verifyConstraints()
     }
 
     // soft 10: workdayClassicMatchesCost — classic matches off weekends
-    // cost 1000 each (Java mirror: two classic matches on plain rounds, one
+    // cost 1000 each (two classic matches on plain rounds, one
     // on a weekend round is free).
     {
         LeagueSchedule s = makeBaseContiguous(4, 5);

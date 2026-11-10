@@ -1,7 +1,7 @@
 """Max-Cut — Python wrapper of the C++ solver on the optimaru engine.
 
 Weighted Max-Cut with fixed vertex sides, same-side and different-side pairs,
-side-size bounds and an optional balance term: one assignment-shape planning variable (the
+side-size bounds and an optional balance term: one assignment-shape decision variable (the
 side, 0 or 1) per vertex; a fixed vertex is pinned and never moves.
 
 Score, at the default weights:

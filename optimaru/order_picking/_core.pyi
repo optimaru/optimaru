@@ -1,11 +1,10 @@
 """Type stubs for `optimaru.order_picking._core` — the order-picking C++ solver.
 
-The solution is the planning solution: each trolley's ordered
-`pick_task_indices` is the planning list variable; a pick task in no list is
-unassigned. `trolley_index` / `previous_pick_task` / `next_pick_task` on a
-pick task are the shadow variables derived from the lists.
+Each trolley's ordered `pick_task_indices` is the decision; a pick task in
+no list is unassigned. `trolley_index` / `previous_pick_task` /
+`next_pick_task` on a pick task are derived from the lists.
 
-Score (HardSoft, lexicographic), at the default weights:
+Score (hard / soft, lexicographic), at the default weights:
   hard = -(missing trolley buckets)                 # trolley_capacity_cost
   soft = -(walk to and between the picks, m         # distance_from_previous_pick_task_cost
            + walk back to the trolley origin, m     # distance_from_last_pick_task_to_path_origin_cost
@@ -24,7 +23,7 @@ class Score:
         """True iff hard == 0."""
 
 class Side:
-    """Shelving side (Shelving.Side): LEFT or RIGHT."""
+    """Shelving side: LEFT or RIGHT."""
 
     LEFT: Side
     RIGHT: Side
@@ -44,14 +43,14 @@ class WarehouseLocation:
     def row(self) -> int: ...
     @property
     def shelving_id(self) -> str:
-        """The Java shelving id, e.g. "(A,1)"."""
+        """The shelving id, e.g. "(A,1)"."""
 
 class Order:
     def __init__(self, id: str) -> None: ...
     id: str
 
 class PickTask:
-    """Planning entity (list element): the picking of one order item."""
+    """The picking of one order item: an element of a trolley's pick list."""
 
     def __init__(
         self,
@@ -67,13 +66,13 @@ class PickTask:
     volume: int
     location: WarehouseLocation
     trolley_index: int
-    """Shadow: index of the owning trolley; -1 == unassigned."""
+    """Derived: index of the owning trolley; -1 == unassigned."""
     previous_pick_task: int
-    """Shadow: previous pick in the trolley's list; -1 == none."""
+    """Derived: previous pick in the trolley's list; -1 == none."""
     next_pick_task: int
-    """Shadow: next pick in the trolley's list; -1 == none."""
+    """Derived: next pick in the trolley's list; -1 == none."""
     def is_last(self) -> bool:
-        """True iff next_pick_task == -1 (the Java PickTask.isLast)."""
+        """True iff next_pick_task == -1."""
 
 class Trolley:
     def __init__(
@@ -88,10 +87,10 @@ class Trolley:
     bucket_capacity: int
     location: WarehouseLocation
     pick_task_indices: list[int]
-    """The planning list variable: ordered indices into pick_tasks."""
+    """The decision: ordered indices into pick_tasks."""
 
 class OrderPickingSolution:
-    """Planning solution."""
+    """The problem data plus the trolleys' pick lists and the score."""
 
     def __init__(
         self,
@@ -110,16 +109,16 @@ class OrderPickingSolution:
         """{trolley id: [pick task ids]} in pick order."""
 
 def calculate_distance(start: WarehouseLocation, end: WarehouseLocation) -> int:
-    """Distance in meters between two locations (Warehouse.calculateDistance)."""
+    """Distance in meters between two locations."""
 
 def distance_to_travel(solution: OrderPickingSolution, trolley_index: int) -> int:
-    """One trolley's round-trip distance (Warehouse.calculateDistanceToTravel)."""
+    """One trolley's round-trip distance."""
 
 def update_shadow_variables(solution: OrderPickingSolution) -> None:
-    """Re-derive the pick tasks' shadow variables from the pick lists."""
+    """Re-derive the pick tasks' derived fields from the pick lists."""
 
 def calculate_score(solution: OrderPickingSolution) -> Score:
-    """Refresh shadows, recompute and store solution.score."""
+    """Refresh the derived fields, recompute and store solution.score."""
 
 def build_demo_data(
     trolleys_count: int = 5,
@@ -164,7 +163,7 @@ class SolverConfig:
 class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, solution: OrderPickingSolution) -> None:
-        """Solve in place: mutates pick_task_indices, refreshes the shadow
+        """Solve in place: mutates pick_task_indices, refreshes the derived
         variables and stores the best score in solution.score."""
 
     def solve_with_constraints(self, solution: OrderPickingSolution, constraints: Iterable[Any] | None = ...) -> None:

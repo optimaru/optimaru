@@ -11,8 +11,7 @@ namespace op
 {
 
 // The order-picking implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective.
 //
 // LIST-kind hooks, per-trolley granularity (the vehicle-routing pattern): a
 // move touches at most two trolleys, and every constraint decomposes into
@@ -25,7 +24,7 @@ namespace op
 //   - hard buckets (trolleyCapacityCost): volume_[o][t] and count_[o][t]
 //     maintained per element; the trolley's required buckets = sum over its
 //     orders of ceil(volume / bucketCapacity), re-derived per touched list.
-//   - soft order split (orderSplitByTrolleyCost): countDistinct(trolley) per
+//   - soft order split (orderSplitByTrolleyCost): distinct trolleys per
 //     order == number of t with count_[o][t] > 0, maintained on the 0 <-> >0
 //     transitions.
 // score applies the components' kDefaultWeight (1 / 1 / 1 / 1000).
@@ -34,8 +33,8 @@ namespace op
 // has the OLD contents; after_list_edit inserts the NEW contents. Pick tasks
 // in no list contribute nothing (the construction heuristic scores partially
 // initialized solutions). This calculator reads the pick lists directly and
-// never the shadow fields, so it stays correct while the engine mutates
-// lists mid-move (shadows are refreshed by ScoreCalculator afterwards). The
+// never the derived fields, so it stays correct while the engine mutates
+// lists mid-move (they are refreshed by ScoreCalculator afterwards). The
 // full-recompute reference is ScoreCalculator::score (checked in
 // the tests and under ScoreChecks::ScoreChecks::Full).
 class OrderPickingIncrementalScoreCalculator final

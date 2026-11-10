@@ -46,7 +46,7 @@ namespace
 
 int failures = 0;
 
-// 2021-02-01 (a Monday) == epoch day 18659, the Java test's DAY_1.
+// 2021-02-01 (a Monday) == epoch day 18659.
 constexpr std::int64_t DAY_1 = 18659;
 
 void check(bool ok, const std::string &label)

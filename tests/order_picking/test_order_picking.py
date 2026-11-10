@@ -50,11 +50,11 @@ def small_solution():
 
 
 # ---------------------------------------------------------------------------
-# Warehouse distance + constraint spot checks (the Java test values).
+# Warehouse distance + constraint spot checks (hand-computed values).
 # ---------------------------------------------------------------------------
 
 
-def test_warehouse_distance_java_cases():
+def test_warehouse_distance_cases():
     cases = [
         (("B", 3, op.Side.LEFT, 1), ("B", 3, op.Side.RIGHT, 1), 4),
         (("B", 3, op.Side.LEFT, 1), ("B", 3, op.Side.LEFT, 10), 9),
@@ -80,8 +80,8 @@ def weighted_total(solution, name):
     return entry["weight"] * sum(entry["costs"])
 
 
-def test_trolley_capacity_cost_java_case():
-    """The Java bucket-shortage case (OrderPickingConstraintProviderTest): penalizes by 5."""
+def test_trolley_capacity_cost_case():
+    """The bucket-shortage case: penalizes by 5."""
     origin = location(*ORIGIN_ARGS)
     orders = [op.Order("order1"), op.Order("order2")]
     volumes = {
@@ -103,8 +103,8 @@ def test_trolley_capacity_cost_java_case():
     assert op.calculate_score(solution).hard == -5
 
 
-def test_order_split_java_case():
-    """The Java order-split case: (3 + 1) * 1000 at the default weight."""
+def test_order_split_case():
+    """The order-split case: (3 + 1) * 1000 at the default weight."""
     origin = location(*ORIGIN_ARGS)
     orders = [op.Order("order1"), op.Order("order2")]
     picks = [op.PickTask(f"p{i}", 0 if i < 4 else 1, 1, origin) for i in range(8)]
@@ -125,7 +125,7 @@ def test_distance_constraints_and_shadows():
     solution.trolleys[1].pick_task_indices = [1, 3]
     op.calculate_score(solution)
 
-    # Shadow variables mirror the lists.
+    # Derived fields mirror the lists.
     assert solution.pick_tasks[0].trolley_index == 0
     assert solution.pick_tasks[0].previous_pick_task == -1
     assert solution.pick_tasks[2].previous_pick_task == 0

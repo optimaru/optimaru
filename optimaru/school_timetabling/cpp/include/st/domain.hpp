@@ -23,11 +23,9 @@ using Score = optimaru::Score;
 // ---------------------------------------------------------------------------
 // Timeslot  (problem fact)
 // ---------------------------------------------------------------------------
-// The quickstart's Timeslot (dayOfWeek + LocalTime start/end), remodeled as a
-// (day, period) pair: Korean schools schedule by numbered periods, not
+// A (day, period) pair: Korean schools schedule by numbered periods, not
 // clock times. day 0 = Monday; period is 1-based. Two periods are consecutive
-// when they share a day and differ by exactly 1 — the quickstart's
-// getTime()-arithmetic in TimeTableConstraintProvider reduces to that.
+// when they share a day and differ by exactly 1.
 // (day, period) pairs are assumed unique within a Timetable.
 struct Timeslot
 {
@@ -38,7 +36,7 @@ struct Timeslot
 // ---------------------------------------------------------------------------
 // Room  (problem fact)
 // ---------------------------------------------------------------------------
-// `type` is informational only (regular/science lab/gym/...): like the quickstart,
+// `type` is informational only (regular/science lab/gym/...):
 // no hard constraint restricts which lessons a room may host.
 struct Room
 {
@@ -47,13 +45,13 @@ struct Room
 };
 
 // ---------------------------------------------------------------------------
-// Lesson  (@PlanningEntity)
+// Lesson  (entity)
 // ---------------------------------------------------------------------------
-// slotRoom is the only planning variable. The engine supports one BASIC int
-// variable per entity, so the quickstart's two variables (timeslot, room) are
+// slotRoom is the only decision variable. The engine supports one BASIC int
+// variable per entity, so the two decisions per lesson (timeslot, room) are
 // composed into a single value:
 //   slotRoom = timeslotIndex * roomCount + roomIndex
-// -1 means unassigned (both quickstart variables null). Decoding helpers live
+// -1 means unassigned (no timeslot and no room). Decoding helpers live
 // on Timetable, which knows roomCount.
 struct Lesson
 {
@@ -62,7 +60,7 @@ struct Lesson
     std::string teacher;
     std::string studentGroup;
 
-    int slotRoom = -1;  // planning variable; -1 == unassigned
+    int slotRoom = -1;  // decision variable; -1 == unassigned
 
     // Pinned lessons keep their slotRoom fixed (e.g. a lesson nailed to a
     // specific period by school policy). They are scored like any lesson but
@@ -77,7 +75,7 @@ struct Lesson
 };
 
 // ---------------------------------------------------------------------------
-// Timetable  (@PlanningSolution)
+// Timetable  (solution)
 // ---------------------------------------------------------------------------
 struct Timetable
 {
@@ -85,7 +83,7 @@ struct Timetable
     std::vector<Room> rooms;
     std::vector<Lesson> lessons;
 
-    // Teacher unavailability (extension over the quickstart): the timeslot
+    // Teacher unavailability: the timeslot
     // indices where a teacher cannot teach, keyed by teacher name. Teachers
     // absent from the map are always available; entries for teachers without
     // lessons are ignored.
@@ -122,8 +120,7 @@ struct Timetable
 }  // namespace st
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
-// annotations of the C++ engine): entities are lessons, the planning variable
+// SolutionTraits specialization: entities are lessons, the decision variable
 // is Lesson::slotRoom, the value range is the (timeslot x room) grid.
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<st::Timetable>

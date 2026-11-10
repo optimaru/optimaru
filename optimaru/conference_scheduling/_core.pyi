@@ -227,7 +227,7 @@ class ConstraintInfo(NamedTuple):
 
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order: 17 hard and 20 soft
-    constraints at the Java provider's weights (talk_type_incompatibility_cost hard
+    constraints at their default weights (talk_type_incompatibility_cost hard
     100000, ..., language_diversity_cost soft 10). Every one is scored by default
     (default_enabled); the three *_diversity_cost rewards have reward=True and
     level_flippable=False, every other constraint flips both ways."""

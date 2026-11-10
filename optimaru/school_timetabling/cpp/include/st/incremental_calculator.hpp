@@ -11,8 +11,8 @@ namespace st
 {
 
 // The school-timetabling implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective: one hand-written incremental calculator for all
+// seven terms.
 //
 // Every constraint is a function of occupancy counts, so a single variable
 // change is O(1):

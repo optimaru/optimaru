@@ -86,7 +86,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("service_duration", &Node::serviceDuration)
         .def_readwrite("delivery_index", &Node::deliveryIndex)
         .def_readwrite("pickup", &Node::pickup)
-        // Shadow variables, recomputed by calculate_score / solve.
+        // Derived fields, recomputed by calculate_score / solve.
         .def_readonly("vehicle_index", &Node::vehicleIndex)
         .def_readonly("arrival_time", &Node::arrivalTime);
 
@@ -179,7 +179,7 @@ PYBIND11_MODULE(_core, m)
             "return_to_depot",
             &Vehicle::returnToDepot,
             "Whether the route ends back home (default: open route).")
-        // The planning list variable: the ordered stop sequence.
+        // The decision: the ordered stop sequence.
         .def_readwrite("node_indices", &Vehicle::nodeIndices)
         .def_readwrite("pinned_node_indices", &Vehicle::pinnedNodeIndices);
 
@@ -281,8 +281,8 @@ PYBIND11_MODULE(_core, m)
         [](PdpRoutePlan &plan)
         { return ScoreCalculator::score(plan); },
         py::arg("plan"),
-        "Recompute shadow variables (vehicle_index, arrival_time) and the "
-        "HardMediumSoft score (also stores plan.score).");
+        "Recompute the derived fields (vehicle_index, arrival_time) and the "
+        "hard / medium / soft score (also stores plan.score).");
 
     m.def("build_random_instance",
           &buildRandomInstance,
