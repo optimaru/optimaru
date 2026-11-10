@@ -144,7 +144,7 @@ private:
     };
 
     // A chain's operations are ListMoves of two kinds: a Segment of length 1
-    // (element1 moved from (l1, p1) to (l2, p2)) and a SWAP (element1 at
+    // (element1 moved from (l1, p1) to (l2, p2)) and a Swap (element1 at
     // (l1, p1) and element2 at (l2, p2) traded places).
 
     bool has_source(const Solution& solution) const {

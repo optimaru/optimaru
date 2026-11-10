@@ -1564,6 +1564,8 @@ private:
         }
     }
     // Previews are a sequence shape feature and need every global's cooperation.
+    // The preview_* bodies behind this gate are compiled for every shape, so
+    // they may only use what both shapes have (members_, no list Traits calls).
     bool previews_served() const {
         if (Traits::shape != Shape::Sequence || solution_ == nullptr) return false;
         for (const auto& g : global_constraints_) {
