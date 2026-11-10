@@ -203,19 +203,6 @@ PYBIND11_MODULE(_core, m) {
     optimaru::python::bind_solver_config(
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
             .def(py::init<>())
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruin_recreate_min_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruin_recreate_max_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruin_recreate_max_ruin_count)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruin_recreate_operator_decay)
-            .def_readwrite("ruin_recreate_polish_steps",
-                           &Solver::Config::ruin_recreate_polish_steps)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Nearby selection: two stays are close when their date windows are.
@@ -235,11 +222,7 @@ PYBIND11_MODULE(_core, m) {
                        std::tuple<std::int64_t, std::int64_t, std::int64_t> hms) {
                         c.target_score =
                                 Score{std::get<0>(hms), std::get<1>(hms), std::get<2>(hms)};
-                    })
-            // Callback fired on every new best solution: on_new_best(step, score).
-            // The pybind11 wrapper re-acquires the GIL, so it is safe from the
-            // engine's multi-start worker threads too.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+                    });
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())
