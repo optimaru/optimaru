@@ -24,9 +24,9 @@ Basic usage::
 The pydantic mirror (for serialization) is in `optimaru.facility_location.models` (optional dependency).
 """
 
-import copy
 from typing import TypeVar
 
+from .._solve import solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
     Consumer,
@@ -108,29 +108,18 @@ def solve(
         from optimaru.facility_location.constraints import get_constraints
         fl.solve(problem, constraints=get_constraints())
     """
-    # A copy: the keyword overrides below must not leak into the caller's config.
-    cfg = copy.copy(config) if config is not None else SolverConfig()
-    if time_limit_seconds is not None:
-        cfg.spent_limit_seconds = time_limit_seconds
-    if random_seed is not None:
-        cfg.random_seed = random_seed
-    if parallel_solver_count is not None:
-        cfg.parallel_solver_count = parallel_solver_count
-    if stop_at_first_feasible:
-        cfg.best_score_limit = (0, float("-inf"))
-    if full_assert:
-        cfg.full_assert = True
-    if on_new_best is not None:
-        cfg.on_new_best = on_new_best
-
-    def _solve(core):
-        if constraints is None:
-            Solver(cfg).solve(core)
-        else:
-            Solver(cfg).solve_with_constraints(core, constraints)
-
+    cfg = solver_config(
+        SolverConfig,
+        config,
+        time_limit_seconds=time_limit_seconds,
+        random_seed=random_seed,
+        parallel_solver_count=parallel_solver_count,
+        stop_at_first_feasible=stop_at_first_feasible,
+        full_assert=full_assert,
+        on_new_best=on_new_best,
+    )
     if isinstance(problem, FacilityLocationProblem):
-        _solve(problem)
+        solve_in_place(Solver(cfg), problem, constraints)
         return problem
 
     # pydantic model (lazy import: pydantic is an optional dependency).
@@ -138,7 +127,7 @@ def solve(
 
     if isinstance(problem, FacilityLocationProblemModel):
         core = problem.to_core()
-        _solve(core)
+        solve_in_place(Solver(cfg), core, constraints)
         return FacilityLocationProblemModel.from_core(core)
     raise TypeError(
         f"problem must be a FacilityLocationProblem or a models.FacilityLocationProblemModel: {type(problem)!r}"

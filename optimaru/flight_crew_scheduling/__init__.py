@@ -33,9 +33,9 @@ There is also a low-level path that builds engine objects (`FlightCrewSchedule`)
 and uses `Solver` (no pydantic needed). The pydantic mirror is in `optimaru.flight_crew_scheduling.models`.
 """
 
-import copy
 from typing import TypeVar
 
+from .._solve import solve_in_place, solver_config
 from ._core import (
     Airport,
     ConstraintInfo,
@@ -81,16 +81,6 @@ def with_initial_solution(problem, solution):
     return models.with_initial_solution(problem, solution)
 
 
-def _resolve_config(config) -> SolverConfig:
-    if config is None:
-        return SolverConfig()
-    if isinstance(config, SolverConfig):
-        return copy.copy(config)  # solve()'s overrides must not leak into it
-    if hasattr(config, "to_core"):
-        return config.to_core()
-    raise ValueError("config must be a SolverConfig or an object with to_core() (models.SolveConfig)")
-
-
 # solve() returns what it was given: the compiled problem, or its pydantic model.
 _Problem = TypeVar("_Problem")
 
@@ -132,28 +122,22 @@ def solve(
         from optimaru.flight_crew_scheduling.constraints import get_constraints
         fcs.solve(schedule, constraints=get_constraints())
     """
-    cfg = _resolve_config(config)
-    if time_limit_seconds is not None:
-        cfg.spent_limit_seconds = time_limit_seconds
-    if random_seed is not None:
-        cfg.random_seed = random_seed
-    if parallel_solver_count is not None:
-        cfg.parallel_solver_count = parallel_solver_count
-    if stop_at_first_feasible:
-        cfg.best_score_limit = (0, float("-inf"))
-    if full_assert:
-        cfg.full_assert = True
-    if on_new_best is not None:
-        cfg.on_new_best = on_new_best
-
-    def _solve(core):
-        if constraints is None:
-            Solver(cfg).solve(core)
-        else:
-            Solver(cfg).solve_with_constraints(core, constraints)
-
+    if config is not None and not isinstance(config, SolverConfig):
+        if not hasattr(config, "to_core"):
+            raise ValueError("config must be a SolverConfig or an object with to_core() (models.SolveConfig)")
+        config = config.to_core()
+    cfg = solver_config(
+        SolverConfig,
+        config,
+        time_limit_seconds=time_limit_seconds,
+        random_seed=random_seed,
+        parallel_solver_count=parallel_solver_count,
+        stop_at_first_feasible=stop_at_first_feasible,
+        full_assert=full_assert,
+        on_new_best=on_new_best,
+    )
     if isinstance(schedule, FlightCrewSchedule):
-        _solve(schedule)
+        solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
 
     from .models import FlightCrewScheduleModel  # pydantic (optional dependency)
@@ -162,5 +146,5 @@ def solve(
         schedule if isinstance(schedule, FlightCrewScheduleModel) else FlightCrewScheduleModel.model_validate(schedule)
     )
     core = model.to_core()
-    _solve(core)
+    solve_in_place(Solver(cfg), core, constraints)
     return FlightCrewScheduleModel.from_core(core)

@@ -24,9 +24,9 @@ through a constraint selection (see `optimaru.sports_league_scheduling.constrain
 The pydantic mirror (for serialization) is in `optimaru.sports_league_scheduling.models` (optional dependency).
 """
 
-import copy
 from typing import TypeVar
 
+from .._solve import solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
     LeagueSchedule,
@@ -111,35 +111,22 @@ def solve(
         from optimaru.sports_league_scheduling.constraints import get_constraints
         sl.solve(schedule, constraints=get_constraints())
     """
-    if config is None:
-        cfg = SolverConfig()
-    elif isinstance(config, SolverConfig):
-        cfg = copy.copy(config)  # the overrides below must not leak into it
-    elif hasattr(config, "to_core"):
-        cfg = config.to_core()
-    else:
-        raise ValueError("config must be a SolverConfig or an object with to_core()")
-    if time_limit_seconds is not None:
-        cfg.spent_limit_seconds = time_limit_seconds
-    if random_seed is not None:
-        cfg.random_seed = random_seed
-    if parallel_solver_count is not None:
-        cfg.parallel_solver_count = parallel_solver_count
-    if stop_at_first_feasible:
-        cfg.best_score_limit = (0, float("-inf"))
-    if full_assert:
-        cfg.full_assert = True
-    if on_new_best is not None:
-        cfg.on_new_best = on_new_best
-
-    def _solve(core):
-        if constraints is None:
-            Solver(cfg).solve(core)
-        else:
-            Solver(cfg).solve_with_constraints(core, constraints)
-
+    if config is not None and not isinstance(config, SolverConfig):
+        if not hasattr(config, "to_core"):
+            raise ValueError("config must be a SolverConfig or an object with to_core()")
+        config = config.to_core()  # a models.SolveConfig
+    cfg = solver_config(
+        SolverConfig,
+        config,
+        time_limit_seconds=time_limit_seconds,
+        random_seed=random_seed,
+        parallel_solver_count=parallel_solver_count,
+        stop_at_first_feasible=stop_at_first_feasible,
+        full_assert=full_assert,
+        on_new_best=on_new_best,
+    )
     if isinstance(schedule, LeagueSchedule):
-        _solve(schedule)
+        solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
 
     # pydantic model (lazy import: pydantic is an optional dependency).
@@ -147,6 +134,6 @@ def solve(
 
     if isinstance(schedule, LeagueScheduleModel):
         core = schedule.to_core()
-        _solve(core)
+        solve_in_place(Solver(cfg), core, constraints)
         return LeagueScheduleModel.from_core(core)
     raise TypeError(f"schedule must be a LeagueSchedule or a models.LeagueScheduleModel: {type(schedule)!r}")

@@ -197,6 +197,8 @@ docs/use-cases/<slug>/               README.md, python.md: its guide
 
 The constraint-spec base every `constraints.py` builds on is
 [`optimaru/_constraint.py`](../../optimaru/_constraint.py), shared by all use cases.
+The two steps every `solve()` shares, the keyword overrides on a copy of the config
+and the solver call, are in [`optimaru/_solve.py`](../../optimaru/_solve.py).
 
 Build and test one use case, from the repository root:
 

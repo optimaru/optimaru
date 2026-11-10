@@ -50,9 +50,9 @@ The high-level entry point is `solve`::
 The pydantic mirror (for serialization) is in `optimaru.project_job_scheduling.models` (optional dependency).
 """
 
-import copy
 from typing import TypeVar
 
+from .._solve import solve_in_place, solver_config
 from ._core import (
     Allocation,
     ConstraintInfo,
@@ -104,33 +104,11 @@ def with_initial_solution(problem, solution):
     return models.with_initial_solution(problem, solution)
 
 
-def _build_config(
-    *,
-    time_limit_seconds: float | None,
-    random_seed: int | None,
-    parallel_solver_count: int | None,
-    stop_at_first_feasible: bool,
-    full_assert: bool,
-    on_new_best,
-    config,
-) -> SolverConfig:
-    # A copy: the keyword overrides below must not leak into the caller's config.
-    cfg = copy.copy(config) if config is not None else SolverConfig()
-    if time_limit_seconds is not None:
-        cfg.spent_limit_seconds = time_limit_seconds
-    if random_seed is not None:
-        cfg.random_seed = random_seed
-    if parallel_solver_count is not None:
-        cfg.parallel_solver_count = parallel_solver_count
-    if stop_at_first_feasible:
-        # Stop as soon as hard 0 is reached: -(2**63) on medium/soft is "no floor", so the
-        # engine compares hard only and no soft total, however low, misses the stop.
-        cfg.best_score_limit = (0, -(2**63), -(2**63))
-    if full_assert:
-        cfg.full_assert = True
-    if on_new_best is not None:
-        cfg.on_new_best = on_new_best
-    return cfg
+def _build_config(**settings) -> SolverConfig:
+    """`solve()`'s `config` and keyword overrides as the `SolverConfig` of the solve."""
+    # Stop as soon as hard 0 is reached: -(2**63) on medium/soft is "no floor", so the
+    # engine compares hard only and no soft total, however low, misses the stop.
+    return solver_config(SolverConfig, first_feasible_limit=(0, -(2**63), -(2**63)), **settings)
 
 
 # solve() returns what it was given: the compiled problem, or its pydantic model.
@@ -181,15 +159,8 @@ def solve(
         on_new_best=on_new_best,
         config=config,
     )
-
-    def _solve(core_schedule):
-        if constraints is None:
-            Solver(cfg).solve(core_schedule)
-        else:
-            Solver(cfg).solve_with_constraints(core_schedule, constraints)
-
     if isinstance(schedule, ProjectJobSchedule):
-        _solve(schedule)
+        solve_in_place(Solver(cfg), schedule, constraints)
         return schedule
 
     # pydantic model path (lazy import: pydantic is an optional dependency).
@@ -200,5 +171,5 @@ def solve(
             f"schedule must be a ProjectJobSchedule or a models.ProjectJobScheduleModel: {type(schedule)!r}"
         )
     core_schedule = schedule.to_core()
-    _solve(core_schedule)
+    solve_in_place(Solver(cfg), core_schedule, constraints)
     return ProjectJobScheduleModel.from_core(core_schedule)
