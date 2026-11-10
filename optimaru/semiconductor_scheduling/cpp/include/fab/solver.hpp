@@ -1,19 +1,13 @@
 #ifndef FAB_SOLVER_HPP
 #define FAB_SOLVER_HPP
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
 #include <utility>
-#include <vector>
 
 #include "fab/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace fab {
 
@@ -36,27 +30,19 @@ namespace fab {
 //      makespan and totals in data mode; warmStart = false.
 class Solver {
 public:
-    struct Config {
-        // Wall-clock budget. 0 stops right after construction (the start is
-        // returned as is; the zero-budget idiom of the tests).
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score (default: never).
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        std::uint64_t seed = 0;
-        // Independent starts, one thread each (seed + i); the best wins. The
-        // constraints overload runs a single start (see there).
-        int parallel_solver_count = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; much slower).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   time_limit 0           stops right after construction (the start is
+    //                          returned as is; the zero-budget idiom of the
+    //                          tests)
+    //   history_length 0       (LATE_ACCEPTANCE) clamp(16 * rows, 400, 3200)
+    //   parallel_solver_count  the constraints overload runs a single start
+    //                          (see there)
+    //   ruin_recreate          off by default (see the constructor)
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
+        // Ruin-and-recreate (the engine's ALNS) is off here: a recreate
+        // evaluates every value of every ruined row, each one a decode.
+        Config() { ruin_recreate = false; }
 
         // Acceptor: simulated annealing. With a
         // (0, 0) starting temperature (the default) it is auto: hard 0 (a
@@ -65,11 +51,9 @@ public:
         // (at least 1), cooling linearly over the spent limit. Measured on the
         // benchmark instances and the web demo, 1% beat late acceptance (which
         // stalls within a second on these plateaus) and 0.5% / 2% / 5%.
-        // history_length (LATE_ACCEPTANCE) 0 = auto: clamp(16 * rows, 400, 3200).
         optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::SimulatedAnnealing;
         Score start_temperature{0, 0.0};
         double simulated_annealing_temperature_fraction = 0.01;
-        std::size_t history_length = 0;
 
         // Moves. The change move draws its value from the recommender: with
         // machine_move_probability another machine for the row (rank kept),
@@ -84,24 +68,6 @@ public:
         double machine_move_probability = 0.55;
         bool priority_swap_moves = true;
         double custom_move_probability = 0.45;
-
-        // Ruin-and-recreate (the engine's ALNS). Off: a recreate evaluates
-        // every value of every ruined row, each one a decode.
-        bool ruin_recreate = false;
-        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
-        double ruin_recreate_min_ruin_fraction = 0.10;
-        double ruin_recreate_max_ruin_fraction = 0.30;
-        int ruin_recreate_max_ruin_count = 60;
-        double ruin_recreate_operator_decay = 0.8;
-        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruin_recreate_polish_steps = 5000;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
-        // Set by solve() on each parallel worker's copy, not by a caller (and
-        // not bound to Python): the first worker that fails raises it, and the
-        // other workers' engines stop at their next step instead of running out
-        // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;

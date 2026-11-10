@@ -382,33 +382,7 @@ PYBIND11_MODULE(_core, m) {
                         c.machine_move_probability = p;
                     })
             .def_readwrite("priority_swap_moves", &Solver::Config::priority_swap_moves)
-            .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruin_recreate_min_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruin_recreate_max_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruin_recreate_max_ruin_count)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruin_recreate_operator_decay)
-            .def_readwrite("ruin_recreate_polish_steps",
-                           &Solver::Config::ruin_recreate_polish_steps)
-            // Early termination once bestScore >= (hard, soft); (0, -inf) stops
-            // at the first feasible schedule.
-            .def_property(
-                    "best_score_limit",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // on_new_best(step, score) on every new best; the wrapper re-acquires
-            // the GIL, so it is safe from the worker threads too.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+            .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())
