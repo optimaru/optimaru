@@ -994,9 +994,10 @@ def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
 
     monkeypatch.setattr(es, "Solver", Recorder)
     callback = lambda step, score: None  # noqa: E731
-    es.solve("the problem", stop_at_first_feasible=True, on_new_best=callback)
+    problem = es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=3)
+    es.solve(problem, stop_at_first_feasible=True, on_new_best=callback)
     assert seen["limit"] == (0, float("-inf"))
-    assert seen["callback"] is not None and seen["solved"] == "the problem"
+    assert seen["callback"] is not None and seen["solved"] is problem
 
 
 def test_package_solve_reports_new_bests():

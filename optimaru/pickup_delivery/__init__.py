@@ -104,6 +104,10 @@ def solve(
     The score is on the result: ``plan.score``. `solve_request` is the same solve for
     a `models` request (JSON in, JSON out).
     """
+    if not isinstance(plan, PdpRoutePlan):
+        raise TypeError(
+            f"plan must be an instance of PdpRoutePlan: {type(plan)!r} (models.solve_request solves a models.PdpRequest)"
+        )
     # A copy: the keyword overrides below must not leak into the caller's config.
     cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:

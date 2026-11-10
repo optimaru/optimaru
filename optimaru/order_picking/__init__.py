@@ -116,6 +116,10 @@ def solve(
         from optimaru.order_picking.constraints import get_constraints
         op.solve(solution, constraints=get_constraints())
     """
+    if not isinstance(solution, OrderPickingSolution):
+        raise TypeError(
+            f"solution must be an instance of OrderPickingSolution: {type(solution)!r} (models.solve_request solves a models.OrderPickingRequest)"
+        )
     # A copy: the keyword overrides below must not leak into the caller's config.
     cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:

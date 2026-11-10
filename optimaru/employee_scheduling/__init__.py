@@ -160,6 +160,10 @@ def solve(
 
     The score is on the result: ``schedule.score``.
     """
+    if not isinstance(schedule, EmployeeSchedule):
+        raise TypeError(
+            f"schedule must be an instance of EmployeeSchedule: {type(schedule)!r} (models.solve_request solves a models.ScheduleRequest)"
+        )
     # A copy: the keyword overrides below must not leak into the caller's config.
     cfg = copy.copy(config) if config is not None else SolverConfig()
     if time_limit_seconds is not None:

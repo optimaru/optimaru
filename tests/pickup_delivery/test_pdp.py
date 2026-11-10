@@ -307,9 +307,10 @@ def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
 
     monkeypatch.setattr(pdp, "Solver", Recorder)
     callback = lambda step, score: None  # noqa: E731
-    pdp.solve("the problem", stop_at_first_feasible=True, on_new_best=callback)
+    problem = pdp.build_random_instance(request_count=8, vehicle_count=3, seed=7)
+    pdp.solve(problem, stop_at_first_feasible=True, on_new_best=callback)
     assert seen["limit"] == (0, -(2**63), -(2**63))
-    assert seen["callback"] is not None and seen["solved"] == "the problem"
+    assert seen["callback"] is not None and seen["solved"] is problem
 
 
 def test_package_solve_reports_new_bests():
