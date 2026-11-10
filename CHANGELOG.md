@@ -19,7 +19,13 @@
   `request_ruin_max_requests` (20), `bundle_moves` and `bundle_max_requests` (3); the two
   switches are on by default, so a seeded solve no longer walks the path it did, and the
   two counts refuse a value below 1. `pdp_demo`'s control flag is `--stop-moves-only` now
-  (it was `--no-pair-moves`) and turns every request-level operator off.
+  (it was `--no-pair-moves`) and turns every request-level operator off. Both results
+  blocks of `benchmarks/pickup-delivery` are measured again (30 s, seed 0). On the 56 Li &
+  Lim instances the engine's mean distance goes from 7.5% above the best known to 0.8%
+  below it (the harness minimizes distance only, so a plan with more vehicles can be
+  shorter than the best known), the worst instance from +22.0% to +2.4%, the instances
+  more than 1% above from 43 to 2, and the vehicles used from 485 to 409 (best known:
+  402). The generated instances of 25 to 400 requests come out 2% to 10% shorter.
 - **Engine (C++): features no use case used are removed.** Gone from the engine headers: the
   chain solution shape (`Shape::Chain`, `ChainObjective`, the chain overload of
   `Solver::solve()`, the `chain::` link helpers), `WeightedObjective`, `explain_score()`,
