@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from .._models import StrictModel, apply_solver_parameters
 from . import _core
 
 __all__ = [
@@ -24,11 +25,7 @@ __all__ = [
 ]
 
 
-class _Model(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class VehicleModel(_Model):
+class VehicleModel(StrictModel):
     id: str
     capacity: int = Field(ge=0)
     home: tuple[float, float]
@@ -74,7 +71,7 @@ class VehicleModel(_Model):
     )
 
 
-class StopModel(_Model):
+class StopModel(StrictModel):
     id: str
     location: tuple[float, float]
     min_start_time: int = 0
@@ -82,7 +79,7 @@ class StopModel(_Model):
     service_duration: int = Field(default=0, ge=0)
 
 
-class DeliveryModel(_Model):
+class DeliveryModel(StrictModel):
     id: str
     demand: int = Field(ge=0)
     order_time: int = Field(
@@ -100,7 +97,7 @@ class DeliveryModel(_Model):
     dropoff: StopModel
 
 
-class PdpInput(_Model):
+class PdpInput(StrictModel):
     vehicles: list[VehicleModel]
     deliveries: list[DeliveryModel]
     driving_seconds: list[list[int]] | None = None
@@ -152,7 +149,7 @@ class PdpInput(_Model):
                     )
 
 
-class PdpRequest(_Model):
+class PdpRequest(StrictModel):
     name: str | None = None
     timelimit: float = Field(default=30.0, ge=0)
     model_input: PdpInput
@@ -162,14 +159,14 @@ class PdpRequest(_Model):
     solver_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
-class PdpStop(_Model):
+class PdpStop(StrictModel):
     stop_id: str
     delivery_id: str
     pickup: bool
     arrival_time: int
 
 
-class VehicleMetrics(_Model):
+class VehicleMetrics(StrictModel):
     """Per-vehicle figures derived from a finished route (post-processing).
 
     Nothing here is scored. The numbers are recomputed from the reported stop
@@ -190,7 +187,7 @@ class VehicleMetrics(_Model):
     return_to_depot: bool = False
 
 
-class PdpSolution(_Model):
+class PdpSolution(StrictModel):
     routes: dict[str, list[PdpStop]]
     unassigned: list[str] = Field(default_factory=list)
     score: str
@@ -325,7 +322,7 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
     config.spent_limit_seconds = request.timelimit
     config.random_seed = request.random_seed
     config.parallel_solver_count = request.num_workers
-    _apply_solver_parameters(config, request.solver_parameters)
+    apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
         config.best_score_limit = (0, -(2**63), -(2**63))
@@ -406,27 +403,3 @@ def with_initial_solution(problem: PdpRequest, solution: PdpSolution | dict[str,
             raise ValueError(f"vehicle {vehicle['id']}: the route does not start with its pinned stops {pinned}")
         vehicle["initial_route"] = route
     return PdpRequest.model_validate(data)
-
-
-def _apply_solver_parameters(config, parameters: dict[str, Any]) -> None:
-    for name, value in parameters.items():
-        if name in {
-            "spent_limit_seconds",
-            "random_seed",
-            "parallel_solver_count",
-            "on_new_best",
-        }:
-            raise ValueError(f"solver parameter {name!r} is controlled by the solve request")
-        if name.startswith("_") or not hasattr(config, name) or callable(getattr(config, name)):
-            raise ValueError(f"unknown solver parameter: {name}")
-        if value is None:
-            continue
-        if name == "best_score_limit" and isinstance(value, list):
-            value = tuple(value)
-        current = getattr(config, name)
-        if isinstance(value, str) and hasattr(type(current), value):
-            value = getattr(type(current), value)
-        try:
-            setattr(config, name, value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid solver parameter {name!r}: {exc}") from exc

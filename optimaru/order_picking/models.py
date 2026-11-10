@@ -29,8 +29,9 @@ Requires the optional ``pydantic`` dependency.
 
 from typing import Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from .._models import StrictModel, apply_solver_parameters
 from . import _core
 
 __all__ = [
@@ -47,15 +48,11 @@ __all__ = [
 ]
 
 
-class _Model(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
 def _pick_task_id(order_id: str, item_position: int) -> str:
     return f"{order_id}-{item_position}"
 
 
-class LocationModel(_Model):
+class LocationModel(StrictModel):
     """A warehouse location: shelving (column, row), side and in-shelving row."""
 
     column: Literal["A", "B", "C", "D", "E"]
@@ -81,7 +78,7 @@ class LocationModel(_Model):
         )
 
 
-class ProductModel(_Model):
+class ProductModel(StrictModel):
     """One order item: an indivisible product at a warehouse location."""
 
     id: str
@@ -90,12 +87,12 @@ class ProductModel(_Model):
     name: str | None = None
 
 
-class OrderModel(_Model):
+class OrderModel(StrictModel):
     id: str
     items: list[ProductModel] = Field(min_length=1)
 
 
-class TrolleyModel(_Model):
+class TrolleyModel(StrictModel):
     id: str
     bucket_count: int = Field(ge=0)
     bucket_capacity: int = Field(gt=0, description="cm3")
@@ -110,7 +107,7 @@ class TrolleyModel(_Model):
     )
 
 
-class OrderPickingRequest(_Model):
+class OrderPickingRequest(StrictModel):
     name: str | None = None
     timelimit: float = Field(default=30.0, ge=0, description="seconds")
     trolleys: list[TrolleyModel] = Field(min_length=1)
@@ -140,7 +137,7 @@ class OrderPickingRequest(_Model):
         return self
 
 
-class PickStop(_Model):
+class PickStop(StrictModel):
     pick_task_id: str
     order_id: str
     product_name: str
@@ -148,7 +145,7 @@ class PickStop(_Model):
     location: LocationModel
 
 
-class OrderPickingResponse(_Model):
+class OrderPickingResponse(StrictModel):
     routes: dict[str, list[PickStop]]  # trolley id -> ordered stops
     distance_by_trolley: dict[str, int]  # meters, incl. the return leg
     unassigned: list[str] = Field(default_factory=list)  # pick task ids
@@ -189,7 +186,7 @@ def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPic
     config.spent_limit_seconds = request.timelimit
     config.random_seed = request.random_seed
     config.parallel_solver_count = request.num_workers
-    _apply_solver_parameters(config, request.solver_parameters)
+    apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
         config.best_score_limit = (0, float("-inf"))
     solver = _core.Solver(config)
@@ -264,22 +261,3 @@ def with_initial_solution(
     for trolley in data["trolleys"]:
         trolley["initial_route"] = [stop.pick_task_id for stop in routes.get(trolley["id"], [])]
     return OrderPickingRequest.model_validate(data)
-
-
-def _apply_solver_parameters(config, parameters: dict[str, Any]) -> None:
-    for name, value in parameters.items():
-        if name in {"spent_limit_seconds", "random_seed", "parallel_solver_count", "on_new_best"}:
-            raise ValueError(f"solver parameter {name!r} is controlled by the solve request")
-        if name.startswith("_") or not hasattr(config, name) or callable(getattr(config, name)):
-            raise ValueError(f"unknown solver parameter: {name}")
-        if value is None:
-            continue
-        if name == "best_score_limit" and isinstance(value, list):
-            value = tuple(value)
-        current = getattr(config, name)
-        if isinstance(value, str) and hasattr(type(current), value):
-            value = getattr(type(current), value)
-        try:
-            setattr(config, name, value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid solver parameter {name!r}: {exc}") from exc

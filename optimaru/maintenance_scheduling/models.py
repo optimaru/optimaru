@@ -16,8 +16,9 @@ human-readable (crew_id, start_date) pair instead of the composite crew_date, an
 
 from datetime import date, timedelta
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import Field, TypeAdapter
 
+from .._models import StrictModel, entities_by_id, solution_dict
 from . import _core
 
 __all__ = [
@@ -51,20 +52,16 @@ def _opt_to_date(epoch_day: int | None) -> date | None:
     return None if epoch_day is None else epoch_to_date(epoch_day)
 
 
-class CrewModel(BaseModel):
+class CrewModel(StrictModel):
     """A crew. One crew can do at most one job per day."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str
 
 
-class JobModel(BaseModel):
+class JobModel(StrictModel):
     """A maintenance job. crew_id/start_date are the assignment (both set means assigned),
     end_date is derived, weekends skipped (result only, ignored by to_core)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str
@@ -79,10 +76,8 @@ class JobModel(BaseModel):
     pinned: bool = False
 
 
-class MaintenanceScheduleModel(BaseModel):
+class MaintenanceScheduleModel(StrictModel):
     """Pydantic mirror of the schedule. score is a read-only result, kept as a separate field."""
-
-    model_config = ConfigDict(extra="forbid")
 
     from_date: date  # inclusive
     to_date: date  # exclusive
@@ -168,33 +163,6 @@ class MaintenanceScheduleModel(BaseModel):
         )
 
 
-def _solution_dict(solution) -> dict:
-    if isinstance(solution, BaseModel):
-        return solution.model_dump()
-    if isinstance(solution, dict):
-        return solution
-    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
-
-
-def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
-    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
-    entities = solved.get(name)
-    if not isinstance(entities, list):
-        raise ValueError(f"solution has no {name!r} list")
-    known = set(ids)
-    if len(known) != len(ids):
-        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
-    by_id: dict = {}
-    for entity in entities:
-        entity_id = entity.get(key) if isinstance(entity, dict) else None
-        if not isinstance(entity_id, (str, int)) or entity_id not in known:
-            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
-        if entity_id in by_id:
-            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
-        by_id[entity_id] = entity
-    return by_id
-
-
 def with_initial_solution(problem, solution):
     """Return a copy of `problem` whose search starts from `solution`.
 
@@ -211,7 +179,7 @@ def with_initial_solution(problem, solution):
     """
     if not isinstance(problem, MaintenanceScheduleModel):
         raise TypeError(f"problem must be a MaintenanceScheduleModel: {type(problem)!r}")
-    jobs = _entities_by_id(_solution_dict(solution), "jobs", [j.id for j in problem.jobs])
+    jobs = entities_by_id(solution_dict(solution), "jobs", [j.id for j in problem.jobs])
     crew_ids = {c.id for c in problem.crews}
     seeded = problem.model_copy(deep=True)
     seeded.score_hard = seeded.score_soft = None

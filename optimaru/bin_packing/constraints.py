@@ -58,19 +58,19 @@ so there is no hand-maintained alias table — check them with `bp.list_constrai
 from .._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
-    "Constraint",
-    "Level",
-    "Score",
-    "score",
     "BinCapacityCost",
     "ColorConflictCost",
+    "Constraint",
     "ItemConflictCost",
+    "Level",
+    "Score",
     "UsedBinsCost",
     "bin_capacity_cost",
     "color_conflict_cost",
-    "item_conflict_cost",
-    "used_bins_cost",
     "get_constraints",
+    "item_conflict_cost",
+    "score",
+    "used_bins_cost",
 ]
 
 

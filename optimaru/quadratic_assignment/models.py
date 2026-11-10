@@ -15,19 +15,24 @@ as a new model; the model passed in is not changed.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
+from .._models import StrictModel
 from . import _core
 
+__all__ = [
+    "ForbiddenAssignmentModel",
+    "QuadraticAssignmentProblemModel",
+    "with_initial_solution",
+]
 
-class ForbiddenAssignmentModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+
+class ForbiddenAssignmentModel(StrictModel):
     facility: str
     location: str
 
 
-class QuadraticAssignmentProblemModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class QuadraticAssignmentProblemModel(StrictModel):
     facilities: list[str] = Field(description="Facilities that must each be assigned once.")
     locations: list[str] = Field(description="Locations that must each receive one facility.")
     flows: list[list[int]] = Field(description="Facility-to-facility flow matrix.")

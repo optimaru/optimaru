@@ -18,6 +18,11 @@
   The conference-scheduling notebook read a `hard` key that `constraint_costs()` no longer
   returns and did not run; a few sentences that named a result the outputs no longer show are
   reworded, and the food-packaging rounds use 50,000 steps.
+- **A star import of five modules binds their own names only.** `models` in `knapsack`,
+  `max_cut`, `quadratic_assignment` and `semiconductor_scheduling`, and
+  `employee_scheduling.helpers`, had no `__all__`, so `from ... import *` also bound the names
+  they import (pydantic's `BaseModel` and `Field`, for example). They now list their own
+  classes and functions, as the other modules do. Every `__all__` in the package is sorted.
 
 ## 0.4.1
 

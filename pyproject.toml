@@ -81,7 +81,8 @@ force-exclude = true
 exclude = ["*.md", "*.ipynb"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+# RUF022: every `__all__` is sorted, so a new name has one place to go.
+select = ["E4", "E7", "E9", "F", "I", "RUF022"]
 ignore = ["E731", "E741"]
 
 [tool.ruff.lint.per-file-ignores]

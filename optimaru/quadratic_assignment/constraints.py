@@ -68,21 +68,21 @@ mechanically, so there is no hand-maintained alias table — check them with
 from .._constraint import Constraint, Level, Score, score_costs, select
 
 __all__ = [
-    "Constraint",
-    "Level",
-    "Score",
-    "score",
-    "PinnedAssignmentsCost",
-    "ForbiddenAssignmentsCost",
-    "LocationCapacityCost",
     "AssignmentCost",
+    "Constraint",
     "FlowDistanceCost",
-    "pinned_assignments_cost",
-    "forbidden_assignments_cost",
-    "location_capacity_cost",
+    "ForbiddenAssignmentsCost",
+    "Level",
+    "LocationCapacityCost",
+    "PinnedAssignmentsCost",
+    "Score",
     "assignment_cost",
     "flow_distance_cost",
+    "forbidden_assignments_cost",
     "get_constraints",
+    "location_capacity_cost",
+    "pinned_assignments_cost",
+    "score",
 ]
 
 

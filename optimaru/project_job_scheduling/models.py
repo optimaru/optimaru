@@ -21,8 +21,9 @@ pinned, and when passed uninitialized the solver fixes them to (first mode, dela
 `pydantic` is an optional dependency (`pip install optimaru.project_job_scheduling[models]`).
 """
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from .._models import StrictModel, entities_by_id, solution_dict
 from . import _core
 
 __all__ = [
@@ -40,11 +41,7 @@ __all__ = [
 JOB_TYPES = ("SOURCE", "STANDARD", "SINK")
 
 
-class _Model(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class ProjectModel(_Model):
+class ProjectModel(StrictModel):
     """A project. release_date is only the reference of the project_delay_cost
     constraint (critical_path_end = release_date + critical_path_duration) and does
     not force the start."""
@@ -54,7 +51,7 @@ class ProjectModel(_Model):
     critical_path_duration: int = Field(default=0, ge=0)
 
 
-class ResourceModel(_Model):
+class ResourceModel(StrictModel):
     """A resource. Renewable capacity is 'per day', otherwise 'summed over the whole horizon'.
     project_id None == global resource (always renewable)."""
 
@@ -70,14 +67,14 @@ class ResourceModel(_Model):
         return self
 
 
-class ResourceRequirementModel(_Model):
+class ResourceRequirementModel(StrictModel):
     """How much of one resource one execution mode uses."""
 
     resource_id: str
     requirement: int = Field(ge=0)
 
 
-class ExecutionModeModel(_Model):
+class ExecutionModeModel(StrictModel):
     """One execution mode of a job (duration + resource demand)."""
 
     id: str
@@ -85,7 +82,7 @@ class ExecutionModeModel(_Model):
     resource_requirements: list[ResourceRequirementModel] = Field(default_factory=list)
 
 
-class JobModel(_Model):
+class JobModel(StrictModel):
     """A job. SOURCE/SINK are the project's start/end milestones, by convention with one
     execution mode (duration 0). `successor_job_ids` defines
     precedence (successor jobs can start once this job ends)."""
@@ -110,7 +107,7 @@ class JobModel(_Model):
         return self
 
 
-class AllocationModel(_Model):
+class AllocationModel(StrictModel):
     """The allocation of one job (1:1 with jobs).
     (execution_mode_id, delay) is the decision pair (both None ==
     uninitialized). start_date/end_date are read-only derived results."""
@@ -130,7 +127,7 @@ class AllocationModel(_Model):
         return self
 
 
-class ProjectJobScheduleModel(_Model):
+class ProjectJobScheduleModel(StrictModel):
     """The problem and its solution. score_* are read-only results, kept as separate fields."""
 
     projects: list[ProjectModel]
@@ -333,33 +330,6 @@ class ProjectJobScheduleModel(_Model):
         )
 
 
-def _solution_dict(solution) -> dict:
-    if isinstance(solution, BaseModel):
-        return solution.model_dump()
-    if isinstance(solution, dict):
-        return solution
-    raise ValueError(f"solution must be a solved model or a dict of that shape: {type(solution)!r}")
-
-
-def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
-    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
-    entities = solved.get(name)
-    if not isinstance(entities, list):
-        raise ValueError(f"solution has no {name!r} list")
-    known = set(ids)
-    if len(known) != len(ids):
-        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
-    by_id: dict = {}
-    for entity in entities:
-        entity_id = entity.get(key) if isinstance(entity, dict) else None
-        if not isinstance(entity_id, (str, int)) or entity_id not in known:
-            raise ValueError(f"solution has an unknown id in {name!r}: {entity_id!r}")
-        if entity_id in by_id:
-            raise ValueError(f"solution repeats an id in {name!r}: {entity_id!r}")
-        by_id[entity_id] = entity
-    return by_id
-
-
 def with_initial_solution(problem, solution):
     """Return a copy of `problem` whose search starts from `solution`.
 
@@ -377,7 +347,7 @@ def with_initial_solution(problem, solution):
     """
     if not isinstance(problem, ProjectJobScheduleModel):
         raise TypeError(f"problem must be a ProjectJobScheduleModel: {type(problem)!r}")
-    allocations = _entities_by_id(_solution_dict(solution), "allocations", [a.id for a in problem.allocations])
+    allocations = entities_by_id(solution_dict(solution), "allocations", [a.id for a in problem.allocations])
     jobs = {j.id: j for j in problem.jobs}
     seeded = problem.model_copy(deep=True)
     seeded.score_hard = seeded.score_medium = seeded.score_soft = None
