@@ -7,7 +7,6 @@
 #include <pybind11/stl.h>  // std::vector / std::string conversions
 
 #include <chrono>
-#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
@@ -190,19 +189,6 @@ PYBIND11_MODULE(_core, m) {
     optimaru::python::bind_solver_config(
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
             .def(py::init<>())
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruin_recreate_min_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruin_recreate_max_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruin_recreate_max_ruin_count)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruin_recreate_operator_decay)
-            .def_readwrite("ruin_recreate_polish_steps",
-                           &Solver::Config::ruin_recreate_polish_steps)
             .def_readwrite("relocate_move_weight", &Solver::Config::relocate_weight)
             .def_readwrite("list_swap_move_weight", &Solver::Config::list_swap_weight)
             .def_readwrite("two_opt_move_weight", &Solver::Config::two_opt_weight)
@@ -212,19 +198,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("distance_nearby_probability",
                            &Solver::Config::distance_nearby_probability)
             .def_readwrite("distance_nearby_size", &Solver::Config::distance_nearby_size)
-            .def_readwrite("order_consolidate_moves", &Solver::Config::order_consolidate_moves)
-            .def_property(
-                    "best_score_limit",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // Callback fired on every new best solution: on_new_best(step, score).
-            // The pybind11 wrapper re-acquires the GIL, so it is safe from the
-            // engine's multi-start worker threads too.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+            .def_readwrite("order_consolidate_moves", &Solver::Config::order_consolidate_moves);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())
