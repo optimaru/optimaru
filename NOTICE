@@ -2,8 +2,11 @@ optimaru
 Copyright 2026 The optimaru Authors
 
 Paths below refer to the source repository,
-https://github.com/optimaru/optimaru; in the Python distribution each
-use-cases/<name> is the subpackage optimaru.<name with dashes as underscores>.
+https://github.com/optimaru/optimaru. A use case optimaru/<name> is the
+subpackage optimaru.<name> of the Python distribution; in the repository it
+spans optimaru/<name>/ (its Python package and its C++ in cpp/), its tests in
+tests/<name>/ and its guide in docs/use-cases/<name with underscores as
+dashes>/.
 
 This product includes software derived from Timefold Solver
 (https://github.com/TimefoldAI/timefold-solver), which is licensed under the
@@ -12,7 +15,7 @@ Timefold Solver is a derivative work of OptaPlanner and OptaPy, which include
 copyrights of the original creator, Red Hat, Inc., affiliates, and
 contributors, all licensed under the Apache License, Version 2.0.
 
-The engine in include/optimaru/ began as a C++ reimplementation, with
+The engine in optimaru/cpp/optimaru/ began as a C++ reimplementation, with
 modifications, of parts of the Timefold Solver core. It has since been
 restructured by The optimaru Authors: its file layout, type and function
 names, configuration and public C++ API are optimaru's own and no longer
@@ -33,25 +36,25 @@ Apache License, Version 2.0. Timefold Quickstarts is a derivative work of
 OptaPlanner Quickstarts, Copyright Red Hat, Inc., affiliates, and
 contributors.
 
-  use-cases/bed-allocation
-  use-cases/conference-scheduling
-  use-cases/employee-scheduling
-  use-cases/facility-location
-  use-cases/flight-crew-scheduling
-  use-cases/food-packaging
-  use-cases/maintenance-scheduling
-  use-cases/meeting-scheduling
-  use-cases/order-picking
-  use-cases/project-job-scheduling
-  use-cases/school-timetabling
-  use-cases/sports-league-scheduling
-  use-cases/task-assigning
-  use-cases/tournament-scheduling
-  use-cases/vehicle-routing
+  optimaru/bed_allocation
+  optimaru/conference_scheduling
+  optimaru/employee_scheduling
+  optimaru/facility_location
+  optimaru/flight_crew_scheduling
+  optimaru/food_packaging
+  optimaru/maintenance_scheduling
+  optimaru/meeting_scheduling
+  optimaru/order_picking
+  optimaru/project_job_scheduling
+  optimaru/school_timetabling
+  optimaru/sports_league_scheduling
+  optimaru/task_assigning
+  optimaru/tournament_scheduling
+  optimaru/vehicle_routing
 
-use-cases/pickup-delivery extends the vehicle-routing translation above and
+optimaru/pickup_delivery extends the vehicle-routing translation above and
 is likewise a derivative of the Timefold Quickstarts vehicle-routing example.
-All other directories under use-cases/ are original to optimaru.
+All other use cases are original to optimaru.
 
 The following benchmark harnesses transcribe the corresponding quickstart's
 demo data generator or constraint scoring and are derivatives of the same
@@ -65,7 +68,7 @@ examples:
   benchmarks/tournament-scheduling
 
 All other directories under benchmarks/ are original to optimaru: they call
-the use-case packages under use-cases/ but do not transcribe Timefold code.
+the use-case packages under optimaru/ but do not transcribe Timefold code.
 
 Modification notice (Apache License 2.0, section 4(b)): the engine and the
 files in the directories named above that derive from the Timefold originals

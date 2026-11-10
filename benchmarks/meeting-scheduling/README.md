@@ -1,6 +1,6 @@
 # Meeting scheduling benchmark
 
-The [`meeting-scheduling`](../../use-cases/meeting-scheduling) use case against **OR-Tools CP-SAT**
+The [`meeting-scheduling`](../../docs/use-cases/meeting-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `meeting_scheduling_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
 rescored by the use case's own evaluator; parity tests in external-solver
@@ -8,7 +8,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/meeting-scheduling/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+OPTIMARU_USE_CASES=meeting_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (meeting_scheduling only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run meeting-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

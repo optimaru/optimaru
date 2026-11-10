@@ -32,7 +32,7 @@ _REQUESTS: dict[int, Any] = {}
 
 
 def _build(order_count: int, trolley_count: int, seed: int) -> Any:
-    from order_picking.models import (
+    from optimaru.order_picking.models import (
         LocationModel, OrderModel, OrderPickingRequest, ProductModel, TrolleyModel, to_solution,
     )
 
@@ -78,7 +78,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import order_picking
+    from optimaru import order_picking
 
     order_picking.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 

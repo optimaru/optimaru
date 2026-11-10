@@ -27,7 +27,7 @@ def self_report(problem: Any) -> tuple[float, ...]:
 
 
 def _build(vertex_count: int, density: float, seed: int) -> Any:
-    from max_cut.models import EdgeModel, MaxCutProblemModel
+    from optimaru.max_cut.models import EdgeModel, MaxCutProblemModel
 
     rng = random.Random(seed)
     vertices = [f"V{v}" for v in range(vertex_count)]
@@ -53,7 +53,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import max_cut
+    from optimaru import max_cut
 
     max_cut.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 

@@ -1,13 +1,13 @@
 # Bin packing benchmark
 
-The [`bin-packing`](../../use-cases/bin-packing) use case against **OR-Tools CP-SAT**
+The [`bin-packing`](../../docs/use-cases/bin-packing) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `bin_packing_cpsat`) on Falkenauer's uniform (u) and triplet (t)
 instances from OR-Library, downloaded on demand and checksum-verified ([`bench/data.py`](bench/data.py)). Both answers are rescored by
 the use case's own evaluator (the C++ `constraint_costs`).
 
 ```sh
 cd benchmarks/bin-packing
-uv sync --project cpsat --all-groups --all-extras
+OPTIMARU_USE_CASES=bin_packing uv sync --project cpsat --all-groups --all-extras   # also builds this checkout's optimaru (bin_packing only)
 uv run --project cpsat pytest -q cpsat/tests
 uv run --project cpsat python -m bench.run_bench --seconds 60
 # offline: generated instances, the shared engine-vs-CP-SAT runner
@@ -57,7 +57,7 @@ A search review found the C++ search 1-2 bins behind a pure-Python simulated-ann
 baseline on instances with colours and conflicts: its only bin-emptying move, `EmptyBinMove`,
 checks the capacity only, so emptying a bin broke a colour or a conflict and late acceptance
 turned the move down. `RepackMove` (see the use case's
-[Search](../../use-cases/bin-packing/README.md#search)) closes that gap.
+[Search](../../docs/use-cases/bin-packing/README.md#search)) closes that gap.
 [`bench/quality.py`](bench/quality.py) generates every instance below
 (`--extra` for those after the first four pairs); `--check` fails when a run on the
 review's four coloured instances uses more bins than the recorded baseline (the most bins

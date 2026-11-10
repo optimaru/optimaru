@@ -26,7 +26,7 @@ def self_report(problem: Any) -> None:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    import conference_scheduling
+    from optimaru import conference_scheduling
 
     return {"demo": lambda: conference_scheduling.demo_conference()}
 
@@ -36,13 +36,13 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import conference_scheduling
+    from optimaru import conference_scheduling
 
     conference_scheduling.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from conference_scheduling.models import ConferenceScheduleModel
+    from optimaru.conference_scheduling.models import ConferenceScheduleModel
 
     from external_solver.conference_scheduling import solve
 

@@ -36,13 +36,13 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import task_assigning
+    from optimaru import task_assigning
 
     task_assigning.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from task_assigning.models import TaskAssigningSolutionModel
+    from optimaru.task_assigning.models import TaskAssigningSolutionModel
 
     from external_solver.task_assigning import solve
 

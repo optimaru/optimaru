@@ -1,6 +1,6 @@
 # Max cut benchmark
 
-The [`max-cut`](../../use-cases/max-cut) use case against **OR-Tools CP-SAT**
+The [`max-cut`](../../docs/use-cases/max-cut) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `max_cut_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units — one external-solver
 `ConstraintPlugin` per constraint ([`external_solver.max_cut.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/max_cut/constraints.py)), each a
@@ -32,7 +32,7 @@ when the objective is built.
 
 ```sh
 cd benchmarks/max-cut/cpsat
-uv sync --all-groups --all-extras
+OPTIMARU_USE_CASES=max_cut uv sync --all-groups --all-extras   # also builds this checkout's optimaru (max_cut only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run max-cut-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```

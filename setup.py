@@ -1,125 +1,93 @@
-"""Builds the `optimaru` wheel: every use case under use-cases/ as a subpackage.
+"""Builds the `optimaru` wheel: the Python package in optimaru/ and one pybind11
+extension, `optimaru.<use case>._core`, per use case.
 
-Each use case keeps its own python/setup.py as the source of truth for what its
-pybind11 extension compiles. This file runs those scripts with a recording stub
-instead of setuptools, re-roots their paths at the repository root and renames
-`<pkg>._core` to `optimaru.<subpackage>._core`. Nothing under use-cases/ is
-modified.
+Every extension compiles its use case's bindings (optimaru/<use case>/cpp/bindings.cpp)
+and C++ sources (optimaru/<use case>/cpp/src/) against the header-only engine
+(optimaru/cpp/optimaru/).
 
     pip install .            # local build
+    uv sync                  # editable build into .venv (extensions built in place)
     python -m build          # sdist + wheel (what the release workflow does)
+
+OPTIMARU_USE_CASES=knapsack,vehicle_routing builds only those extensions; CI uses
+it to test one use case per job. Leave it unset for a release build.
 """
 
 import os
-import runpy
-from contextlib import contextmanager
 
 # setuptools must be imported before pybind11.setup_helpers: on Python 3.12+
 # it provides the distutils shim that pybind11's helpers still import.
 import setuptools
-import pybind11.setup_helpers as helpers
 from pybind11.setup_helpers import ParallelCompile, Pybind11Extension, build_ext
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+ENGINE_INCLUDE = "optimaru/cpp"
 
-# use-case directory → (subpackage under optimaru, import package inside python/)
+# use case → the C++ sources under optimaru/<use case>/cpp/src/ its extension compiles.
 USE_CASES = {
-    "assembly-line-balancing": ("assembly_line_balancing", "assembly_line_balancing"),
-    "bed-allocation": ("bed_allocation", "bed_allocation"),
-    "bin-packing": ("bin_packing", "bin_packing"),
-    "conference-scheduling": ("conference_scheduling", "conference_scheduling"),
-    "employee-scheduling": ("employee_scheduling", "es_scheduling"),
-    "facility-location": ("facility_location", "facility_location"),
-    "flight-crew-scheduling": ("flight_crew_scheduling", "flight_crew"),
-    "food-packaging": ("food_packaging", "food_packaging"),
-    "knapsack": ("knapsack", "knapsack"),
-    "maintenance-scheduling": ("maintenance_scheduling", "maintenance_scheduling"),
-    "max-cut": ("max_cut", "max_cut"),
-    "meeting-scheduling": ("meeting_scheduling", "meeting_scheduling"),
-    "order-picking": ("order_picking", "order_picking"),
-    "pickup-delivery": ("pickup_delivery", "pdp_routing"),
-    "project-job-scheduling": ("project_job_scheduling", "project_job"),
-    "quadratic-assignment": ("quadratic_assignment", "quadratic_assignment"),
-    "school-timetabling": ("school_timetabling", "st_timetabling"),
-    "semiconductor-scheduling": ("semiconductor_scheduling", "semiconductor_scheduling"),
-    "sports-league-scheduling": ("sports_league_scheduling", "sports_league"),
-    "task-assigning": ("task_assigning", "task_assigning"),
-    "tournament-scheduling": ("tournament_scheduling", "tournament_scheduling"),
-    "vehicle-routing": ("vehicle_routing", "vrp_routing"),
+    "assembly_line_balancing": ["score_calculator", "incremental_calculator", "construction", "solver"],
+    "bed_allocation": ["score_calculator", "incremental_calculator", "solver"],
+    "bin_packing": ["score_calculator", "incremental_calculator", "construction", "solver"],
+    "conference_scheduling": ["score_calculator", "incremental_calculator", "solver"],
+    "employee_scheduling": ["score_calculator", "incremental_calculator", "solver"],
+    "facility_location": ["score_calculator", "incremental_calculator", "solver"],
+    "flight_crew_scheduling": ["score_calculator", "incremental_calculator", "solver"],
+    "food_packaging": ["score_calculator", "incremental_calculator", "solver", "demo_data"],
+    "knapsack": ["score_calculator", "incremental_calculator", "construction", "solver"],
+    "maintenance_scheduling": ["score_calculator", "incremental_calculator", "solver", "demo_data"],
+    "max_cut": ["score_calculator", "incremental_calculator", "solver"],
+    "meeting_scheduling": ["score_calculator", "incremental_calculator", "solver"],
+    "order_picking": ["score_calculator", "incremental_calculator", "solver", "demo_data"],
+    "pickup_delivery": ["score_calculator", "incremental_calculator", "haversine", "solver", "demo_data"],
+    "project_job_scheduling": ["score_calculator", "incremental_calculator", "solver"],
+    "quadratic_assignment": ["score_calculator", "incremental_calculator", "solver"],
+    "school_timetabling": [
+        "score_calculator",
+        "incremental_calculator",
+        "solver",
+        "canonical_score_calculator",
+        "canonical_incremental_calculator",
+        "canonical_solver",
+    ],
+    "semiconductor_scheduling": [
+        "decoder",
+        "score_calculator",
+        "evaluator",
+        "incremental_calculator",
+        "solver",
+    ],
+    "sports_league_scheduling": ["score_calculator", "incremental_calculator", "solver"],
+    "task_assigning": ["score_calculator", "incremental_calculator", "solver"],
+    "tournament_scheduling": ["score_calculator", "incremental_calculator", "solver"],
+    "vehicle_routing": ["score_calculator", "incremental_calculator", "haversine", "solver"],
 }
 
 
-@contextmanager
-def recording():
-    """Swap setuptools.setup / Pybind11Extension for recorders while a use-case setup.py runs."""
-    calls = []
-
-    def fake_extension(name, sources, **kwargs):
-        calls.append((name, list(sources), kwargs))
-
-    saved = setuptools.setup, helpers.Pybind11Extension
-    setuptools.setup = lambda **_: None
-    helpers.Pybind11Extension = fake_extension
-    try:
-        yield calls
-    finally:
-        setuptools.setup, helpers.Pybind11Extension = saved
+def selected_use_cases():
+    wanted = os.environ.get("OPTIMARU_USE_CASES", "").replace(",", " ").split()
+    unknown = sorted(set(wanted) - set(USE_CASES))
+    if unknown:
+        raise SystemExit(f"OPTIMARU_USE_CASES: unknown use case(s) {unknown}; known: {sorted(USE_CASES)}")
+    return [name for name in USE_CASES if not wanted or name in wanted]
 
 
-def use_case_extensions(slug, subpackage, import_pkg):
-    py_dir = os.path.join("use-cases", slug, "python")
-    script = os.path.join(HERE, py_dir, "setup.py")
-    cwd = os.getcwd()
-    with recording() as calls:
-        # Their paths are relative to python/; run from there so any os.path
-        # checks they do resolve the same way as a standalone build.
-        os.chdir(os.path.join(HERE, py_dir))
-        try:
-            runpy.run_path(script, run_name="__main__")
-        finally:
-            os.chdir(cwd)
-
-    rebase = lambda p: os.path.normpath(os.path.join(py_dir, p)).replace(os.sep, "/")
-    extensions = []
-    for name, sources, kwargs in calls:
-        assert name.startswith(import_pkg + "."), f"{slug}: unexpected extension name {name}"
-        kwargs = dict(kwargs)
-        kwargs["include_dirs"] = [rebase(d) for d in kwargs.get("include_dirs", [])]
-        extensions.append(
-            Pybind11Extension(
-                f"optimaru.{subpackage}{name[len(import_pkg):]}",
-                sources=[rebase(s) for s in sources],
-                **kwargs,
-            )
-        )
-    return extensions
-
-
-def subpackages():
-    packages, package_dir = ["optimaru"], {"optimaru": "python/optimaru"}
-    for slug, (subpackage, import_pkg) in USE_CASES.items():
-        src = f"use-cases/{slug}/python/{import_pkg}"
-        package_dir[f"optimaru.{subpackage}"] = src
-        packages.append(f"optimaru.{subpackage}")
-        for nested in setuptools.find_packages(os.path.join(HERE, src)):
-            packages.append(f"optimaru.{subpackage}.{nested}")
-    return packages, package_dir
+def extension(name):
+    cpp = f"optimaru/{name}/cpp"
+    return Pybind11Extension(
+        f"optimaru.{name}._core",
+        sources=[f"{cpp}/bindings.cpp", *(f"{cpp}/src/{source}.cpp" for source in USE_CASES[name])],
+        include_dirs=[f"{cpp}/include", ENGINE_INCLUDE],
+        cxx_std=17,
+    )
 
 
 # Compile every extension's translation units in parallel.
 ParallelCompile("OPTIMARU_BUILD_JOBS", default=0).install()
 
-ext_modules = [
-    ext
-    for slug, (subpackage, import_pkg) in USE_CASES.items()
-    for ext in use_case_extensions(slug, subpackage, import_pkg)
-]
-packages, package_dir = subpackages()
+packages = ["optimaru", *(f"optimaru.{name}" for name in USE_CASES)]
 
 setuptools.setup(
     packages=packages,
-    package_dir=package_dir,
     package_data={pkg: ["*.pyi", "py.typed"] for pkg in packages},
-    ext_modules=ext_modules,
+    ext_modules=[extension(name) for name in selected_use_cases()],
     cmdclass={"build_ext": build_ext},
 )

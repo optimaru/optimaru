@@ -23,7 +23,7 @@ all three tables; the tables below cover tracks 1 and 2.
   teacherTimeEfficiency / studentGroupSubjectVariety). The
   teacher_unavailability_cost extension of this repository's C++ domain gets empty
   data in these instances, so it contributes 0 (fairness).
-- **Instances**: `use-cases/school-timetabling/cpp/bench/st_quality_bench.cpp`
+- **Instances**: `optimaru/school_timetabling/cpp/bench/st_quality_bench.cpp`
   generates them deterministically and dumps JSON; both solvers read the
   same file. 5 days × 8 periods = 40 slots, a 34-period weekly curriculum per
   class. Presets (classes / teachers / rooms): `S: 6/12/7 (204 lessons)`,
@@ -53,11 +53,11 @@ all three tables; the tables below cover tracks 1 and 2.
   soft canonical constraint — blocks, merged parallel sections, team teaching, teacher
   unavailability and weekly/consecutive caps, special-room demand, fixed
   placements). Same as the
-  [`API_SPEC.md`](../../use-cases/school-timetabling/API_SPEC.md) contract.
+  [`API_SPEC.md`](../../docs/use-cases/school-timetabling/API_SPEC.md) contract.
 - **Instances**: `gen_canonical.py` generates S (6 classes / 15 teachers / 72
   courses), M (12 / 23 / 138) and L (24 / 42 / 270). Class periods total == 34
   slots, with a teacher-load check and pydantic validation.
-- **Participants**: (1) the C++ canonical solver (`st_timetabling.solve`,
+- **Participants**: (1) the C++ canonical solver (`optimaru.school_timetabling.solve`,
   single-threaded), (2) the CP-SAT reference (`teacher_scheduling.solve` in
   `cpsat/`, 8 workers). Same time limit, same seed argument.
 - **Rescoring**: both backends' solutions are rescored with the CP-SAT
@@ -69,11 +69,11 @@ all three tables; the tables below cover tracks 1 and 2.
   cases of the C++ `canonical_test`).
 - Engine numbers use the default **monolithic incremental calculator** (fast
   path). The plugin-assembly path with the same semantics
-  (`st_timetabling.solve(..., constraints=)`) reaches 35–55% of the
+  (`optimaru.school_timetabling.solve(..., constraints=)`) reaches 35–55% of the
   monolith's move throughput (track 2 S/M/L at 10 s), so it does not represent
   these numbers — the benchmark and CI always use the fast path. See the plugin
   section of
-  [`use-cases/school-timetabling/python/README.md`](../../use-cases/school-timetabling/python/README.md).
+  [`docs/use-cases/school-timetabling/python.md`](../../docs/use-cases/school-timetabling/python.md).
 
 ## Latest measurement (local, 2026-11-04)
 
@@ -253,17 +253,17 @@ an exhaustive descent is cheap.
 
 ```sh
 # 0) C++ build + test gate
-cmake -S use-cases/school-timetabling/cpp -B build/st -DCMAKE_BUILD_TYPE=Release
+cmake -B build/st -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_ENGINE_TESTS=OFF -DOPTIMARU_USE_CASES=school_timetabling
 cmake --build build/st -j
-./build/st/st_test && ./build/st/canonical_test
+./build/st/school_timetabling/st_test && ./build/st/school_timetabling/canonical_test
 
 # 1) Track 1: cross-check gate → C++ vs CP-SAT → rescoring → table (out/RESULTS_track1.md)
 cd benchmarks/school-timetabling
 uv run run_bench.py --sizes S,M,L --seconds 10 \
-  --cpp-bin ../../build/st/st_quality_bench
+  --cpp-bin ../../build/st/school_timetabling/st_quality_bench
 
 # 2) Track-2 prerequisite: build the pybind extension in place in the source tree
-( cd ../../use-cases/school-timetabling/python && uv sync --all-groups && uv run python setup.py build_ext --inplace )
+( cd ../.. && OPTIMARU_USE_CASES=school_timetabling uv sync --all-groups )
 
 # 3) Track 2: full canonical constraints (out/RESULTS_track2.md)
 uv run run_bench.py --track2 --sizes S,M,L --seconds 10
@@ -280,7 +280,8 @@ C++/evaluator cross-check gate → track 1 → track 2 → track 3 →
 all three tables published in the job summary (+ instance/solution JSON uploaded as
 artifacts).
 
-- Triggers: push to `main` / PR (`include/**`, `use-cases/school-timetabling/**`,
+- Triggers: push to `main` / PR (`optimaru/cpp/**`, `optimaru/school_timetabling/**`,
+  `tests/school_timetabling/**`,
   `benchmarks/school-timetabling/**`, the workflow itself), and
   `workflow_dispatch` (per-instance budget `seconds`, default 10).
 - The runner is ubuntu-latest (4 vCPUs), so absolute values differ from the

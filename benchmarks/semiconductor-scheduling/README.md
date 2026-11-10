@@ -1,6 +1,6 @@
 # Semiconductor scheduling benchmark
 
-The [`semiconductor-scheduling`](../../use-cases/semiconductor-scheduling) use case against **OR-Tools CP-SAT**
+The [`semiconductor-scheduling`](../../docs/use-cases/semiconductor-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `semiconductor_scheduling_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, as external-solver plugins of the domain
 specs, so both answers are rescored by the use case's own C++ evaluator; external-solver's
@@ -10,7 +10,7 @@ identical (formulation notes:
 
 ```sh
 cd benchmarks/semiconductor-scheduling/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+OPTIMARU_USE_CASES=semiconductor_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (semiconductor_scheduling only)
 uv run pytest -q                       # benchmark harness tests
 uv run semiconductor-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```

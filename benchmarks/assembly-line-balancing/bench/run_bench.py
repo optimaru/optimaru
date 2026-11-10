@@ -5,7 +5,7 @@ import json
 import time
 from pathlib import Path
 
-import assembly_line_balancing
+from optimaru import assembly_line_balancing
 
 from bench.data import DATASETS, load_suite
 

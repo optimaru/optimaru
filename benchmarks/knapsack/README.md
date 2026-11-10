@@ -1,6 +1,6 @@
 # Knapsack benchmark
 
-The [`knapsack`](../../use-cases/knapsack) use case against **OR-Tools CP-SAT**
+The [`knapsack`](../../docs/use-cases/knapsack) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `knapsack_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units — one external-solver
 `ConstraintPlugin` per constraint ([`external_solver.knapsack.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/knapsack/constraints.py)), each a
@@ -26,7 +26,7 @@ objective is built.
 
 ```sh
 cd benchmarks/knapsack/cpsat
-uv sync --all-groups --all-extras
+OPTIMARU_USE_CASES=knapsack uv sync --all-groups --all-extras   # also builds this checkout's optimaru (knapsack only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run knapsack-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```

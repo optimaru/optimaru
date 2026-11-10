@@ -18,10 +18,10 @@ uv run project-job-compare --instance demo --seconds 2 --json
 
 ## Constraints
 
-Plugins subclass the `project_job.constraints` specs of the same name
+Plugins subclass the `optimaru.project_job_scheduling.constraints` specs of the same name
 (`NonRenewableResourceCapacityCost`, `RenewableResourceCapacityCost`,
 `ProjectDelayCost`, `MakespanCost`) and restate no defaults: the default level
-and weight of every plugin come from `project_job.constraint_info()`, and
+and weight of every plugin come from `optimaru.project_job_scheduling.constraint_info()`, and
 `catalog()` equals it. The objective uses the levels `hard`, `medium`, `soft`;
 `project_delay_cost` sits on `medium` at weight 1 like the engine, and
 `level="hard"`, `"medium"` or `"soft"` (or a `Level`) moves any pick onto that
@@ -39,5 +39,5 @@ modes; a fractional offset is refused (`offset must be an integer for CP-SAT`).
 'renewable_resource_capacity_cost': clip=False with a non-zero offset cannot be hard,
 ...`); medium folds into soft, as in the engine, so it takes the literal formula.
 External-solver's `tests/project_job_scheduling/test_solve.py` pins every mode and delay of a two-project instance and checks
-that the CP-SAT objective, the engine's own score and `project_job.constraints.score()`
+that the CP-SAT objective, the engine's own score and `optimaru.project_job_scheduling.constraints.score()`
 agree per level under repeated, shifted and re-levelled picks.

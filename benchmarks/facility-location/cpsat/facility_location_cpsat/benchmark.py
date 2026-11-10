@@ -38,7 +38,7 @@ def _build(
     Python's RNG stream differs from the C++ demo's mt19937_64, so an instance
     matches the C++ demo in scale and distribution rather than bit-for-bit.
     """
-    import facility_location as fl
+    import optimaru.facility_location as fl
 
     rng = random.Random(seed)
     facilities = []
@@ -90,7 +90,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import facility_location as fl
+    import optimaru.facility_location as fl
 
     fl.solve(
         problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1
@@ -99,7 +99,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.facility_location import solve
-    from facility_location.models import FacilityLocationProblemModel
+    from optimaru.facility_location.models import FacilityLocationProblemModel
 
     solved = solve(
         FacilityLocationProblemModel.from_core(problem),

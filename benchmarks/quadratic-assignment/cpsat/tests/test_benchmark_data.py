@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import bench.data
 from bench.data import apply_permutation, parse_qap_data, parse_qap_solution
-from quadratic_assignment import constraint_costs
+from optimaru.quadratic_assignment import constraint_costs
 
 
 def test_qaplib_parsers_and_reference_rescore() -> None:

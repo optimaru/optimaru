@@ -1,0 +1,495 @@
+// pybind11 bindings for the vehicle-routing C++ core.
+// Wraps the existing vrp::* use case (include/ and src/ beside this file) without modifying
+// it. One solver, one module (vrp_routing._core).
+#include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
+#include <chrono>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <tuple>
+
+#include "optimaru/python/constraint_binding.hpp"
+#include "vrp/constraints.hpp"
+#include "vrp/domain.hpp"
+#include "vrp/haversine.hpp"
+#include "vrp/score_calculator.hpp"
+#include "vrp/solver.hpp"
+
+namespace py = pybind11;
+using namespace vrp;
+namespace tfpy = optimaru::python;
+
+PYBIND11_MODULE(_core, m)
+{
+    m.doc() = "Vehicle routing — C++ core exposed to Python";
+
+    py::class_<Score>(m, "Score", py::module_local())
+        .def_readonly("hard", &Score::hard)
+        .def_readonly("medium", &Score::medium)
+        .def_readonly("soft", &Score::soft)
+        .def("is_feasible", &Score::feasible)
+        .def("__str__", &Score::str)
+        .def("__repr__",
+             [](const Score &s) { return "<Score " + s.str() + ">"; });
+
+    py::class_<Location>(m, "Location", py::module_local())
+        .def(py::init(
+                 [](double latitude, double longitude)
+                 {
+                     Location l;
+                     l.latitude = latitude;
+                     l.longitude = longitude;
+                     return l;
+                 }),
+             py::arg("latitude"),
+             py::arg("longitude"))
+        .def_readwrite("latitude", &Location::latitude)
+        .def_readwrite("longitude", &Location::longitude)
+        .def_readonly("index", &Location::index);
+
+    py::class_<Visit>(m, "Visit", py::module_local())
+        .def(py::init(
+                 [](std::string id,
+                    std::string name,
+                    int locationIndex,
+                    int demand,
+                    Seconds minStart,
+                    Seconds maxEnd,
+                    Seconds service,
+                    std::int64_t unassignedPenalty)
+                 {
+                     Visit v;
+                     v.id = std::move(id);
+                     v.name = std::move(name);
+                     v.locationIndex = locationIndex;
+                     v.demand = demand;
+                     v.minStartTime = minStart;
+                     v.maxEndTime = maxEnd;
+                     v.serviceDuration = service;
+                     v.unassignedPenaltyMinutes = unassignedPenalty;
+                     return v;
+                 }),
+             py::arg("id"),
+             py::arg("name"),
+             py::arg("location_index"),
+             py::arg("demand"),
+             py::arg("min_start_time"),
+             py::arg("max_end_time"),
+             py::arg("service_duration"),
+             py::arg("unassigned_penalty_minutes")
+             = Visit::kUnassignedPenaltyAuto)
+        .def_readwrite("id", &Visit::id)
+        .def_readwrite("name", &Visit::name)
+        .def_readwrite("location_index", &Visit::locationIndex)
+        .def_readwrite("demand", &Visit::demand)
+        .def_readwrite("min_start_time", &Visit::minStartTime)
+        .def_readwrite("max_end_time", &Visit::maxEndTime)
+        .def_readwrite("service_duration", &Visit::serviceDuration)
+        .def_readwrite("unassigned_penalty_minutes",
+                       &Visit::unassignedPenaltyMinutes)
+        .def("unassigned_penalty",
+             &Visit::unassignedPenalty,
+             "The medium-level cost charged when this visit is left unrouted.")
+        // Shadow variables, recomputed by calculate_score / solve.
+        .def_readonly("vehicle_index", &Visit::vehicleIndex)
+        .def_readonly("arrival_time", &Visit::arrivalTime);
+
+    py::class_<Vehicle>(m, "Vehicle", py::module_local())
+        .def(py::init(
+                 [](std::string id,
+                    int capacity,
+                    int homeLocationIndex,
+                    Seconds departureTime,
+                    Seconds maxTravelTime,
+                    Seconds maxRouteDuration,
+                    Seconds maxEndTime,
+                    int maxStops,
+                    double minLoadRatio,
+                    double fixedCost,
+                    double maxRouteRadiusMeters,
+                    bool returnToDepot)
+                 {
+                     Vehicle v;
+                     v.id = std::move(id);
+                     v.capacity = capacity;
+                     v.homeLocationIndex = homeLocationIndex;
+                     v.departureTime = departureTime;
+                     v.maxTravelTime = maxTravelTime;
+                     v.maxRouteDuration = maxRouteDuration;
+                     v.maxEndTime = maxEndTime;
+                     v.maxStops = maxStops;
+                     v.minLoadRatio = minLoadRatio;
+                     v.fixedCost = fixedCost;
+                     v.maxRouteRadiusMeters = maxRouteRadiusMeters;
+                     v.returnToDepot = returnToDepot;
+                     return v;
+                 }),
+             py::arg("id"),
+             py::arg("capacity"),
+             py::arg("home_location_index"),
+             py::arg("departure_time") = 0,
+             py::arg("max_travel_time") = 0,
+             py::arg("max_route_duration") = 0,
+             py::arg("max_end_time") = 0,
+             py::arg("max_stops") = 0,
+             py::arg("min_load_ratio") = 0.0,
+             py::arg("fixed_cost") = 0.0,
+             py::arg("max_route_radius_meters") = 0.0,
+             py::arg("return_to_depot") = false)
+        .def_readwrite("id", &Vehicle::id)
+        .def_readwrite("capacity", &Vehicle::capacity)
+        .def_readwrite("home_location_index", &Vehicle::homeLocationIndex)
+        .def_readwrite("departure_time", &Vehicle::departureTime)
+        .def_readwrite("max_travel_time", &Vehicle::maxTravelTime)
+        .def_readwrite("max_route_duration", &Vehicle::maxRouteDuration)
+        .def_readwrite("max_end_time", &Vehicle::maxEndTime)
+        .def_readwrite("max_stops", &Vehicle::maxStops)
+        .def_readwrite("min_load_ratio", &Vehicle::minLoadRatio)
+        .def_readwrite("fixed_cost", &Vehicle::fixedCost)
+        .def_readwrite("max_route_radius_meters",
+                       &Vehicle::maxRouteRadiusMeters)
+        .def_readwrite(
+            "return_to_depot",
+            &Vehicle::returnToDepot,
+            "Whether the route ends back home (default: open route).")
+        // The planning list variable: the ordered visit indices of the route.
+        .def_readwrite("visit_indices", &Vehicle::visitIndices);
+
+    py::class_<VehicleRoutePlan>(m, "VehicleRoutePlan", py::module_local())
+        .def(py::init(
+                 [](std::string name,
+                    std::vector<Location> locations,
+                    std::vector<Vehicle> vehicles,
+                    std::vector<Visit> visits,
+                    std::optional<std::vector<std::vector<Seconds>>>
+                        drivingSeconds)
+                 {
+                     VehicleRoutePlan plan;
+                     plan.name = std::move(name);
+                     plan.locations = std::move(locations);
+                     for (std::size_t i = 0; i < plan.locations.size(); ++i)
+                         plan.locations[i].index = static_cast<int>(i);
+                     plan.vehicles = std::move(vehicles);
+                     plan.visits = std::move(visits);
+                     if (drivingSeconds)
+                     {
+                         // An explicit matrix: what production actually has
+                         // (OSRM / Google / a benchmark instance's own
+                         // metric). Haversine is only the fallback for when
+                         // the caller has nothing but coordinates.
+                         const std::size_t n = plan.locations.size();
+                         if (drivingSeconds->size() != n)
+                             throw std::invalid_argument(
+                                 "driving_seconds must be a square matrix over "
+                                 "locations");
+                         for (const auto &row : *drivingSeconds)
+                         {
+                             if (row.size() != n)
+                                 throw std::invalid_argument(
+                                     "driving_seconds must be a square matrix "
+                                     "over locations");
+                         }
+                         plan.drivingSeconds = std::move(*drivingSeconds);
+                     }
+                     else
+                     {
+                         // The haversine driving-time matrix, precomputed once
+                         // (the Java Location map analog).
+                         HaversineDrivingTimeCalculator::initDrivingTimeMatrix(
+                             plan);
+                     }
+                     return plan;
+                 }),
+             py::arg("name"),
+             py::arg("locations"),
+             py::arg("vehicles"),
+             py::arg("visits"),
+             py::arg("driving_seconds") = py::none())
+        .def_readonly("name", &VehicleRoutePlan::name)
+        .def_readonly("locations", &VehicleRoutePlan::locations)
+        .def_readwrite("vehicles", &VehicleRoutePlan::vehicles)
+        .def_readonly("visits", &VehicleRoutePlan::visits)
+        // The unassigned pool: visits the solver chose not to route (the
+        // medium-level unassignedVisitsCost penalty). Filled by solve().
+        .def_readwrite("unassigned_visit_indices",
+                       &VehicleRoutePlan::unassignedVisitIndices)
+        .def("rebuild_unassigned_pool",
+             &VehicleRoutePlan::rebuildUnassignedPool,
+             "Recompute unassigned_visit_indices from the current routes.")
+        .def_readonly("score", &VehicleRoutePlan::score)
+        .def("driving_time",
+             &VehicleRoutePlan::drivingTime,
+             py::arg("from_location"),
+             py::arg("to_location"),
+             "Precomputed driving seconds between two location indices.")
+        // Convenience: routes as lists of visit ids, per vehicle.
+        .def("routes",
+             [](const VehicleRoutePlan &plan)
+             {
+                 py::dict out;
+                 for (const Vehicle &v : plan.vehicles)
+                 {
+                     py::list route;
+                     for (int i : v.visitIndices)
+                         route.append(plan.visits[i].id);
+                     out[py::str(v.id)] = route;
+                 }
+                 return out;
+             })
+        // Convenience: the ids of the visits left unassigned.
+        .def("unassigned_visit_ids",
+             [](const VehicleRoutePlan &plan)
+             {
+                 py::list out;
+                 for (int i : plan.unassignedVisitIndices)
+                     out.append(plan.visits[static_cast<std::size_t>(i)].id);
+                 return out;
+             });
+
+    m.def(
+        "calculate_score",
+        [](VehicleRoutePlan &plan)
+        { return ScoreCalculator::score(plan); },
+        py::arg("plan"),
+        "Recompute shadow variables (vehicle_index, arrival_time) and the "
+        "HardMediumSoft score (also stores plan.score).");
+
+    // The acceptance criteria the engine offers.
+    py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())
+        .value("HILL_CLIMBING", optimaru::AcceptanceRule::HillClimbing)
+        .value("LATE_ACCEPTANCE", optimaru::AcceptanceRule::LateAcceptance)
+        .value("ENTITY_TABU", optimaru::AcceptanceRule::EntityTabu)
+        .value("SIMULATED_ANNEALING",
+               optimaru::AcceptanceRule::SimulatedAnnealing)
+        .value("GREAT_DELUGE", optimaru::AcceptanceRule::GreatDeluge)
+        .value("STEP_COUNTING_HILL_CLIMBING",
+               optimaru::AcceptanceRule::StepCountingHillClimbing)
+        .value("RECORD_TO_RECORD_TRAVEL",
+               optimaru::AcceptanceRule::RecordToRecordTravel);
+
+    // The adaptive operator-selection schemes.
+    py::enum_<optimaru::SelectionScheme>(m, "OperatorSelectionType", py::module_local())
+        .value("ROULETTE_WHEEL",
+               optimaru::SelectionScheme::RouletteWheel)
+        .value("SEGMENTED_ROULETTE_WHEEL",
+               optimaru::SelectionScheme::SegmentedRouletteWheel)
+        .value("ALPHA_UCB", optimaru::SelectionScheme::AlphaUcb)
+        .value("RANDOM", optimaru::SelectionScheme::Uniform);
+
+    optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
+        .def(py::init<>())
+        .def_property(
+            "spent_limit_seconds",
+            [](const Solver::Config &c)
+            { return std::chrono::duration<double>(c.time_limit).count(); },
+            [](Solver::Config &c, double s)
+            { c.time_limit = optimaru::python::seconds_to_millis(s, "spent_limit_seconds"); })
+        .def_readwrite("random_seed", &Solver::Config::seed)
+        .def_readwrite("late_acceptance_size",
+                       &Solver::Config::history_length)
+        .def_property(
+            "best_score_limit",
+            [](const Solver::Config &c)
+            {
+                return py::make_tuple(c.target_score.hard,
+                                      c.target_score.medium,
+                                      c.target_score.soft);
+            },
+            [](Solver::Config &c,
+               std::tuple<std::int64_t, std::int64_t, std::int64_t> hms)
+            {
+                c.target_score = Score{
+                    std::get<0>(hms), std::get<1>(hms), std::get<2>(hms)};
+            })
+        .def_readwrite("unimproved_step_count_limit",
+                       &Solver::Config::stall_step_limit)
+        .def_property(
+            "unimproved_spent_limit_seconds",
+            [](const Solver::Config &c)
+            {
+                return std::chrono::duration<double>(c.stall_time_limit)
+                    .count();
+            },
+            [](Solver::Config &c, double s)
+            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
+        .def_readwrite("step_count_limit", &Solver::Config::step_limit)
+        .def_readwrite("parallel_solver_count",
+                       &Solver::Config::parallelSolverCount)
+        .def_readwrite("first_fit_decreasing",
+                       &Solver::Config::firstFitDecreasing)
+        // --- acceptance ---
+        .def_readwrite("acceptor_type", &Solver::Config::rule)
+        .def_readwrite("record_to_record_start_gap",
+                       &Solver::Config::recordToRecordStartGap)
+        .def_readwrite("record_to_record_end_gap",
+                       &Solver::Config::recordToRecordEndGap)
+        // --- move mix ---
+        .def_readwrite("relocate_move_weight",
+                       &Solver::Config::relocate_weight)
+        .def_readwrite("list_swap_move_weight",
+                       &Solver::Config::list_swap_weight)
+        .def_readwrite("two_opt_move_weight", &Solver::Config::two_opt_weight)
+        .def_readwrite("or_opt_move_weight", &Solver::Config::or_opt_weight)
+        .def_readwrite("tail_swap_move_weight",
+                       &Solver::Config::tail_swap_weight)
+        .def_readwrite("inter_exchange_move_weight",
+                       &Solver::Config::cross_exchange_weight)
+        .def_readwrite("inter_exchange_max_segment",
+                       &Solver::Config::cross_exchange_max_run)
+        // --- adaptive ruin & recreate (ALNS) ---
+        .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
+        .def_readwrite("ruin_recreate_unimproved_step_trigger",
+                       &Solver::Config::ruinRecreateUnimprovedStepTrigger)
+        .def_readwrite("ruin_recreate_min_ruin_fraction",
+                       &Solver::Config::ruinRecreateMinRuinFraction)
+        .def_readwrite("ruin_recreate_max_ruin_fraction",
+                       &Solver::Config::ruinRecreateMaxRuinFraction)
+        .def_readwrite("ruin_recreate_max_ruin_count",
+                       &Solver::Config::ruinRecreateMaxRuinCount)
+        .def_readwrite("ruin_recreate_polish_steps",
+                       &Solver::Config::ruinRecreatePolishSteps)
+        .def_readwrite("ruin_recreate_as_move_weight",
+                       &Solver::Config::ruinRecreateAsMoveWeight)
+        .def_readwrite("ruin_recreate_as_move_max_ruin",
+                       &Solver::Config::ruinRecreateAsMoveMaxRuin)
+        .def_readwrite("descent_weight", &Solver::Config::descent_weight)
+        .def_readwrite("descent_max_sweeps", &Solver::Config::descent_max_sweeps)
+        .def_readwrite("granular_descent", &Solver::Config::granularDescent)
+        .def_readwrite("granular_descent_max_segment",
+                       &Solver::Config::granularDescentMaxSegment)
+        .def_readwrite("granular_descent_candidate_routes",
+                       &Solver::Config::granularDescentCandidateRoutes)
+        .def_readwrite("route_elimination_weight",
+                       &Solver::Config::route_elimination_weight)
+        .def_readwrite("route_elimination_max_size",
+                       &Solver::Config::route_elimination_max_size)
+        .def_readwrite("ejection_chain_weight",
+                       &Solver::Config::ejection_chain_weight)
+        .def_readwrite("ejection_chain_max_steps",
+                       &Solver::Config::ejection_chain_max_steps)
+        .def_readwrite("ejection_chain_candidate_lists",
+                       &Solver::Config::ejection_chain_candidate_lists)
+        .def_readwrite("ejection_chain_max_evaluations",
+                       &Solver::Config::ejection_chain_max_evaluations)
+        .def_readwrite("iterated_local_search_weight",
+                       &Solver::Config::iterated_local_search_weight)
+        .def_readwrite("iterated_local_search_min_ruin",
+                       &Solver::Config::iterated_local_search_min_ruin)
+        .def_readwrite("iterated_local_search_max_ruin",
+                       &Solver::Config::iterated_local_search_max_ruin)
+        .def_readwrite("iterated_local_search_max_segment",
+                       &Solver::Config::iterated_local_search_max_segment)
+        .def_readwrite("iterated_local_search_max_evaluations",
+                       &Solver::Config::iterated_local_search_max_evaluations)
+        .def_readwrite("ruin_recreate_selection_type",
+                       &Solver::Config::ruinRecreateSelectionType)
+        .def_readwrite("ruin_recreate_operator_decay",
+                       &Solver::Config::ruinRecreateOperatorDecay)
+        .def_readwrite("ruin_recreate_rewards",
+                       &Solver::Config::ruinRecreateRewards)
+        .def_readwrite("ruin_recreate_selection_segment_length",
+                       &Solver::Config::ruinRecreateSelectionSegmentLength)
+        .def_readwrite("ruin_recreate_selection_alpha",
+                       &Solver::Config::ruinRecreateSelectionAlpha)
+        .def_readwrite("sisr_ruin", &Solver::Config::sisr_ruin)
+        .def_readwrite("route_ruin", &Solver::Config::route_ruin)
+        .def_readwrite("sisr_max_string_removals",
+                       &Solver::Config::sisr_max_string_removals)
+        .def_readwrite("sisr_max_string_size",
+                       &Solver::Config::sisr_max_string_size)
+        .def_readwrite("regret_k", &Solver::Config::regret_k)
+        .def_readwrite("blink_rate", &Solver::Config::blink_rate)
+        // --- nearby selection ---
+        .def_readwrite("driving_time_nearby",
+                       &Solver::Config::drivingTimeNearby)
+        .def_readwrite("driving_time_nearby_size",
+                       &Solver::Config::drivingTimeNearbySize)
+        .def_readwrite("driving_time_nearby_probability",
+                       &Solver::Config::drivingTimeNearbyProbability)
+        .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+
+    py::class_<Solver>(m, "Solver", py::module_local())
+        .def(py::init<>())
+        .def(py::init<Solver::Config>(), py::arg("config"))
+        // Solves in place: fills vehicle.visit_indices, the visits' shadow
+        // variables and plan.score.
+        .def(
+            "solve",
+            [](Solver &solver, VehicleRoutePlan &plan)
+            {
+                solver.solve(plan);
+                ScoreCalculator::score(plan);
+            },
+            py::arg("plan"),
+            // Released for the solve: with parallel_solver_count > 1 the
+            // workers copy, call and destroy the on_new_best wrapper, each
+            // of which takes the GIL back (holding it here deadlocked).
+            py::call_guard<py::gil_scoped_release>())
+        // Same solve, scored by a caller-chosen constraint set (see
+        // vrp_routing.constraints). The picks replace the defaults; None
+        // keeps them. A name may be picked several times: every pick is its
+        // own instance (a fresh copy of the default component) with its own
+        // knobs.
+        //
+        // updateShadowVariables, not score: the plugin solve already
+        // stored the score THIS calculator computed, and a full recompute
+        // would overwrite it with the monolithic default one.
+        //
+        // The picks are read with the GIL held; the solve itself releases it
+        // like solve() above (an on_new_best callback takes it back).
+        .def(
+            "solve_with_constraints",
+            [](Solver &solver,
+               VehicleRoutePlan &plan,
+               const py::object &constraints)
+            {
+                DecomposedCalculator calculator;
+                tfpy::apply_constraints([] { return defaultConstraints(); },
+                                       constraints)
+                    .into(calculator);
+                py::gil_scoped_release release;
+                solver.solve(plan, calculator);
+                ScoreCalculator::updateShadowVariables(plan);
+            },
+            py::arg("plan"),
+            py::arg("constraints") = py::none());
+
+    // The raw per-unit costs of an assembly on `plan` — the input
+    // vrp_routing.constraints.score() turns into a score. Scoring once is
+    // enough: re-pricing any assembly is pure Python arithmetic on these.
+    // None = the default assembly; a pick list scores exactly those picks
+    // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
+    // of a name keyed "<name>#<k>".
+    m.def(
+        "constraint_costs",
+        [](VehicleRoutePlan &plan, const py::object &constraints)
+        {
+            DecomposedCalculator calculator;
+            tfpy::apply_constraints([] { return defaultConstraints(); },
+                                   constraints)
+                .into(calculator);
+            return tfpy::constraint_costs(calculator, plan);
+        },
+        py::arg("plan"),
+        py::arg("constraints") = py::none(),
+        "Raw per-unit cost of every constraint, before weight/exponent/offset/level "
+        "(each entry also carries the domain's medium_fold, a per-vehicle one its "
+        "evaluated units).");
+
+    // The constraint names this domain scores, in default-assembly order --
+    // the same strings a score breakdown reports.
+    m.def(
+        "list_constraints",
+        [] { return tfpy::constraint_names(defaultConstraints()); },
+        "Constraint names available to vrp_routing.constraints.");
+
+    // The constraint catalog, read off the same default assembly:
+    // constraint_info() -> [ConstraintInfo(name, default_level,
+    // default_weight, level_flippable, reward, default_enabled), ...] in
+    // list_constraints() order. The defaults live in the C++ components only
+    // (unassigned_visits_cost: medium, weight 1 in medium units).
+    tfpy::bind_constraint_info(m, [] { return defaultConstraints(); });
+}

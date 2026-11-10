@@ -12,7 +12,7 @@ and compares them. It runs build → cross-check gate → quality benchmark → 
 | `evaluate.py` | Track-1 shared evaluator: recomputes the quickstart's six-constraint score from a solution (checked against each solver's self-report); its per-term keys are the `*_cost` names below, each holding the raw cost (the reward `teacher_time_efficiency_cost` is <= 0) |
 | `cpsat_quickstart.py` | Track-1 CP-SAT solver (six constraints: hard as constraints, the three soft ones as the objective) |
 | `gen_canonical.py` | Track-2 generator of S/M/L canonical `TimetableProblem`s (blocks / parallel sections / team teaching / unavailability, with a load check) |
-| `../../use-cases/school-timetabling/cpp/bench/st_quality_bench.cpp` | Track-1 C++ side: builds instances, dumps JSON, solves, cross-check mode |
+| `../../optimaru/school_timetabling/cpp/bench/st_quality_bench.cpp` | Track-1 C++ side: builds instances, dumps JSON, solves, cross-check mode |
 
 ## Track 1: the quickstart's six constraints
 
@@ -40,7 +40,7 @@ the C++ score of the fixed instance matches `evaluate.py`
 
 The canonical `TimetableProblem` (every hard and soft canonical constraint) is solved under the same
 time limit by CP-SAT (`teacher_scheduling.solve`) and the C++ canonical
-engine (`st_timetabling.solve`, single-threaded — shown as `pending` when the
+engine (`optimaru.school_timetabling.solve`, single-threaded — shown as `pending` when the
 extension is not built and the import fails); both results are rescored with
 cpsat's `validate.py`.
 
@@ -96,9 +96,9 @@ How to read it:
 ## CP-SAT reference (`cpsat/`, `teacher_scheduling`)
 
 Its constraint registry (`teacher_scheduling/solver/registry.py`) subclasses the
-engine's specs (`st_timetabling.constraints`): the same 17 names, the same
+engine's specs (`optimaru.school_timetabling.constraints`): the same 17 names, the same
 `(weight=None, level=None, exponent=1.0, *, offset=0.0, clip=True)` knobs and the engine's defaults from
-`st_timetabling.constraint_info()` — nothing is restated. The hard constraints
+`optimaru.school_timetabling.constraint_info()` — nothing is restated. The hard constraints
 are CP-SAT model constraints, so on this path:
 
 - `unassigned_lessons_cost` with `level="soft"` is partial timetabling (`solve_partial`).

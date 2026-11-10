@@ -3,7 +3,7 @@
 Deterministic comparison instances and the CLI entry point; the CP-SAT
 formulation is `external_solver.employee_scheduling`.
 
-`es_scheduling.constraint_costs` takes an engine schedule and the rule list,
+`optimaru.employee_scheduling.constraint_costs` takes an engine schedule and the rule list,
 while the runner hands over a request, so `PACKAGE` names
 `external_solver.employee_scheduling`, whose `constraint_costs(request)` builds
 the engine's `DecomposedCalculator` from the request's rules. It is still the
@@ -16,7 +16,7 @@ import sys
 from collections.abc import Callable
 
 from cpsat_plugins.benchmark import run_cli
-from es_scheduling.models import ScheduleRequest
+from optimaru.employee_scheduling.models import ScheduleRequest
 
 NAME = "employee-scheduling"
 PACKAGE = "external_solver.employee_scheduling"
@@ -35,7 +35,7 @@ class Roster(ScheduleRequest):
 
 
 def _build(seed: int, workers: int, days: int) -> Roster:
-    from es_scheduling.demo import generate_demo_data
+    from optimaru.employee_scheduling.demo import generate_demo_data
 
     return Roster.model_validate(
         generate_demo_data(seed=seed, workers=workers, days=days).model_dump()
@@ -58,7 +58,7 @@ def describe(problem: Roster) -> str:
 
 
 def solve_engine(problem: Roster, seconds: float, seed: int) -> None:
-    from es_scheduling.models import solve_request, with_initial_solution
+    from optimaru.employee_scheduling.models import solve_request, with_initial_solution
 
     problem.timelimit = seconds
     problem.settings.random_seed = seed

@@ -61,7 +61,7 @@ def _build(room_count: int, last_day: int, seed: int) -> Any:
     """Structural transcription of the C++ demo's ``generateDemoData``.
     Python's RNG stream differs from mt19937_64, so this matches the C++ demo
     in scale and distribution rather than bit-for-bit."""
-    import bed_allocation as ba
+    import optimaru.bed_allocation as ba
 
     rng = random.Random(seed)
     department = ba.Department(
@@ -152,7 +152,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import bed_allocation as ba
+    import optimaru.bed_allocation as ba
 
     config = ba.SolverConfig()
     config.spent_limit_seconds = seconds
@@ -161,14 +161,14 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def self_report(problem: Any) -> tuple[float, ...]:
-    """Folded to the two levels `bed_allocation.constraints.score` reports
+    """Folded to the two levels `optimaru.bed_allocation.constraints.score` reports
     (medium rides in soft at 1e9 — see the package docstring)."""
     score = problem.score
     return (score.hard, score.medium * 10**9 + score.soft)
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from bed_allocation.models import BedPlanModel
+    from optimaru.bed_allocation.models import BedPlanModel
     from external_solver.bed_allocation import solve
 
     solved = solve(

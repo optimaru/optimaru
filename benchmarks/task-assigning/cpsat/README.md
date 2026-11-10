@@ -5,7 +5,7 @@ CP-SAT alternative for task assigning: external-solver's `external_solver.task_a
 in this checkout). Its `catalog()` exposes independently selectable constraints/objectives;
 passing `constraints` replaces the defaults.
 
-Each plugin subclasses the `task_assigning.constraints` spec of the same name
+Each plugin subclasses the `optimaru.task_assigning.constraints` spec of the same name
 (`RequiredSkillCost`, `SquaredMakespanCost`, `CriticalPriorityTaskEndTimeCost`,
 `MajorPriorityTaskEndTimeCost`, `MinorPriorityTaskEndTimeCost`,
 `UnassignedTasksCost`) and only builds its expression; default levels and
@@ -34,6 +34,6 @@ with an offset is refused on hard and on medium with the engine's messages (`con
 'required_skill_cost': clip=False with a non-zero offset cannot be hard, ...` and
 `constraint 'unassigned_tasks_cost': clip=False with a non-zero offset cannot be medium
 here, ...`). External-solver's `tests/task_assigning/test_solve.py` pins several layouts and checks
-that the CP-SAT objective, `task_assigning.constraints.score()` and (wherever every task
+that the CP-SAT objective, `optimaru.task_assigning.constraints.score()` and (wherever every task
 is assigned) the engine's own score agree per level under repeated, shifted and
 re-levelled picks.

@@ -7,7 +7,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from quadratic_assignment import QuadraticAssignmentProblemModel
+from optimaru.quadratic_assignment import QuadraticAssignmentProblemModel
 
 QAPLIB_DATA_URL = (
     "https://coral.ise.lehigh.edu/wp-content/uploads/2014/07/qapdata.tar.gz"

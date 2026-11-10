@@ -1,6 +1,6 @@
 # Employee scheduling CP-SAT
 
-CP-SAT backend for the rule list of an `es_scheduling` request,
+CP-SAT backend for the rule list of an `optimaru.employee_scheduling` request,
 `external_solver.employee_scheduling` from
 [external-solver](https://github.com/optimaru/external-solver); this project runs it
 against the engine in this checkout. One boolean per
@@ -19,20 +19,20 @@ uv run employee-scheduling-compare --seconds 10
 uv run employee-scheduling-compare --instance demo --seconds 2 --json
 ```
 
-`es_scheduling.constraint_costs(schedule, constraints)` works on an engine
+`optimaru.employee_scheduling.constraint_costs(schedule, constraints)` works on an engine
 schedule and a rule list, while the runner hands over a request, so
 `external_solver.employee_scheduling` provides the `constraint_costs(request)` the
 runner calls. It builds
-`es_scheduling.DecomposedCalculator` from the request's rules and returns what
+`optimaru.employee_scheduling.DecomposedCalculator` from the request's rules and returns what
 that calculator reports for the roster, which is the calculator the engine
 searches with. The engine runs through `solve_request` with its default
 settings and one start.
 
 ## Rules
 
-All 30 constraints of `es_scheduling.constraints` are modelled; external-solver's `tests/employee_scheduling/test_solve.py`
+All 30 constraints of `optimaru.employee_scheduling.constraints` are modelled; external-solver's `tests/employee_scheduling/test_solve.py`
 checks that list against the rule union and `catalog()` against
-`es_scheduling.constraint_info()` row for row. Each plugin subclasses its spec
+`optimaru.employee_scheduling.constraint_info()` row for row. Each plugin subclasses its spec
 (`class MaxConsecutiveDaysCost(domain.MaxConsecutiveDaysCost, RulePlugin)`) and
 adds only `build()`: the default level, weight and reward flag are the engine's
 `constraint_info()` rows (read by external-solver), and `level="soft"` demotes to soft

@@ -6,8 +6,8 @@ hard/soft optimization. Results are re-scored by the shared engine.
 
 One plugin per constraint ([`external_solver.sports_league_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/sports_league_scheduling/constraints.py)), each subclassing the
 domain spec of the same name (`TeamConflictCost`, `WorkdayClassicMatchesCost`, ...) and
-registered in `sports_league.list_constraints()` order. The default level and weight of
-every plugin come from the engine's `sports_league.constraint_info()`, so the two solvers
+registered in `optimaru.sports_league_scheduling.list_constraints()` order. The default level and weight of
+every plugin come from the engine's `optimaru.sports_league_scheduling.constraint_info()`, so the two solvers
 cannot disagree on a default. `level="soft"` / `level="hard"` moves a term to the soft / hard level,
 as in the engine, and `level="medium"` is refused by both (`this use case has no medium
 level`); `exponent != 1` and non-integer weights are not supported on this path.

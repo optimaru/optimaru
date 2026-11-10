@@ -19,9 +19,9 @@ included, are pinned down.
 """
 
 import pytest
-import st_timetabling as st
-from st_timetabling import canon
-from st_timetabling.constraints import UNASSIGNED_LESSONS_SOFT_WEIGHT, Level, UnassignedLessonsCost, get_constraints
+import optimaru.school_timetabling as st
+from optimaru.school_timetabling import canon
+from optimaru.school_timetabling.constraints import UNASSIGNED_LESSONS_SOFT_WEIGHT, Level, UnassignedLessonsCost, get_constraints
 
 from teacher_scheduling import SolverConfig as CpsatConfig
 from teacher_scheduling import Timetable, TimetableProblem

@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- **Repository layout.** The source tree now has the shape of the package it
+  builds. `optimaru/` is the one Python package. The engine headers moved from
+  `include/optimaru/` to `optimaru/cpp/optimaru/` (the include path stays
+  `#include "optimaru/..."`), and each use case moved from
+  `use-cases/<slug>/{cpp,python}` into its subpackage `optimaru/<use case>/`,
+  with its C++ in `optimaru/<use case>/cpp/`. Tests moved to `tests/` (engine,
+  shared constraint base, one directory per use case), and the guides to
+  `docs/`. The standalone per-use-case packages (`vrp_routing`,
+  `st_timetabling`, ...) and their 22 copies of the constraint-spec base are
+  gone: everything imports `optimaru.<use case>`. The installed package and its
+  API do not change.
+- **Builds.** One `uv sync` at the root builds every extension in place, and
+  one CMake project (`cmake -B build`) builds the engine and every use case's
+  C++ tests. `OPTIMARU_USE_CASES` narrows either build to some use cases.
+- **Docs.** `docs/extending.md` is a step-by-step guide to adding a move or a
+  cost, and a documentation site (MkDocs, with an API reference generated from
+  the sources) is built from `docs/` and published on GitHub Pages. The engine
+  layout in the README lists every header.
+
 ## 0.4.0
 
 First release.

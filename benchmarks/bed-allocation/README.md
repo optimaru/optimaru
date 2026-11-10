@@ -3,7 +3,7 @@
 Transcribes the Timefold Quickstarts `bed-allocation` example's demo data generator (Apache-2.0),
 with modifications; see the repository [NOTICE](../../NOTICE).
 
-The [`bed-allocation`](../../use-cases/bed-allocation) use case against **OR-Tools CP-SAT**
+The [`bed-allocation`](../../docs/use-cases/bed-allocation) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `bed_allocation_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
 rescored by the use case's own evaluator; parity tests in external-solver
@@ -11,7 +11,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/bed-allocation/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+OPTIMARU_USE_CASES=bed_allocation uv sync --all-groups --all-extras   # also builds this checkout's optimaru (bed_allocation only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run bed-allocation-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```
@@ -19,7 +19,7 @@ uv run bed-allocation-compare --seconds 10 --workers 8   # engine vs CP-SAT (--m
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 
 `dump_instances.py` writes the comparison instances for the engine-only
-C++ bench (`use-cases/bed-allocation/cpp/bench/ba_quality_bench.cpp`).
+C++ bench (`optimaru/bed_allocation/cpp/bench/ba_quality_bench.cpp`).
 
 The engine runs single-threaded; CP-SAT gets `--workers` search
 workers and its time includes model construction.

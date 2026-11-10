@@ -27,7 +27,7 @@ hard with the engine's message (`constraint 'bed_conflict_cost': clip=False with
 offset cannot be hard, ...`); medium folds into soft, as in the engine, so it takes the
 literal formula. External-solver's `tests/bed_allocation/test_solve.py` pins all 27
 assignments of a tiny instance and checks that the CP-SAT objective, the engine's own score
-and `bed_allocation.constraints.score()` agree per level under repeated, shifted and
+and `optimaru.bed_allocation.constraints.score()` agree per level under repeated, shifted and
 re-levelled picks.
 
 ## Engine comparison

@@ -26,7 +26,7 @@ def self_report(problem: Any) -> None:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    import food_packaging
+    from optimaru import food_packaging
 
     return {"demo": lambda: food_packaging.generate_demo_data()}
 
@@ -36,13 +36,13 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import food_packaging
+    from optimaru import food_packaging
 
     food_packaging.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from food_packaging.models import PackagingScheduleModel
+    from optimaru.food_packaging.models import PackagingScheduleModel
 
     from external_solver.food_packaging import solve
 

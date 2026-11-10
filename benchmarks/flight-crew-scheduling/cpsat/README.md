@@ -9,12 +9,12 @@ reported score.
 
 ## Constraints
 
-One plugin per engine constraint, in `flight_crew.list_constraints()` order
+One plugin per engine constraint, in `optimaru.flight_crew_scheduling.list_constraints()` order
 (`required_skill_cost`, `flight_conflict_cost`, `transfer_between_two_flights_cost`,
 `employee_unavailability_cost`, `first_assignment_not_departing_from_home_cost`,
 `last_assignment_not_arriving_at_home_cost`). Each plugin subclasses the domain spec of
-the same name (`flight_crew.constraints.RequiredSkillCost`, ...) and only adds `build()`;
-its default level and weight come from `flight_crew.constraint_info()`, so the two
+the same name (`optimaru.flight_crew_scheduling.constraints.RequiredSkillCost`, ...) and only adds `build()`;
+its default level and weight come from `optimaru.flight_crew_scheduling.constraint_info()`, so the two
 solvers cannot disagree on a default. `level="soft"` demotes a constraint to the soft level
 and `level="hard"` promotes one to hard, in both solvers; `level="medium"` is refused on
 both (`this use case has no medium level`). Not supported on CP-SAT (refused):

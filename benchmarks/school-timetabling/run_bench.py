@@ -10,7 +10,7 @@ evaluate.py and compared with its self-report.
 
 Track 2 (--track2, full canonical constraints): the S/M/L canonical problems of
 gen_canonical.py are solved by CP-SAT (teacher_scheduling.solve) and by the C++
-canonical engine (st_timetabling.solve; "pending" if the import fails), and
+canonical engine (optimaru.school_timetabling.solve; "pending" if the import fails), and
 both results are rescored with cpsat's validate.py (same time limit, same problem).
 
 Track 3 (--track3, partial timetabling): a track-2 instance loses one weekday
@@ -40,7 +40,6 @@ from evaluate import assignment_from_solution, format_score, load_json, score_as
 
 BENCH_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BENCH_DIR.parents[1]
-ST_DIR = REPO_ROOT / "use-cases" / "school-timetabling"
 
 # Track-1 size presets: (classes, teachers, rooms). Same as documented in st_quality_bench.cpp.
 PRESETS: dict[str, tuple[int, int, int]] = {
@@ -60,8 +59,10 @@ def ensure_cpp_bin(explicit: str | None) -> Path:
     if explicit:
         return Path(explicit)
     build_dir = REPO_ROOT / "build" / "st-bench"
-    binary = build_dir / "st_quality_bench"
-    _run(["cmake", "-S", ST_DIR / "cpp", "-B", build_dir, "-DCMAKE_BUILD_TYPE=Release"], stdout=subprocess.DEVNULL)
+    binary = build_dir / "school_timetabling" / "st_quality_bench"
+    configure = ["cmake", "-S", REPO_ROOT, "-B", build_dir, "-DCMAKE_BUILD_TYPE=Release"]
+    configure += ["-DOPTIMARU_USE_CASES=school_timetabling", "-DOPTIMARU_ENGINE_TESTS=OFF"]
+    _run(configure, stdout=subprocess.DEVNULL)
     _run(["cmake", "--build", build_dir, "--target", "st_quality_bench", "-j"], stdout=subprocess.DEVNULL)
     return binary
 
@@ -200,31 +201,31 @@ def track1(args) -> None:
 
 def _cpsat_path() -> None:
     """Puts the CP-SAT reference (teacher_scheduling) on sys.path, together with the engine
-    package it builds on: its constraint registry subclasses the st_timetabling specs and
-    takes their defaults from st_timetabling.constraint_info(), so the extension must be built."""
-    for path in (BENCH_DIR / "cpsat", ST_DIR / "python"):
+    package it builds on: its constraint registry subclasses the optimaru.school_timetabling specs and
+    takes their defaults from optimaru.school_timetabling.constraint_info(), so the extension must be built."""
+    for path in (BENCH_DIR / "cpsat", REPO_ROOT):
         if str(path) not in sys.path:
             sys.path.insert(0, str(path))
 
 
 def _load_engine_solver():
-    """The st_timetabling canonical entry point (`st_timetabling.solve`, default mode
+    """The optimaru.school_timetabling canonical entry point (`optimaru.school_timetabling.solve`, default mode
     canonical). None when the import fails (extension not built, say)."""
-    if str(ST_DIR / "python") not in sys.path:
-        sys.path.insert(0, str(ST_DIR / "python"))
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
     try:
-        import st_timetabling
+        from optimaru import school_timetabling
     except ImportError:
         return None
-    return st_timetabling.solve
+    return school_timetabling.solve
 
 
 def _load_engine_assembly():
-    """`st_timetabling.constraints.Assembly` (None when the package is not built)."""
-    if str(ST_DIR / "python") not in sys.path:
-        sys.path.insert(0, str(ST_DIR / "python"))
+    """`optimaru.school_timetabling.constraints.Assembly` (None when the package is not built)."""
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
     try:
-        from st_timetabling.constraints import Assembly
+        from optimaru.school_timetabling.constraints import Assembly
     except ImportError:
         return None
     return Assembly
@@ -289,7 +290,7 @@ def track3(args) -> None:
     engine_solve = _load_engine_solver()
     Assembly = _load_engine_assembly()
     if engine_solve is None or Assembly is None:
-        print("engine: pending (st_timetabling canonical not installed — running CP-SAT only)")
+        print("engine: pending (optimaru.school_timetabling canonical not installed — running CP-SAT only)")
 
     def evaluate_result(problem, problem_dict, timetable) -> dict:
         """Shared rescoring. Separates the weekly-period shortfall from the other hard constraints.
@@ -475,7 +476,7 @@ def track2(args) -> None:
     weights = ObjectiveWeights()
     engine_solve = _load_engine_solver()
     if engine_solve is None:
-        print("engine: pending (st_timetabling canonical not installed — running CP-SAT only)")
+        print("engine: pending (optimaru.school_timetabling canonical not installed — running CP-SAT only)")
 
     def evaluate_result(problem, timetable) -> dict:
         violations = validate_timetable(problem, timetable)
@@ -566,7 +567,7 @@ def track2(args) -> None:
     lines += [
         "",
         "- Both backends are rescored with cpsat validate.py (hard-violation list + soft penalties × default weights).",
-        "- engine is the st_timetabling canonical backend (single thread; pending if the import fails).",
+        "- engine is the optimaru.school_timetabling canonical backend (single thread; pending if the import fails).",
     ]
     for row in rows:
         if row["violations"]:

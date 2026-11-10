@@ -1,6 +1,6 @@
-# The `optimaru` Python distribution: every use case under use-cases/ as a
-# subpackage (optimaru.vehicle_routing, optimaru.school_timetabling, …).
-# Extensions are assembled by setup.py from each use case's own setup.py.
+# The `optimaru` Python distribution: the package in optimaru/, every use case a
+# subpackage (optimaru.vehicle_routing, optimaru.school_timetabling, …) with its
+# compiled `_core`. setup.py lists the extensions and their C++ sources.
 [build-system]
 requires = ["setuptools>=77", "pybind11>=2.13.6"]
 build-backend = "setuptools.build_meta"
@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 name = "optimaru"
 version = "0.4.0"
 description = "Metaheuristic optimization engine for routing, scheduling, timetabling and allocation — 22 ready-to-use models."
-readme = "python/README.md"
+readme = "docs/pypi.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 # The compiled extensions embed pybind11 headers (BSD-3-Clause); its license
@@ -46,8 +46,35 @@ Source = "https://github.com/optimaru/optimaru"
 Issues = "https://github.com/optimaru/optimaru/issues"
 
 [tool.setuptools]
-# Packages, package_dir and ext_modules come from setup.py.
+# Packages and ext_modules come from setup.py.
 include-package-data = false
+
+[dependency-groups]
+dev = ["pytest", "numpy", "ruff"]
+
+[tool.uv]
+# Editable installs build the extensions in place (optimaru/<use case>/_core*.so);
+# rebuild them when the C++ changes.
+cache-keys = [
+  { file = "pyproject.toml" },
+  { file = "setup.py" },
+  { file = "optimaru/**/*.cpp" },
+  { file = "optimaru/**/*.hpp" },
+  { env = "OPTIMARU_USE_CASES" },
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+ignore = ["E731", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
 
 [tool.cibuildwheel]
 build = "cp311-* cp312-* cp313-* cp314-*"

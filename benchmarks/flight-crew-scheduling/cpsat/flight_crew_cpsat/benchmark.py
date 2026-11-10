@@ -14,7 +14,7 @@ from typing import Any
 from cpsat_plugins.benchmark import run_cli
 
 NAME = "flight-crew-scheduling"
-PACKAGE = "flight_crew"
+PACKAGE = "optimaru.flight_crew_scheduling"
 CPSAT_EXACT = True
 CPSAT_CAVEAT = ""
 
@@ -46,7 +46,7 @@ def _build(count_days: int, count_flights: int, seed: int) -> Any:
     Python's RNG stream differs from mt19937_64, so the instance matches the
     C++ demo in scale and distribution rather than bit-for-bit.
     """
-    import flight_crew as fcs
+    import optimaru.flight_crew_scheduling as fcs
 
     rng = random.Random(seed)
     airport_count = len(AIRPORTS)
@@ -159,7 +159,7 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import flight_crew as fcs
+    import optimaru.flight_crew_scheduling as fcs
 
     config = fcs.SolverConfig()
     config.spent_limit_seconds = seconds
@@ -169,7 +169,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.flight_crew_scheduling import solve
-    from flight_crew.models import FlightCrewScheduleModel
+    from optimaru.flight_crew_scheduling.models import FlightCrewScheduleModel
 
     solved = solve(
         FlightCrewScheduleModel.from_core(problem),

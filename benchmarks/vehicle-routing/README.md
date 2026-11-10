@@ -1,11 +1,11 @@
 # Vehicle routing benchmark (CVRP)
 
-The [`vehicle-routing`](../../use-cases/vehicle-routing) use case against a
+The [`vehicle-routing`](../../docs/use-cases/vehicle-routing) use case against a
 widely used open-source solver on the classic capacitated VRP:
 
 | Backend | Solver | Setup |
 | --- | --- | --- |
-| `engine` | optimaru, `vrp_routing` | default configuration, 1 worker |
+| `engine` | optimaru, `optimaru.vehicle_routing` | default configuration, 1 worker |
 | `ortools` | [Google OR-Tools](https://developers.google.com/optimization/routing) Routing solver (`pywrapcp`) | PATH_CHEAPEST_ARC + guided local search, the library's recommended VRP setup |
 
 OR-Tools lives here only; it is not part of the use case.
@@ -68,7 +68,7 @@ vrp_benchmark/
 ├── instance.py         CVRPLIB parser, Augerat Set A download, rescore()
 ├── cvrplib.py          Set X catalog + BKS download and cache
 └── solvers/
-    ├── engine.py           optimaru via vrp_routing
+    ├── engine.py           optimaru via optimaru.vehicle_routing
     └── ortools_routing.py  OR-Tools Routing solver
 tests/
 ```

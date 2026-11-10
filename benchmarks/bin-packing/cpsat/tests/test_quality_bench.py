@@ -3,9 +3,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-import bin_packing
+from optimaru import bin_packing
 from bench import quality
-from bin_packing.models import BinPackingProblemModel
+from optimaru.bin_packing.models import BinPackingProblemModel
 
 
 def test_the_review_instance_is_reproduced() -> None:

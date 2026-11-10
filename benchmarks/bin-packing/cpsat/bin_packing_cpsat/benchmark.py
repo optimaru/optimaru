@@ -24,7 +24,7 @@ CPSAT_CAVEAT = ""
 def _uniform(count: int, capacity: int, low: int, high: int, seed: int, colors: int = 0) -> Any:
     """Falkenauer-style 'u' instance: uniform weights; optionally every third item coloured
     and a few conflict pairs, so all four constraints are in play."""
-    import bin_packing as bp
+    import optimaru.bin_packing as bp
 
     rng = random.Random(seed)
     items = [
@@ -56,13 +56,13 @@ def describe(problem: Any) -> str:
 
 
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
-    import bin_packing as bp
+    import optimaru.bin_packing as bp
 
     bp.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from bin_packing.models import BinPackingProblemModel
+    from optimaru.bin_packing.models import BinPackingProblemModel
     from external_solver.bin_packing import solve
 
     solved = solve(

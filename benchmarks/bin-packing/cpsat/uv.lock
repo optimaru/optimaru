@@ -14,7 +14,7 @@ resolution-markers = [
 ]
 
 [manifest]
-overrides = [{ name = "optimaru", marker = "sys_platform == 'never'" }]
+overrides = [{ name = "optimaru", editable = "../../../" }]
 
 [[package]]
 name = "absl-py"
@@ -35,32 +35,13 @@ wheels = [
 ]
 
 [[package]]
-name = "bin-packing"
-version = "0.1.0"
-source = { editable = "../../../use-cases/bin-packing/python" }
-dependencies = [
-    { name = "pydantic" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.5" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pybind11", specifier = ">=2.13.6" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "setuptools", specifier = ">=61.0" },
-]
-
-[[package]]
 name = "bin-packing-cpsat"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "bin-packing" },
     { name = "cpsat-plugins" },
     { name = "external-solver" },
+    { name = "optimaru" },
     { name = "ortools" },
     { name = "pydantic" },
 ]
@@ -73,9 +54,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bin-packing", editable = "../../../use-cases/bin-packing/python" },
     { name = "cpsat-plugins", editable = "../../cpsat-common" },
     { name = "external-solver", git = "https://github.com/optimaru/external-solver?tag=v0.1.0" },
+    { name = "optimaru", editable = "../../../" },
     { name = "ortools", specifier = ">=9.10" },
     { name = "pydantic", specifier = ">=2.5" },
 ]
@@ -112,7 +93,7 @@ name = "external-solver"
 version = "0.1.0"
 source = { git = "https://github.com/optimaru/external-solver?tag=v0.1.0#964a068e8118be26bccdc7cafc518a0cc234fea1" }
 dependencies = [
-    { name = "optimaru", marker = "sys_platform == 'never'" },
+    { name = "optimaru" },
     { name = "ortools" },
     { name = "pydantic" },
 ]
@@ -303,11 +284,20 @@ wheels = [
 [[package]]
 name = "optimaru"
 version = "0.4.0"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../../../" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ea/fb/1d935be3d86e3d6efe6e3593ddc0a1e26e9e87013f471ac7e36640b0bdf6/optimaru-0.3.0.tar.gz", hash = "sha256:9d34dfac1aa5a63397151a6b3abd3bb7ca67940db0c35b02098fc31ab0eb57f1", size = 1441548, upload-time = "2026-11-01T18:47:18.177Z" }
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.5" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "numpy" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
 
 [[package]]
 name = "ortools"

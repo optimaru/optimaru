@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11, <4.0"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -242,6 +242,24 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/3d/f9/88d94a75de065ea32619465d2f77b29a0469500e99012523b91cc4141cd1/openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050", size = 186464, upload-time = "2024-06-28T14:03:44.161Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2", size = 250910, upload-time = "2024-06-28T14:03:41.161Z" },
+]
+
+[[package]]
+name = "optimaru"
+version = "0.4.0"
+source = { editable = "../../../" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.5" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "numpy" },
+    { name = "pytest" },
+    { name = "ruff" },
 ]
 
 [[package]]
@@ -559,59 +577,33 @@ wheels = [
 ]
 
 [[package]]
-name = "st-timetabling"
-version = "0.1.0"
-source = { editable = "../../../use-cases/school-timetabling/python" }
-
-[package.optional-dependencies]
-models = [
-    { name = "pydantic" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "pydantic", marker = "extra == 'models'", specifier = ">=2.5" }]
-provides-extras = ["models"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pybind11", specifier = ">=2.13.6" },
-    { name = "pydantic", specifier = ">=2.5" },
-    { name = "pytest" },
-    { name = "setuptools", specifier = ">=61.0" },
-]
-
-[[package]]
 name = "teacher-scheduling"
 version = "0.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "openpyxl" },
+    { name = "optimaru" },
     { name = "ortools" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "st-timetabling" },
 ]
 
 [package.dev-dependencies]
 test = [
     { name = "pytest" },
-    { name = "st-timetabling", extra = ["models"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "openpyxl", specifier = ">=3.1,<4" },
+    { name = "optimaru", editable = "../../../" },
     { name = "ortools", specifier = ">=9.15,<10" },
     { name = "pydantic", specifier = ">=2.13.2,<3" },
     { name = "pydantic-settings", specifier = ">=2.4.0,<3" },
-    { name = "st-timetabling", editable = "../../../use-cases/school-timetabling/python" },
 ]
 
 [package.metadata.requires-dev]
-test = [
-    { name = "pytest", specifier = ">=8.3.4" },
-    { name = "st-timetabling", extras = ["models"], editable = "../../../use-cases/school-timetabling/python" },
-]
+test = [{ name = "pytest", specifier = ">=8.3.4" }]
 
 [[package]]
 name = "typing-extensions"

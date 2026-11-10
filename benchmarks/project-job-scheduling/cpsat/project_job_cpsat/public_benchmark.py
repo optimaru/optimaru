@@ -12,9 +12,9 @@ from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
-import project_job as pjs
+import optimaru.project_job_scheduling as pjs
 from external_solver.project_job_scheduling import solve as solve_cpsat
-from project_job.models import (
+from optimaru.project_job_scheduling.models import (
     AllocationModel,
     ExecutionModeModel,
     JobModel,

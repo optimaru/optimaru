@@ -1,6 +1,6 @@
 # Sports league scheduling benchmark
 
-The [`sports-league-scheduling`](../../use-cases/sports-league-scheduling) use case against **OR-Tools CP-SAT**
+The [`sports-league-scheduling`](../../docs/use-cases/sports-league-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `sports_league_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
 rescored by the use case's own evaluator; external-solver's parity tests
@@ -8,7 +8,7 @@ rescored by the use case's own evaluator; external-solver's parity tests
 
 ```sh
 cd benchmarks/sports-league-scheduling/cpsat
-uv sync --all-groups --all-extras      # builds the engine extension too
+OPTIMARU_USE_CASES=sports_league_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (sports_league_scheduling only)
 uv run pytest -q                       # benchmark harness tests
 uv run sports-league-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

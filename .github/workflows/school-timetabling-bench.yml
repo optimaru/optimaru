@@ -11,7 +11,7 @@
 #     this repo's C++ engine and OR-Tools CP-SAT;
 #     every solution is re-scored by the shared evaluator (benchmarks/school-timetabling/evaluate.py).
 #   Track 2 — the canonical full-constraint model (H1~H10 + S1~S6), the C++
-#     canonical solver (st_timetabling) vs CP-SAT (teacher_scheduling); both
+#     canonical solver (optimaru.school_timetabling) vs CP-SAT (teacher_scheduling); both
 #     solutions are re-scored by the CP-SAT package's validate.py.
 #   Track 3 — the same model with unassigned_lessons_cost relaxed (partial
 #     timetabling): a day is removed so the periods no longer fit, and both
@@ -30,14 +30,16 @@ on:
     branches:
       - main
     paths:
-      - "include/**"
-      - "use-cases/school-timetabling/**"
+      - "optimaru/cpp/**"
+      - "optimaru/school_timetabling/**"
+      - "tests/school_timetabling/**"
       - "benchmarks/school-timetabling/**"
       - ".github/workflows/school-timetabling-bench.yml"
   pull_request:
     paths:
-      - "include/**"
-      - "use-cases/school-timetabling/**"
+      - "optimaru/cpp/**"
+      - "optimaru/school_timetabling/**"
+      - "tests/school_timetabling/**"
       - "benchmarks/school-timetabling/**"
       - ".github/workflows/school-timetabling-bench.yml"
 
@@ -65,19 +67,19 @@ jobs:
 
       - name: Build C++ (tests, cross-check, quality bench)
         run: |
-          cmake -S use-cases/school-timetabling/cpp -B build/st -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake -B build/st -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DOPTIMARU_ENGINE_TESTS=OFF -DOPTIMARU_USE_CASES=school_timetabling
           cmake --build build/st -j
 
       - name: C++ test gates (st_test + canonical_test)
         run: |
-          ./build/st/st_test
-          ./build/st/canonical_test
+          ./build/st/school_timetabling/st_test
+          ./build/st/school_timetabling/canonical_test
 
       - name: C++ cross-check score
         run: |
           mkdir -p "$QBENCH_DIR"
-          ./build/st/st_quality_bench crosscheck "$QBENCH_DIR/crosscheck.json" | tee cpp_crosscheck.txt
+          ./build/st/school_timetabling/st_quality_bench crosscheck "$QBENCH_DIR/crosscheck.json" | tee cpp_crosscheck.txt
 
       - name: Install uv (with package cache)
         uses: astral-sh/setup-uv@v5
@@ -85,7 +87,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: |
             benchmarks/school-timetabling/uv.lock
-            use-cases/school-timetabling/python/uv.lock
+            uv.lock
 
       - name: Set up Python 3.14
         run: uv python install 3.14
@@ -94,14 +96,13 @@ jobs:
         working-directory: benchmarks/school-timetabling
         run: uv sync --frozen
 
-      - name: Build the st_timetabling extension in place (track-2 engine backend)
-        # run_bench.py --track2 imports st_timetabling straight from the
-        # source tree, so the pybind extension must sit next to the package.
-        working-directory: use-cases/school-timetabling/python
+      - name: Build the school_timetabling extension in place (track-2 engine backend)
+        # run_bench.py --track2 imports optimaru.school_timetabling straight from
+        # the source tree, so the pybind extension must sit next to the package.
         run: |
           uv sync --all-groups --frozen
-          uv run python setup.py build_ext --inplace
         env:
+          OPTIMARU_USE_CASES: school_timetabling
           CC: ccache cc
           CXX: ccache c++
 
@@ -112,7 +113,7 @@ jobs:
         working-directory: benchmarks/school-timetabling
         run: |
           uv run run_bench.py --sizes S,M,L --seconds "$SECONDS_BUDGET" \
-            --cpp-bin "$GITHUB_WORKSPACE/build/st/st_quality_bench" \
+            --cpp-bin "$GITHUB_WORKSPACE/build/st/school_timetabling/st_quality_bench" \
             --out-dir "$QBENCH_DIR"
 
       - name: Track 2 — canonical full-parity model (C++ canonical vs CP-SAT)

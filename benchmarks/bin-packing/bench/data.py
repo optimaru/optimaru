@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
-from bin_packing.models import BinPackingProblemModel, ItemModel
+from optimaru.bin_packing.models import BinPackingProblemModel, ItemModel
 
 ORLIB_BASE_URL = "https://people.brunel.ac.uk/~mastjjb/jeb/orlib/files/"
 # binpack1-4: uniform u120..u1000; binpack5-8: triplets t60..t501.

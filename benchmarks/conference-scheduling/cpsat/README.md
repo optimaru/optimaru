@@ -6,7 +6,7 @@ catalog. Passing `constraints` replaces the default catalog. The model is
 [external-solver](https://github.com/optimaru/external-solver); this project runs it
 against the engine in this checkout.
 
-Each plugin subclasses the engine's spec (`conference_scheduling.constraints`) and only
+Each plugin subclasses the engine's spec (`optimaru.conference_scheduling.constraints`) and only
 builds its CP-SAT terms; the default levels and weights, the reward flags and the
 flippability are read from `conference_scheduling.constraint_info()` (the C++
 components), so `catalog()` equals the engine catalog. The three `*_diversity_cost`

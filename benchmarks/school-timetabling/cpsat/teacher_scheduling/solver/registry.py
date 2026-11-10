@@ -1,13 +1,13 @@
 """Constraint catalog — a plugin registry with one class per constraint.
 
 Each built-in constraint is a subclass of the engine's spec of the same
-constraint (`st_timetabling.constraints`): one name per constraint across the
+constraint (`optimaru.school_timetabling.constraints`): one name per constraint across the
 engine, this CP-SAT reference, the server and the timetable penalties
 (`unassigned_lessons_cost`, `class_conflict_cost`, ... `parallel_groups_cost`),
 and the same five knobs, ``(weight=None, level=None, exponent=1.0, *,
 offset=0.0, clip=True)``. The defaults (level, weight, flippability) are the
 engine's — read from
-`st_timetabling.constraint_info()`, the C++ components' kDefaultLevel /
+`optimaru.school_timetabling.constraint_info()`, the C++ components' kDefaultLevel /
 kDefaultWeight — never restated here.
 
 `solve()` takes a single list of these objects — no separate hard and soft
@@ -75,8 +75,8 @@ from dataclasses import dataclass, fields
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from ortools.sat.python import cp_model
-from st_timetabling import constraint_info as _engine_constraint_info
-from st_timetabling import constraints as domain
+from optimaru.school_timetabling import constraint_info as _engine_constraint_info
+from optimaru.school_timetabling import constraints as domain
 
 from teacher_scheduling.solver import constraints as hard_impl
 from teacher_scheduling.solver import objective
@@ -96,7 +96,7 @@ def _check_literal_offset(name: str, level: str, offset: float, clip: bool) -> N
     """``clip=False`` with an offset != 0 stays off the hard level, in the engine's words.
 
     The rule of the engine (python::checkLiteralOffset) and of the
-    ``st_timetabling`` score() mirror, word for word: the literal formula
+    ``optimaru.school_timetabling`` score() mirror, word for word: the literal formula
     charges every evaluated unit ``shape(x - offset)``, a raw 0 included, so on
     hard it would reward slack (one unit's slack cancelling another's
     violation) or charge units without a violation, and hard 0 must mean no
@@ -131,7 +131,7 @@ class Constraint(Protocol):
 class _EnginePlugin:
     """The CP-SAT side of one engine constraint spec: the knob rules and `build()`.
 
-    Mixed into a subclass of the matching `st_timetabling.constraints` spec, so
+    Mixed into a subclass of the matching `optimaru.school_timetabling.constraints` spec, so
     the name, the labels and the knob fields (weight / level / exponent / offset /
     clip) are the spec's own.
     """

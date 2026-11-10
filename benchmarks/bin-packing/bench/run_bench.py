@@ -6,7 +6,7 @@ import math
 import time
 from pathlib import Path
 
-import bin_packing
+from optimaru import bin_packing
 
 from bench.data import load_suite
 

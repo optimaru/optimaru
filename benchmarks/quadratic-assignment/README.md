@@ -1,6 +1,6 @@
 # Quadratic assignment benchmark
 
-The [`quadratic-assignment`](../../use-cases/quadratic-assignment) use case against **OR-Tools CP-SAT**
+The [`quadratic-assignment`](../../docs/use-cases/quadratic-assignment) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `quadratic_assignment_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units — one external-solver `ConstraintPlugin` per
 constraint ([`external_solver.quadratic_assignment.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/quadratic_assignment/constraints.py)), each a subclass of the domain spec with its
@@ -47,7 +47,7 @@ cannot be hard`.
 
 ```sh
 cd benchmarks/quadratic-assignment/cpsat
-uv sync --all-groups --all-extras
+OPTIMARU_USE_CASES=quadratic_assignment uv sync --all-groups --all-extras   # also builds this checkout's optimaru (quadratic_assignment only)
 uv run pytest -q                                       # benchmark harness tests
 uv run quadratic-assignment-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
@@ -67,7 +67,7 @@ demand, checksum-verified ([`bench/data.py`](bench/data.py)), and rescores every
 
 ```sh
 cd benchmarks/quadratic-assignment
-uv sync --project cpsat --all-groups --all-extras
+OPTIMARU_USE_CASES=quadratic_assignment uv sync --project cpsat --all-groups --all-extras   # also builds this checkout's optimaru (quadratic_assignment only)
 uv run --project cpsat pytest -q cpsat/tests
 uv run --project cpsat python -m bench.run_bench --seconds 60
 ```
