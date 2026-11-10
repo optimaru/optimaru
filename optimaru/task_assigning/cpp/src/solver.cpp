@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include "ta/incremental_calculator.hpp"
@@ -19,9 +18,7 @@ namespace {
 // solve() overloads.
 optimaru::Settings buildEngineConfig(const Solver::Config& config,
                                      const TaskAssigningSolution& solution, int parallel_starts) {
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.parallel_starts = parallel_starts;
     if (config.on_new_best) {
         auto on_new_best = config.on_new_best;
@@ -29,11 +26,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
             on_new_best(step, fromEngineScore(score));
         };
     }
-    engineConfig.limits.time_limit = config.time_limit;
     engineConfig.limits.target_score = toEngineScoreLimit(config.target_score);
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
     // history_length 0 = auto-scale with the instance (see Config).
     engineConfig.search.acceptance.history_length =
             config.history_length != 0
@@ -45,15 +38,6 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     moves.two_opt_weight = config.two_opt_weight;
     moves.or_opt_weight = config.or_opt_weight;
     moves.tail_swap_weight = config.tail_swap_weight;
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
-    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
-    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
-    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
-    lns.operator_decay = config.ruin_recreate_operator_decay;
-    lns.rewards = config.ruin_recreate_rewards;
-    lns.polish_steps = config.ruin_recreate_polish_steps;
     return engineConfig;
 }
 
@@ -79,9 +63,7 @@ void Solver::solve(TaskAssigningSolution& solution) {
         ScoreCalculator::score(solution);
         return;
     }
-    if (config_.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
 
     // Cheapest-insertion construction + late-acceptance local search over
     // the sequence moves (+ ALNS kicks), multi-start parallel when
@@ -99,9 +81,7 @@ void Solver::solve(TaskAssigningSolution& solution) {
 
 void Solver::solve(TaskAssigningSolution& solution,
                    optimaru::DecomposedObjective<TaskAssigningSolution>& calculator) {
-    if (config_.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
     if (!solution.tasks.empty() && !solution.employees.empty()) {
         // Single-start: the caller-owned calculator cannot be cloned, so the
         // multi-start factory would have nothing to hand its extra workers.
