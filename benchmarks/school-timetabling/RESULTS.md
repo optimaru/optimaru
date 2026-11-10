@@ -175,7 +175,7 @@ spending steps**, not a move kind.
 - `Config::descent_weight` — picks a lesson and a nearby partner, evaluates
   every slotRoom of both plus their swap, applies the best, and repeats until
   nothing improves. Always improving, so it skips the acceptor.
-- `Config::ruinRecreateAsMoveWeight` — ruins a few lessons, repairs them with
+- `Config::ruin_recreate_as_move_weight` — ruins a few lessons, repairs them with
   best-value, scores the result like an ordinary move and lets the acceptor
   judge it; rejected results are undone. Unlike the stagnation kick it is
   neither rare nor unconditional.
@@ -227,7 +227,7 @@ both ends of the band:
 
 Hence **the descent default stays 0, and the as-move switches on
 automatically only in the measured band**: a negative
-`ruinRecreateAsMoveWeight` (the new default) means 0.2 / slotRoomCount when
+`ruin_recreate_as_move_weight` (the new default) means 0.2 / slotRoomCount when
 slotRoomCount is within [900, 1300], else 0. An explicit 0 disables it, a
 positive value is used as is. Outside the band (S/M, 1480 cells) it is off
 rather than extrapolated — there is no reason to make a default out of where
