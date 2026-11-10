@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
-#include <stdexcept>
 #include <utility>
 
 #include "fp/incremental_calculator.hpp"
@@ -140,9 +139,7 @@ bool improveOperatorAssignment(PackagingSchedule& schedule) {
 
 void Solver::solve(PackagingSchedule& schedule) {
     ScoreCalculator::prepare(schedule);
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
     assignMissingOperators(schedule);
 
     const int movableJobs = static_cast<int>(schedule.engineToJob.size());
@@ -158,8 +155,8 @@ void Solver::solve(PackagingSchedule& schedule) {
     // more alternations mean more operator re-optimizations and more
     // acceptor restarts within the same wall budget.
     const int rounds =
-            config_.operatorRounds > 0
-                    ? config_.operatorRounds
+            config_.operator_rounds > 0
+                    ? config_.operator_rounds
                     : (anySharedOperator(schedule) && !schedule.operators.empty() ? 5 : 1);
     const auto deadline = std::chrono::steady_clock::now() + config_.time_limit;
 
@@ -168,12 +165,13 @@ void Solver::solve(PackagingSchedule& schedule) {
                 deadline - std::chrono::steady_clock::now());
         if (remaining <= std::chrono::milliseconds(0)) break;
 
-        optimaru::Settings engineConfig;
+        // The shared fields come from settings_from(); a leg's seed, its time
+        // limit and its kick switch are computed here, below.
+        optimaru::Settings engineConfig = optimaru::settings_from(config_);
         engineConfig.seed = config_.seed + static_cast<std::uint64_t>(round) *
                                                    static_cast<std::uint64_t>(std::max(
-                                                           1, config_.parallelSolverCount));
-        engineConfig.score_checks = config_.score_checks;
-        engineConfig.parallel_starts = std::max(1, config_.parallelSolverCount);
+                                                           1, config_.parallel_solver_count));
+        engineConfig.parallel_starts = std::max(1, config_.parallel_solver_count);
         if (config_.on_new_best) {
             auto callback = config_.on_new_best;
             engineConfig.on_new_best = [callback](std::int64_t step, const optimaru::Score& score) {
@@ -182,9 +180,6 @@ void Solver::solve(PackagingSchedule& schedule) {
         }
         engineConfig.limits.time_limit = remaining / (rounds - round);
         engineConfig.limits.target_score = config_.target_score;
-        engineConfig.limits.stall_time_limit = config_.stall_time_limit;
-        engineConfig.limits.step_limit = config_.step_limit;
-        engineConfig.limits.stall_step_limit = config_.stall_step_limit;
         engineConfig.search.acceptance.history_length =
                 config_.history_length != 0
                         ? config_.history_length
@@ -196,9 +191,9 @@ void Solver::solve(PackagingSchedule& schedule) {
         moves.two_opt_weight = config_.two_opt_weight;
         moves.or_opt_weight = config_.or_opt_weight;
         moves.tail_swap_weight = config_.tail_swap_weight;
-        if (config_.nearbyProbability > 0 && movableJobs >= 2) {
-            engineConfig.search.nearby.probability = config_.nearbyProbability;
-            engineConfig.search.nearby.size = config_.nearbySize;
+        if (config_.nearby_probability > 0 && movableJobs >= 2) {
+            engineConfig.search.nearby.probability = config_.nearby_probability;
+            engineConfig.search.nearby.size = config_.nearby_size;
             // Element ids are engine ids; the meter reads only immutable
             // problem facts (products, cleanup matrix, id mapping), so the
             // lambda stays valid across the engine's worker copies. Missing
@@ -217,15 +212,7 @@ void Solver::solve(PackagingSchedule& schedule) {
                 return changeover * 1e6 + idealGap;
             };
         }
-        auto& lns = engineConfig.search.ruin_recreate;
-        lns.enabled = config_.ruin_recreate && movableJobs >= 4;
-        lns.unimproved_step_trigger = config_.ruinRecreateUnimprovedStepTrigger;
-        lns.min_ruin_fraction = config_.ruinRecreateMinRuinFraction;
-        lns.max_ruin_fraction = config_.ruinRecreateMaxRuinFraction;
-        lns.max_ruin_count = config_.ruinRecreateMaxRuinCount;
-        lns.operator_decay = config_.ruinRecreateOperatorDecay;
-        lns.rewards = config_.ruinRecreateRewards;
-        lns.polish_steps = config_.ruinRecreatePolishSteps;
+        engineConfig.search.ruin_recreate.enabled = config_.ruin_recreate && movableJobs >= 4;
 
         // Construction heuristic (cheapest insertion over lines + the
         // unassigned pool) + late-acceptance local search with ALNS kicks;
@@ -257,9 +244,7 @@ void Solver::solve(PackagingSchedule& schedule) {
 void Solver::solve(PackagingSchedule& schedule,
                    optimaru::DecomposedObjective<PackagingSchedule>& calculator) {
     ScoreCalculator::prepare(schedule);
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
     assignMissingOperators(schedule);
 
     const int movableJobs = static_cast<int>(schedule.engineToJob.size());
@@ -268,9 +253,7 @@ void Solver::solve(PackagingSchedule& schedule,
         // multi-start workers both need calculators of their own, and a
         // caller-assembled plugin cannot be cloned. The move mix, the
         // changeover-nearby selection and the ALNS kicks are the same.
-        optimaru::Settings engineConfig;
-        engineConfig.seed = config_.seed;
-        engineConfig.score_checks = config_.score_checks;
+        optimaru::Settings engineConfig = optimaru::settings_from(config_);
         engineConfig.parallel_starts = 1;
         if (config_.on_new_best) {
             // Report the same three levels as the final schedule.score below.
@@ -284,11 +267,7 @@ void Solver::solve(PackagingSchedule& schedule,
                 callback(step, levelScoreOf(calculator));
             };
         }
-        engineConfig.limits.time_limit = config_.time_limit;
         engineConfig.limits.target_score = config_.target_score;
-        engineConfig.limits.stall_time_limit = config_.stall_time_limit;
-        engineConfig.limits.step_limit = config_.step_limit;
-        engineConfig.limits.stall_step_limit = config_.stall_step_limit;
         engineConfig.search.acceptance.history_length =
                 config_.history_length != 0
                         ? config_.history_length
@@ -300,9 +279,9 @@ void Solver::solve(PackagingSchedule& schedule,
         moves.two_opt_weight = config_.two_opt_weight;
         moves.or_opt_weight = config_.or_opt_weight;
         moves.tail_swap_weight = config_.tail_swap_weight;
-        if (config_.nearbyProbability > 0 && movableJobs >= 2) {
-            engineConfig.search.nearby.probability = config_.nearbyProbability;
-            engineConfig.search.nearby.size = config_.nearbySize;
+        if (config_.nearby_probability > 0 && movableJobs >= 2) {
+            engineConfig.search.nearby.probability = config_.nearby_probability;
+            engineConfig.search.nearby.size = config_.nearby_size;
             engineConfig.search.nearby.distance = [&schedule](int a, int b) {
                 const Job& jobA = schedule.jobs[schedule.engineToJob[a]];
                 const Job& jobB = schedule.jobs[schedule.engineToJob[b]];
@@ -316,15 +295,7 @@ void Solver::solve(PackagingSchedule& schedule,
                 return changeover * 1e6 + idealGap;
             };
         }
-        auto& lns = engineConfig.search.ruin_recreate;
-        lns.enabled = config_.ruin_recreate && movableJobs >= 4;
-        lns.unimproved_step_trigger = config_.ruinRecreateUnimprovedStepTrigger;
-        lns.min_ruin_fraction = config_.ruinRecreateMinRuinFraction;
-        lns.max_ruin_fraction = config_.ruinRecreateMaxRuinFraction;
-        lns.max_ruin_count = config_.ruinRecreateMaxRuinCount;
-        lns.operator_decay = config_.ruinRecreateOperatorDecay;
-        lns.rewards = config_.ruinRecreateRewards;
-        lns.polish_steps = config_.ruinRecreatePolishSteps;
+        engineConfig.search.ruin_recreate.enabled = config_.ruin_recreate && movableJobs >= 4;
 
         auto engine = optimaru::Solver<PackagingSchedule>(std::move(engineConfig));
         engine.solve(schedule, calculator);

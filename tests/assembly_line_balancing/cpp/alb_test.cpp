@@ -388,10 +388,10 @@ bool fullAssertSolve(AssemblyLineBalancingProblem p, const std::string& label) {
     config.step_limit = 1500;
     config.seed = 3;
     config.score_checks = optimaru::ScoreChecks::Full;
-    config.ruinRecreateUnimprovedStepTrigger = 100;
-    config.ruinRecreatePolishSteps = 50;
-    config.valueRecommenderProbability = 0.5;
-    config.closeStationMoves = true;
+    config.ruin_recreate_unimproved_step_trigger = 100;
+    config.ruin_recreate_polish_steps = 50;
+    config.value_recommender_probability = 0.5;
+    config.close_station_moves = true;
     bool corrupted = false;
     try {
         Solver(config).solve(p);
@@ -434,7 +434,7 @@ void verifySolves() {
           "a seeded step-limited solve is reproducible");
 
     Solver::Config parallel = config;
-    parallel.parallelSolverCount = 3;
+    parallel.parallel_solver_count = 3;
     AssemblyLineBalancingProblem c = salbpInstance(40, 9);
     AssemblyLineBalancingProblem d = salbpInstance(40, 9);
     Solver(parallel).solve(c);

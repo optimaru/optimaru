@@ -232,28 +232,16 @@ PYBIND11_MODULE(_core, m) {
                     })
             .def_property(
                     "simulated_annealing_temperature_fraction",
-                    [](const Solver::Config& c) { return c.simulatedAnnealingTemperatureFraction; },
+                    [](const Solver::Config& c) {
+                        return c.simulated_annealing_temperature_fraction;
+                    },
                     [](Solver::Config& c, double f) {
                         if (!(f > 0.0) || !std::isfinite(f))
                             throw py::value_error(
                                     "simulated_annealing_temperature_fraction must be finite and > "
                                     "0");
-                        c.simulatedAnnealingTemperatureFraction = f;
-                    })
-            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-            // stops at the first feasible solution.
-            .def_property(
-                    "best_score_limit",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // Callback fired on every new best solution: on_new_best(step, score).
-            // The pybind11 wrapper re-acquires the GIL, so it is safe from the
-            // multi-start worker threads too.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+                        c.simulated_annealing_temperature_fraction = f;
+                    });
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

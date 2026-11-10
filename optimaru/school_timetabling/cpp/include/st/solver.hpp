@@ -1,15 +1,11 @@
 #ifndef ST_SOLVER_HPP
 #define ST_SOLVER_HPP
 
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
 #include <utility>
-#include <vector>
 
 #include "st/domain.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace st {
 
@@ -18,54 +14,24 @@ namespace st {
 // optimaru::Solver<Timetable>. On top of the built-in change/swap moves and
 // the engine's adaptive ruin-and-recreate (ALNS) it registers the same-group
 // nearby meter adopted on the quality bench, which makes classmates the
-// preferred swap partners (see Config::sameGroupNearby).
+// preferred swap partners (see Config::same_group_nearby).
 class Solver {
 public:
-    struct Config {
-        // Wall-clock budget.
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires (termination is by time_limit).
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        // Late-acceptance history length. 0 (the default) = auto: clamp(8 *
-        // lessonCount, 400, 3200) — on the quality bench S is insensitive up
-        // to 1600 but degrades at 3200, while M/L keep improving up to 3200
-        // (L +108% over the old fixed 400), and 8x the lesson count tracks
-        // that optimum across the presets.
-        std::size_t history_length = 0;
-        std::uint64_t seed = 0;
-
-        // Independent parallel starts (the engine's multi-start): each worker
-        // receives seed + i and the full wall-clock budget; the best
-        // solution wins.
-        int parallelSolverCount = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; orders of magnitude
-        // slower).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS). Without this the LA acceptor can lock into a local
-        // optimum within milliseconds on small instances and never escape.
-        bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
-
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   history_length 0       clamp(8 * lessonCount, 400, 3200): on the
+    //                          quality bench S is insensitive up to 1600 but
+    //                          degrades at 3200, while M/L keep improving up to
+    //                          3200 (L +108% over the old fixed 400), and 8x
+    //                          the lesson count tracks that optimum across the
+    //                          presets
+    //   parallel_solver_count  the engine's multi-start
+    //   ruin_recreate          without the kicks the LA acceptor can lock into
+    //                          a local optimum within milliseconds on small
+    //                          instances and never escape
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
-        // the stagnation kick above (engine
+        // the stagnation kick (engine
         // RuinRecreateSettings::as_move_weight). Probability that a step is a
         // small ruin + greedy repair instead of a sampled change/swap; a
         // rejected one is rolled back like any other move.
@@ -85,8 +51,8 @@ public:
         // and 1480 cells -5.5% at 10s / -4.8% at 20s — so AUTO switches
         // off rather than extrapolate in either direction. See
         // benchmarks/school-timetabling/RESULTS.md.
-        double ruinRecreateAsMoveWeight = -1.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = -1.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Best-improvement descent over one nearby lesson pair (engine
         // SearchSettings::descent_weight): enumerate every slotRoom for
@@ -114,15 +80,13 @@ public:
         // other's nearest neighbors, biasing swap partners toward classmates
         // (group-conflict-neutral swaps) and turning the LNS related ruin
         // into a same-group cluster ruin. Mirrors the canonical solver's
-        // sameClassNearby; adopted on the quality bench (M/L +10% final
+        // same_class_nearby; adopted on the quality bench (M/L +10% final
         // soft, S unchanged). A best-of-k smart swap operator like the
         // canonical solver's was also tried here and measured strictly
         // worse (the k-fold evaluation cost starves this domain's very high
         // move throughput), so it is deliberately absent.
-        bool sameGroupNearby = true;
-        double sameGroupNearbyProbability = 0.5;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
+        bool same_group_nearby = true;
+        double same_group_nearby_probability = 0.5;
     };
 
     Solver() = default;

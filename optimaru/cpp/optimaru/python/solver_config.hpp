@@ -21,6 +21,7 @@
 //       included), so a package's solve(config=cfg, ...) can apply its
 //       keyword overrides to a copy and leave the caller's config alone.
 
+#include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -34,6 +35,7 @@
 #include <vector>
 
 #include "optimaru/score/score.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace optimaru {
 namespace python {
@@ -85,7 +87,7 @@ template <typename Config, typename = void>
 struct HasRuinRecreateRewards : std::false_type {};
 template <typename Config>
 struct HasRuinRecreateRewards<Config,
-                              std::void_t<decltype(std::declval<Config&>().ruinRecreateRewards)>>
+                              std::void_t<decltype(std::declval<Config&>().ruin_recreate_rewards)>>
     : std::true_type {};
 
 }  // namespace detail
@@ -99,17 +101,25 @@ struct HasRuinRecreateRewards<Config,
 //   step_count_limit                 Config::step_limit         (0 = no limit)
 //   unimproved_step_count_limit      Config::stall_step_limit   (0 = no limit)
 //   random_seed                      Config::seed
-//   parallel_solver_count            Config::parallelSolverCount, > 0
+//   parallel_solver_count            > 0
 //   late_acceptance_size             Config::history_length, >= 0 with 0 = auto;
 //                                    > 0 when `late_acceptance_auto` is false
 //                                    (a use case without an automatic size)
 //   full_assert                      Config::score_checks == ScoreChecks::Full
-//   ruin_recreate_rewards            Config::ruinRecreateRewards, exactly 4
-//                                    values (only where the Config has it)
+//   ruin_recreate_rewards            exactly 4 values (only where the Config has it)
 //
-// A use case binds its own fields (move weights, nearby settings,
-// best_score_limit in its Score's shape, on_new_best, ...) on the class this
-// returns.
+// and, for a Config built on the bases of optimaru/solver_config.hpp:
+//
+//   on_new_best                      SolverConfigBase
+//   best_score_limit                 SolverConfigBase<Score>::target_score as
+//                                    (hard, soft); a use case with a Score of
+//                                    its own binds it in that Score's shape
+//   ruin_recreate, ruin_recreate_*   RuinRecreateConfig, and the two
+//                                    ruin_recreate_as_move_* knobs where the
+//                                    Config has them
+//
+// A use case binds its own fields (move weights, nearby settings, ...) on
+// the class this returns.
 template <typename Class>
 Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
     using Config = typename Class::type;
@@ -132,12 +142,12 @@ Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
     cls.def_readwrite("unimproved_step_count_limit", &Config::stall_step_limit);
     cls.def_readwrite("random_seed", &Config::seed);
     cls.def_property(
-            "parallel_solver_count", [](const Config& c) { return c.parallelSolverCount; },
+            "parallel_solver_count", [](const Config& c) { return c.parallel_solver_count; },
             [](Config& c, int count) {
                 if (count <= 0) {
                     throw pybind11::value_error("parallel_solver_count must be positive");
                 }
-                c.parallelSolverCount = count;
+                c.parallel_solver_count = count;
             });
     cls.def_property(
             "late_acceptance_size", [](const Config& c) { return c.history_length; },
@@ -154,14 +164,51 @@ Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
             [](Config& c, bool on) { c.score_checks = on ? ScoreChecks::Full : ScoreChecks::Off; });
     if constexpr (detail::HasRuinRecreateRewards<Config>::value) {
         cls.def_property(
-                "ruin_recreate_rewards", [](const Config& c) { return c.ruinRecreateRewards; },
+                "ruin_recreate_rewards", [](const Config& c) { return c.ruin_recreate_rewards; },
                 [](Config& c, std::vector<double> rewards) {
                     if (rewards.size() != 4) {
                         throw pybind11::value_error(
                                 "ruin_recreate_rewards must contain exactly 4 values");
                     }
-                    c.ruinRecreateRewards = std::move(rewards);
+                    c.ruin_recreate_rewards = std::move(rewards);
                 });
+    }
+    if constexpr (optimaru::detail::HasSolverConfigBase<Config>::value) {
+        // pybind11's std::function caster re-acquires the GIL around the call,
+        // so the callback is safe from a parallel start's thread too. An
+        // exception it raises there is caught on that thread, stops the other
+        // starts and is rethrown to Python by the pool that runs them
+        // (solve_parallel_starts or the engine's solve_multistart).
+        cls.def_readwrite("on_new_best", &Config::on_new_best);
+        if constexpr (std::is_base_of_v<SolverConfigBase<Score>, Config>) {
+            // (0, -inf) stops at the first feasible solution.
+            cls.def_property(
+                    "best_score_limit",
+                    [](const Config& c) {
+                        return pybind11::make_tuple(c.target_score.hard, c.target_score.soft);
+                    },
+                    [](Config& c, std::pair<std::int64_t, double> limit) {
+                        c.target_score = Score{limit.first, limit.second};
+                    });
+        }
+    }
+    if constexpr (std::is_base_of_v<RuinRecreateConfig, Config>) {
+        cls.def_readwrite("ruin_recreate", &Config::ruin_recreate);
+        cls.def_readwrite("ruin_recreate_unimproved_step_trigger",
+                          &Config::ruin_recreate_unimproved_step_trigger);
+        cls.def_readwrite("ruin_recreate_min_ruin_fraction",
+                          &Config::ruin_recreate_min_ruin_fraction);
+        cls.def_readwrite("ruin_recreate_max_ruin_fraction",
+                          &Config::ruin_recreate_max_ruin_fraction);
+        cls.def_readwrite("ruin_recreate_max_ruin_count", &Config::ruin_recreate_max_ruin_count);
+        cls.def_readwrite("ruin_recreate_operator_decay", &Config::ruin_recreate_operator_decay);
+        cls.def_readwrite("ruin_recreate_polish_steps", &Config::ruin_recreate_polish_steps);
+        if constexpr (optimaru::detail::HasAsMoveKnobs<Config>::value) {
+            cls.def_readwrite("ruin_recreate_as_move_weight",
+                              &Config::ruin_recreate_as_move_weight);
+            cls.def_readwrite("ruin_recreate_as_move_max_ruin",
+                              &Config::ruin_recreate_as_move_max_ruin);
+        }
     }
     return cls;
 }

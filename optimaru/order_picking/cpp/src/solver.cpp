@@ -2,11 +2,9 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <exception>
 #include <limits>
 #include <memory>
 #include <random>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -14,7 +12,6 @@
 #include "op/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/worker_threads.hpp"
 #include "optimaru/search/operators.hpp"
 
 namespace op {
@@ -22,7 +19,7 @@ namespace op {
 namespace {
 
 // ---------------------------------------------------------------------------
-// OrderConsolidateMove (see Config::orderConsolidateMoves)
+// OrderConsolidateMove (see Config::order_consolidate_moves)
 // ---------------------------------------------------------------------------
 // The order-level neighborhood the built-in element moves cannot reach. Every
 // move it makes is atomic at whole-order granularity, in three tiers:
@@ -389,16 +386,8 @@ namespace {
 // too).
 optimaru::Settings buildEngineConfig(const Solver::Config& config,
                                      const OrderPickingSolution& solution) {
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.parallel_starts = 1;
-    engineConfig.on_new_best = config.on_new_best;
-    engineConfig.limits.time_limit = config.time_limit;
-    engineConfig.limits.target_score = config.target_score;
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
     // history_length 0 = auto-scale with the instance (see Config).
     engineConfig.search.acceptance.history_length =
             config.history_length != 0
@@ -410,20 +399,11 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     moves.two_opt_weight = config.two_opt_weight;
     moves.or_opt_weight = config.or_opt_weight;
     moves.tail_swap_weight = config.tail_swap_weight;
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
 
     // Warehouse-distance nearby neighborhoods over the pick tasks (see
-    // Config::distanceNearby). The meter reads a snapshot of the pick
+    // Config::distance_nearby). The meter reads a snapshot of the pick
     // locations — a pure lookup.
-    if (config.distanceNearby) {
+    if (config.distance_nearby) {
         auto locations = std::make_shared<std::vector<WarehouseLocation>>();
         locations->reserve(solution.pickTasks.size());
         for (const PickTask& task : solution.pickTasks) locations->push_back(task.location);
@@ -431,9 +411,9 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
             return static_cast<double>(calculateDistance((*locations)[a], (*locations)[b]));
         };
         engineConfig.search.nearby.size =
-                std::max(1, std::min(config.distanceNearbySize,
+                std::max(1, std::min(config.distance_nearby_size,
                                      static_cast<int>(solution.pickTasks.size()) - 1));
-        engineConfig.search.nearby.probability = config.distanceNearbyProbability;
+        engineConfig.search.nearby.probability = config.distance_nearby_probability;
     }
 
     return engineConfig;
@@ -446,47 +426,19 @@ void Solver::solve(OrderPickingSolution& solution) {
         ScoreCalculator::score(solution);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
 
     // Independent parallel starts (the school-timetabling pattern): the
     // order-consolidation operator binds to its worker's calculator, so the
     // engine's built-in multi-start — which runs the threads with the
-    // built-in moves only — cannot be used. Worker i solves its own copy
-    // with seed + i; the best final score wins.
-    const int workerCount = std::max(1, config_.parallelSolverCount);
-    if (workerCount > 1) {
-        std::vector<OrderPickingSolution> candidates(workerCount, solution);
-        std::vector<std::exception_ptr> failures(workerCount);
-        // Raised by the first worker that fails: every worker's engine checks
-        // it once a step, so the others stop instead of using up their budget.
-        auto stop = std::make_shared<std::atomic<bool>>(false);
-        // A worker that cannot be started (std::system_error) stops and joins
-        // the ones already running before the error is rethrown here.
-        optimaru::run_worker_threads(workerCount, *stop,
-                                     [this, &candidates, &failures, &stop](int i) {
-                                         try {
-                                             Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
-                                             workerConfig.stop_flag = stop;
-                                             workerConfig.seed += static_cast<std::uint64_t>(i);
-                                             if (i != 0) workerConfig.on_new_best = nullptr;
-                                             Solver worker(std::move(workerConfig));
-                                             worker.solve(candidates[i]);
-                                         } catch (...) {
-                                             failures[i] = std::current_exception();
-                                             stop->store(true);
-                                         }
-                                     });
-        for (const std::exception_ptr& failure : failures) {
-            if (failure) std::rethrow_exception(failure);
-        }
-        int best = 0;
-        for (int i = 1; i < workerCount; ++i) {
-            if (candidates[i].score > candidates[best].score) best = i;
-        }
-        solution = std::move(candidates[best]);
+    // built-in moves only — cannot be used. Each start is a single-start
+    // Solver of its own.
+    if (config_.parallel_solver_count > 1) {
+        optimaru::solve_parallel_starts(
+                config_, solution, [](const Config& config, OrderPickingSolution& candidate, int) {
+                    Solver worker(config);
+                    worker.solve(candidate);
+                });
         return;
     }
 
@@ -497,7 +449,7 @@ void Solver::solve(OrderPickingSolution& solution) {
     OrderPickingIncrementalScoreCalculator calculator;
     optimaru::Solver<OrderPickingSolution> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.orderConsolidateMoves) {
+    if (config_.order_consolidate_moves) {
         engine.add_move_operator(std::make_unique<OrderConsolidateMove>(&calculator));
     }
     engine.solve(solution, calculator);
@@ -509,9 +461,7 @@ void Solver::solve(OrderPickingSolution& solution) {
 
 void Solver::solve(OrderPickingSolution& solution,
                    optimaru::DecomposedObjective<OrderPickingSolution>& calculator) {
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
     if (!solution.pickTasks.empty() && !solution.trolleys.empty()) {
         // No OrderConsolidateMove here: that operator reads the monolithic
         // calculator's live per-(trolley, order) volume table, which a

@@ -132,9 +132,10 @@ public:
 
     // Shares a cooperative-stop flag with this solver: setting it has the
     // effect of request_stop(), and request_stop() sets it. The chain
-    // facade hands its flag to its inner solver this way, and a domain's own
-    // parallel worker pool gives every worker's solver one flag, which the
-    // first worker that fails raises so the others stop at their next step.
+    // facade hands its flag to its inner solver this way, and
+    // solve_parallel_starts (solver_config.hpp) gives every start's solver
+    // one flag, which the first start that fails raises so the others stop at
+    // their next step.
     void share_stop_flag(std::shared_ptr<std::atomic<bool>> flag) {
         stop_requested_ = std::move(flag);
     }

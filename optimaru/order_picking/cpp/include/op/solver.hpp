@@ -1,18 +1,12 @@
 #ifndef OP_SOLVER_HPP
 #define OP_SOLVER_HPP
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
 #include <utility>
-#include <vector>
 
 #include "op/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace op {
 
@@ -25,52 +19,20 @@ namespace op {
 // neighborhood for a travel-distance objective.
 class Solver {
 public:
-    struct Config {
-        // Wall-clock budget.
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires (termination is by time_limit).
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        // Late-acceptance history length. 0 (the default) = auto:
-        // clamp(4 * pickTaskCount, 200, 1600).
-        std::size_t history_length = 0;
-        std::uint64_t seed = 0;
-
-        // Independent parallel starts (the engine's multi-start): each worker
-        // receives seed + i and the full wall-clock budget; the best
-        // solution wins.
-        int parallelSolverCount = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; orders of magnitude
-        // slower).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS) — lets the trolley assignment escape the local
-        // optima that pure route polishing locks into. The trigger is high
-        // on purpose: the consolidation move reaches a strong record within
-        // ~10^3 steps, and each kick unconditionally replaces the incumbent
-        // and resets the acceptor, so an early kick cadence keeps
-        // interrupting the slow travel-distance descent that needs ~10^6
-        // uninterrupted steps (measured on the 4x instance: trigger 5000
-        // stalled at the step-703 record; 50000 kept both the kicks' order
-        // diversification and the full descent).
-        bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 50000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   history_length 0  clamp(4 * pickTaskCount, 200, 1600)
+    //   ruin_recreate     lets the trolley assignment escape the local optima
+    //                     that pure route polishing locks into
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
+        // The kick trigger is high on purpose: the consolidation move reaches
+        // a strong record within ~10^3 steps, and each kick unconditionally
+        // replaces the incumbent and resets the acceptor, so an early kick
+        // cadence keeps interrupting the slow travel-distance descent that
+        // needs ~10^6 uninterrupted steps (measured on the 4x instance:
+        // trigger 5000 stalled at the step-703 record; 50000 kept both the
+        // kicks' order diversification and the full descent).
+        Config() { ruin_recreate_unimproved_step_trigger = 50000; }
 
         // Sequence move mix. Weights are relative; 0 disables a move. Or-opt
         // (short-segment relocate) and tail swap (2-opt*) are on: both are
@@ -87,9 +49,9 @@ public:
         // measured best across the demo and the 2x/4x bench instances — the
         // wider neighborhood keeps enough cross-trolley partners for the
         // split-structure improvements that a tight 12-pick one misses.
-        bool distanceNearby = true;
-        double distanceNearbyProbability = 0.5;
-        int distanceNearbySize = 24;
+        bool distance_nearby = true;
+        double distance_nearby_probability = 0.5;
+        int distance_nearby_size = 24;
 
         // Custom order-level move operator (adaptive selection alongside the
         // built-in list moves). The order-split penalty (1000 per extra
@@ -98,14 +60,7 @@ public:
         // at whole-order granularity instead — gather a split order onto one
         // trolley, and once none is split, relocate or swap whole orders
         // between trolleys. See OrderConsolidateMove in solver.cpp.
-        bool orderConsolidateMoves = true;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
-        // Set by solve() on each parallel worker's copy, not by a caller (and
-        // not bound to Python): the first worker that fails raises it, and the
-        // other workers' engines stop at their next step instead of running out
-        // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stop_flag;
+        bool order_consolidate_moves = true;
     };
 
     Solver() = default;
@@ -124,9 +79,9 @@ public:
     // the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score.
     //
-    // Two knobs do not apply on this path: parallelSolverCount (the
+    // Two knobs do not apply on this path: parallel_solver_count (the
     // caller-owned calculator cannot be cloned across workers) and
-    // orderConsolidateMoves (that operator reads the monolithic calculator's
+    // order_consolidate_moves (that operator reads the monolithic calculator's
     // live per-(trolley, order) volume table).
     void solve(OrderPickingSolution& solution,
                optimaru::DecomposedObjective<OrderPickingSolution>& calculator);

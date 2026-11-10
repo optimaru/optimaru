@@ -7,7 +7,6 @@
 #include <pybind11/stl.h>  // std::vector / std::string conversions
 
 #include <chrono>
-#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
@@ -184,24 +183,6 @@ PYBIND11_MODULE(_core, m) {
     optimaru::python::bind_solver_config(
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
             .def(py::init<>())
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
-            // Destroy-and-repair as an ordinary acceptor-judged move: probability
-            // per step (0 disables; default 2e-4, tuned on the quality bench).
-            .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruinRecreateAsMoveWeight)
-            .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruinRecreateAsMoveMaxRuin)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Guided value selection: probability that a change move draws a
@@ -209,26 +190,12 @@ PYBIND11_MODULE(_core, m) {
             // (0 disables the hook).
             .def_property(
                     "day_fit_value_probability",
-                    [](const Solver::Config& c) { return c.dayFitValueProbability; },
+                    [](const Solver::Config& c) { return c.day_fit_value_probability; },
                     [](Solver::Config& c, double probability) {
                         if (probability < 0.0 || probability > 1.0)
                             throw py::value_error("day_fit_value_probability must be in [0, 1]");
-                        c.dayFitValueProbability = probability;
-                    })
-            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-            // stops at the first feasible solution.
-            .def_property(
-                    "best_score_limit",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // Callback fired on every new best solution: on_new_best(step, score).
-            // The pybind11 wrapper re-acquires the GIL, so it is safe from the
-            // engine's multi-start worker threads too.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+                        c.day_fit_value_probability = probability;
+                    });
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

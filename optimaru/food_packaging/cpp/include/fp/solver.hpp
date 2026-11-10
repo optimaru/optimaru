@@ -4,13 +4,12 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
-#include <limits>
 #include <utility>
-#include <vector>
 
 #include "fp/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace fp {
 
@@ -45,7 +44,14 @@ bool improveOperatorAssignment(PackagingSchedule& schedule);
 // jointly move-by-move).
 class Solver {
 public:
-    struct Config {
+    // Only the ruin & recreate knobs are the shared ones of
+    // optimaru/solver_config.hpp (RuinRecreateConfig); the kicks are
+    // auto-disabled for tiny instances (< 4 movable jobs). The limits, the seed
+    // and the callback stay declared here, because SolverConfigBase<S> gives
+    // target_score and on_new_best the same score type S and here they differ:
+    // target_score is the ENGINE score, on_new_best reports this use case's
+    // three-level Score.
+    struct Config : optimaru::RuinRecreateConfig {
         // Wall-clock budget (default 30s). Shared across all engine legs.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
@@ -53,8 +59,7 @@ public:
         // (hard = hard; soft = medium * kMediumUnit + soft). E.g.
         // {0, -inf} stops at the first hard-feasible solution. The default
         // never fires.
-        optimaru::Score target_score{std::numeric_limits<std::int64_t>::max(),
-                                     std::numeric_limits<double>::infinity()};
+        optimaru::Score target_score = optimaru::Score::unreachable();
         // Optional early exits per engine leg; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;
@@ -68,7 +73,7 @@ public:
         // Independent parallel starts (the engine's multi-start) per leg:
         // each worker receives seed + i and the leg's full budget; the
         // best solution wins.
-        int parallelSolverCount = 1;
+        int parallel_solver_count = 1;
 
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
@@ -79,19 +84,7 @@ public:
         // an operator after seeding (the conflict constraint can never
         // fire), else 5 (adopted R4: 5 legs beat 3 and 2 on the shared-
         // operator bench).
-        int operatorRounds = 0;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS). Auto-disabled for tiny instances (< 4 movable
-        // jobs).
-        bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        int operator_rounds = 0;
 
         // Sequence move mix. Weights are relative; 0 disables a move. Or-opt
         // (segment relocate) and tail swap (2-opt*) are enabled here on top
@@ -121,8 +114,8 @@ public:
         // operator (10x300, 5 ops) gave +0.1% / +1.9% / +38.8% engine-soft
         // (6 seeds, hard never worse); size 10 beat 20 and 40, probability
         // 0.8 beat 0.5.
-        double nearbyProbability = 0.8;
-        int nearbySize = 10;
+        double nearby_probability = 0.8;
+        int nearby_size = 10;
 
         // New-best callback with the hard/medium/soft score, in the same levels
         // as the final schedule.score of the solve() overload in use: the
@@ -154,8 +147,8 @@ public:
     // left primed on the final solution, so constraint_totals() explains
     // exactly that score.
     //
-    // Two knobs do not apply on this path: parallelSolverCount and
-    // operatorRounds. Both need a fresh calculator per start / per leg, and a
+    // Two knobs do not apply on this path: parallel_solver_count and
+    // operator_rounds. Both need a fresh calculator per start / per leg, and a
     // caller-owned assembly cannot be cloned; the plugin path runs one leg,
     // one start, with the same move mix, nearby selection and ALNS kicks.
     void solve(PackagingSchedule& schedule,

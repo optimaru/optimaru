@@ -240,12 +240,12 @@ The solution has the **assignment** shape; the domain solver that configures the
 
 **Adding a move.** The engine already mixes flip (change) and swap moves (weights in
 `Solver::Config`) and runs ruin-and-recreate on stagnation (and, with
-`ruinRecreateAsMoveWeight > 0`, as an ordinary move — it moves a cluster of vertices
+`ruin_recreate_as_move_weight > 0`, as an ordinary move — it moves a cluster of vertices
 chained by same-side pairs at once). A new move (a gain-guided Kernighan–Lin flip,
 say) is an `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)`
-on every engine `optimaru/max_cut/cpp/src/solver.cpp` builds: the single start, each parallel worker
-in `searchInParallel()` and the constraint-assembly overload. Under exact size
-bounds a move must keep the side sizes.
+on every engine `optimaru/max_cut/cpp/src/solver.cpp` builds: the one in `searchOneStart()`
+(the single start and each parallel start) and the one of the constraint-assembly
+overload. Under exact size bounds a move must keep the side sizes.
 
 **Changing the construction heuristic.** `construct()` in `optimaru/max_cut/cpp/src/solver.cpp` gives
 every vertex a side before the engine starts (the alternating start); the

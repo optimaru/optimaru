@@ -125,7 +125,7 @@ class SolverConfig:
     ruin_recreate_polish_steps: int
     ruin_recreate_as_move_weight: float
     """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
-    ruinRecreate.asMoveWeight); 0 (default) = off; off in exact-size mode."""
+    ruin_recreate.as_move_weight); 0 (default) = off; off in exact-size mode."""
     ruin_recreate_as_move_max_ruin: int
     change_move_weight: float
     """A change move flips one vertex (0.8 by default; 0 in exact-size mode)."""

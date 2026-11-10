@@ -53,7 +53,7 @@ def test_stop_at_first_feasible_and_callback():
 
 
 def test_parallel_solver_count_workers():
-    """parallelSolverCount>1 fans out to domain worker threads rather than the engine's
+    """parallel_solver_count>1 fans out to domain worker threads rather than the engine's
     built-in multiStart (TeamCountMove must bind to each worker's calculator).
     Checks that each worker's independent solve ends normally and the best is adopted."""
     for workers in (2, 4):

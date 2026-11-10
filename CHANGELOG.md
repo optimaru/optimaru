@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **C++: every `Solver::Config` field is snake_case, and the common ones come from a shared
+  base (breaking for C++ callers).** A `Config` mixed `time_limit` and `seed` with
+  `parallelSolverCount`, `ruinRecreateMaxRuinCount` and `nearbyProbability`; every camelCase
+  field is now snake_case (`parallel_solver_count`, `ruin_recreate_max_ruin_count`,
+  `nearby_probability`, ...). The fields each of the 22 use cases declared for itself (the
+  limits, the seed, the parallel starts, the score checks, `on_new_best`, and the ruin &
+  recreate knobs) are declared once, in `optimaru::SolverConfigBase<Score>` and
+  `optimaru::RuinRecreateConfig` of the new `optimaru/solver_config.hpp`, which also holds
+  what every solver did with them: `check_config()`, `settings_from()` and
+  `solve_parallel_starts()`. A use case's `Config` derives from the bases and declares only
+  its own knobs. Python is not affected: every `SolverConfig` keeps its attributes and their
+  defaults, and a seeded solve walks the same path.
+- **Maintenance scheduling: `SolverConfig` gains `ruin_recreate_as_move_weight` and
+  `ruin_recreate_as_move_max_ruin`.** The C++ solver already had the two knobs
+  (destroy-and-repair as an ordinary move judged by the acceptor; 0, the default, turns it
+  off), but Python could not set them.
 - **Semiconductor scheduling: a wrong problem type is a `TypeError`.** `solve()`,
   `calculate_score()`, `constraint_costs()` and `constraint_items()` raised `AttributeError`
   for a value that was neither a `SemiconductorSchedule` nor a

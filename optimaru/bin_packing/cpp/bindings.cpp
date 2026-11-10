@@ -160,30 +160,12 @@ PYBIND11_MODULE(_core, m) {
     optimaru::python::bind_solver_config(
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
             .def(py::init<>())
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
-            // Destroy-and-repair as an ordinary acceptor-judged move (engine
-            // ruin_recreate.as_move_weight). 0 disables it.
-            .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruinRecreateAsMoveWeight)
-            .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruinRecreateAsMoveMaxRuin)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Guided change-move targets: the bin of a random other item (a bin
             // in use). probability 0 = off (uniform over all n bins).
             .def_readwrite("value_recommender_probability",
-                           &Solver::Config::valueRecommenderProbability)
+                           &Solver::Config::value_recommender_probability)
             // Assignment best-improvement descent strategy weight. 0 = off.
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             // Gate on how often a step may draw a macro move (EmptyBinMove,
@@ -191,40 +173,26 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             // EmptyBinMove: the domain macro move that empties one light bin in a
             // single step (see cpp/include/bp/moves.hpp).
-            .def_readwrite("empty_bin_moves", &Solver::Config::emptyBinMoves)
+            .def_readwrite("empty_bin_moves", &Solver::Config::empty_bin_moves)
             .def_property(
                     "empty_bin_candidates",
-                    [](const Solver::Config& c) { return c.emptyBinCandidates; },
+                    [](const Solver::Config& c) { return c.empty_bin_candidates; },
                     [](Solver::Config& c, int count) {
                         if (count <= 0)
                             throw py::value_error("empty_bin_candidates must be positive");
-                        c.emptyBinCandidates = count;
+                        c.empty_bin_candidates = count;
                     })
             // RepackMove: empty a light bin with up to repack_partner_bins other
             // light bins and re-place their items best fit decreasing without a
             // capacity, colour or conflict clash (cpp/include/bp/moves.hpp).
-            .def_readwrite("repack_moves", &Solver::Config::repackMoves)
+            .def_readwrite("repack_moves", &Solver::Config::repack_moves)
             .def_property(
                     "repack_partner_bins",
-                    [](const Solver::Config& c) { return c.repackPartnerBins; },
+                    [](const Solver::Config& c) { return c.repack_partner_bins; },
                     [](Solver::Config& c, int count) {
                         if (count < 0) throw py::value_error("repack_partner_bins must be >= 0");
-                        c.repackPartnerBins = count;
-                    })
-            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-            // stops at the first feasible solution.
-            .def_property(
-                    "best_score_limit",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // Callback fired on every new best solution: on_new_best(step, score).
-            // The pybind11 wrapper re-acquires the GIL, so it is safe from the
-            // parallel workers too.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+                        c.repack_partner_bins = count;
+                    });
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

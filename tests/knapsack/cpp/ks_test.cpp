@@ -334,7 +334,7 @@ void verifySolver() {
         config.step_limit = 4000;
         config.seed = 3;
         config.score_checks = optimaru::ScoreChecks::Full;
-        config.ruinRecreateUnimprovedStepTrigger = 200;  // exercise the -1 ruins too
+        config.ruin_recreate_unimproved_step_trigger = 200;  // exercise the -1 ruins too
         bool ok = true;
         try {
             Solver(config).solve(p);
@@ -443,14 +443,14 @@ void verifySolver() {
         KnapsackProblem p = randomInstance(80, 6);
         Solver::Config config;
         config.time_limit = std::chrono::milliseconds(300);
-        config.parallelSolverCount = 4;
+        config.parallel_solver_count = 4;
         config.seed = 1;
         std::int64_t calls = 0;
         config.on_new_best = [&calls](std::int64_t, const Score&) { ++calls; };
         Solver(config).solve(p);
         KnapsackProblem rescored = p;
         check(sameScore(p.score, ScoreCalculator::score(rescored)) && calls > 0,
-              "parallelSolverCount 4: a consistent best solution, on_new_best fired");
+              "parallel_solver_count 4: a consistent best solution, on_new_best fired");
     }
     {
         KnapsackProblem p;

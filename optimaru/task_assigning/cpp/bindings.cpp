@@ -227,18 +227,6 @@ PYBIND11_MODULE(_core, m) {
     optimaru::python::bind_solver_config(
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
             .def(py::init<>())
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
             .def_readwrite("relocate_move_weight", &Solver::Config::relocate_weight)
             .def_readwrite("list_swap_move_weight", &Solver::Config::list_swap_weight)
             .def_readwrite("two_opt_move_weight", &Solver::Config::two_opt_weight)
@@ -257,11 +245,7 @@ PYBIND11_MODULE(_core, m) {
                        std::tuple<std::int64_t, std::int64_t, std::int64_t, std::int64_t> levels) {
                         c.target_score = Score{std::get<0>(levels), std::get<1>(levels),
                                                std::get<2>(levels), std::get<3>(levels)};
-                    })
-            // Callback fired on every new best solution: on_new_best(step,
-            // score). The pybind11 wrapper re-acquires the GIL, so it is safe
-            // from the engine's multi-start worker threads too.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+                    });
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

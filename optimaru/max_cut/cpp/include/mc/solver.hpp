@@ -1,16 +1,12 @@
 #ifndef MC_SOLVER_HPP
 #define MC_SOLVER_HPP
 
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
 #include <utility>
-#include <vector>
 
 #include "mc/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace mc {
 
@@ -31,54 +27,25 @@ namespace mc {
 // penalty); so does the default start when fixed vertices unbalance it.
 class Solver {
 public:
-    struct Config {
-        // Wall-clock budget. 0 stops before the first step: the solve then
-        // returns the start partition unchanged (scored).
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires.
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion (so
-        // step_limit = 0 means "no step limit", not "no search").
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        // Late-acceptance history length. 0 (the default) = auto:
-        // clamp(8 * vertex count, 400, 3200).
-        std::size_t history_length = 0;
-        std::uint64_t seed = 0;
-
-        // Independent parallel starts: worker thread i searches its own copy
-        // of the start partition with seed + i and the full budget; the
-        // best score wins. Only worker 0 calls on_new_best. An exception in a
-        // worker (a throwing on_new_best included) stops the other workers and
-        // is rethrown by solve(). Ignored by the constraint-assembly overload.
-        int parallelSolverCount = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; much slower).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS): a batch of free vertices is unassigned and the
-        // engine's greedy recreate puts each back on its better side.
-        // Ignored in exact-size mode.
-        bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   time_limit 0           the solve returns the start partition unchanged
+    //                          (scored)
+    //   history_length 0       clamp(8 * vertex count, 400, 3200)
+    //   parallel_solver_count  every start searches its own copy of the start
+    //                          partition; a start that throws (a throwing
+    //                          on_new_best included) stops the others and is
+    //                          rethrown by solve(). Ignored by the
+    //                          constraint-assembly overload
+    //   ruin_recreate          a batch of free vertices is unassigned and the
+    //                          engine's greedy recreate puts each back on its
+    //                          better side. Ignored in exact-size mode
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ordinary acceptor-judged move (engine
         // ruin_recreate.as_move_weight). 0 (default) disables it; ignored in
         // exact-size mode.
-        double ruinRecreateAsMoveWeight = 0.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = 0.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Assignment move mix. Weights are relative; 0 disables a move. With two
         // sides a change move is a flip; a swap move exchanges a side-0 and a
@@ -90,8 +57,6 @@ public:
         // local_search.descent_weight). 0 (default) = off; ignored in
         // exact-size mode.
         double descent_weight = 0.0;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
     };
 
     Solver() = default;
@@ -115,7 +80,7 @@ public:
     // problem.score is computed by THIS calculator and the calculator is left
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
-    // so parallelSolverCount is ignored.
+    // so parallel_solver_count is ignored.
     void solve(MaxCutProblem& problem, optimaru::DecomposedObjective<MaxCutProblem>& calculator);
 
 private:

@@ -8,10 +8,12 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <functional>
 #include <memory>
 #include <numeric>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -2037,6 +2039,248 @@ void testConstraintAssembly() {
     std::printf("\n");
 }
 
+// ===========================================================================
+// solver_config.hpp: the Config bases, their Settings, and parallel starts
+// ===========================================================================
+namespace {
+
+// What solve_parallel_starts needs of a problem: copies, and a score.
+struct ToyProblem {
+    Score score{0, 0.0};
+    int solved_by = -1;  // the start that wrote this copy
+};
+
+struct ToyConfig : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
+    double ruin_recreate_as_move_weight = 0.25;
+    int ruin_recreate_as_move_max_ruin = 7;
+};
+
+// A start that "searches" until the run's stop flag is raised (30 s at most).
+bool waitForStop(const ToyConfig& start) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    while (!start.stop_flag->load() && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    return start.stop_flag->load();
+}
+
+}  // namespace
+
+void testSolverConfig() {
+    std::printf("== solver_config.hpp: settings_from, check_config, solve_parallel_starts ==\n");
+    {  // settings_from puts every field of the two bases in its place.
+        ToyConfig config;
+        config.time_limit = std::chrono::milliseconds(1234);
+        config.target_score = Score{0, -5.0};
+        config.stall_time_limit = std::chrono::milliseconds(77);
+        config.step_limit = 11;
+        config.stall_step_limit = 13;
+        config.seed = 99;
+        config.parallel_solver_count = 6;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        int calls = 0;
+        config.on_new_best = [&calls](std::int64_t, const Score&) { ++calls; };
+        config.ruin_recreate = false;
+        config.ruin_recreate_unimproved_step_trigger = 3;
+        config.ruin_recreate_min_ruin_fraction = 0.2;
+        config.ruin_recreate_max_ruin_fraction = 0.4;
+        config.ruin_recreate_max_ruin_count = 9;
+        config.ruin_recreate_operator_decay = 0.5;
+        config.ruin_recreate_rewards = {4.0, 3.0, 2.0, 1.0};
+        config.ruin_recreate_polish_steps = 17;
+        const optimaru::Settings settings = optimaru::settings_from(config);
+        const optimaru::Limits& limits = settings.limits;
+        check(settings.seed == 99 && settings.score_checks == optimaru::ScoreChecks::Full &&
+                      limits.time_limit == std::chrono::milliseconds(1234) &&
+                      limits.stall_time_limit == std::chrono::milliseconds(77) &&
+                      limits.step_limit == 11 && limits.stall_step_limit == 13,
+              "settings_from: the seed, the score checks and the four limits");
+        settings.on_new_best(1, Score{0, 0.0});
+        check(limits.target_score == Score{0, -5.0} && calls == 1,
+              "settings_from: target_score and on_new_best of an engine-Score Config");
+        const optimaru::RuinRecreateSettings& kicks = settings.search.ruin_recreate;
+        check(!kicks.enabled && kicks.unimproved_step_trigger == 3 &&
+                      kicks.min_ruin_fraction == 0.2 && kicks.max_ruin_fraction == 0.4 &&
+                      kicks.max_ruin_count == 9 && kicks.operator_decay == 0.5 &&
+                      kicks.rewards == std::vector<double>({4.0, 3.0, 2.0, 1.0}) &&
+                      kicks.polish_steps == 17,
+              "settings_from: the ruin & recreate knobs");
+        check(kicks.as_move_weight == 0.25 && kicks.as_move_max_ruin == 7,
+              "settings_from: the two as-move knobs of a Config that declares them");
+        check(settings.parallel_starts == 1,
+              "settings_from leaves parallel_starts alone (how the starts run is the solver's)");
+        const optimaru::Settings defaults = optimaru::settings_from(ToyConfig{});
+        check(defaults.limits.target_score == Score::unreachable() && !defaults.on_new_best &&
+                      defaults.search.ruin_recreate.enabled,
+              "settings_from: a default Config never stops on its target, reports nothing, kicks");
+    }
+    {  // check_config
+        ToyConfig config;
+        config.ruin_recreate_rewards = {1.0, 2.0};
+        bool refused = false;
+        try {
+            optimaru::check_config(config);
+        } catch (const std::invalid_argument&) {
+            refused = true;
+        }
+        bool accepted = true;
+        try {
+            optimaru::check_config(ToyConfig{});
+        } catch (const std::invalid_argument&) {
+            accepted = false;
+        }
+        check(refused && accepted, "check_config refuses anything but four rewards");
+    }
+    {  // What each start is handed, and which candidate wins.
+        ToyConfig config;
+        config.seed = 40;
+        config.parallel_solver_count = 4;
+        config.on_new_best = [](std::int64_t, const Score&) {};
+        ToyProblem problem;
+        std::vector<std::uint64_t> seeds(4);
+        std::vector<int> counts(4);
+        std::vector<int> reports(4);
+        std::vector<const std::atomic<bool>*> flags(4);
+        std::vector<const ToyProblem*> candidates(4);
+        optimaru::solve_parallel_starts(
+                config, problem, [&](const ToyConfig& start, ToyProblem& candidate, int i) {
+                    const auto index = static_cast<std::size_t>(i);
+                    seeds[index] = start.seed;
+                    counts[index] = start.parallel_solver_count;
+                    reports[index] = start.on_new_best ? 1 : 0;
+                    flags[index] = start.stop_flag.get();
+                    candidates[index] = &candidate;
+                    // Starts 1 and 2 tie for the best score.
+                    candidate.score = Score{0, i == 1 || i == 2 ? -1.0 : -5.0};
+                    candidate.solved_by = i;
+                });
+        check(seeds == std::vector<std::uint64_t>({40, 41, 42, 43}),
+              "solve_parallel_starts: start i searches with seed + i");
+        check(counts == std::vector<int>({1, 1, 1, 1}),
+              "solve_parallel_starts: every start is one start");
+        check(reports == std::vector<int>({1, 0, 0, 0}),
+              "solve_parallel_starts: only start 0 reports new bests");
+        check(flags[0] != nullptr && !flags[0]->load() &&
+                      std::count(flags.begin(), flags.end(), flags[0]) == 4,
+              "solve_parallel_starts: the starts share one stop flag, lowered");
+        const bool ownCopies =
+                std::count(candidates.begin(), candidates.end(), &problem) == 0 &&
+                std::set<const ToyProblem*>(candidates.begin(), candidates.end()).size() == 4;
+        check(ownCopies, "solve_parallel_starts: every start searches a copy of its own");
+        check(problem.solved_by == 1 && problem.score == Score{0, -1.0},
+              "solve_parallel_starts: the best score wins, the lowest start on ties");
+        check(config.seed == 40 && config.parallel_solver_count == 4 && !config.stop_flag,
+              "solve_parallel_starts leaves the caller's Config as it was");
+    }
+    {  // One start (anything below two): no copy, no thread, the Config as it is.
+        for (const int count : {1, 0, -3}) {
+            ToyConfig config;
+            config.seed = 7;
+            config.parallel_solver_count = count;
+            ToyProblem problem;
+            const ToyConfig* seenConfig = nullptr;
+            const ToyProblem* seenProblem = nullptr;
+            int index = -1;
+            const std::thread::id caller = std::this_thread::get_id();
+            bool onCallerThread = false;
+            optimaru::solve_parallel_starts(
+                    config, problem, [&](const ToyConfig& start, ToyProblem& candidate, int i) {
+                        seenConfig = &start;
+                        seenProblem = &candidate;
+                        index = i;
+                        onCallerThread = std::this_thread::get_id() == caller;
+                    });
+            check(seenConfig == &config && seenProblem == &problem && index == 0 && onCallerThread,
+                  "solve_parallel_starts: parallel_solver_count " + std::to_string(count) +
+                          " solves the problem itself, on the calling thread");
+        }
+    }
+    {  // A start that throws: the others stop, the error is rethrown, the
+        // problem is left as it was.
+        ToyConfig config;
+        config.parallel_solver_count = 3;
+        ToyProblem problem;
+        problem.score = Score{-3, -3.0};
+        std::atomic<int> stopped{0};
+        std::string caught;
+        const auto began = std::chrono::steady_clock::now();
+        try {
+            optimaru::solve_parallel_starts(
+                    config, problem,
+                    [&stopped](const ToyConfig& start, ToyProblem& candidate, int i) {
+                        if (i == 1) throw std::runtime_error("start 1 failed");
+                        if (waitForStop(start)) ++stopped;
+                        candidate.score = Score{0, 0.0};
+                        candidate.solved_by = i;
+                    });
+        } catch (const std::runtime_error& error) {
+            caught = error.what();
+        }
+        const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+        check(caught == "start 1 failed",
+              "solve_parallel_starts rethrows a start's exception on the calling thread");
+        check(stopped.load() == 2 && seconds < 10.0,
+              "solve_parallel_starts: the other starts see the stop flag raised (no 30 s wait)");
+        check(problem.score == Score{-3, -3.0} && problem.solved_by == -1,
+              "solve_parallel_starts: a failed run leaves the problem as it was");
+    }
+    {  // Two starts fail: the one rethrown is the first in start order, not the
+        // first in time (start 0 fails only after start 2 has).
+        ToyConfig config;
+        config.parallel_solver_count = 3;
+        ToyProblem problem;
+        std::string caught;
+        try {
+            optimaru::solve_parallel_starts(config, problem,
+                                            [](const ToyConfig& start, ToyProblem&, int i) {
+                                                if (i == 2)
+                                                    throw std::runtime_error("start 2 failed");
+                                                waitForStop(start);
+                                                if (i == 0)
+                                                    throw std::runtime_error("start 0 failed");
+                                            });
+        } catch (const std::runtime_error& error) {
+            caught = error.what();
+        }
+        check(caught == "start 0 failed",
+              "solve_parallel_starts: of two failures, the first in start order is rethrown");
+    }
+    {  // A thread that cannot be created (injected before start 1): the start
+        // already running is stopped and joined, and the error comes out here.
+        ToyConfig config;
+        config.parallel_solver_count = 3;
+        ToyProblem problem;
+        std::atomic<int> stopped{0};
+        optimaru::worker_thread_start_hook = [](int index) {
+            if (index == 1) {
+                throw std::system_error(
+                        std::make_error_code(std::errc::resource_unavailable_try_again),
+                        "injected thread creation failure");
+            }
+        };
+        const auto began = std::chrono::steady_clock::now();
+        bool caught = false;
+        try {
+            optimaru::solve_parallel_starts(
+                    config, problem,
+                    [&stopped](const ToyConfig& start, ToyProblem& candidate, int i) {
+                        if (waitForStop(start)) ++stopped;
+                        candidate.solved_by = i;
+                    });
+        } catch (const std::system_error& error) {
+            caught = std::string(error.what()).find("injected") != std::string::npos;
+        }
+        optimaru::worker_thread_start_hook = nullptr;
+        const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+        check(caught && stopped.load() == 1 && seconds < 10.0 && problem.solved_by == -1,
+              "solve_parallel_starts: a thread creation failure stops and joins the start "
+              "already running, is rethrown, and leaves the problem as it was");
+    }
+    std::printf("\n");
+}
+
 void testBackgroundSolveAndLimits() {
     std::printf("== background solve + stall_step_limit ==\n");
     using Clock = std::chrono::steady_clock;
@@ -2126,6 +2370,7 @@ int main() {
     testDecomposedListPreviews();
     testDecomposedPiecewisePreviews();
     testConstraintAssembly();
+    testSolverConfig();
     testBackgroundSolveAndLimits();
     testShadowVariables();
     testChainedVariables();

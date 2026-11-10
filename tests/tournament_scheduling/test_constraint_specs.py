@@ -63,7 +63,7 @@ def test_get_constraints_defaults_to_the_full_set():
 def test_default_constraints_reproduce_the_monolithic_cost_function():
     """A cost function assembled from all default specs must equal the monolithic scoring.
 
-    Whether both paths reach the same **solution** cannot be checked: the teamCountMoves
+    Whether both paths reach the same **solution** cannot be checked: the team_count_moves
     guided operator does not run on ts's plugin path (it is tied to the monolithic
     calculator's live aggregates — cpp/include/ts/solver.hpp).
     What can be checked is that both calculators agree on the same solution."""

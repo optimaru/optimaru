@@ -26,16 +26,8 @@ namespace {
 // start is a complete permutation.
 optimaru::Settings engineConfigOf(const Solver::Config& config,
                                   const QuadraticAssignmentProblem& problem, int starts) {
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.parallel_starts = starts;
-    engineConfig.on_new_best = config.on_new_best;
-    engineConfig.limits.time_limit = config.time_limit;
-    engineConfig.limits.target_score = config.target_score;
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
 
     auto& acceptor = engineConfig.search.acceptance;
     acceptor.rule = config.rule;
@@ -61,11 +53,12 @@ optimaru::Settings engineConfigOf(const Solver::Config& config,
 }
 
 void requireConfig(const Solver::Config& config) {
-    if (config.parallelSolverCount <= 0)
-        throw std::invalid_argument("parallelSolverCount must be positive");
+    optimaru::check_config(config);
+    if (config.parallel_solver_count <= 0)
+        throw std::invalid_argument("parallel_solver_count must be positive");
     if (config.tabu_tenure < 0) throw std::invalid_argument("entityTabuSize must be >= 0");
-    if (!(config.simulatedAnnealingTemperatureFraction > 0.0))
-        throw std::invalid_argument("simulatedAnnealingTemperatureFraction must be > 0");
+    if (!(config.simulated_annealing_temperature_fraction > 0.0))
+        throw std::invalid_argument("simulated_annealing_temperature_fraction must be > 0");
 }
 
 // SIMULATED_ANNEALING with the auto starting temperature (0, 0): the
@@ -80,7 +73,7 @@ bool autoTemperature(const Solver::Config& config) {
 void installAutoTemperature(const Solver::Config& config,
                             optimaru::Solver<QuadraticAssignmentProblem>& engine) {
     if (!autoTemperature(config)) return;
-    const double fraction = config.simulatedAnnealingTemperatureFraction;
+    const double fraction = config.simulated_annealing_temperature_fraction;
     engine.set_acceptor_factory(
             [fraction](const optimaru::Score& start) -> std::unique_ptr<optimaru::Acceptor> {
                 const double soft = std::max(1.0, fraction * std::fabs(start.soft));
@@ -117,7 +110,7 @@ void Solver::solve(QuadraticAssignmentProblem& problem) {
         // Independent parallel starts through the engine's own multi-start:
         // no custom operator or variable listener is registered, so the
         // worker threads run exactly the same search (seed + i each).
-        const int starts = std::max(1, config_.parallelSolverCount);
+        const int starts = std::max(1, config_.parallel_solver_count);
         optimaru::Solver<QuadraticAssignmentProblem> engine(
                 engineConfigOf(config_, problem, starts));
         installAutoTemperature(config_, engine);

@@ -231,8 +231,8 @@ void testFullAssert() {
     config.seed = 9;
     config.score_checks = optimaru::ScoreChecks::Full;
     // Kick often so the LNS path is genuinely exercised inside the budget.
-    config.ruinRecreateUnimprovedStepTrigger = 50;
-    config.ruinRecreatePolishSteps = 20;
+    config.ruin_recreate_unimproved_step_trigger = 50;
+    config.ruin_recreate_polish_steps = 20;
 
     bool threw = false;
     try {
@@ -339,11 +339,11 @@ void testSearchStrategiesAreConsistent() {
         config.seed = 3;
         config.score_checks = optimaru::ScoreChecks::Full;
         config.descent_weight = testCase.descent;
-        config.ruinRecreateAsMoveWeight = testCase.drMove;
+        config.ruin_recreate_as_move_weight = testCase.drMove;
         config.route_elimination_weight = testCase.route_elimination;
         config.ejection_chain_weight = testCase.ejection_chain;
-        config.ruinRecreateUnimprovedStepTrigger = 50;
-        config.ruinRecreatePolishSteps = 10;
+        config.ruin_recreate_unimproved_step_trigger = 50;
+        config.ruin_recreate_polish_steps = 10;
 
         bool threw = false;
         try {
@@ -495,7 +495,7 @@ void testEjectionChainFillsTightPool() {
         config.score_checks = optimaru::ScoreChecks::Full;
         config.ruin_recreate = false;
         config.descent_weight = 0.0;
-        config.ruinRecreateAsMoveWeight = 0.0;
+        config.ruin_recreate_as_move_weight = 0.0;
         config.route_elimination_weight = 0.0;
         config.iterated_local_search_weight = 0.0;  // its ruin/repair could fill the pool too
         config.ejection_chain_weight = 1.0;

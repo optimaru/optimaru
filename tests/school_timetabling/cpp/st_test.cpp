@@ -286,8 +286,8 @@ void verifyFullAssertSolve() {
     config.seed = 3;
     config.score_checks = optimaru::ScoreChecks::Full;
     // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
-    config.ruinRecreateUnimprovedStepTrigger = 200;
-    config.ruinRecreatePolishSteps = 100;
+    config.ruin_recreate_unimproved_step_trigger = 200;
+    config.ruin_recreate_polish_steps = 100;
 
     bool corrupted = false;
     Score final{};
@@ -369,9 +369,9 @@ void verifySearchStrategies() {
         config.seed = 3;
         config.score_checks = optimaru::ScoreChecks::Full;
         config.descent_weight = testCase.descent;
-        config.ruinRecreateAsMoveWeight = testCase.drMove;
-        config.ruinRecreateUnimprovedStepTrigger = 200;
-        config.ruinRecreatePolishSteps = 100;
+        config.ruin_recreate_as_move_weight = testCase.drMove;
+        config.ruin_recreate_unimproved_step_trigger = 200;
+        config.ruin_recreate_polish_steps = 100;
 
         bool corrupted = false;
         try {

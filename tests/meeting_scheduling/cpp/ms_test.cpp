@@ -416,8 +416,8 @@ void verifyFullAssertSolve() {
     config.seed = 3;
     config.score_checks = optimaru::ScoreChecks::Full;
     // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
-    config.ruinRecreateUnimprovedStepTrigger = 200;
-    config.ruinRecreatePolishSteps = 100;
+    config.ruin_recreate_unimproved_step_trigger = 200;
+    config.ruin_recreate_polish_steps = 100;
 
     bool corrupted = false;
     Score final{};
@@ -491,7 +491,7 @@ void verifyPinnedAndDemoSolve() {
     // must not change what a solve is allowed to reach (only how fast).
     MeetingSchedule unguided = buildDemoData();
     Solver::Config unguidedConfig = demoConfig;
-    unguidedConfig.dayFitValueProbability = 0.0;
+    unguidedConfig.day_fit_value_probability = 0.0;
     Solver unguidedSolver(unguidedConfig);
     unguidedSolver.solve(unguided);
     check(unguided.score.hard == 0, "demo reaches 0hard with day-fit guidance disabled");

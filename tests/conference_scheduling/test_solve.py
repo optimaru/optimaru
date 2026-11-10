@@ -66,9 +66,9 @@ def test_solve_config_mirror():
 
 
 def test_parallel_solver_count_workers():
-    """parallelSolverCount>1 is handled by a domain-level fan-out rather than the engine's
-    built-in multiStart (the domain drives the restartSegments budget). Checks that each
-    worker's solve ends normally and the best is adopted."""
+    """parallel_solver_count > 1 runs through optimaru::solve_parallel_starts rather than the
+    engine's own multi-start (each start drives its restart_segments budget itself). Checks
+    that each start's solve ends normally and the best is adopted."""
     for workers in (2, 4):
         schedule = cs.demo_conference()
         cs.solve(

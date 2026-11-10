@@ -166,24 +166,6 @@ PYBIND11_MODULE(_core, m) {
     optimaru::python::bind_solver_config(
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
             .def(py::init<>())
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
-            // Destroy-and-repair as an ordinary acceptor-judged move (engine
-            // ruin_recreate.as_move_weight). 0 disables it.
-            .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruinRecreateAsMoveWeight)
-            .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruinRecreateAsMoveMaxRuin)
             // A change move flips one item; a swap move trades a selected item
             // for an unselected one.
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
@@ -191,22 +173,8 @@ PYBIND11_MODULE(_core, m) {
             // Assignment best-improvement descent strategy weight. 0 = off.
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             // Nearby swap partners: items of similar weight. probability 0 = off.
-            .def_readwrite("nearby_probability", &Solver::Config::nearbyProbability)
-            .def_readwrite("nearby_size", &Solver::Config::nearbySize)
-            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-            // stops at the first feasible solution.
-            .def_property(
-                    "best_score_limit",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // Callback fired on every new best solution: on_new_best(step, score).
-            // The pybind11 wrapper re-acquires the GIL, so it is safe from the
-            // multi-start worker threads too.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+            .def_readwrite("nearby_probability", &Solver::Config::nearby_probability)
+            .def_readwrite("nearby_size", &Solver::Config::nearby_size);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

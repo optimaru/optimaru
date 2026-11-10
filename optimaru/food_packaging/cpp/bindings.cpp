@@ -199,19 +199,7 @@ PYBIND11_MODULE(_core, m) {
     optimaru::python::bind_solver_config(config);
     config.def(py::init<>())
             // 0 = auto: 1 without operator sharing, else 5 alternating rounds.
-            .def_readwrite("operator_rounds", &Solver::Config::operatorRounds)
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
+            .def_readwrite("operator_rounds", &Solver::Config::operator_rounds)
             .def_readwrite("relocate_move_weight", &Solver::Config::relocate_weight)
             .def_readwrite("list_swap_move_weight", &Solver::Config::list_swap_weight)
             .def_readwrite("two_opt_move_weight", &Solver::Config::two_opt_weight)
@@ -219,8 +207,8 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("tail_swap_move_weight", &Solver::Config::tail_swap_weight)
             // Nearby selection over the cleanup matrix (cheap-changeover
             // neighborhoods); probability 0 disables.
-            .def_readwrite("nearby_probability", &Solver::Config::nearbyProbability)
-            .def_readwrite("nearby_size", &Solver::Config::nearbySize)
+            .def_readwrite("nearby_probability", &Solver::Config::nearby_probability)
+            .def_readwrite("nearby_size", &Solver::Config::nearby_size)
             // Early termination once bestScore >= (hard, medium*1e10 + soft) as
             // the ENGINE score; (0, -inf) stops at the first hard-feasible
             // solution.

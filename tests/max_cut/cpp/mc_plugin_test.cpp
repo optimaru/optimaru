@@ -329,9 +329,9 @@ bool fullAssertSolve(MaxCutProblem& p, ConstraintAssembly assembly, const std::s
     config.step_limit = 4000;
     config.seed = 3;
     config.score_checks = optimaru::ScoreChecks::Full;
-    config.ruinRecreateUnimprovedStepTrigger = 200;
-    config.ruinRecreatePolishSteps = 100;
-    config.ruinRecreateAsMoveWeight = 0.05;
+    config.ruin_recreate_unimproved_step_trigger = 200;
+    config.ruin_recreate_polish_steps = 100;
+    config.ruin_recreate_as_move_weight = 0.05;
     DecomposedCalculator calculator;
     std::move(assembly).into(calculator);
     try {

@@ -291,54 +291,22 @@ PYBIND11_MODULE(_core, m) {
             // Consecutive local-search runs sharing the one time limit; each
             // restarts from the previous run's best (see cs/solver.hpp).
             .def_property(
-                    "restart_segments", [](const Solver::Config& c) { return c.restartSegments; },
+                    "restart_segments", [](const Solver::Config& c) { return c.restart_segments; },
                     [](Solver::Config& c, int segments) {
                         if (segments <= 0)
                             throw py::value_error("restart_segments must be positive");
-                        c.restartSegments = segments;
+                        c.restart_segments = segments;
                     })
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
-            // Destroy-and-repair as an ordinary acceptor-judged move; negative =
-            // auto (0.2 / slotRoomCount, the budget-share rule), 0 disables.
-            .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruinRecreateAsMoveWeight)
-            .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruinRecreateAsMoveMaxRuin)
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             // Violation-guided entity selection probability (0 = off; see
             // cs/solver.hpp).
-            .def_readwrite("hot_talk_probability", &Solver::Config::hotTalkProbability)
+            .def_readwrite("hot_talk_probability", &Solver::Config::hot_talk_probability)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             // Bias change moves toward the talk's type-compatible cells (see
             // cs/solver.hpp).
             .def_readwrite("compatible_value_probability",
-                           &Solver::Config::compatibleValueProbability)
-            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-            // stops at the first feasible solution.
-            .def_property(
-                    "best_score_limit",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // Callback fired on every new best solution: on_new_best(step, score).
-            // The pybind11 wrapper re-acquires the GIL, so it is safe from the
-            // engine's multi-start worker threads too.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+                           &Solver::Config::compatible_value_probability);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

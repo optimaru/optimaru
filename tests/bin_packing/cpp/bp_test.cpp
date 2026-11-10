@@ -389,9 +389,9 @@ void verifyFullAssertSolve() {
     config.seed = 3;
     config.score_checks = optimaru::ScoreChecks::Full;
     // Kick early so the LNS ruin/recreate path also runs under ScoreChecks::Full.
-    config.ruinRecreateUnimprovedStepTrigger = 200;
-    config.ruinRecreatePolishSteps = 100;
-    config.ruinRecreateAsMoveWeight = 0.05;
+    config.ruin_recreate_unimproved_step_trigger = 200;
+    config.ruin_recreate_polish_steps = 100;
+    config.ruin_recreate_as_move_weight = 0.05;
     bool corrupted = false;
     try {
         Solver(config).solve(p);
@@ -461,7 +461,7 @@ void verifyParallel() {
     BinPackingProblem p = twentyItems(true);
     Solver::Config config;
     config.time_limit = std::chrono::milliseconds(500);
-    config.parallelSolverCount = 3;
+    config.parallel_solver_count = 3;
     config.seed = 11;
     Solver(config).solve(p);
     const Score reported = p.score;

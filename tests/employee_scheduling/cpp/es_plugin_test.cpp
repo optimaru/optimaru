@@ -447,7 +447,7 @@ void verifyParallelFailureStopsWorkers() {
     EmployeeSchedule s = buildRoster(5);
     Solver::Config config;
     config.time_limit = std::chrono::seconds(30);
-    config.parallelSolverCount = 4;
+    config.parallel_solver_count = 4;
     config.on_new_best = [](std::int64_t, const Score&) { throw std::runtime_error("boom"); };
     const auto started = std::chrono::steady_clock::now();
     bool raised = false;
@@ -468,7 +468,7 @@ void verifyThreadStartFailureStopsWorkers() {
     EmployeeSchedule s = buildRoster(5);
     Solver::Config config;
     config.time_limit = std::chrono::seconds(30);
-    config.parallelSolverCount = 4;
+    config.parallel_solver_count = 4;
     // std::thread throws std::system_error when the system has no thread to
     // give; here worker 1's creation fails through the engine's test seam.
     optimaru::worker_thread_start_hook = [](int index) {

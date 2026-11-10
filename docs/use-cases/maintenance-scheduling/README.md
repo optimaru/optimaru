@@ -21,7 +21,11 @@ result = mnt.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`maintenance_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`maintenance_scheduling.SolverConfig`) and `constraints` (see below).
+
+`SolverConfig` holds the search knobs; `optimaru/maintenance_scheduling/_core.pyi` lists them. Two of them run destroy-and-repair as an ordinary move judged by the acceptor, besides the kicks on stagnation: `ruin_recreate_as_move_weight` is the probability that a step draws one (0, the default, turns it off) and `ruin_recreate_as_move_max_ruin` is its ruin size (12 by default).
+
+The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=maintenance_scheduling && cmake --build build -j

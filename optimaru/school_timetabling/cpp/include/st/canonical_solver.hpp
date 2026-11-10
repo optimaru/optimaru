@@ -1,19 +1,13 @@
 #ifndef ST_CANONICAL_SOLVER_HPP
 #define ST_CANONICAL_SOLVER_HPP
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
 #include <utility>
-#include <vector>
 
 #include "st/canonical_domain.hpp"
 #include "st/objective_weights.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace st::canon {
 
@@ -31,60 +25,32 @@ namespace st::canon {
 //     phase; builtin-equivalent single move in the hard phase);
 //   - a construction-heuristic difficulty order (block members, team-teaching
 //     and tightly-restricted lessons first — First Fit Decreasing).
-// parallelSolverCount > 1 runs the independent worker threads
+// parallel_solver_count > 1 runs the independent worker threads
 // (each with its own calculator + operator instances, seed + i).
 class Solver {
 public:
-    struct Config {
-        // Wall-clock budget (the CP-SAT package's SOLVER_TIME_LIMIT_SECONDS
-        // analog).
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires (termination is by time_limit).
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        // Late-acceptance history length. 0 (the default) = auto: clamp(4 *
-        // lessonCount, 400, 3200) — on the track-2 bench the small instance
-        // prefers ~800 while the mid/large ones profit from 1600+, and 4x
-        // the lesson count tracks that optimum across sizes.
-        std::size_t history_length = 0;
-        std::uint64_t seed = 0;
-
-        // Independent parallel starts (the engine's multi-start): each worker
-        // receives seed + i and the full wall-clock budget; the best
-        // solution wins.
-        int parallelSolverCount = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; orders of magnitude
-        // slower).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS) — essential on dense instances where plain LA local
-        // search locks into a local optimum.
-        bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
-
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   time_limit             the CP-SAT package's SOLVER_TIME_LIMIT_SECONDS
+    //                          analog
+    //   history_length 0       clamp(4 * lessonCount, 400, 3200): on the
+    //                          track-2 bench the small instance prefers ~800
+    //                          while the mid/large ones profit from 1600+, and
+    //                          4x the lesson count tracks that optimum across
+    //                          sizes
+    //   parallel_solver_count  starts of this solver's own solve (see above),
+    //                          not the engine's multi-start; ignored by the
+    //                          constraint-assembly overload
+    //   ruin_recreate          essential on dense instances, where plain LA
+    //                          local search locks into a local optimum
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
-        // the stagnation kick above (engine
+        // the stagnation kick (engine
         // RuinRecreateSettings::as_move_weight). Probability that a step is a
         // small ruin + greedy repair instead of a sampled change/swap; a
         // rejected one is rolled back like any other move.
-        double ruinRecreateAsMoveWeight = 0.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = 0.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Best-improvement descent over one nearby lesson pair (engine
         // SearchSettings::descent_weight): enumerate every allowed period
@@ -104,14 +70,14 @@ public:
         // currently involved in a hard violation (the hard hot sets in the
         // incremental calculator). Falls back to uniform selection once
         // feasible. 0 disables the hook entirely.
-        double hotLessonProbability = 0.7;
+        double hot_lesson_probability = 0.7;
 
         // Smart same-class swap operator (the es SmartChangeMove pattern):
-        // evaluate up to smartClassSwapCandidates random classmate swaps and
+        // evaluate up to smart_class_swap_candidates random classmate swaps and
         // apply the best. Joins the adaptive move-operator roulette next to
         // the built-in change/swap mix.
-        bool smartClassSwapMoves = true;
-        int smartClassSwapCandidates = 8;
+        bool smart_class_swap_moves = true;
+        int smart_class_swap_candidates = 8;
 
         // Best-of-k width of the re-assign move (partial solving only; see
         // ReassignMove). Wider than the swap operator's k on purpose: putting
@@ -123,7 +89,7 @@ public:
         // / total objective: 8 -> 325 / 891748, 16 -> 328 / 862891,
         // 32 -> 342 / 722035, 64 -> 341 / 731519. Past ~32 each attempt costs
         // more score evaluations than the extra reach is worth.
-        int reassignCandidates = 32;
+        int reassign_candidates = 32;
 
         // Same-class nearby selection. Canonical instances are typically
         // fully packed per class (weekly hours == slot count), where a change
@@ -133,26 +99,19 @@ public:
         // meter makes classmates each other's nearest neighbors, which biases
         // swap partners toward classmates and turns the engine's related ruin
         // into a same-class cluster ruin.
-        bool sameClassNearby = true;
+        bool same_class_nearby = true;
         // Probability that a swap partner is drawn from the nearby
         // (same-class) list instead of uniformly. Swept on the track-2 bench
         // instances (S/M/L x 3 seeds, 10s): 0.5 dominates 0.8/0.95 — enough
         // pull to keep dense instances feasible, enough diversity to keep the
         // small instances from over-focusing.
-        double sameClassNearbyProbability = 0.5;
+        double same_class_nearby_probability = 0.5;
 
         // The soft weights of the monolithic fast path, solve(table) only
         // (the model carries none). Default: the soft components'
         // kDefaultWeight. solve(table, calculator) ignores them — the
         // assembly's components carry their own weights.
         ObjectiveWeights weights;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
-        // Set by solve() on each parallel worker's copy, not by a caller (and
-        // not bound to Python): the first worker that fails raises it, and the
-        // other workers' engines stop at their next step instead of running out
-        // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;
@@ -174,7 +133,7 @@ public:
     // final table.score is computed by THIS calculator and the calculator is
     // left primed on the final solution, so constraint_totals() explains
     // exactly that score. Single-start: the caller-owned calculator cannot
-    // be cloned, so parallelSolverCount is ignored.
+    // be cloned, so parallel_solver_count is ignored.
     void solve(Timetable& table, optimaru::DecomposedObjective<Timetable>& calculator);
 
 private:

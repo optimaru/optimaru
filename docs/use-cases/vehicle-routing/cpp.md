@@ -33,7 +33,7 @@ cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
 | `ScoreCalculator` (reference) + `VehicleRoutingIncrementalScoreCalculator` (live) | the four default constraints: a full recompute, and the incremental calculator the search calls |
 | `Solver` (`solver.hpp`)                          | wraps `optimaru/cpp/optimaru/`'s `optimaru::Solver`: construction heuristic + local search |
 | `Solver::Config::time_limit`                     | wall-clock budget (default 30 s)                 |
-| `Solver::Config::target_score`                   | stop early once the best score reaches it; `{0,0,min}` stops at the first feasible, fully assigned solution |
+| `Solver::Config::target_score`                   | stop early once the best score reaches it; `{0, kNoLevelFloor, kNoLevelFloor}` stops at the first feasible solution, which may still leave visits unassigned |
 
 ### The four constraints
 
@@ -74,8 +74,8 @@ the opt-in weight-0 objectives (`EnclosingCircleRadiusCost`,
    best-improvement descent (Toth & Vigo 2003) on nearby route pairs. The descent enumerates
    relocate, swap, 2-opt, 2-opt\* and bounded ExchangeNM moves, then applies
    the best candidate through the same acceptor (late acceptance by default).
-   It is enabled by `granularDescent` and controlled by
-   `granularDescentMaxSegment`, `granularDescentCandidateRoutes`, and
+   It is enabled by `granular_descent` and controlled by
+   `granular_descent_max_segment`, `granular_descent_candidate_routes`, and
    `descent_weight`.
    An ejection chain (`ejection_chain_weight`) covers what single moves
    cannot reach on a tightly loaded fleet: it inserts an unassigned visit (or
@@ -98,7 +98,7 @@ the opt-in weight-0 objectives (`EnclosingCircleRadiusCost`,
    by re-costing the written-out candidate route, so the same strategies run
    on any constraint assembly.
 3. **Adaptive ruin & recreate (ALNS)** — destroy-and-repair runs as an
-   acceptor-judged move (`ruinRecreateAsMoveWeight`). The unconditional
+   acceptor-judged move (`ruin_recreate_as_move_weight`). The unconditional
    stagnation kick is available (`ruin_recreate = true`) but off by default:
    on a tightly loaded fleet the kicked solution is one the search never
    recovers from, and the best stops moving (see `Solver::Config`).

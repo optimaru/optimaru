@@ -418,8 +418,8 @@ void verifySolve() {
         Solver::Config config;
         config.time_limit = std::chrono::seconds(2);
         config.score_checks = optimaru::ScoreChecks::Full;
-        config.ruinRecreateUnimprovedStepTrigger = 100;
-        config.ruinRecreatePolishSteps = 50;
+        config.ruin_recreate_unimproved_step_trigger = 100;
+        config.ruin_recreate_polish_steps = 50;
         config.seed = 1;
         bool threw = false;
         try {

@@ -3,18 +3,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <exception>
 #include <functional>
 #include <random>
-#include <stdexcept>
 #include <utility>
-#include <vector>
 
 #include "pjs/incremental_calculator.hpp"
 #include "pjs/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/worker_threads.hpp"
 
 namespace pjs {
 
@@ -41,9 +37,7 @@ Score levelScoreOf(const optimaru::DecomposedObjective<ProjectJobSchedule>& calc
 void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
                optimaru::Objective<ProjectJobSchedule>& calculator,
                std::function<Score(const optimaru::Score&)> reportedScore) {
-    optimaru::Settings engineConfig;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
     if (config.on_new_best) {
         auto on_new_best = config.on_new_best;
         engineConfig.on_new_best = [on_new_best, reportedScore = std::move(reportedScore)](
@@ -51,11 +45,7 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
             on_new_best(step, reportedScore(score));
         };
     }
-    engineConfig.limits.time_limit = config.time_limit;
     engineConfig.limits.target_score = toEngineScoreLimit(config.target_score);
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
     // history_length 0 = auto-scale with the instance (see Config).
     // 16x (up from the initial 8x) measured best once the allocation-free
     // calculator doubled moves/s: the longer horizon converts the extra
@@ -67,17 +57,8 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
                     : std::clamp<std::size_t>(16 * schedule.allocations.size(), 400, 3200);
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
-    lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
-    lns.max_ruin_fraction = config.ruinRecreateMaxRuinFraction;
-    lns.max_ruin_count = config.ruinRecreateMaxRuinCount;
-    lns.operator_decay = config.ruinRecreateOperatorDecay;
-    lns.rewards = config.ruinRecreateRewards;
-    lns.polish_steps = config.ruinRecreatePolishSteps;
 
-    // Guided value selection (see Config::nearCurrentDelayProbability): a
+    // Guided value selection (see Config::near_current_delay_probability): a
     // recommended change-move value keeps the delay within a small geometric
     // delta of the entity's current delay — the delay-major composite
     // encoding makes uniform draws jump delays wildly, and almost all of
@@ -86,8 +67,8 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
     // a clamped delay 0 the +-delta draws degenerate to mode switches too,
     // which is where good schedules live). Returning -1 falls back to the
     // engine's uniform draw.
-    if (config.nearCurrentDelayProbability > 0.0) {
-        const double guidedProbability = config.nearCurrentDelayProbability;
+    if (config.near_current_delay_probability > 0.0) {
+        const double guidedProbability = config.near_current_delay_probability;
         const ProjectJobSchedule* working = &schedule;
         engineConfig.search.value_hint = [working, guidedProbability](std::mt19937_64& rng,
                                                                       int allocationIndex) -> int {
@@ -132,46 +113,18 @@ void Solver::solve(ProjectJobSchedule& schedule) {
         ScoreCalculator::score(schedule);
         return;
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
 
-    // Multi-start at the domain level instead of the engine's
+    // Parallel starts at the domain level instead of the engine's
     // solve_multistart: the guided value selection below captures the working
     // solution, so every start needs its own schedule copy AND its own
-    // recommender wiring.
-    const int workerCount = std::max(1, config_.parallelSolverCount);
-    if (workerCount > 1) {
-        std::vector<ProjectJobSchedule> candidates(workerCount, schedule);
-        std::vector<std::exception_ptr> failures(workerCount);
-        // Raised by the first worker that fails: every worker's engine checks
-        // it once a step, so the others stop instead of using up their budget.
-        auto stop = std::make_shared<std::atomic<bool>>(false);
-        // A worker that cannot be started (std::system_error) stops and joins
-        // the ones already running before the error is rethrown here.
-        optimaru::run_worker_threads(workerCount, *stop,
-                                     [this, &candidates, &failures, &stop](int i) {
-                                         try {
-                                             Config workerConfig = config_;
-                                             workerConfig.parallelSolverCount = 1;
-                                             workerConfig.stop_flag = stop;
-                                             workerConfig.seed += static_cast<std::uint64_t>(i);
-                                             if (i != 0) workerConfig.on_new_best = nullptr;
-                                             Solver worker(std::move(workerConfig));
-                                             worker.solve(candidates[i]);
-                                         } catch (...) {
-                                             failures[i] = std::current_exception();
-                                             stop->store(true);
-                                         }
-                                     });
-        for (const std::exception_ptr& failure : failures) {
-            if (failure) std::rethrow_exception(failure);
-        }
-        int best = 0;
-        for (int i = 1; i < workerCount; ++i) {
-            if (candidates[i].score > candidates[best].score) best = i;
-        }
-        schedule = std::move(candidates[best]);
+    // recommender wiring. Each start is this whole solve again, on its copy,
+    // with one start (so it takes the single-start path below).
+    if (config_.parallel_solver_count > 1) {
+        const auto solveOne = [](const Config& config, ProjectJobSchedule& candidate, int) {
+            Solver(config).solve(candidate);
+        };
+        optimaru::solve_parallel_starts(config_, schedule, solveOne);
         return;
     }
 
@@ -195,9 +148,7 @@ void Solver::solve(ProjectJobSchedule& schedule,
             schedule.allocations[a].modeDelay = schedule.valueOf(0, 0);
         }
     }
-    if (config_.ruinRecreateRewards.size() != 4) {
-        throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
-    }
+    optimaru::check_config(config_);
     if (!schedule.allocations.empty()) {
         // The engine reports a new best right after the working solution
         // became it, so the calculator's accumulators hold exactly that

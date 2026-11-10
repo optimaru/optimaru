@@ -196,7 +196,7 @@ private:
 
     // Which placements are worth trying for e: with nearby selection, only the
     // slots adjacent to its assigned nearby neighbours (plus every list's end,
-    // so empty lists stay reachable) — O(nearbySize) trial insertions instead
+    // so empty lists stay reachable) — O(nearby size) trial insertions instead
     // of O(total positions). Without one, every position.
     //
     // A KNOWN WEAKNESS, AND WHY THE OBVIOUS FIX IS NOT HERE. When e's nearby
@@ -213,7 +213,7 @@ private:
     // loses on both use cases that exercise it: vehicle-routing RC2_10_5 goes
     // +8.1% -> +11.4% (35 -> 36 vehicles), and pickup-delivery's pair-aware
     // operators drop from -120/-170/-150 medium to -230/-190/-210 on the tight
-    // instance. The reason is cost, not direction — it turns an O(nearbySize)
+    // instance. The reason is cost, not direction — it turns an O(nearby size)
     // repair into an O(elements) one precisely when the repair is busiest, and
     // the kicks it buys back are worth more than the placements it improves.
     // A cheaper anchor (a bounded sample of positions, or remembering where the

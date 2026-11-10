@@ -1,18 +1,11 @@
 #ifndef ES_SOLVER_HPP
 #define ES_SOLVER_HPP
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
 #include <utility>
-#include <vector>
 
 #include "es/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
-#include "optimaru/model/editor.hpp"  // ScoreChecks
+#include "optimaru/solver_config.hpp"
 
 namespace es {
 
@@ -22,20 +15,18 @@ namespace es {
 // optimaru::Solver<EmployeeSchedule>.
 class Solver {
 public:
-    struct Config {
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires (termination is by time_limit).
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        std::size_t history_length = 400;
-        std::uint64_t seed = 0;
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   history_length         400 by default. There is no automatic size: 0
+    //                          is refused
+    //   parallel_solver_count  only solve(schedule) honors it;
+    //                          solve(schedule, calculator) ignores it and runs
+    //                          one search. Python goes through the calculator
+    //                          overload and gets its parallel starts from
+    //                          separate processes instead (see
+    //                          optimaru.employee_scheduling.models.solve_request)
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
+        Config() { history_length = 400; }
 
         // Fraction of the total time budget reserved for the post-local-search
         // greedy hard-repair. Local search runs for time_limit*(1-fraction) and
@@ -49,60 +40,33 @@ public:
         // costs local-search time. Kept as a knob for instances where local
         // search ends a few points short of feasible and a final greedy push
         // closes the gap.
-        double greedyRepairBudgetFraction = 0.0;
-
-        // Independent parallel starts. Each worker receives seed + i
-        // and the full wall-clock budget; the best solution wins. This is
-        // generally more scalable than synchronizing candidate evaluation
-        // around one mutable incremental score editor.
-        // Only solve(schedule) honors this; solve(schedule, calculator) ignores
-        // it and runs one search. Python goes through the calculator overload
-        // and gets its parallel starts from separate processes instead (see
-        // optimaru.employee_scheduling.models.solve_request).
-        int parallelSolverCount = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (a debugging aid for the C++ tests;
-        // orders of magnitude slower, not exposed to Python).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
+        double greedy_repair_budget_fraction = 0.0;
 
         // Guided move selection (A: pick a skill-capable, available target
         // employee; B: bias the shift toward employees with hard violations).
         // Set false for plain uniform-random move selection.
-        bool guidedMoves = true;
-        bool employeeGreedyConstruction = true;
-
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS). Without this the late-acceptance search can lock into a local
-        // optimum within milliseconds on small instances and never escape.
-        bool ruin_recreate = true;
-        std::int64_t ruinRecreateUnimprovedStepTrigger = 5000;
-        double ruinRecreateMinRuinFraction = 0.10;
-        double ruinRecreateMaxRuinFraction = 0.30;
-        int ruinRecreateMaxRuinCount = 60;
-        double ruinRecreateOperatorDecay = 0.8;
-        std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruinRecreatePolishSteps = 5000;
+        bool guided_moves = true;
+        bool employee_greedy_construction = true;
 
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
-        // the stagnation kick above (engine
+        // the stagnation kick (engine
         // RuinRecreateSettings::as_move_weight). Probability that a step is a
         // small ruin + greedy repair instead of a sampled change/swap; a
         // rejected one is rolled back like any other move. It draws from the
         // same adaptive ruin-operator pool as the kick, so with
-        // employeeRuinMoves on the domain's own employeeHotRuin is one of the
+        // employee_ruin_moves on the domain's own employeeHotRuin is one of the
         // operators it can pick — the difference from the kick is the
         // cadence (every step by weight, not on stagnation) and that the
         // acceptor gets a veto.
-        double ruinRecreateAsMoveWeight = 0.0;
-        int ruinRecreateAsMoveMaxRuin = 12;
+        double ruin_recreate_as_move_weight = 0.0;
+        int ruin_recreate_as_move_max_ruin = 12;
 
         // Best-improvement descent over one nearby shift pair (engine
         // SearchSettings::descent_weight): enumerate every employee for
         // both shifts plus their swap, apply the best improving one, repeat
         // until the pair is locally optimal. Always improving, so it bypasses
         // the acceptor. Picks its first shift through the same violation
-        // guidance as the change moves when guidedMoves is on.
+        // guidance as the change moves when guided_moves is on.
         //
         // One descent costs ~2 * employeeCount score evaluations, which is
         // what makes it affordable HERE: the value range is the employee
@@ -120,12 +84,12 @@ public:
         // min-rest) actually interact. Neighbor-list size is auto-derived from
         // the densest 24h window of the instance. Same pattern as
         // school-timetabling's adopted same-group nearby.
-        bool nearbyShifts = true;
+        bool nearby_shifts = true;
         // Default 0.65: measured best compromise across roster sizes. 0.8 wins
         // bigger on rosters of ~1000 shifts but costs small rosters their soft
         // budget once hard converges (same-day swaps cannot move the date-based
         // soft terms). For large-only workloads prefer 0.8.
-        double nearbyShiftsProbability = 0.65;
+        double nearby_shifts_probability = 0.65;
 
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
@@ -135,20 +99,20 @@ public:
         // engine's custom move hooks. They complement the generic change/swap
         // moves with stronger domain moves while keeping the same score
         // calculator and acceptor protocol.
-        bool smartChangeMoves = false;
-        int smartChangeCandidateCount = 6;
-        bool employeeDayRepairMoves = true;
-        bool employeeRunRepairMoves = true;
-        int employeeRunRepairMaxDays = 3;
-        bool employeeWindowMoves = true;
-        int employeeWindowMaxDays = 3;
+        bool smart_change_moves = false;
+        int smart_change_candidate_count = 6;
+        bool employee_day_repair_moves = true;
+        bool employee_run_repair_moves = true;
+        int employee_run_repair_max_days = 3;
+        bool employee_window_moves = true;
+        int employee_window_max_days = 3;
         // Cap how often the adaptive custom-operator pool gets a turn. Window
         // swaps are much costlier than sampled change/swap moves and can
         // otherwise monopolize the selector after one reward. 0.30-0.40 is a
         // plateau in interleaved A/B runs across roster sizes. Re-measure if
         // move economics shift.
         double custom_move_probability = 0.30;
-        bool employeeRuinMoves = true;
+        bool employee_ruin_moves = true;
 
         // Allow the search to leave a shift UNASSIGNED (employeeIndex = -1).
         // The default fills every shift (the value range is the employee list,
@@ -157,7 +121,7 @@ public:
         // coverage slots (staffing floor via shift_coverage_cost) rather than
         // fixed demand. Default off: with the unassigned_shifts_cost hard rule
         // (the usual setup) an empty slot is penalized and refilled anyway.
-        bool employeeUnassignMoves = false;
+        bool employee_unassign_moves = false;
 
         // Sequence move mix. Exposed for parity with the generic engine; employee
         // scheduling is assignment-shaped, so these do not affect this domain.
@@ -166,13 +130,6 @@ public:
         double two_opt_weight = 0.2;
         double or_opt_weight = 0.0;
         double tail_swap_weight = 0.0;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
-        // Set by solve() on each parallel worker's copy, not by a caller (and
-        // not bound to Python): the first worker that fails raises it, and the
-        // other workers' engines stop at their next step instead of running out
-        // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;
@@ -190,7 +147,7 @@ public:
     // primed on the final solution so constraint_totals() explains the score.
     // Structurally compatible delta constraints are grouped automatically;
     // unsupported constraints remain on the individual generic delta path.
-    // Always one search: Config::parallelSolverCount is ignored here.
+    // Always one search: Config::parallel_solver_count is ignored here.
     void solve(EmployeeSchedule& schedule,
                optimaru::DecomposedObjective<EmployeeSchedule>& calculator);
 

@@ -569,75 +569,59 @@ PYBIND11_MODULE(_core, m) {
                                     "no_improvement_step_count_limit must be non-negative");
                         c.stall_step_limit = steps;
                     })
-            .def_readwrite("guided_moves", &Solver::Config::guidedMoves)
+            .def_readwrite("guided_moves", &Solver::Config::guided_moves)
             .def_readwrite("employee_greedy_construction",
-                           &Solver::Config::employeeGreedyConstruction)
+                           &Solver::Config::employee_greedy_construction)
             .def_property(
                     "greedy_repair_budget_fraction",
-                    [](const Solver::Config& c) { return c.greedyRepairBudgetFraction; },
+                    [](const Solver::Config& c) { return c.greedy_repair_budget_fraction; },
                     [](Solver::Config& c, double fraction) {
                         if (fraction < 0.0 || fraction >= 0.9)
                             throw py::value_error(
                                     "greedy_repair_budget_fraction must be in [0, 0.9)");
-                        c.greedyRepairBudgetFraction = fraction;
+                        c.greedy_repair_budget_fraction = fraction;
                     })
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruinRecreateUnimprovedStepTrigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruinRecreateMinRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruinRecreateMaxRuinFraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruinRecreateMaxRuinCount)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruinRecreateOperatorDecay)
-            .def_readwrite("ruin_recreate_polish_steps", &Solver::Config::ruinRecreatePolishSteps)
-            .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruinRecreateAsMoveWeight)
-            .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruinRecreateAsMoveMaxRuin)
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             .def_readwrite("descent_max_sweeps", &Solver::Config::descent_max_sweeps)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
-            .def_readwrite("nearby_shifts", &Solver::Config::nearbyShifts)
+            .def_readwrite("nearby_shifts", &Solver::Config::nearby_shifts)
             .def_property(
                     "nearby_shifts_probability",
-                    [](const Solver::Config& c) { return c.nearbyShiftsProbability; },
+                    [](const Solver::Config& c) { return c.nearby_shifts_probability; },
                     [](Solver::Config& c, double probability) {
                         if (probability < 0.0 || probability > 1.0)
                             throw py::value_error(
                                     "nearby_shifts_probability must be between 0 and 1");
-                        c.nearbyShiftsProbability = probability;
+                        c.nearby_shifts_probability = probability;
                     })
-            .def_readwrite("smart_change_moves", &Solver::Config::smartChangeMoves)
+            .def_readwrite("smart_change_moves", &Solver::Config::smart_change_moves)
             .def_property(
                     "smart_change_candidate_count",
-                    [](const Solver::Config& c) { return c.smartChangeCandidateCount; },
+                    [](const Solver::Config& c) { return c.smart_change_candidate_count; },
                     [](Solver::Config& c, int count) {
                         if (count <= 0)
                             throw py::value_error("smart_change_candidate_count must be positive");
-                        c.smartChangeCandidateCount = count;
+                        c.smart_change_candidate_count = count;
                     })
-            .def_readwrite("employee_day_repair_moves", &Solver::Config::employeeDayRepairMoves)
-            .def_readwrite("employee_run_repair_moves", &Solver::Config::employeeRunRepairMoves)
+            .def_readwrite("employee_day_repair_moves", &Solver::Config::employee_day_repair_moves)
+            .def_readwrite("employee_run_repair_moves", &Solver::Config::employee_run_repair_moves)
             .def_property(
                     "employee_run_repair_max_days",
-                    [](const Solver::Config& c) { return c.employeeRunRepairMaxDays; },
+                    [](const Solver::Config& c) { return c.employee_run_repair_max_days; },
                     [](Solver::Config& c, int days) {
                         if (days <= 0)
                             throw py::value_error("employee_run_repair_max_days must be positive");
-                        c.employeeRunRepairMaxDays = days;
+                        c.employee_run_repair_max_days = days;
                     })
-            .def_readwrite("employee_window_moves", &Solver::Config::employeeWindowMoves)
+            .def_readwrite("employee_window_moves", &Solver::Config::employee_window_moves)
             .def_property(
                     "employee_window_max_days",
-                    [](const Solver::Config& c) { return c.employeeWindowMaxDays; },
+                    [](const Solver::Config& c) { return c.employee_window_max_days; },
                     [](Solver::Config& c, int days) {
                         if (days <= 0)
                             throw py::value_error("employee_window_max_days must be positive");
-                        c.employeeWindowMaxDays = days;
+                        c.employee_window_max_days = days;
                     })
             .def_property(
                     "custom_move_probability",
@@ -648,26 +632,13 @@ PYBIND11_MODULE(_core, m) {
                                     "custom_move_probability must be between 0 and 1");
                         c.custom_move_probability = probability;
                     })
-            .def_readwrite("employee_ruin_moves", &Solver::Config::employeeRuinMoves)
-            .def_readwrite("employee_unassign_moves", &Solver::Config::employeeUnassignMoves)
+            .def_readwrite("employee_ruin_moves", &Solver::Config::employee_ruin_moves)
+            .def_readwrite("employee_unassign_moves", &Solver::Config::employee_unassign_moves)
             .def_readwrite("relocate_move_weight", &Solver::Config::relocate_weight)
             .def_readwrite("list_swap_move_weight", &Solver::Config::list_swap_weight)
             .def_readwrite("two_opt_move_weight", &Solver::Config::two_opt_weight)
             .def_readwrite("or_opt_move_weight", &Solver::Config::or_opt_weight)
-            .def_readwrite("tail_swap_move_weight", &Solver::Config::tail_swap_weight)
-            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-            // stops at the first feasible solution.
-            .def_property(
-                    "best_score_limit",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // Callback fired on every new best solution: on_new_best(step, score).
-            // The pybind11 wrapper re-acquires the GIL, which solve() releases.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+            .def_readwrite("tail_swap_move_weight", &Solver::Config::tail_swap_weight);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

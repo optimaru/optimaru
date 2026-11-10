@@ -10,7 +10,7 @@
 //
 // Two modes:
 //   st_quality_bench <classes> <teachers> <rooms> <seed> <seconds> <out.json>
-//                    [parallelSolverCount]
+//                    [parallel_solver_count]
 //     Generates a deterministic instance (5 days x 8 periods, fixed subject
 //     curriculum, seed-shuffled subject->teacher split), dumps it as JSON
 //     (the CP-SAT model and evaluate.py read the same file), solves for the
@@ -231,7 +231,7 @@ int main(int argc, char** argv) {
     if (argc < 7) {
         std::fprintf(stderr,
                      "usage: st_quality_bench <classes> <teachers> <rooms> <seed> "
-                     "<seconds> <out.json> [parallelSolverCount]\n"
+                     "<seconds> <out.json> [parallel_solver_count]\n"
                      "       st_quality_bench crosscheck <out.json>\n");
         return 2;
     }
@@ -253,16 +253,16 @@ int main(int argc, char** argv) {
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = seed;
-    if (argc >= 8) config.parallelSolverCount = std::max(1, std::atoi(argv[7]));
+    if (argc >= 8) config.parallel_solver_count = std::max(1, std::atoi(argv[7]));
     // Optional knob overrides for A/B tuning sweeps (unset = solver
     // defaults, i.e. exactly the published bench configuration). These only
     // change SEARCH knobs, never scoring semantics.
     if (const char* v = std::getenv("ST_BENCH_ASMOVE_WEIGHT"))
-        config.ruinRecreateAsMoveWeight = std::atof(v);
+        config.ruin_recreate_as_move_weight = std::atof(v);
     if (const char* v = std::getenv("ST_BENCH_ASMOVE_MAXRUIN"))
-        config.ruinRecreateAsMoveMaxRuin = std::atoi(v);
+        config.ruin_recreate_as_move_max_ruin = std::atoi(v);
     if (const char* v = std::getenv("ST_BENCH_NEARBY_PROB"))
-        config.sameGroupNearbyProbability = std::atof(v);
+        config.same_group_nearby_probability = std::atof(v);
     if (const char* v = std::getenv("ST_BENCH_LA_SIZE"))
         config.history_length = static_cast<std::size_t>(std::atoll(v));
     const auto t0 = std::chrono::steady_clock::now();

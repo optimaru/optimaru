@@ -146,6 +146,11 @@ class SolverConfig:
     ruin_recreate_operator_decay: float
     ruin_recreate_rewards: list[float]
     ruin_recreate_polish_steps: int
+    ruin_recreate_as_move_weight: float
+    """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
+    ruin_recreate.as_move_weight). 0 (default) = off."""
+    ruin_recreate_as_move_max_ruin: int
+    """Ruin size for the as-a-move form; much smaller than a kick's."""
     change_move_weight: float
     swap_move_weight: float
     window_value_probability: float

@@ -60,7 +60,7 @@ def test_on_new_best_callback():
 
 
 def test_parallel_solver_count_workers():
-    """parallelSolverCount>1 fans out to single-start workers rather than the engine's
+    """parallel_solver_count>1 fans out to single-start workers rather than the engine's
     built-in multiStart (the guidance hooks bind to each worker's working solution/calculator).
     Checks that each worker ends normally and the best is adopted."""
     for workers in (2, 4):
