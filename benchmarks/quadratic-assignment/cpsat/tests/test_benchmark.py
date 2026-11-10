@@ -1,5 +1,4 @@
 from cpsat_plugins.benchmark import score_solution
-
 from quadratic_assignment_cpsat import benchmark
 
 

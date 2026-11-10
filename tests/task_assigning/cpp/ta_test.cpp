@@ -27,49 +27,34 @@
 
 using namespace ta;
 
-namespace
-{
+namespace {
 
 int failures = 0;
 
-void check(bool ok, const std::string &label)
-{
+void check(bool ok, const std::string& label) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-void checkScore(const std::string &label,
-                const Score &actual,
-                const Score &expected)
-{
+void checkScore(const std::string& label, const Score& actual, const Score& expected) {
     const bool ok = actual == expected;
-    std::printf("  [%s] %-44s got=%s expected=%s\n",
-                ok ? "PASS" : "FAIL",
-                label.c_str(),
-                actual.str().c_str(),
-                expected.str().c_str());
-    if (!ok)
-        ++failures;
+    std::printf("  [%s] %-44s got=%s expected=%s\n", ok ? "PASS" : "FAIL", label.c_str(),
+                actual.str().c_str(), expected.str().c_str());
+    if (!ok) ++failures;
 }
 
 // One customer, one task type per added task; affinity/skills as requested.
-struct Builder
-{
+struct Builder {
     TaskAssigningSolution solution;
 
     Builder() { solution.customers.push_back({"c0", "Customer 0"}); }
 
-    int addCustomer()
-    {
-        solution.customers.push_back(
-            {"c" + std::to_string(solution.customers.size()), ""});
+    int addCustomer() {
+        solution.customers.push_back({"c" + std::to_string(solution.customers.size()), ""});
         return static_cast<int>(solution.customers.size()) - 1;
     }
 
-    int addEmployee(std::vector<std::string> skills,
-                    std::vector<Affinity> affinities = {})
-    {
+    int addEmployee(std::vector<std::string> skills, std::vector<Affinity> affinities = {}) {
         Employee employee;
         employee.id = "e" + std::to_string(solution.employees.size());
         employee.fullName = employee.id;
@@ -79,12 +64,8 @@ struct Builder
         return static_cast<int>(solution.employees.size()) - 1;
     }
 
-    int addTask(Minutes baseDuration,
-                std::vector<std::string> requiredSkills = {},
-                Priority priority = Priority::MINOR,
-                Minutes minStartTime = 0,
-                int customer = 0)
-    {
+    int addTask(Minutes baseDuration, std::vector<std::string> requiredSkills = {},
+                Priority priority = Priority::MINOR, Minutes minStartTime = 0, int customer = 0) {
         TaskType type;
         type.code = "T" + std::to_string(solution.taskTypes.size());
         type.title = type.code;
@@ -103,8 +84,7 @@ struct Builder
         return static_cast<int>(solution.tasks.size()) - 1;
     }
 
-    void assign(int employee, std::vector<int> tasks)
-    {
+    void assign(int employee, std::vector<int> tasks) {
         solution.employees[employee].tasks = std::move(tasks);
     }
 };
@@ -112,8 +92,7 @@ struct Builder
 // -------------------------------------------------------------------------
 // (a) Each constraint in isolation, full recompute vs hand-computed scores.
 // -------------------------------------------------------------------------
-void verifyConstraints()
-{
+void verifyConstraints() {
     std::printf("== (a) Constraints vs hand-computed scores ==\n");
 
     {
@@ -128,8 +107,7 @@ void verifyConstraints()
         b.assign(e, {t1, t2, t3});
         ScoreCalculator::score(b.solution);
         check(b.solution.score.hard == -3,
-              "requiredSkillCost penalizes 3 (got "
-                  + std::to_string(-b.solution.score.hard) + ")");
+              "requiredSkillCost penalizes 3 (got " + std::to_string(-b.solution.score.hard) + ")");
     }
     {
         // unassignedTasksCost: 3 tasks, 1 assigned
@@ -141,9 +119,8 @@ void verifyConstraints()
         const int t3 = b.addTask(1);
         b.assign(e, {t3});
         ScoreCalculator::score(b.solution);
-        check(b.solution.score.soft0 == -2,
-              "unassignedTasksCost penalizes 2 (got "
-                  + std::to_string(-b.solution.score.soft0) + ")");
+        check(b.solution.score.soft0 == -2, "unassignedTasksCost penalizes 2 (got " +
+                                                    std::to_string(-b.solution.score.soft0) + ")");
     }
     {
         // criticalPriorityTaskEndTimeCost: HIGH
@@ -156,9 +133,8 @@ void verifyConstraints()
         b.addTask(20, {}, Priority::MINOR, 2);
         b.assign(e, {t1});
         ScoreCalculator::score(b.solution);
-        check(b.solution.score.soft2 == -44,
-              "criticalPriorityTaskEndTimeCost penalizes 44 (got "
-                  + std::to_string(-b.solution.score.soft2) + ")");
+        check(b.solution.score.soft2 == -44, "criticalPriorityTaskEndTimeCost penalizes 44 (got " +
+                                                     std::to_string(-b.solution.score.soft2) + ")");
     }
     {
         // majorPriorityTaskEndTimeCost: endTime 11,
@@ -169,9 +145,8 @@ void verifyConstraints()
         b.addTask(20, {}, Priority::MINOR, 2);
         b.assign(e, {t1});
         ScoreCalculator::score(b.solution);
-        check(b.solution.score.soft2 == -22,
-              "majorPriorityTaskEndTimeCost penalizes 22 (got "
-                  + std::to_string(-b.solution.score.soft2) + ")");
+        check(b.solution.score.soft2 == -22, "majorPriorityTaskEndTimeCost penalizes 22 (got " +
+                                                     std::to_string(-b.solution.score.soft2) + ")");
     }
     {
         // minorPriorityTaskEndTimeCost: endTime 11,
@@ -182,9 +157,8 @@ void verifyConstraints()
         b.addTask(20, {}, Priority::MAJOR, 2);
         b.assign(e, {t1});
         ScoreCalculator::score(b.solution);
-        check(b.solution.score.soft2 == -11,
-              "minorPriorityTaskEndTimeCost penalizes 11 (got "
-                  + std::to_string(-b.solution.score.soft2) + ")");
+        check(b.solution.score.soft2 == -11, "minorPriorityTaskEndTimeCost penalizes 11 (got " +
+                                                     std::to_string(-b.solution.score.soft2) + ")");
     }
     {
         // squaredMakespanCost, with chained start times:
@@ -203,11 +177,10 @@ void verifyConstraints()
         b.assign(e2, {t3});
         ScoreCalculator::score(b.solution);
         check(b.solution.score.soft1 == -3725,
-              "squaredMakespanCost penalizes 61^2 + 2^2 = 3725 (got "
-                  + std::to_string(-b.solution.score.soft1) + ")");
+              "squaredMakespanCost penalizes 61^2 + 2^2 = 3725 (got " +
+                      std::to_string(-b.solution.score.soft1) + ")");
         // Derived fields recomputed along the chain.
-        check(b.solution.tasks[t2].startTime == 21
-                  && b.solution.tasks[t2].employee == e1,
+        check(b.solution.tasks[t2].startTime == 21 && b.solution.tasks[t2].employee == e1,
               "chained startTime = max(previous end, minStartTime)");
     }
     {
@@ -221,9 +194,8 @@ void verifyConstraints()
         b.assign(e, {t1, t2});
         ScoreCalculator::score(b.solution);
         // t1: start 0, end 30. t2: start 30, end 70.
-        check(b.solution.tasks[t1].startTime == 0
-                  && b.solution.tasks[t2].startTime == 30
-                  && b.solution.score.soft1 == -(70 * 70),
+        check(b.solution.tasks[t1].startTime == 0 && b.solution.tasks[t2].startTime == 30 &&
+                      b.solution.score.soft1 == -(70 * 70),
               "affinity multipliers LOW x3 / NONE x4 drive durations");
     }
     {
@@ -245,10 +217,9 @@ void verifyConstraints()
         check(!score.feasible() && Score{0, -5, -100, -10}.feasible(),
               "isFeasible depends on the hard level only");
         // Level priority survives the engine mapping.
-        check(toEngineScore(Score{0, -1, 0, 0})
-                      < toEngineScore(Score{-0, 0, -1000000, -999999})
-                  && toEngineScore(Score{-1, 0, 0, 0})
-                         < toEngineScore(Score{0, -100000, -1000000, -9}),
+        check(toEngineScore(Score{0, -1, 0, 0}) < toEngineScore(Score{-0, 0, -1000000, -999999}) &&
+                      toEngineScore(Score{-1, 0, 0, 0}) <
+                              toEngineScore(Score{0, -100000, -1000000, -9}),
               "lexicographic order preserved by the engine mapping");
     }
     std::printf("\n");
@@ -257,41 +228,29 @@ void verifyConstraints()
 // -------------------------------------------------------------------------
 // Random instance for the incremental / solve tests.
 // -------------------------------------------------------------------------
-TaskAssigningSolution
-buildRandomInstance(int taskCount, int employeeCount, unsigned seed)
-{
-    const std::vector<std::string> skillPool
-        = {"s0", "s1", "s2", "s3", "s4", "s5"};
+TaskAssigningSolution buildRandomInstance(int taskCount, int employeeCount, unsigned seed) {
+    const std::vector<std::string> skillPool = {"s0", "s1", "s2", "s3", "s4", "s5"};
     std::mt19937_64 rng(seed);
     Builder b;
     b.addCustomer();
     b.addCustomer();
     b.addCustomer();  // 4 customers in total
-    for (int e = 0; e < employeeCount; ++e)
-    {
+    for (int e = 0; e < employeeCount; ++e) {
         std::vector<std::string> skills;
-        for (const std::string &skill : skillPool)
-        {
-            if (rng() % 100 < 45)
-                skills.push_back(skill);
+        for (const std::string& skill : skillPool) {
+            if (rng() % 100 < 45) skills.push_back(skill);
         }
         std::vector<Affinity> affinities;
-        for (int c = 0; c < 4; ++c)
-            affinities.push_back(static_cast<Affinity>(rng() % 4));
+        for (int c = 0; c < 4; ++c) affinities.push_back(static_cast<Affinity>(rng() % 4));
         b.addEmployee(std::move(skills), std::move(affinities));
     }
-    for (int t = 0; t < taskCount; ++t)
-    {
+    for (int t = 0; t < taskCount; ++t) {
         std::vector<std::string> required;
-        for (const std::string &skill : skillPool)
-        {
-            if (rng() % 100 < 20)
-                required.push_back(skill);
+        for (const std::string& skill : skillPool) {
+            if (rng() % 100 < 20) required.push_back(skill);
         }
-        b.addTask(static_cast<Minutes>(10 + rng() % 51),
-                  std::move(required),
-                  static_cast<Priority>(rng() % 3),
-                  static_cast<Minutes>(rng() % 120),
+        b.addTask(static_cast<Minutes>(10 + rng() % 51), std::move(required),
+                  static_cast<Priority>(rng() % 3), static_cast<Minutes>(rng() % 120),
                   static_cast<int>(rng() % 4));
     }
     return b.solution;
@@ -301,17 +260,14 @@ buildRandomInstance(int taskCount, int employeeCount, unsigned seed)
 // (b) Incremental == full recompute across a random walk of sequence mutations
 // through the Editor protocol.
 // -------------------------------------------------------------------------
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (b) Incremental vs full recompute (random walk) ==\n");
-    TaskAssigningSolution solution
-        = buildRandomInstance(/*taskCount*/ 30, /*employeeCount*/ 6, 7);
+    TaskAssigningSolution solution = buildRandomInstance(/*taskCount*/ 30, /*employeeCount*/ 6, 7);
     const int taskCount = static_cast<int>(solution.tasks.size());
     const int employeeCount = static_cast<int>(solution.employees.size());
 
     TaskAssigningIncrementalScoreCalculator calculator;
-    optimaru::Editor<TaskAssigningSolution> editor(solution,
-                                                            calculator);
+    optimaru::Editor<TaskAssigningSolution> editor(solution, calculator);
 
     std::mt19937_64 rng(2024);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -319,98 +275,71 @@ void verifyIncremental()
     // Track which list each task is in (-1 == unassigned).
     std::vector<int> taskList(taskCount, -1);
     std::vector<int> unassigned;
-    for (int t = 0; t < taskCount; ++t)
-        unassigned.push_back(t);
+    for (int t = 0; t < taskCount; ++t) unassigned.push_back(t);
 
-    auto indexWithin = [&](int list, int task)
-    {
-        const std::vector<int> &tasks = solution.employees[list].tasks;
-        for (std::size_t p = 0; p < tasks.size(); ++p)
-        {
-            if (tasks[p] == task)
-                return static_cast<int>(p);
+    auto indexWithin = [&](int list, int task) {
+        const std::vector<int>& tasks = solution.employees[list].tasks;
+        for (std::size_t p = 0; p < tasks.size(); ++p) {
+            if (tasks[p] == task) return static_cast<int>(p);
         }
         return -1;
     };
 
     int mismatches = 0;
     const int steps = 3000;
-    for (int step = 0; step < steps; ++step)
-    {
+    for (int step = 0; step < steps; ++step) {
         const double dice = unit(rng);
-        if (dice < 0.35 && !unassigned.empty())
-        {
+        if (dice < 0.35 && !unassigned.empty()) {
             // Assign an unassigned task to a random (list, position).
             const std::size_t pick = rng() % unassigned.size();
             const int task = unassigned[pick];
-            unassigned.erase(unassigned.begin()
-                             + static_cast<std::ptrdiff_t>(pick));
+            unassigned.erase(unassigned.begin() + static_cast<std::ptrdiff_t>(pick));
             const int list = static_cast<int>(rng() % employeeCount);
-            const int position = static_cast<int>(
-                rng() % (solution.employees[list].tasks.size() + 1));
+            const int position =
+                    static_cast<int>(rng() % (solution.employees[list].tasks.size() + 1));
             editor.insert(list, position, task);
             taskList[task] = list;
-        }
-        else if (dice < 0.55)
-        {
+        } else if (dice < 0.55) {
             // Unassign a random assigned task.
             const int task = static_cast<int>(rng() % taskCount);
-            if (taskList[task] < 0)
-                continue;
-            editor.remove(taskList[task],
-                                       indexWithin(taskList[task], task));
+            if (taskList[task] < 0) continue;
+            editor.remove(taskList[task], indexWithin(taskList[task], task));
             taskList[task] = -1;
             unassigned.push_back(task);
-        }
-        else if (dice < 0.85)
-        {
+        } else if (dice < 0.85) {
             // Relocate a random assigned task.
             const int task = static_cast<int>(rng() % taskCount);
-            if (taskList[task] < 0)
-                continue;
-            editor.remove(taskList[task],
-                                       indexWithin(taskList[task], task));
+            if (taskList[task] < 0) continue;
+            editor.remove(taskList[task], indexWithin(taskList[task], task));
             const int list = static_cast<int>(rng() % employeeCount);
-            const int position = static_cast<int>(
-                rng() % (solution.employees[list].tasks.size() + 1));
+            const int position =
+                    static_cast<int>(rng() % (solution.employees[list].tasks.size() + 1));
             editor.insert(list, position, task);
             taskList[task] = list;
-        }
-        else
-        {
+        } else {
             // Reverse a random segment within a random list (2-opt).
             const int list = static_cast<int>(rng() % employeeCount);
-            const int size
-                = static_cast<int>(solution.employees[list].tasks.size());
-            if (size < 2)
-                continue;
+            const int size = static_cast<int>(solution.employees[list].tasks.size());
+            if (size < 2) continue;
             int first = static_cast<int>(rng() % size);
             int last = static_cast<int>(rng() % size);
-            if (first > last)
-                std::swap(first, last);
+            if (first > last) std::swap(first, last);
             editor.reverse(list, first, last);
         }
 
         const optimaru::Score incremental = editor.score();
         // Full recompute on the same lists (only rewrites derived fields the
         // incremental calculator never reads).
-        const optimaru::Score full
-            = ScoreCalculator::calculateEngineScore(solution);
-        if (full.hard != incremental.hard
-            || std::fabs(full.soft - incremental.soft) > 1e-9)
-        {
-            if (++mismatches <= 3)
-            {
-                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                            step,
-                            incremental.str().c_str(),
-                            full.str().c_str());
+        const optimaru::Score full = ScoreCalculator::calculateEngineScore(solution);
+        if (full.hard != incremental.hard || std::fabs(full.soft - incremental.soft) > 1e-9) {
+            if (++mismatches <= 3) {
+                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
     }
     check(mismatches == 0,
-          std::to_string(steps)
-              + " random list moves, incremental == full recompute");
+          std::to_string(steps) + " random list moves, incremental == full recompute");
     std::printf("\n");
 }
 
@@ -419,11 +348,9 @@ void verifyIncremental()
 // against a full reset + recompute after every single move and throws
 // ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (c) FULL_ASSERT solve ==\n");
-    TaskAssigningSolution solution
-        = buildRandomInstance(/*taskCount*/ 20, /*employeeCount*/ 5, 11);
+    TaskAssigningSolution solution = buildRandomInstance(/*taskCount*/ 20, /*employeeCount*/ 5, 11);
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(2);
@@ -435,23 +362,18 @@ void verifyFullAssertSolve()
 
     bool corrupted = false;
     Score finalScore{};
-    try
-    {
+    try {
         Solver solver(config);
         solver.solve(solution);
         finalScore = solution.score;
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
-    if (!corrupted)
-    {
+    if (!corrupted) {
         const Score recomputed = ScoreCalculator::score(solution);
-        check(finalScore == recomputed,
-              "solver-reported score == full recompute");
+        check(finalScore == recomputed, "solver-reported score == full recompute");
     }
     std::printf("\n");
 }
@@ -460,8 +382,7 @@ void verifyFullAssertSolve()
 // (d) The demo instance solves to hard 0 with every task assigned exactly
 // once (the demo data admits a zero-missing-skill assignment).
 // -------------------------------------------------------------------------
-void verifyFeasibleSolve()
-{
+void verifyFeasibleSolve() {
     std::printf("== (d) Demo instance solve reaches hard 0 ==\n");
     TaskAssigningSolution solution = demo::generateDemoData();
 
@@ -474,35 +395,26 @@ void verifyFeasibleSolve()
     check(solution.score.hard == 0, "demo instance reaches [0]hard");
     check(solution.score.soft0 == 0, "no task left unassigned");
     std::vector<int> seen(solution.tasks.size(), 0);
-    for (const Employee &employee : solution.employees)
-    {
-        for (int taskIndex : employee.tasks)
-            ++seen[taskIndex];
+    for (const Employee& employee : solution.employees) {
+        for (int taskIndex : employee.tasks) ++seen[taskIndex];
     }
     bool eachOnce = true;
-    for (int count : seen)
-    {
-        if (count != 1)
-            eachOnce = false;
+    for (int count : seen) {
+        if (count != 1) eachOnce = false;
     }
     check(eachOnce, "every task appears in exactly one employee list");
     // Derived task fields are consistent on the returned best solution.
     bool shadowsConsistent = true;
-    for (std::size_t e = 0; e < solution.employees.size(); ++e)
-    {
+    for (std::size_t e = 0; e < solution.employees.size(); ++e) {
         Minutes previousEnd = 0;
         bool first = true;
-        for (int taskIndex : solution.employees[e].tasks)
-        {
-            const Task &task = solution.tasks[taskIndex];
-            const Minutes expected
-                = first ? task.minStartTime
-                        : std::max(previousEnd, task.minStartTime);
-            if (task.employee != static_cast<int>(e)
-                || task.startTime != expected)
+        for (int taskIndex : solution.employees[e].tasks) {
+            const Task& task = solution.tasks[taskIndex];
+            const Minutes expected =
+                    first ? task.minStartTime : std::max(previousEnd, task.minStartTime);
+            if (task.employee != static_cast<int>(e) || task.startTime != expected)
                 shadowsConsistent = false;
-            previousEnd
-                = expected + solution.taskDuration(task, static_cast<int>(e));
+            previousEnd = expected + solution.taskDuration(task, static_cast<int>(e));
             first = false;
         }
     }
@@ -515,41 +427,35 @@ void verifyFeasibleSolve()
 // hard and soft0 (folded into the engine's hard level) compared exactly,
 // soft -inf, so no soft score, however low, misses the stop.
 // -------------------------------------------------------------------------
-void verifyStopAtFirstFeasibleLimit()
-{
+void verifyStopAtFirstFeasibleLimit() {
     std::printf("== stop_at_first_feasible's limit ==\n");
-    const optimaru::Score limit
-        = toEngineScoreLimit(Score{0, 0, kNoLevelFloor, kNoLevelFloor});
+    const optimaru::Score limit = toEngineScoreLimit(Score{0, 0, kNoLevelFloor, kNoLevelFloor});
     check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
           "(0, 0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
-    check(optimaru::Score{0, -1e30} >= limit
-              && toEngineScore(Score{0, 0, -(1LL << 40), -(1LL << 62)}) >= limit,
+    check(optimaru::Score{0, -1e30} >= limit &&
+                  toEngineScore(Score{0, 0, -(1LL << 40), -(1LL << 62)}) >= limit,
           "every skill met and every task assigned, any soft: reaches it");
-    check(!(toEngineScore(Score{0, -1, 0, 0}) >= limit)
-              && !(toEngineScore(Score{-1, 0, 0, 0}) >= limit),
+    check(!(toEngineScore(Score{0, -1, 0, 0}) >= limit) &&
+                  !(toEngineScore(Score{-1, 0, 0, 0}) >= limit),
           "an unassigned task or a missing skill does not");
-    const optimaru::Score lax
-        = toEngineScoreLimit(Score{0, -2, kNoLevelFloor, 0});
+    const optimaru::Score lax = toEngineScoreLimit(Score{0, -2, kNoLevelFloor, 0});
     check(lax.hard == -2 && lax.soft == -std::numeric_limits<double>::infinity(),
           "soft0 keeps its floor (-2 unassigned) while soft1 has none");
     const Score other{-2, -3, -5, -7};
-    check(toEngineScoreLimit(other) == toEngineScore(other),
-          "any other limit folds like a score");
+    check(toEngineScoreLimit(other) == toEngineScore(other), "any other limit folds like a score");
     std::printf("\n");
 }
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyStopAtFirstFeasibleLimit();
     verifyConstraints();
     verifyIncremental();
     verifyFullAssertSolve();
     verifyFeasibleSolve();
 
-    if (failures == 0)
-    {
+    if (failures == 0) {
         std::printf("All task-assigning checks PASSED.\n");
         return 0;
     }

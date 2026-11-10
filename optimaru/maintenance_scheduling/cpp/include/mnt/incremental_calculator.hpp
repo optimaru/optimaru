@@ -8,8 +8,7 @@
 #include "mnt/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace mnt
-{
+namespace mnt {
 
 // The maintenance-scheduling implementation of the engine's
 // optimaru::Objective.
@@ -35,10 +34,9 @@ namespace mnt
 // reference is ScoreCalculator::score (checked in the tests and
 // under ScoreChecks::ScoreChecks::Full).
 class MaintenanceSchedulingIncrementalScoreCalculator final
-    : public optimaru::Objective<MaintenanceSchedule>
-{
+    : public optimaru::Objective<MaintenanceSchedule> {
 public:
-    void rebuild(MaintenanceSchedule &solution) override;
+    void rebuild(MaintenanceSchedule& solution) override;
     void before_assign(int jobIndex) override;
     void after_assign(int jobIndex) override;
     Score score() override;
@@ -54,12 +52,10 @@ public:
     bool hasHotTagCells() const { return !hotCells_.empty(); }
     // The whole set, in no particular order (the tests check it against a
     // brute-force recomputation).
-    const std::vector<int> &hotTagCells() const { return hotCells_; }
+    const std::vector<int>& hotTagCells() const { return hotCells_; }
     // Packed as tagId * dayCount + (day - dayBase); -1 when there is none.
-    int hotTagCell(std::mt19937_64 &rng) const
-    {
-        if (hotCells_.empty())
-            return -1;
+    int hotTagCell(std::mt19937_64& rng) const {
+        if (hotCells_.empty()) return -1;
         return hotCells_[rng() % hotCells_.size()];
     }
 
@@ -67,20 +63,16 @@ public:
     // [beginOffset, endOffset) (offsets relative to dayBase) — i.e. placing a
     // job there adds no crewConflictCost. Lets the solver's value recommender
     // propose crews the job actually fits on.
-    bool crewFree(int crewIndex, int beginOffset, int endOffset) const
-    {
-        const int *row = crewDayCnt_.data()
-                         + static_cast<std::size_t>(crewIndex) * dayCount_;
-        for (int day = beginOffset; day < endOffset; ++day)
-        {
-            if (row[day] != 0)
-                return false;
+    bool crewFree(int crewIndex, int beginOffset, int endOffset) const {
+        const int* row = crewDayCnt_.data() + static_cast<std::size_t>(crewIndex) * dayCount_;
+        for (int day = beginOffset; day < endOffset; ++day) {
+            if (row[day] != 0) return false;
         }
         return true;
     }
 
 private:
-    MaintenanceSchedule *schedule_ = nullptr;
+    MaintenanceSchedule* schedule_ = nullptr;
     int dayCount_ = 0;
     std::vector<int> assign_;  // crewDate per job (-1 == unassigned)
 
@@ -94,9 +86,9 @@ private:
     std::int64_t crewOverlap_ = 0;        // hard 1 crewConflictCost (days)
     std::int64_t minStartViolation_ = 0;  // hard 2 minStartDateCost (days)
     std::int64_t maxEndViolation_ = 0;    // hard 3 maxEndDateCost (days)
-    std::int64_t beforeIdeal_ = 0;  // soft 4 beforeIdealEndDateCost (days)
-    std::int64_t afterIdeal_ = 0;   // soft 5 afterIdealEndDateCost (days)
-    std::int64_t tagOverlap_ = 0;   // soft 6 tagConflictCost (tag-days)
+    std::int64_t beforeIdeal_ = 0;        // soft 4 beforeIdealEndDateCost (days)
+    std::int64_t afterIdeal_ = 0;         // soft 5 afterIdealEndDateCost (days)
+    std::int64_t tagOverlap_ = 0;         // soft 6 tagConflictCost (tag-days)
 
     // Hot (tag, day) cells as an indexed set: hotCells_ is the dense member
     // list, hotCellPos_ maps a cell to its slot in it (-1 = not hot), so both
@@ -104,13 +96,11 @@ private:
     std::vector<int> hotCells_;
     std::vector<int> hotCellPos_;
 
-    void hotAdd(std::size_t cell)
-    {
+    void hotAdd(std::size_t cell) {
         hotCellPos_[cell] = static_cast<int>(hotCells_.size());
         hotCells_.push_back(static_cast<int>(cell));
     }
-    void hotRemove(std::size_t cell)
-    {
+    void hotRemove(std::size_t cell) {
         const int pos = hotCellPos_[cell];
         const int moved = hotCells_.back();
         hotCells_[pos] = moved;
@@ -122,12 +112,10 @@ private:
     void insert(int jobIndex, int crewDate);
     void retract(int jobIndex, int crewDate);
 
-    std::size_t crewDayOffset(int crewIndex, int dayOffset) const
-    {
+    std::size_t crewDayOffset(int crewIndex, int dayOffset) const {
         return static_cast<std::size_t>(crewIndex) * dayCount_ + dayOffset;
     }
-    std::size_t tagDayOffset(int tagId, int dayOffset) const
-    {
+    std::size_t tagDayOffset(int tagId, int dayOffset) const {
         return static_cast<std::size_t>(tagId) * dayCount_ + dayOffset;
     }
 };

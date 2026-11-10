@@ -47,17 +47,19 @@ public:
         const double bonus_numerator = alpha_ * std::log(1.0 + static_cast<double>(iteration_));
         double best_value = -std::numeric_limits<double>::infinity();
         for (std::size_t i = 0; i < avg_rewards_.size(); ++i) {
-            const double value = avg_rewards_[i] +
-                                 std::sqrt(bonus_numerator /
-                                           static_cast<double>(std::max<std::int64_t>(times_[i], 1)));
+            const double value =
+                    avg_rewards_[i] +
+                    std::sqrt(bonus_numerator /
+                              static_cast<double>(std::max<std::int64_t>(times_[i], 1)));
             if (value > best_value) best_value = value;
         }
         // Ties broken uniformly, matching numpy's isclose-then-choose.
         untried_.clear();
         for (std::size_t i = 0; i < avg_rewards_.size(); ++i) {
-            const double value = avg_rewards_[i] +
-                                 std::sqrt(bonus_numerator /
-                                           static_cast<double>(std::max<std::int64_t>(times_[i], 1)));
+            const double value =
+                    avg_rewards_[i] +
+                    std::sqrt(bonus_numerator /
+                              static_cast<double>(std::max<std::int64_t>(times_[i], 1)));
             if (value >= best_value - 1e-9) untried_.push_back(static_cast<int>(i));
         }
         return untried_[rng() % static_cast<std::uint64_t>(untried_.size())];

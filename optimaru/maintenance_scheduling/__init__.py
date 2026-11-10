@@ -130,6 +130,7 @@ def solve(
         cfg.full_assert = True
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
+
     def _solve(core):
         if constraints is None:
             Solver(cfg).solve(core)

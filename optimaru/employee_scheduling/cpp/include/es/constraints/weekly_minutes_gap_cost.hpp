@@ -39,7 +39,7 @@ struct WeeklyMinutesGapCost final : EsGlobalConstraint {
         for (int u = 0; u < units_; ++u) recomputeUnit(u, members_per_unit[u]);
     }
     void on_unit_changed(const EmployeeSchedule&, int unit,
-                       const std::vector<int>& members) override {
+                         const std::vector<int>& members) override {
         recomputeUnit(unit, members);
     }
     double cost() const override {
@@ -48,8 +48,7 @@ struct WeeklyMinutesGapCost final : EsGlobalConstraint {
         for (int w = 0; w < weeks_; ++w) {
             std::int64_t mn = weekMinutes_[w], mx = weekMinutes_[w];  // unit 0
             for (int u = 1; u < units_; ++u) {
-                const std::int64_t v =
-                        weekMinutes_[static_cast<std::size_t>(u) * weeks_ + w];
+                const std::int64_t v = weekMinutes_[static_cast<std::size_t>(u) * weeks_ + w];
                 if (v < mn) mn = v;
                 if (v > mx) mx = v;
             }
@@ -61,8 +60,7 @@ struct WeeklyMinutesGapCost final : EsGlobalConstraint {
 
 private:
     void recomputeUnit(int unit, const std::vector<int>& members) {
-        std::int64_t* row =
-                weekMinutes_.data() + static_cast<std::size_t>(unit) * weeks_;
+        std::int64_t* row = weekMinutes_.data() + static_cast<std::size_t>(unit) * weeks_;
         for (int w = 0; w < weeks_; ++w) row[w] = 0;
         for (int i : members) row[shiftWeek_[i]] += shiftDur_[i];
     }

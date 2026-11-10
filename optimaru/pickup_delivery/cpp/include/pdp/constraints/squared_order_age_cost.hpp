@@ -3,8 +3,7 @@
 
 #include "pdp/constraints/common.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
 // Soft, weight 0 (opt-in, default_enabled = false): squaredOrderAgeCost — the
 // sum over requests of the squared seconds from the order to the end of its
@@ -22,50 +21,33 @@ namespace pdp
 // make leaving out the oldest orders the cheapest move there is. So the pool
 // list charges each of its dropoffs as if it finished kUnassignedFinish into
 // the plan.
-struct SquaredOrderAgeCost final : PdpUnitConstraint
-{
+struct SquaredOrderAgeCost final : PdpUnitConstraint {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
     static constexpr Seconds kUnassignedFinish = 3600;
 
     explicit SquaredOrderAgeCost(double weight = kDefaultWeight)
-        : PdpUnitConstraint("squaredOrderAgeCost", weight, kDefaultLevel)
-    {
-    }
+        : PdpUnitConstraint("squaredOrderAgeCost", weight, kDefaultLevel) {}
 
-    double
-    cost(const PdpRoutePlan &p, int u, const std::vector<int> &m) const override
-    {
+    double cost(const PdpRoutePlan& p, int u, const std::vector<int>& m) const override {
         double total = 0;
-        const auto charge = [&](const Node &node, Seconds finish)
-        {
-            const Delivery &delivery
-                = p.deliveries[static_cast<std::size_t>(node.deliveryIndex)];
+        const auto charge = [&](const Node& node, Seconds finish) {
+            const Delivery& delivery = p.deliveries[static_cast<std::size_t>(node.deliveryIndex)];
             const auto age = static_cast<double>(finish - delivery.orderTime);
             total += age * age;
         };
-        if (detail::isPool(p, u))
-        {
-            for (int nodeIndex : m)
-            {
-                const Node &node = p.nodes[static_cast<std::size_t>(nodeIndex)];
-                if (!node.pickup)
-                    charge(node, kUnassignedFinish);
+        if (detail::isPool(p, u)) {
+            for (int nodeIndex : m) {
+                const Node& node = p.nodes[static_cast<std::size_t>(nodeIndex)];
+                if (!node.pickup) charge(node, kUnassignedFinish);
             }
             return total;
         }
-        detail::walkRoute(
-            p,
-            u,
-            m,
-            [&](int nodeIndex, Seconds arrival)
-            {
-                const Node &node = p.nodes[static_cast<std::size_t>(nodeIndex)];
-                if (!node.pickup)
-                    charge(node,
-                           std::max(arrival, node.minStartTime)
-                               + node.serviceDuration);
-            });
+        detail::walkRoute(p, u, m, [&](int nodeIndex, Seconds arrival) {
+            const Node& node = p.nodes[static_cast<std::size_t>(nodeIndex)];
+            if (!node.pickup)
+                charge(node, std::max(arrival, node.minStartTime) + node.serviceDuration);
+        });
         return total;
     }
 };

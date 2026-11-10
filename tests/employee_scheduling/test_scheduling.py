@@ -1002,5 +1002,9 @@ def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
 
 def test_package_solve_reports_new_bests():
     calls = []
-    es.solve(es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=3), config=_steps(300), on_new_best=lambda step, score: calls.append(step))
+    es.solve(
+        es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=3),
+        config=_steps(300),
+        on_new_best=lambda step, score: calls.append(step),
+    )
     assert calls

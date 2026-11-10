@@ -5,8 +5,7 @@
 
 #include "ba/domain.hpp"
 
-namespace ba
-{
+namespace ba {
 
 // The bed-allocation constraints as one monolithic calculator.
 //
@@ -58,15 +57,13 @@ namespace ba
 //
 // Uninitialized stays (bed == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // Full recompute; also stores plan.score.
-    static Score score(BedPlan &plan);
+    static Score score(BedPlan& plan);
 
     // The same recompute in the engine's score type (see toEngineScore).
-    static optimaru::Score calculateEngineScore(BedPlan &plan)
-    {
+    static optimaru::Score calculateEngineScore(BedPlan& plan) {
         return toEngineScore(score(plan));
     }
 
@@ -74,31 +71,29 @@ public:
     // equipment table and resolves each stay's specialty priority per
     // department. Idempotent (guarded by BedPlan::prepared). Must run before
     // scoring; score/solve call it.
-    static void prepare(BedPlan &plan);
+    static void prepare(BedPlan& plan);
 
     // --- shared building blocks (positive penalty units) ---
 
     // Per-stay penalties of assigning stay `stayIndex` to value
     // `value` (a real bed or the "no bed" sentinel; -1 contributes nothing).
-    struct SingleImpact
-    {
+    struct SingleImpact {
         std::int64_t hard = 0;
         std::int64_t medium = 0;
         std::int64_t soft = 0;
     };
-    static SingleImpact
-    singleStayImpact(const BedPlan &plan, int stayIndex, int value);
+    static SingleImpact singleStayImpact(const BedPlan& plan, int stayIndex, int value);
 
     // hard 1 (bedConflictCost): BedConflictCost::kDefaultWeight (1000) *
     // sameNightCount for two stays in one bed. Defined in
     // score_calculator.cpp, which reads the component constant (the
     // components include this header, so it cannot include theirs).
-    static std::int64_t bedConflictPairPenalty(const Stay &a, const Stay &b);
+    static std::int64_t bedConflictPairPenalty(const Stay& a, const Stay& b);
 
     // hard 4 (mixedGenderRoomCost): MixedGenderRoomCost::kDefaultWeight
     // (1000) * sameNightCount for a mixed-gender pair; both stays must
     // already share one SAME_GENDER room (the caller checks the room).
-    static std::int64_t mixedGenderPairPenalty(const Stay &a, const Stay &b);
+    static std::int64_t mixedGenderPairPenalty(const Stay& a, const Stay& b);
 };
 
 }  // namespace ba

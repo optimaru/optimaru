@@ -48,8 +48,7 @@ class GranularLocalSearch {
     using Traits = SolutionTraits<Solution>;
 
 public:
-    GranularLocalSearch(ElementIndex<Solution>& index, const Neighborhoods& nearby,
-                        int max_segment)
+    GranularLocalSearch(ElementIndex<Solution>& index, const Neighborhoods& nearby, int max_segment)
         : index_(index),
           nearby_(nearby),
           max_segment_(std::clamp(max_segment, 1, ListMove::kMaxSegment)) {}
@@ -320,14 +319,13 @@ public:
                 // Other operators and rejected iterations change lists the
                 // descent never saw: every list that differs from the state
                 // the previous iteration left behind is marked again.
-                Snapshot::for_each_changed_list(solution, after_,
-                                             [&](int l) { local_search_.mark_list(solution, l); });
+                Snapshot::for_each_changed_list(
+                        solution, after_, [&](int l) { local_search_.mark_list(solution, l); });
                 const int span = max_ruin_ - min_ruin_ + 1;
-                const int ruin_count = std::clamp(
-                        min_ruin_ + random_index(rng, span), 1,
-                        n - 1);
+                const int ruin_count = std::clamp(min_ruin_ + random_index(rng, span), 1, n - 1);
                 drawn_ruin_ = ruin_selector_.select(rng);
-                std::vector<int> ruined = ruins_[drawn_ruin_]->select_ruin_set(ctx, ruin_count, rng);
+                std::vector<int> ruined =
+                        ruins_[drawn_ruin_]->select_ruin_set(ctx, ruin_count, rng);
                 repair_.dedupe(editor, ruined, n);
                 if (ruined.empty()) {
                     // Nothing to do, but the lists marked above were seen:

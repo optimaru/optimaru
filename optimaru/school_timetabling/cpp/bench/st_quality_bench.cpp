@@ -46,31 +46,21 @@
 
 using namespace st;
 
-namespace
-{
+namespace {
 
 constexpr int DAYS = 5;
 constexpr int PERIODS_PER_DAY = 8;
 
-struct SubjectHours
-{
-    const char *subject;
+struct SubjectHours {
+    const char* subject;
     int hours;
 };
 
 // Weekly hours per class; sums to 34 (6 free cells per class in the 40-slot
 // week). ASCII ids keep the shared JSON trivially portable.
 const std::vector<SubjectHours> CURRICULUM = {
-    {"KOR", 5},
-    {"MATH", 5},
-    {"ENG", 4},
-    {"SCI", 4},
-    {"SOC", 4},
-    {"PE", 3},
-    {"MUS", 3},
-    {"ART", 2},
-    {"ETH", 2},
-    {"HIS", 2},
+        {"KOR", 5}, {"MATH", 5}, {"ENG", 4}, {"SCI", 4}, {"SOC", 4},
+        {"PE", 3},  {"MUS", 3},  {"ART", 2}, {"ETH", 2}, {"HIS", 2},
 };
 
 // -------------------------------------------------------------------------
@@ -80,63 +70,46 @@ const std::vector<SubjectHours> CURRICULUM = {
 // ceil(classes / poolSize) * hours — comfortably under the 40-slot week for
 // all presets, keeping the instances feasible but room-tight.
 // -------------------------------------------------------------------------
-Timetable
-buildInstance(int classes, int teachers, int rooms, std::uint64_t seed)
-{
+Timetable buildInstance(int classes, int teachers, int rooms, std::uint64_t seed) {
     const int subjectCount = static_cast<int>(CURRICULUM.size());
-    if (teachers < subjectCount)
-    {
-        std::fprintf(stderr,
-                     "need at least %d teachers (one per subject)\n",
-                     subjectCount);
+    if (teachers < subjectCount) {
+        std::fprintf(stderr, "need at least %d teachers (one per subject)\n", subjectCount);
         std::exit(2);
     }
     std::mt19937_64 rng(seed);
 
     Timetable t;
-    for (int d = 0; d < DAYS; ++d)
-    {
-        for (int p = 1; p <= PERIODS_PER_DAY; ++p)
-            t.timeslots.push_back({d, p});
+    for (int d = 0; d < DAYS; ++d) {
+        for (int p = 1; p <= PERIODS_PER_DAY; ++p) t.timeslots.push_back({d, p});
     }
-    for (int r = 0; r < rooms; ++r)
-        t.rooms.push_back({"R" + std::to_string(r), "general"});
+    for (int r = 0; r < rooms; ++r) t.rooms.push_back({"R" + std::to_string(r), "general"});
 
     std::vector<std::string> groups;
-    for (int g = 0; g < classes; ++g)
-    {
+    for (int g = 0; g < classes; ++g) {
         char buf[16];
         std::snprintf(buf, sizeof(buf), "C%02d", g + 1);
         groups.emplace_back(buf);
     }
 
     // teacherOf[s][g] = teacher name for subject s in class g.
-    std::vector<std::vector<std::string>> teacherOf(
-        subjectCount, std::vector<std::string>(classes));
-    for (int s = 0; s < subjectCount; ++s)
-    {
+    std::vector<std::vector<std::string>> teacherOf(subjectCount,
+                                                    std::vector<std::string>(classes));
+    for (int s = 0; s < subjectCount; ++s) {
         std::vector<int> pool;
-        for (int tt = s; tt < teachers; tt += subjectCount)
-            pool.push_back(tt);
+        for (int tt = s; tt < teachers; tt += subjectCount) pool.push_back(tt);
         std::vector<int> order(classes);
         std::iota(order.begin(), order.end(), 0);
         std::shuffle(order.begin(), order.end(), rng);
-        for (int i = 0; i < classes; ++i)
-        {
-            teacherOf[s][order[i]]
-                = "T" + std::to_string(pool[i % pool.size()]);
+        for (int i = 0; i < classes; ++i) {
+            teacherOf[s][order[i]] = "T" + std::to_string(pool[i % pool.size()]);
         }
     }
 
-    for (int g = 0; g < classes; ++g)
-    {
-        for (int s = 0; s < subjectCount; ++s)
-        {
-            for (int h = 1; h <= CURRICULUM[s].hours; ++h)
-            {
+    for (int g = 0; g < classes; ++g) {
+        for (int s = 0; s < subjectCount; ++s) {
+            for (int h = 1; h <= CURRICULUM[s].hours; ++h) {
                 Lesson lesson;
-                lesson.id = groups[g] + "-" + CURRICULUM[s].subject + "-"
-                            + std::to_string(h);
+                lesson.id = groups[g] + "-" + CURRICULUM[s].subject + "-" + std::to_string(h);
                 lesson.subject = CURRICULUM[s].subject;
                 lesson.teacher = teacherOf[s][g];
                 lesson.studentGroup = groups[g];
@@ -155,33 +128,26 @@ buildInstance(int classes, int teachers, int rooms, std::uint64_t seed)
 // score_calculator.cpp): hard = -(1 room + 1 teacher + 1 group) = -3,
 // soft = teacherTimeEfficiencyCost 3 - teacherRoomChangeCost 4 - classSubjectRepeatCost 2 = -3.
 // -------------------------------------------------------------------------
-Timetable buildCrossCheck()
-{
+Timetable buildCrossCheck() {
     Timetable t;
-    for (int d = 0; d < 2; ++d)
-    {
-        for (int p = 1; p <= 3; ++p)
-            t.timeslots.push_back({d, p});
+    for (int d = 0; d < 2; ++d) {
+        for (int p = 1; p <= 3; ++p) t.timeslots.push_back({d, p});
     }
     t.rooms.push_back({"R0", "general"});
     t.rooms.push_back({"R1", "general"});
 
-    struct Fixed
-    {
+    struct Fixed {
         const char *id, *subject, *teacher, *group;
         int timeslot, room;
     };
     const Fixed fixed[] = {
-        {"L0", "MATH", "TA", "G1", 0, 0},
-        {"L1", "MATH", "TA", "G1", 1, 0},
-        {"L2", "PHYS", "TB", "G2", 0, 0},  // room conflict with L0
-        {"L3", "PHYS", "TB", "G1", 0, 1},  // teacher (L2) + group (L0) conflict
-        {"L4", "CHEM", "TB", "G2", 1, 1},
-        {"L5", "MATH", "TA", "G2", 5, 1},
-        {"L6", "MATH", "TC", "G2", 4, 0},
+            {"L0", "MATH", "TA", "G1", 0, 0}, {"L1", "MATH", "TA", "G1", 1, 0},
+            {"L2", "PHYS", "TB", "G2", 0, 0},  // room conflict with L0
+            {"L3", "PHYS", "TB", "G1", 0, 1},  // teacher (L2) + group (L0) conflict
+            {"L4", "CHEM", "TB", "G2", 1, 1}, {"L5", "MATH", "TA", "G2", 5, 1},
+            {"L6", "MATH", "TC", "G2", 4, 0},
     };
-    for (const Fixed &f : fixed)
-    {
+    for (const Fixed& f : fixed) {
         Lesson lesson;
         lesson.id = f.id;
         lesson.subject = f.subject;
@@ -196,74 +162,60 @@ Timetable buildCrossCheck()
 // -------------------------------------------------------------------------
 // JSON dumps (shared with the CP-SAT model and evaluate.py).
 // -------------------------------------------------------------------------
-void dumpInstance(const Timetable &t, const std::string &path)
-{
+void dumpInstance(const Timetable& t, const std::string& path) {
     int days = 0;
     int periods = 0;
-    for (const Timeslot &slot : t.timeslots)
-    {
+    for (const Timeslot& slot : t.timeslots) {
         days = std::max(days, slot.day + 1);
         periods = std::max(periods, slot.period);
     }
     std::ofstream out(path);
     out << "{\n  \"days\": " << days << ",\n  \"periodsPerDay\": " << periods
         << ",\n  \"timeslots\": [\n";
-    for (int s = 0; s < t.timeslotCount(); ++s)
-    {
-        out << "    {\"day\": " << t.timeslots[s].day
-            << ", \"period\": " << t.timeslots[s].period << "}"
-            << (s + 1 < t.timeslotCount() ? "," : "") << '\n';
+    for (int s = 0; s < t.timeslotCount(); ++s) {
+        out << "    {\"day\": " << t.timeslots[s].day << ", \"period\": " << t.timeslots[s].period
+            << "}" << (s + 1 < t.timeslotCount() ? "," : "") << '\n';
     }
     out << "  ],\n  \"rooms\": [";
-    for (int r = 0; r < t.roomCount(); ++r)
-        out << (r ? ", " : "") << '"' << t.rooms[r].name << '"';
+    for (int r = 0; r < t.roomCount(); ++r) out << (r ? ", " : "") << '"' << t.rooms[r].name << '"';
     out << "],\n  \"lessons\": [\n";
-    for (std::size_t i = 0; i < t.lessons.size(); ++i)
-    {
-        const Lesson &l = t.lessons[i];
+    for (std::size_t i = 0; i < t.lessons.size(); ++i) {
+        const Lesson& l = t.lessons[i];
         const int ts = l.slotRoom >= 0 ? t.timeslotIndexOf(l.slotRoom) : -1;
         const int room = l.slotRoom >= 0 ? t.roomIndexOf(l.slotRoom) : -1;
         out << "    {\"id\": \"" << l.id << "\", \"subject\": \"" << l.subject
-            << "\", \"teacher\": \"" << l.teacher << "\", \"studentGroup\": \""
-            << l.studentGroup << "\", \"timeslot\": " << ts
-            << ", \"room\": " << room << "}"
+            << "\", \"teacher\": \"" << l.teacher << "\", \"studentGroup\": \"" << l.studentGroup
+            << "\", \"timeslot\": " << ts << ", \"room\": " << room << "}"
             << (i + 1 < t.lessons.size() ? "," : "") << '\n';
     }
     out << "  ]\n}\n";
 }
 
-void dumpSolution(const Timetable &t, const std::string &path)
-{
+void dumpSolution(const Timetable& t, const std::string& path) {
     std::ofstream out(path);
     out << "{\n  \"solver\": \"cpp\",\n  \"score\": \"" << t.score.str()
         << "\",\n  \"assignment\": [\n";
-    for (std::size_t i = 0; i < t.lessons.size(); ++i)
-    {
-        const Lesson &l = t.lessons[i];
+    for (std::size_t i = 0; i < t.lessons.size(); ++i) {
+        const Lesson& l = t.lessons[i];
         const int ts = l.slotRoom >= 0 ? t.timeslotIndexOf(l.slotRoom) : -1;
         const int room = l.slotRoom >= 0 ? t.roomIndexOf(l.slotRoom) : -1;
-        out << "    {\"id\": \"" << l.id << "\", \"timeslot\": " << ts
-            << ", \"room\": " << room << "}"
-            << (i + 1 < t.lessons.size() ? "," : "") << '\n';
+        out << "    {\"id\": \"" << l.id << "\", \"timeslot\": " << ts << ", \"room\": " << room
+            << "}" << (i + 1 < t.lessons.size() ? "," : "") << '\n';
     }
     out << "  ]\n}\n";
 }
 
-std::string solutionPathFor(const std::string &instancePath)
-{
+std::string solutionPathFor(const std::string& instancePath) {
     const std::string suffix = ".json";
     std::string base = instancePath;
-    if (base.size() > suffix.size()
-        && base.compare(base.size() - suffix.size(), suffix.size(), suffix)
-               == 0)
-    {
+    if (base.size() > suffix.size() &&
+        base.compare(base.size() - suffix.size(), suffix.size(), suffix) == 0) {
         base.erase(base.size() - suffix.size());
     }
     return base + ".solution_cpp.json";
 }
 
-int runCrossCheck(const std::string &outPath)
-{
+int runCrossCheck(const std::string& outPath) {
     Timetable t = buildCrossCheck();
     dumpInstance(t, outPath);
     ScoreCalculator calc;
@@ -274,17 +226,13 @@ int runCrossCheck(const std::string &outPath)
 
 }  // namespace
 
-int main(int argc, char **argv)
-{
-    if (argc >= 3 && std::string(argv[1]) == "crosscheck")
-        return runCrossCheck(argv[2]);
-    if (argc < 7)
-    {
-        std::fprintf(
-            stderr,
-            "usage: st_quality_bench <classes> <teachers> <rooms> <seed> "
-            "<seconds> <out.json> [parallelSolverCount]\n"
-            "       st_quality_bench crosscheck <out.json>\n");
+int main(int argc, char** argv) {
+    if (argc >= 3 && std::string(argv[1]) == "crosscheck") return runCrossCheck(argv[2]);
+    if (argc < 7) {
+        std::fprintf(stderr,
+                     "usage: st_quality_bench <classes> <teachers> <rooms> <seed> "
+                     "<seconds> <out.json> [parallelSolverCount]\n"
+                     "       st_quality_bench crosscheck <out.json>\n");
         return 2;
     }
     const int classes = std::atoi(argv[1]);
@@ -297,30 +245,25 @@ int main(int argc, char **argv)
     Timetable table = buildInstance(classes, teachers, rooms, seed);
     dumpInstance(table, outPath);
     std::printf(
-        "QBENCH_CPP instance classes=%d teachers=%d rooms=%d lessons=%zu "
-        "timeslots=%d seed=%llu\n",
-        classes,
-        teachers,
-        rooms,
-        table.lessons.size(),
-        table.timeslotCount(),
-        static_cast<unsigned long long>(seed));
+            "QBENCH_CPP instance classes=%d teachers=%d rooms=%d lessons=%zu "
+            "timeslots=%d seed=%llu\n",
+            classes, teachers, rooms, table.lessons.size(), table.timeslotCount(),
+            static_cast<unsigned long long>(seed));
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = seed;
-    if (argc >= 8)
-        config.parallelSolverCount = std::max(1, std::atoi(argv[7]));
+    if (argc >= 8) config.parallelSolverCount = std::max(1, std::atoi(argv[7]));
     // Optional knob overrides for A/B tuning sweeps (unset = solver
     // defaults, i.e. exactly the published bench configuration). These only
     // change SEARCH knobs, never scoring semantics.
-    if (const char *v = std::getenv("ST_BENCH_ASMOVE_WEIGHT"))
+    if (const char* v = std::getenv("ST_BENCH_ASMOVE_WEIGHT"))
         config.ruinRecreateAsMoveWeight = std::atof(v);
-    if (const char *v = std::getenv("ST_BENCH_ASMOVE_MAXRUIN"))
+    if (const char* v = std::getenv("ST_BENCH_ASMOVE_MAXRUIN"))
         config.ruinRecreateAsMoveMaxRuin = std::atoi(v);
-    if (const char *v = std::getenv("ST_BENCH_NEARBY_PROB"))
+    if (const char* v = std::getenv("ST_BENCH_NEARBY_PROB"))
         config.sameGroupNearbyProbability = std::atof(v);
-    if (const char *v = std::getenv("ST_BENCH_LA_SIZE"))
+    if (const char* v = std::getenv("ST_BENCH_LA_SIZE"))
         config.history_length = static_cast<std::size_t>(std::atoll(v));
     const auto t0 = std::chrono::steady_clock::now();
     // Sustained move-evaluation speed, estimated from the improvement
@@ -329,36 +272,27 @@ int main(int argc, char **argv)
     long long lastStep = 0;
     long long lastMs = 0;
     bool feasibleSeen = false;
-    config.on_new_best = [&t0, &lastStep, &lastMs, &feasibleSeen](
-                           std::int64_t step, const Score &sc)
-    {
+    config.on_new_best = [&t0, &lastStep, &lastMs, &feasibleSeen](std::int64_t step,
+                                                                  const Score& sc) {
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::steady_clock::now() - t0)
-                            .count();
+                                std::chrono::steady_clock::now() - t0)
+                                .count();
         lastStep = step;
         lastMs = ms;
-        if (!feasibleSeen && sc.hard >= 0)
-        {
+        if (!feasibleSeen && sc.hard >= 0) {
             feasibleSeen = true;
-            std::printf("QBENCH_CPP first_feasible t=%lldms\n",
-                        static_cast<long long>(ms));
+            std::printf("QBENCH_CPP first_feasible t=%lldms\n", static_cast<long long>(ms));
         }
-        std::printf("QBENCH_CPP best t=%lldms step=%lld score=%s\n",
-                    static_cast<long long>(ms),
-                    static_cast<long long>(step),
-                    sc.str().c_str());
+        std::printf("QBENCH_CPP best t=%lldms step=%lld score=%s\n", static_cast<long long>(ms),
+                    static_cast<long long>(step), sc.str().c_str());
     };
     Solver solver(config);
     solver.solve(table);
 
     dumpSolution(table, solutionPathFor(outPath));
-    const double movesPerSec = lastMs > 0
-                                   ? 1000.0 * static_cast<double>(lastStep)
-                                         / static_cast<double>(lastMs)
-                                   : 0.0;
+    const double movesPerSec =
+            lastMs > 0 ? 1000.0 * static_cast<double>(lastStep) / static_cast<double>(lastMs) : 0.0;
     std::printf("QBENCH_CPP_FINAL score=%s feasible=%s moves_per_sec=%.0f\n",
-                table.score.str().c_str(),
-                table.score.feasible() ? "true" : "false",
-                movesPerSec);
+                table.score.str().c_str(), table.score.feasible() ? "true" : "false", movesPerSec);
     return 0;
 }

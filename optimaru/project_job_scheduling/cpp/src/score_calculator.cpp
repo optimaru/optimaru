@@ -11,46 +11,37 @@
 #include "pjs/constraints/project_delay_cost.hpp"
 #include "pjs/constraints/renewable_resource_capacity_cost.hpp"
 
-namespace pjs
-{
+namespace pjs {
 
-namespace
-{
+namespace {
 
 // The monolithic score is the default assembly, so it reads the same
 // constants the components carry. Integral, so every level is computed
-// exactly in int64. The medium weight is in medium units; toEngineScore folds the medium level (kMediumFold).
-constexpr auto kNonRenewableWeight = static_cast<std::int64_t>(
-    NonRenewableResourceCapacityCost::kDefaultWeight);
-constexpr auto kRenewableWeight
-    = static_cast<std::int64_t>(RenewableResourceCapacityCost::kDefaultWeight);
-constexpr auto kProjectDelayWeight
-    = static_cast<std::int64_t>(ProjectDelayCost::kDefaultWeight);
-constexpr auto kMakespanWeight
-    = static_cast<std::int64_t>(MakespanCost::kDefaultWeight);
-static_assert(
-    kNonRenewableWeight == NonRenewableResourceCapacityCost::kDefaultWeight
-        && kRenewableWeight == RenewableResourceCapacityCost::kDefaultWeight
-        && kProjectDelayWeight == ProjectDelayCost::kDefaultWeight
-        && kMakespanWeight == MakespanCost::kDefaultWeight,
-    "the monolithic calculator assumes integral default weights");
-static_assert(NonRenewableResourceCapacityCost::kDefaultLevel
-                      == optimaru::Level::Hard
-                  && RenewableResourceCapacityCost::kDefaultLevel
-                         == optimaru::Level::Hard
-                  && ProjectDelayCost::kDefaultLevel == optimaru::Level::Medium
-                  && MakespanCost::kDefaultLevel == optimaru::Level::Soft,
+// exactly in int64. The medium weight is in medium units; toEngineScore folds the medium level
+// (kMediumFold).
+constexpr auto kNonRenewableWeight =
+        static_cast<std::int64_t>(NonRenewableResourceCapacityCost::kDefaultWeight);
+constexpr auto kRenewableWeight =
+        static_cast<std::int64_t>(RenewableResourceCapacityCost::kDefaultWeight);
+constexpr auto kProjectDelayWeight = static_cast<std::int64_t>(ProjectDelayCost::kDefaultWeight);
+constexpr auto kMakespanWeight = static_cast<std::int64_t>(MakespanCost::kDefaultWeight);
+static_assert(kNonRenewableWeight == NonRenewableResourceCapacityCost::kDefaultWeight &&
+                      kRenewableWeight == RenewableResourceCapacityCost::kDefaultWeight &&
+                      kProjectDelayWeight == ProjectDelayCost::kDefaultWeight &&
+                      kMakespanWeight == MakespanCost::kDefaultWeight,
+              "the monolithic calculator assumes integral default weights");
+static_assert(NonRenewableResourceCapacityCost::kDefaultLevel == optimaru::Level::Hard &&
+                      RenewableResourceCapacityCost::kDefaultLevel == optimaru::Level::Hard &&
+                      ProjectDelayCost::kDefaultLevel == optimaru::Level::Medium &&
+                      MakespanCost::kDefaultLevel == optimaru::Level::Soft,
               "the monolithic calculator scores each term on its default "
               "level");
 
 }  // namespace
 
-void ScoreCalculator::prepare(ProjectJobSchedule &schedule)
-{
-    if (schedule.prepared)
-        return;
-    if (schedule.delayRangeSize < 1)
-    {
+void ScoreCalculator::prepare(ProjectJobSchedule& schedule) {
+    if (schedule.prepared) return;
+    if (schedule.delayRangeSize < 1) {
         throw std::invalid_argument("delayRangeSize must be >= 1");
     }
     const int allocationCount = schedule.allocationCount();
@@ -59,33 +50,23 @@ void ScoreCalculator::prepare(ProjectJobSchedule &schedule)
     const int resourceCount = static_cast<int>(schedule.resources.size());
 
     int maxModeCount = 1;
-    for (int j = 0; j < jobCount; ++j)
-    {
-        const Job &job = schedule.jobs[j];
-        if (job.project < 0 || job.project >= projectCount)
-        {
-            throw std::invalid_argument("job " + job.id
-                                        + ": project index out of range");
+    for (int j = 0; j < jobCount; ++j) {
+        const Job& job = schedule.jobs[j];
+        if (job.project < 0 || job.project >= projectCount) {
+            throw std::invalid_argument("job " + job.id + ": project index out of range");
         }
-        if (job.executionModes.empty())
-        {
-            throw std::invalid_argument(
-                "job " + job.id
-                + ": every job needs at least one execution "
-                  "mode (SOURCE/SINK carry a "
-                  "zero-duration mode)");
+        if (job.executionModes.empty()) {
+            throw std::invalid_argument("job " + job.id +
+                                        ": every job needs at least one execution "
+                                        "mode (SOURCE/SINK carry a "
+                                        "zero-duration mode)");
         }
-        maxModeCount = std::max(maxModeCount,
-                                static_cast<int>(job.executionModes.size()));
-        for (const ExecutionMode &mode : job.executionModes)
-        {
-            for (const ResourceRequirement &req : mode.resourceRequirements)
-            {
-                if (req.resource < 0 || req.resource >= resourceCount)
-                {
-                    throw std::invalid_argument(
-                        "execution mode " + mode.id
-                        + ": resource index out of range");
+        maxModeCount = std::max(maxModeCount, static_cast<int>(job.executionModes.size()));
+        for (const ExecutionMode& mode : job.executionModes) {
+            for (const ResourceRequirement& req : mode.resourceRequirements) {
+                if (req.resource < 0 || req.resource >= resourceCount) {
+                    throw std::invalid_argument("execution mode " + mode.id +
+                                                ": resource index out of range");
                 }
             }
         }
@@ -96,21 +77,15 @@ void ScoreCalculator::prepare(ProjectJobSchedule &schedule)
     // order over the precedence DAG.
     schedule.successorAllocations.assign(allocationCount, {});
     std::vector<int> indegree(allocationCount, 0);
-    for (int a = 0; a < allocationCount; ++a)
-    {
-        const Allocation &allocation = schedule.allocations[a];
-        if (allocation.job < 0 || allocation.job >= jobCount)
-        {
-            throw std::invalid_argument("allocation " + allocation.id
-                                        + ": job index out of range");
+    for (int a = 0; a < allocationCount; ++a) {
+        const Allocation& allocation = schedule.allocations[a];
+        if (allocation.job < 0 || allocation.job >= jobCount) {
+            throw std::invalid_argument("allocation " + allocation.id + ": job index out of range");
         }
-        for (int p : allocation.predecessorAllocations)
-        {
-            if (p < 0 || p >= allocationCount || p == a)
-            {
-                throw std::invalid_argument(
-                    "allocation " + allocation.id
-                    + ": predecessor index out of range");
+        for (int p : allocation.predecessorAllocations) {
+            if (p < 0 || p >= allocationCount || p == a) {
+                throw std::invalid_argument("allocation " + allocation.id +
+                                            ": predecessor index out of range");
             }
             schedule.successorAllocations[p].push_back(a);
             ++indegree[a];
@@ -118,50 +93,38 @@ void ScoreCalculator::prepare(ProjectJobSchedule &schedule)
     }
     schedule.topologicalOrder.clear();
     schedule.topologicalOrder.reserve(allocationCount);
-    for (int a = 0; a < allocationCount; ++a)
-    {
-        if (indegree[a] == 0)
-            schedule.topologicalOrder.push_back(a);
+    for (int a = 0; a < allocationCount; ++a) {
+        if (indegree[a] == 0) schedule.topologicalOrder.push_back(a);
     }
-    for (std::size_t head = 0; head < schedule.topologicalOrder.size(); ++head)
-    {
+    for (std::size_t head = 0; head < schedule.topologicalOrder.size(); ++head) {
         const int a = schedule.topologicalOrder[head];
-        for (int s : schedule.successorAllocations[a])
-        {
-            if (--indegree[s] == 0)
-                schedule.topologicalOrder.push_back(s);
+        for (int s : schedule.successorAllocations[a]) {
+            if (--indegree[s] == 0) schedule.topologicalOrder.push_back(s);
         }
     }
-    if (static_cast<int>(schedule.topologicalOrder.size()) != allocationCount)
-    {
-        throw std::invalid_argument(
-            "the allocation precedence graph contains a cycle");
+    if (static_cast<int>(schedule.topologicalOrder.size()) != allocationCount) {
+        throw std::invalid_argument("the allocation precedence graph contains a cycle");
     }
     schedule.prepared = true;
 }
 
-void ScoreCalculator::updateDates(ProjectJobSchedule &schedule)
-{
-    for (int a : schedule.topologicalOrder)
-    {
-        Allocation &allocation = schedule.allocations[a];
+void ScoreCalculator::updateDates(ProjectJobSchedule& schedule) {
+    for (int a : schedule.topologicalOrder) {
+        Allocation& allocation = schedule.allocations[a];
         int doneDate = 0;
-        for (int p : allocation.predecessorAllocations)
-        {
+        for (int p : allocation.predecessorAllocations) {
             doneDate = std::max(doneDate, schedule.allocations[p].endDate);
         }
         const int value = allocation.modeDelay;
         const int delay = value < 0 ? 0 : schedule.delayOfValue(value);
-        const int duration
-            = value < 0 ? 0 : schedule.executionModeOf(a, value).duration;
+        const int duration = value < 0 ? 0 : schedule.executionModeOf(a, value).duration;
         allocation.predecessorsDoneDate = doneDate;
         allocation.startDate = doneDate + delay;
         allocation.endDate = allocation.startDate + duration;
     }
 }
 
-Score ScoreCalculator::score(ProjectJobSchedule &schedule)
-{
+Score ScoreCalculator::score(ProjectJobSchedule& schedule) {
     prepare(schedule);
     updateDates(schedule);
 
@@ -174,23 +137,16 @@ Score ScoreCalculator::score(ProjectJobSchedule &schedule)
     // (resource, day).
     std::vector<std::vector<int>> renewableUsage(resourceCount);
 
-    for (int a = 0; a < schedule.allocationCount(); ++a)
-    {
-        const Allocation &allocation = schedule.allocations[a];
-        if (allocation.modeDelay < 0)
-            continue;  // unassigned: no resource usage
-        const ExecutionMode &mode
-            = schedule.executionModeOf(a, allocation.modeDelay);
-        for (const ResourceRequirement &req : mode.resourceRequirements)
-        {
-            const Resource &resource = schedule.resources[req.resource];
-            if (!resource.renewable)
-            {
+    for (int a = 0; a < schedule.allocationCount(); ++a) {
+        const Allocation& allocation = schedule.allocations[a];
+        if (allocation.modeDelay < 0) continue;  // unassigned: no resource usage
+        const ExecutionMode& mode = schedule.executionModeOf(a, allocation.modeDelay);
+        for (const ResourceRequirement& req : mode.resourceRequirements) {
+            const Resource& resource = schedule.resources[req.resource];
+            if (!resource.renewable) {
                 nonRenewableUsage[req.resource] += req.requirement;
-            }
-            else if (allocation.endDate > allocation.startDate)
-            {
-                std::vector<int> &usage = renewableUsage[req.resource];
+            } else if (allocation.endDate > allocation.startDate) {
+                std::vector<int>& usage = renewableUsage[req.resource];
                 if (static_cast<int>(usage.size()) < allocation.endDate)
                     usage.resize(allocation.endDate, 0);
                 for (int d = allocation.startDate; d < allocation.endDate; ++d)
@@ -201,20 +157,14 @@ Score ScoreCalculator::score(ProjectJobSchedule &schedule)
 
     std::int64_t nonRenewableExcess = 0;
     std::int64_t renewableExcess = 0;
-    for (int r = 0; r < resourceCount; ++r)
-    {
-        const Resource &resource = schedule.resources[r];
-        if (!resource.renewable)
-        {
+    for (int r = 0; r < resourceCount; ++r) {
+        const Resource& resource = schedule.resources[r];
+        if (!resource.renewable) {
             if (nonRenewableUsage[r] > resource.capacity)
                 nonRenewableExcess += nonRenewableUsage[r] - resource.capacity;
-        }
-        else
-        {
-            for (int used : renewableUsage[r])
-            {
-                if (used > resource.capacity)
-                    renewableExcess += used - resource.capacity;
+        } else {
+            for (int used : renewableUsage[r]) {
+                if (used > resource.capacity) renewableExcess += used - resource.capacity;
             }
         }
     }
@@ -224,24 +174,18 @@ Score ScoreCalculator::score(ProjectJobSchedule &schedule)
     std::int64_t medium = 0;
     std::int64_t makespan = 0;
     bool hasSink = false;
-    for (int a = 0; a < schedule.allocationCount(); ++a)
-    {
-        if (schedule.jobTypeOf(a) != JobType::SINK)
-            continue;
+    for (int a = 0; a < schedule.allocationCount(); ++a) {
+        if (schedule.jobTypeOf(a) != JobType::SINK) continue;
         const int endDate = schedule.allocations[a].endDate;
-        const int projectDelay
-            = endDate - schedule.projectCriticalPathEndDateOf(a);
-        if (projectDelay > 0)
-            medium += projectDelay;
-        makespan
-            = hasSink ? std::max<std::int64_t>(makespan, endDate) : endDate;
+        const int projectDelay = endDate - schedule.projectCriticalPathEndDateOf(a);
+        if (projectDelay > 0) medium += projectDelay;
+        makespan = hasSink ? std::max<std::int64_t>(makespan, endDate) : endDate;
         hasSink = true;
     }
 
-    schedule.score = Score{-(kNonRenewableWeight * nonRenewableExcess
-                             + kRenewableWeight * renewableExcess),
-                           -(kProjectDelayWeight * medium),
-                           -(kMakespanWeight * makespan)};
+    schedule.score =
+            Score{-(kNonRenewableWeight * nonRenewableExcess + kRenewableWeight * renewableExcess),
+                  -(kProjectDelayWeight * medium), -(kMakespanWeight * makespan)};
     return schedule.score;
 }
 

@@ -10,8 +10,8 @@ namespace es {
 // week). MaxWeeklyMinutesCost and MinWeeklyMinutesCost pass their own
 // registry name and defaults.
 struct WeeklyMinutesConstraint : EsUnitConstraint {
-    WeeklyMinutesConstraint(std::string name, double weight, optimaru::Level level,
-                            Minutes minutes, int weekAnchor = 0)
+    WeeklyMinutesConstraint(std::string name, double weight, optimaru::Level level, Minutes minutes,
+                            int weekAnchor = 0)
         : EsUnitConstraint(std::move(name), weight, level),
           threshold_(static_cast<std::int64_t>(minutes)),
           weekAnchor_(weekAnchor) {}
@@ -57,7 +57,11 @@ struct WeeklyMinutesConstraint : EsUnitConstraint {
             // B: skip a week whose shifts are all pinned (fixed history); an idle
             // week (no shift at all) is still scored so guaranteed-hours holds.
             if (!(pinned_[w] && !movable_[w])) c += weekCost(total_[w]);
-        for (int i : members) { total_[week_[i]] = 0; movable_[week_[i]] = 0; pinned_[week_[i]] = 0; }
+        for (int i : members) {
+            total_[week_[i]] = 0;
+            movable_[week_[i]] = 0;
+            pinned_[week_[i]] = 0;
+        }
         return c;
     }
     virtual double weekCost(std::int64_t totalMinutes) const = 0;
@@ -65,8 +69,8 @@ struct WeeklyMinutesConstraint : EsUnitConstraint {
 protected:
     std::int64_t threshold_;
     int weekAnchor_;
-    std::vector<std::int32_t> week_, duration_;  // per shift
-    mutable std::vector<std::int64_t> total_;    // scratch, zeroed after use
+    std::vector<std::int32_t> week_, duration_;   // per shift
+    mutable std::vector<std::int64_t> total_;     // scratch, zeroed after use
     mutable std::vector<char> movable_, pinned_;  // scratch: week has movable / pinned shift
     std::int32_t weeks_ = 0;
 };

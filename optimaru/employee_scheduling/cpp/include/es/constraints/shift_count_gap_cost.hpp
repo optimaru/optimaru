@@ -15,8 +15,7 @@ struct ShiftCountGapCost final : EsGlobalConstraint {
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit ShiftCountGapCost(double weight = kDefaultWeight, int tolerance = 0)
-        : EsGlobalConstraint("shiftCountGapCost", weight, kDefaultLevel),
-          tolerance_(tolerance) {}
+        : EsGlobalConstraint("shiftCountGapCost", weight, kDefaultLevel), tolerance_(tolerance) {}
     void reset(const EmployeeSchedule& s,
                const std::vector<std::vector<int>>& members_per_unit) override {
         counts_.assign(members_per_unit.size(), 0);
@@ -30,7 +29,7 @@ struct ShiftCountGapCost final : EsGlobalConstraint {
         tighten();
     }
     void on_unit_changed(const EmployeeSchedule&, int unit,
-                       const std::vector<int>& members) override {
+                         const std::vector<int>& members) override {
         const int oldC = counts_[unit];
         const int newC = static_cast<int>(members.size());
         if (newC == oldC) return;
@@ -53,8 +52,8 @@ private:
         while (maxC_ > minC_ && hist_[maxC_] == 0) --maxC_;
     }
     int tolerance_;
-    std::vector<int> counts_;   // per employee: assigned shift count
-    std::vector<int> hist_;     // count value -> number of employees
+    std::vector<int> counts_;  // per employee: assigned shift count
+    std::vector<int> hist_;    // count value -> number of employees
     int minC_ = 0, maxC_ = 0;
 };
 

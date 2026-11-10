@@ -11,8 +11,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace ba
-{
+namespace ba {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -86,21 +85,18 @@ using ConstraintAssembly = optimaru::ConstraintAssembly<BedPlan>;
 using BaUnitConstraint = optimaru::UnitConstraint<BedPlan>;
 using BaGlobalConstraint = optimaru::GlobalConstraint<BedPlan>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const BedPlan &plan)
-{
-    if (!plan.prepared)
-    {
-        throw std::logic_error("ba constraints require "
-                               "ScoreCalculator::prepare(plan) first");
+inline void requirePrepared(const BedPlan& plan) {
+    if (!plan.prepared) {
+        throw std::logic_error(
+                "ba constraints require "
+                "ScoreCalculator::prepare(plan) first");
     }
 }
 
 // Is this value a real bed (rather than the "no bed" sentinel)?
-inline bool isRealBed(const BedPlan &plan, int value)
-{
+inline bool isRealBed(const BedPlan& plan, int value) {
     return value >= 0 && value < plan.bedCount();
 }
 
@@ -111,15 +107,13 @@ inline bool isRealBed(const BedPlan &plan, int value)
 // shape_cost(0 - offset): every real bed, an empty one included, and never the
 // sentinel. constraint_costs() reports the scope as "units", so the Python
 // score() charges the same beds.
-class RealBeds
-{
+class RealBeds {
 public:
-    void reset(const BedPlan &plan)
-    {
+    void reset(const BedPlan& plan) {
         beds_.resize(static_cast<std::size_t>(plan.bedCount()));
         std::iota(beds_.begin(), beds_.end(), 0);
     }
-    const std::vector<int> *units() const { return &beds_; }
+    const std::vector<int>* units() const { return &beds_; }
 
 private:
     std::vector<int> beds_;
@@ -133,34 +127,22 @@ private:
 // Shared base of the ten rules whose cost is a sum of independent
 // per-(stay, value) terms: the subclass writes `stayCost` only, and both the
 // full re-cost and the exact O(1) delta follow from it.
-struct PerStayConstraint : BaUnitConstraint
-{
+struct PerStayConstraint : BaUnitConstraint {
     using BaUnitConstraint::BaUnitConstraint;
 
     // The penalty units stay `stayIndex` incurs while assigned to
     // value `unit`, in this constraint's own (unweighted) unit of account.
-    virtual double stayCost(const BedPlan &plan, int unit, int stayIndex) const
-        = 0;
+    virtual double stayCost(const BedPlan& plan, int unit, int stayIndex) const = 0;
 
-    void on_reset(const BedPlan &plan) override
-    {
-        detail::requirePrepared(plan);
-    }
-    double cost(const BedPlan &plan,
-                int unit,
-                const std::vector<int> &members) const override
-    {
+    void on_reset(const BedPlan& plan) override { detail::requirePrepared(plan); }
+    double cost(const BedPlan& plan, int unit, const std::vector<int>& members) const override {
         double total = 0.0;
-        for (int stayIndex : members)
-            total += stayCost(plan, unit, stayIndex);
+        for (int stayIndex : members) total += stayCost(plan, unit, stayIndex);
         return total;
     }
     bool supports_delta() const override { return true; }
-    double delta_cost(const BedPlan &plan,
-                     int unit,
-                     const std::vector<int> & /*members*/,
-                     int entity) const override
-    {
+    double delta_cost(const BedPlan& plan, int unit, const std::vector<int>& /*members*/,
+                      int entity) const override {
         return stayCost(plan, unit, entity);
     }
 };
@@ -168,29 +150,21 @@ struct PerStayConstraint : BaUnitConstraint
 // Shared base of the per-stay rules that read the bed's ROOM: the "no bed"
 // sentinel has none, so they are silent there, and they evaluate the real
 // beds only (detail::RealBeds).
-struct PerStayRoomConstraint : PerStayConstraint
-{
+struct PerStayRoomConstraint : PerStayConstraint {
     using PerStayConstraint::PerStayConstraint;
 
-    void on_reset(const BedPlan &plan) override
-    {
+    void on_reset(const BedPlan& plan) override {
         PerStayConstraint::on_reset(plan);
         beds_.reset(plan);
     }
-    const std::vector<int> *scoped_units() const override
-    {
-        return beds_.units();
-    }
+    const std::vector<int>* scoped_units() const override { return beds_.units(); }
 
     // The penalty units stay `stayIndex` incurs in `room` (already resolved
     // from the bed), never called for the sentinel.
-    virtual double
-    roomCost(const BedPlan &plan, int roomIndex, int stayIndex) const = 0;
+    virtual double roomCost(const BedPlan& plan, int roomIndex, int stayIndex) const = 0;
 
-    double stayCost(const BedPlan &plan, int unit, int stayIndex) const override
-    {
-        if (!detail::isRealBed(plan, unit))
-            return 0.0;
+    double stayCost(const BedPlan& plan, int unit, int stayIndex) const override {
+        if (!detail::isRealBed(plan, unit)) return 0.0;
         return roomCost(plan, plan.beds[unit].room, stayIndex);
     }
 
@@ -203,17 +177,14 @@ private:
 // ---------------------------------------------------------------------------
 // Shared base: supports_member_change() routes everything through
 // on_member_changed; the unit-diff hook is unreachable for assignment-shaped solutions.
-struct MemberChangeGlobalConstraint : BaGlobalConstraint
-{
+struct MemberChangeGlobalConstraint : BaGlobalConstraint {
     using BaGlobalConstraint::BaGlobalConstraint;
     bool supports_member_change() const override { return true; }
-    void on_unit_changed(const BedPlan & /*plan*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
-        throw std::logic_error(name
-                               + ": onUnitChanged is unreachable "
-                                 "(member-change fast path)");
+    void on_unit_changed(const BedPlan& /*plan*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
+        throw std::logic_error(name +
+                               ": onUnitChanged is unreachable "
+                               "(member-change fast path)");
     }
 };
 

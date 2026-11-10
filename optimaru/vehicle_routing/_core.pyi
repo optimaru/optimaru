@@ -249,9 +249,7 @@ class Solver:
     pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: VehicleRoutePlan) -> None: ...
-    def solve_with_constraints(
-        self, plan: VehicleRoutePlan, constraints: Iterable[Any] | None = ...
-    ) -> None:
+    def solve_with_constraints(self, plan: VehicleRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see optimaru.vehicle_routing.constraints). The given list replaces the default set;
         None keeps the default set. A name may be picked several times: each pick is
@@ -263,9 +261,7 @@ def list_constraints() -> list[str]:
     then the global unassigned_visits_cost.
     The same names optimaru.vehicle_routing.constraints uses."""
 
-def constraint_costs(
-    plan: VehicleRoutePlan, constraints: Iterable[Any] | None = ...
-) -> dict[str, dict[str, Any]]:
+def constraint_costs(plan: VehicleRoutePlan, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
     """Per-constraint, per-unit **raw** costs — before weight/exponent/offset/level
     rounding. A unit is a vehicle (plus the unassigned pool as the last cell, always 0);
     a global constraint reports one cost. `optimaru.vehicle_routing.constraints.score()` takes these

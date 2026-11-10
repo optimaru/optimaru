@@ -19,39 +19,31 @@
 #include "fcs/constraints/required_skill_cost.hpp"
 #include "fcs/constraints/transfer_between_two_flights_cost.hpp"
 
-namespace fcs
-{
+namespace fcs {
 
-constexpr auto kRequiredSkillWeight
-    = static_cast<std::int64_t>(RequiredSkillCost::kDefaultWeight);
-constexpr auto kFlightConflictWeight
-    = static_cast<std::int64_t>(FlightConflictCost::kDefaultWeight);
-constexpr auto kTransferWeight
-    = static_cast<std::int64_t>(TransferBetweenTwoFlightsCost::kDefaultWeight);
-constexpr auto kUnavailabilityWeight
-    = static_cast<std::int64_t>(EmployeeUnavailabilityCost::kDefaultWeight);
-constexpr double kFirstNotHomeWeight
-    = FirstAssignmentNotDepartingFromHomeCost::kDefaultWeight;
-constexpr double kLastNotHomeWeight
-    = LastAssignmentNotArrivingAtHomeCost::kDefaultWeight;
+constexpr auto kRequiredSkillWeight = static_cast<std::int64_t>(RequiredSkillCost::kDefaultWeight);
+constexpr auto kFlightConflictWeight =
+        static_cast<std::int64_t>(FlightConflictCost::kDefaultWeight);
+constexpr auto kTransferWeight =
+        static_cast<std::int64_t>(TransferBetweenTwoFlightsCost::kDefaultWeight);
+constexpr auto kUnavailabilityWeight =
+        static_cast<std::int64_t>(EmployeeUnavailabilityCost::kDefaultWeight);
+constexpr double kFirstNotHomeWeight = FirstAssignmentNotDepartingFromHomeCost::kDefaultWeight;
+constexpr double kLastNotHomeWeight = LastAssignmentNotArrivingAtHomeCost::kDefaultWeight;
 
-static_assert(kRequiredSkillWeight == RequiredSkillCost::kDefaultWeight
-                  && kFlightConflictWeight == FlightConflictCost::kDefaultWeight
-                  && kTransferWeight
-                         == TransferBetweenTwoFlightsCost::kDefaultWeight
-                  && kUnavailabilityWeight
-                         == EmployeeUnavailabilityCost::kDefaultWeight,
+static_assert(kRequiredSkillWeight == RequiredSkillCost::kDefaultWeight &&
+                      kFlightConflictWeight == FlightConflictCost::kDefaultWeight &&
+                      kTransferWeight == TransferBetweenTwoFlightsCost::kDefaultWeight &&
+                      kUnavailabilityWeight == EmployeeUnavailabilityCost::kDefaultWeight,
               "the monolithic calculators assume integral hard weights");
-static_assert(
-    RequiredSkillCost::kDefaultLevel == optimaru::Level::Hard
-        && FlightConflictCost::kDefaultLevel == optimaru::Level::Hard
-        && TransferBetweenTwoFlightsCost::kDefaultLevel == optimaru::Level::Hard
-        && EmployeeUnavailabilityCost::kDefaultLevel == optimaru::Level::Hard
-        && FirstAssignmentNotDepartingFromHomeCost::kDefaultLevel
-               == optimaru::Level::Soft
-        && LastAssignmentNotArrivingAtHomeCost::kDefaultLevel
-               == optimaru::Level::Soft,
-    "the monolithic calculators assume the component levels");
+static_assert(RequiredSkillCost::kDefaultLevel == optimaru::Level::Hard &&
+                      FlightConflictCost::kDefaultLevel == optimaru::Level::Hard &&
+                      TransferBetweenTwoFlightsCost::kDefaultLevel == optimaru::Level::Hard &&
+                      EmployeeUnavailabilityCost::kDefaultLevel == optimaru::Level::Hard &&
+                      FirstAssignmentNotDepartingFromHomeCost::kDefaultLevel ==
+                              optimaru::Level::Soft &&
+                      LastAssignmentNotArrivingAtHomeCost::kDefaultLevel == optimaru::Level::Soft,
+              "the monolithic calculators assume the component levels");
 
 }  // namespace fcs
 

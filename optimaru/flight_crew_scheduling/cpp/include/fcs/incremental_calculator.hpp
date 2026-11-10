@@ -8,8 +8,7 @@
 #include "fcs/score_calculator.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace fcs
-{
+namespace fcs {
 
 // The flight-crew-scheduling implementation of the engine's
 // optimaru::Objective: one hand-written incremental calculator for all
@@ -33,17 +32,15 @@ namespace fcs
 // construction heuristic can score partially initialized solutions. The
 // full-recompute reference is ScoreCalculator::score (checked in the
 // tests and under ScoreChecks::ScoreChecks::Full).
-class FlightCrewIncrementalScoreCalculator final
-    : public optimaru::Objective<FlightCrewSchedule>
-{
+class FlightCrewIncrementalScoreCalculator final : public optimaru::Objective<FlightCrewSchedule> {
 public:
-    void rebuild(FlightCrewSchedule &solution) override;
+    void rebuild(FlightCrewSchedule& solution) override;
     void before_assign(int assignmentIndex) override;
     void after_assign(int assignmentIndex) override;
     Score score() override;
 
 private:
-    FlightCrewSchedule *schedule_ = nullptr;
+    FlightCrewSchedule* schedule_ = nullptr;
     std::vector<int> assign_;  // employee per assignment (-1 == unassigned)
 
     // Departure-sorted assignment indices per employee, plus that employee's

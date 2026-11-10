@@ -276,12 +276,12 @@ def track3(args) -> None:
     """
     _cpsat_path()
     from pydantic import ValidationError
+
+    import gen_canonical
     from teacher_scheduling import SolverConfig, Timetable, TimetableProblem
     from teacher_scheduling.partial import UNASSIGNED_WEIGHT, solve_partial, unassigned_courses
     from teacher_scheduling.solver.config import ObjectiveWeights
     from teacher_scheduling.validate import compute_penalties, validate_timetable
-
-    import gen_canonical
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -464,11 +464,10 @@ def track3(args) -> None:
 
 def track2(args) -> None:
     _cpsat_path()
+    import gen_canonical
     from teacher_scheduling import SolverConfig, TimetableProblem, solve
     from teacher_scheduling.solver.config import ObjectiveWeights
     from teacher_scheduling.validate import compute_penalties, validate_timetable
-
-    import gen_canonical
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

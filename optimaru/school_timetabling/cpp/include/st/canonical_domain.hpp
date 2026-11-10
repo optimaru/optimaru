@@ -51,8 +51,7 @@
 //     holes, course forbidden_slots, teacher unavailable, class unavailable —
 //     is pre-baked into the per-lesson allowedSlot table and costs 1 hard
 //     point per violation (disallowedSlotCost).
-namespace st::canon
-{
+namespace st::canon {
 
 using Score = optimaru::Score;
 
@@ -62,8 +61,7 @@ using Score = optimaru::Score;
 // One weekly period of one (possibly merged) course. `slot` is the only
 // decision variable: the timeslot index into Timetable::dayOfSlot /
 // periodOfSlot; -1 = unassigned.
-struct Lesson
-{
+struct Lesson {
     std::string id;
 
     int classGroupId = -1;  // dense class id; the lesson occupies 1 class slot
@@ -113,8 +111,7 @@ struct Lesson
 // (e.g. Fri has 6 periods while Mon~Thu have 7) — simply enumerate the slots
 // that exist. Periods must fit a 16-bit mask (period <= 16) and days a byte
 // mask (day < 8).
-struct Timetable
-{
+struct Timetable {
     std::vector<int> dayOfSlot;     // slot -> 0-based day
     std::vector<int> periodOfSlot;  // slot -> 1-based period
     std::vector<Lesson> lessons;
@@ -164,13 +161,10 @@ struct Timetable
     std::vector<int> slotOfDayPeriod;
 
     int slotCount() const { return static_cast<int>(dayOfSlot.size()); }
-    int slotAt(int day, int period) const
-    {
-        return slotOfDayPeriod[static_cast<std::size_t>(day) * maxPeriod
-                               + period - 1];
+    int slotAt(int day, int period) const {
+        return slotOfDayPeriod[static_cast<std::size_t>(day) * maxPeriod + period - 1];
     }
-    static bool slotAllowed(const Lesson &lesson, int slot)
-    {
+    static bool slotAllowed(const Lesson& lesson, int slot) {
         return lesson.allowedSlot.empty() || lesson.allowedSlot[slot] != 0;
     }
 };
@@ -182,28 +176,20 @@ struct Timetable
 // variable is Lesson::slot, the value range is the timeslot list. Pinned
 // lessons (fixed slots) are excluded from every move.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<st::canon::Timetable>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const st::canon::Timetable &t)
-    {
+template <>
+struct optimaru::SolutionTraits<st::canon::Timetable> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const st::canon::Timetable& t) {
         return static_cast<int>(t.lessons.size());
     }
-    static int value_count(const st::canon::Timetable &t)
-    {
-        return t.slotCount();
-    }
-    static int value_of(const st::canon::Timetable &t, int lessonIndex)
-    {
+    static int value_count(const st::canon::Timetable& t) { return t.slotCount(); }
+    static int value_of(const st::canon::Timetable& t, int lessonIndex) {
         return t.lessons[lessonIndex].slot;
     }
-    static void assign(st::canon::Timetable &t, int lessonIndex, int slot)
-    {
+    static void assign(st::canon::Timetable& t, int lessonIndex, int slot) {
         t.lessons[lessonIndex].slot = slot;
     }
-    static bool is_pinned(const st::canon::Timetable &t, int lessonIndex)
-    {
+    static bool is_pinned(const st::canon::Timetable& t, int lessonIndex) {
         return t.lessons[lessonIndex].pinned;
     }
 };

@@ -103,7 +103,9 @@ def _as_int(value: Any) -> int | None:
 def _parse_slot(text: str) -> TimeSlot:
     match = _SLOT_RE.match(text)
     if not match:
-        raise ExcelFormatError(f"cannot read the time notation: {text!r} (e.g. '월1' or '월 1교시', i.e. Monday period 1)")
+        raise ExcelFormatError(
+            f"cannot read the time notation: {text!r} (e.g. '월1' or '월 1교시', i.e. Monday period 1)"
+        )
     day_label, period = match.groups()
     return TimeSlot(day=_DAY_BY_LABEL[day_label], period=int(period))
 
@@ -281,7 +283,9 @@ def _read_load_table(rows: list[list[Any]]) -> tuple[list[_LoadRow], dict[int, i
         class_of_column[index] = (grade, number)
         max_class[grade] = max(max_class[grade], number)
     if not class_of_column:
-        raise ExcelFormatError(f"[{SHEET_LOAD}] cannot read the grade/class header (class numbers are needed under the grade row)")
+        raise ExcelFormatError(
+            f"[{SHEET_LOAD}] cannot read the grade/class header (class numbers are needed under the grade row)"
+        )
 
     order_column = columns.get("순")  # row number
     entries: list[_LoadRow] = []
@@ -389,7 +393,9 @@ def _apply_special(
         if kind in ("배정금지", "이동금지", "특별교사"):  # forbidden placement / no move / special teacher
             teacher_id = teacher_id_by_name.get(target)
             if teacher_id is None:
-                warnings.append(f"[{SHEET_SPECIAL}] forbidden placement: teacher '{target}' not found in the load table")
+                warnings.append(
+                    f"[{SHEET_SPECIAL}] forbidden placement: teacher '{target}' not found in the load table"
+                )
                 continue
             unavailable[teacher_id].add(_parse_slot(value))
         elif kind == "연속수업":  # consecutive lessons
@@ -596,7 +602,9 @@ def _warn_on_capacity(problem: TimetableProblem, class_id_by_name: dict[str, str
         )
         assigned = sum(course.periods_per_week for course in problem.courses_by_class_group.get(group.id, ()))
         if assigned > available:
-            warnings.append(f"{group.name}: {assigned} periods assigned > {available} cells available — cannot be scheduled")
+            warnings.append(
+                f"{group.name}: {assigned} periods assigned > {available} cells available — cannot be scheduled"
+            )
         elif assigned < available:
             warnings.append(
                 f"{group.name}: {assigned} periods assigned < {available} cells available — {available - assigned} cells stay empty"

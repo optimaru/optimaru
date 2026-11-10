@@ -3,8 +3,7 @@
 
 #include "ba/constraints/common.hpp"
 
-namespace ba
-{
+namespace ba {
 
 // Hard, weight 1000: bedConflictCost — two stays in one bed on the same
 // night. Raw cost per bed = the summed shared nights over every pair of its
@@ -13,54 +12,36 @@ namespace ba
 //
 // A sum over the pairs INSIDE one unit, so the exact delta of one stay
 // joining or leaving is its overlap with the other occupants.
-struct BedConflictCost final : BaUnitConstraint
-{
+struct BedConflictCost final : BaUnitConstraint {
     static constexpr double kDefaultWeight = 1000.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit BedConflictCost(double weight = kDefaultWeight)
-        : BaUnitConstraint("bedConflictCost", weight, kDefaultLevel)
-    {
-    }
-    void on_reset(const BedPlan &plan) override
-    {
+        : BaUnitConstraint("bedConflictCost", weight, kDefaultLevel) {}
+    void on_reset(const BedPlan& plan) override {
         detail::requirePrepared(plan);
         beds_.reset(plan);
     }
     // The real beds; the sentinel is no bed (detail::RealBeds).
-    const std::vector<int> *scoped_units() const override
-    {
-        return beds_.units();
-    }
-    double cost(const BedPlan &plan,
-                int unit,
-                const std::vector<int> &members) const override
-    {
-        if (!detail::isRealBed(plan, unit))
-            return 0.0;
+    const std::vector<int>* scoped_units() const override { return beds_.units(); }
+    double cost(const BedPlan& plan, int unit, const std::vector<int>& members) const override {
+        if (!detail::isRealBed(plan, unit)) return 0.0;
         std::int64_t nights = 0;
-        for (std::size_t a = 0; a < members.size(); ++a)
-        {
-            const Stay &first = plan.stays[members[a]];
+        for (std::size_t a = 0; a < members.size(); ++a) {
+            const Stay& first = plan.stays[members[a]];
             for (std::size_t b = a + 1; b < members.size(); ++b)
                 nights += first.sameNightCount(plan.stays[members[b]]);
         }
         return static_cast<double>(nights);
     }
     bool supports_delta() const override { return true; }
-    double delta_cost(const BedPlan &plan,
-                     int unit,
-                     const std::vector<int> &members,
-                     int entity) const override
-    {
-        if (!detail::isRealBed(plan, unit))
-            return 0.0;
-        const Stay &stay = plan.stays[entity];
+    double delta_cost(const BedPlan& plan, int unit, const std::vector<int>& members,
+                      int entity) const override {
+        if (!detail::isRealBed(plan, unit)) return 0.0;
+        const Stay& stay = plan.stays[entity];
         std::int64_t nights = 0;
-        for (int other : members)
-        {
-            if (other != entity)
-                nights += stay.sameNightCount(plan.stays[other]);
+        for (int other : members) {
+            if (other != entity) nights += stay.sameNightCount(plan.stays[other]);
         }
         return static_cast<double>(nights);
     }

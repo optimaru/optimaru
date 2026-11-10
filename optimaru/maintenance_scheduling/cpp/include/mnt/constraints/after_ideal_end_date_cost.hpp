@@ -3,8 +3,7 @@
 
 #include "mnt/constraints/common.hpp"
 
-namespace mnt
-{
+namespace mnt {
 
 // Soft, weight 1'000'000: afterIdealEndDateCost — the calendar days a job
 // finishes LATE. Raw cost per (start date, crew) cell = the summed days by
@@ -13,27 +12,18 @@ namespace mnt
 // more expensive than a tag conflict and a million times more than finishing
 // early, which is what makes overdue maintenance the term the search clears
 // first among the softs.
-struct AfterIdealEndDateCost final : PerJobConstraint
-{
+struct AfterIdealEndDateCost final : PerJobConstraint {
     static constexpr double kDefaultWeight = 1000000.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit AfterIdealEndDateCost(double weight = kDefaultWeight)
-        : PerJobConstraint("afterIdealEndDateCost", weight, kDefaultLevel)
-    {
-    }
-    double jobCost(const MaintenanceSchedule &schedule,
-                   int unit,
-                   int jobIndex) const override
-    {
-        const Job &job = schedule.jobs[jobIndex];
-        if (job.idealEndDate == kNoDate)
-            return 0.0;
-        const std::int64_t endDate = schedule.endDateFor(
-            job.durationInDays, schedule.dateIndexOf(unit));
-        return endDate > job.idealEndDate
-                   ? static_cast<double>(endDate - job.idealEndDate)
-                   : 0.0;
+        : PerJobConstraint("afterIdealEndDateCost", weight, kDefaultLevel) {}
+    double jobCost(const MaintenanceSchedule& schedule, int unit, int jobIndex) const override {
+        const Job& job = schedule.jobs[jobIndex];
+        if (job.idealEndDate == kNoDate) return 0.0;
+        const std::int64_t endDate =
+                schedule.endDateFor(job.durationInDays, schedule.dateIndexOf(unit));
+        return endDate > job.idealEndDate ? static_cast<double>(endDate - job.idealEndDate) : 0.0;
     }
 };
 

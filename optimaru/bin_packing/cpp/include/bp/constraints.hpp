@@ -18,8 +18,7 @@
 #include "bp/constraints/item_conflict_cost.hpp"
 #include "bp/constraints/used_bins_cost.hpp"
 
-namespace bp
-{
+namespace bp {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -50,8 +49,7 @@ namespace bp
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<BinCapacityCost>();
     assembly.emplace<ColorConflictCost>();
@@ -60,8 +58,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

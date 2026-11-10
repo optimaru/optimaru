@@ -14,19 +14,16 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 
-namespace bp
-{
+namespace bp {
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/:
 // the domain construction (best-fit decreasing, bp/construction.hpp), then
 // optimaru::Solver<BinPackingProblem> with late acceptance over the built-in
 // change/swap moves, the domain's EmptyBinMove and RepackMove
 // (bp/moves.hpp) and the engine's adaptive ruin-and-recreate (ALNS).
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget. 0 = no search: the construction (or the seed,
         // completed where an item is still -1) comes back as it is.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
@@ -34,7 +31,7 @@ public:
         // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires (termination is by time_limit).
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<double>::infinity()};
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;
@@ -56,8 +53,7 @@ public:
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
         // slower).
-        optimaru::ScoreChecks score_checks
-            = optimaru::ScoreChecks::Off;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS); the recreate places each ruined item in its best
@@ -115,7 +111,7 @@ public:
         bool repackMoves = true;
         int repackPartnerBins = 2;
 
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
@@ -135,7 +131,7 @@ public:
     // Throws std::invalid_argument for binCapacity <= 0, a repeated item
     // id, a weight <= 0, a bad conflict or (warm start) a bin outside
     // -1..n-1.
-    void solve(BinPackingProblem &problem);
+    void solve(BinPackingProblem& problem);
 
     // Solves with a caller-assembled plugin calculator (see
     // bp/constraints.hpp): the same construction and search, scored by the
@@ -144,8 +140,8 @@ public:
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be
     // cloned, so parallelSolverCount is ignored.
-    void solve(BinPackingProblem &problem,
-               optimaru::DecomposedObjective<BinPackingProblem> &calculator);
+    void solve(BinPackingProblem& problem,
+               optimaru::DecomposedObjective<BinPackingProblem>& calculator);
 
 private:
     Config config_;

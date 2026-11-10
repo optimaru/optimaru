@@ -82,11 +82,7 @@ def _build(count_days: int, count_flights: int, seed: int) -> Any:
         if departure < 1:
             departure = 1 + rng.randrange(4) * 60
         arrival = departure + 60 * HOURS[routes[f][0]][routes[f][1]]
-        flights.append(
-            fcs.Flight(
-                f"Flight {f + 1}", routes[f][0], departure, routes[f][1], arrival
-            )
-        )
+        flights.append(fcs.Flight(f"Flight {f + 1}", routes[f][0], departure, routes[f][1], arrival))
 
     assignments = []
     assignment_id = 0
@@ -96,9 +92,7 @@ def _build(count_days: int, count_flights: int, seed: int) -> Any:
             skills.append(ATTENDANT)
         for index, skill in enumerate(skills, start=1):
             assignment_id += 1
-            assignments.append(
-                fcs.FlightAssignment(str(assignment_id), f, index, skill)
-            )
+            assignments.append(fcs.FlightAssignment(str(assignment_id), f, index, skill))
 
     flight_airports: list[int] = []
     for f in range(count_flights):
@@ -114,11 +108,7 @@ def _build(count_days: int, count_flights: int, seed: int) -> Any:
                 skills.append(ATTENDANT)
             for skill in skills:
                 employee_id += 1
-                employees.append(
-                    fcs.Employee(
-                        str(employee_id), f"E{employee_id}", airport, [skill], set()
-                    )
-                )
+                employees.append(fcs.Employee(str(employee_id), f"E{employee_id}", airport, [skill], set()))
 
     order = list(range(len(employees)))
     rng.shuffle(order)
@@ -169,6 +159,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.flight_crew_scheduling import solve
+
     from optimaru.flight_crew_scheduling.models import FlightCrewScheduleModel
 
     solved = solve(

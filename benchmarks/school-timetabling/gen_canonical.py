@@ -175,7 +175,13 @@ def generate(size: str) -> dict:
             "preferred_periods": [],
             "avoided_periods": [],
         },
-        {"id": "SOC", "name": "Social studies", "required_room_type": None, "preferred_periods": [], "avoided_periods": []},
+        {
+            "id": "SOC",
+            "name": "Social studies",
+            "required_room_type": None,
+            "preferred_periods": [],
+            "avoided_periods": [],
+        },
         {"id": "PE", "name": "PE", "required_room_type": "GYM", "preferred_periods": [], "avoided_periods": [1]},
         {
             "id": "MUS",
@@ -185,7 +191,13 @@ def generate(size: str) -> dict:
             "avoided_periods": [],
         },
         {"id": "ART", "name": "Art", "required_room_type": "ART_ROOM", "preferred_periods": [], "avoided_periods": []},
-        {"id": "TECH", "name": "Technology and Home Economics", "required_room_type": None, "preferred_periods": [], "avoided_periods": []},
+        {
+            "id": "TECH",
+            "name": "Technology and Home Economics",
+            "required_room_type": None,
+            "preferred_periods": [],
+            "avoided_periods": [],
+        },
         {"id": "ETH", "name": "Ethics", "required_room_type": None, "preferred_periods": [], "avoided_periods": []},
         {"id": "HR", "name": "Homeroom", "required_room_type": None, "preferred_periods": [], "avoided_periods": []},
     ]
@@ -273,7 +285,9 @@ def _verify(problem: dict, size: str) -> None:
         unavailable = len(teacher["unavailable"])
         load = per_teacher[teacher["id"]]
         if load > cap - unavailable:
-            raise ValueError(f"[{size}] teacher {teacher['id']}: {load} hours a week > cap {cap} - unavailable {unavailable}")
+            raise ValueError(
+                f"[{size}] teacher {teacher['id']}: {load} hours a week > cap {cap} - unavailable {unavailable}"
+            )
 
     # Where possible, validate with the canonical pydantic models too (referential integrity, parallel-group consistency, ...).
     if str(_CPSAT_DIR) not in sys.path:

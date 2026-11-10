@@ -3,70 +3,52 @@
 
 #include "st/constraints/global/global_constraint.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // classGapCost — soft, weight 10. Raw cost = the idle periods wedged inside
 // a class's day (last - first + 1 - count over its busy periods), summed
 // over (class, day), on the class-owned busy masks (one occupancy unit per
 // lesson, so a merged lesson counts once); 0 = every class day is compact.
-struct ClassGapCost final : MemberChangeGlobalConstraint
-{
+struct ClassGapCost final : MemberChangeGlobalConstraint {
     static constexpr double kDefaultWeight = 10.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit ClassGapCost(double weight = kDefaultWeight)
-        : MemberChangeGlobalConstraint("classGapCost", weight, kDefaultLevel)
-    {
-    }
-    void reset(const Timetable &table,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+        : MemberChangeGlobalConstraint("classGapCost", weight, kDefaultLevel) {}
+    void reset(const Timetable& table,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(table);
         masks_.reset(table.classCount, table.slotCount(), table.dayCount);
         // Dense projections (lesson -> class, slot -> day/period bit), so
         // the per-event path never strides the Lesson structs.
         const int lessonCount = static_cast<int>(table.lessons.size());
         classOf_.resize(lessonCount);
-        for (int i = 0; i < lessonCount; ++i)
-            classOf_[i] = table.lessons[i].classGroupId;
+        for (int i = 0; i < lessonCount; ++i) classOf_[i] = table.lessons[i].classGroupId;
         const int slotCount = table.slotCount();
         slotDay_.resize(slotCount);
         slotBit_.resize(slotCount);
-        for (int slot = 0; slot < slotCount; ++slot)
-        {
+        for (int slot = 0; slot < slotCount; ++slot) {
             slotDay_[slot] = table.dayOfSlot[slot];
             slotBit_[slot] = detail::periodBit(table, slot);
         }
         total_ = 0;
-        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
-        {
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit) {
             for (int entity : members_per_unit[unit])
                 apply(static_cast<int>(unit), entity, /*joined=*/true);
         }
     }
-    void on_member_changed(const Timetable & /*table*/,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int entity,
-                         bool joined) override
-    {
+    void on_member_changed(const Timetable& /*table*/, int unit,
+                           const std::vector<int>& /*members*/, int entity, bool joined) override {
         apply(unit, entity, joined);
     }
     double cost() const override { return static_cast<double>(total_); }
 
 private:
-    void apply(int slot, int entity, bool joined)
-    {
-        masks_.apply(classOf_[entity],
-                     slot,
-                     slotDay_[slot],
-                     slotBit_[slot],
-                     joined,
-                     [&](std::uint16_t oldMask, std::uint16_t newMask)
-                     {
-                         total_ += ScoreCalculator::gapOf(newMask)
-                                   - ScoreCalculator::gapOf(oldMask);
+    void apply(int slot, int entity, bool joined) {
+        masks_.apply(classOf_[entity], slot, slotDay_[slot], slotBit_[slot], joined,
+                     [&](std::uint16_t oldMask, std::uint16_t newMask) {
+                         total_ +=
+                                 ScoreCalculator::gapOf(newMask) - ScoreCalculator::gapOf(oldMask);
                      });
     }
     detail::OwnerDayMasks masks_;

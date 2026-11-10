@@ -17,7 +17,7 @@ struct VehicleCapacityCost final : detail::SummedUnitConstraint {
         : SummedUnitConstraint("vehicleCapacityCost", weight, kDefaultLevel) {}
 
     bool piecewise_cost(const VehicleRoutePlan& plan, int unit, const optimaru::ListPiece* pieces,
-                       int count, double& out) const override {
+                        int count, double& out) const override {
         if (detail::isPool(plan, unit)) {
             out = 0.0;
             return true;

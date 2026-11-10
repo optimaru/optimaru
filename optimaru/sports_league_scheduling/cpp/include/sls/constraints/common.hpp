@@ -12,8 +12,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace sls
-{
+namespace sls {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -86,8 +85,7 @@ namespace sls
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<LeagueSchedule>;
+using DecomposedCalculator = optimaru::DecomposedObjective<LeagueSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<LeagueSchedule>;
 using SlsUnitConstraint = optimaru::UnitConstraint<LeagueSchedule>;
 using SlsGlobalConstraint = optimaru::GlobalConstraint<LeagueSchedule>;
@@ -98,34 +96,28 @@ using SlsGlobalConstraint = optimaru::GlobalConstraint<LeagueSchedule>;
 // default weight stops being integral or if a component leaves the level the
 // monolith sums it into.
 template <typename Component, optimaru::Level kLevel>
-constexpr std::int64_t monolithicWeight()
-{
+constexpr std::int64_t monolithicWeight() {
     static_assert(Component::kDefaultLevel == kLevel,
                   "the monolithic calculators sum this constraint into "
                   "another level");
-    constexpr auto weight
-        = static_cast<std::int64_t>(Component::kDefaultWeight);
+    constexpr auto weight = static_cast<std::int64_t>(Component::kDefaultWeight);
     static_assert(weight == Component::kDefaultWeight,
                   "the monolithic calculators assume integral default "
                   "weights");
     return weight;
 }
 template <typename Component>
-constexpr std::int64_t kHardWeight
-    = monolithicWeight<Component, optimaru::Level::Hard>();
+constexpr std::int64_t kHardWeight = monolithicWeight<Component, optimaru::Level::Hard>();
 template <typename Component>
-constexpr std::int64_t kSoftWeight
-    = monolithicWeight<Component, optimaru::Level::Soft>();
+constexpr std::int64_t kSoftWeight = monolithicWeight<Component, optimaru::Level::Soft>();
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const LeagueSchedule &schedule)
-{
-    if (!schedule.prepared)
-    {
-        throw std::logic_error("sls constraints require "
-                               "ScoreCalculator::prepare(schedule) first");
+inline void requirePrepared(const LeagueSchedule& schedule) {
+    if (!schedule.prepared) {
+        throw std::logic_error(
+                "sls constraints require "
+                "ScoreCalculator::prepare(schedule) first");
     }
 }
 
@@ -138,35 +130,23 @@ inline void requirePrepared(const LeagueSchedule &schedule)
 // their cost is a sum of independent per-(match, round) terms, so the
 // subclass writes `matchCost` only and both the full re-cost and the exact
 // O(1) delta follow from it.
-struct PerMatchConstraint : SlsUnitConstraint
-{
+struct PerMatchConstraint : SlsUnitConstraint {
     using SlsUnitConstraint::SlsUnitConstraint;
 
     // The penalty units match `matchIndex` incurs while played in round
     // position `unit`.
-    virtual double matchCost(const LeagueSchedule &schedule,
-                             int unit,
-                             int matchIndex) const = 0;
+    virtual double matchCost(const LeagueSchedule& schedule, int unit, int matchIndex) const = 0;
 
-    void on_reset(const LeagueSchedule &schedule) override
-    {
-        detail::requirePrepared(schedule);
-    }
-    double cost(const LeagueSchedule &schedule,
-                int unit,
-                const std::vector<int> &members) const override
-    {
+    void on_reset(const LeagueSchedule& schedule) override { detail::requirePrepared(schedule); }
+    double cost(const LeagueSchedule& schedule, int unit,
+                const std::vector<int>& members) const override {
         double total = 0.0;
-        for (int matchIndex : members)
-            total += matchCost(schedule, unit, matchIndex);
+        for (int matchIndex : members) total += matchCost(schedule, unit, matchIndex);
         return total;
     }
     bool supports_delta() const override { return true; }
-    double delta_cost(const LeagueSchedule &schedule,
-                     int unit,
-                     const std::vector<int> & /*members*/,
-                     int entity) const override
-    {
+    double delta_cost(const LeagueSchedule& schedule, int unit, const std::vector<int>& /*members*/,
+                      int entity) const override {
         return matchCost(schedule, unit, entity);
     }
 };
@@ -177,55 +157,43 @@ struct PerMatchConstraint : SlsUnitConstraint
 // Shared base of the rules whose total is a sum over match pairs keyed by the
 // round index. It keeps the matches bucketed by index and asks the subclass
 // for the marginal of one match against the buckets it can pair with.
-struct RoundIndexPairConstraint : SlsGlobalConstraint
-{
+struct RoundIndexPairConstraint : SlsGlobalConstraint {
     using SlsGlobalConstraint::SlsGlobalConstraint;
 
     bool supports_member_change() const override { return true; }
-    void on_unit_changed(const LeagueSchedule & /*schedule*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
-        throw std::logic_error(name
-                               + ": onUnitChanged is unreachable "
-                                 "(member-change fast path)");
+    void on_unit_changed(const LeagueSchedule& /*schedule*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
+        throw std::logic_error(name +
+                               ": onUnitChanged is unreachable "
+                               "(member-change fast path)");
     }
 
-    void reset(const LeagueSchedule &schedule,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+    void reset(const LeagueSchedule& schedule,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(schedule);
         indexCount_ = schedule.maxRoundIndex + 1;
         byIndex_.assign(indexCount_ > 0 ? indexCount_ : 0, {});
         total_ = 0;
-        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
-        {
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit) {
             const int index = schedule.roundIndexOf(static_cast<int>(unit));
-            for (int matchIndex : members_per_unit[unit])
-            {
+            for (int matchIndex : members_per_unit[unit]) {
                 total_ += marginal(schedule, matchIndex, index);
                 byIndex_[index].push_back(matchIndex);
             }
         }
     }
 
-    void on_member_changed(const LeagueSchedule &schedule,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int entity,
-                         bool joined) override
-    {
+    void on_member_changed(const LeagueSchedule& schedule, int unit,
+                           const std::vector<int>& /*members*/, int entity, bool joined) override {
         const int index = schedule.roundIndexOf(unit);
-        std::vector<int> &bucket = byIndex_[index];
-        if (joined)
-        {
+        std::vector<int>& bucket = byIndex_[index];
+        if (joined) {
             total_ += marginal(schedule, entity, index);
             bucket.push_back(entity);
             return;
         }
         const auto it = std::find(bucket.begin(), bucket.end(), entity);
-        if (it != bucket.end())
-        {
+        if (it != bucket.end()) {
             *it = bucket.back();
             bucket.pop_back();
         }
@@ -237,17 +205,14 @@ struct RoundIndexPairConstraint : SlsGlobalConstraint
 protected:
     // The matches currently on round index `index` — NOT including the match
     // whose marginal is being computed.
-    const std::vector<int> &at(int index) const
-    {
-        if (index < 0 || index >= indexCount_)
-            return empty_;
+    const std::vector<int>& at(int index) const {
+        if (index < 0 || index >= indexCount_) return empty_;
         return byIndex_[index];
     }
 
     // The pair terms match `matchIndex` on round index `index` contributes
     // against the current occupants of the adjacent buckets.
-    virtual std::int64_t marginal(const LeagueSchedule &schedule,
-                                  int matchIndex,
+    virtual std::int64_t marginal(const LeagueSchedule& schedule, int matchIndex,
                                   int index) const = 0;
 
 private:
@@ -264,67 +229,52 @@ private:
 // count, with the one touched team's row re-scored through
 // ScoreCalculator::runPenalty. O(indexCount) per move, and exact by
 // construction rather than by an incremental run-splicing argument.
-struct TeamSideRunConstraint : SlsGlobalConstraint
-{
+struct TeamSideRunConstraint : SlsGlobalConstraint {
     using SlsGlobalConstraint::SlsGlobalConstraint;
 
     // Which team of the match this side tracks (home or away).
-    virtual int teamOf(const Match &match) const = 0;
+    virtual int teamOf(const Match& match) const = 0;
 
     bool supports_member_change() const override { return true; }
-    void on_unit_changed(const LeagueSchedule & /*schedule*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
-        throw std::logic_error(name
-                               + ": onUnitChanged is unreachable "
-                                 "(member-change fast path)");
+    void on_unit_changed(const LeagueSchedule& /*schedule*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
+        throw std::logic_error(name +
+                               ": onUnitChanged is unreachable "
+                               "(member-change fast path)");
     }
 
-    void reset(const LeagueSchedule &schedule,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+    void reset(const LeagueSchedule& schedule,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(schedule);
         indexCount_ = schedule.maxRoundIndex + 1;
-        counts_.assign(
-            static_cast<std::size_t>(schedule.teamCount()) * indexCount_, 0);
+        counts_.assign(static_cast<std::size_t>(schedule.teamCount()) * indexCount_, 0);
         row_.assign(indexCount_, 0);
         penaltyPerTeam_.assign(schedule.teamCount(), 0);
         total_ = 0;
-        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
-        {
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit) {
             const int index = schedule.roundIndexOf(static_cast<int>(unit));
-            for (int matchIndex : members_per_unit[unit])
-            {
+            for (int matchIndex : members_per_unit[unit]) {
                 const int team = teamOf(schedule.matches[matchIndex]);
                 ++counts_[static_cast<std::size_t>(team) * indexCount_ + index];
             }
         }
-        for (int team = 0; team < schedule.teamCount(); ++team)
-            rescore(team);
+        for (int team = 0; team < schedule.teamCount(); ++team) rescore(team);
     }
 
-    void on_member_changed(const LeagueSchedule &schedule,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int entity,
-                         bool joined) override
-    {
+    void on_member_changed(const LeagueSchedule& schedule, int unit,
+                           const std::vector<int>& /*members*/, int entity, bool joined) override {
         const int index = schedule.roundIndexOf(unit);
         const int team = teamOf(schedule.matches[entity]);
-        counts_[static_cast<std::size_t>(team) * indexCount_ + index]
-            += joined ? 1 : -1;
+        counts_[static_cast<std::size_t>(team) * indexCount_ + index] += joined ? 1 : -1;
         rescore(team);
     }
 
     double cost() const override { return static_cast<double>(total_); }
 
 private:
-    void rescore(int team)
-    {
+    void rescore(int team) {
         const std::size_t base = static_cast<std::size_t>(team) * indexCount_;
-        for (int i = 0; i < indexCount_; ++i)
-            row_[i] = counts_[base + i];
+        for (int i = 0; i < indexCount_; ++i) row_[i] = counts_[base + i];
         const std::int64_t penalty = ScoreCalculator::runPenalty(row_);
         total_ += penalty - penaltyPerTeam_[team];
         penaltyPerTeam_[team] = penalty;

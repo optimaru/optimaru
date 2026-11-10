@@ -28,42 +28,29 @@
 
 using namespace st::canon;
 
-namespace
-{
+namespace {
 
 int failures = 0;
 
-void check(bool ok, const std::string &label)
-{
+void check(bool ok, const std::string& label) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-void checkCount(const std::string &label,
-                std::int64_t got,
-                std::int64_t expected)
-{
+void checkCount(const std::string& label, std::int64_t got, std::int64_t expected) {
     const bool ok = got == expected;
-    std::printf("  [%s] %-44s got=%lld expected=%lld\n",
-                ok ? "PASS" : "FAIL",
-                label.c_str(),
-                static_cast<long long>(got),
-                static_cast<long long>(expected));
-    if (!ok)
-        ++failures;
+    std::printf("  [%s] %-44s got=%lld expected=%lld\n", ok ? "PASS" : "FAIL", label.c_str(),
+                static_cast<long long>(got), static_cast<long long>(expected));
+    if (!ok) ++failures;
 }
 
 const ObjectiveWeights kZeroWeights{0, 0, 0, 0, 0, 0};
 
 // Base grid: slots enumerated day-major from periodsPerDay.
-Timetable makeGrid(const std::vector<int> &periodsPerDay)
-{
+Timetable makeGrid(const std::vector<int>& periodsPerDay) {
     Timetable t;
-    for (int d = 0; d < static_cast<int>(periodsPerDay.size()); ++d)
-    {
-        for (int p = 1; p <= periodsPerDay[d]; ++p)
-        {
+    for (int d = 0; d < static_cast<int>(periodsPerDay.size()); ++d) {
+        for (int p = 1; p <= periodsPerDay[d]; ++p) {
             t.dayOfSlot.push_back(d);
             t.periodOfSlot.push_back(p);
         }
@@ -73,20 +60,13 @@ Timetable makeGrid(const std::vector<int> &periodsPerDay)
 
 // Slot index for (day, 1-based period) in a makeGrid layout (usable before
 // prepare()).
-int slotIdx(const std::vector<int> &periodsPerDay, int day, int period)
-{
+int slotIdx(const std::vector<int>& periodsPerDay, int day, int period) {
     int s = 0;
-    for (int d = 0; d < day; ++d)
-        s += periodsPerDay[d];
+    for (int d = 0; d < day; ++d) s += periodsPerDay[d];
     return s + period - 1;
 }
 
-int addLesson(Timetable &t,
-              int classId,
-              int courseKey,
-              std::vector<int> teachers,
-              int slot = -1)
-{
+int addLesson(Timetable& t, int classId, int courseKey, std::vector<int> teachers, int slot = -1) {
     Lesson lesson;
     lesson.id = "L" + std::to_string(t.lessons.size());
     lesson.classGroupId = classId;
@@ -103,8 +83,7 @@ int addLesson(Timetable &t,
 // -------------------------------------------------------------------------
 const std::vector<int> kGrid25{5, 5};
 
-void verifyHardConstraints()
-{
+void verifyHardConstraints() {
     std::printf("== (a1) Hard constraints, hand-computed ==\n");
 
     // unassignedLessonsCost: unassigned lessons cost 1 hard each.
@@ -114,9 +93,7 @@ void verifyHardConstraints()
         addLesson(t, 0, 1, {1});
         addLesson(t, 0, 2, {2}, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("unassignedLessonsCost two unassigned lessons",
-                   b.unassignedLessonsCost,
-                   2);
+        checkCount("unassignedLessonsCost two unassigned lessons", b.unassignedLessonsCost, 2);
         checkCount("unassignedLessonsCost hard total", b.hardTotal(), 2);
     }
     // classConflictCost: class conflict — same class, same slot, C(n,2).
@@ -125,14 +102,11 @@ void verifyHardConstraints()
         addLesson(t, 0, 0, {0}, 0);
         addLesson(t, 0, 1, {1}, 0);
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount(
-            "classConflictCost class conflict pair", b.classConflictCost, 1);
+        checkCount("classConflictCost class conflict pair", b.classConflictCost, 1);
         addLesson(t, 0, 2, {2}, 0);
         t.prepared = false;  // structural change: re-run prepare()
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("classConflictCost class conflict triple = C(3,2)",
-                   b.classConflictCost,
-                   3);
+        checkCount("classConflictCost class conflict triple = C(3,2)", b.classConflictCost, 3);
     }
     // teacherConflictCost: teacher conflict — same teacher, same slot,
     // different classes.
@@ -141,12 +115,8 @@ void verifyHardConstraints()
         addLesson(t, 0, 0, {0}, 0);
         addLesson(t, 1, 1, {0}, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("teacherConflictCost teacher conflict pair",
-                   b.teacherConflictCost,
-                   1);
-        checkCount("teacherConflictCost no class conflict across classes",
-                   b.classConflictCost,
-                   0);
+        checkCount("teacherConflictCost teacher conflict pair", b.teacherConflictCost, 1);
+        checkCount("teacherConflictCost no class conflict across classes", b.classConflictCost, 0);
     }
     // teacherConflictCost: team teaching — two lessons sharing BOTH teachers
     // conflict once per teacher.
@@ -155,9 +125,7 @@ void verifyHardConstraints()
         addLesson(t, 0, 0, {0, 1}, 0);
         addLesson(t, 1, 1, {0, 1}, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("teacherConflictCost team-teaching double conflict",
-                   b.teacherConflictCost,
-                   2);
+        checkCount("teacherConflictCost team-teaching double conflict", b.teacherConflictCost, 2);
     }
     // disallowedSlotCost: assignment outside the allowedSlot table.
     {
@@ -166,12 +134,10 @@ void verifyHardConstraints()
         t.lessons[i].allowedSlot.assign(10, 1);
         t.lessons[i].allowedSlot[0] = 0;
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount(
-            "disallowedSlotCost forbidden slot hit", b.disallowedSlotCost, 1);
+        checkCount("disallowedSlotCost forbidden slot hit", b.disallowedSlotCost, 1);
         t.lessons[i].slot = 1;
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount(
-            "disallowedSlotCost allowed slot ok", b.disallowedSlotCost, 0);
+        checkCount("disallowedSlotCost allowed slot ok", b.disallowedSlotCost, 0);
     }
     // roomCapacityCost: room-type demand over capacity (cpsat
     // test_room_capacity_respected: one science lab shared by two classes).
@@ -183,12 +149,10 @@ void verifyHardConstraints()
         t.lessons[a].roomTypeDemand = {1};
         t.lessons[b1].roomTypeDemand = {1};
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount(
-            "roomCapacityCost demand 2 > capacity 1", b.roomCapacityCost, 1);
+        checkCount("roomCapacityCost demand 2 > capacity 1", b.roomCapacityCost, 1);
         t.lessons[b1].slot = 1;
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount(
-            "roomCapacityCost spread over slots ok", b.roomCapacityCost, 0);
+        checkCount("roomCapacityCost spread over slots ok", b.roomCapacityCost, 0);
     }
     // roomCapacityCost: a merged lesson carries the SUM of its members'
     // demands.
@@ -198,15 +162,11 @@ void verifyHardConstraints()
         const int i = addLesson(t, 0, 0, {0, 1}, 0);
         t.lessons[i].roomTypeDemand = {2};
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("roomCapacityCost merged demand 2 > capacity 1",
-                   b.roomCapacityCost,
-                   1);
+        checkCount("roomCapacityCost merged demand 2 > capacity 1", b.roomCapacityCost, 1);
         t.roomCapacityByType = {2};
         t.prepared = false;
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("roomCapacityCost merged demand 2 <= capacity 2",
-                   b.roomCapacityCost,
-                   0);
+        checkCount("roomCapacityCost merged demand 2 <= capacity 2", b.roomCapacityCost, 0);
     }
     // courseMaxPeriodsPerDayCost: per-course daily cap (cpsat
     // test_daily_course_limit).
@@ -217,44 +177,32 @@ void verifyHardConstraints()
         t.courseDailyLimit = {1};
         Breakdown b = ScoreCalculator::computeBreakdown(t);
         checkCount("courseMaxPeriodsPerDayCost two same-course lessons one day",
-                   b.courseMaxPeriodsPerDayCost,
-                   1);
+                   b.courseMaxPeriodsPerDayCost, 1);
         t.lessons[1].slot = slotIdx(kGrid25, 1, 3);
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("courseMaxPeriodsPerDayCost spread over days ok",
-                   b.courseMaxPeriodsPerDayCost,
+        checkCount("courseMaxPeriodsPerDayCost spread over days ok", b.courseMaxPeriodsPerDayCost,
                    0);
     }
     // blockAdjacencyCost: block groups — violation = (k-1) - same-day
     // consecutive adjacencies.
     {
-        auto blockCase = [](const std::vector<std::pair<int, int>> &dayPeriods,
-                            std::int64_t expected,
-                            const std::string &label)
-        {
+        auto blockCase = [](const std::vector<std::pair<int, int>>& dayPeriods,
+                            std::int64_t expected, const std::string& label) {
             Timetable t = makeGrid(kGrid25);
-            for (const auto &[day, period] : dayPeriods)
-            {
-                const int i
-                    = addLesson(t, 0, 0, {0}, slotIdx(kGrid25, day, period));
+            for (const auto& [day, period] : dayPeriods) {
+                const int i = addLesson(t, 0, 0, {0}, slotIdx(kGrid25, day, period));
                 t.lessons[i].blockGroup = 0;
             }
-            t.courseDailyLimit
-                = {4};  // keep courseMaxPeriodsPerDayCost out of the way
+            t.courseDailyLimit = {4};  // keep courseMaxPeriodsPerDayCost out of the way
             const Breakdown b = ScoreCalculator::computeBreakdown(t);
             checkCount(label, b.blockAdjacencyCost, expected);
         };
         blockCase({{0, 1}, {0, 2}}, 0, "blockAdjacencyCost pair adjacent");
         blockCase({{0, 1}, {0, 3}}, 1, "blockAdjacencyCost pair with a hole");
-        blockCase(
-            {{0, 1}, {1, 1}}, 1, "blockAdjacencyCost pair split across days");
+        blockCase({{0, 1}, {1, 1}}, 1, "blockAdjacencyCost pair split across days");
         blockCase({{0, 1}, {0, 2}, {0, 3}}, 0, "blockAdjacencyCost triple run");
-        blockCase({{0, 1}, {0, 2}, {0, 4}},
-                  1,
-                  "blockAdjacencyCost triple, one detached");
-        blockCase({{0, 1}, {0, 3}, {1, 1}},
-                  2,
-                  "blockAdjacencyCost triple fully scattered");
+        blockCase({{0, 1}, {0, 2}, {0, 4}}, 1, "blockAdjacencyCost triple, one detached");
+        blockCase({{0, 1}, {0, 3}, {1, 1}}, 2, "blockAdjacencyCost triple fully scattered");
     }
     // blockAdjacencyCost vs partial assignment. CP-SAT's _check_blocks asks
     // whether SOME day holds a run of block_periods, so half of a 2-period
@@ -270,13 +218,11 @@ void verifyHardConstraints()
         t.lessons[b1].blockGroup = 0;
         t.courseDailyLimit = {4};
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("blockAdjacencyCost half-placed block is charged",
-                   b.blockAdjacencyCost,
-                   1);
-        checkCount("blockAdjacencyCost ... and unassignedLessonsCost charges "
-                   "the missing hour",
-                   b.unassignedLessonsCost,
-                   1);
+        checkCount("blockAdjacencyCost half-placed block is charged", b.blockAdjacencyCost, 1);
+        checkCount(
+                "blockAdjacencyCost ... and unassignedLessonsCost charges "
+                "the missing hour",
+                b.unassignedLessonsCost, 1);
     }
     {
         Timetable t = makeGrid(kGrid25);
@@ -286,13 +232,9 @@ void verifyHardConstraints()
         t.lessons[b1].blockGroup = 0;
         t.courseDailyLimit = {4};
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("blockAdjacencyCost group dropped whole is free",
-                   b.blockAdjacencyCost,
-                   0);
-        checkCount(
-            "blockAdjacencyCost ... unassignedLessonsCost alone prices it",
-            b.unassignedLessonsCost,
-            2);
+        checkCount("blockAdjacencyCost group dropped whole is free", b.blockAdjacencyCost, 0);
+        checkCount("blockAdjacencyCost ... unassignedLessonsCost alone prices it",
+                   b.unassignedLessonsCost, 2);
     }
     // teacherMaxPeriodsCost daily: distinct busy periods over maxPerDay.
     {
@@ -302,9 +244,7 @@ void verifyHardConstraints()
         addLesson(t, 1, 1, {0}, slotIdx(kGrid25, 0, 3));
         addLesson(t, 2, 2, {0}, slotIdx(kGrid25, 0, 5));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("teacherMaxPeriodsCost 3 periods > maxPerDay 2",
-                   b.teacherMaxPeriodsCost,
-                   1);
+        checkCount("teacherMaxPeriodsCost 3 periods > maxPerDay 2", b.teacherMaxPeriodsCost, 1);
     }
     // teacherMaxPeriodsCost daily counts DISTINCT periods (validate.py uses a
     // set): a same-slot overlap is an teacherConflictCost conflict, not extra
@@ -315,12 +255,9 @@ void verifyHardConstraints()
         addLesson(t, 0, 0, {0}, 0);
         addLesson(t, 1, 1, {0}, 0);
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("teacherMaxPeriodsCost same-slot overlap: conflict",
-                   b.teacherConflictCost,
-                   1);
+        checkCount("teacherMaxPeriodsCost same-slot overlap: conflict", b.teacherConflictCost, 1);
         checkCount("teacherMaxPeriodsCost same-slot overlap: no daily excess",
-                   b.teacherMaxPeriodsCost,
-                   0);
+                   b.teacherMaxPeriodsCost, 0);
     }
     // teacherMaxPeriodsCost weekly (cpsat test_teacher_weekly_max shape).
     {
@@ -330,42 +267,28 @@ void verifyHardConstraints()
         addLesson(t, 1, 1, {0}, slotIdx(kGrid25, 0, 3));
         addLesson(t, 2, 2, {0}, slotIdx(kGrid25, 1, 1));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("teacherMaxPeriodsCost 3 weekly periods > maxPerWeek 2",
-                   b.teacherMaxPeriodsCost,
+        checkCount("teacherMaxPeriodsCost 3 weekly periods > maxPerWeek 2", b.teacherMaxPeriodsCost,
                    1);
     }
     // teacherMaxConsecutivePeriodsCost: consecutive-run excess (cpsat
     // test_teacher_consecutive_limit).
     {
-        auto runCase = [](std::vector<int> periods,
-                          int limit,
-                          std::int64_t expected,
-                          const std::string &label)
-        {
+        auto runCase = [](std::vector<int> periods, int limit, std::int64_t expected,
+                          const std::string& label) {
             Timetable t = makeGrid(kGrid25);
             t.teacherMaxConsecutive = {limit};
             t.teacherMaxPerDay = {6};
             int next = 0;
-            for (int p : periods)
-            {
+            for (int p : periods) {
                 const int id = next++;
                 addLesson(t, id, id, {0}, slotIdx(kGrid25, 0, p));
             }
             const Breakdown b = ScoreCalculator::computeBreakdown(t);
             checkCount(label, b.teacherMaxConsecutivePeriodsCost, expected);
         };
-        runCase({1, 2, 3},
-                2,
-                1,
-                "teacherMaxConsecutivePeriodsCost run 3 over limit 2");
-        runCase({1, 2, 3, 4, 5},
-                2,
-                3,
-                "teacherMaxConsecutivePeriodsCost run 5 over limit 2");
-        runCase({1, 2, 4, 5},
-                2,
-                0,
-                "teacherMaxConsecutivePeriodsCost two runs of 2 ok");
+        runCase({1, 2, 3}, 2, 1, "teacherMaxConsecutivePeriodsCost run 3 over limit 2");
+        runCase({1, 2, 3, 4, 5}, 2, 3, "teacherMaxConsecutivePeriodsCost run 5 over limit 2");
+        runCase({1, 2, 4, 5}, 2, 0, "teacherMaxConsecutivePeriodsCost two runs of 2 ok");
     }
     std::printf("\n");
 }
@@ -373,8 +296,7 @@ void verifyHardConstraints()
 // -------------------------------------------------------------------------
 // (a2) Soft constraints: validate.py's compute_penalties, key for key.
 // -------------------------------------------------------------------------
-void verifySoftConstraints()
-{
+void verifySoftConstraints() {
     std::printf("== (a2) Soft constraints, hand-computed ==\n");
 
     // teacherGapCost: teacher gap = last - first + 1 - count of the day's busy
@@ -386,11 +308,9 @@ void verifySoftConstraints()
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
         addLesson(t, 1, 1, {0}, slotIdx(kGrid25, 0, 3));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount(
-            "teacherGapCost periods {1,3} -> gap 1", b.teacherGapCost, 1);
+        checkCount("teacherGapCost periods {1,3} -> gap 1", b.teacherGapCost, 1);
         checkCount("teacherGapCost weighted soft penalty",
-                   static_cast<std::int64_t>(b.softPenalty(weights)),
-                   1);
+                   static_cast<std::int64_t>(b.softPenalty(weights)), 1);
     }
     // teacherGapCost: an unavailable period wedged between lessons still counts
     // as a gap (validate.py counts busy periods only, ignoring availability).
@@ -398,15 +318,12 @@ void verifySoftConstraints()
         Timetable t = makeGrid(kGrid25);
         const int a = addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
         const int b1 = addLesson(t, 1, 1, {0}, slotIdx(kGrid25, 0, 3));
-        for (int i : {a, b1})
-        {
+        for (int i : {a, b1}) {
             t.lessons[i].allowedSlot.assign(10, 1);
             t.lessons[i].allowedSlot[slotIdx(kGrid25, 0, 2)] = 0;
         }
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("teacherGapCost unavailable period still a gap",
-                   b.teacherGapCost,
-                   1);
+        checkCount("teacherGapCost unavailable period still a gap", b.teacherGapCost, 1);
     }
     // teacherGapCost + classGapCost: cpsat test_forced_gap_matches_hand_count —
     // one class, periods 1 and 5 fixed -> 3 gaps for both the teacher and the
@@ -428,9 +345,7 @@ void verifySoftConstraints()
         addLesson(t, 1, 1, {0}, slotIdx(kGrid25, 0, 2));
         addLesson(t, 2, 2, {0}, slotIdx(kGrid25, 1, 1));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("teacherWorkdayCost lessons on two days -> 2 workdays",
-                   b.teacherWorkdayCost,
-                   2);
+        checkCount("teacherWorkdayCost lessons on two days -> 2 workdays", b.teacherWorkdayCost, 2);
     }
     // teacherFreeDayCost: workday on a preferred-free day (cpsat
     // test_forced_free_day_violation_counted).
@@ -439,14 +354,10 @@ void verifySoftConstraints()
         t.teacherPreferredFreeDays = {1 << 1};  // Tue
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 1, 1));
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("teacherFreeDayCost lesson on preferred-free day",
-                   b.teacherFreeDayCost,
-                   1);
+        checkCount("teacherFreeDayCost lesson on preferred-free day", b.teacherFreeDayCost, 1);
         t.lessons[0].slot = slotIdx(kGrid25, 0, 1);
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("teacherFreeDayCost lesson moved off the free day",
-                   b.teacherFreeDayCost,
-                   0);
+        checkCount("teacherFreeDayCost lesson moved off the free day", b.teacherFreeDayCost, 0);
     }
     // classGapCost: class gap with different teachers (isolated from
     // teacherGapCost by weights).
@@ -455,11 +366,8 @@ void verifySoftConstraints()
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 2));
         addLesson(t, 0, 1, {1}, slotIdx(kGrid25, 0, 4));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount(
-            "classGapCost class periods {2,4} -> gap 1", b.classGapCost, 1);
-        checkCount("teacherGapCost single-lesson teachers have no gap",
-                   b.teacherGapCost,
-                   0);
+        checkCount("classGapCost class periods {2,4} -> gap 1", b.classGapCost, 1);
+        checkCount("teacherGapCost single-lesson teachers have no gap", b.teacherGapCost, 0);
     }
     // avoidedPeriodCost / nonPreferredPeriodCost: cpsat
     // test_period_preferences_steer_placement — avoided {1}, preferred {2},
@@ -470,26 +378,19 @@ void verifySoftConstraints()
         t.coursePreferredPeriodMask = {0x0002};  // period 2
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 1));
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount(
-            "avoidedPeriodCost avoided period hit", b.avoidedPeriodCost, 1);
-        checkCount("nonPreferredPeriodCost off the preferred periods",
-                   b.nonPreferredPeriodCost,
-                   1);
+        checkCount("avoidedPeriodCost avoided period hit", b.avoidedPeriodCost, 1);
+        checkCount("nonPreferredPeriodCost off the preferred periods", b.nonPreferredPeriodCost, 1);
         t.lessons[0].slot = slotIdx(kGrid25, 0, 2);
         b = ScoreCalculator::computeBreakdown(t);
         checkCount("avoidedPeriodCost clean period", b.avoidedPeriodCost, 0);
-        checkCount("nonPreferredPeriodCost preferred period",
-                   b.nonPreferredPeriodCost,
-                   0);
+        checkCount("nonPreferredPeriodCost preferred period", b.nonPreferredPeriodCost, 0);
     }
     // nonPreferredPeriodCost: an empty preferred mask means no preference.
     {
         Timetable t = makeGrid(kGrid25);
         addLesson(t, 0, 0, {0}, slotIdx(kGrid25, 0, 5));
         const Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("nonPreferredPeriodCost no preference, no penalty",
-                   b.nonPreferredPeriodCost,
-                   0);
+        checkCount("nonPreferredPeriodCost no preference, no penalty", b.nonPreferredPeriodCost, 0);
     }
     // avoidedPeriodCost / nonPreferredPeriodCost preference units: a merged
     // lesson carries one unit per member course and each unit counts on its own
@@ -501,20 +402,13 @@ void verifySoftConstraints()
         const int i = addLesson(t, 0, 0, {0, 1}, slotIdx(kGrid25, 0, 1));
         t.lessons[i].preferenceUnits = {{0x0001, 0x0000}, {0x0001, 0x0002}};
         Breakdown b = ScoreCalculator::computeBreakdown(t);
-        checkCount("avoidedPeriodCost merged units, both avoided",
-                   b.avoidedPeriodCost,
-                   2);
-        checkCount("nonPreferredPeriodCost merged units, one preferred",
-                   b.nonPreferredPeriodCost,
+        checkCount("avoidedPeriodCost merged units, both avoided", b.avoidedPeriodCost, 2);
+        checkCount("nonPreferredPeriodCost merged units, one preferred", b.nonPreferredPeriodCost,
                    1);
         t.lessons[i].slot = slotIdx(kGrid25, 0, 2);
         b = ScoreCalculator::computeBreakdown(t);
-        checkCount("avoidedPeriodCost merged units clean period",
-                   b.avoidedPeriodCost,
-                   0);
-        checkCount("nonPreferredPeriodCost merged units on preferred",
-                   b.nonPreferredPeriodCost,
-                   0);
+        checkCount("avoidedPeriodCost merged units clean period", b.avoidedPeriodCost, 0);
+        checkCount("nonPreferredPeriodCost merged units on preferred", b.nonPreferredPeriodCost, 0);
     }
     // Weighted assembly: soft score = -(weighted sum) with the default
     // weights 20/3/30/10/5/1 (the soft components' kDefaultWeight; the model
@@ -529,11 +423,8 @@ void verifySoftConstraints()
         // classGapCost 1, avoidedPeriodCost 1: soft =
         // -(20 + 3 + 30 + 10 + 5) = -68.
         const Score score = ScoreCalculator::score(t);
-        checkCount("weighted soft assembly",
-                   static_cast<std::int64_t>(-score.soft),
-                   68);
-        checkCount(
-            "weighted hard stays 0", static_cast<std::int64_t>(-score.hard), 0);
+        checkCount("weighted soft assembly", static_cast<std::int64_t>(-score.soft), 68);
+        checkCount("weighted hard stays 0", static_cast<std::int64_t>(-score.hard), 0);
     }
     std::printf("\n");
 }
@@ -545,8 +436,7 @@ void verifySoftConstraints()
 // -------------------------------------------------------------------------
 const std::vector<int> kGridRandom{5, 5, 5, 4};
 
-Timetable buildRandomInstance(int courseCount, std::uint64_t seed)
-{
+Timetable buildRandomInstance(int courseCount, std::uint64_t seed) {
     std::mt19937_64 rng(seed);
     Timetable t = makeGrid(kGridRandom);
     const int slotCount = t.slotCount();
@@ -563,8 +453,7 @@ Timetable buildRandomInstance(int courseCount, std::uint64_t seed)
     t.teacherPreferredFreeDays[3] = 1 << 0;
 
     int nextBlock = 0;
-    for (int c = 0; c < courseCount; ++c)
-    {
+    for (int c = 0; c < courseCount; ++c) {
         t.courseDailyLimit.push_back(1 + static_cast<int>(rng() % 2));
         t.courseAvoidedPeriodMask.push_back(rng() % 3 == 0 ? 0x0001 : 0);
         t.coursePreferredPeriodMask.push_back(rng() % 3 == 0 ? 0x000E : 0);
@@ -575,42 +464,33 @@ Timetable buildRandomInstance(int courseCount, std::uint64_t seed)
         // random sprinkle of both.
         if (c == 2 || rng() % 4 == 0)  // team teaching / merged lesson
         {
-            teach.push_back(
-                (teach[0] + 1 + static_cast<int>(rng() % (teachers - 1)))
-                % teachers);
+            teach.push_back((teach[0] + 1 + static_cast<int>(rng() % (teachers - 1))) % teachers);
         }
         const int periods = 2 + static_cast<int>(rng() % 3);
         const int roomType = rng() % 3 == 0 ? static_cast<int>(rng() % 2) : -1;
         const int block = (c < 2 || rng() % 4 == 0) ? nextBlock++ : -1;
-        if (block >= 0)
-            t.courseDailyLimit.back() = 2;
+        if (block >= 0) t.courseDailyLimit.back() = 2;
 
-        for (int i = 0; i < periods; ++i)
-        {
+        for (int i = 0; i < periods; ++i) {
             const int lesson = addLesson(t, classId, c, teach);
-            if (roomType >= 0)
-            {
+            if (roomType >= 0) {
                 t.lessons[lesson].roomTypeDemand.assign(2, 0);
                 t.lessons[lesson].roomTypeDemand[roomType] = 1;
             }
-            if (block >= 0 && i < 2)
-                t.lessons[lesson].blockGroup = block;
+            if (block >= 0 && i < 2) t.lessons[lesson].blockGroup = block;
             if (rng() % 3 == 0)  // merged-lesson style multi-unit
                                  // avoidedPeriodCost / nonPreferredPeriodCost
             {
-                t.lessons[lesson].preferenceUnits
-                    = {{static_cast<std::uint16_t>(rng() % 4),
-                        static_cast<std::uint16_t>(rng() % 8)},
-                       {static_cast<std::uint16_t>(rng() % 4),
-                        static_cast<std::uint16_t>(rng() % 8)}};
+                t.lessons[lesson].preferenceUnits = {{static_cast<std::uint16_t>(rng() % 4),
+                                                      static_cast<std::uint16_t>(rng() % 8)},
+                                                     {static_cast<std::uint16_t>(rng() % 4),
+                                                      static_cast<std::uint16_t>(rng() % 8)}};
             }
             if (rng() % 2 == 0)  // per-lesson allowed table with random holes
             {
                 std::vector<char> allowed(slotCount, 1);
-                for (int s = 0; s < slotCount; ++s)
-                {
-                    if (rng() % 8 == 0)
-                        allowed[s] = 0;
+                for (int s = 0; s < slotCount; ++s) {
+                    if (rng() % 8 == 0) allowed[s] = 0;
                 }
                 t.lessons[lesson].allowedSlot = std::move(allowed);
             }
@@ -624,15 +504,12 @@ Timetable buildRandomInstance(int courseCount, std::uint64_t seed)
 // swap moves (including unassignments), driven through the Editor so
 // the before/set/after hook contract is exercised exactly like in the engine.
 // -------------------------------------------------------------------------
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (b) Incremental scoring == full recompute ==\n");
     Timetable t = buildRandomInstance(/*courseCount*/ 16, /*seed*/ 7);
     ScoreCalculator::prepare(t);
     std::printf("  instance: %d lessons, %d slots, %d block groups\n",
-                static_cast<int>(t.lessons.size()),
-                t.slotCount(),
-                t.blockGroupCount);
+                static_cast<int>(t.lessons.size()), t.slotCount(), t.blockGroupCount);
 
     CanonicalIncrementalScoreCalculator calc;
     optimaru::Editor<Timetable> editor(t, calc);
@@ -646,20 +523,14 @@ void verifyIncremental()
     int mismatches = 0;
     int hotMismatches = 0;
     const int steps = 3000;
-    for (int step = 0; step < steps; ++step)
-    {
-        if (unit(rng) < 0.75)
-        {
+    for (int step = 0; step < steps; ++step) {
+        if (unit(rng) < 0.75) {
             // ChangeMove; 10% of the time to unassigned (-1), like the
             // construction heuristic's starting state.
             const int lesson = static_cast<int>(rng() % lessonCount);
-            const int value = (unit(rng) < 0.10)
-                                  ? -1
-                                  : static_cast<int>(rng() % value_count);
+            const int value = (unit(rng) < 0.10) ? -1 : static_cast<int>(rng() % value_count);
             editor.assign(lesson, value);
-        }
-        else
-        {
+        } else {
             // SwapMove, bracketed like the engine does it.
             const int a = static_cast<int>(rng() % lessonCount);
             const int b = static_cast<int>(rng() % lessonCount);
@@ -671,30 +542,19 @@ void verifyIncremental()
             editor.end_batch();
         }
         // Full recompute on the same assignment.
-        for (int i = 0; i < lessonCount; ++i)
-            shadow.lessons[i].slot = t.lessons[i].slot;
-        const Score full = ScoreCalculator::computeBreakdown(shadow).toScore(
-            ObjectiveWeights{});
+        for (int i = 0; i < lessonCount; ++i) shadow.lessons[i].slot = t.lessons[i].slot;
+        const Score full = ScoreCalculator::computeBreakdown(shadow).toScore(ObjectiveWeights{});
         const Score incremental = editor.score();
-        if (!calc.hotSetsConsistent())
-            ++hotMismatches;
-        if (full.hard != incremental.hard
-            || std::fabs(full.soft - incremental.soft) > 1e-9)
-        {
-            if (++mismatches <= 3)
-            {
-                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                            step,
-                            incremental.str().c_str(),
-                            full.str().c_str());
+        if (!calc.hotSetsConsistent()) ++hotMismatches;
+        if (full.hard != incremental.hard || std::fabs(full.soft - incremental.soft) > 1e-9) {
+            if (++mismatches <= 3) {
+                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
     }
-    check(mismatches == 0,
-          std::to_string(steps)
-              + " random moves, incremental == full recompute");
-    check(hotMismatches == 0,
-          "hot violation sets match the occupancy counters at every step");
+    check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
+    check(hotMismatches == 0, "hot violation sets match the occupancy counters at every step");
     std::printf("\n");
 }
 
@@ -703,8 +563,7 @@ void verifyIncremental()
 // against a full reset + recompute after every single move and throws
 // ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (c) FULL_ASSERT solve ==\n");
     Timetable t = buildRandomInstance(/*courseCount*/ 8, /*seed*/ 11);
 
@@ -718,23 +577,18 @@ void verifyFullAssertSolve()
 
     bool corrupted = false;
     Score final{};
-    try
-    {
+    try {
         Solver solver(config);
         solver.solve(t);
         final = t.score;
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
-    if (!corrupted)
-    {
+    if (!corrupted) {
         const Score recomputed = ScoreCalculator::score(t);
-        check(final.hard == recomputed.hard
-                  && std::fabs(final.soft - recomputed.soft) < 1e-9,
+        check(final.hard == recomputed.hard && std::fabs(final.soft - recomputed.soft) < 1e-9,
               "solver-reported score == full recompute");
     }
     std::printf("\n");
@@ -744,8 +598,7 @@ void verifyFullAssertSolve()
 // (d) Feature scenarios: solve, reach hard 0, verify the structure the
 // feature promises.
 // -------------------------------------------------------------------------
-Solver::Config quickSolveConfig(std::uint64_t seed)
-{
+Solver::Config quickSolveConfig(std::uint64_t seed) {
     Solver::Config config;
     config.time_limit = std::chrono::seconds(2);
     config.target_score = Score{0, -std::numeric_limits<double>::infinity()};
@@ -754,8 +607,7 @@ Solver::Config quickSolveConfig(std::uint64_t seed)
     return config;
 }
 
-void verifyBlockScenario()
-{
+void verifyBlockScenario() {
     std::printf("== (d1) Block (consecutive periods) scenario ==\n");
     const std::vector<int> ppd{4, 4};
     Timetable t = makeGrid(ppd);
@@ -766,8 +618,7 @@ void verifyBlockScenario()
     const int blockB = addLesson(t, 0, 0, {0});
     t.lessons[blockA].blockGroup = 0;
     t.lessons[blockB].blockGroup = 0;
-    for (int c = 1; c <= 3; ++c)
-        addLesson(t, 0, c, {1});
+    for (int c = 1; c <= 3; ++c) addLesson(t, 0, c, {1});
     addLesson(t, 0, 4, {2});
     addLesson(t, 0, 4, {2});
 
@@ -777,14 +628,13 @@ void verifyBlockScenario()
     checkCount("block scenario reaches hard 0", b.hardTotal(), 0);
     const int sa = t.lessons[blockA].slot;
     const int sb = t.lessons[blockB].slot;
-    check(sa >= 0 && sb >= 0 && t.dayOfSlot[sa] == t.dayOfSlot[sb]
-              && std::abs(t.periodOfSlot[sa] - t.periodOfSlot[sb]) == 1,
+    check(sa >= 0 && sb >= 0 && t.dayOfSlot[sa] == t.dayOfSlot[sb] &&
+                  std::abs(t.periodOfSlot[sa] - t.periodOfSlot[sb]) == 1,
           "block lessons sit on one day in consecutive periods");
     std::printf("\n");
 }
 
-void verifyMergedLessonScenario()
-{
+void verifyMergedLessonScenario() {
     std::printf("== (d2) Merged-lesson (parallel groups) scenario ==\n");
     const std::vector<int> ppd{3, 3};
     Timetable t = makeGrid(ppd);
@@ -794,8 +644,7 @@ void verifyMergedLessonScenario()
     // land on different days.
     t.courseDailyLimit = {1, 2, 2};
     std::vector<int> merged;
-    for (int i = 0; i < 2; ++i)
-    {
+    for (int i = 0; i < 2; ++i) {
         const int lesson = addLesson(t, 0, 0, {0, 1});
         t.lessons[lesson].roomTypeDemand = {1};
         merged.push_back(lesson);
@@ -810,33 +659,26 @@ void verifyMergedLessonScenario()
     solver.solve(t);
     const Breakdown b = ScoreCalculator::computeBreakdown(t);
     checkCount("merged scenario reaches hard 0", b.hardTotal(), 0);
-    check(t.dayOfSlot[t.lessons[merged[0]].slot]
-              != t.dayOfSlot[t.lessons[merged[1]].slot],
+    check(t.dayOfSlot[t.lessons[merged[0]].slot] != t.dayOfSlot[t.lessons[merged[1]].slot],
           "merged course spread over two days (daily cap 1)");
-    for (int teacher : {0, 1})
-    {
+    for (int teacher : {0, 1}) {
         std::set<int> slots;
         int count = 0;
-        for (const Lesson &lesson : t.lessons)
-        {
-            for (int tt : lesson.teachers)
-            {
-                if (tt == teacher)
-                {
+        for (const Lesson& lesson : t.lessons) {
+            for (int tt : lesson.teachers) {
+                if (tt == teacher) {
                     slots.insert(lesson.slot);
                     ++count;
                 }
             }
         }
         check(static_cast<int>(slots.size()) == count,
-              "teacher " + std::to_string(teacher)
-                  + " has no overlap with the merged lessons");
+              "teacher " + std::to_string(teacher) + " has no overlap with the merged lessons");
     }
     std::printf("\n");
 }
 
-void verifyTeamTeachingScenario()
-{
+void verifyTeamTeachingScenario() {
     std::printf("== (d3) Team-teaching scenario ==\n");
     const std::vector<int> ppd{5};
     Timetable t = makeGrid(ppd);
@@ -857,8 +699,7 @@ void verifyTeamTeachingScenario()
     bool overlap = false;
     for (int i = 1; i < static_cast<int>(t.lessons.size()); ++i)
         overlap = overlap || t.lessons[i].slot == teamSlot;
-    check(teamSlot >= 0 && !overlap,
-          "no other lesson of either teacher shares the team slot");
+    check(teamSlot >= 0 && !overlap, "no other lesson of either teacher shares the team slot");
     std::printf("\n");
 }
 
@@ -870,8 +711,7 @@ void verifyTeamTeachingScenario()
 // per class, the merged C11 tech/home-economics parallel group, one
 // team-taught English hour and a pinned homeroom hour on Monday period 1.
 // -------------------------------------------------------------------------
-struct DemoSchool
-{
+struct DemoSchool {
     Timetable t;
     std::vector<int> hrLessons;               // pinned, slot 0
     std::vector<std::vector<int>> artBlocks;  // per class: 2 lesson indices
@@ -881,8 +721,7 @@ struct DemoSchool
     int nextBlock = 0;
 };
 
-DemoSchool buildDemoSchool()
-{
+DemoSchool buildDemoSchool() {
     // Teacher ids: T01..T15 -> 0..14. Class ids: C11,C12,C21,C22,C31,C32 ->
     // 0..5. Room types: 0 SCI(2), 1 MUS(1), 2 ART(1), 3 GYM(1).
     const std::vector<int> ppd{7, 7, 7, 7, 6};
@@ -901,46 +740,32 @@ DemoSchool buildDemoSchool()
     d.t.teacherPreferredFreeDays[12] = 1 << 4;  // T13: Friday
 
     // Teacher unavailability, baked into the lessons' allowedSlot tables.
-    std::vector<std::vector<char>> teacherAllowed(
-        15, std::vector<char>(slotCount, 1));
-    teacherAllowed[1][slotIdx(ppd, 0, 7)] = 0;  // T02: Mon 7
-    teacherAllowed[1][slotIdx(ppd, 1, 7)] = 0;  // T02: Tue 7
-    teacherAllowed[3][slotIdx(ppd, 2, 6)] = 0;  // T04: Wed 6
-    teacherAllowed[3][slotIdx(ppd, 2, 7)] = 0;  // T04: Wed 7
-    for (int p = 1; p <= 6; ++p)
-        teacherAllowed[11][slotIdx(ppd, 4, p)] = 0;  // T12: all of Friday
+    std::vector<std::vector<char>> teacherAllowed(15, std::vector<char>(slotCount, 1));
+    teacherAllowed[1][slotIdx(ppd, 0, 7)] = 0;                                // T02: Mon 7
+    teacherAllowed[1][slotIdx(ppd, 1, 7)] = 0;                                // T02: Tue 7
+    teacherAllowed[3][slotIdx(ppd, 2, 6)] = 0;                                // T04: Wed 6
+    teacherAllowed[3][slotIdx(ppd, 2, 7)] = 0;                                // T04: Wed 7
+    for (int p = 1; p <= 6; ++p) teacherAllowed[11][slotIdx(ppd, 4, p)] = 0;  // T12: all of Friday
 
-    auto addCourse = [&](int classId,
-                         std::vector<int> teachers,
-                         int periods,
-                         int dailyLimit,
-                         int roomType,
-                         std::uint16_t avoided,
-                         std::uint16_t preferred,
-                         bool block)
-    {
+    auto addCourse = [&](int classId, std::vector<int> teachers, int periods, int dailyLimit,
+                         int roomType, std::uint16_t avoided, std::uint16_t preferred, bool block) {
         const int key = d.nextCourse++;
         d.t.courseDailyLimit.push_back(dailyLimit);
         d.t.courseAvoidedPeriodMask.push_back(avoided);
         d.t.coursePreferredPeriodMask.push_back(preferred);
         const int group = block ? d.nextBlock++ : -1;
         std::vector<char> allowed(slotCount, 1);
-        for (int teacher : teachers)
-        {
-            for (int s = 0; s < slotCount; ++s)
-            {
-                if (teacherAllowed[teacher][s] == 0)
-                    allowed[s] = 0;
+        for (int teacher : teachers) {
+            for (int s = 0; s < slotCount; ++s) {
+                if (teacherAllowed[teacher][s] == 0) allowed[s] = 0;
             }
         }
         std::vector<int> made;
-        for (int i = 0; i < periods; ++i)
-        {
+        for (int i = 0; i < periods; ++i) {
             const int lesson = addLesson(d.t, classId, key, teachers);
             d.t.lessons[lesson].allowedSlot = allowed;
             d.t.lessons[lesson].blockGroup = group;
-            if (roomType >= 0)
-            {
+            if (roomType >= 0) {
                 d.t.lessons[lesson].roomTypeDemand.assign(4, 0);
                 d.t.lessons[lesson].roomTypeDemand[roomType] = 1;
             }
@@ -958,27 +783,22 @@ DemoSchool buildDemoSchool()
     const int TECH[6] = {-1, 13, 13, 14, 13, 14};  // C11 is the merged group
     const int HOMEROOM[6] = {0, 2, 4, 6, 8, 10};
 
-    for (int c = 0; c < 6; ++c)
-    {
+    for (int c = 0; c < 6; ++c) {
         addCourse(c, {KOR[c]}, 5, 1, -1, 0, 0, false);
-        addCourse(
-            c, {MATH[c]}, 5, 1, -1, 0, 0x000F, false);  // prefers mornings
+        addCourse(c, {MATH[c]}, 5, 1, -1, 0, 0x000F, false);  // prefers mornings
         addCourse(c, {ENG[c]}, c == 2 ? 4 : 5, 1, -1, 0, 0, false);
         addCourse(c, {SCI[c]}, 4, 1, /*SCI*/ 0, 0, 0, false);
         addCourse(c, {SOC[c]}, 4, 1, -1, 0, 0, false);
-        addCourse(c, {SOC[c]}, 1, 1, -1, 0, 0, false);  // ETH, same teacher
-        addCourse(
-            c, {10}, 3, 1, /*GYM*/ 3, 0x0001, 0, false);  // PE, avoids period 1
+        addCourse(c, {SOC[c]}, 1, 1, -1, 0, 0, false);          // ETH, same teacher
+        addCourse(c, {10}, 3, 1, /*GYM*/ 3, 0x0001, 0, false);  // PE, avoids period 1
         addCourse(c, {11}, 2, 1, /*MUS*/ 1, 0, 0, false);
-        d.artBlocks.push_back(
-            addCourse(c, {12}, 2, 2, /*ART*/ 2, 0, 0, true));  // 2-period block
+        d.artBlocks.push_back(addCourse(c, {12}, 2, 2, /*ART*/ 2, 0, 0, true));  // 2-period block
         if (c == 0)
             d.mergedTech = addCourse(0, {13, 14}, 2, 1, -1, 0, 0, false);
         else
             addCourse(c, {TECH[c]}, 2, 1, -1, 0, 0, false);
         // Homeroom hour (creative activities): pinned to Monday period 1.
-        const std::vector<int> hr
-            = addCourse(c, {HOMEROOM[c]}, 1, 1, -1, 0, 0, false);
+        const std::vector<int> hr = addCourse(c, {HOMEROOM[c]}, 1, 1, -1, 0, 0, false);
         d.t.lessons[hr[0]].pinned = true;
         d.t.lessons[hr[0]].slot = slotIdx(ppd, 0, 1);
         d.hrLessons.push_back(hr[0]);
@@ -988,15 +808,11 @@ DemoSchool buildDemoSchool()
     return d;
 }
 
-void verifySampleScaleSolve()
-{
+void verifySampleScaleSolve() {
     std::printf("== (e) Sample-scale school reaches hard 0 in 20s ==\n");
     DemoSchool d = buildDemoSchool();
     std::printf("  instance: %d lessons, %d slots, %d teachers, %d classes\n",
-                static_cast<int>(d.t.lessons.size()),
-                d.t.slotCount(),
-                15,
-                6);
+                static_cast<int>(d.t.lessons.size()), d.t.slotCount(), 15, 6);
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(20);
@@ -1008,46 +824,40 @@ void verifySampleScaleSolve()
     const auto start = std::chrono::steady_clock::now();
     Solver solver(config);
     solver.solve(d.t);
-    const double seconds = std::chrono::duration<double>(
-                               std::chrono::steady_clock::now() - start)
-                               .count();
+    const double seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 
     const Breakdown b = ScoreCalculator::computeBreakdown(d.t);
-    std::printf(
-        "  solved in %.1fs, score %s\n", seconds, d.t.score.str().c_str());
+    std::printf("  solved in %.1fs, score %s\n", seconds, d.t.score.str().c_str());
     checkCount("sample-scale hard total", b.hardTotal(), 0);
     check(seconds <= 20.5, "finished within the 20s budget");
 
     bool allAssigned = true;
-    for (const Lesson &lesson : d.t.lessons)
-        allAssigned = allAssigned && lesson.slot >= 0;
+    for (const Lesson& lesson : d.t.lessons) allAssigned = allAssigned && lesson.slot >= 0;
     check(allAssigned, "every lesson assigned");
 
     bool hrPinned = true;
-    for (int i : d.hrLessons)
-        hrPinned = hrPinned && d.t.lessons[i].slot == 0;
+    for (int i : d.hrLessons) hrPinned = hrPinned && d.t.lessons[i].slot == 0;
     check(hrPinned, "homeroom hours stayed pinned to Monday period 1");
 
     bool artOk = true;
-    for (const std::vector<int> &pair : d.artBlocks)
-    {
+    for (const std::vector<int>& pair : d.artBlocks) {
         const int sa = d.t.lessons[pair[0]].slot;
         const int sb = d.t.lessons[pair[1]].slot;
-        artOk = artOk && d.t.dayOfSlot[sa] == d.t.dayOfSlot[sb]
-                && std::abs(d.t.periodOfSlot[sa] - d.t.periodOfSlot[sb]) == 1;
+        artOk = artOk && d.t.dayOfSlot[sa] == d.t.dayOfSlot[sb] &&
+                std::abs(d.t.periodOfSlot[sa] - d.t.periodOfSlot[sb]) == 1;
     }
     check(artOk, "every art double period is consecutive on one day");
 
-    check(d.t.dayOfSlot[d.t.lessons[d.mergedTech[0]].slot]
-              != d.t.dayOfSlot[d.t.lessons[d.mergedTech[1]].slot],
+    check(d.t.dayOfSlot[d.t.lessons[d.mergedTech[0]].slot] !=
+                  d.t.dayOfSlot[d.t.lessons[d.mergedTech[1]].slot],
           "merged tech group spread over two days");
     std::printf("\n");
 }
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyHardConstraints();
     verifySoftConstraints();
     verifyIncremental();
@@ -1057,8 +867,7 @@ int main()
     verifyTeamTeachingScenario();
     verifySampleScaleSolve();
 
-    if (failures == 0)
-    {
+    if (failures == 0) {
         std::printf("All canonical-domain checks PASSED.\n");
         return 0;
     }

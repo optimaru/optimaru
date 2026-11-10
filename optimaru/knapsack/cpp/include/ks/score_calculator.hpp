@@ -5,8 +5,7 @@
 
 #include "ks/domain.hpp"
 
-namespace ks
-{
+namespace ks {
 
 // The knapsack score, monolithic.
 //
@@ -34,8 +33,7 @@ namespace ks
 // resource overflow, the unselected mandatory and selected forbidden
 // entries, the summed group violation, the unmet dependencies, and the
 // selected value (+value; selectedValueCost is -value).
-struct RawCosts
-{
+struct RawCosts {
     std::int64_t capacityOverflow = 0;   // knapsackCapacityCost
     std::int64_t resourceOverflow = 0;   // resourceCapacityCost
     std::int64_t missingMandatory = 0;   // mandatoryItemsCost
@@ -44,25 +42,24 @@ struct RawCosts
     std::int64_t unmetDependencies = 0;  // itemDependencyCost
     std::int64_t value = 0;              // selectedValueCost (as +value)
 
-    bool operator==(const RawCosts &other) const
-    {
-        return capacityOverflow == other.capacityOverflow && resourceOverflow == other.resourceOverflow
-               && missingMandatory == other.missingMandatory && chosenForbidden == other.chosenForbidden
-               && groupViolation == other.groupViolation && unmetDependencies == other.unmetDependencies
-               && value == other.value;
+    bool operator==(const RawCosts& other) const {
+        return capacityOverflow == other.capacityOverflow &&
+               resourceOverflow == other.resourceOverflow &&
+               missingMandatory == other.missingMandatory &&
+               chosenForbidden == other.chosenForbidden && groupViolation == other.groupViolation &&
+               unmetDependencies == other.unmetDependencies && value == other.value;
     }
-    bool operator!=(const RawCosts &other) const { return !(*this == other); }
+    bool operator!=(const RawCosts& other) const { return !(*this == other); }
 };
 
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // Runs prepare(), then the full recompute; stores problem.score.
-    static Score score(KnapsackProblem &problem);
+    static Score score(KnapsackProblem& problem);
 
     // Runs prepare(), then the full recompute of every raw cost (what
     // score weighs); leaves problem.score alone.
-    static RawCosts rawCosts(KnapsackProblem &problem);
+    static RawCosts rawCosts(KnapsackProblem& problem);
 
     // Validates the facts and the selection and (re)builds the derived
     // indexes (KnapsackProblem's "derived data"). Throws std::invalid_argument
@@ -71,7 +68,7 @@ public:
     // group listing an item twice or with bounds outside 0 <= min <= max <=
     // size, an item both mandatory and forbidden, or a selection outside
     // {-1, 0, 1}. Always rebuilds (cheap, O(items + references)).
-    static void prepare(KnapsackProblem &problem);
+    static void prepare(KnapsackProblem& problem);
 };
 
 }  // namespace ks

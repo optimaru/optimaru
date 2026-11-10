@@ -45,9 +45,7 @@ def problem(timelimit: float = 0) -> OrderPickingRequest:
 
 def solution_of(routes: dict[str, list[str]]) -> OrderPickingResponse:
     def stop(task_id: str) -> PickStop:
-        return PickStop(
-            pick_task_id=task_id, order_id="any", product_name="any", volume=1, location=spot("A", 0)
-        )
+        return PickStop(pick_task_id=task_id, order_id="any", product_name="any", volume=1, location=spot("A", 0))
 
     return OrderPickingResponse(
         routes={trolley: [stop(task_id) for task_id in tasks] for trolley, tasks in routes.items()},

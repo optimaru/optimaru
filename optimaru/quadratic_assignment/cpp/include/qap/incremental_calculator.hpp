@@ -8,8 +8,7 @@
 #include "qap/domain.hpp"
 #include "qap/score_calculator.hpp"
 
-namespace qap
-{
+namespace qap {
 
 // The quadratic-assignment implementation of the engine's
 // optimaru::Objective: the monolithic fast path. A facility
@@ -29,10 +28,9 @@ namespace qap
 // nothing. The full-recompute reference is ScoreCalculator::score
 // (checked in the tests and under ScoreChecks::ScoreChecks::Full).
 class QuadraticAssignmentIncrementalScoreCalculator final
-    : public optimaru::Objective<QuadraticAssignmentProblem>
-{
+    : public optimaru::Objective<QuadraticAssignmentProblem> {
 public:
-    void rebuild(QuadraticAssignmentProblem &solution) override;
+    void rebuild(QuadraticAssignmentProblem& solution) override;
     void before_assign(int facilityIndex) override;
     void after_assign(int facilityIndex) override;
     Score score() override;
@@ -42,17 +40,17 @@ public:
     ScoreCalculator::RawCosts rawCosts() const;
 
 private:
-    QuadraticAssignmentProblem *problem_ = nullptr;
-    std::vector<int> location_;      // per facility (-1 == unassigned)
+    QuadraticAssignmentProblem* problem_ = nullptr;
+    std::vector<int> location_;       // per facility (-1 == unassigned)
     std::vector<std::int64_t> load_;  // summed demand per location
 
     // Running raw totals (all counted positive; weights applied in
     // score).
-    std::int64_t pinned_ = 0;     // hard 1
-    std::int64_t forbidden_ = 0;  // hard 2
+    std::int64_t pinned_ = 0;        // hard 1
+    std::int64_t forbidden_ = 0;     // hard 2
     std::int64_t overCapacity_ = 0;  // hard 3
-    std::int64_t direct_ = 0;     // soft 4
-    std::int64_t flow_ = 0;       // soft 5
+    std::int64_t direct_ = 0;        // soft 4
+    std::int64_t flow_ = 0;          // soft 5
 
     void insert(int facility, int location);
     void retract(int facility, int location);

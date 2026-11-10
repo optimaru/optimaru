@@ -38,9 +38,8 @@ struct PreviewParity {
 };
 
 template <typename Solution>
-PreviewParity run_preview_parity(Editor<Solution>& editor,
-                               Objective<Solution>& objective,
-                               std::uint64_t seed, int trials) {
+PreviewParity run_preview_parity(Editor<Solution>& editor, Objective<Solution>& objective,
+                                 std::uint64_t seed, int trials) {
     using Traits = SolutionTraits<Solution>;
     static_assert(Traits::shape == Shape::Sequence, "previews are a sequence-shape feature");
     Solution& solution = editor.solution();
@@ -50,14 +49,13 @@ PreviewParity run_preview_parity(Editor<Solution>& editor,
     auto pick = [&](int n) { return random_index(rng, n); };
 
     PreviewParity result;
-    auto compare = [&](const Score& preview, const Score& actual,
-                       const char* kind) {
+    auto compare = [&](const Score& preview, const Score& actual, const char* kind) {
         ++result.checked;
         ++result.previewed;
         if (!scores_agree(preview, actual)) {
             if (++result.mismatches <= 5) {
-                std::printf("    %s: preview %s != actual %s\n", kind,
-                            preview.str().c_str(), actual.str().c_str());
+                std::printf("    %s: preview %s != actual %s\n", kind, preview.str().c_str(),
+                            actual.str().c_str());
             }
         }
     };
@@ -152,8 +150,10 @@ PreviewParity run_preview_parity(Editor<Solution>& editor,
                 continue;
             }
             std::vector<int> tail1, tail2;
-            for (int p = c1; p < size(l1); ++p) tail1.push_back(Traits::element_at(solution, l1, p));
-            for (int p = c2; p < size(l2); ++p) tail2.push_back(Traits::element_at(solution, l2, p));
+            for (int p = c1; p < size(l1); ++p)
+                tail1.push_back(Traits::element_at(solution, l1, p));
+            for (int p = c2; p < size(l2); ++p)
+                tail2.push_back(Traits::element_at(solution, l2, p));
             set_tail(l1, c1, tail2);
             set_tail(l2, c2, tail1);
             compare(preview, editor.score(), "tail swap");

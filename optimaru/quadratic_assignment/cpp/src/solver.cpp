@@ -13,11 +13,9 @@
 #include "qap/incremental_calculator.hpp"
 #include "qap/score_calculator.hpp"
 
-namespace qap
-{
+namespace qap {
 
-namespace
-{
+namespace {
 
 // The engine configuration shared by both solve() overloads: swap moves only
 // (change_weight 0 with a positive swap weight; the engine falls back to a
@@ -26,8 +24,8 @@ namespace
 // here so a future default cannot switch them on behind the permutation's
 // back). The engine's construction heuristic finds nothing to place: the
 // start is a complete permutation.
-optimaru::Settings engineConfigOf(const Solver::Config &config, const QuadraticAssignmentProblem &problem, int starts)
-{
+optimaru::Settings engineConfigOf(const Solver::Config& config,
+                                  const QuadraticAssignmentProblem& problem, int starts) {
     optimaru::Settings engineConfig;
     engineConfig.seed = config.seed;
     engineConfig.score_checks = config.score_checks;
@@ -39,15 +37,16 @@ optimaru::Settings engineConfigOf(const Solver::Config &config, const QuadraticA
     engineConfig.limits.step_limit = config.step_limit;
     engineConfig.limits.stall_step_limit = config.stall_step_limit;
 
-    auto &acceptor = engineConfig.search.acceptance;
+    auto& acceptor = engineConfig.search.acceptance;
     acceptor.rule = config.rule;
-    acceptor.history_length = config.history_length != 0
-                                      ? config.history_length
-                                      : std::clamp<std::size_t>(8 * problem.facilities.size(), 400, 3200);
+    acceptor.history_length =
+            config.history_length != 0
+                    ? config.history_length
+                    : std::clamp<std::size_t>(8 * problem.facilities.size(), 400, 3200);
     acceptor.tabu_tenure = config.tabu_tenure;
     acceptor.start_temperature = config.start_temperature;
 
-    auto &local = engineConfig.search;
+    auto& local = engineConfig.search;
     local.moves.change_weight = 0.0;
     local.moves.swap_weight = 1.0;
     local.ruin_recreate.enabled = false;
@@ -61,12 +60,10 @@ optimaru::Settings engineConfigOf(const Solver::Config &config, const QuadraticA
     return engineConfig;
 }
 
-void requireConfig(const Solver::Config &config)
-{
+void requireConfig(const Solver::Config& config) {
     if (config.parallelSolverCount <= 0)
         throw std::invalid_argument("parallelSolverCount must be positive");
-    if (config.tabu_tenure < 0)
-        throw std::invalid_argument("entityTabuSize must be >= 0");
+    if (config.tabu_tenure < 0) throw std::invalid_argument("entityTabuSize must be >= 0");
     if (!(config.simulatedAnnealingTemperatureFraction > 0.0))
         throw std::invalid_argument("simulatedAnnealingTemperatureFraction must be > 0");
 }
@@ -75,82 +72,68 @@ void requireConfig(const Solver::Config &config)
 // acceptor factory computes it from the start's score. The engine shares the
 // factory with every multi-start start. (An explicit temperature goes into the
 // engine config, see engineConfigOf.)
-bool autoTemperature(const Solver::Config &config)
-{
-    return config.rule == optimaru::AcceptanceRule::SimulatedAnnealing
-           && config.start_temperature.hard == 0
-           && config.start_temperature.soft == 0.0;
+bool autoTemperature(const Solver::Config& config) {
+    return config.rule == optimaru::AcceptanceRule::SimulatedAnnealing &&
+           config.start_temperature.hard == 0 && config.start_temperature.soft == 0.0;
 }
 
-void installAutoTemperature(const Solver::Config &config,
-                            optimaru::Solver<QuadraticAssignmentProblem> &engine)
-{
-    if (!autoTemperature(config))
-        return;
+void installAutoTemperature(const Solver::Config& config,
+                            optimaru::Solver<QuadraticAssignmentProblem>& engine) {
+    if (!autoTemperature(config)) return;
     const double fraction = config.simulatedAnnealingTemperatureFraction;
     engine.set_acceptor_factory(
-        [fraction](const optimaru::Score &start) -> std::unique_ptr<optimaru::Acceptor>
-        {
-            const double soft = std::max(1.0, fraction * std::fabs(start.soft));
-            return std::make_unique<optimaru::SimulatedAnnealing>(optimaru::Score{0, soft});
-        });
+            [fraction](const optimaru::Score& start) -> std::unique_ptr<optimaru::Acceptor> {
+                const double soft = std::max(1.0, fraction * std::fabs(start.soft));
+                return std::make_unique<optimaru::SimulatedAnnealing>(optimaru::Score{0, soft});
+            });
 }
 
 // Validates and lays out the start: the seed (a full bijection) once, else
 // the identity. Returns false when there is nothing to search (n <= 1).
-bool start(QuadraticAssignmentProblem &problem)
-{
+bool start(QuadraticAssignmentProblem& problem) {
     ScoreCalculator::prepare(problem);  // validates the facts
-    if (problem.warmStart)
-    {
-        if (!problem.isBijection())
-        {
+    if (problem.warmStart) {
+        if (!problem.isBijection()) {
             throw std::invalid_argument(
-                "warm start needs a full bijection: every facility at its own location");
+                    "warm start needs a full bijection: every facility at its own location");
         }
-    }
-    else
-    {
-        for (int f = 0; f < problem.facilityCount(); ++f)
-            problem.facilities[f].location = f;
+    } else {
+        for (int f = 0; f < problem.facilityCount(); ++f) problem.facilities[f].location = f;
     }
     problem.warmStart = false;  // a seed is used once
     return problem.facilityCount() > 1;
 }
 
-void requireBijection(const QuadraticAssignmentProblem &problem)
-{
+void requireBijection(const QuadraticAssignmentProblem& problem) {
     if (!problem.isBijection())
         throw std::logic_error("quadratic-assignment solve left a non-bijective assignment");
 }
 
 }  // namespace
 
-void Solver::solve(QuadraticAssignmentProblem &problem)
-{
+void Solver::solve(QuadraticAssignmentProblem& problem) {
     requireConfig(config_);
-    if (start(problem))
-    {
+    if (start(problem)) {
         // Independent parallel starts through the engine's own multi-start:
         // no custom operator or variable listener is registered, so the
         // worker threads run exactly the same search (seed + i each).
         const int starts = std::max(1, config_.parallelSolverCount);
-        optimaru::Solver<QuadraticAssignmentProblem> engine(engineConfigOf(config_, problem, starts));
+        optimaru::Solver<QuadraticAssignmentProblem> engine(
+                engineConfigOf(config_, problem, starts));
         installAutoTemperature(config_, engine);
-        engine.solve_multistart(problem,
-                               [] { return std::make_unique<QuadraticAssignmentIncrementalScoreCalculator>(); });
+        engine.solve_multistart(problem, [] {
+            return std::make_unique<QuadraticAssignmentIncrementalScoreCalculator>();
+        });
     }
     requireBijection(problem);
     // The authoritative final score: a full recompute on the best solution.
     ScoreCalculator::score(problem);
 }
 
-void Solver::solve(QuadraticAssignmentProblem &problem,
-                   optimaru::DecomposedObjective<QuadraticAssignmentProblem> &calculator)
-{
+void Solver::solve(QuadraticAssignmentProblem& problem,
+                   optimaru::DecomposedObjective<QuadraticAssignmentProblem>& calculator) {
     requireConfig(config_);
-    if (start(problem))
-    {
+    if (start(problem)) {
         // Single-start: the caller-owned calculator cannot be cloned.
         optimaru::Solver<QuadraticAssignmentProblem> engine(engineConfigOf(config_, problem, 1));
         installAutoTemperature(config_, engine);

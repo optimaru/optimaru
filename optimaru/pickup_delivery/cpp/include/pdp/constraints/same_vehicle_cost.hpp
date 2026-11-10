@@ -3,8 +3,7 @@
 
 #include "pdp/constraints/common.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
 // Hard, weight 1000 (ScoreCalculator::kCouplingPenalty): sameVehicleCost — a
 // request whose pickup and dropoff are routed on two DIFFERENT vehicles.
@@ -15,25 +14,16 @@ namespace pdp
 // Silent when the request is half-routed or fully unrouted: pairedRequestCost
 // and unassignedRequestsCost price those cases, so each rule stays one term.
 // Structural on the CP-SAT path only (its plugin refuses level='soft').
-struct SameVehicleCost final : RequestCouplingConstraint
-{
-    static constexpr double kDefaultWeight
-        = static_cast<double>(ScoreCalculator::kCouplingPenalty);
+struct SameVehicleCost final : RequestCouplingConstraint {
+    static constexpr double kDefaultWeight = static_cast<double>(ScoreCalculator::kCouplingPenalty);
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit SameVehicleCost(double weight = kDefaultWeight)
-        : RequestCouplingConstraint("sameVehicleCost", weight, kDefaultLevel)
-    {
-    }
-    std::int64_t requestCost(const PdpRoutePlan & /*plan*/,
-                             const Delivery & /*delivery*/,
-                             int pickupUnit,
-                             int /*pickupPosition*/,
-                             int dropoffUnit,
-                             int /*dropoffPosition*/) const override
-    {
-        if (pickupUnit < 0 || dropoffUnit < 0)
-            return 0;
+        : RequestCouplingConstraint("sameVehicleCost", weight, kDefaultLevel) {}
+    std::int64_t requestCost(const PdpRoutePlan& /*plan*/, const Delivery& /*delivery*/,
+                             int pickupUnit, int /*pickupPosition*/, int dropoffUnit,
+                             int /*dropoffPosition*/) const override {
+        if (pickupUnit < 0 || dropoffUnit < 0) return 0;
         return pickupUnit != dropoffUnit ? 1 : 0;
     }
 };

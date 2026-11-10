@@ -111,23 +111,16 @@ def parse_instance(
         if len(parts := line.split()) == 3
     }
     demands_by_id = {
-        int(parts[0]): int(parts[1])
-        for line in sections["DEMAND_SECTION"]
-        if len(parts := line.split()) == 2
+        int(parts[0]): int(parts[1]) for line in sections["DEMAND_SECTION"] if len(parts := line.split()) == 2
     }
-    depot_tokens = [
-        int(token) for line in sections["DEPOT_SECTION"] for token in line.split()
-    ]
+    depot_tokens = [int(token) for line in sections["DEPOT_SECTION"] for token in line.split()]
     if depot_tokens != [1, -1] or len(coordinates_by_id) != dimension:
         raise ValueError("expected one depot at node 1 and a complete coordinate set")
     coordinates = tuple(coordinates_by_id[i] for i in range(1, dimension + 1))
     demands = tuple(demands_by_id[i] for i in range(1, dimension + 1))
     if demands[0] != 0:
         raise ValueError("depot demand must be zero")
-    distances = tuple(
-        tuple(_rounded_euclidean(left, right) for right in coordinates)
-        for left in coordinates
-    )
+    distances = tuple(tuple(_rounded_euclidean(left, right) for right in coordinates) for left in coordinates)
     name = headers["NAME"]
     vehicle_match = re.search(r"-k(\d+)$", name)
     if vehicle_match is None:
@@ -141,12 +134,8 @@ def parse_instance(
         coordinates=coordinates,
         demands=demands,
         distances=distances,
-        best_known_distance=(
-            best_known_distance if best_known_distance is not None else comment_optimum
-        ),
-        proven_optimal=(
-            proven_optimal if proven_optimal is not None else comment_optimum is not None
-        ),
+        best_known_distance=(best_known_distance if best_known_distance is not None else comment_optimum),
+        proven_optimal=(proven_optimal if proven_optimal is not None else comment_optimum is not None),
     )
 
 
@@ -155,9 +144,7 @@ def load_augerat_instance(name: str, cache_dir: Path) -> CvrpInstance:
     try:
         catalog_id, expected = AUGERAT_A[name]
     except KeyError as exc:
-        raise ValueError(
-            f"unknown instance {name!r}; available: {', '.join(sorted(AUGERAT_A))}"
-        ) from exc
+        raise ValueError(f"unknown instance {name!r}; available: {', '.join(sorted(AUGERAT_A))}") from exc
     path = cache_dir / "cvrplib-a" / f"{name}.vrp"
     if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == expected:
         return parse_instance(path.read_text())
@@ -186,9 +173,7 @@ def rescore(instance: CvrpInstance, routes: list[list[int]]) -> Rescore:
     """
     used = [nodes for nodes in routes if nodes]
     if len(used) > instance.vehicle_count:
-        raise ValueError(
-            f"{len(used)} routes for a fleet of {instance.vehicle_count} vehicles"
-        )
+        raise ValueError(f"{len(used)} routes for a fleet of {instance.vehicle_count} vehicles")
     seen = [node for nodes in used for node in nodes]
     if len(seen) != len(set(seen)):
         raise ValueError("returned routes visit a customer more than once")
@@ -201,9 +186,7 @@ def rescore(instance: CvrpInstance, routes: list[list[int]]) -> Rescore:
         if sum(instance.demands[node] for node in nodes) > instance.capacity:
             feasible = False
         path = [0, *nodes, 0]
-        distance += sum(
-            instance.distances[left][right] for left, right in itertools.pairwise(path)
-        )
+        distance += sum(instance.distances[left][right] for left, right in itertools.pairwise(path))
     return Rescore(
         used_vehicles=len(used),
         distance=distance,

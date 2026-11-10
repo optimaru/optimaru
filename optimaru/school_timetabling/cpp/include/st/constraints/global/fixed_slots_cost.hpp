@@ -3,8 +3,7 @@
 
 #include "st/constraints/global/global_constraint.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // fixedSlotsCost — hard, weight 1, NOT level-flippable (structural). The
 // CP-SAT reference's rule for the fixed_slots field: a course's lessons off its fixed
@@ -18,28 +17,20 @@ namespace st::canon
 // constraint_costs() cover fixed_slots_cost like every other constraint:
 // level='soft' is refused (soft() throws), level='hard' is a no-op, a weight or
 // an exponent are accepted and scale a zero.
-struct FixedSlotsCost final : MemberChangeGlobalConstraint
-{
+struct FixedSlotsCost final : MemberChangeGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit FixedSlotsCost(double weight = kDefaultWeight)
-        : MemberChangeGlobalConstraint("fixedSlotsCost", weight, kDefaultLevel)
-    {
+        : MemberChangeGlobalConstraint("fixedSlotsCost", weight, kDefaultLevel) {
         level_flippable = false;  // structural: pinned lessons, never scored
     }
-    void reset(const Timetable &table,
-               const std::vector<std::vector<int>> & /*members*/) override
-    {
+    void reset(const Timetable& table, const std::vector<std::vector<int>>& /*members*/) override {
         detail::requirePrepared(table);
     }
-    void on_member_changed(const Timetable & /*table*/,
-                         int /*unit*/,
-                         const std::vector<int> & /*members*/,
-                         int /*entity*/,
-                         bool /*joined*/) override
-    {
-    }
+    void on_member_changed(const Timetable& /*table*/, int /*unit*/,
+                           const std::vector<int>& /*members*/, int /*entity*/,
+                           bool /*joined*/) override {}
     double cost() const override { return 0.0; }
 };
 

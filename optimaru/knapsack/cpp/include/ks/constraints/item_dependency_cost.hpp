@@ -6,8 +6,7 @@
 
 #include "ks/constraints/common.hpp"
 
-namespace ks
-{
+namespace ks {
 
 // Hard, weight 1: itemDependencyCost — selected items whose required item is
 // left out. Raw cost = the number of (item, required) pairs — every entry of
@@ -18,35 +17,27 @@ namespace ks
 // O(the item's dependencies) per flip.
 //
 // One total (a global constraint): the exponent shapes the count.
-struct ItemDependencyCost final : detail::SelectionConstraint
-{
+struct ItemDependencyCost final : detail::SelectionConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit ItemDependencyCost(double weight = kDefaultWeight)
-        : detail::SelectionConstraint("itemDependencyCost", weight, kDefaultLevel)
-    {
-    }
+        : detail::SelectionConstraint("itemDependencyCost", weight, kDefaultLevel) {}
 
-    void reset(const KnapsackProblem &problem,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+    void reset(const KnapsackProblem& problem,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(problem);
         selected_ = detail::selectedFlags(problem, members_per_unit);
         unmet_ = 0;
-        for (const Dependency &dependency : problem.dependencies)
-            unmet_ += unmetOf(dependency);
+        for (const Dependency& dependency : problem.dependencies) unmet_ += unmetOf(dependency);
     }
 
-    void onSelectionChanged(const KnapsackProblem &problem, int item, bool selected) override
-    {
-        for (int d : problem.dependenciesAsItem[item])
-            unmet_ -= unmetOf(problem.dependencies[d]);
+    void onSelectionChanged(const KnapsackProblem& problem, int item, bool selected) override {
+        for (int d : problem.dependenciesAsItem[item]) unmet_ -= unmetOf(problem.dependencies[d]);
         for (int d : problem.dependenciesAsRequired[item])
             unmet_ -= unmetOf(problem.dependencies[d]);
         selected_[item] = selected ? 1 : 0;
-        for (int d : problem.dependenciesAsItem[item])
-            unmet_ += unmetOf(problem.dependencies[d]);
+        for (int d : problem.dependenciesAsItem[item]) unmet_ += unmetOf(problem.dependencies[d]);
         for (int d : problem.dependenciesAsRequired[item])
             unmet_ += unmetOf(problem.dependencies[d]);
     }
@@ -54,8 +45,7 @@ struct ItemDependencyCost final : detail::SelectionConstraint
     double cost() const override { return static_cast<double>(unmet_); }
 
 private:
-    std::int64_t unmetOf(const Dependency &dependency) const
-    {
+    std::int64_t unmetOf(const Dependency& dependency) const {
         return selected_[dependency.item] && !selected_[dependency.required] ? 1 : 0;
     }
 

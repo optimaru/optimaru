@@ -175,9 +175,7 @@ def test_json_vehicles_default_to_twenty_stops_and_open_routes():
     vehicle = models.VehicleModel(id="V", capacity=1, home=(0, 0))
     assert vehicle.max_stops == 20
     assert vehicle.return_to_depot is False
-    core = models.to_plan(models.PdpInput(vehicles=[vehicle], deliveries=[])).vehicles[
-        0
-    ]
+    core = models.to_plan(models.PdpInput(vehicles=[vehicle], deliveries=[])).vehicles[0]
     assert core.max_stops == 20
     assert pdp.Vehicle("V", 1, 0).max_stops == 0
 
@@ -189,22 +187,14 @@ def test_routes_are_open_unless_the_vehicle_returns_to_depot():
         request = models.PdpRequest(
             timelimit=0.2,
             model_input=models.PdpInput(
-                vehicles=[
-                    models.VehicleModel(
-                        id="V", capacity=1, home=(0, 0), return_to_depot=return_to_depot
-                    )
-                ],
+                vehicles=[models.VehicleModel(id="V", capacity=1, home=(0, 0), return_to_depot=return_to_depot)],
                 deliveries=[
                     models.DeliveryModel(
                         id="R",
                         demand=1,
                         # Service minutes make dropping the request cost medium.
-                        pickup=models.StopModel(
-                            id="P", location=(0, 1), service_duration=60
-                        ),
-                        dropoff=models.StopModel(
-                            id="D", location=(0, 2), service_duration=60
-                        ),
+                        pickup=models.StopModel(id="P", location=(0, 1), service_duration=60),
+                        dropoff=models.StopModel(id="D", location=(0, 2), service_duration=60),
                     )
                 ],
                 # home -> P 10, P -> D 20, D -> home 100 (asymmetric on purpose).
@@ -315,5 +305,9 @@ def test_package_solve_forwards_the_stop_and_the_callback(monkeypatch):
 
 def test_package_solve_reports_new_bests():
     calls = []
-    pdp.solve(pdp.build_random_instance(request_count=8, vehicle_count=3, seed=7), config=_steps(300), on_new_best=lambda step, score: calls.append(step))
+    pdp.solve(
+        pdp.build_random_instance(request_count=8, vehicle_count=3, seed=7),
+        config=_steps(300),
+        on_new_best=lambda step, score: calls.append(step),
+    )
     assert calls

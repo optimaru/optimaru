@@ -42,9 +42,9 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from optimaru.task_assigning.models import TaskAssigningSolutionModel
-
     from external_solver.task_assigning import solve
+
+    from optimaru.task_assigning.models import TaskAssigningSolutionModel
 
     solved = solve(
         TaskAssigningSolutionModel.from_core(problem),

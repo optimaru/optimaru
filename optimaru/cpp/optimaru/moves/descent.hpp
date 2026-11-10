@@ -74,9 +74,8 @@ public:
     // carries no score, such as an unassigned pool: reordering moves within
     // it (2-opt, same-list swap) are never improving and are not scanned.
     Descent(ElementIndex<Solution>& index, const Neighborhoods& nearby, int max_sweeps,
-            const std::function<int(std::mt19937_64&)>& entity_hint,
-            bool advanced_list = false, int list_max_segment = 2,
-            int list_candidate_routes = 4, int unordered_list = -1)
+            const std::function<int(std::mt19937_64&)>& entity_hint, bool advanced_list = false,
+            int list_max_segment = 2, int list_candidate_routes = 4, int unordered_list = -1)
         : index_(index),
           nearby_(nearby),
           max_sweeps_(max_sweeps),
@@ -108,8 +107,7 @@ public:
             throttle_.reset(ctx.stop_requested);
             evaluations_ = 0;
 
-            const int seed =
-                    random_index(rng, element_count);
+            const int seed = random_index(rng, element_count);
             const int l1 = index_.list_of(seed);
             if (l1 < 0) return false;
 
@@ -151,7 +149,7 @@ public:
             Score current = editor.score();
             for (int sweep = 0; sweep < max_sweeps_ && !throttle_.stopped(); ++sweep) {
                 if (advanced_list_ ? !best_granular_move(editor, current, l1, l2)
-                                  : !best_relocate_between(editor, current, l1, l2))
+                                   : !best_relocate_between(editor, current, l1, l2))
                     break;
                 current = editor.score();
             }
@@ -205,7 +203,7 @@ private:
     // plus a nearby partner, then repeatedly applies the single best improving
     // change-or-swap over the two until none is left or the sweep cap hits.
     bool apply_basic(OperatorContext<Solution>& ctx, std::mt19937_64& rng,
-                    std::vector<int>& entities) {
+                     std::vector<int>& entities) {
         if constexpr (Traits::shape != Shape::Assignment) {
             (void)ctx;
             (void)rng;
@@ -259,9 +257,8 @@ private:
     // One pass: try every value for e1, every value for e2, and the swap of the
     // two; keep the best strictly-improving one and apply it. Returns whether
     // anything was applied. e2 < 0 restricts the pass to e1.
-    bool best_change_or_swap_between(Editor<Solution>& editor,
-                                 const Score& current_score, int e1, int e2,
-                                 int value_count) {
+    bool best_change_or_swap_between(Editor<Solution>& editor, const Score& current_score, int e1,
+                                     int e2, int value_count) {
         Solution& solution = editor.solution();
         Score best = current_score;
         int best_entity = -1, best_value = -1;
@@ -373,8 +370,8 @@ private:
     // One pass: try relocating every element of l1 into every position of l2
     // and vice versa, keep the best strictly-improving one, apply it.
     // Returns whether anything was applied.
-    bool best_relocate_between(Editor<Solution>& editor, const Score& current_score,
-                             int l1, int l2) {
+    bool best_relocate_between(Editor<Solution>& editor, const Score& current_score, int l1,
+                               int l2) {
         Score best = current_score;
         int best_from = -1, best_pos = -1, best_to = -1, best_insert = -1;
 
@@ -382,21 +379,21 @@ private:
             const int from = direction == 0 ? l1 : l2;
             const int to = direction == 0 ? l2 : l1;
             scan_relocations(editor, from, to,
-                            [&](const Score& candidate, int p, int q, int /*element*/) {
-                if (candidate > best) {
-                    best = candidate;
-                    best_from = from;
-                    best_pos = p;
-                    best_to = to;
-                    best_insert = q;
-                }
-            });
+                             [&](const Score& candidate, int p, int q, int /*element*/) {
+                                 if (candidate > best) {
+                                     best = candidate;
+                                     best_from = from;
+                                     best_pos = p;
+                                     best_to = to;
+                                     best_insert = q;
+                                 }
+                             });
         }
 
         if (best_from < 0) return false;
-        const ListMove move = ListMove::segment(
-                best_from, best_pos, 1, best_to, best_insert,
-                Traits::element_at(editor.solution(), best_from, best_pos));
+        const ListMove move =
+                ListMove::segment(best_from, best_pos, 1, best_to, best_insert,
+                                  Traits::element_at(editor.solution(), best_from, best_pos));
         Moves::apply(editor, index_, move);
         applied_.push_back(move);
         return true;
@@ -408,8 +405,7 @@ private:
     // best improving move. All trial moves are reverted immediately, so the
     // live element index remains coherent and undo_last() can restore the
     // accepted sequence atomically if the acceptor rejects it.
-    bool best_granular_move(Editor<Solution>& editor,
-                          const Score& current_score, int l1, int l2) {
+    bool best_granular_move(Editor<Solution>& editor, const Score& current_score, int l1, int l2) {
         Solution& solution = editor.solution();
         Score best = current_score;
         ListMove best_move;
@@ -428,9 +424,9 @@ private:
             const int from = direction == 0 ? l1 : l2;
             const int to = direction == 0 ? l2 : l1;
             scan_relocations(editor, from, to,
-                            [&](const Score& candidate, int p, int q, int element) {
-                                remember(candidate, ListMove::segment(from, p, 1, to, q, element));
-                            });
+                             [&](const Score& candidate, int p, int q, int element) {
+                                 remember(candidate, ListMove::segment(from, p, 1, to, q, element));
+                             });
         }
 
         // Exchange(1,1), both between routes and within each route. The
@@ -498,8 +494,7 @@ private:
     }
 
     template <typename Remember>
-    void consider_swaps(Editor<Solution>& editor, int l1, int l2,
-                       Remember&& remember) {
+    void consider_swaps(Editor<Solution>& editor, int l1, int l2, Remember&& remember) {
         Solution& solution = editor.solution();
         const int size1 = Traits::list_size(solution, l1);
         const int size2 = Traits::list_size(solution, l2);

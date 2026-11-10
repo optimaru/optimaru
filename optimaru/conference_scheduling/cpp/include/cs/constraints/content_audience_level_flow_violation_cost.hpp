@@ -3,8 +3,7 @@
 
 #include "cs/constraints/common.hpp"
 
-namespace cs
-{
+namespace cs {
 
 // Soft, weight 10: contentAudienceLevelFlowViolationCost — a beginner talk
 // scheduled after (or overlapping) an advanced talk on the same content, so
@@ -13,19 +12,13 @@ namespace cs
 // duration for each pair where the lower-level talk ends after the
 // higher-level talk starts; 0 = no violation (every content goes from the
 // lower audience level to the higher one).
-struct ContentAudienceLevelFlowViolationCost final : BreakdownConstraint
-{
+struct ContentAudienceLevelFlowViolationCost final : BreakdownConstraint {
     static constexpr double kDefaultWeight = 10.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
-    explicit ContentAudienceLevelFlowViolationCost(double weight
-                                                   = kDefaultWeight)
-        : BreakdownConstraint(
-              "contentAudienceLevelFlowViolationCost", weight, kDefaultLevel)
-    {
-    }
-    std::int64_t select(const Breakdown &breakdown) const override
-    {
+    explicit ContentAudienceLevelFlowViolationCost(double weight = kDefaultWeight)
+        : BreakdownConstraint("contentAudienceLevelFlowViolationCost", weight, kDefaultLevel) {}
+    std::int64_t select(const Breakdown& breakdown) const override {
         return breakdown.contentAudienceLevelFlowViolationCost;
     }
 };

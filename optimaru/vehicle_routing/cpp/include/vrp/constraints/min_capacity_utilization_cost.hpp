@@ -20,8 +20,7 @@ struct MinCapacityUtilizationCost final : detail::PerVehicleConstraint {
         if (detail::isPool(p, u) || m.empty() || p.vehicles[u].minLoadRatio <= 0) return 0;
         std::int64_t load = 0;
         for (int i : m) load += p.visits[i].demand;
-        return std::max(0.0,
-            p.vehicles[u].capacity * p.vehicles[u].minLoadRatio - load);
+        return std::max(0.0, p.vehicles[u].capacity * p.vehicles[u].minLoadRatio - load);
     }
 };
 

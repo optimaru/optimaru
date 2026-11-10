@@ -88,7 +88,7 @@ struct ScopedUnit final : EsUnitConstraint {
     // members, which breaks delta exactness, so fall back to full recompute.
     bool supports_delta() const override { return !hasShift_ && inner_->supports_delta(); }
     double delta_cost(const EmployeeSchedule& s, int unit, const std::vector<int>& members,
-                     int entity) const override {
+                      int entity) const override {
         if (hasWorker_ && !workerMask_[unit]) return 0.0;
         return inner_->delta_cost(s, unit, members, entity);
     }

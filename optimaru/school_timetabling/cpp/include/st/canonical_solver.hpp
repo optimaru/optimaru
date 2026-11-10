@@ -15,8 +15,7 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/ for
 // the canonical domain, following the st::Solver pattern. On top of the
@@ -34,11 +33,9 @@ namespace st::canon
 //     and tightly-restricted lessons first — First Fit Decreasing).
 // parallelSolverCount > 1 runs the independent worker threads
 // (each with its own calculator + operator instances, seed + i).
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget (the CP-SAT package's SOLVER_TIME_LIMIT_SECONDS
         // analog).
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
@@ -46,7 +43,7 @@ public:
         // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires (termination is by time_limit).
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<double>::infinity()};
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;
@@ -67,8 +64,7 @@ public:
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
         // slower).
-        optimaru::ScoreChecks score_checks
-            = optimaru::ScoreChecks::Off;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS) — essential on dense instances where plain LA local
@@ -151,7 +147,7 @@ public:
         // assembly's components carry their own weights.
         ObjectiveWeights weights;
 
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
@@ -166,7 +162,7 @@ public:
     // kDefaultWeight, soft at config_.weights): mutates lessons[*].slot and
     // stores the best score found in table.score. Pinned lessons keep their
     // assignment.
-    void solve(Timetable &table);
+    void solve(Timetable& table);
 
     // Solves with a caller-assembled plugin calculator (see
     // st/canonical_constraints.hpp): pick components and weights, then pass
@@ -179,8 +175,7 @@ public:
     // left primed on the final solution, so constraint_totals() explains
     // exactly that score. Single-start: the caller-owned calculator cannot
     // be cloned, so parallelSolverCount is ignored.
-    void solve(Timetable &table,
-               optimaru::DecomposedObjective<Timetable> &calculator);
+    void solve(Timetable& table, optimaru::DecomposedObjective<Timetable>& calculator);
 
 private:
     Config config_;

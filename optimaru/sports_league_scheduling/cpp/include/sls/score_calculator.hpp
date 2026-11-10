@@ -6,16 +6,14 @@
 
 #include "sls/domain.hpp"
 
-namespace sls
-{
+namespace sls {
 
 // Per-constraint raw totals of one full recompute (all counted positive; the
 // score applies the signs). One member per constraint; each member is named
 // after its constraint's registry name (sls/constraints/<subject>_cost.hpp).
 // The weights are applied only in hardTotal() / softTotal(), which read each
 // component's kDefaultWeight (score_calculator.cpp).
-struct Breakdown
-{
+struct Breakdown {
     // Hard (counts).
     std::int64_t teamConflictCost = 0;
     std::int64_t consecutiveHomeMatchesCost = 0;  // sum of run lengths >= 4
@@ -68,15 +66,14 @@ struct Breakdown
 //                                        that is not a weekend/holiday
 // Unassigned matches (round == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // A run of >= MAX_CONSECUTIVE consecutive home (or away) round indices
     // is penalized by its length.
     static constexpr int MAX_CONSECUTIVE = 4;
 
-    static Score score(LeagueSchedule &schedule);
-    static Breakdown computeBreakdown(LeagueSchedule &schedule);
+    static Score score(LeagueSchedule& schedule);
+    static Breakdown computeBreakdown(LeagueSchedule& schedule);
 
     // --- shared building blocks (also used by the plugin components) ---
 
@@ -86,14 +83,14 @@ public:
     // (team, side); only presence matters — a run is formed by
     // the set of round indices, so several matches on one round index count
     // once.
-    static std::int64_t runPenalty(const std::vector<int> &cnt);
+    static std::int64_t runPenalty(const std::vector<int>& cnt);
 
     // Interns the ordered (home, away) team pairs into dense ids, resolves
     // each match's reversed-pair id, fills the round-index existence table
     // and zero-fills a missing distance matrix. Idempotent (guarded by
     // LeagueSchedule::prepared). Must run before scoring; score /
     // solve call it.
-    static void prepare(LeagueSchedule &schedule);
+    static void prepare(LeagueSchedule& schedule);
 };
 
 }  // namespace sls

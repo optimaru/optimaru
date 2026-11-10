@@ -17,8 +17,8 @@ struct MaxStopsCost final : detail::PerVehicleConstraint {
         : PerVehicleConstraint("maxStopsCost", weight, kDefaultLevel) {}
     double cost(const VehicleRoutePlan& p, int u, const std::vector<int>& m) const override {
         if (detail::isPool(p, u) || p.vehicles[u].maxStops <= 0) return 0;
-        return static_cast<double>(std::max(0,
-            static_cast<int>(m.size()) - p.vehicles[u].maxStops));
+        return static_cast<double>(
+                std::max(0, static_cast<int>(m.size()) - p.vehicles[u].maxStops));
     }
 };
 

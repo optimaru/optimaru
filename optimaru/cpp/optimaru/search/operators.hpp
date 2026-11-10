@@ -86,7 +86,7 @@ public:
     virtual ~RuinOperator() = default;
     virtual const char* name() const = 0;
     virtual std::vector<int> select_ruin_set(OperatorContext<Solution>& ctx, int ruin_count,
-                                           std::mt19937_64& rng) = 0;
+                                             std::mt19937_64& rng) = 0;
 };
 
 }  // namespace optimaru

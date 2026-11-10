@@ -30,12 +30,11 @@ class ChainObjective {
 public:
     virtual ~ChainObjective() = default;
 
-    virtual void rebuild(Solution& solution,
-                                      const std::vector<std::vector<int>>& chains) = 0;
+    virtual void rebuild(Solution& solution, const std::vector<std::vector<int>>& chains) = 0;
     virtual void before_chain_edit(Solution& /*solution*/, int /*anchor_index*/,
-                                    const std::vector<int>& /*chain*/) {}
-    virtual void after_chain_edit(Solution& /*solution*/, int /*anchor_index*/,
                                    const std::vector<int>& /*chain*/) {}
+    virtual void after_chain_edit(Solution& /*solution*/, int /*anchor_index*/,
+                                  const std::vector<int>& /*chain*/) {}
     virtual Score score() = 0;
 };
 

@@ -10,8 +10,7 @@
 #include "alb/score_calculator.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace alb
-{
+namespace alb {
 
 // The assembly-line-balancing implementation of the engine's
 // optimaru::Objective: the default constraint set at the
@@ -38,10 +37,9 @@ namespace alb
 // ScoreCalculator::score (checked in the tests and under
 // ScoreChecks::ScoreChecks::Full). Requires ScoreCalculator::prepare(problem).
 class AssemblyLineBalancingIncrementalScoreCalculator final
-    : public optimaru::Objective<AssemblyLineBalancingProblem>
-{
+    : public optimaru::Objective<AssemblyLineBalancingProblem> {
 public:
-    void rebuild(AssemblyLineBalancingProblem &solution) override;
+    void rebuild(AssemblyLineBalancingProblem& solution) override;
     void before_assign(int taskIndex) override;
     void after_assign(int taskIndex) override;
     Score score() override;
@@ -53,7 +51,7 @@ public:
     RawCosts rawCosts() const;
 
 private:
-    AssemblyLineBalancingProblem *problem_ = nullptr;
+    AssemblyLineBalancingProblem* problem_ = nullptr;
     std::vector<int> station_;  // mirror: station per task (-1 == unassigned)
 
     // Per-station aggregates.

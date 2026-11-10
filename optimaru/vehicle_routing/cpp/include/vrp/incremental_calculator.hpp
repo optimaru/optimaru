@@ -8,8 +8,7 @@
 #include "optimaru/score/objective.hpp"
 #include "vrp/domain.hpp"
 
-namespace vrp
-{
+namespace vrp {
 
 // ---------------------------------------------------------------------------
 // VehicleRoutingIncrementalScoreCalculator
@@ -50,10 +49,9 @@ namespace vrp
 // means +3.1pp (X-n491) / +1.1pp (X-n701) WORSE and 0 paired wins, with
 // X-n289 bit-identical on all 6 seeds.
 class VehicleRoutingIncrementalScoreCalculator final
-    : public optimaru::Objective<VehicleRoutePlan>
-{
+    : public optimaru::Objective<VehicleRoutePlan> {
 public:
-    void rebuild(VehicleRoutePlan &solution) override;
+    void rebuild(VehicleRoutePlan& solution) override;
     void before_list_edit(int listIndex) override;
     void after_list_edit(int listIndex) override;
     optimaru::Score score() override;
@@ -82,15 +80,13 @@ public:
     // (falling back to the walk when it is not a prefix sum) and the plugin
     // together.
     bool preview_segment_move(int fromList, int start, int len, int toList, int insert_at,
-                            optimaru::Score &out) override;
-    bool preview_swap(int l1, int p1, int l2, int p2, optimaru::Score &out) override;
-    bool preview_reverse(int list, int first, int last,
-                        optimaru::Score &out) override;
-    bool preview_tail_swap(int l1, int c1, int l2, int c2,
-                         optimaru::Score &out) override;
+                              optimaru::Score& out) override;
+    bool preview_swap(int l1, int p1, int l2, int p2, optimaru::Score& out) override;
+    bool preview_reverse(int list, int first, int last, optimaru::Score& out) override;
+    bool preview_tail_swap(int l1, int c1, int l2, int c2, optimaru::Score& out) override;
     bool preview_exchange(int l1, int p1, int len1, int l2, int p2, int len2,
-                         optimaru::Score &out) override;
-    bool preview_insert(int list, int pos, int element, optimaru::Score &out) override;
+                          optimaru::Score& out) override;
+    bool preview_insert(int list, int pos, int element, optimaru::Score& out) override;
     // Every kind above is served once the working solution is set.
     bool has_previews() const override { return previewsEnabled(); }
 
@@ -102,8 +98,7 @@ private:
     // A contiguous run [begin, end) of one list, traversed forward or reversed.
     // (A detached element never appears as a piece: preview_insert scores it
     // as a direct delta instead.)
-    struct Piece
-    {
+    struct Piece {
         int list;
         int begin;
         int end;
@@ -112,8 +107,7 @@ private:
 
     // Per-list prefix sums over its current elements. Index k holds the total
     // over the first k elements, so a run [i, j) is entry j minus entry i.
-    struct ListCache
-    {
+    struct ListCache {
         std::vector<std::int64_t> cumLoad;     // demand
         std::vector<std::int64_t> cumService;  // service seconds
         std::vector<std::int64_t> cumPenalty;  // unassigned penalty (pool term)
@@ -136,44 +130,39 @@ private:
     // One list's proposed content as a short run of pieces. Fixed capacity
     // keeps a preview free of heap allocation: no move here needs more than
     // five pieces (an intra-route swap) and a split insert adds two.
-    struct Run
-    {
+    struct Run {
         static constexpr int kCapacity = 7;
         int list = -1;
         int count = 0;
         Piece pieces[kCapacity];
 
-        void add(const Piece &piece)
-        {
+        void add(const Piece& piece) {
             assert(count < kCapacity);
             pieces[count++] = piece;
         }
         // Insert `piece` so that it starts at element `index` of the run,
         // splitting the piece that position falls in.
-        void insert_at(int index, const Piece &piece);
+        void insert_at(int index, const Piece& piece);
     };
 
     void rebuildCache(int listIndex);
-    bool previewRuns(const Run *runs, int runCount, optimaru::Score &out) const;
+    bool previewRuns(const Run* runs, int runCount, optimaru::Score& out) const;
     // The exact O(route) path: materialize and walk. Used on a plan with
     // waiting and whenever the cached sums cannot rule lateness out.
-    bool previewRunsByWalk(const Run *runs, int runCount, optimaru::Score &out) const;
-    bool previewInsertByWalk(int list, int pos, int element, optimaru::Score &out) const;
+    bool previewRunsByWalk(const Run* runs, int runCount, optimaru::Score& out) const;
+    bool previewInsertByWalk(int list, int pos, int element, optimaru::Score& out) const;
     bool previewsEnabled() const { return plan_ != nullptr; }
     // Earliest deadline among the elements [begin, end) of a cached list.
-    Seconds minEndOf(const ListCache &cache, const std::vector<int> &elements, std::size_t begin,
+    Seconds minEndOf(const ListCache& cache, const std::vector<int>& elements, std::size_t begin,
                      std::size_t end) const;
-    const std::vector<int> &elementsOf(int list) const
-    {
-        return list >= vehicleCount_
-                   ? plan_->unassignedVisitIndices
-                   : plan_->vehicles[static_cast<std::size_t>(list)].visitIndices;
+    const std::vector<int>& elementsOf(int list) const {
+        return list >= vehicleCount_ ? plan_->unassignedVisitIndices
+                                     : plan_->vehicles[static_cast<std::size_t>(list)].visitIndices;
     }
     int list_size(int list) const { return static_cast<int>(elementsOf(list).size()); }
 
     // Per-vehicle terms, all derived in one walk of the route.
-    struct RouteTerms
-    {
+    struct RouteTerms {
         std::int64_t overload = 0;  // hard: max(0, demand - capacity)
         std::int64_t lateness = 0;  // hard: whole minutes past maxEndTime
         std::int64_t driving = 0;   // soft: seconds, home -> visits (-> home if returnToDepot)
@@ -181,19 +170,18 @@ private:
 
     RouteTerms evaluateRoute(int vehicleIndex) const;
     // The same walk over an arbitrary visit sequence (a previewed route).
-    RouteTerms evaluateElements(int vehicleIndex, const std::vector<int> &elements) const;
+    RouteTerms evaluateElements(int vehicleIndex, const std::vector<int>& elements) const;
 
     RouteTerms termsFromCache(int vehicleIndex) const;
     std::int64_t unassignedMinutes() const;
 
     // Ceil of a positive second-count to whole minutes, matching
     // Visit.roundDurationToNextOrEqualMinutes.
-    static std::int64_t ceilToMinutes(Seconds seconds)
-    {
+    static std::int64_t ceilToMinutes(Seconds seconds) {
         return seconds <= 0 ? 0 : (seconds + 59) / 60;
     }
 
-    VehicleRoutePlan *plan_ = nullptr;
+    VehicleRoutePlan* plan_ = nullptr;
     int vehicleCount_ = 0;
 
     std::vector<RouteTerms> terms_;  // per vehicle

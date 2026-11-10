@@ -17,17 +17,14 @@
 #include "alb/constraints/workload_imbalance_cost.hpp"
 #include "alb/score_calculator.hpp"
 
-namespace alb
-{
+namespace alb {
 
-namespace
-{
+namespace {
 
 // The same constants the components and ScoreCalculator read (integral; see
 // score_calculator.cpp, which also checks the levels).
 template <typename Component>
-constexpr std::int64_t weightOf()
-{
+constexpr std::int64_t weightOf() {
     return static_cast<std::int64_t>(Component::kDefaultWeight);
 }
 
@@ -38,12 +35,11 @@ constexpr bool kTrackWorkload = weightOf<WorkloadImbalanceCost>() != 0;
 }  // namespace
 
 void AssemblyLineBalancingIncrementalScoreCalculator::rebuild(
-    AssemblyLineBalancingProblem &solution)
-{
-    if (!solution.prepared)
-    {
-        throw std::logic_error("alb incremental calculator requires "
-                               "ScoreCalculator::prepare(problem) first");
+        AssemblyLineBalancingProblem& solution) {
+    if (!solution.prepared) {
+        throw std::logic_error(
+                "alb incremental calculator requires "
+                "ScoreCalculator::prepare(problem) first");
     }
     problem_ = &solution;
     const int n = solution.taskCount();
@@ -55,41 +51,32 @@ void AssemblyLineBalancingIncrementalScoreCalculator::rebuild(
     usedLoads_.clear();
     overCapacity_ = reversedArcs_ = beyondMaxStations_ = outsideBounds_ = 0;
     missedFixed_ = forbiddenHits_ = groupExtra_ = pairsTogether_ = usedStations_ = 0;
-    for (int t = 0; t < n; ++t)
-    {
+    for (int t = 0; t < n; ++t) {
         const int station = solution.tasks[t].station;
-        if (station >= 0)
-            insert(t, station);
+        if (station >= 0) insert(t, station);
     }
 }
 
-void AssemblyLineBalancingIncrementalScoreCalculator::ensureStation(int station)
-{
+void AssemblyLineBalancingIncrementalScoreCalculator::ensureStation(int station) {
     // The engine draws stations below stationCount; this only guards a
     // caller that wrote a larger one without re-running prepare().
-    if (station >= static_cast<int>(load_.size()))
-    {
+    if (station >= static_cast<int>(load_.size())) {
         load_.resize(station + 1, 0);
         count_.resize(station + 1, 0);
     }
 }
 
-std::int64_t AssemblyLineBalancingIncrementalScoreCalculator::overflowOf(int station) const
-{
+std::int64_t AssemblyLineBalancingIncrementalScoreCalculator::overflowOf(int station) const {
     const std::int64_t over = load_[station] - problem_->cycleTime;
     return over > 0 ? over : 0;
 }
 
-void AssemblyLineBalancingIncrementalScoreCalculator::moveLoad(int station,
-                                                               std::int64_t delta,
-                                                               int countDelta)
-{
+void AssemblyLineBalancingIncrementalScoreCalculator::moveLoad(int station, std::int64_t delta,
+                                                               int countDelta) {
     overCapacity_ -= overflowOf(station);
-    if (kTrackWorkload && load_[station] > 0)
-        usedLoads_.erase(usedLoads_.find(load_[station]));
+    if (kTrackWorkload && load_[station] > 0) usedLoads_.erase(usedLoads_.find(load_[station]));
     load_[station] += delta;
-    if (kTrackWorkload && load_[station] > 0)
-        usedLoads_.insert(load_[station]);
+    if (kTrackWorkload && load_[station] > 0) usedLoads_.insert(load_[station]);
     overCapacity_ += overflowOf(station);
 
     const int before = count_[station];
@@ -100,90 +87,65 @@ void AssemblyLineBalancingIncrementalScoreCalculator::moveLoad(int station,
         --usedStations_;
 }
 
-void AssemblyLineBalancingIncrementalScoreCalculator::addTaskTerms(int task,
-                                                                   int station,
-                                                                   int sign)
-{
-    const AssemblyLineBalancingProblem &p = *problem_;
-    const Task &t = p.tasks[task];
-    if (p.maxStations)
-        beyondMaxStations_ += sign * std::max(0, station - *p.maxStations + 1);
+void AssemblyLineBalancingIncrementalScoreCalculator::addTaskTerms(int task, int station,
+                                                                   int sign) {
+    const AssemblyLineBalancingProblem& p = *problem_;
+    const Task& t = p.tasks[task];
+    if (p.maxStations) beyondMaxStations_ += sign * std::max(0, station - *p.maxStations + 1);
     int outside = std::max(0, t.minStation - station);
-    if (t.maxStation)
-        outside += std::max(0, station - *t.maxStation);
+    if (t.maxStation) outside += std::max(0, station - *t.maxStation);
     outsideBounds_ += sign * outside;
-    if (t.fixedStation && *t.fixedStation != station)
-        missedFixed_ += sign;
-    const std::vector<int> &forbidden = p.forbiddenSorted[task];
-    if (std::binary_search(forbidden.begin(), forbidden.end(), station))
-        forbiddenHits_ += sign;
+    if (t.fixedStation && *t.fixedStation != station) missedFixed_ += sign;
+    const std::vector<int>& forbidden = p.forbiddenSorted[task];
+    if (std::binary_search(forbidden.begin(), forbidden.end(), station)) forbiddenHits_ += sign;
 }
 
 std::int64_t AssemblyLineBalancingIncrementalScoreCalculator::reversedArcsOf(int task,
-                                                                             int station) const
-{
-    const AssemblyLineBalancingProblem &p = *problem_;
+                                                                             int station) const {
+    const AssemblyLineBalancingProblem& p = *problem_;
     std::int64_t count = 0;
-    for (int arc : p.arcsOut[task])
-    {
+    for (int arc : p.arcsOut[task]) {
         const int after = station_[p.precedences[arc].after];
-        if (after >= 0 && station > after)
-            ++count;
+        if (after >= 0 && station > after) ++count;
     }
-    for (int arc : p.arcsIn[task])
-    {
+    for (int arc : p.arcsIn[task]) {
         const int before = station_[p.precedences[arc].before];
-        if (before >= 0 && before > station)
-            ++count;
+        if (before >= 0 && before > station) ++count;
     }
     return count;
 }
 
 std::int64_t AssemblyLineBalancingIncrementalScoreCalculator::pairsWith(int task,
-                                                                        int station) const
-{
-    const AssemblyLineBalancingProblem &p = *problem_;
+                                                                        int station) const {
+    const AssemblyLineBalancingProblem& p = *problem_;
     std::int64_t together = 0;
-    for (int index : p.pairsOf[task])
-    {
-        const TaskPair &pair = p.differentStationPairs[index];
-        if (pair.first == pair.second)
-        {
+    for (int index : p.pairsOf[task]) {
+        const TaskPair& pair = p.differentStationPairs[index];
+        if (pair.first == pair.second) {
             ++together;
             continue;
         }
         const int partner = pair.first == task ? pair.second : pair.first;
-        if (station_[partner] == station)
-            ++together;
+        if (station_[partner] == station) ++together;
     }
     return together;
 }
 
-void AssemblyLineBalancingIncrementalScoreCalculator::updateGroups(int task,
-                                                                   int station,
-                                                                   bool joined)
-{
-    for (int group : problem_->groupsOf[task])
-    {
-        std::vector<std::pair<int, int>> &tally = groupTally_[group];
+void AssemblyLineBalancingIncrementalScoreCalculator::updateGroups(int task, int station,
+                                                                   bool joined) {
+    for (int group : problem_->groupsOf[task]) {
+        std::vector<std::pair<int, int>>& tally = groupTally_[group];
         std::size_t at = 0;
-        while (at < tally.size() && tally[at].first != station)
-            ++at;
+        while (at < tally.size() && tally[at].first != station) ++at;
         const int before = groupDistinct_[group];
-        if (joined)
-        {
-            if (at == tally.size())
-            {
+        if (joined) {
+            if (at == tally.size()) {
                 tally.emplace_back(station, 1);
                 ++groupDistinct_[group];
-            }
-            else
-            {
+            } else {
                 ++tally[at].second;
             }
-        }
-        else if (--tally[at].second == 0)
-        {
+        } else if (--tally[at].second == 0) {
             tally[at] = tally.back();
             tally.pop_back();
             --groupDistinct_[group];
@@ -192,8 +154,7 @@ void AssemblyLineBalancingIncrementalScoreCalculator::updateGroups(int task,
     }
 }
 
-void AssemblyLineBalancingIncrementalScoreCalculator::insert(int task, int station)
-{
+void AssemblyLineBalancingIncrementalScoreCalculator::insert(int task, int station) {
     ensureStation(station);
     station_[task] = station;
     moveLoad(station, problem_->tasks[task].duration, +1);
@@ -204,8 +165,7 @@ void AssemblyLineBalancingIncrementalScoreCalculator::insert(int task, int stati
 }
 
 // Exact mirror of insert.
-void AssemblyLineBalancingIncrementalScoreCalculator::retract(int task, int station)
-{
+void AssemblyLineBalancingIncrementalScoreCalculator::retract(int task, int station) {
     updateGroups(task, station, false);
     pairsTogether_ -= pairsWith(task, station);
     reversedArcs_ -= reversedArcsOf(task, station);
@@ -214,22 +174,17 @@ void AssemblyLineBalancingIncrementalScoreCalculator::retract(int task, int stat
     station_[task] = -1;
 }
 
-void AssemblyLineBalancingIncrementalScoreCalculator::before_assign(int taskIndex)
-{
+void AssemblyLineBalancingIncrementalScoreCalculator::before_assign(int taskIndex) {
     const int old = station_[taskIndex];
-    if (old >= 0)
-        retract(taskIndex, old);  // unassigned: nothing to retract
+    if (old >= 0) retract(taskIndex, old);  // unassigned: nothing to retract
 }
 
-void AssemblyLineBalancingIncrementalScoreCalculator::after_assign(int taskIndex)
-{
+void AssemblyLineBalancingIncrementalScoreCalculator::after_assign(int taskIndex) {
     const int now = problem_->tasks[taskIndex].station;  // the new value
-    if (now >= 0)
-        insert(taskIndex, now);  // now unassigned: nothing to insert
+    if (now >= 0) insert(taskIndex, now);                // now unassigned: nothing to insert
 }
 
-RawCosts AssemblyLineBalancingIncrementalScoreCalculator::rawCosts() const
-{
+RawCosts AssemblyLineBalancingIncrementalScoreCalculator::rawCosts() const {
     RawCosts raw;
     raw.stationCapacityCost = overCapacity_;
     raw.taskPrecedenceCost = reversedArcs_;
@@ -240,20 +195,15 @@ RawCosts AssemblyLineBalancingIncrementalScoreCalculator::rawCosts() const
     raw.sameStationGroupsCost = groupExtra_;
     raw.differentStationPairsCost = pairsTogether_;
     raw.usedStationsCost = usedStations_;
-    if (kTrackWorkload)
-    {
+    if (kTrackWorkload) {
         if (!usedLoads_.empty())
             raw.workloadImbalanceCost = *usedLoads_.rbegin() - *usedLoads_.begin();
-    }
-    else
-    {
+    } else {
         std::int64_t heaviest = 0;
         std::int64_t lightest = 0;
         bool any = false;
-        for (std::int64_t load : load_)
-        {
-            if (load <= 0)
-                continue;
+        for (std::int64_t load : load_) {
+            if (load <= 0) continue;
             heaviest = any ? std::max(heaviest, load) : load;
             lightest = any ? std::min(lightest, load) : load;
             any = true;
@@ -263,23 +213,22 @@ RawCosts AssemblyLineBalancingIncrementalScoreCalculator::rawCosts() const
     return raw;
 }
 
-Score AssemblyLineBalancingIncrementalScoreCalculator::score()
-{
+Score AssemblyLineBalancingIncrementalScoreCalculator::score() {
     std::int64_t workload = 0;
     if (kTrackWorkload && !usedLoads_.empty())
         workload = *usedLoads_.rbegin() - *usedLoads_.begin();
     Score score;
-    score.hard = -(weightOf<StationCapacityCost>() * overCapacity_
-                   + weightOf<TaskPrecedenceCost>() * reversedArcs_
-                   + weightOf<MaxStationsCost>() * beyondMaxStations_
-                   + weightOf<TaskStationBoundsCost>() * outsideBounds_
-                   + weightOf<FixedTaskStationsCost>() * missedFixed_
-                   + weightOf<ForbiddenTaskStationsCost>() * forbiddenHits_
-                   + weightOf<SameStationGroupsCost>() * groupExtra_
-                   + weightOf<DifferentStationPairsCost>() * pairsTogether_);
+    score.hard = -(weightOf<StationCapacityCost>() * overCapacity_ +
+                   weightOf<TaskPrecedenceCost>() * reversedArcs_ +
+                   weightOf<MaxStationsCost>() * beyondMaxStations_ +
+                   weightOf<TaskStationBoundsCost>() * outsideBounds_ +
+                   weightOf<FixedTaskStationsCost>() * missedFixed_ +
+                   weightOf<ForbiddenTaskStationsCost>() * forbiddenHits_ +
+                   weightOf<SameStationGroupsCost>() * groupExtra_ +
+                   weightOf<DifferentStationPairsCost>() * pairsTogether_);
     // Negate in integer space so a zero penalty prints as 0, not -0.
-    score.soft = static_cast<double>(-(weightOf<UsedStationsCost>() * usedStations_
-                                       + weightOf<WorkloadImbalanceCost>() * workload));
+    score.soft = static_cast<double>(-(weightOf<UsedStationsCost>() * usedStations_ +
+                                       weightOf<WorkloadImbalanceCost>() * workload));
     return score;
 }
 

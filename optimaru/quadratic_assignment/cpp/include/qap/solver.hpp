@@ -12,8 +12,7 @@
 #include "optimaru/settings.hpp"
 #include "qap/domain.hpp"
 
-namespace qap
-{
+namespace qap {
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/: it
 // starts from a complete permutation (the identity, or a warm-start seed that
@@ -28,18 +27,17 @@ namespace qap
 // to a change move when the swap weight is 0), ruin-and-recreate, descent,
 // value recommenders, ejection chains and iterated local search. The final
 // state is checked to be a bijection (std::logic_error otherwise).
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget. 0 stops before the first step: the solve then
         // returns its start (the identity, or the seed) unchanged.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires.
-        Score target_score{std::numeric_limits<std::int64_t>::max(), std::numeric_limits<double>::infinity()};
+        Score target_score{std::numeric_limits<std::int64_t>::max(),
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion (so
         // step_limit = 0 means "no step limit", not "no search").
         std::chrono::milliseconds stall_time_limit{0};
@@ -71,7 +69,7 @@ public:
         // recompute after every move (debugging aid; much slower).
         optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
     };
 
     Solver() = default;
@@ -82,7 +80,7 @@ public:
     // full bijection, else std::invalid_argument), searches with swaps,
     // writes the best permutation and problem.score (a full recompute), and
     // resets problem.warmStart to false.
-    void solve(QuadraticAssignmentProblem &problem);
+    void solve(QuadraticAssignmentProblem& problem);
 
     // Solves with a caller-assembled plugin calculator (see
     // qap/constraints.hpp): pick components and weights, then pass the
@@ -91,8 +89,8 @@ public:
     // final solution, so constraint_totals() explains exactly that score.
     // Single-start: the caller-owned calculator cannot be cloned, so
     // parallelSolverCount is ignored.
-    void solve(QuadraticAssignmentProblem &problem,
-               optimaru::DecomposedObjective<QuadraticAssignmentProblem> &calculator);
+    void solve(QuadraticAssignmentProblem& problem,
+               optimaru::DecomposedObjective<QuadraticAssignmentProblem>& calculator);
 
 private:
     Config config_;

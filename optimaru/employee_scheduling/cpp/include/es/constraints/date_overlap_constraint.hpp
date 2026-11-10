@@ -12,9 +12,10 @@ namespace es {
 // kDefaultWeight / kDefaultLevel.
 struct DateOverlapConstraint : GroupableAssignmentConstraint {
     DateOverlapConstraint(std::string name, double weight, optimaru::Level level,
-                          std::set<DayIndex> Employee::* dates, double sign,
-                          bool perDay = false)
-        : GroupableAssignmentConstraint(std::move(name), weight, level), dates_(dates), sign_(sign),
+                          std::set<DayIndex> Employee::* dates, double sign, bool perDay = false)
+        : GroupableAssignmentConstraint(std::move(name), weight, level),
+          dates_(dates),
+          sign_(sign),
           perDay_(perDay) {}
     void on_reset(const EmployeeSchedule& s) override {
         shiftCount_ = static_cast<int>(s.shifts.size());
@@ -34,8 +35,7 @@ struct DateOverlapConstraint : GroupableAssignmentConstraint {
     }
     double cost(const EmployeeSchedule& s, int unit,
                 const std::vector<int>& members) const override {
-        const std::int32_t* row =
-                minutes_.data() + static_cast<std::size_t>(unit) * shiftCount_;
+        const std::int32_t* row = minutes_.data() + static_cast<std::size_t>(unit) * shiftCount_;
         std::int64_t c = 0;
         for (int i : members)
             if (!s.shifts[i].pinned) c += row[i];  // pinned shifts are fixed context
@@ -43,13 +43,14 @@ struct DateOverlapConstraint : GroupableAssignmentConstraint {
     }
     bool supports_delta() const override { return true; }
     double delta_cost(const EmployeeSchedule& s, int unit, const std::vector<int>&,
-                     int entity) const override {
+                      int entity) const override {
         return memberDelta(s, unit, entity);
     }
     double memberDelta(const EmployeeSchedule& s, int unit, int entity) const {
         if (s.shifts[entity].pinned) return 0.0;
         return sign_ * minutes_[static_cast<std::size_t>(unit) * shiftCount_ + entity];
     }
+
 private:
     std::set<DayIndex> Employee::* dates_;
     double sign_;

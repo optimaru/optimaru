@@ -21,8 +21,7 @@
 #include "fcs/constraints/required_skill_cost.hpp"
 #include "fcs/constraints/transfer_between_two_flights_cost.hpp"
 
-namespace fcs
-{
+namespace fcs {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -54,8 +53,7 @@ namespace fcs
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<RequiredSkillCost>();
     assembly.emplace<FlightConflictCost>();
@@ -66,8 +64,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

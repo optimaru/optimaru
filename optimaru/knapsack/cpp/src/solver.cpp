@@ -14,14 +14,11 @@
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
 
-namespace ks
-{
+namespace ks {
 
-namespace
-{
+namespace {
 
-void requireRewards(const Solver::Config &config)
-{
+void requireRewards(const Solver::Config& config) {
     if (config.ruinRecreateRewards.size() != 4)
         throw std::invalid_argument("ruinRecreateRewards must contain exactly 4 values");
 }
@@ -30,10 +27,8 @@ void requireRewards(const Solver::Config &config)
 // local search over the built-in assignment moves, plus the ALNS kicks. The
 // engine's construction heuristic finds nothing left to place: the domain
 // construction decided every item.
-optimaru::Settings engineConfigOf(const Solver::Config &config,
-                                      const KnapsackProblem &problem,
-                                      int starts)
-{
+optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackProblem& problem,
+                                  int starts) {
     optimaru::Settings engineConfig;
     engineConfig.seed = config.seed;
     engineConfig.score_checks = config.score_checks;
@@ -44,10 +39,10 @@ optimaru::Settings engineConfigOf(const Solver::Config &config,
     engineConfig.limits.stall_time_limit = config.stall_time_limit;
     engineConfig.limits.step_limit = config.step_limit;
     engineConfig.limits.stall_step_limit = config.stall_step_limit;
-    engineConfig.search.acceptance.history_length
-        = config.history_length != 0
-              ? config.history_length
-              : std::clamp<std::size_t>(8 * problem.items.size(), 400, 3200);
+    engineConfig.search.acceptance.history_length =
+            config.history_length != 0
+                    ? config.history_length
+                    : std::clamp<std::size_t>(8 * problem.items.size(), 400, 3200);
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
     engineConfig.search.descent_weight = config.descent_weight;
@@ -55,18 +50,17 @@ optimaru::Settings engineConfigOf(const Solver::Config &config,
     // Nearby swap partners: items of similar weight. The weights are copied,
     // so the meter stays valid in the multi-start worker threads, whose
     // problems are copies.
-    if (config.nearbyProbability > 0.0 && config.nearbySize > 0)
-    {
+    if (config.nearbyProbability > 0.0 && config.nearbySize > 0) {
         auto weights = std::make_shared<std::vector<std::int64_t>>();
-        for (const Item &item : problem.items)
-            weights->push_back(item.weight);
+        for (const Item& item : problem.items) weights->push_back(item.weight);
         engineConfig.search.nearby.probability = config.nearbyProbability;
         engineConfig.search.nearby.size = config.nearbySize;
-        engineConfig.search.nearby.distance = [weights](int a, int b)
-        { return static_cast<double>(std::llabs((*weights)[a] - (*weights)[b])); };
+        engineConfig.search.nearby.distance = [weights](int a, int b) {
+            return static_cast<double>(std::llabs((*weights)[a] - (*weights)[b]));
+        };
     }
 
-    auto &lns = engineConfig.search.ruin_recreate;
+    auto& lns = engineConfig.search.ruin_recreate;
     lns.enabled = config.ruin_recreate;
     lns.unimproved_step_trigger = config.ruinRecreateUnimprovedStepTrigger;
     lns.min_ruin_fraction = config.ruinRecreateMinRuinFraction;
@@ -81,8 +75,7 @@ optimaru::Settings engineConfigOf(const Solver::Config &config,
 }
 
 // Validates, constructs and consumes the seed.
-void construct(KnapsackProblem &problem)
-{
+void construct(KnapsackProblem& problem) {
     ScoreCalculator::prepare(problem);  // validates the facts and the selection
     constructSelection(problem);
     problem.warmStart = false;  // a seed is used once
@@ -90,31 +83,27 @@ void construct(KnapsackProblem &problem)
 
 }  // namespace
 
-void Solver::solve(KnapsackProblem &problem)
-{
+void Solver::solve(KnapsackProblem& problem) {
     requireRewards(config_);
     construct(problem);
-    if (!problem.items.empty())
-    {
+    if (!problem.items.empty()) {
         // Independent parallel starts through the engine's own multi-start:
         // no custom operator or variable listener is registered, so the
         // worker threads run exactly the same search (seed + i each).
         const int starts = std::max(1, config_.parallelSolverCount);
         optimaru::Solver<KnapsackProblem> engine(engineConfigOf(config_, problem, starts));
-        engine.solve_multistart(problem,
-                               [] { return std::make_unique<KnapsackIncrementalScoreCalculator>(); });
+        engine.solve_multistart(
+                problem, [] { return std::make_unique<KnapsackIncrementalScoreCalculator>(); });
     }
     // The authoritative final score: a full recompute on the best solution.
     ScoreCalculator::score(problem);
 }
 
-void Solver::solve(KnapsackProblem &problem,
-                   optimaru::DecomposedObjective<KnapsackProblem> &calculator)
-{
+void Solver::solve(KnapsackProblem& problem,
+                   optimaru::DecomposedObjective<KnapsackProblem>& calculator) {
     requireRewards(config_);
     construct(problem);
-    if (!problem.items.empty())
-    {
+    if (!problem.items.empty()) {
         // Single-start: the caller-owned calculator cannot be cloned.
         optimaru::Solver<KnapsackProblem> engine(engineConfigOf(config_, problem, 1));
         engine.solve(problem, calculator);

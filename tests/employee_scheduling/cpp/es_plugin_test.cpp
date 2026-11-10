@@ -92,7 +92,8 @@ EmployeeSchedule buildRoster(std::uint64_t seed) {
         for (int k = 0; k < 3; ++k)
             if (k != e % 3 || e == 5) employee.skills.insert(skills[k]);
         employee.unavailableDates = {static_cast<DayIndex>(rng() % 14)};
-        employee.undesiredDates = {static_cast<DayIndex>(rng() % 14), static_cast<DayIndex>(rng() % 14)};
+        employee.undesiredDates = {static_cast<DayIndex>(rng() % 14),
+                                   static_cast<DayIndex>(rng() % 14)};
         employee.desiredDates = {static_cast<DayIndex>(rng() % 14)};
         employee.desiredShifts = {{static_cast<DayIndex>(rng() % 14), "Location B"}};
         s.employees.push_back(employee);
@@ -125,7 +126,8 @@ EmployeeSchedule buildRoster(std::uint64_t seed) {
 void randomAssignment(EmployeeSchedule& s, std::mt19937_64& rng, bool allowUnassigned) {
     const int employees = static_cast<int>(s.employees.size());
     for (Shift& shift : s.shifts) {
-        const int value = static_cast<int>(rng() % (employees + (allowUnassigned ? 1 : 0))) - (allowUnassigned ? 1 : 0);
+        const int value = static_cast<int>(rng() % (employees + (allowUnassigned ? 1 : 0))) -
+                          (allowUnassigned ? 1 : 0);
         shift.employeeIndex = value;
     }
 }
@@ -140,11 +142,13 @@ Score score(DecomposedCalculator& calc, EmployeeSchedule& s) {
 // (a) the catalog
 // ---------------------------------------------------------------------------
 template <typename Component>
-bool rowIs(const optimaru::ConstraintInfo& row, const char* name, optimaru::Level level, bool is_global,
-           bool enabled, bool reward = false) {
+bool rowIs(const optimaru::ConstraintInfo& row, const char* name, optimaru::Level level,
+           bool is_global, bool enabled, bool reward = false) {
     Component component;  // constructs at its default parameters
-    return row.name == name && component.name == name && row.default_level == Component::kDefaultLevel &&
-           row.default_weight == Component::kDefaultWeight && component.weight == Component::kDefaultWeight &&
+    return row.name == name && component.name == name &&
+           row.default_level == Component::kDefaultLevel &&
+           row.default_weight == Component::kDefaultWeight &&
+           component.weight == Component::kDefaultWeight &&
            component.level == Component::kDefaultLevel && row.default_level == level &&
            row.default_weight == 1.0 && row.reward == reward && row.level_flippable == !reward &&
            row.is_global == is_global && row.default_enabled == enabled;
@@ -155,17 +159,21 @@ void verifyCatalog() {
     using optimaru::Level;
     const auto defaults = defaultConstraints().info();
     check(defaults.size() == 8 &&
-                  rowIs<RequiredSkillCost>(defaults[0], "requiredSkillCost", Level::Hard, false, true) &&
-                  rowIs<EmployeeUnavailabilityCost>(defaults[1], "employeeUnavailabilityCost", Level::Hard,
-                                                    false, true) &&
-                  rowIs<ShiftOverlapCost>(defaults[2], "shiftOverlapCost", Level::Hard, false, true) &&
-                  rowIs<MaxOneShiftPerDayCost>(defaults[3], "maxOneShiftPerDayCost", Level::Hard, false,
-                                               true) &&
+                  rowIs<RequiredSkillCost>(defaults[0], "requiredSkillCost", Level::Hard, false,
+                                           true) &&
+                  rowIs<EmployeeUnavailabilityCost>(defaults[1], "employeeUnavailabilityCost",
+                                                    Level::Hard, false, true) &&
+                  rowIs<ShiftOverlapCost>(defaults[2], "shiftOverlapCost", Level::Hard, false,
+                                          true) &&
+                  rowIs<MaxOneShiftPerDayCost>(defaults[3], "maxOneShiftPerDayCost", Level::Hard,
+                                               false, true) &&
                   rowIs<MinRestCost>(defaults[4], "minRestCost", Level::Hard, false, true) &&
-                  rowIs<UndesiredDayCost>(defaults[5], "undesiredDayCost", Level::Soft, false, true) &&
-                  rowIs<DesiredDayCost>(defaults[6], "desiredDayCost", Level::Soft, false, true, true) &&
-                  rowIs<ShiftCountImbalanceCost>(defaults[7], "shiftCountImbalanceCost", Level::Soft, true,
-                                                 true),
+                  rowIs<UndesiredDayCost>(defaults[5], "undesiredDayCost", Level::Soft, false,
+                                          true) &&
+                  rowIs<DesiredDayCost>(defaults[6], "desiredDayCost", Level::Soft, false, true,
+                                        true) &&
+                  rowIs<ShiftCountImbalanceCost>(defaults[7], "shiftCountImbalanceCost",
+                                                 Level::Soft, true, true),
           "defaultConstraints().info() == the eight default components' constants");
 
     const auto rows = optimaru::catalog_info(defaultConstraints(), catalogConstraints());
@@ -177,44 +185,60 @@ void verifyCatalog() {
     // global ones, so the 22 catalog-only rows come as 16 units, then 6
     // globals, each group in factory order.
     check(rows.size() == 30 &&
-                  rowIs<DesiredShiftCost>(rows[8], "desiredShiftCost", Level::Soft, false, false, true) &&
-                  rowIs<MaxConsecutiveDaysCost>(rows[9], "maxConsecutiveDaysCost", Level::Hard, false, false) &&
-                  rowIs<MinConsecutiveDaysCost>(rows[10], "minConsecutiveDaysCost", Level::Soft, false, false) &&
-                  rowIs<MaxConsecutiveDaysOffCost>(rows[11], "maxConsecutiveDaysOffCost", Level::Soft, false,
-                                                   false) &&
-                  rowIs<RestAfterConsecutiveWorkCost>(rows[12], "restAfterConsecutiveWorkCost", Level::Hard,
-                                                      false, false) &&
-                  rowIs<MaxWeeklyMinutesCost>(rows[13], "maxWeeklyMinutesCost", Level::Hard, false, false) &&
-                  rowIs<MinWeeklyMinutesCost>(rows[14], "minWeeklyMinutesCost", Level::Soft, false, false) &&
-                  rowIs<MinWeeklyRestDaysCost>(rows[15], "minWeeklyRestDaysCost", Level::Hard, false, false) &&
+                  rowIs<DesiredShiftCost>(rows[8], "desiredShiftCost", Level::Soft, false, false,
+                                          true) &&
+                  rowIs<MaxConsecutiveDaysCost>(rows[9], "maxConsecutiveDaysCost", Level::Hard,
+                                                false, false) &&
+                  rowIs<MinConsecutiveDaysCost>(rows[10], "minConsecutiveDaysCost", Level::Soft,
+                                                false, false) &&
+                  rowIs<MaxConsecutiveDaysOffCost>(rows[11], "maxConsecutiveDaysOffCost",
+                                                   Level::Soft, false, false) &&
+                  rowIs<RestAfterConsecutiveWorkCost>(rows[12], "restAfterConsecutiveWorkCost",
+                                                      Level::Hard, false, false) &&
+                  rowIs<MaxWeeklyMinutesCost>(rows[13], "maxWeeklyMinutesCost", Level::Hard, false,
+                                              false) &&
+                  rowIs<MinWeeklyMinutesCost>(rows[14], "minWeeklyMinutesCost", Level::Soft, false,
+                                              false) &&
+                  rowIs<MinWeeklyRestDaysCost>(rows[15], "minWeeklyRestDaysCost", Level::Hard,
+                                               false, false) &&
                   rowIs<AssignmentCost>(rows[16], "assignmentCost", Level::Soft, false, false) &&
-                  rowIs<LocationRunLengthCost>(rows[17], "locationRunLengthCost", Level::Soft, false, false) &&
-                  rowIs<RestAfterLocationRunCost>(rows[18], "restAfterLocationRunCost", Level::Hard, false,
-                                                  false) &&
-                  rowIs<LocationRunGapCost>(rows[19], "locationRunGapCost", Level::Soft, false, false) &&
-                  rowIs<WorkerLocationCountCost>(rows[20], "workerLocationCountCost", Level::Soft, false,
-                                                 false) &&
+                  rowIs<LocationRunLengthCost>(rows[17], "locationRunLengthCost", Level::Soft,
+                                               false, false) &&
+                  rowIs<RestAfterLocationRunCost>(rows[18], "restAfterLocationRunCost", Level::Hard,
+                                                  false, false) &&
+                  rowIs<LocationRunGapCost>(rows[19], "locationRunGapCost", Level::Soft, false,
+                                            false) &&
+                  rowIs<WorkerLocationCountCost>(rows[20], "workerLocationCountCost", Level::Soft,
+                                                 false, false) &&
                   rowIs<DayPatternCost>(rows[21], "dayPatternCost", Level::Soft, false, false) &&
-                  rowIs<TargetDaysOffCost>(rows[22], "targetDaysOffCost", Level::Soft, false, false) &&
-                  rowIs<WorkerDayCountInRangeCost>(rows[23], "workerDayCountInRangeCost", Level::Soft, false,
-                                                   false) &&
-                  rowIs<UnassignedShiftsCost>(rows[24], "unassignedShiftsCost", Level::Hard, true, false) &&
-                  rowIs<ShiftCountGapCost>(rows[25], "shiftCountGapCost", Level::Soft, true, false) &&
-                  rowIs<WeeklyMinutesGapCost>(rows[26], "weeklyMinutesGapCost", Level::Soft, true, false) &&
-                  rowIs<ShiftCoverageCost>(rows[27], "shiftCoverageCost", Level::Soft, true, false) &&
-                  rowIs<LocationImbalanceCost>(rows[28], "locationImbalanceCost", Level::Soft, true, false) &&
+                  rowIs<TargetDaysOffCost>(rows[22], "targetDaysOffCost", Level::Soft, false,
+                                           false) &&
+                  rowIs<WorkerDayCountInRangeCost>(rows[23], "workerDayCountInRangeCost",
+                                                   Level::Soft, false, false) &&
+                  rowIs<UnassignedShiftsCost>(rows[24], "unassignedShiftsCost", Level::Hard, true,
+                                              false) &&
+                  rowIs<ShiftCountGapCost>(rows[25], "shiftCountGapCost", Level::Soft, true,
+                                           false) &&
+                  rowIs<WeeklyMinutesGapCost>(rows[26], "weeklyMinutesGapCost", Level::Soft, true,
+                                              false) &&
+                  rowIs<ShiftCoverageCost>(rows[27], "shiftCoverageCost", Level::Soft, true,
+                                           false) &&
+                  rowIs<LocationImbalanceCost>(rows[28], "locationImbalanceCost", Level::Soft, true,
+                                               false) &&
                   rowIs<WorkerPairingCost>(rows[29], "workerPairingCost", Level::Soft, true, false),
           "catalogInfo: the 22 rule-only components' constants, disabled by default");
 
     bool camel = true;
     for (const auto& row : rows) {
         const std::string snake = optimaru::python::python_name(row.name);
-        camel = camel && !row.name.empty() && std::islower(static_cast<unsigned char>(row.name[0])) &&
+        camel = camel && !row.name.empty() &&
+                std::islower(static_cast<unsigned char>(row.name[0])) &&
                 row.name.find(' ') == std::string::npos && snake.size() > 5 &&
                 snake.compare(snake.size() - 5, 5, "_cost") == 0;
     }
     check(camel, "every registry name is camelCase and its Python name ends in _cost");
-    check(optimaru::python::python_name("maxConsecutiveDaysOffCost") == "max_consecutive_days_off_cost" &&
+    check(optimaru::python::python_name("maxConsecutiveDaysOffCost") ==
+                          "max_consecutive_days_off_cost" &&
                   optimaru::python::python_name("workerDayCountInRangeCost") ==
                           "worker_day_count_in_range_cost",
           "pythonName maps the registry names to their snake_case Python names");
@@ -226,7 +250,8 @@ void verifyCatalog() {
     DesiredDayCost desired;
     desired.set_level(optimaru::Level::Soft);
     check(desired.level == optimaru::Level::Soft, "re-stating a reward's soft level is a no-op");
-    check(!throwsInvalid([] { defaultConstraints().soft("requiredSkillCost").hard("undesiredDayCost"); }),
+    check(!throwsInvalid(
+                  [] { defaultConstraints().soft("requiredSkillCost").hard("undesiredDayCost"); }),
           "the other defaults stay flippable both ways");
     check(throwsInvalid([] { WorkerDayCountInRangeCost bad(1.0, -1, 5); }),
           "WorkerDayCountInRangeCost refuses a day range outside the horizon limit");
@@ -253,7 +278,8 @@ void verifyDefaultAssemblyEqualsMonolith() {
                             str(plugin).c_str());
         }
     }
-    check(mismatches == 0, "300 random assignments: the default assembly equals the monolith bit-for-bit");
+    check(mismatches == 0,
+          "300 random assignments: the default assembly equals the monolith bit-for-bit");
 }
 
 // ---------------------------------------------------------------------------
@@ -291,14 +317,14 @@ void addEveryComponent(DecomposedCalculator& calc) {
     calc.emplace<WorkerDayCountInRangeCost>(1.0, 0, 6, 2, 4);
     calc.emplace<LocationImbalanceCost>(1.0, "Location A", "", "ssd", 0, std::vector<int>{});
     calc.emplace<LocationImbalanceCost>(1.0, "", "Skill B", "gap", 1, std::vector<int>{5, 6});
-    calc.emplace<WorkerPairingCost>(1.0, 0, 1, std::vector<int>{0, 1, 2, 3},
-                                    std::vector<std::string>{"Location A", "Location A", "Location B",
-                                                             "Location B"},
-                                    false);
+    calc.emplace<WorkerPairingCost>(
+            1.0, 0, 1, std::vector<int>{0, 1, 2, 3},
+            std::vector<std::string>{"Location A", "Location A", "Location B", "Location B"},
+            false);
     calc.add(std::make_unique<ScopedUnit>(std::make_unique<MaxConsecutiveDaysCost>(1.0, 2),
                                           std::vector<int>{0, 2}, std::vector<int>{}, true, false));
-    calc.add(std::make_unique<ScopedUnit>(std::make_unique<UndesiredDayCost>(),
-                                          std::vector<int>{}, std::vector<int>{0, 2, 4, 6, 8}, false, true));
+    calc.add(std::make_unique<ScopedUnit>(std::make_unique<UndesiredDayCost>(), std::vector<int>{},
+                                          std::vector<int>{0, 2, 4, 6, 8}, false, true));
 }
 
 void verifyIncrementalEqualsFull() {
@@ -345,8 +371,8 @@ void verifyIncrementalEqualsFull() {
 // ---------------------------------------------------------------------------
 void verifyScopedUnit() {
     std::printf("== (d) ScopedUnit keeps the inner metadata ==\n");
-    ScopedUnit reward(std::make_unique<DesiredDayCost>(2.5), std::vector<int>{0}, std::vector<int>{}, true,
-                      false);
+    ScopedUnit reward(std::make_unique<DesiredDayCost>(2.5), std::vector<int>{0},
+                      std::vector<int>{}, true, false);
     check(reward.name == "desiredDayCost" && reward.reward && !reward.level_flippable &&
                   reward.weight == 2.5 && reward.level == optimaru::Level::Soft,
           "a scoped DesiredDayCost keeps name, reward, levelFlippable, weight and level");
@@ -372,18 +398,23 @@ void verifyLabels() {
     check(LocationRunLengthCost(1.0, "Location B", 3, 6).label == "Location run[Location B 3..6]" &&
                   LocationRunLengthCost().label == "Location run[work 0..inf]",
           "LocationRunLengthCost label");
-    check(RestAfterLocationRunCost(1.0, "Location B", 3).label == "Rest after location run[Location B 3]",
+    check(RestAfterLocationRunCost(1.0, "Location B", 3).label ==
+                  "Rest after location run[Location B 3]",
           "RestAfterLocationRunCost label");
-    check(LocationRunGapCost(1.0, "", 10).label == "Location run gap[work 10]", "LocationRunGapCost label");
+    check(LocationRunGapCost(1.0, "", 10).label == "Location run gap[work 10]",
+          "LocationRunGapCost label");
     check(WorkerLocationCountCost(1.0, "Location B", "Skill B", 4, 8).label ==
                   "Worker location count[Location B Skill B 4..8]",
           "WorkerLocationCountCost label");
-    check(DayPatternCost(1.0, "Location A,OFF,Location B").label == "Day pattern[Location A,OFF,Location B]",
+    check(DayPatternCost(1.0, "Location A,OFF,Location B").label ==
+                  "Day pattern[Location A,OFF,Location B]",
           "DayPatternCost label");
-    check(TargetDaysOffCost(1.0, {5, 6}, 1).label == "Target days off[>=1]", "TargetDaysOffCost label");
+    check(TargetDaysOffCost(1.0, {5, 6}, 1).label == "Target days off[>=1]",
+          "TargetDaysOffCost label");
     check(WorkerDayCountInRangeCost(1.0, 0, 6, 2, -1).label == "Worker day count[work 0..6 2..inf]",
           "WorkerDayCountInRangeCost label");
-    check(LocationImbalanceCost(1.0, "", "Skill A", "gap", 1, {5}).label == "Balance[off-target Skill A gap]" &&
+    check(LocationImbalanceCost(1.0, "", "Skill A", "gap", 1, {5}).label ==
+                          "Balance[off-target Skill A gap]" &&
                   LocationImbalanceCost().label == "Balance[work all ssd]",
           "LocationImbalanceCost label");
     check(WorkerPairingCost(1.0, 0, 1, {}, {}, true).label == "Worker pairing[0!=1]",
@@ -400,9 +431,11 @@ void verifyLabels() {
     score(calc, s);
     const auto totals = calc.constraint_totals();
     const auto costs = calc.constraint_costs();
-    check(totals.size() == 2 && totals[0].name == "dayPatternCost" && totals[1].name == "dayPatternCost" &&
-                  totals[0].label == "Day pattern[WORK,WORK]" && totals[1].label == "Day pattern[OFF,OFF]" &&
-                  costs.size() == 2 && costs[1].label == "Day pattern[OFF,OFF]",
+    check(totals.size() == 2 && totals[0].name == "dayPatternCost" &&
+                  totals[1].name == "dayPatternCost" &&
+                  totals[0].label == "Day pattern[WORK,WORK]" &&
+                  totals[1].label == "Day pattern[OFF,OFF]" && costs.size() == 2 &&
+                  costs[1].label == "Day pattern[OFF,OFF]",
           "two instances of one registry name report the plain name and their own labels");
 }
 
@@ -456,7 +489,8 @@ void verifyThreadStartFailureStopsWorkers() {
             std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
     check(raised && seconds < 10.0,
           "worker 1 cannot start: worker 0 is stopped and joined, the error reaches the caller "
-          "after " + std::to_string(seconds) + " s (no std::terminate)");
+          "after " +
+                  std::to_string(seconds) + " s (no std::terminate)");
 }
 
 // ---------------------------------------------------------------------------
@@ -504,21 +538,24 @@ void addRepeatedShifted(DecomposedCalculator& calc) {
     addEveryComponent(calc);
     // Hard refuses the literal formula with an offset (hard 0 must mean no
     // violation): the hard copies are thresholds, the literal ones soft.
-    calc.add(shaped<RequiredSkillCost>(1.0, true, 2.0));             // delta-grouped hard, threshold
+    calc.add(shaped<RequiredSkillCost>(1.0, true, 2.0));  // delta-grouped hard, threshold
     auto literalSkill = shaped<RequiredSkillCost>(1.0, false, 2.0);  // ... and a soft literal copy
     literalSkill->set_level(optimaru::Level::Soft);
     calc.add(std::move(literalSkill));
-    calc.add(shaped<EmployeeUnavailabilityCost>(60.0, true));        // hard threshold
-    auto squared = shaped<UndesiredDayCost>(120.0, true, 0.01);      // a repeat: (minutes - 120)^2
+    calc.add(shaped<EmployeeUnavailabilityCost>(60.0, true));    // hard threshold
+    auto squared = shaped<UndesiredDayCost>(120.0, true, 0.01);  // a repeat: (minutes - 120)^2
     squared->set_exponent(2.0);
     calc.add(std::move(squared));
-    calc.add(shaped<UndesiredDayCost>(-30.0, false, 0.5));           // ... and a literal one
-    calc.add(shaped<DesiredDayCost>(60.0, false));                   // a reward, literal
-    calc.add(shaped<DayPatternCost>(-1.0, true, 1.0, "WORK,WORK,WORK"));  // shared day-pattern context
-    calc.add(shaped<ShiftCountImbalanceCost>(0.5, false, 2.0));      // global
-    calc.add(shaped<LocationImbalanceCost>(1.0, false, 1.0, "Location A", "", "ssd", 0, std::vector<int>{}));
-    auto scoped = std::make_unique<ScopedUnit>(std::make_unique<MaxConsecutiveDaysCost>(1.0, 3),
-                                               std::vector<int>{1, 3}, std::vector<int>{}, true, false);
+    calc.add(shaped<UndesiredDayCost>(-30.0, false, 0.5));  // ... and a literal one
+    calc.add(shaped<DesiredDayCost>(60.0, false));          // a reward, literal
+    calc.add(shaped<DayPatternCost>(-1.0, true, 1.0,
+                                    "WORK,WORK,WORK"));          // shared day-pattern context
+    calc.add(shaped<ShiftCountImbalanceCost>(0.5, false, 2.0));  // global
+    calc.add(shaped<LocationImbalanceCost>(1.0, false, 1.0, "Location A", "", "ssd", 0,
+                                           std::vector<int>{}));
+    auto scoped =
+            std::make_unique<ScopedUnit>(std::make_unique<MaxConsecutiveDaysCost>(1.0, 3),
+                                         std::vector<int>{1, 3}, std::vector<int>{}, true, false);
     scoped->set_offset(2.0);
     scoped->set_clip(false);
     scoped->set_level(optimaru::Level::Soft);  // a scoped literal copy, on soft
@@ -546,8 +583,9 @@ void verifyRepeatsAndOffsets() {
               "undesired + 0.5 x undesired^2: -(480 + 115200) soft");
         const auto entries = calc.constraint_costs();
         check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs &&
-                      entries[0].unit_costs == std::vector<double>{480.0, 0.0} && entries[1].weight == 0.5 &&
-                      entries[1].exponent == 2.0 && entries[0].name == entries[1].name,
+                      entries[0].unit_costs == std::vector<double>{480.0, 0.0} &&
+                      entries[1].weight == 0.5 && entries[1].exponent == 2.0 &&
+                      entries[0].name == entries[1].name,
               "two instances, the same raw costs, each with its own knobs");
     }
     {
@@ -557,7 +595,8 @@ void verifyRepeatsAndOffsets() {
             calc.add(std::move(component));
             return score(calc, s);
         };
-        check(soft(shaped<UndesiredDayCost>(100.0, true)).soft == -380.0, "threshold offset 100: 480 - 100");
+        check(soft(shaped<UndesiredDayCost>(100.0, true)).soft == -380.0,
+              "threshold offset 100: 480 - 100");
         check(soft(shaped<UndesiredDayCost>(100.0, false)).soft == -280.0,
               "literal offset 100: (480 - 100) + (0 - 100), both employees");
         check(soft(shaped<UndesiredDayCost>(-10.0, true)).soft == -490.0,
@@ -569,7 +608,8 @@ void verifyRepeatsAndOffsets() {
         // A hard pick rounds per employee: 3 x (480 - 479.5) = 1.5 -> 2.
         auto hard = shaped<UndesiredDayCost>(479.5, true, 3.0);
         hard->set_level(optimaru::Level::Hard);
-        check(soft(std::move(hard)).hard == -2, "hard threshold offset 479.5 at weight 3: llround(1.5) = 2");
+        check(soft(std::move(hard)).hard == -2,
+              "hard threshold offset 479.5 at weight 3: llround(1.5) = 2");
         // The literal unavailability pick on soft charges both employees,
         // 3 x (0 - 0.5) = -1.5 each, not rounded: +3 soft.
         auto literal = shaped<EmployeeUnavailabilityCost>(0.5, false, 3.0);
@@ -579,8 +619,9 @@ void verifyRepeatsAndOffsets() {
               "soft literal offset 0.5 at weight 3 on unavailability: 2 x 1.5 = +3 soft");
         // A worker scope: only Worker 2 is evaluated, so the literal charges it alone.
         DecomposedCalculator scopedCalc;
-        auto scoped = std::make_unique<ScopedUnit>(std::make_unique<UndesiredDayCost>(), std::vector<int>{1, 1, 7},
-                                                   std::vector<int>{}, true, false);
+        auto scoped = std::make_unique<ScopedUnit>(std::make_unique<UndesiredDayCost>(),
+                                                   std::vector<int>{1, 1, 7}, std::vector<int>{},
+                                                   true, false);
         scoped->set_offset(100.0);
         scoped->set_clip(false);
         scopedCalc.add(std::move(scoped));
@@ -615,7 +656,8 @@ void verifyRepeatsAndOffsets() {
         };
         auto refusal = [](const std::string& name) {
             return "Constraint '" + name +
-                   "' cannot use clip=false with a non-zero offset on a level that counts toward the "
+                   "' cannot use clip=false with a non-zero offset on a level that counts toward "
+                   "the "
                    "hard score (hard 0 must mean no violation)";
         };
         auto clipFirst = std::make_unique<EmployeeUnavailabilityCost>(3.0);
@@ -627,8 +669,9 @@ void verifyRepeatsAndOffsets() {
               "unavailability literal offset +-0.5 on hard: refused at reset");
         auto promoted = shaped<UndesiredDayCost>(100.0, false);
         promoted->set_level(optimaru::Level::Hard);
-        auto scoped = std::make_unique<ScopedUnit>(std::make_unique<MaxConsecutiveDaysCost>(1.0, 3),
-                                                   std::vector<int>{1}, std::vector<int>{}, true, false);
+        auto scoped =
+                std::make_unique<ScopedUnit>(std::make_unique<MaxConsecutiveDaysCost>(1.0, 3),
+                                             std::vector<int>{1}, std::vector<int>{}, true, false);
         scoped->set_offset(2.0);
         scoped->set_clip(false);
         check(resetRefusal(std::move(promoted)) == refusal("undesiredDayCost") &&
@@ -689,8 +732,9 @@ void verifyRepeatsAndOffsets() {
                 std::printf("    step %d: incremental %s full %s\n", step, str(incremental).c_str(),
                             str(full).c_str());
         }
-        check(mismatches == 0, std::to_string(steps) +
-                                       " random moves with repeated, shifted components: incremental == fresh");
+        check(mismatches == 0,
+              std::to_string(steps) +
+                      " random moves with repeated, shifted components: incremental == fresh");
     }
     {
         EmployeeSchedule s = buildRoster(17);

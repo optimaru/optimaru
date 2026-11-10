@@ -33,17 +33,14 @@
 using namespace alb;
 using namespace alb_test;
 
-namespace
-{
+namespace {
 
-RawCosts rawOf(AssemblyLineBalancingProblem p)
-{
+RawCosts rawOf(AssemblyLineBalancingProblem p) {
     ScoreCalculator::prepare(p);
     return ScoreCalculator::rawCosts(p);
 }
 
-Score scoreOf(AssemblyLineBalancingProblem p)
-{
+Score scoreOf(AssemblyLineBalancingProblem p) {
     ScoreCalculator::prepare(p);
     return ScoreCalculator::score(p);
 }
@@ -51,14 +48,15 @@ Score scoreOf(AssemblyLineBalancingProblem p)
 // -------------------------------------------------------------------------
 // (a) Per-constraint hand checks.
 // -------------------------------------------------------------------------
-void verifyConstraints()
-{
+void verifyConstraints() {
     std::printf("== (a) Per-constraint raw costs by hand ==\n");
     const RawCosts h = rawOf(fixtureH());
-    check(h.stationCapacityCost == 1, "stationCapacityCost positive: station 3 carries 6 of 5 -> 1");
+    check(h.stationCapacityCost == 1,
+          "stationCapacityCost positive: station 3 carries 6 of 5 -> 1");
     check(h.taskPrecedenceCost == 1, "taskPrecedenceCost positive: A on 1 before B on 0 -> 1");
     check(h.maxStationsCost == 1, "maxStationsCost positive: D on 3 with max_stations 3 -> 1");
-    check(h.taskStationBoundsCost == 2, "taskStationBoundsCost positive: B below 1, D above 2 -> 2");
+    check(h.taskStationBoundsCost == 2,
+          "taskStationBoundsCost positive: B below 1, D above 2 -> 2");
     check(h.fixedTaskStationsCost == 1, "fixedTaskStationsCost positive: A off its fixed 0 -> 1");
     check(h.forbiddenTaskStationsCost == 1,
           "forbiddenTaskStationsCost positive: A on 1, listed twice -> 1");
@@ -67,7 +65,8 @@ void verifyConstraints()
           "differentStationPairsCost positive: (A, C) together + self-pair (B, B) -> 2");
     check(h.usedStationsCost == 3, "usedStationsCost positive: stations 0, 1, 3 -> 3");
     check(h.workloadImbalanceCost == 3, "workloadImbalanceCost positive: loads 3 / 5 / 6 -> 3");
-    check(sameScore(scoreOf(fixtureH()), Score{-10, -3.0}), "fixture H default score -10hard/-3soft");
+    check(sameScore(scoreOf(fixtureH()), Score{-10, -3.0}),
+          "fixture H default score -10hard/-3soft");
 
     const RawCosts z = rawOf(fixtureZ());
     check(z.stationCapacityCost == 0, "stationCapacityCost zero: loads 5 / 5 on cycle 5");
@@ -75,7 +74,8 @@ void verifyConstraints()
     check(z.maxStationsCost == 0, "maxStationsCost zero: every task below station 3");
     check(z.taskStationBoundsCost == 0, "taskStationBoundsCost zero: every task inside its domain");
     check(z.fixedTaskStationsCost == 0, "fixedTaskStationsCost zero: A and C on their fixed 0");
-    check(z.forbiddenTaskStationsCost == 0, "forbiddenTaskStationsCost zero: no forbidden station hit");
+    check(z.forbiddenTaskStationsCost == 0,
+          "forbiddenTaskStationsCost zero: no forbidden station hit");
     check(z.sameStationGroupsCost == 0, "sameStationGroupsCost zero: each group on one station");
     check(z.differentStationPairsCost == 0, "differentStationPairsCost zero: every pair separated");
     check(z.usedStationsCost == 2, "usedStationsCost on Z: 2 stations");
@@ -83,8 +83,7 @@ void verifyConstraints()
     check(sameScore(scoreOf(fixtureZ()), Score{0, -2.0}), "fixture Z default score 0hard/-2soft");
 
     AssemblyLineBalancingProblem empty = fixtureH();
-    for (Task &t : empty.tasks)
-        t.station = -1;
+    for (Task& t : empty.tasks) t.station = -1;
     const RawCosts e = rawOf(empty);
     check(e.usedStationsCost == 0 && e.workloadImbalanceCost == 0,
           "usedStationsCost / workloadImbalanceCost zero with no task assigned");
@@ -96,8 +95,7 @@ void verifyConstraints()
 // -------------------------------------------------------------------------
 // (b) Edge cases.
 // -------------------------------------------------------------------------
-void verifyEdgeCases()
-{
+void verifyEdgeCases() {
     std::printf("== (b) Edge cases ==\n");
     AssemblyLineBalancingProblem none;
     none.cycleTime = 5;
@@ -114,29 +112,32 @@ void verifyEdgeCases()
     far.tasks = {task("A", 3, 7), task("B", 3, 0)};
     ScoreCalculator::prepare(far);
     check(far.stationCount == 8, "station 7 of 2 tasks: V = 8");
-    check(far.stationLoads().size() == 8 && far.stationLoads()[7] == 3
-              && far.stationLoads()[3] == 0 && far.stationsUsed() == 2,
+    check(far.stationLoads().size() == 8 && far.stationLoads()[7] == 3 &&
+                  far.stationLoads()[3] == 0 && far.stationsUsed() == 2,
           "station loads list the empty middle stations");
     const RawCosts farRaw = ScoreCalculator::rawCosts(far);
     check(farRaw.maxStationsCost == 0 && farRaw.taskStationBoundsCost == 0,
           "no max_stations / max_station: no station is too far");
     far.maxStations = 2;
     ScoreCalculator::prepare(far);
-    check(ScoreCalculator::rawCosts(far).maxStationsCost == 6, "max_stations 2, station 7 -> 7 - 2 + 1");
+    check(ScoreCalculator::rawCosts(far).maxStationsCost == 6,
+          "max_stations 2, station 7 -> 7 - 2 + 1");
 
     // Duplicate arcs count once per copy; a self-arc never costs.
     AssemblyLineBalancingProblem arcs;
     arcs.cycleTime = 10;
     arcs.tasks = {task("A", 1, 2), task("B", 1, 1)};
     arcs.precedences = {{0, 1}, {0, 1}, {1, 1}};
-    check(rawOf(arcs).taskPrecedenceCost == 2, "a duplicated reversed arc counts twice, a self-arc 0");
+    check(rawOf(arcs).taskPrecedenceCost == 2,
+          "a duplicated reversed arc counts twice, a self-arc 0");
 
     // Unassigned endpoints never count.
     AssemblyLineBalancingProblem partial = fixtureH();
     partial.tasks[1].station = -1;  // B
     const RawCosts pr = rawOf(partial);
     check(pr.taskPrecedenceCost == 0, "an arc into an unassigned task does not count");
-    check(pr.differentStationPairsCost == 1, "pairs with an unassigned task (incl. its self-pair) do not count");
+    check(pr.differentStationPairsCost == 1,
+          "pairs with an unassigned task (incl. its self-pair) do not count");
     check(pr.sameStationGroupsCost == 0, "an unassigned member does not split its group");
     check(pr.taskStationBoundsCost == 1, "an unassigned task is outside no domain");
 
@@ -149,14 +150,10 @@ void verifyEdgeCases()
 
     // Invalid facts are refused by prepare(); with `message`, the error must
     // name the field exactly.
-    auto refuses = [](AssemblyLineBalancingProblem p, const std::string &message = "")
-    {
-        try
-        {
+    auto refuses = [](AssemblyLineBalancingProblem p, const std::string& message = "") {
+        try {
             ScoreCalculator::prepare(p);
-        }
-        catch (const std::invalid_argument &e)
-        {
+        } catch (const std::invalid_argument& e) {
             return message.empty() || std::string(e.what()) == message;
         }
         return false;
@@ -176,7 +173,8 @@ void verifyEdgeCases()
     // The station-domain rules of the pydantic model, for direct core users.
     bad = fixtureH();
     bad.tasks[1].fixedStation = -3;  // B
-    check(refuses(bad, "task 'B': fixed_station must be >= 0"), "fixed_station -3 is refused by name");
+    check(refuses(bad, "task 'B': fixed_station must be >= 0"),
+          "fixed_station -3 is refused by name");
     bad.tasks[1].fixedStation = -1;
     check(refuses(bad, "task 'B': fixed_station must be >= 0"), "fixed_station -1 is refused too");
     bad = fixtureH();
@@ -197,8 +195,7 @@ void verifyEdgeCases()
 // -------------------------------------------------------------------------
 // (c) The construction, as the pure-Python reference builds it.
 // -------------------------------------------------------------------------
-AssemblyLineBalancingProblem threeTasks()
-{
+AssemblyLineBalancingProblem threeTasks() {
     AssemblyLineBalancingProblem p;
     p.cycleTime = 5;
     p.tasks = {task("A", 3), task("B", 3), task("C", 2)};
@@ -206,15 +203,13 @@ AssemblyLineBalancingProblem threeTasks()
     return p;
 }
 
-Solver zeroBudget()
-{
+Solver zeroBudget() {
     Solver::Config config;
     config.time_limit = std::chrono::milliseconds(0);
     return Solver(config);
 }
 
-void verifyConstruction()
-{
+void verifyConstruction() {
     std::printf("== (c) Construction ==\n");
     {
         AssemblyLineBalancingProblem p = threeTasks();
@@ -226,10 +221,10 @@ void verifyConstruction()
     }
     {
         AssemblyLineBalancingProblem p = threeTasks();
-        for (Task &t : p.tasks)
-            t.station = 2;
+        for (Task& t : p.tasks) t.station = 2;
         zeroBudget().solve(p);
-        check(p.assignment() == std::vector<int>({0, 1, 0}), "without warm start input stations are ignored");
+        check(p.assignment() == std::vector<int>({0, 1, 0}),
+              "without warm start input stations are ignored");
     }
     {
         AssemblyLineBalancingProblem p = threeTasks();
@@ -245,7 +240,8 @@ void verifyConstruction()
         p.tasks = {task("A", 1, -1, 0, std::nullopt, 1), task("B", 1, 0)};
         p.warmStart = true;
         zeroBudget().solve(p);
-        check(p.assignment() == std::vector<int>({1, 0}), "an unseeded fixed task goes to its fixed station");
+        check(p.assignment() == std::vector<int>({1, 0}),
+              "an unseeded fixed task goes to its fixed station");
     }
     {
         AssemblyLineBalancingProblem p = threeTasks();
@@ -253,7 +249,8 @@ void verifyConstruction()
         p.warmStart = true;
         p.tasks[0].station = 2;  // A seeded at max_stations
         zeroBudget().solve(p);
-        check(p.assignment() == std::vector<int>({2, 3, 2}), "seed A 2: C joins it, B overflows to 3");
+        check(p.assignment() == std::vector<int>({2, 3, 2}),
+              "seed A 2: C joins it, B overflows to 3");
         check(p.stationCount == 4, "V taken after the construction: 4 for 3 tasks");
         check(p.score.hard < 0, "beyond max_stations stays a hard penalty");
     }
@@ -273,24 +270,17 @@ void verifyConstruction()
         AssemblyLineBalancingProblem p = threeTasks();
         p.tasks[0].fixedStation = -3;
         bool named = false;
-        try
-        {
+        try {
             zeroBudget().solve(p);
-        }
-        catch (const std::invalid_argument &e)
-        {
+        } catch (const std::invalid_argument& e) {
             named = std::string(e.what()) == "task 'A': fixed_station must be >= 0";
         }
         check(named, "solve() refuses fixed_station -3 by name");
     }
-    auto throwsCycle = [](AssemblyLineBalancingProblem p)
-    {
-        try
-        {
+    auto throwsCycle = [](AssemblyLineBalancingProblem p) {
+        try {
             zeroBudget().solve(p);
-        }
-        catch (const std::invalid_argument &e)
-        {
+        } catch (const std::invalid_argument& e) {
             return std::string(e.what()) == "precedence graph must be acyclic";
         }
         return false;
@@ -303,8 +293,7 @@ void verifyConstruction()
     check(throwsCycle(selfArc), "a self-arc is refused by the construction");
     AssemblyLineBalancingProblem seededCycle = cyclic;
     seededCycle.warmStart = true;
-    for (Task &t : seededCycle.tasks)
-        t.station = 0;
+    for (Task& t : seededCycle.tasks) t.station = 0;
     check(throwsCycle(seededCycle), "a cycle is refused even for a complete seed");
     std::printf("\n");
 }
@@ -316,13 +305,10 @@ void verifyConstruction()
 // counts the states where some constraint's maintained raw total differs
 // from ScoreCalculator::rawCosts, `nonZeroStates` the states per constraint
 // with a non-zero raw total.
-int randomWalk(AssemblyLineBalancingProblem &p,
-               AssemblyLineBalancingIncrementalScoreCalculator &calculator,
-               int steps,
-               std::uint64_t seed,
-               int &totalMismatches,
-               std::map<std::string, int> &nonZeroStates)
-{
+int randomWalk(AssemblyLineBalancingProblem& p,
+               AssemblyLineBalancingIncrementalScoreCalculator& calculator, int steps,
+               std::uint64_t seed, int& totalMismatches,
+               std::map<std::string, int>& nonZeroStates) {
     optimaru::Editor<AssemblyLineBalancingProblem> editor(p, calculator);
     std::mt19937_64 rng(seed);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -330,17 +316,13 @@ int randomWalk(AssemblyLineBalancingProblem &p,
     const int values = p.stationCount;
     int mismatches = 0;
     int printBudget = 3;
-    for (int step = 0; step < steps; ++step)
-    {
+    for (int step = 0; step < steps; ++step) {
         const double kind = unit(rng);
-        if (kind < 0.55)
-        {
+        if (kind < 0.55) {
             const int t = static_cast<int>(rng() % n);
             const int value = unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % values);
             editor.assign(t, value);
-        }
-        else if (kind < 0.85)
-        {
+        } else if (kind < 0.85) {
             const int a = static_cast<int>(rng() % n);
             const int b = static_cast<int>(rng() % n);
             const int va = p.tasks[a].station;
@@ -349,14 +331,11 @@ int randomWalk(AssemblyLineBalancingProblem &p,
             editor.assign(a, vb);
             editor.assign(b, va);
             editor.end_batch();
-        }
-        else
-        {
+        } else {
             // CloseStationMove-like batch: empty one station.
             const int victim = static_cast<int>(rng() % values);
             editor.begin_batch();
-            for (int t = 0; t < n; ++t)
-            {
+            for (int t = 0; t < n; ++t) {
                 if (p.tasks[t].station == victim)
                     editor.assign(t, static_cast<int>(rng() % values));
             }
@@ -365,47 +344,45 @@ int randomWalk(AssemblyLineBalancingProblem &p,
         AssemblyLineBalancingProblem shadow = p;
         const Score full = ScoreCalculator::score(shadow);
         const Score incremental = editor.score();
-        if (!sameScore(full, incremental) && ++mismatches <= 3)
-        {
-            std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                        step,
-                        incremental.str().c_str(),
-                        full.str().c_str());
+        if (!sameScore(full, incremental) && ++mismatches <= 3) {
+            std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                        incremental.str().c_str(), full.str().c_str());
         }
-        if (!sameTotals(namedTotals(calculator.rawCosts()), namedTotals(ScoreCalculator::rawCosts(shadow)),
-                        nonZeroStates, "@step " + std::to_string(step), printBudget))
+        if (!sameTotals(namedTotals(calculator.rawCosts()),
+                        namedTotals(ScoreCalculator::rawCosts(shadow)), nonZeroStates,
+                        "@step " + std::to_string(step), printBudget))
             ++totalMismatches;
     }
     return mismatches;
 }
 
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (d) Incremental == full recompute ==\n");
     int mismatches = 0;
     int totalMismatches = 0;
     std::map<std::string, int> nonZeroStates;
-    for (std::uint64_t seed = 1; seed <= 6; ++seed)
-    {
+    for (std::uint64_t seed = 1; seed <= 6; ++seed) {
         AssemblyLineBalancingProblem p = randomInstance(12 + static_cast<int>(seed), seed);
         ScoreCalculator::prepare(p);
         AssemblyLineBalancingIncrementalScoreCalculator calculator;
         mismatches += randomWalk(p, calculator, 600, 100 + seed, totalMismatches, nonZeroStates);
     }
-    check(mismatches == 0, "3600 random change / swap / unassign / batch moves, incremental == full");
-    check(totalMismatches == 0, "after every move each constraint's maintained raw total == rawCosts()");
+    check(mismatches == 0,
+          "3600 random change / swap / unassign / batch moves, incremental == full");
+    check(totalMismatches == 0,
+          "after every move each constraint's maintained raw total == rawCosts()");
     // workloadImbalanceCost (default weight 0) is not in the monolithic
     // score; rawCosts() still reads it from the maintained loads, so it is
     // compared here too.
-    check(everyConstraintNonZero(nonZeroStates, kNames), "every constraint is non-zero at least once in the walk");
+    check(everyConstraintNonZero(nonZeroStates, kNames),
+          "every constraint is non-zero at least once in the walk");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
 // (e) ScoreChecks::Full solves.
 // -------------------------------------------------------------------------
-bool fullAssertSolve(AssemblyLineBalancingProblem p, const std::string &label)
-{
+bool fullAssertSolve(AssemblyLineBalancingProblem p, const std::string& label) {
     Solver::Config config;
     config.time_limit = std::chrono::seconds(30);
     config.step_limit = 1500;
@@ -416,31 +393,25 @@ bool fullAssertSolve(AssemblyLineBalancingProblem p, const std::string &label)
     config.valueRecommenderProbability = 0.5;
     config.closeStationMoves = true;
     bool corrupted = false;
-    try
-    {
+    try {
         Solver(config).solve(p);
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, label + ": FULL_ASSERT solve without score corruption");
-    if (corrupted)
-        return false;
+    if (corrupted) return false;
     AssemblyLineBalancingProblem shadow = p;
     check(sameScore(p.score, ScoreCalculator::score(shadow)),
           label + ": solver-reported score == full recompute");
     return true;
 }
 
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (e) FULL_ASSERT solves ==\n");
     AssemblyLineBalancingProblem rich = randomInstance(14, 77);
     rich.precedences.clear();  // the construction needs an acyclic graph
-    for (int t = 1; t < rich.taskCount(); t += 2)
-        rich.precedences.push_back({t - 1, t});
+    for (int t = 1; t < rich.taskCount(); t += 2) rich.precedences.push_back({t - 1, t});
     fullAssertSolve(rich, "feature-rich instance");
     fullAssertSolve(salbpInstance(30, 5), "SALBP-like instance");
     std::printf("\n");
@@ -449,8 +420,7 @@ void verifyFullAssertSolve()
 // -------------------------------------------------------------------------
 // (f) Determinism, multi-start, quality, zero budget.
 // -------------------------------------------------------------------------
-void verifySolves()
-{
+void verifySolves() {
     std::printf("== (f) Solves ==\n");
     Solver::Config config;
     config.time_limit = std::chrono::seconds(30);
@@ -478,26 +448,24 @@ void verifySolves()
 
     AssemblyLineBalancingProblem big = salbpInstance(100, 21);
     std::int64_t total = 0;
-    for (const Task &t : big.tasks)
-        total += t.duration;
+    for (const Task& t : big.tasks) total += t.duration;
     Solver::Config timed;
     timed.time_limit = std::chrono::seconds(2);
     timed.seed = 1;
     Solver(timed).solve(big);
     bool assigned = true;
-    for (const Task &t : big.tasks)
-        assigned &= t.isAssigned();
+    for (const Task& t : big.tasks) assigned &= t.isAssigned();
     check(assigned && big.score.hard == 0, "a 100-task SALBP-like instance reaches 0hard");
     const std::int64_t lowerBound = (total + big.cycleTime - 1) / big.cycleTime;
-    std::printf("  stations used %d, lower bound %lld\n", big.stationsUsed(), static_cast<long long>(lowerBound));
+    std::printf("  stations used %d, lower bound %lld\n", big.stationsUsed(),
+                static_cast<long long>(lowerBound));
     check(big.stationsUsed() <= lowerBound + 2, "within two stations of the trivial lower bound");
     std::printf("\n");
 }
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyConstraints();
     verifyEdgeCases();
     verifyConstruction();
@@ -505,8 +473,7 @@ int main()
     verifyFullAssertSolve();
     verifySolves();
 
-    if (failures == 0)
-    {
+    if (failures == 0) {
         std::printf("All assembly-line-balancing checks PASSED.\n");
         return 0;
     }

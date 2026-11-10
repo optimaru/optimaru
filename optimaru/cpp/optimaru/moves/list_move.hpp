@@ -50,8 +50,8 @@ struct ListMove {
     // The `len` elements at [start, start+len) of `from`, inserted in order at
     // `insert_at` of `to`, which indexes `to` after the segment is out (the two
     // lists may be the same). A relocation is a segment of length 1.
-    static ListMove segment(int from, int start, int len, int to, int insert_at,
-                            int element1 = -1, int element2 = -1) {
+    static ListMove segment(int from, int start, int len, int to, int insert_at, int element1 = -1,
+                            int element2 = -1) {
         return {Kind::Segment, from, start, to, insert_at, len, 0, element1, element2};
     }
     // Exchange the elements at (l1, p1) and (l2, p2); same or different lists.
@@ -59,19 +59,18 @@ struct ListMove {
         return {Kind::Swap, l1, p1, l2, p2, 0, 0, element1, element2};
     }
     // Reverse [first, last] of `list`.
-    static ListMove reverse(int list, int first, int last, int element1 = -1,
-                            int element2 = -1) {
+    static ListMove reverse(int list, int first, int last, int element1 = -1, int element2 = -1) {
         return {Kind::Reverse, list, first, list, last, 0, 0, element1, element2};
     }
     // l1 keeps [0, c1) and takes l2's [c2, end), and vice versa; l1 != l2.
     static ListMove tail_swap(int l1, int c1, int l2, int c2, int element1 = -1,
-                             int element2 = -1) {
+                              int element2 = -1) {
         return {Kind::TailSwap, l1, c1, l2, c2, 0, 0, element1, element2};
     }
     // Replace l1's [p1, p1+len1) with l2's [p2, p2+len2) and vice versa;
     // l1 != l2, either length may be 0.
-    static ListMove exchange(int l1, int p1, int len1, int l2, int p2, int len2,
-                             int element1 = -1, int element2 = -1) {
+    static ListMove exchange(int l1, int p1, int len1, int l2, int p2, int len2, int element1 = -1,
+                             int element2 = -1) {
         return {Kind::Exchange, l1, p1, l2, p2, len1, len2, element1, element2};
     }
 };
@@ -83,8 +82,7 @@ struct ListMoves {
     using Traits = SolutionTraits<Solution>;
 
     // The objective's preview of `m`; false when it declines.
-    static bool preview(Objective<Solution>& calc, const ListMove& m,
-                        Score& out) {
+    static bool preview(Objective<Solution>& calc, const ListMove& m, Score& out) {
         switch (m.kind) {
             case ListMove::Kind::Segment:
                 return calc.preview_segment_move(m.l1, m.p1, m.len1, m.l2, m.p2, out);
@@ -100,8 +98,7 @@ struct ListMoves {
         return false;
     }
 
-    static void apply(Editor<Solution>& editor, ElementIndex<Solution>& index,
-                      const ListMove& m) {
+    static void apply(Editor<Solution>& editor, ElementIndex<Solution>& index, const ListMove& m) {
         switch (m.kind) {
             case ListMove::Kind::Segment:
                 index.move_segment(editor, m.l1, m.p1, m.len1, m.l2, m.p2);
@@ -122,8 +119,7 @@ struct ListMoves {
     }
 
     // Inverse of apply(m) on the solution apply(m) produced.
-    static void undo(Editor<Solution>& editor, ElementIndex<Solution>& index,
-                     const ListMove& m) {
+    static void undo(Editor<Solution>& editor, ElementIndex<Solution>& index, const ListMove& m) {
         switch (m.kind) {
             case ListMove::Kind::Segment:
                 // The segment sits at [p2, p2+len1) of l2; `p1` indexes l1
@@ -148,24 +144,21 @@ struct ListMoves {
     // Score of the solution after `m` (see evaluate_with_preview): the preview
     // when the objective serves one, else apply / score / undo. `served`,
     // when given, reports which.
-    static Score evaluate(Editor<Solution>& editor,
-                                  ElementIndex<Solution>& index, const ListMove& m,
-                                  bool* served = nullptr) {
+    static Score evaluate(Editor<Solution>& editor, ElementIndex<Solution>& index,
+                          const ListMove& m, bool* served = nullptr) {
         return evaluate_with_preview(
                 editor,
-                [&](Objective<Solution>& calc, Score& out) {
-                    return preview(calc, m, out);
-                },
+                [&](Objective<Solution>& calc, Score& out) { return preview(calc, m, out); },
                 [&] { apply(editor, index, m); }, [&] { undo(editor, index, m); }, served);
     }
 
 private:
     static void swap_in_place(Editor<Solution>& editor, ElementIndex<Solution>& index,
-                            const ListMove& m) {
+                              const ListMove& m) {
         const Solution& solution = editor.solution();
         index.swap_elements(editor, m.l1, m.p1, m.l2, m.p2,
-                           Traits::element_at(solution, m.l1, m.p1),
-                           Traits::element_at(solution, m.l2, m.p2));
+                            Traits::element_at(solution, m.l1, m.p1),
+                            Traits::element_at(solution, m.l2, m.p2));
     }
 };
 

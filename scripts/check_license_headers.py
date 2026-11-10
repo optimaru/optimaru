@@ -35,9 +35,7 @@ SUFFIXES = {".hpp", ".h", ".hh", ".hxx", ".ipp", ".inl", ".tpp", ".cpp", ".cc", 
 def main() -> int:
     files = sorted(p for p in ENGINE.rglob("*") if p.suffix in SUFFIXES and p.is_file())
     if not files:
-        print(
-            f"no engine headers found under {ENGINE.relative_to(ROOT)}", file=sys.stderr
-        )
+        print(f"no engine headers found under {ENGINE.relative_to(ROOT)}", file=sys.stderr)
         return 1
     expected = HEADER.splitlines()
     missing = []

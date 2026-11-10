@@ -35,8 +35,8 @@ class Editor {
 
 public:
     Editor(Solution& solution, Objective<Solution>& objective,
-                  ScoreChecks score_checks = ScoreChecks::Off,
-                  const DerivedStates* derived_states = nullptr)
+           ScoreChecks score_checks = ScoreChecks::Off,
+           const DerivedStates* derived_states = nullptr)
         : solution_(solution),
           objective_(objective),
           mode_(score_checks),

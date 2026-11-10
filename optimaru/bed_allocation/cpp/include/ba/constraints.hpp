@@ -27,8 +27,7 @@
 #include "ba/constraints/required_patient_equipment_cost.hpp"
 #include "ba/constraints/unassigned_stays_cost.hpp"
 
-namespace ba
-{
+namespace ba {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -68,8 +67,7 @@ namespace ba
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<BedConflictCost>();
     assembly.emplace<FemaleInMaleRoomCost>();
@@ -86,8 +84,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

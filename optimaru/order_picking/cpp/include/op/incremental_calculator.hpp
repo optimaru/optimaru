@@ -7,8 +7,7 @@
 #include "op/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace op
-{
+namespace op {
 
 // The order-picking implementation of the engine's
 // optimaru::Objective.
@@ -38,10 +37,9 @@ namespace op
 // full-recompute reference is ScoreCalculator::score (checked in
 // the tests and under ScoreChecks::ScoreChecks::Full).
 class OrderPickingIncrementalScoreCalculator final
-    : public optimaru::Objective<OrderPickingSolution>
-{
+    : public optimaru::Objective<OrderPickingSolution> {
 public:
-    void rebuild(OrderPickingSolution &solution) override;
+    void rebuild(OrderPickingSolution& solution) override;
     void before_list_edit(int listIndex) override;
     void after_list_edit(int listIndex) override;
     Score score() override;
@@ -50,25 +48,17 @@ public:
     // per-trolley bucket demand, used by the order-consolidation move
     // operator (see Solver) to find split orders, their holder trolleys and
     // merge feasibility in O(1) per cell.
-    int distinctTrolleyCount(int orderIndex) const
-    {
-        return distinctTrolleys_[orderIndex];
-    }
-    int pickCountOnTrolley(int orderIndex, int trolley) const
-    {
+    int distinctTrolleyCount(int orderIndex) const { return distinctTrolleys_[orderIndex]; }
+    int pickCountOnTrolley(int orderIndex, int trolley) const {
         return count_[cell(orderIndex, trolley)];
     }
-    std::int64_t orderVolumeOnTrolley(int orderIndex, int trolley) const
-    {
+    std::int64_t orderVolumeOnTrolley(int orderIndex, int trolley) const {
         return volume_[cell(orderIndex, trolley)];
     }
-    std::int64_t requiredBucketsOnTrolley(int trolley) const
-    {
-        return required_[trolley];
-    }
+    std::int64_t requiredBucketsOnTrolley(int trolley) const { return required_[trolley]; }
 
 private:
-    OrderPickingSolution *solution_ = nullptr;
+    OrderPickingSolution* solution_ = nullptr;
     int trolleyCount_ = 0;
     int orderCount_ = 0;
 
@@ -89,8 +79,7 @@ private:
     std::int64_t distTotal_ = 0;      // soft, meters
     std::int64_t splitTotal_ = 0;     // soft, distinct (order, trolley) pairs
 
-    std::size_t cell(int orderIndex, int trolley) const
-    {
+    std::size_t cell(int orderIndex, int trolley) const {
         return static_cast<std::size_t>(orderIndex) * trolleyCount_ + trolley;
     }
 

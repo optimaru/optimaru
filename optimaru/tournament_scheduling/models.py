@@ -104,9 +104,7 @@ class TournamentScheduleModel(BaseModel):
                     f"unavailability penalty {position}: team {penalty.team!r} is out of range {valid_teams}"
                 )
             if not 0 <= penalty.day < day_count:
-                raise ValueError(
-                    f"unavailability penalty {position}: day {penalty.day!r} is out of range {valid_days}"
-                )
+                raise ValueError(f"unavailability penalty {position}: day {penalty.day!r} is out of range {valid_days}")
         for assignment in self.team_assignments:
             if not 0 <= assignment.day < day_count:
                 raise ValueError(

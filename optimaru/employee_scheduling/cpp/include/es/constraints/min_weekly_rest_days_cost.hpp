@@ -58,10 +58,10 @@ struct MinWeeklyRestDaysCost final : EsUnitConstraint {
 
 private:
     std::int32_t maxWorkDays_;
-    std::vector<std::int32_t> day_, week_;      // per shift
-    mutable std::vector<char> worked_;          // scratch, zeroed after use
+    std::vector<std::int32_t> day_, week_;        // per shift
+    mutable std::vector<char> worked_;            // scratch, zeroed after use
     mutable std::vector<std::int32_t> weekDays_;  // scratch, zeroed after use
-    mutable std::vector<char> movable_;         // scratch: week has a movable shift
+    mutable std::vector<char> movable_;           // scratch: week has a movable shift
     std::int32_t weeks_ = 0;
     std::int32_t horizon_ = 0;
 };

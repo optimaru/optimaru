@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from external_solver.pickup_delivery import solve_request as solve_cpsat_request
+
 from optimaru.pickup_delivery.constraints import (
     max_end_time_cost,
     paired_request_cost,
@@ -37,9 +38,7 @@ from optimaru.pickup_delivery.models import (
 
 # The 100-customer Li & Lim set as published on SINTEF's TOP benchmark page
 # (https://www.sintef.no/projectweb/top/pdptw/li-lim-benchmark/).
-ARCHIVE_URL = (
-    "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_100.zip"
-)
+ARCHIVE_URL = "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_100.zip"
 ARCHIVE_SHA256 = "d106694e9e18cebc32b63c322e1000620238392c1b9d98d92de82ef7e4b43cd9"
 ARCHIVE_PREFIX = "pdp_100/"
 DEFAULT_INSTANCE = "lc101"
@@ -94,11 +93,7 @@ class PdptwInstance:
     @property
     def requests(self) -> tuple[tuple[Node, Node], ...]:
         by_id = {node.id: node for node in self.nodes}
-        return tuple(
-            (node, by_id[node.delivery_id])
-            for node in self.nodes
-            if node.delivery_id > 0
-        )
+        return tuple((node, by_id[node.delivery_id]) for node in self.nodes if node.delivery_id > 0)
 
 
 def parse_instance(text: str, *, name: str = "instance") -> PdptwInstance:
@@ -125,9 +120,7 @@ def _download(cache_dir: Path) -> bytes:
         payload = archive.read_bytes()
         if hashlib.sha256(payload).hexdigest() == ARCHIVE_SHA256:
             return payload
-    request = urllib.request.Request(
-        ARCHIVE_URL, headers={"User-Agent": "optimaru-benchmark/1.0"}
-    )
+    request = urllib.request.Request(ARCHIVE_URL, headers={"User-Agent": "optimaru-benchmark/1.0"})
     with urllib.request.urlopen(request, timeout=60) as response:
         payload = response.read()
     digest = hashlib.sha256(payload).hexdigest()
@@ -180,11 +173,7 @@ def synthetic_instance(request_count: int, seed: int = 0) -> PdptwInstance:
         latest = int(horizon - back - direct - 2 * service - 2 * width)
         ready = rng.randint(math.ceil(to_pickup), max(math.ceil(to_pickup), latest))
         drop_ready = ready + service + math.ceil(direct)
-        nodes.append(
-            Node(
-                pickup_id, px, py, demand, ready, ready + width, service, 0, dropoff_id
-            )
-        )
+        nodes.append(Node(pickup_id, px, py, demand, ready, ready + width, service, 0, dropoff_id))
         nodes.append(
             Node(
                 dropoff_id,
@@ -199,9 +188,7 @@ def synthetic_instance(request_count: int, seed: int = 0) -> PdptwInstance:
             )
         )
     vehicles = max(2, math.ceil(request_count / 3))
-    return PdptwInstance(
-        f"synthetic-{request_count}-s{seed}", vehicles, 200, depot, tuple(nodes)
-    )
+    return PdptwInstance(f"synthetic-{request_count}-s{seed}", vehicles, 200, depot, tuple(nodes))
 
 
 def load_instance(name: str, cache_dir: Path) -> PdptwInstance:
@@ -215,9 +202,7 @@ def load_instance(name: str, cache_dir: Path) -> PdptwInstance:
                 for item in archive.namelist()
                 if item.startswith(ARCHIVE_PREFIX) and item.endswith(".txt")
             )
-            raise ValueError(
-                f"unknown instance {name!r}; available: {', '.join(available)}"
-            ) from exc
+            raise ValueError(f"unknown instance {name!r}; available: {', '.join(available)}") from exc
 
 
 def _distance(left: Node, right: Node) -> int:
@@ -276,8 +261,7 @@ def make_request(
                             id=str(dropoff.id),
                             location=(dropoff.y / 1_000, dropoff.x / 1_000),
                             min_start_time=dropoff.ready * DISTANCE_SCALE,
-                            max_end_time=(dropoff.due + dropoff.service)
-                            * DISTANCE_SCALE,
+                            max_end_time=(dropoff.due + dropoff.service) * DISTANCE_SCALE,
                             service_duration=dropoff.service * DISTANCE_SCALE,
                         ),
                     )
@@ -336,9 +320,7 @@ def rescore(
         if clock > instance.depot.due * DISTANCE_SCALE:
             raise ValueError("vehicle returned after the depot horizon")
     if sorted(seen) != sorted(selected):
-        raise ValueError(
-            "returned routes do not cover every selected stop exactly once"
-        )
+        raise ValueError("returned routes do not cover every selected stop exactly once")
     return used, distance
 
 
@@ -370,12 +352,8 @@ def main(argv: list[str] | None = None) -> int:
         metavar="N",
         help="solve a seeded synthetic instance with N requests instead (all of them)",
     )
-    parser.add_argument(
-        "--backend", choices=("engine", "cpsat", "both"), default="both"
-    )
-    parser.add_argument(
-        "--cache-dir", type=Path, default=Path(__file__).with_name(".cache")
-    )
+    parser.add_argument("--backend", choices=("engine", "cpsat", "both"), default="both")
+    parser.add_argument("--cache-dir", type=Path, default=Path(__file__).with_name(".cache"))
     args = parser.parse_args(argv)
 
     if args.synthetic:
@@ -406,9 +384,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             used, distance = rescore(instance, selected, solution.routes)
         except ValueError as exc:  # incomplete or rule-breaking plan
-            print(
-                f"{backend:6} rejected: {exc} elapsed={elapsed:.2f}s score={solution.score}"
-            )
+            print(f"{backend:6} rejected: {exc} elapsed={elapsed:.2f}s score={solution.score}")
             continue
         if solution.total_driving_seconds != distance:
             raise ValueError("solver report and independent distance disagree")

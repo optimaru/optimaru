@@ -30,8 +30,7 @@
 #include "alb/constraints/used_stations_cost.hpp"
 #include "alb/constraints/workload_imbalance_cost.hpp"
 
-namespace alb
-{
+namespace alb {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -70,8 +69,7 @@ namespace alb
 // them (the reference's catalog order). The order is stated ONCE, here:
 // defaultConstraints() and catalogNames() are both built from it.
 template <typename Visit>
-void forEachDefaultConstraint(Visit &&visit)
-{
+void forEachDefaultConstraint(Visit&& visit) {
     visit(std::make_unique<StationCapacityCost>());
     visit(std::make_unique<TaskPrecedenceCost>());
     visit(std::make_unique<MaxStationsCost>());
@@ -84,41 +82,32 @@ void forEachDefaultConstraint(Visit &&visit)
     visit(std::make_unique<WorkloadImbalanceCost>());
 }
 
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
-    forEachDefaultConstraint([&assembly](auto component)
-                             { assembly.add(std::move(component)); });
+    forEachDefaultConstraint([&assembly](auto component) { assembly.add(std::move(component)); });
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 
 // The registry names of the default set, in catalog order.
-inline std::vector<std::string> catalogNames()
-{
+inline std::vector<std::string> catalogNames() {
     std::vector<std::string> names;
-    forEachDefaultConstraint([&names](auto component)
-                             { names.push_back(component->name); });
+    forEachDefaultConstraint([&names](auto component) { names.push_back(component->name); });
     return names;
 }
 
 // defaultConstraints().info() rows, in catalog order: the constraint catalog
 // constraint_info() reports.
-inline std::vector<optimaru::ConstraintInfo> catalogRows()
-{
+inline std::vector<optimaru::ConstraintInfo> catalogRows() {
     const std::vector<optimaru::ConstraintInfo> rows = defaultConstraints().info();
     std::vector<optimaru::ConstraintInfo> ordered;
     ordered.reserve(rows.size());
-    for (const std::string &name : catalogNames())
-    {
-        for (const optimaru::ConstraintInfo &row : rows)
-        {
-            if (row.name == name)
-                ordered.push_back(row);
+    for (const std::string& name : catalogNames()) {
+        for (const optimaru::ConstraintInfo& row : rows) {
+            if (row.name == name) ordered.push_back(row);
         }
     }
     return ordered;

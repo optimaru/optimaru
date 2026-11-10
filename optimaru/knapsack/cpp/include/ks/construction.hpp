@@ -5,8 +5,7 @@
 
 #include "ks/domain.hpp"
 
-namespace ks
-{
+namespace ks {
 
 // The greedy construction (the Python reference's `_greedy_selection`):
 // items in descending value / weight order — the density as a double, equal
@@ -18,14 +17,13 @@ namespace ks
 // greedy decides it). Returns 0 / 1 per item. Requires
 // ScoreCalculator::prepare(problem); throws std::invalid_argument when
 // `fixed` has the wrong length or a value outside {-1, 0, 1}.
-std::vector<int> greedySelection(const KnapsackProblem &problem,
-                                 const std::vector<int> &fixed);
+std::vector<int> greedySelection(const KnapsackProblem& problem, const std::vector<int>& fixed);
 
 // The domain construction run by Solver::solve: every item from
 // greedySelection(problem, all -1), or — when problem.warmStart — the current
 // selection kept and only its undecided items (-1) filled in around the
 // seeded load. Leaves every item at 0 or 1.
-void constructSelection(KnapsackProblem &problem);
+void constructSelection(KnapsackProblem& problem);
 
 }  // namespace ks
 

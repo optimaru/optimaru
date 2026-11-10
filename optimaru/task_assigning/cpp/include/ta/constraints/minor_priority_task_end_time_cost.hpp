@@ -3,25 +3,19 @@
 
 #include "ta/constraints/common.hpp"
 
-namespace ta
-{
+namespace ta {
 
 // Soft, weight 1: minorPriorityTaskEndTimeCost — the end time of every MINOR
 // task, the baseline of the three priority rules. Raw cost per employee = the
 // summed end times (minutes) of its MINOR tasks, so 0 = the employee does no
 // MINOR task. The soft[2] level.
-struct MinorPriorityTaskEndTimeCost final : PriorityTaskEndTimeCostBase
-{
+struct MinorPriorityTaskEndTimeCost final : PriorityTaskEndTimeCostBase {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit MinorPriorityTaskEndTimeCost(double weight = kDefaultWeight)
-        : PriorityTaskEndTimeCostBase("minorPriorityTaskEndTimeCost",
-                                      weight,
-                                      kDefaultLevel,
-                                      Priority::MINOR)
-    {
-    }
+        : PriorityTaskEndTimeCostBase("minorPriorityTaskEndTimeCost", weight, kDefaultLevel,
+                                      Priority::MINOR) {}
 };
 
 }  // namespace ta

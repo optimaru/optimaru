@@ -3,8 +3,7 @@
 
 #include "st/constraints/common.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // ---------------------------------------------------------------------------
 // Per-slot unit constraints (exact delta_cost — the calculator never re-costs
@@ -22,12 +21,11 @@ struct SlotDeltaGroup;
 // six per-constraint delta_cost calls (which re-scan the slot's members).
 // Metadata (weight / level / exponent / offset / clip) stays calculator-owned, so the knobs
 // keep working unchanged.
-struct GroupableSlotConstraint : CanonUnitConstraint
-{
+struct GroupableSlotConstraint : CanonUnitConstraint {
     using CanonUnitConstraint::CanonUnitConstraint;
-    const char *delta_group_key() const override;
-    std::unique_ptr<optimaru::UnitConstraintDeltaGroup<Timetable>>
-    create_delta_group() const override;
+    const char* delta_group_key() const override;
+    std::unique_ptr<optimaru::UnitConstraintDeltaGroup<Timetable>> create_delta_group()
+            const override;
 };
 
 }  // namespace st::canon

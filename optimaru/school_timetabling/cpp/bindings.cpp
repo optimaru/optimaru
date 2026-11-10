@@ -37,51 +37,43 @@ namespace opy = optimaru::python;
 using namespace st;
 namespace cn = st::canon;
 
-namespace
-{
+namespace {
 
 // The quickstart and canonical Solver::Config structs share every engine
 // field, so both bindings come from this one helper; the mode-specific
 // fields (the canonical fast-path `weights` and guided-search knobs, the
 // quickstart same-group nearby knobs) are bound next to each class below.
-template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
-{
+template <typename Config>
+void bindSolverConfigCommon(py::class_<Config>& cls) {
     cls.def(py::init<>())
-        .def_readwrite("ruin_recreate", &Config::ruin_recreate)
-        .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                       &Config::ruinRecreateUnimprovedStepTrigger)
-        .def_readwrite("ruin_recreate_min_ruin_fraction",
-                       &Config::ruinRecreateMinRuinFraction)
-        .def_readwrite("ruin_recreate_max_ruin_fraction",
-                       &Config::ruinRecreateMaxRuinFraction)
-        .def_readwrite("ruin_recreate_max_ruin_count",
-                       &Config::ruinRecreateMaxRuinCount)
-        .def_readwrite("ruin_recreate_operator_decay",
-                       &Config::ruinRecreateOperatorDecay)
-        .def_readwrite("ruin_recreate_polish_steps",
-                       &Config::ruinRecreatePolishSteps)
-        .def_readwrite("ruin_recreate_as_move_weight",
-                       &Config::ruinRecreateAsMoveWeight)
-        .def_readwrite("ruin_recreate_as_move_max_ruin",
-                       &Config::ruinRecreateAsMoveMaxRuin)
-        .def_readwrite("descent_weight", &Config::descent_weight)
-        .def_readwrite("descent_max_sweeps", &Config::descent_max_sweeps)
-        .def_readwrite("change_move_weight", &Config::change_weight)
-        .def_readwrite("swap_move_weight", &Config::swap_weight)
-        // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-        // stops at the first feasible solution.
-        .def_property(
-            "best_score_limit",
-            [](const Config &c) {
-                return py::make_tuple(c.target_score.hard,
-                                      c.target_score.soft);
-            },
-            [](Config &c, std::pair<std::int64_t, double> hs)
-            { c.target_score = Score{hs.first, hs.second}; })
-        // Callback fired on every new best solution: on_new_best(step, score).
-        // The pybind11 wrapper re-acquires the GIL, so it is safe from the
-        // engine's multi-start worker threads too.
-        .def_readwrite("on_new_best", &Config::on_new_best);
+            .def_readwrite("ruin_recreate", &Config::ruin_recreate)
+            .def_readwrite("ruin_recreate_unimproved_step_trigger",
+                           &Config::ruinRecreateUnimprovedStepTrigger)
+            .def_readwrite("ruin_recreate_min_ruin_fraction", &Config::ruinRecreateMinRuinFraction)
+            .def_readwrite("ruin_recreate_max_ruin_fraction", &Config::ruinRecreateMaxRuinFraction)
+            .def_readwrite("ruin_recreate_max_ruin_count", &Config::ruinRecreateMaxRuinCount)
+            .def_readwrite("ruin_recreate_operator_decay", &Config::ruinRecreateOperatorDecay)
+            .def_readwrite("ruin_recreate_polish_steps", &Config::ruinRecreatePolishSteps)
+            .def_readwrite("ruin_recreate_as_move_weight", &Config::ruinRecreateAsMoveWeight)
+            .def_readwrite("ruin_recreate_as_move_max_ruin", &Config::ruinRecreateAsMoveMaxRuin)
+            .def_readwrite("descent_weight", &Config::descent_weight)
+            .def_readwrite("descent_max_sweeps", &Config::descent_max_sweeps)
+            .def_readwrite("change_move_weight", &Config::change_weight)
+            .def_readwrite("swap_move_weight", &Config::swap_weight)
+            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
+            // stops at the first feasible solution.
+            .def_property(
+                    "best_score_limit",
+                    [](const Config& c) {
+                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
+                    },
+                    [](Config& c, std::pair<std::int64_t, double> hs) {
+                        c.target_score = Score{hs.first, hs.second};
+                    })
+            // Callback fired on every new best solution: on_new_best(step, score).
+            // The pybind11 wrapper re-acquires the GIL, so it is safe from the
+            // engine's multi-start worker threads too.
+            .def_readwrite("on_new_best", &Config::on_new_best);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,37 +95,27 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
 
 // The constraints `picks` names (None = the whole default set), with their
 // knobs applied, poured into `calc`.
-void addPicks(cn::DecomposedCalculator &calc, const py::object &picks)
-{
+void addPicks(cn::DecomposedCalculator& calc, const py::object& picks) {
     std::shared_ptr<cn::TeacherMaskHub> hub = cn::sharedTeacherMaskHub(calc);
-    if (hub == nullptr)
-        hub = std::make_shared<cn::TeacherMaskHub>();
-    opy::apply_constraints([&] { return cn::defaultConstraints(hub); }, picks)
-        .into(calc);
+    if (hub == nullptr) hub = std::make_shared<cn::TeacherMaskHub>();
+    opy::apply_constraints([&] { return cn::defaultConstraints(hub); }, picks).into(calc);
 }
 
 // The catalog order (the default set's emplace order) as Python names.
-std::vector<std::string> catalogNames()
-{
+std::vector<std::string> catalogNames() {
     std::vector<std::string> names;
-    for (const std::string &name : cn::constraintOrder())
-        names.push_back(opy::python_name(name));
+    for (const std::string& name : cn::constraintOrder()) names.push_back(opy::python_name(name));
     return names;
 }
 
 // constraint_info() rows in the catalog order (ConstraintAssembly::info()
 // lists the unit constraints before the global ones).
-std::vector<optimaru::ConstraintInfo> catalogRows()
-{
-    const std::vector<optimaru::ConstraintInfo> rows
-        = cn::defaultConstraints().info();
+std::vector<optimaru::ConstraintInfo> catalogRows() {
+    const std::vector<optimaru::ConstraintInfo> rows = cn::defaultConstraints().info();
     std::vector<optimaru::ConstraintInfo> ordered;
-    for (const std::string &name : cn::constraintOrder())
-    {
-        for (const optimaru::ConstraintInfo &row : rows)
-        {
-            if (row.name == name)
-                ordered.push_back(row);
+    for (const std::string& name : cn::constraintOrder()) {
+        for (const optimaru::ConstraintInfo& row : rows) {
+            if (row.name == name) ordered.push_back(row);
         }
     }
     return ordered;
@@ -142,69 +124,56 @@ std::vector<optimaru::ConstraintInfo> catalogRows()
 // opy::constraint_costs(calc, table) with its entries in the catalog order:
 // each catalog name's instances together, in the calculator's order (the
 // keys are unchanged: "<name>", "<name>#2", ..., the instance_keys rule).
-py::dict orderedConstraintCosts(cn::DecomposedCalculator &calc,
-                                cn::Timetable &table)
-{
+py::dict orderedConstraintCosts(cn::DecomposedCalculator& calc, cn::Timetable& table) {
     cn::ScoreCalculator::prepare(table);
     const py::dict costs = opy::constraint_costs(calc, table);
     py::dict ordered;
-    for (const std::string &name : catalogNames())
-    {
-        for (const auto &item : costs)
-        {
+    for (const std::string& name : catalogNames()) {
+        for (const auto& item : costs) {
             const py::dict entry = py::reinterpret_borrow<py::dict>(item.second);
-            if (entry["name"].cast<std::string>() == name)
-                ordered[item.first] = item.second;
+            if (entry["name"].cast<std::string>() == name) ordered[item.first] = item.second;
         }
     }
-    for (const auto &item : costs)  // anything outside the catalog order
+    for (const auto& item : costs)  // anything outside the catalog order
     {
-        if (!ordered.contains(item.first))
-            ordered[item.first] = item.second;
+        if (!ordered.contains(item.first)) ordered[item.first] = item.second;
     }
     return ordered;
 }
 
 // The canonical domain keeps allowedSlot as std::vector<char> (a compact
 // per-slot permission table); expose it as a Python list of bools.
-std::vector<bool> allowedSlotToPython(const cn::Lesson &lesson)
-{
+std::vector<bool> allowedSlotToPython(const cn::Lesson& lesson) {
     return {lesson.allowedSlot.begin(), lesson.allowedSlot.end()};
 }
 
-void allowedSlotFromPython(cn::Lesson &lesson, const std::vector<bool> &table)
-{
+void allowedSlotFromPython(cn::Lesson& lesson, const std::vector<bool>& table) {
     lesson.allowedSlot.assign(table.begin(), table.end());
 }
 
 // The fields of canon.ObjectiveWeights, by Python name.
-struct WeightField
-{
-    const char *name;
-    double cn::ObjectiveWeights::*member;
+struct WeightField {
+    const char* name;
+    double cn::ObjectiveWeights::* member;
 };
 
 constexpr WeightField kWeightFields[] = {
-    {"teacher_gap_cost", &cn::ObjectiveWeights::teacherGapCost},
-    {"teacher_workday_cost", &cn::ObjectiveWeights::teacherWorkdayCost},
-    {"teacher_free_day_cost", &cn::ObjectiveWeights::teacherFreeDayCost},
-    {"class_gap_cost", &cn::ObjectiveWeights::classGapCost},
-    {"avoided_period_cost", &cn::ObjectiveWeights::avoidedPeriodCost},
-    {"non_preferred_period_cost",
-     &cn::ObjectiveWeights::nonPreferredPeriodCost},
+        {"teacher_gap_cost", &cn::ObjectiveWeights::teacherGapCost},
+        {"teacher_workday_cost", &cn::ObjectiveWeights::teacherWorkdayCost},
+        {"teacher_free_day_cost", &cn::ObjectiveWeights::teacherFreeDayCost},
+        {"class_gap_cost", &cn::ObjectiveWeights::classGapCost},
+        {"avoided_period_cost", &cn::ObjectiveWeights::avoidedPeriodCost},
+        {"non_preferred_period_cost", &cn::ObjectiveWeights::nonPreferredPeriodCost},
 };
 
 // One fast-path soft weight (an ObjectiveWeights argument or field), checked
 // like a constraint pick's weight knob and in the same words: a real number
 // (not a bool), finite and >= 0.
-double checkedWeight(const char *field, const py::object &value)
-{
-    const std::string label
-        = std::string("ObjectiveWeights.") + field + ": weight must be ";
+double checkedWeight(const char* field, const py::object& value) {
+    const std::string label = std::string("ObjectiveWeights.") + field + ": weight must be ";
     const std::string shown = py::repr(value).cast<std::string>();
-    if (py::isinstance<py::bool_>(value)
-        || !py::isinstance(value,
-                           py::module_::import("numbers").attr("Real")))
+    if (py::isinstance<py::bool_>(value) ||
+        !py::isinstance(value, py::module_::import("numbers").attr("Real")))
         throw py::type_error(label + "a number, not " + shown);
     const double weight = py::float_(value).cast<double>();
     if (!std::isfinite(weight) || weight < 0.0)
@@ -212,102 +181,71 @@ double checkedWeight(const char *field, const py::object &value)
     return weight;
 }
 
-void bindCanon(py::module_ &canon)
-{
+void bindCanon(py::module_& canon) {
     // The soft weights of the monolithic fast path (Settings.weights),
     // named like the soft constraints; the defaults are the components'
     // kDefaultWeight. Never part of the model, never read by the plugin path.
     const cn::ObjectiveWeights defaultWeights{};
     py::class_<cn::ObjectiveWeights> objectiveWeights(
-        canon,
-        "ObjectiveWeights",
-        py::module_local(),
-        "Soft weights of the monolithic fast path (solve(...) without "
-        "constraints=), one per soft constraint; the defaults are the C++ "
-        "components' kDefaultWeight.");
+            canon, "ObjectiveWeights", py::module_local(),
+            "Soft weights of the monolithic fast path (solve(...) without "
+            "constraints=), one per soft constraint; the defaults are the C++ "
+            "components' kDefaultWeight.");
     objectiveWeights
-        .def(py::init(
-                 [](const py::object &teacherGapCost,
-                    const py::object &teacherWorkdayCost,
-                    const py::object &teacherFreeDayCost,
-                    const py::object &classGapCost,
-                    const py::object &avoidedPeriodCost,
-                    const py::object &nonPreferredPeriodCost)
-                 {
+            .def(py::init([](const py::object& teacherGapCost, const py::object& teacherWorkdayCost,
+                             const py::object& teacherFreeDayCost, const py::object& classGapCost,
+                             const py::object& avoidedPeriodCost,
+                             const py::object& nonPreferredPeriodCost) {
                      cn::ObjectiveWeights w;
-                     w.teacherGapCost
-                         = checkedWeight("teacher_gap_cost", teacherGapCost);
-                     w.teacherWorkdayCost = checkedWeight(
-                         "teacher_workday_cost", teacherWorkdayCost);
-                     w.teacherFreeDayCost = checkedWeight(
-                         "teacher_free_day_cost", teacherFreeDayCost);
-                     w.classGapCost
-                         = checkedWeight("class_gap_cost", classGapCost);
-                     w.avoidedPeriodCost = checkedWeight(
-                         "avoided_period_cost", avoidedPeriodCost);
-                     w.nonPreferredPeriodCost
-                         = checkedWeight("non_preferred_period_cost",
-                                         nonPreferredPeriodCost);
+                     w.teacherGapCost = checkedWeight("teacher_gap_cost", teacherGapCost);
+                     w.teacherWorkdayCost =
+                             checkedWeight("teacher_workday_cost", teacherWorkdayCost);
+                     w.teacherFreeDayCost =
+                             checkedWeight("teacher_free_day_cost", teacherFreeDayCost);
+                     w.classGapCost = checkedWeight("class_gap_cost", classGapCost);
+                     w.avoidedPeriodCost = checkedWeight("avoided_period_cost", avoidedPeriodCost);
+                     w.nonPreferredPeriodCost =
+                             checkedWeight("non_preferred_period_cost", nonPreferredPeriodCost);
                      return w;
                  }),
-             py::arg("teacher_gap_cost") = defaultWeights.teacherGapCost,
-             py::arg("teacher_workday_cost")
-             = defaultWeights.teacherWorkdayCost,
-             py::arg("teacher_free_day_cost")
-             = defaultWeights.teacherFreeDayCost,
-             py::arg("class_gap_cost") = defaultWeights.classGapCost,
-             py::arg("avoided_period_cost") = defaultWeights.avoidedPeriodCost,
-             py::arg("non_preferred_period_cost")
-             = defaultWeights.nonPreferredPeriodCost)
-        .def("__eq__",
-             [](const cn::ObjectiveWeights &a, const cn::ObjectiveWeights &b)
-             {
-                 return a.teacherGapCost == b.teacherGapCost
-                        && a.teacherWorkdayCost == b.teacherWorkdayCost
-                        && a.teacherFreeDayCost == b.teacherFreeDayCost
-                        && a.classGapCost == b.classGapCost
-                        && a.avoidedPeriodCost == b.avoidedPeriodCost
-                        && a.nonPreferredPeriodCost == b.nonPreferredPeriodCost;
-             })
-        .def(
-            "__repr__",
-            [](const cn::ObjectiveWeights &w)
-            {
-                return py::str(
-                           "ObjectiveWeights(teacher_gap_cost={}, "
-                           "teacher_workday_cost={}, teacher_free_day_cost={}, "
-                           "class_gap_cost={}, avoided_period_cost={}, "
-                           "non_preferred_period_cost={})")
-                    .format(w.teacherGapCost,
-                            w.teacherWorkdayCost,
-                            w.teacherFreeDayCost,
-                            w.classGapCost,
-                            w.avoidedPeriodCost,
-                            w.nonPreferredPeriodCost);
+                 py::arg("teacher_gap_cost") = defaultWeights.teacherGapCost,
+                 py::arg("teacher_workday_cost") = defaultWeights.teacherWorkdayCost,
+                 py::arg("teacher_free_day_cost") = defaultWeights.teacherFreeDayCost,
+                 py::arg("class_gap_cost") = defaultWeights.classGapCost,
+                 py::arg("avoided_period_cost") = defaultWeights.avoidedPeriodCost,
+                 py::arg("non_preferred_period_cost") = defaultWeights.nonPreferredPeriodCost)
+            .def("__eq__",
+                 [](const cn::ObjectiveWeights& a, const cn::ObjectiveWeights& b) {
+                     return a.teacherGapCost == b.teacherGapCost &&
+                            a.teacherWorkdayCost == b.teacherWorkdayCost &&
+                            a.teacherFreeDayCost == b.teacherFreeDayCost &&
+                            a.classGapCost == b.classGapCost &&
+                            a.avoidedPeriodCost == b.avoidedPeriodCost &&
+                            a.nonPreferredPeriodCost == b.nonPreferredPeriodCost;
+                 })
+            .def("__repr__", [](const cn::ObjectiveWeights& w) {
+                return py::str("ObjectiveWeights(teacher_gap_cost={}, "
+                               "teacher_workday_cost={}, teacher_free_day_cost={}, "
+                               "class_gap_cost={}, avoided_period_cost={}, "
+                               "non_preferred_period_cost={})")
+                        .format(w.teacherGapCost, w.teacherWorkdayCost, w.teacherFreeDayCost,
+                                w.classGapCost, w.avoidedPeriodCost, w.nonPreferredPeriodCost);
             });
     // The fields reject what the constructor rejects.
-    for (const WeightField &field : kWeightFields)
-    {
+    for (const WeightField& field : kWeightFields) {
         objectiveWeights.def_property(
-            field.name,
-            [member = field.member](const cn::ObjectiveWeights &w)
-            { return w.*member; },
-            [member = field.member, name = field.name](
-                cn::ObjectiveWeights &w, const py::object &value)
-            { w.*member = checkedWeight(name, value); });
+                field.name,
+                [member = field.member](const cn::ObjectiveWeights& w) { return w.*member; },
+                [member = field.member, name = field.name](cn::ObjectiveWeights& w,
+                                                           const py::object& value) {
+                    w.*member = checkedWeight(name, value);
+                });
     }
 
     py::class_<cn::Lesson>(canon, "Lesson", py::module_local())
-        .def(py::init(
-                 [](std::string id,
-                    int classGroupId,
-                    int courseKey,
-                    std::vector<int> teachers,
-                    std::vector<int> roomTypeDemand,
-                    int blockGroup,
-                    bool pinned,
-                    int slot)
-                 {
+            .def(py::init([](std::string id, int classGroupId, int courseKey,
+                             std::vector<int> teachers, std::vector<int> roomTypeDemand,
+                             int blockGroup, bool pinned, int slot) {
                      cn::Lesson lesson;
                      lesson.id = std::move(id);
                      lesson.classGroupId = classGroupId;
@@ -319,113 +257,87 @@ void bindCanon(py::module_ &canon)
                      lesson.slot = slot;
                      return lesson;
                  }),
-             py::arg("id"),
-             py::arg("class_group_id"),
-             py::arg("course_key"),
-             py::arg("teachers"),
-             py::arg("room_type_demand") = std::vector<int>{},
-             py::arg("block_group") = -1,
-             py::arg("pinned") = false,
-             py::arg("slot") = -1)
-        .def_readwrite("id", &cn::Lesson::id)
-        .def_readwrite("class_group_id", &cn::Lesson::classGroupId)
-        .def_readwrite("course_key", &cn::Lesson::courseKey)
-        .def_readwrite("teachers", &cn::Lesson::teachers)
-        .def_readwrite("room_type_demand", &cn::Lesson::roomTypeDemand)
-        // Per-slot permission table (disallowed_slot_cost); empty = every
-        // slot allowed.
-        .def_property(
-            "allowed_slot", &allowedSlotToPython, &allowedSlotFromPython)
-        // Preference units (avoided_period_cost / non_preferred_period_cost):
-        // one (avoided_mask, preferred_mask) pair per member
-        // course of a merged lesson; empty = derive from the courseKey masks.
-        .def_readwrite("preference_units", &cn::Lesson::preferenceUnits)
-        .def_readwrite("block_group", &cn::Lesson::blockGroup)
-        .def_readwrite("pinned", &cn::Lesson::pinned)
-        .def_readwrite("slot", &cn::Lesson::slot);
+                 py::arg("id"), py::arg("class_group_id"), py::arg("course_key"),
+                 py::arg("teachers"), py::arg("room_type_demand") = std::vector<int>{},
+                 py::arg("block_group") = -1, py::arg("pinned") = false, py::arg("slot") = -1)
+            .def_readwrite("id", &cn::Lesson::id)
+            .def_readwrite("class_group_id", &cn::Lesson::classGroupId)
+            .def_readwrite("course_key", &cn::Lesson::courseKey)
+            .def_readwrite("teachers", &cn::Lesson::teachers)
+            .def_readwrite("room_type_demand", &cn::Lesson::roomTypeDemand)
+            // Per-slot permission table (disallowed_slot_cost); empty = every
+            // slot allowed.
+            .def_property("allowed_slot", &allowedSlotToPython, &allowedSlotFromPython)
+            // Preference units (avoided_period_cost / non_preferred_period_cost):
+            // one (avoided_mask, preferred_mask) pair per member
+            // course of a merged lesson; empty = derive from the courseKey masks.
+            .def_readwrite("preference_units", &cn::Lesson::preferenceUnits)
+            .def_readwrite("block_group", &cn::Lesson::blockGroup)
+            .def_readwrite("pinned", &cn::Lesson::pinned)
+            .def_readwrite("slot", &cn::Lesson::slot);
 
     py::class_<cn::Timetable>(canon, "Timetable", py::module_local())
-        .def(py::init(
-                 [](std::vector<int> dayOfSlot,
-                    std::vector<int> periodOfSlot,
-                    std::vector<cn::Lesson> lessons)
-                 {
+            .def(py::init([](std::vector<int> dayOfSlot, std::vector<int> periodOfSlot,
+                             std::vector<cn::Lesson> lessons) {
                      cn::Timetable t;
                      t.dayOfSlot = std::move(dayOfSlot);
                      t.periodOfSlot = std::move(periodOfSlot);
                      t.lessons = std::move(lessons);
                      return t;
                  }),
-             py::arg("day_of_slot"),
-             py::arg("period_of_slot"),
-             py::arg("lessons"))
-        .def_readwrite("day_of_slot", &cn::Timetable::dayOfSlot)
-        .def_readwrite("period_of_slot", &cn::Timetable::periodOfSlot)
-        // NOTE: element access returns copies (like the quickstart lessons);
-        // use set_assignment for bulk slot writes.
-        .def_readwrite("lessons", &cn::Timetable::lessons)
-        .def_readwrite("teacher_count", &cn::Timetable::teacherCount)
-        .def_readwrite("class_count", &cn::Timetable::classCount)
-        .def_readwrite("room_capacity_by_type",
-                       &cn::Timetable::roomCapacityByType)
-        .def_readwrite("teacher_max_per_day", &cn::Timetable::teacherMaxPerDay)
-        .def_readwrite("teacher_max_per_week",
-                       &cn::Timetable::teacherMaxPerWeek)
-        .def_readwrite("teacher_max_consecutive",
-                       &cn::Timetable::teacherMaxConsecutive)
-        // Per-teacher preferred-free-day bitmask (bit d = 0-based day).
-        .def_readwrite("teacher_preferred_free_days",
-                       &cn::Timetable::teacherPreferredFreeDays)
-        .def_readwrite("course_daily_limit", &cn::Timetable::courseDailyLimit)
-        // Per-courseKey period masks (bit = period - 1), the default
-        // preference unit for lessons without explicit preference_units.
-        .def_readwrite("course_avoided_period_mask",
-                       &cn::Timetable::courseAvoidedPeriodMask)
-        .def_readwrite("course_preferred_period_mask",
-                       &cn::Timetable::coursePreferredPeriodMask)
-        .def_readonly("score", &cn::Timetable::score)
-        .def_readonly("prepared", &cn::Timetable::prepared)
-        .def("slot_count", &cn::Timetable::slotCount)
-        // Convenience: the current slot per lesson (the solution).
-        .def("assignment",
-             [](const cn::Timetable &t)
-             {
-                 std::vector<int> a;
-                 a.reserve(t.lessons.size());
-                 for (const cn::Lesson &lesson : t.lessons)
-                     a.push_back(lesson.slot);
-                 return a;
-             })
-        // Bulk write of the decision variable (lesson access via .lessons
-        // returns copies, so per-lesson writes would be lost).
-        .def(
-            "set_assignment",
-            [](cn::Timetable &t, const std::vector<int> &a)
-            {
-                if (a.size() != t.lessons.size())
-                    throw py::value_error(
-                        "assignment length must equal the lesson count");
-                for (std::size_t i = 0; i < a.size(); ++i)
-                    t.lessons[i].slot = a[i];
-            },
-            py::arg("assignment"));
+                 py::arg("day_of_slot"), py::arg("period_of_slot"), py::arg("lessons"))
+            .def_readwrite("day_of_slot", &cn::Timetable::dayOfSlot)
+            .def_readwrite("period_of_slot", &cn::Timetable::periodOfSlot)
+            // NOTE: element access returns copies (like the quickstart lessons);
+            // use set_assignment for bulk slot writes.
+            .def_readwrite("lessons", &cn::Timetable::lessons)
+            .def_readwrite("teacher_count", &cn::Timetable::teacherCount)
+            .def_readwrite("class_count", &cn::Timetable::classCount)
+            .def_readwrite("room_capacity_by_type", &cn::Timetable::roomCapacityByType)
+            .def_readwrite("teacher_max_per_day", &cn::Timetable::teacherMaxPerDay)
+            .def_readwrite("teacher_max_per_week", &cn::Timetable::teacherMaxPerWeek)
+            .def_readwrite("teacher_max_consecutive", &cn::Timetable::teacherMaxConsecutive)
+            // Per-teacher preferred-free-day bitmask (bit d = 0-based day).
+            .def_readwrite("teacher_preferred_free_days", &cn::Timetable::teacherPreferredFreeDays)
+            .def_readwrite("course_daily_limit", &cn::Timetable::courseDailyLimit)
+            // Per-courseKey period masks (bit = period - 1), the default
+            // preference unit for lessons without explicit preference_units.
+            .def_readwrite("course_avoided_period_mask", &cn::Timetable::courseAvoidedPeriodMask)
+            .def_readwrite("course_preferred_period_mask",
+                           &cn::Timetable::coursePreferredPeriodMask)
+            .def_readonly("score", &cn::Timetable::score)
+            .def_readonly("prepared", &cn::Timetable::prepared)
+            .def("slot_count", &cn::Timetable::slotCount)
+            // Convenience: the current slot per lesson (the solution).
+            .def("assignment",
+                 [](const cn::Timetable& t) {
+                     std::vector<int> a;
+                     a.reserve(t.lessons.size());
+                     for (const cn::Lesson& lesson : t.lessons) a.push_back(lesson.slot);
+                     return a;
+                 })
+            // Bulk write of the decision variable (lesson access via .lessons
+            // returns copies, so per-lesson writes would be lost).
+            .def(
+                    "set_assignment",
+                    [](cn::Timetable& t, const std::vector<int>& a) {
+                        if (a.size() != t.lessons.size())
+                            throw py::value_error("assignment length must equal the lesson count");
+                        for (std::size_t i = 0; i < a.size(); ++i) t.lessons[i].slot = a[i];
+                    },
+                    py::arg("assignment"));
 
-    canon.def("calculate_score",
-              py::overload_cast<cn::Timetable &>(
-                  &cn::ScoreCalculator::score),
+    canon.def("calculate_score", py::overload_cast<cn::Timetable&>(&cn::ScoreCalculator::score),
               py::arg("table"),
               "Full recompute of the score at the default weights "
               "(also stores table.score).");
     canon.def("calculate_score",
-              py::overload_cast<cn::Timetable &, const cn::ObjectiveWeights &>(
-                  &cn::ScoreCalculator::score),
-              py::arg("table"),
-              py::arg("weights"),
+              py::overload_cast<cn::Timetable&, const cn::ObjectiveWeights&>(
+                      &cn::ScoreCalculator::score),
+              py::arg("table"), py::arg("weights"),
               "Full recompute with the soft terms at `weights` (the fast "
               "path's ObjectiveWeights; also stores table.score).");
-    canon.def("prepare",
-              &cn::ScoreCalculator::prepare,
-              py::arg("table"),
+    canon.def("prepare", &cn::ScoreCalculator::prepare, py::arg("table"),
               "Normalize the instance in place (idempotent; also run by "
               "calculate_score / constraint_costs / Solver.solve).");
 
@@ -434,183 +346,158 @@ void bindCanon(py::module_ &canon)
     // from Python, then pass the assembly to Solver.solve(table, calc).
     // ------------------------------------------------------------------
     py::class_<cn::DecomposedCalculator>(
-        canon,
-        "DecomposedCalculator",
-        py::module_local(),
-        "Pluggable score calculator: assemble canonical constraints — either "
-        "from constraint picks (see optimaru.school_timetabling.constraints) or one by one "
-        "via add(name, ...) — then pass to Solver.solve(table, calc). The "
-        "default set (default_calculator) reproduces canon.calculate_score "
-        "exactly.")
-        .def(py::init<>())
-        // Example: DecomposedCalculator([TeacherGapCost(weight=40), ...]).
-        // Duck-typed picks (.name/.weight/.level/.exponent, optionally
-        // .offset/.clip), resolved and checked by opy::apply_constraints:
-        // weight None keeps the component's kDefaultWeight, level None its
-        // kDefaultLevel; a name picked several times is one instance per
-        // pick.
-        .def(py::init(
-                 [](const py::object &constraints)
-                 {
+            canon, "DecomposedCalculator", py::module_local(),
+            "Pluggable score calculator: assemble canonical constraints — either "
+            "from constraint picks (see optimaru.school_timetabling.constraints) or one by one "
+            "via add(name, ...) — then pass to Solver.solve(table, calc). The "
+            "default set (default_calculator) reproduces canon.calculate_score "
+            "exactly.")
+            .def(py::init<>())
+            // Example: DecomposedCalculator([TeacherGapCost(weight=40), ...]).
+            // Duck-typed picks (.name/.weight/.level/.exponent, optionally
+            // .offset/.clip), resolved and checked by opy::apply_constraints:
+            // weight None keeps the component's kDefaultWeight, level None its
+            // kDefaultLevel; a name picked several times is one instance per
+            // pick.
+            .def(py::init([](const py::object& constraints) {
                      auto calc = std::make_unique<cn::DecomposedCalculator>();
                      addPicks(*calc, constraints);
                      return calc;
                  }),
-             py::arg("constraints"),
-             "Assemble from constraint picks (duck-typed: .name, .weight, "
-             ".level, .exponent, optionally .offset / .clip; None = the whole "
-             "default set). The picks replace the defaults; a name picked "
-             "several times is one instance per pick, each with its own "
-             "knobs (their costs add up); an empty list is a ValueError.")
-        .def(
-            "add",
-            [](cn::DecomposedCalculator &calc,
-               const std::string &name,
-               const py::object &weight,
-               const py::object &level,
-               const py::object &exponent,
-               const py::object &offset,
-               const py::object &clip,
-               const py::kwargs &kwargs)
-            {
-                // The knobs are the only keywords; any other is a TypeError.
-                for (const auto &item : kwargs)
-                    throw py::type_error("add() got an unexpected keyword argument '"
-                                         + py::str(item.first).cast<std::string>() + "'");
-                const py::object pick = py::module_::import("types").attr(
-                    "SimpleNamespace")(py::arg("name") = name,
-                                       py::arg("weight") = weight,
-                                       py::arg("level") = level,
-                                       py::arg("exponent") = exponent,
-                                       py::arg("offset") = offset,
-                                       py::arg("clip") = clip);
-                py::list picks;
-                picks.append(pick);
-                addPicks(calc, picks);
-            },
-            py::arg("name"),
-            py::arg("weight") = py::none(),
-            py::arg("level") = py::none(),
-            py::arg("exponent") = 1.0,
-            py::kw_only(),
-            py::arg("offset") = 0.0,
-            py::arg("clip") = true,
-            "Add one canonical constraint by name (see CONSTRAINT_NAMES), "
-            "with the same five knobs and checks as a spec:\n"
-            "weight:   None = the component's default weight, else a finite "
-            "number >= 0.\n"
-            "level:    None = the default level, otherwise 'hard' or 'soft' "
-            "(fixed_slots_cost / parallel_groups_cost refuse 'soft').\n"
-            "exponent: sign-preserving power shaping, > 0.\n"
-            "offset:   (keyword) a shift of that shaping, finite (0 = none); "
-            "clip=True (the default) counts only what lies beyond it, "
-            "clip=False shapes cost - offset as it is (refused with an "
-            "offset on hard, ValueError: hard 0 must mean no violation).\n"
-            "Raises ValueError for an unknown name. Adding a name twice is "
-            "allowed here (their costs add up).")
-        .def(
-            "score",
-            [](cn::DecomposedCalculator &calc, cn::Timetable &table)
-            {
-                cn::ScoreCalculator::prepare(table);
-                calc.rebuild(table);
-                const Score s = calc.score();
-                table.score = s;
-                return s;
-            },
-            py::arg("table"),
-            "Score `table`'s current assignment with this assembly (also "
-            "stores table.score) and prime the calculator so "
-            "constraint_totals() explains the result.")
-        .def(
-            "constraint_totals",
-            [](const cn::DecomposedCalculator &calc)
-            {
-                // In the catalog order, like constraint_costs():
-                // constraint_totals() lists the unit constraints before the
-                // global ones. Anything outside the catalog comes last.
-                const std::vector<std::string> order = cn::constraintOrder();
-                const auto rank = [&order](const std::string &name)
-                {
-                    return std::find(order.begin(), order.end(), name)
-                           - order.begin();
-                };
-                std::vector<optimaru::ConstraintTotal> totals
-                    = calc.constraint_totals();
-                std::stable_sort(totals.begin(),
-                                 totals.end(),
-                                 [&rank](const optimaru::ConstraintTotal &a,
-                                         const optimaru::ConstraintTotal &b)
-                                 { return rank(a.name) < rank(b.name); });
-                py::list out;
-                for (const optimaru::ConstraintTotal &t : totals)
-                {
-                    py::dict d;
-                    d["name"] = opy::python_name(t.name);
-                    d["label"] = t.label;
-                    d["cost"] = t.cost;  // weighted; positive = penalizing
-                    d["level"] = optimaru::level_name(t.level);
-                    d["is_hard"] = t.is_hard;
-                    out.append(d);
-                }
-                return out;
-            },
-            "Weighted cost per constraint for the last scored/solved "
-            "solution (positive = penalizing): {name, label, cost, level, "
-            "is_hard}, in list_constraints() order.")
-        .def(
-            "constraint_costs",
-            [](cn::DecomposedCalculator &calc, cn::Timetable &table)
-            { return orderedConstraintCosts(calc, table); },
-            py::arg("table"),
-            "Raw per-unit costs of this assembly's constraints on `table` "
-            "(the constraint_costs() dict shape; re-primes the calculator).")
-        .def_property_readonly("delta_group_count",
-                               &cn::DecomposedCalculator::delta_group_count,
-                               "Number of structural delta groups compiled by "
-                               "the last reset/solve.");
+                 py::arg("constraints"),
+                 "Assemble from constraint picks (duck-typed: .name, .weight, "
+                 ".level, .exponent, optionally .offset / .clip; None = the whole "
+                 "default set). The picks replace the defaults; a name picked "
+                 "several times is one instance per pick, each with its own "
+                 "knobs (their costs add up); an empty list is a ValueError.")
+            .def(
+                    "add",
+                    [](cn::DecomposedCalculator& calc, const std::string& name,
+                       const py::object& weight, const py::object& level,
+                       const py::object& exponent, const py::object& offset, const py::object& clip,
+                       const py::kwargs& kwargs) {
+                        // The knobs are the only keywords; any other is a TypeError.
+                        for (const auto& item : kwargs)
+                            throw py::type_error("add() got an unexpected keyword argument '" +
+                                                 py::str(item.first).cast<std::string>() + "'");
+                        const py::object pick =
+                                py::module_::import("types").attr("SimpleNamespace")(
+                                        py::arg("name") = name, py::arg("weight") = weight,
+                                        py::arg("level") = level, py::arg("exponent") = exponent,
+                                        py::arg("offset") = offset, py::arg("clip") = clip);
+                        py::list picks;
+                        picks.append(pick);
+                        addPicks(calc, picks);
+                    },
+                    py::arg("name"), py::arg("weight") = py::none(), py::arg("level") = py::none(),
+                    py::arg("exponent") = 1.0, py::kw_only(), py::arg("offset") = 0.0,
+                    py::arg("clip") = true,
+                    "Add one canonical constraint by name (see CONSTRAINT_NAMES), "
+                    "with the same five knobs and checks as a spec:\n"
+                    "weight:   None = the component's default weight, else a finite "
+                    "number >= 0.\n"
+                    "level:    None = the default level, otherwise 'hard' or 'soft' "
+                    "(fixed_slots_cost / parallel_groups_cost refuse 'soft').\n"
+                    "exponent: sign-preserving power shaping, > 0.\n"
+                    "offset:   (keyword) a shift of that shaping, finite (0 = none); "
+                    "clip=True (the default) counts only what lies beyond it, "
+                    "clip=False shapes cost - offset as it is (refused with an "
+                    "offset on hard, ValueError: hard 0 must mean no violation).\n"
+                    "Raises ValueError for an unknown name. Adding a name twice is "
+                    "allowed here (their costs add up).")
+            .def(
+                    "score",
+                    [](cn::DecomposedCalculator& calc, cn::Timetable& table) {
+                        cn::ScoreCalculator::prepare(table);
+                        calc.rebuild(table);
+                        const Score s = calc.score();
+                        table.score = s;
+                        return s;
+                    },
+                    py::arg("table"),
+                    "Score `table`'s current assignment with this assembly (also "
+                    "stores table.score) and prime the calculator so "
+                    "constraint_totals() explains the result.")
+            .def(
+                    "constraint_totals",
+                    [](const cn::DecomposedCalculator& calc) {
+                        // In the catalog order, like constraint_costs():
+                        // constraint_totals() lists the unit constraints before the
+                        // global ones. Anything outside the catalog comes last.
+                        const std::vector<std::string> order = cn::constraintOrder();
+                        const auto rank = [&order](const std::string& name) {
+                            return std::find(order.begin(), order.end(), name) - order.begin();
+                        };
+                        std::vector<optimaru::ConstraintTotal> totals = calc.constraint_totals();
+                        std::stable_sort(totals.begin(), totals.end(),
+                                         [&rank](const optimaru::ConstraintTotal& a,
+                                                 const optimaru::ConstraintTotal& b) {
+                                             return rank(a.name) < rank(b.name);
+                                         });
+                        py::list out;
+                        for (const optimaru::ConstraintTotal& t : totals) {
+                            py::dict d;
+                            d["name"] = opy::python_name(t.name);
+                            d["label"] = t.label;
+                            d["cost"] = t.cost;  // weighted; positive = penalizing
+                            d["level"] = optimaru::level_name(t.level);
+                            d["is_hard"] = t.is_hard;
+                            out.append(d);
+                        }
+                        return out;
+                    },
+                    "Weighted cost per constraint for the last scored/solved "
+                    "solution (positive = penalizing): {name, label, cost, level, "
+                    "is_hard}, in list_constraints() order.")
+            .def(
+                    "constraint_costs",
+                    [](cn::DecomposedCalculator& calc, cn::Timetable& table) {
+                        return orderedConstraintCosts(calc, table);
+                    },
+                    py::arg("table"),
+                    "Raw per-unit costs of this assembly's constraints on `table` "
+                    "(the constraint_costs() dict shape; re-primes the calculator).")
+            .def_property_readonly("delta_group_count",
+                                   &cn::DecomposedCalculator::delta_group_count,
+                                   "Number of structural delta groups compiled by "
+                                   "the last reset/solve.");
 
     canon.attr("CONSTRAINT_NAMES") = py::tuple(py::cast(catalogNames()));
 
     // The documented weight of unassigned_lessons_cost demoted to soft
     // (partial timetabling): UnassignedLessonsCost::kSoftWeight.
-    canon.attr("UNASSIGNED_LESSONS_SOFT_WEIGHT")
-        = cn::UnassignedLessonsCost::kSoftWeight;
+    canon.attr("UNASSIGNED_LESSONS_SOFT_WEIGHT") = cn::UnassignedLessonsCost::kSoftWeight;
 
     canon.def(
-        "default_calculator",
-        []
-        {
-            auto calc = std::make_unique<cn::DecomposedCalculator>();
-            cn::addDefaultConstraints(*calc);
-            return calc;
-        },
-        "A DecomposedCalculator preloaded with the default set, every "
-        "component at its default weight and level. Scores bit-for-bit "
-        "like canon.calculate_score.");
+            "default_calculator",
+            [] {
+                auto calc = std::make_unique<cn::DecomposedCalculator>();
+                cn::addDefaultConstraints(*calc);
+                return calc;
+            },
+            "A DecomposedCalculator preloaded with the default set, every "
+            "component at its default weight and level. Scores bit-for-bit "
+            "like canon.calculate_score.");
 
     // The raw per-unit costs of the default set (or of `constraints`, the
     // same picks as solve(constraints=...)), before weight / exponent /
     // level — what optimaru.school_timetabling.constraints.score() turns into a score.
     canon.def(
-        "constraint_costs",
-        [](cn::Timetable &table, const py::object &constraints)
-        {
-            cn::DecomposedCalculator calc;
-            addPicks(calc, constraints);
-            return orderedConstraintCosts(calc, table);
-        },
-        py::arg("table"),
-        py::arg("constraints") = py::none(),
-        "Raw per-unit cost of every default constraint (or of the picked "
-        "ones), before weight/exponent/offset/level: {key: {costs, weight, "
-        "exponent, offset, clip, hard, global, level, reward, "
-        "level_flippable, name, label, default_weight, default_level}}, in "
-        "list_constraints() order; the k-th pick of a name is keyed "
-        "'<name>#<k>', next to the name's first instance.");
+            "constraint_costs",
+            [](cn::Timetable& table, const py::object& constraints) {
+                cn::DecomposedCalculator calc;
+                addPicks(calc, constraints);
+                return orderedConstraintCosts(calc, table);
+            },
+            py::arg("table"), py::arg("constraints") = py::none(),
+            "Raw per-unit cost of every default constraint (or of the picked "
+            "ones), before weight/exponent/offset/level: {key: {costs, weight, "
+            "exponent, offset, clip, hard, global, level, reward, "
+            "level_flippable, name, label, default_weight, default_level}}, in "
+            "list_constraints() order; the k-th pick of a name is keyed "
+            "'<name>#<k>', next to the name's first instance.");
 
-    py::class_<cn::Solver::Config> config(
-        canon, "SolverConfig", py::module_local());
+    py::class_<cn::Solver::Config> config(canon, "SolverConfig", py::module_local());
 
     optimaru::python::bind_solver_config(config);
     bindSolverConfigCommon(config);
@@ -618,96 +505,75 @@ void bindCanon(py::module_ &canon)
     // none, the plugin path's components carry their own).
     config.def_readwrite("weights", &cn::Solver::Config::weights);
     // Same-class nearby swap bias (see canonical_solver.hpp).
-    config.def_readwrite("same_class_nearby",
-                         &cn::Solver::Config::sameClassNearby);
+    config.def_readwrite("same_class_nearby", &cn::Solver::Config::sameClassNearby);
     config.def_readwrite("same_class_nearby_probability",
                          &cn::Solver::Config::sameClassNearbyProbability);
     // Violation-guided entity selection (see canonical_solver.hpp).
-    config.def_readwrite("hot_lesson_probability",
-                         &cn::Solver::Config::hotLessonProbability);
+    config.def_readwrite("hot_lesson_probability", &cn::Solver::Config::hotLessonProbability);
     // Smart same-class swap operator (see canonical_solver.hpp).
-    config.def_readwrite("smart_class_swap_moves",
-                         &cn::Solver::Config::smartClassSwapMoves);
+    config.def_readwrite("smart_class_swap_moves", &cn::Solver::Config::smartClassSwapMoves);
     config.def_readwrite("smart_class_swap_candidates",
                          &cn::Solver::Config::smartClassSwapCandidates);
     // Best-of-k width of the re-assign move — only in play when the assembly
     // demotes unassigned_lessons_cost to soft (partial timetabling; see
     // canonical_solver.hpp for the sweep).
-    config.def_readwrite("reassign_candidates",
-                         &cn::Solver::Config::reassignCandidates);
+    config.def_readwrite("reassign_candidates", &cn::Solver::Config::reassignCandidates);
 
     py::class_<cn::Solver>(canon, "Solver", py::module_local())
-        .def(py::init<>())
-        .def(py::init<cn::Solver::Config>(), py::arg("config"))
-        // Solves in place: sets lesson.slot and table.score. The GIL is
-        // released so parallel multi-start workers can fire on_new_best.
-        .def("solve",
-             static_cast<void (cn::Solver::*)(cn::Timetable &)>(
-                 &cn::Solver::solve),
-             py::arg("table"),
-             py::call_guard<py::gil_scoped_release>())
-        // Same, but with a caller-assembled plugin calculator: the search
-        // and the final table.score both use that assembly (custom weights
-        // included; single-start — see canonical_solver.hpp).
-        .def("solve",
-             static_cast<void (cn::Solver::*)(cn::Timetable &,
-                                              cn::DecomposedCalculator &)>(
-                 &cn::Solver::solve),
-             py::arg("table"),
-             py::arg("calculator"),
-             py::call_guard<py::gil_scoped_release>());
+            .def(py::init<>())
+            .def(py::init<cn::Solver::Config>(), py::arg("config"))
+            // Solves in place: sets lesson.slot and table.score. The GIL is
+            // released so parallel multi-start workers can fire on_new_best.
+            .def("solve", static_cast<void (cn::Solver::*)(cn::Timetable&)>(&cn::Solver::solve),
+                 py::arg("table"), py::call_guard<py::gil_scoped_release>())
+            // Same, but with a caller-assembled plugin calculator: the search
+            // and the final table.score both use that assembly (custom weights
+            // included; single-start — see canonical_solver.hpp).
+            .def("solve",
+                 static_cast<void (cn::Solver::*)(cn::Timetable&, cn::DecomposedCalculator&)>(
+                         &cn::Solver::solve),
+                 py::arg("table"), py::arg("calculator"), py::call_guard<py::gil_scoped_release>());
 }
 
 }  // namespace
 
-PYBIND11_MODULE(_core, m)
-{
-    m.doc() = "School timetabling — optimaru engine-backed C++ wrapper "
-              "exposed to Python";
+PYBIND11_MODULE(_core, m) {
+    m.doc() =
+            "School timetabling — optimaru engine-backed C++ wrapper "
+            "exposed to Python";
 
     py::class_<Score>(m, "Score", py::module_local())
-        .def_readonly("hard", &Score::hard)
-        .def_readonly("soft", &Score::soft)
-        .def("is_feasible", &Score::feasible)
-        .def("__str__", &Score::str)
-        .def("__repr__",
-             [](const Score &s) { return "<Score " + s.str() + ">"; });
+            .def_readonly("hard", &Score::hard)
+            .def_readonly("soft", &Score::soft)
+            .def("is_feasible", &Score::feasible)
+            .def("__str__", &Score::str)
+            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
 
     py::class_<Timeslot>(m, "Timeslot", py::module_local())
-        .def(py::init(
-                 [](int day, int period)
-                 {
+            .def(py::init([](int day, int period) {
                      Timeslot t;
                      t.day = day;
                      t.period = period;
                      return t;
                  }),
-             py::arg("day"),
-             py::arg("period"))
-        .def_readwrite("day", &Timeslot::day)
-        .def_readwrite("period", &Timeslot::period);
+                 py::arg("day"), py::arg("period"))
+            .def_readwrite("day", &Timeslot::day)
+            .def_readwrite("period", &Timeslot::period);
 
     py::class_<Room>(m, "Room", py::module_local())
-        .def(py::init(
-                 [](std::string name, std::string type)
-                 {
+            .def(py::init([](std::string name, std::string type) {
                      Room r;
                      r.name = std::move(name);
                      r.type = std::move(type);
                      return r;
                  }),
-             py::arg("name"),
-             py::arg("type") = "")
-        .def_readwrite("name", &Room::name)
-        .def_readwrite("type", &Room::type);
+                 py::arg("name"), py::arg("type") = "")
+            .def_readwrite("name", &Room::name)
+            .def_readwrite("type", &Room::type);
 
     py::class_<Lesson>(m, "Lesson", py::module_local())
-        .def(py::init(
-                 [](std::string id,
-                    std::string subject,
-                    std::string teacher,
-                    std::string studentGroup)
-                 {
+            .def(py::init([](std::string id, std::string subject, std::string teacher,
+                             std::string studentGroup) {
                      Lesson l;
                      l.id = std::move(id);
                      l.subject = std::move(subject);
@@ -715,24 +581,18 @@ PYBIND11_MODULE(_core, m)
                      l.studentGroup = std::move(studentGroup);
                      return l;
                  }),
-             py::arg("id"),
-             py::arg("subject"),
-             py::arg("teacher"),
-             py::arg("student_group"))
-        .def_readwrite("id", &Lesson::id)
-        .def_readwrite("subject", &Lesson::subject)
-        .def_readwrite("teacher", &Lesson::teacher)
-        .def_readwrite("student_group", &Lesson::studentGroup)
-        .def_readwrite("slot_room", &Lesson::slotRoom)
-        .def_readwrite("pinned", &Lesson::pinned);
+                 py::arg("id"), py::arg("subject"), py::arg("teacher"), py::arg("student_group"))
+            .def_readwrite("id", &Lesson::id)
+            .def_readwrite("subject", &Lesson::subject)
+            .def_readwrite("teacher", &Lesson::teacher)
+            .def_readwrite("student_group", &Lesson::studentGroup)
+            .def_readwrite("slot_room", &Lesson::slotRoom)
+            .def_readwrite("pinned", &Lesson::pinned);
 
     py::class_<Timetable>(m, "Timetable", py::module_local())
-        .def(py::init(
-                 [](std::vector<Timeslot> timeslots,
-                    std::vector<Room> rooms,
-                    std::vector<Lesson> lessons,
-                    std::map<std::string, std::set<int>> teacherUnavailable)
-                 {
+            .def(py::init([](std::vector<Timeslot> timeslots, std::vector<Room> rooms,
+                             std::vector<Lesson> lessons,
+                             std::map<std::string, std::set<int>> teacherUnavailable) {
                      Timetable t;
                      t.timeslots = std::move(timeslots);
                      t.rooms = std::move(rooms);
@@ -740,55 +600,41 @@ PYBIND11_MODULE(_core, m)
                      t.teacherUnavailable = std::move(teacherUnavailable);
                      return t;
                  }),
-             py::arg("timeslots"),
-             py::arg("rooms"),
-             py::arg("lessons"),
-             py::arg("teacher_unavailable")
-             = std::map<std::string, std::set<int>>{})
-        .def_readwrite("timeslots", &Timetable::timeslots)
-        .def_readwrite("rooms", &Timetable::rooms)
-        .def_readwrite("lessons", &Timetable::lessons)
-        .def_readwrite("teacher_unavailable", &Timetable::teacherUnavailable)
-        .def_readonly("score", &Timetable::score)
-        // composite slotRoom encoding helpers (see st/domain.hpp)
-        .def("timeslot_count", &Timetable::timeslotCount)
-        .def("room_count", &Timetable::roomCount)
-        .def("slot_room_count", &Timetable::slotRoomCount)
-        .def("slot_room_of",
-             &Timetable::slotRoomOf,
-             py::arg("timeslot_index"),
-             py::arg("room_index"))
-        .def("timeslot_index_of",
-             &Timetable::timeslotIndexOf,
-             py::arg("slot_room"))
-        .def("room_index_of", &Timetable::roomIndexOf, py::arg("slot_room"))
-        // Convenience: the current slotRoom per lesson (the solution).
-        .def("assignment",
-             [](const Timetable &t)
-             {
-                 std::vector<int> a;
-                 a.reserve(t.lessons.size());
-                 for (const Lesson &l : t.lessons)
-                     a.push_back(l.slotRoom);
-                 return a;
-             })
-        // Bulk write of the decision variable (lesson access via .lessons
-        // returns copies, so per-lesson writes would be lost).
-        .def(
-            "set_assignment",
-            [](Timetable &t, const std::vector<int> &a)
-            {
-                if (a.size() != t.lessons.size())
-                    throw py::value_error(
-                        "assignment length must equal the lesson count");
-                for (std::size_t i = 0; i < a.size(); ++i)
-                    t.lessons[i].slotRoom = a[i];
-            },
-            py::arg("assignment"));
+                 py::arg("timeslots"), py::arg("rooms"), py::arg("lessons"),
+                 py::arg("teacher_unavailable") = std::map<std::string, std::set<int>>{})
+            .def_readwrite("timeslots", &Timetable::timeslots)
+            .def_readwrite("rooms", &Timetable::rooms)
+            .def_readwrite("lessons", &Timetable::lessons)
+            .def_readwrite("teacher_unavailable", &Timetable::teacherUnavailable)
+            .def_readonly("score", &Timetable::score)
+            // composite slotRoom encoding helpers (see st/domain.hpp)
+            .def("timeslot_count", &Timetable::timeslotCount)
+            .def("room_count", &Timetable::roomCount)
+            .def("slot_room_count", &Timetable::slotRoomCount)
+            .def("slot_room_of", &Timetable::slotRoomOf, py::arg("timeslot_index"),
+                 py::arg("room_index"))
+            .def("timeslot_index_of", &Timetable::timeslotIndexOf, py::arg("slot_room"))
+            .def("room_index_of", &Timetable::roomIndexOf, py::arg("slot_room"))
+            // Convenience: the current slotRoom per lesson (the solution).
+            .def("assignment",
+                 [](const Timetable& t) {
+                     std::vector<int> a;
+                     a.reserve(t.lessons.size());
+                     for (const Lesson& l : t.lessons) a.push_back(l.slotRoom);
+                     return a;
+                 })
+            // Bulk write of the decision variable (lesson access via .lessons
+            // returns copies, so per-lesson writes would be lost).
+            .def(
+                    "set_assignment",
+                    [](Timetable& t, const std::vector<int>& a) {
+                        if (a.size() != t.lessons.size())
+                            throw py::value_error("assignment length must equal the lesson count");
+                        for (std::size_t i = 0; i < a.size(); ++i) t.lessons[i].slotRoom = a[i];
+                    },
+                    py::arg("assignment"));
 
-    m.def("calculate_score",
-          &ScoreCalculator::score,
-          py::arg("table"),
+    m.def("calculate_score", &ScoreCalculator::score, py::arg("table"),
           "Full recompute of the score (also stores table.score).");
 
     py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
@@ -801,19 +647,17 @@ PYBIND11_MODULE(_core, m)
                          &Solver::Config::sameGroupNearbyProbability);
 
     py::class_<Solver>(m, "Solver", py::module_local())
-        .def(py::init<>())
-        .def(py::init<Solver::Config>(), py::arg("config"))
-        // Solves in place: sets lesson.slot_room and table.score. The GIL is
-        // released so parallel multi-start workers can fire on_new_best.
-        .def("solve",
-             py::overload_cast<Timetable &>(&Solver::solve),
-             py::arg("table"),
-             py::call_guard<py::gil_scoped_release>());
+            .def(py::init<>())
+            .def(py::init<Solver::Config>(), py::arg("config"))
+            // Solves in place: sets lesson.slot_room and table.score. The GIL is
+            // released so parallel multi-start workers can fire on_new_best.
+            .def("solve", py::overload_cast<Timetable&>(&Solver::solve), py::arg("table"),
+                 py::call_guard<py::gil_scoped_release>());
 
     // Canonical full-parity domain (st::canon): the CP-SAT reference
     // package's hard and soft constraints with validate.py semantics.
-    py::module_ canonModule = m.def_submodule(
-        "canon", "Canonical full-parity school-timetabling domain (st::canon)");
+    py::module_ canonModule =
+            m.def_submodule("canon", "Canonical full-parity school-timetabling domain (st::canon)");
     bindCanon(canonModule);
 
     // The package's constraint catalog — the canonical domain's (the
@@ -826,8 +670,7 @@ PYBIND11_MODULE(_core, m)
     // the catalog order, which ConstraintAssembly::info() does not.
     opy::detail::bind_info_rows(m, [] { return catalogRows(); });
     m.def(
-        "list_constraints",
-        [] { return catalogNames(); },
-        "The canonical constraint names, in catalog order (the same as "
-        "canon.CONSTRAINT_NAMES).");
+            "list_constraints", [] { return catalogNames(); },
+            "The canonical constraint names, in catalog order (the same as "
+            "canon.CONSTRAINT_NAMES).");
 }

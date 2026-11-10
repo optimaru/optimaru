@@ -109,11 +109,7 @@ class PdpInput(_Model):
     def _unique_ids(self):
         vehicle_ids = [vehicle.id for vehicle in self.vehicles]
         delivery_ids = [delivery.id for delivery in self.deliveries]
-        stop_ids = [
-            stop.id
-            for delivery in self.deliveries
-            for stop in (delivery.pickup, delivery.dropoff)
-        ]
+        stop_ids = [stop.id for delivery in self.deliveries for stop in (delivery.pickup, delivery.dropoff)]
         if len(vehicle_ids) != len(set(vehicle_ids)):
             raise ValueError("duplicate vehicle ids")
         if len(delivery_ids) != len(set(delivery_ids)):
@@ -122,48 +118,29 @@ class PdpInput(_Model):
             raise ValueError("duplicate stop ids")
         if self.driving_seconds is not None:
             size = len(self.vehicles) + 2 * len(self.deliveries)
-            if len(self.driving_seconds) != size or any(
-                len(row) != size for row in self.driving_seconds
-            ):
-                raise ValueError(
-                    "driving_seconds must be a square matrix over vehicles then stops"
-                )
+            if len(self.driving_seconds) != size or any(len(row) != size for row in self.driving_seconds):
+                raise ValueError("driving_seconds must be a square matrix over vehicles then stops")
             if any(value < 0 for row in self.driving_seconds for value in row):
                 raise ValueError("driving_seconds values must be non-negative")
         self._check_initial_routes()
         for delivery in self.deliveries:
-            if (
-                delivery.required_vehicle
-                and delivery.required_vehicle not in vehicle_ids
-            ):
-                raise ValueError(
-                    f"request {delivery.id}: unknown vehicle {delivery.required_vehicle!r}"
-                )
+            if delivery.required_vehicle and delivery.required_vehicle not in vehicle_ids:
+                raise ValueError(f"request {delivery.id}: unknown vehicle {delivery.required_vehicle!r}")
         return self
 
     def _check_initial_routes(self) -> None:
-        requests = {
-            stop.id: delivery
-            for delivery in self.deliveries
-            for stop in (delivery.pickup, delivery.dropoff)
-        }
+        requests = {stop.id: delivery for delivery in self.deliveries for stop in (delivery.pickup, delivery.dropoff)}
         seen: set[str] = set()
         for vehicle in self.vehicles:
             route = vehicle.initial_route
             if vehicle.pinned_stops > len(route):
-                raise ValueError(
-                    f"vehicle {vehicle.id}: more pinned_stops than initial_route stops"
-                )
+                raise ValueError(f"vehicle {vehicle.id}: more pinned_stops than initial_route stops")
             position = {stop_id: index for index, stop_id in enumerate(route)}
             if len(position) != len(route) or seen.intersection(route):
-                raise ValueError(
-                    f"vehicle {vehicle.id}: a stop appears twice in the initial routes"
-                )
+                raise ValueError(f"vehicle {vehicle.id}: a stop appears twice in the initial routes")
             seen.update(route)
             if unknown := set(route) - requests.keys():
-                raise ValueError(
-                    f"vehicle {vehicle.id}: unknown stop {sorted(unknown)}"
-                )
+                raise ValueError(f"vehicle {vehicle.id}: unknown stop {sorted(unknown)}")
             for stop_id in route:
                 request = requests[stop_id]
                 pickup = position.get(request.pickup.id)
@@ -278,9 +255,7 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
                 dropoff_index,
                 delivery.demand,
                 delivery.order_time,
-                vehicle_index[delivery.required_vehicle]
-                if delivery.required_vehicle
-                else -1,
+                vehicle_index[delivery.required_vehicle] if delivery.required_vehicle else -1,
             )
         )
     node_index = {node.id: index for index, node in enumerate(nodes)}
@@ -288,16 +263,12 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
         route = [node_index[stop_id] for stop_id in model.initial_route]
         vehicle.node_indices = route
         vehicle.pinned_node_indices = route[: model.pinned_stops]
-    plan = _core.PdpRoutePlan(
-        name, locations, vehicles, nodes, deliveries, model_input.driving_seconds
-    )
+    plan = _core.PdpRoutePlan(name, locations, vehicles, nodes, deliveries, model_input.driving_seconds)
     plan.rebuild_unassigned_pool()
     return plan
 
 
-def vehicle_metrics(
-    plan: _core.PdpRoutePlan, routes: dict[str, list[PdpStop]]
-) -> dict[str, VehicleMetrics]:
+def vehicle_metrics(plan: _core.PdpRoutePlan, routes: dict[str, list[PdpStop]]) -> dict[str, VehicleMetrics]:
     """Post-process finished routes into per-vehicle figures.
 
     Works for any backend: it only needs the stop order and the arrival times
@@ -325,9 +296,7 @@ def vehicle_metrics(
             driving += plan.driving_time(previous, node.location_index)
             waiting += max(0, node.min_start_time - stop.arrival_time)
             service += node.service_duration
-            departure = (
-                max(stop.arrival_time, node.min_start_time) + node.service_duration
-            )
+            departure = max(stop.arrival_time, node.min_start_time) + node.service_duration
             previous = node.location_index
         if stops and vehicle.return_to_depot:
             leg = plan.driving_time(previous, vehicle.home_location_index)
@@ -407,9 +376,7 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
     )
 
 
-def with_initial_solution(
-    problem: PdpRequest, solution: PdpSolution | dict[str, Any]
-) -> PdpRequest:
+def with_initial_solution(problem: PdpRequest, solution: PdpSolution | dict[str, Any]) -> PdpRequest:
     """Return a copy of `problem` whose search starts from `solution`.
 
     `solution` is what `solve_request` returned, as the model or as its JSON
@@ -429,18 +396,14 @@ def with_initial_solution(
     as a starting point.
     """
     routes = PdpSolution.model_validate(solution).routes
-    if unknown := routes.keys() - {
-        vehicle.id for vehicle in problem.model_input.vehicles
-    }:
+    if unknown := routes.keys() - {vehicle.id for vehicle in problem.model_input.vehicles}:
         raise ValueError(f"unknown vehicle {sorted(unknown)}")
     data = problem.model_dump()
     for vehicle in data["model_input"]["vehicles"]:
         route = [stop.stop_id for stop in routes.get(vehicle["id"], [])]
         pinned = vehicle["initial_route"][: vehicle["pinned_stops"]]
         if route[: len(pinned)] != pinned:
-            raise ValueError(
-                f"vehicle {vehicle['id']}: the route does not start with its pinned stops {pinned}"
-            )
+            raise ValueError(f"vehicle {vehicle['id']}: the route does not start with its pinned stops {pinned}")
         vehicle["initial_route"] = route
     return PdpRequest.model_validate(data)
 
@@ -453,14 +416,8 @@ def _apply_solver_parameters(config, parameters: dict[str, Any]) -> None:
             "parallel_solver_count",
             "on_new_best",
         }:
-            raise ValueError(
-                f"solver parameter {name!r} is controlled by the solve request"
-            )
-        if (
-            name.startswith("_")
-            or not hasattr(config, name)
-            or callable(getattr(config, name))
-        ):
+            raise ValueError(f"solver parameter {name!r} is controlled by the solve request")
+        if name.startswith("_") or not hasattr(config, name) or callable(getattr(config, name)):
             raise ValueError(f"unknown solver parameter: {name}")
         if value is None:
             continue

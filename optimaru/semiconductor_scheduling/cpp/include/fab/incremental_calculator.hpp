@@ -5,8 +5,7 @@
 #include "fab/evaluator.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace fab
-{
+namespace fab {
 
 // ---------------------------------------------------------------------------
 // SemiconductorIncrementalScoreCalculator — the default fast path
@@ -18,18 +17,17 @@ namespace fab
 // suffix decode. Equal to ScoreCalculator::searchStateScore after every move
 // (ScoreChecks::Full and fab_test check it).
 class SemiconductorIncrementalScoreCalculator final
-    : public optimaru::Objective<SemiconductorSchedule>
-{
+    : public optimaru::Objective<SemiconductorSchedule> {
 public:
-    void rebuild(SemiconductorSchedule &schedule) override;
+    void rebuild(SemiconductorSchedule& schedule) override;
     void before_assign(int row) override;
     void after_assign(int row) override;
     optimaru::Score score() override;
 
     // The raw totals behind score() (tests compare them term by
     // term with the full recompute).
-    const RawTotals &rawTotals() { return evaluator_.totals(); }
-    const ScheduleEvaluator &evaluator() const { return evaluator_; }
+    const RawTotals& rawTotals() { return evaluator_.totals(); }
+    const ScheduleEvaluator& evaluator() const { return evaluator_; }
 
 private:
     ScheduleEvaluator evaluator_;

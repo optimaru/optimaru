@@ -12,13 +12,12 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 
-namespace fp
-{
+namespace fp {
 
 // Construction for the operator variable (Line::operator_index): every line
 // without an operator gets the least-used operator so far (ties: lowest index) —
 // injective whenever operators >= lines. No-op when there are no operators.
-void assignMissingOperators(PackagingSchedule &schedule);
+void assignMissingOperators(PackagingSchedule& schedule);
 
 // One hill-climbing pass over the Line.operator assignment with the job
 // lists FIXED: repeatedly moves single lines to the operator that most
@@ -26,7 +25,7 @@ void assignMissingOperators(PackagingSchedule &schedule);
 // constraint that reads operators), until no move improves. Returns whether
 // anything changed. Exact when operators >= lines (any injective assignment
 // zeroes the conflict).
-bool improveOperatorAssignment(PackagingSchedule &schedule);
+bool improveOperatorAssignment(PackagingSchedule& schedule);
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
 // wires up the incremental score calculator and delegates the job-list
@@ -44,11 +43,9 @@ bool improveOperatorAssignment(PackagingSchedule &schedule);
 // the traversal of the operator dimension differs (caveat: for
 // operators < lines the operator assignment is optimized between legs, not
 // jointly move-by-move).
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget (default 30s). Shared across all engine legs.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
@@ -56,9 +53,8 @@ public:
         // (hard = hard; soft = medium * kMediumUnit + soft). E.g.
         // {0, -inf} stops at the first hard-feasible solution. The default
         // never fires.
-        optimaru::Score target_score{
-            std::numeric_limits<std::int64_t>::max(),
-            std::numeric_limits<double>::infinity()};
+        optimaru::Score target_score{std::numeric_limits<std::int64_t>::max(),
+                                     std::numeric_limits<double>::infinity()};
         // Optional early exits per engine leg; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;
@@ -77,8 +73,7 @@ public:
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
         // slower).
-        optimaru::ScoreChecks score_checks
-            = optimaru::ScoreChecks::Off;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
         // Operator-alternation rounds. 0 = auto: 1 when no two lines share
         // an operator after seeding (the conflict constraint can never
@@ -136,7 +131,7 @@ public:
         // reads the calculator's three levels before the medium fold, so a
         // soft total of 10^10 or more stays on soft there. With multiple
         // legs/starts, step counts restart per leg and only worker 0 reports.
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
     };
 
     Solver() = default;
@@ -147,7 +142,7 @@ public:
     // every job's derived fields and stores the best score found in
     // schedule.score. Pinned jobs keep their exact position (or stay
     // unassigned).
-    void solve(PackagingSchedule &schedule);
+    void solve(PackagingSchedule& schedule);
 
     // Solves with a caller-assembled plugin calculator (see
     // fp/constraints.hpp): pick components and weights, then pass the
@@ -163,9 +158,8 @@ public:
     // operatorRounds. Both need a fresh calculator per start / per leg, and a
     // caller-owned assembly cannot be cloned; the plugin path runs one leg,
     // one start, with the same move mix, nearby selection and ALNS kicks.
-    void
-    solve(PackagingSchedule &schedule,
-          optimaru::DecomposedObjective<PackagingSchedule> &calculator);
+    void solve(PackagingSchedule& schedule,
+               optimaru::DecomposedObjective<PackagingSchedule>& calculator);
 
 private:
     Config config_;

@@ -9,8 +9,7 @@
 #include "sls/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace sls
-{
+namespace sls {
 
 // The sports-league-scheduling implementation of the engine's
 // optimaru::Objective.
@@ -40,11 +39,9 @@ namespace sls
 // heuristic can score partially initialized solutions. The full-recompute
 // reference is ScoreCalculator::score (checked in the tests and
 // under ScoreChecks::ScoreChecks::Full).
-class SportsLeagueIncrementalScoreCalculator final
-    : public optimaru::Objective<LeagueSchedule>
-{
+class SportsLeagueIncrementalScoreCalculator final : public optimaru::Objective<LeagueSchedule> {
 public:
-    void rebuild(LeagueSchedule &solution) override;
+    void rebuild(LeagueSchedule& solution) override;
     void before_assign(int matchIndex) override;
     void after_assign(int matchIndex) override;
     Score score() override;
@@ -52,19 +49,18 @@ public:
     // Tournament selection on the per-match soft cost (see matchCost_): the
     // most expensive of `sample` randomly drawn matches. Drives the solver's
     // travel-guided entity selection; -1 when there is nothing to pick.
-    int costliestMatch(std::mt19937_64 &rng, int sample) const;
+    int costliestMatch(std::mt19937_64& rng, int sample) const;
 
     // The soft penalty a single match currently carries (see matchCost_).
     // Summed over all matches this is the soft total with the three hop-pair
     // terms counted twice, once for each match of the pair — the invariant
     // the tests check.
-    std::int64_t matchCost(int matchIndex) const
-    {
+    std::int64_t matchCost(int matchIndex) const {
         return matchCost_[static_cast<std::size_t>(matchIndex)];
     }
 
 private:
-    LeagueSchedule *schedule_ = nullptr;
+    LeagueSchedule* schedule_ = nullptr;
     int indexCount_ = 0;       // maxRoundIndex + 1
     std::vector<int> assign_;  // round (value) per match; -1 == unassigned
 
@@ -103,10 +99,9 @@ private:
 
     // Applies `delta` (+1/-1) to cnt[team][roundIndex] and updates
     // consecutive_ by re-pricing the maximal run around roundIndex.
-    void bumpRun(std::vector<int> &cnt, int team, int roundIndex, int delta);
+    void bumpRun(std::vector<int>& cnt, int team, int roundIndex, int delta);
 
-    std::size_t pairRoundOffset(int pairId, int roundIndex) const
-    {
+    std::size_t pairRoundOffset(int pairId, int roundIndex) const {
         return static_cast<std::size_t>(pairId) * indexCount_ + roundIndex;
     }
 };

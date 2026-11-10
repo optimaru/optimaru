@@ -17,8 +17,7 @@
 #include "pjs/constraints/project_delay_cost.hpp"
 #include "pjs/constraints/renewable_resource_capacity_cost.hpp"
 
-namespace pjs
-{
+namespace pjs {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -39,8 +38,7 @@ namespace pjs
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<NonRenewableResourceCapacityCost>();
     assembly.emplace<RenewableResourceCapacityCost>();
@@ -49,8 +47,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

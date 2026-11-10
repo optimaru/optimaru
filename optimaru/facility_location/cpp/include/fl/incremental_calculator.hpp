@@ -7,8 +7,7 @@
 #include "fl/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace fl
-{
+namespace fl {
 
 // The facility-location implementation of the engine's
 // optimaru::Objective: one hand-written incremental calculator for all
@@ -32,17 +31,15 @@ namespace fl
 // full-recompute reference is ScoreCalculator::score (checked in
 // the tests and under ScoreChecks::ScoreChecks::Full).
 class FacilityLocationIncrementalScoreCalculator final
-    : public optimaru::Objective<FacilityLocationProblem>
-{
+    : public optimaru::Objective<FacilityLocationProblem> {
 public:
-    void
-    rebuild(FacilityLocationProblem &solution) override;
+    void rebuild(FacilityLocationProblem& solution) override;
     void before_assign(int consumerIndex) override;
     void after_assign(int consumerIndex) override;
     Score score() override;
 
 private:
-    FacilityLocationProblem *problem_ = nullptr;
+    FacilityLocationProblem* problem_ = nullptr;
     std::vector<int> assign_;  // facility per consumer (-1 == unassigned)
 
     // Per-facility aggregates (same shapes as the full recompute's locals).
@@ -59,13 +56,10 @@ private:
     void retract(int consumerIndex, int facilityIndex);
 
     // hard 1 term of one facility given its current aggregates.
-    std::int64_t capacityPenalty(int facilityIndex) const
-    {
-        if (consumerCnt_[facilityIndex] == 0)
-            return 0;
-        const std::int64_t over
-            = usedDemand_[facilityIndex]
-              - problem_->facilities[facilityIndex].capacity;
+    std::int64_t capacityPenalty(int facilityIndex) const {
+        if (consumerCnt_[facilityIndex] == 0) return 0;
+        const std::int64_t over =
+                usedDemand_[facilityIndex] - problem_->facilities[facilityIndex].capacity;
         return over > 0 ? over : 0;
     }
 };

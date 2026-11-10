@@ -5,8 +5,7 @@
 
 #include "mc/constraints/common.hpp"
 
-namespace mc
-{
+namespace mc {
 
 // Hard, weight 1: samePartitionPairsCost — must-be-together pairs that are
 // split. Raw cost per side u = the pairs whose FIRST endpoint is on side u
@@ -19,49 +18,36 @@ namespace mc
 //   #{pairs (e, w), w != e, w not on side u}  -  #{pairs (w, e), w != e, w on side u}
 // read from the CSR incidence (O(pair degree)); partner sides come from the
 // working solution (see common.hpp for why that is exact).
-struct SamePartitionPairsCost final : McUnitConstraint
-{
+struct SamePartitionPairsCost final : McUnitConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit SamePartitionPairsCost(double weight = kDefaultWeight)
-        : McUnitConstraint("samePartitionPairsCost", weight, kDefaultLevel)
-    {
-    }
+        : McUnitConstraint("samePartitionPairsCost", weight, kDefaultLevel) {}
 
-    void on_reset(const MaxCutProblem &problem) override
-    {
-        detail::requirePrepared(problem);
-    }
+    void on_reset(const MaxCutProblem& problem) override { detail::requirePrepared(problem); }
 
-    double cost(const MaxCutProblem &problem, int /*unit*/, const std::vector<int> &members) const override
-    {
+    double cost(const MaxCutProblem& problem, int /*unit*/,
+                const std::vector<int>& members) const override {
         const std::vector<char> in = detail::memberFlags(problem, members);
         double total = 0.0;
-        for (const VertexPair &pair : problem.samePartitionPairs)
-        {
-            if (in[pair.first] && !in[pair.second])
-                total += 1.0;
+        for (const VertexPair& pair : problem.samePartitionPairs) {
+            if (in[pair.first] && !in[pair.second]) total += 1.0;
         }
         return total;
     }
 
     bool supports_delta() const override { return true; }
-    double delta_cost(const MaxCutProblem &problem,
-                     int unit,
-                     const std::vector<int> & /*members*/,
-                     int vertex) const override
-    {
+    double delta_cost(const MaxCutProblem& problem, int unit, const std::vector<int>& /*members*/,
+                      int vertex) const override {
         double delta = 0.0;
-        for (int k = problem.sameAsFirstStart[vertex]; k < problem.sameAsFirstStart[vertex + 1]; ++k)
-        {
-            if (problem.side[problem.sameAsFirstPartner[k]] != unit)
-                delta += 1.0;
+        for (int k = problem.sameAsFirstStart[vertex]; k < problem.sameAsFirstStart[vertex + 1];
+             ++k) {
+            if (problem.side[problem.sameAsFirstPartner[k]] != unit) delta += 1.0;
         }
-        for (int k = problem.sameAsSecondStart[vertex]; k < problem.sameAsSecondStart[vertex + 1]; ++k)
-        {
-            if (problem.side[problem.sameAsSecondPartner[k]] == unit)
-                delta -= 1.0;
+        for (int k = problem.sameAsSecondStart[vertex]; k < problem.sameAsSecondStart[vertex + 1];
+             ++k) {
+            if (problem.side[problem.sameAsSecondPartner[k]] == unit) delta -= 1.0;
         }
         return delta;
     }

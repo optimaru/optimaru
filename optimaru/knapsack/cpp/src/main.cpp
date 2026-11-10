@@ -16,11 +16,9 @@
 
 using namespace ks;
 
-namespace
-{
+namespace {
 
-Item makeItem(const std::string &id, std::int64_t weight, std::int64_t value)
-{
+Item makeItem(const std::string& id, std::int64_t weight, std::int64_t value) {
     Item item;
     item.id = id;
     item.weight = weight;
@@ -28,16 +26,15 @@ Item makeItem(const std::string &id, std::int64_t weight, std::int64_t value)
     return item;
 }
 
-KnapsackProblem campingTrip()
-{
+KnapsackProblem campingTrip() {
     KnapsackProblem problem;
     problem.capacity = 60;
     problem.resources.push_back({"fragile_slots", 2});
     problem.items = {
-        makeItem("camera", 12, 24),  makeItem("laptop", 18, 38), makeItem("battery", 8, 18),
-        makeItem("tent", 22, 35),    makeItem("water", 15, 20),  makeItem("food", 10, 22),
-        makeItem("jacket", 9, 16),   makeItem("first-aid", 6, 15), makeItem("drone", 20, 40),
-        makeItem("book", 5, 8),      makeItem("stove", 11, 21),  makeItem("radio", 7, 14),
+            makeItem("camera", 12, 24), makeItem("laptop", 18, 38),   makeItem("battery", 8, 18),
+            makeItem("tent", 22, 35),   makeItem("water", 15, 20),    makeItem("food", 10, 22),
+            makeItem("jacket", 9, 16),  makeItem("first-aid", 6, 15), makeItem("drone", 20, 40),
+            makeItem("book", 5, 8),     makeItem("stove", 11, 21),    makeItem("radio", 7, 14),
     };
     problem.items[0].resourceUsage["fragile_slots"] = 1;
     problem.items[8].resourceUsage["fragile_slots"] = 2;
@@ -53,8 +50,7 @@ KnapsackProblem campingTrip()
 
 }  // namespace
 
-int main(int argc, char **argv)
-{
+int main(int argc, char** argv) {
     const double seconds = argc > 1 ? std::atof(argv[1]) : 2.0;
     KnapsackProblem problem = campingTrip();
 
@@ -69,10 +65,8 @@ int main(int argc, char **argv)
                 static_cast<long long>(problem.totalWeight()),
                 static_cast<long long>(problem.capacity),
                 static_cast<long long>(problem.totalValue()));
-    for (const Item &item : problem.items)
-    {
-        if (item.isSelected())
-            std::printf(" %s", item.id.c_str());
+    for (const Item& item : problem.items) {
+        if (item.isSelected()) std::printf(" %s", item.id.c_str());
     }
     std::printf("\n");
 
@@ -81,8 +75,7 @@ int main(int argc, char **argv)
     addDefaultConstraints(calculator);
     calculator.rebuild(problem);
     calculator.score();
-    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
-    {
+    for (const optimaru::ConstraintTotal& total : calculator.constraint_totals()) {
         std::printf("  %-26s %-4s %g\n", total.name.c_str(), optimaru::level_name(total.level),
                     total.cost);
     }

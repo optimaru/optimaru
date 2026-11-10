@@ -7,8 +7,7 @@
 #include "st/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace st
-{
+namespace st {
 
 // The school-timetabling implementation of the engine's
 // optimaru::Objective: one hand-written incremental calculator for all
@@ -34,17 +33,15 @@ namespace st
 // heuristic can score partially initialized solutions. The full-recompute
 // reference is ScoreCalculator::score (checked in the tests and
 // under ScoreChecks::ScoreChecks::Full).
-class SchoolTimetablingIncrementalScoreCalculator final
-    : public optimaru::Objective<Timetable>
-{
+class SchoolTimetablingIncrementalScoreCalculator final : public optimaru::Objective<Timetable> {
 public:
-    void rebuild(Timetable &solution) override;
+    void rebuild(Timetable& solution) override;
     void before_assign(int lessonIndex) override;
     void after_assign(int lessonIndex) override;
     Score score() override;
 
 private:
-    Timetable *table_ = nullptr;
+    Timetable* table_ = nullptr;
     int tsCount_ = 0;
     int roomCount_ = 0;
     std::vector<int> assign_;  // slotRoom per lesson (-1 == unassigned)
@@ -67,20 +64,16 @@ private:
     void insert(int lessonIndex, int slotRoom);
     void retract(int lessonIndex, int slotRoom);
 
-    std::size_t teacherSlotOffset(int teacherId, int ts) const
-    {
+    std::size_t teacherSlotOffset(int teacherId, int ts) const {
         return static_cast<std::size_t>(teacherId) * tsCount_ + ts;
     }
-    std::size_t groupSlotOffset(int groupId, int ts) const
-    {
+    std::size_t groupSlotOffset(int groupId, int ts) const {
         return static_cast<std::size_t>(groupId) * tsCount_ + ts;
     }
-    std::size_t groupSubjectSlotOffset(int groupSubjectId, int ts) const
-    {
+    std::size_t groupSubjectSlotOffset(int groupSubjectId, int ts) const {
         return static_cast<std::size_t>(groupSubjectId) * tsCount_ + ts;
     }
-    std::size_t teacherRoomOffset(int teacherId, int room) const
-    {
+    std::size_t teacherRoomOffset(int teacherId, int room) const {
         return static_cast<std::size_t>(teacherId) * roomCount_ + room;
     }
 };

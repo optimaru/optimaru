@@ -3,8 +3,7 @@
 
 #include "pdp/constraints/common.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
 // Hard, weight 1e12 (ScoreCalculator::kPinnedPenalty): pinnedStopsCost — a
 // route must start with its vehicle's pinnedNodeIndices, in that order. A move
@@ -19,28 +18,19 @@ namespace pdp
 // Raw cost per vehicle = the number of positions i < pinned count where the
 // route's i-th stop is not the i-th pinned stop; 0 = the pinned prefix is in
 // place, or nothing is pinned (the pool list costs 0).
-struct PinnedStopsCost final : detail::PerVehicleConstraint
-{
-    static constexpr double kDefaultWeight
-        = static_cast<double>(ScoreCalculator::kPinnedPenalty);
+struct PinnedStopsCost final : detail::PerVehicleConstraint {
+    static constexpr double kDefaultWeight = static_cast<double>(ScoreCalculator::kPinnedPenalty);
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit PinnedStopsCost(double weight = kDefaultWeight)
-        : PerVehicleConstraint("pinnedStopsCost", weight, kDefaultLevel)
-    {
-    }
+        : PerVehicleConstraint("pinnedStopsCost", weight, kDefaultLevel) {}
 
-    double
-    cost(const PdpRoutePlan &p, int u, const std::vector<int> &m) const override
-    {
-        if (detail::isPool(p, u))
-            return 0;
-        const std::vector<int> &pinned = p.vehicles[u].pinnedNodeIndices;
+    double cost(const PdpRoutePlan& p, int u, const std::vector<int>& m) const override {
+        if (detail::isPool(p, u)) return 0;
+        const std::vector<int>& pinned = p.vehicles[u].pinnedNodeIndices;
         double misplaced = 0;
-        for (std::size_t i = 0; i < pinned.size(); ++i)
-        {
-            if (i >= m.size() || m[i] != pinned[i])
-                misplaced += 1;
+        for (std::size_t i = 0; i < pinned.size(); ++i) {
+            if (i >= m.size() || m[i] != pinned[i]) misplaced += 1;
         }
         return misplaced;
     }

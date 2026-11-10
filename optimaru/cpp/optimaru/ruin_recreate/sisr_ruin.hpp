@@ -50,7 +50,7 @@ public:
     const char* name() const override { return "sisrRuin"; }
 
     std::vector<int> select_ruin_set(OperatorContext<Solution>& ctx, int ruin_count,
-                                   std::mt19937_64& rng) override {
+                                     std::mt19937_64& rng) override {
         if constexpr (Traits::shape != Shape::Sequence) {
             return fallback_.select_ruin_set(ctx, ruin_count, rng);
         } else {
@@ -84,7 +84,7 @@ public:
                 if (cut_lists >= max_string_removals) break;
                 if (static_cast<int>(ruined.size()) >= ruin_count) break;
                 if (!cut_string_around(ctx, neighbor, list_cut, ruined, max_string_size, ruin_count,
-                                     rng)) {
+                                       rng)) {
                     ++cut_lists;
                 }
             }
@@ -101,8 +101,8 @@ private:
     // ids to `ruined`. Returns true when nothing was cut (element unassigned,
     // or its list already cut) so the caller does not count a list removal.
     bool cut_string_around(OperatorContext<Solution>& ctx, int element, std::vector<char>& list_cut,
-                         std::vector<int>& ruined, int max_string_size, int ruin_count,
-                         std::mt19937_64& rng) {
+                           std::vector<int>& ruined, int max_string_size, int ruin_count,
+                           std::mt19937_64& rng) {
         const Solution& solution = ctx.editor.solution();
         const int list = ctx.element_list[element];
         if (list < 0) return true;  // currently unassigned

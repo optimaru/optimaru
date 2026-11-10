@@ -4,8 +4,7 @@
 #include "vrp/constraints/common.hpp"
 #include "vrp/constraints/route_geometry.hpp"
 
-namespace vrp
-{
+namespace vrp {
 
 // Soft, weight 0 (opt-in, default_enabled = false): enclosingCircleRadiusCost
 // -- how spread out a route is. Raw cost per vehicle = the radius in meters of
@@ -14,25 +13,17 @@ namespace vrp
 // route with fewer than two visits (and for the pool list). Opt-in so adding
 // it does not change the default scoring: give it a weight to prefer
 // compact routes.
-struct EnclosingCircleRadiusCost final : detail::PerVehicleConstraint
-{
+struct EnclosingCircleRadiusCost final : detail::PerVehicleConstraint {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit EnclosingCircleRadiusCost(double weight = kDefaultWeight)
-        : PerVehicleConstraint("enclosingCircleRadiusCost", weight, kDefaultLevel)
-    {
-    }
-    double cost(const VehicleRoutePlan &p,
-                int u,
-                const std::vector<int> &members) const override
-    {
-        if (detail::isPool(p, u) || members.size() < 2)
-            return 0.0;
+        : PerVehicleConstraint("enclosingCircleRadiusCost", weight, kDefaultLevel) {}
+    double cost(const VehicleRoutePlan& p, int u, const std::vector<int>& members) const override {
+        if (detail::isPool(p, u) || members.size() < 2) return 0.0;
         std::vector<Location> locations;
         locations.reserve(members.size());
-        for (int i : members)
-            locations.push_back(p.locations[p.visits[i].locationIndex]);
+        for (int i : members) locations.push_back(p.locations[p.visits[i].locationIndex]);
         return detail::smallestEnclosingRadius(locations);
     }
 };

@@ -26,14 +26,14 @@ struct UnassignedShiftsCost final : EsGlobalConstraint {
         }
     }
     void on_unit_changed(const EmployeeSchedule&, int unit,
-                       const std::vector<int>& members) override {
+                         const std::vector<int>& members) override {
         const long n = static_cast<long>(members.size());
         assigned_ += n - counts_[unit];
         counts_[unit] = n;
     }
     bool supports_member_change() const override { return true; }
-    void on_member_changed(const EmployeeSchedule& s, int unit,
-                         const std::vector<int>& members, int, bool) override {
+    void on_member_changed(const EmployeeSchedule& s, int unit, const std::vector<int>& members,
+                           int, bool) override {
         on_unit_changed(s, unit, members);
     }
     double cost() const override { return static_cast<double>(shiftCount_ - assigned_); }

@@ -98,7 +98,7 @@ public:
             std::shuffle(displaced_.begin(), displaced_.end(), rng);
             for (int element : displaced_) {
                 repair_.insert_cheapest(editor, element, rng, /*exclude_list=*/target,
-                                       repair_.excluded_list());
+                                        repair_.excluded_list());
             }
 
             entities = displaced_;

@@ -24,42 +24,26 @@
 
 using namespace pjs;
 
-namespace
-{
+namespace {
 
 int failures = 0;
 
-void check(bool ok, const std::string &label)
-{
+void check(bool ok, const std::string& label) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-void checkScore(const std::string &label,
-                const Score &actual,
-                long expectedHard,
-                long expectedMedium,
-                long expectedSoft)
-{
-    const bool ok = actual.hard == expectedHard
-                    && actual.medium == expectedMedium
-                    && actual.soft == expectedSoft;
-    std::printf("  [%s] %-44s got=%s expected=%ldhard/%ldmedium/%ldsoft\n",
-                ok ? "PASS" : "FAIL",
-                label.c_str(),
-                actual.str().c_str(),
-                expectedHard,
-                expectedMedium,
-                expectedSoft);
-    if (!ok)
-        ++failures;
+void checkScore(const std::string& label, const Score& actual, long expectedHard,
+                long expectedMedium, long expectedSoft) {
+    const bool ok = actual.hard == expectedHard && actual.medium == expectedMedium &&
+                    actual.soft == expectedSoft;
+    std::printf("  [%s] %-44s got=%s expected=%ldhard/%ldmedium/%ldsoft\n", ok ? "PASS" : "FAIL",
+                label.c_str(), actual.str().c_str(), expectedHard, expectedMedium, expectedSoft);
+    if (!ok) ++failures;
 }
 
 // One project, one resource; jobs/allocations appended by the helpers below.
-ProjectJobSchedule
-makeBase(int resourceCapacity, bool renewable, int criticalPathDuration)
-{
+ProjectJobSchedule makeBase(int resourceCapacity, bool renewable, int criticalPathDuration) {
     ProjectJobSchedule schedule;
     schedule.projects.push_back({"1", 0, criticalPathDuration});
     schedule.resources.push_back({"1", resourceCapacity, renewable, 0});
@@ -69,11 +53,9 @@ makeBase(int resourceCapacity, bool renewable, int criticalPathDuration)
 // Adds a job with a single execution mode (duration, one optional
 // requirement on resource 0) and its 1:1 allocation. Returns the allocation
 // index.
-int addJob(ProjectJobSchedule &schedule,
-           JobType jobType,
-           int duration,
+int addJob(ProjectJobSchedule& schedule, JobType jobType, int duration,
            int requirement,  // <= 0: no resource requirement
-           const std::vector<int> &predecessors,
+           const std::vector<int>& predecessors,
            int delay = -1)  // < 0: unassigned
 {
     Job job;
@@ -83,8 +65,7 @@ int addJob(ProjectJobSchedule &schedule,
     ExecutionMode mode;
     mode.id = "m" + job.id;
     mode.duration = duration;
-    if (requirement > 0)
-        mode.resourceRequirements.push_back({0, requirement});
+    if (requirement > 0) mode.resourceRequirements.push_back({0, requirement});
     job.executionModes.push_back(mode);
     schedule.jobs.push_back(job);
 
@@ -94,8 +75,7 @@ int addJob(ProjectJobSchedule &schedule,
     allocation.predecessorAllocations = predecessors;
     schedule.allocations.push_back(allocation);
     const int index = schedule.allocationCount() - 1;
-    if (delay >= 0)
-    {
+    if (delay >= 0) {
         // Single-mode jobs everywhere in these fixtures: maxModeCount == 1,
         // so the composite value is simply the delay.
         schedule.allocations[index].modeDelay = delay;
@@ -108,8 +88,7 @@ int addJob(ProjectJobSchedule &schedule,
 // (which also exercises the derived dates: a duration-1 / duration-2
 // predecessor gives predecessorsDoneDate = 1 / 2).
 // -------------------------------------------------------------------------
-void verifyConstraints()
-{
+void verifyConstraints() {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
     // hard 1: nonRenewableResourceCapacityCost — requirements 7 + 6 against
@@ -118,22 +97,15 @@ void verifyConstraints()
         ProjectJobSchedule s = makeBase(10, /*renewable*/ false, 0);
         addJob(s, JobType::STANDARD, 10, 7, {}, 100);
         addJob(s, JobType::STANDARD, 10, 6, {}, 100);
-        checkScore("nonRenewableResourceCapacityCost",
-                   ScoreCalculator::score(s),
-                   -3,
-                   0,
-                   0);
+        checkScore("nonRenewableResourceCapacityCost", ScoreCalculator::score(s), -3, 0, 0);
     }
     // hard 1: within capacity costs nothing.
     {
         ProjectJobSchedule s = makeBase(13, /*renewable*/ false, 0);
         addJob(s, JobType::STANDARD, 10, 7, {}, 100);
         addJob(s, JobType::STANDARD, 10, 6, {}, 100);
-        checkScore("nonRenewableResourceCapacityCost within capacity",
-                   ScoreCalculator::score(s),
-                   0,
-                   0,
-                   0);
+        checkScore("nonRenewableResourceCapacityCost within capacity", ScoreCalculator::score(s), 0,
+                   0, 0);
     }
     // hard 2: renewableResourceCapacityCost — requirements 7 (days 101..110)
     // and 5 (days 102..111) against capacity 10: 9 overlap days x 2 = 18.
@@ -145,19 +117,13 @@ void verifyConstraints()
         const int p2 = addJob(s, JobType::STANDARD, 2, 0, {}, 0);
         const int a1 = addJob(s, JobType::STANDARD, 10, 7, {p1}, 100);
         const int a2 = addJob(s, JobType::STANDARD, 10, 5, {p2}, 100);
-        checkScore("renewableResourceCapacityCost",
-                   ScoreCalculator::score(s),
-                   -18,
-                   0,
-                   0);
+        checkScore("renewableResourceCapacityCost", ScoreCalculator::score(s), -18, 0, 0);
         // The derived dates (predecessorsDoneDate -> start -> end).
-        check(s.allocations[a1].predecessorsDoneDate == 1
-                  && s.allocations[a1].startDate == 101
-                  && s.allocations[a1].endDate == 111,
+        check(s.allocations[a1].predecessorsDoneDate == 1 && s.allocations[a1].startDate == 101 &&
+                      s.allocations[a1].endDate == 111,
               "derived dates of allocation 1 (done=1, start=101, end=111)");
-        check(s.allocations[a2].predecessorsDoneDate == 2
-                  && s.allocations[a2].startDate == 102
-                  && s.allocations[a2].endDate == 112,
+        check(s.allocations[a2].predecessorsDoneDate == 2 && s.allocations[a2].startDate == 102 &&
+                      s.allocations[a2].endDate == 112,
               "derived dates of allocation 2 (done=2, start=102, end=112)");
     }
     // medium 3 + soft 4 (+ hard 2): the project-delay case
@@ -170,11 +136,7 @@ void verifyConstraints()
         const int p2 = addJob(s, JobType::STANDARD, 2, 0, {}, 0);
         addJob(s, JobType::SINK, 10, 7, {p1}, 100);
         addJob(s, JobType::SINK, 10, 5, {p2}, 100);
-        checkScore("projectDelayCost + makespanCost",
-                   ScoreCalculator::score(s),
-                   -18,
-                   -23,
-                   -112);
+        checkScore("projectDelayCost + makespanCost", ScoreCalculator::score(s), -18, -23, -112);
     }
     // medium 3: no penalty when the sinks end before the critical path end
     // (the makespan case, makespanCost: criticalPathDuration 155).
@@ -184,11 +146,7 @@ void verifyConstraints()
         const int p2 = addJob(s, JobType::STANDARD, 2, 0, {}, 0);
         addJob(s, JobType::SINK, 10, 7, {p1}, 100);
         addJob(s, JobType::SINK, 10, 5, {p2}, 100);
-        checkScore("makespanCost (projectDelayCost 0)",
-                   ScoreCalculator::score(s),
-                   -18,
-                   0,
-                   -112);
+        checkScore("makespanCost (projectDelayCost 0)", ScoreCalculator::score(s), -18, 0, -112);
     }
     // Composite encoding: a 2-mode job inside a 3-mode schedule decodes the
     // slot modulo its own mode count (slot 2 -> mode 0).
@@ -219,8 +177,8 @@ void verifyConstraints()
         // delay 4, slot 2: value = 4 * 3 + 2 = 14 -> mode 2 % 2 = 0 (dur 3).
         s.allocations[narrowAllocation].modeDelay = s.valueOf(4, 2);
         ScoreCalculator::score(s);
-        check(s.allocations[narrowAllocation].startDate == 4
-                  && s.allocations[narrowAllocation].endDate == 7,
+        check(s.allocations[narrowAllocation].startDate == 4 &&
+                      s.allocations[narrowAllocation].endDate == 7,
               "slot 2 of a 2-mode job decodes to mode 0 (start 4, end 7)");
         // delay 4, slot 1 -> mode 1 (dur 7).
         s.allocations[narrowAllocation].modeDelay = s.valueOf(4, 1);
@@ -235,14 +193,9 @@ void verifyConstraints()
         const int a = addJob(s, JobType::STANDARD, 2, 1, {}, 1);
         const int b = addJob(s, JobType::STANDARD, 5, 9, {a});  // unassigned
         const int c = addJob(s, JobType::STANDARD, 3, 1, {b}, 0);
-        checkScore("unassigned contributes no usage",
-                   ScoreCalculator::score(s),
-                   0,
-                   0,
-                   0);
-        check(s.allocations[b].startDate == 3 && s.allocations[b].endDate == 3
-                  && s.allocations[c].startDate == 3
-                  && s.allocations[c].endDate == 6,
+        checkScore("unassigned contributes no usage", ScoreCalculator::score(s), 0, 0, 0);
+        check(s.allocations[b].startDate == 3 && s.allocations[b].endDate == 3 &&
+                      s.allocations[c].startDate == 3 && s.allocations[c].endDate == 6,
               "unassigned passes dates through (b 3-3, c 3-6)");
     }
     // Pinning: SOURCE/SINK are always pinned, STANDARD only when flagged.
@@ -251,10 +204,9 @@ void verifyConstraints()
         const int source = addJob(s, JobType::SOURCE, 0, 0, {}, 0);
         const int standard = addJob(s, JobType::STANDARD, 1, 1, {source}, 0);
         const int sink = addJob(s, JobType::SINK, 0, 0, {standard}, 0);
-        using Descriptor
-            = optimaru::SolutionTraits<pjs::ProjectJobSchedule>;
-        check(Descriptor::is_pinned(s, source) && Descriptor::is_pinned(s, sink)
-                  && !Descriptor::is_pinned(s, standard),
+        using Descriptor = optimaru::SolutionTraits<pjs::ProjectJobSchedule>;
+        check(Descriptor::is_pinned(s, source) && Descriptor::is_pinned(s, sink) &&
+                      !Descriptor::is_pinned(s, standard),
               "SOURCE/SINK pinned, STANDARD not");
         s.allocations[standard].pinned = true;
         check(Descriptor::is_pinned(s, standard), "user-pinned STANDARD");
@@ -266,12 +218,9 @@ void verifyConstraints()
         const int b = addJob(s, JobType::STANDARD, 1, 0, {a}, 0);
         s.allocations[a].predecessorAllocations.push_back(b);
         bool threw = false;
-        try
-        {
+        try {
             ScoreCalculator::prepare(s);
-        }
-        catch (const std::invalid_argument &)
-        {
+        } catch (const std::invalid_argument&) {
             threw = true;
         }
         check(threw, "prepare() throws on a precedence cycle");
@@ -286,57 +235,44 @@ void verifyConstraints()
 // exercised), a random precedence DAG and a mix of renewable/non-renewable
 // resources.
 // -------------------------------------------------------------------------
-ProjectJobSchedule buildRandomInstance(int projectCount,
-                                       int standardPerProject,
-                                       std::uint64_t seed,
-                                       int delayRangeSize)
-{
+ProjectJobSchedule buildRandomInstance(int projectCount, int standardPerProject, std::uint64_t seed,
+                                       int delayRangeSize) {
     std::mt19937_64 rng(seed);
     ProjectJobSchedule schedule;
     schedule.delayRangeSize = delayRangeSize;
 
     schedule.resources.push_back({"global", 12, true, -1});
-    for (int p = 0; p < projectCount; ++p)
-    {
-        schedule.projects.push_back(
-            {"P" + std::to_string(p), 2 * p, 10 + 3 * p});
+    for (int p = 0; p < projectCount; ++p) {
+        schedule.projects.push_back({"P" + std::to_string(p), 2 * p, 10 + 3 * p});
         schedule.resources.push_back({"ren" + std::to_string(p), 10, true, p});
         schedule.resources.push_back({"non" + std::to_string(p), 30, false, p});
     }
 
-    for (int p = 0; p < projectCount; ++p)
-    {
+    for (int p = 0; p < projectCount; ++p) {
         const int base = static_cast<int>(schedule.jobs.size());
         const int count = standardPerProject + 2;
         const std::vector<int> pool = {0, 1 + 2 * p, 2 + 2 * p};
-        for (int i = 0; i < count; ++i)
-        {
+        for (int i = 0; i < count; ++i) {
             Job job;
             job.id = "J" + std::to_string(base + i);
             job.project = p;
             job.jobType = i == 0           ? JobType::SOURCE
                           : i == count - 1 ? JobType::SINK
                                            : JobType::STANDARD;
-            if (job.jobType == JobType::STANDARD)
-            {
+            if (job.jobType == JobType::STANDARD) {
                 const int modeCount = 1 + static_cast<int>(rng() % 3);
-                for (int m = 0; m < modeCount; ++m)
-                {
+                for (int m = 0; m < modeCount; ++m) {
                     ExecutionMode mode;
                     mode.id = job.id + "m" + std::to_string(m);
                     mode.duration = 1 + static_cast<int>(rng() % 5);
                     const int reqCount = 1 + static_cast<int>(rng() % 2);
-                    for (int r = 0; r < reqCount; ++r)
-                    {
+                    for (int r = 0; r < reqCount; ++r) {
                         mode.resourceRequirements.push_back(
-                            {pool[rng() % pool.size()],
-                             1 + static_cast<int>(rng() % 5)});
+                                {pool[rng() % pool.size()], 1 + static_cast<int>(rng() % 5)});
                     }
                     job.executionModes.push_back(mode);
                 }
-            }
-            else
-            {
+            } else {
                 job.executionModes.push_back({job.id + "m0", 0, {}});
             }
             schedule.jobs.push_back(job);
@@ -351,18 +287,15 @@ ProjectJobSchedule buildRandomInstance(int projectCount,
         // Precedence DAG (local indices, edges only forward): the source
         // feeds the first standards, every standard feeds 1-2 later jobs,
         // the last standard feeds the sink.
-        for (int i = 1; i < count - 1; ++i)
-        {
-            schedule.allocations[base + i].predecessorAllocations.push_back(
-                i <= 2 ? base : base + i - 1);
-            if (i >= 3 && rng() % 2 == 0)
-            {
+        for (int i = 1; i < count - 1; ++i) {
+            schedule.allocations[base + i].predecessorAllocations.push_back(i <= 2 ? base
+                                                                                   : base + i - 1);
+            if (i >= 3 && rng() % 2 == 0) {
                 schedule.allocations[base + i].predecessorAllocations.push_back(
-                    base + 1 + static_cast<int>(rng() % (i - 1)));
+                        base + 1 + static_cast<int>(rng() % (i - 1)));
             }
         }
-        schedule.allocations[base + count - 1].predecessorAllocations.push_back(
-            base + count - 2);
+        schedule.allocations[base + count - 1].predecessorAllocations.push_back(base + count - 2);
     }
     return schedule;
 }
@@ -374,8 +307,7 @@ ProjectJobSchedule buildRandomInstance(int projectCount,
 // engine. Every move can shift whole successor subgraphs, so this covers the
 // re-propagation of the derived dates.
 // -------------------------------------------------------------------------
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (b) Verifying incremental scoring == full recompute ==\n");
     ProjectJobSchedule t = buildRandomInstance(/*projects*/ 2,
                                                /*standardPerProject*/ 6,
@@ -394,20 +326,14 @@ void verifyIncremental()
 
     int mismatches = 0;
     const int steps = 3000;
-    for (int step = 0; step < steps; ++step)
-    {
-        if (unit(rng) < 0.75)
-        {
+    for (int step = 0; step < steps; ++step) {
+        if (unit(rng) < 0.75) {
             // ChangeMove; 10% of the time to unassigned (-1), like the ruin
             // phase and the construction heuristic's starting state.
             const int allocation = static_cast<int>(rng() % allocationCount);
-            const int value = (unit(rng) < 0.10)
-                                  ? -1
-                                  : static_cast<int>(rng() % value_count);
+            const int value = (unit(rng) < 0.10) ? -1 : static_cast<int>(rng() % value_count);
             editor.assign(allocation, value);
-        }
-        else
-        {
+        } else {
             // SwapMove (also across jobs with different mode counts).
             const int a = static_cast<int>(rng() % allocationCount);
             const int b = static_cast<int>(rng() % allocationCount);
@@ -417,28 +343,19 @@ void verifyIncremental()
             editor.assign(b, va);
         }
         // Full recompute on the same assignment.
-        for (int i = 0; i < allocationCount; ++i)
-        {
+        for (int i = 0; i < allocationCount; ++i) {
             shadow.allocations[i].modeDelay = t.allocations[i].modeDelay;
         }
-        const optimaru::Score full
-            = ScoreCalculator::calculateEngineScore(shadow);
+        const optimaru::Score full = ScoreCalculator::calculateEngineScore(shadow);
         const optimaru::Score incremental = editor.score();
-        if (full.hard != incremental.hard
-            || std::fabs(full.soft - incremental.soft) > 1e-9)
-        {
-            if (++mismatches <= 3)
-            {
-                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                            step,
-                            incremental.str().c_str(),
-                            full.str().c_str());
+        if (full.hard != incremental.hard || std::fabs(full.soft - incremental.soft) > 1e-9) {
+            if (++mismatches <= 3) {
+                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
     }
-    check(mismatches == 0,
-          std::to_string(steps)
-              + " random moves, incremental == full recompute");
+    check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
     std::printf("\n");
 }
 
@@ -447,8 +364,7 @@ void verifyIncremental()
 // against a full reset + recompute after every single move and throws
 // ScoreMismatchError on any divergence.
 // -------------------------------------------------------------------------
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (c) FULL_ASSERT solve ==\n");
     ProjectJobSchedule t = buildRandomInstance(/*projects*/ 2,
                                                /*standardPerProject*/ 4,
@@ -465,20 +381,16 @@ void verifyFullAssertSolve()
 
     bool corrupted = false;
     Score final{};
-    try
-    {
+    try {
         Solver solver(config);
         solver.solve(t);
         final = t.score;
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
-    if (!corrupted)
-    {
+    if (!corrupted) {
         const Score recomputed = ScoreCalculator::score(t);
         check(final == recomputed, "solver-reported score == full recompute");
     }
@@ -489,8 +401,7 @@ void verifyFullAssertSolve()
 // (d) A demo-sized solve reaches feasibility (hard 0), assigns every
 // allocation and keeps the pinned SOURCE/SINK allocations untouched.
 // -------------------------------------------------------------------------
-void verifySolve()
-{
+void verifySolve() {
     std::printf("== (d) Demo-sized solve ==\n");
     ProjectJobSchedule t = buildRandomInstance(/*projects*/ 2,
                                                /*standardPerProject*/ 10,
@@ -513,18 +424,13 @@ void verifySolve()
 
     check(t.score.hard == 0, "demo-sized instance reaches 0hard");
     bool allAssigned = true;
-    for (const Allocation &allocation : t.allocations)
-    {
-        if (allocation.modeDelay < 0)
-            allAssigned = false;
+    for (const Allocation& allocation : t.allocations) {
+        if (allocation.modeDelay < 0) allAssigned = false;
     }
     check(allAssigned, "every allocation assigned after the solve");
     bool pinnedKept = t.allocations[pinnedStandard].modeDelay == pinnedValue;
-    for (int a = 0; a < t.allocationCount(); ++a)
-    {
-        if (t.jobTypeOf(a) != JobType::STANDARD
-            && t.allocations[a].modeDelay != 0)
-        {
+    for (int a = 0; a < t.allocationCount(); ++a) {
+        if (t.jobTypeOf(a) != JobType::STANDARD && t.allocations[a].modeDelay != 0) {
             pinnedKept = false;
         }
     }
@@ -538,41 +444,34 @@ void verifySolve()
 // misses the stop. Through toEngineScore the sentinel folded into a finite
 // engine soft that a soft score below it never reached.
 // -------------------------------------------------------------------------
-void verifyStopAtFirstFeasibleLimit()
-{
+void verifyStopAtFirstFeasibleLimit() {
     std::printf("== stop_at_first_feasible's limit is hard-only ==\n");
-    const optimaru::Score limit
-        = toEngineScoreLimit(Score{0, kNoLevelFloor, kNoLevelFloor});
+    const optimaru::Score limit = toEngineScoreLimit(Score{0, kNoLevelFloor, kNoLevelFloor});
     check(limit.hard == 0 && std::isinf(limit.soft) && limit.soft < 0.0,
           "(0, INT64_MIN, INT64_MIN) -> engine limit (0, -inf)");
-    check(optimaru::Score{0, -1e30} >= limit
-              && toEngineScore(Score{0, -5, -(1LL << 62)}) >= limit,
+    check(optimaru::Score{0, -1e30} >= limit && toEngineScore(Score{0, -5, -(1LL << 62)}) >= limit,
           "a feasible score with any soft (-1e30; medium -5, soft -2^62) reaches it");
-    check(!(optimaru::Score{-1, 0.0} >= limit),
-          "an infeasible score does not");
-    check(toEngineScoreLimit(Score{0, kNoLevelFloor, 0}).soft
-                  == -std::numeric_limits<double>::infinity()
-              && toEngineScoreLimit(Score{0, 0, kNoLevelFloor}).soft
-                     == -std::numeric_limits<double>::infinity(),
+    check(!(optimaru::Score{-1, 0.0} >= limit), "an infeasible score does not");
+    check(toEngineScoreLimit(Score{0, kNoLevelFloor, 0}).soft ==
+                          -std::numeric_limits<double>::infinity() &&
+                  toEngineScoreLimit(Score{0, 0, kNoLevelFloor}).soft ==
+                          -std::numeric_limits<double>::infinity(),
           "INT64_MIN on medium or on soft drops the soft-side floor");
     const Score other{-2, -3, -5};
-    check(toEngineScoreLimit(other) == toEngineScore(other),
-          "any other limit folds like a score");
+    check(toEngineScoreLimit(other) == toEngineScore(other), "any other limit folds like a score");
     std::printf("\n");
 }
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyStopAtFirstFeasibleLimit();
     verifyConstraints();
     verifyIncremental();
     verifyFullAssertSolve();
     verifySolve();
 
-    if (failures == 0)
-    {
+    if (failures == 0) {
         std::printf("All project-job-scheduling checks PASSED.\n");
         return 0;
     }

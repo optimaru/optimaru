@@ -10,8 +10,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace mc
-{
+namespace mc {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -38,8 +37,7 @@ constexpr int kSideCount = 2;
 // ---------------------------------------------------------------------------
 // An undirected weighted edge between two vertex indices. A self-loop is
 // allowed and never cut; parallel edges add up. weight >= 0.
-struct Edge
-{
+struct Edge {
     int source = -1;
     int target = -1;
     std::int64_t weight = 1;
@@ -49,8 +47,7 @@ struct Edge
 // (samePartitionPairs) or on different sides (differentPartitionPairs). A
 // pair may repeat (each entry counts) and may name one vertex twice (a same
 // self-pair is never split, a different self-pair is always joined).
-struct VertexPair
-{
+struct VertexPair {
     int first = -1;
     int second = -1;
 };
@@ -69,8 +66,7 @@ struct VertexPair
 //     endpoint splits the pair, an unassigned first endpoint charges
 //     nothing).
 // On a complete partition every rule matches the Python reference.
-struct MaxCutProblem
-{
+struct MaxCutProblem {
     // --- problem facts -----------------------------------------------------
     std::vector<std::string> vertexIds;  // index = entity
     std::vector<Edge> edges;
@@ -127,64 +123,48 @@ struct MaxCutProblem
     int minSize() const { return minPartitionSize.value_or(0); }
     int max_size() const { return maxPartitionSize.value_or(vertexCount()); }
     // Exact size: both bounds given and equal.
-    bool exactSize() const
-    {
-        return minPartitionSize.has_value() && maxPartitionSize.has_value()
-               && *minPartitionSize == *maxPartitionSize;
+    bool exactSize() const {
+        return minPartitionSize.has_value() && maxPartitionSize.has_value() &&
+               *minPartitionSize == *maxPartitionSize;
     }
-    bool is_pinned(int vertex) const
-    {
+    bool is_pinned(int vertex) const {
         return static_cast<std::size_t>(vertex) < fixedSide.size() && fixedSide[vertex] >= 0;
     }
-    int movableCount() const
-    {
+    int movableCount() const {
         int movable = 0;
-        for (int v = 0; v < vertexCount(); ++v)
-            movable += is_pinned(v) ? 0 : 1;
+        for (int v = 0; v < vertexCount(); ++v) movable += is_pinned(v) ? 0 : 1;
         return movable;
     }
-    int sideSize(int s) const
-    {
+    int sideSize(int s) const {
         int count = 0;
-        for (int value : side)
-            count += value == s ? 1 : 0;
+        for (int value : side) count += value == s ? 1 : 0;
         return count;
     }
     // The weight of the edges with both endpoints assigned and on different
     // sides (straight from the facts; no prepare needed).
-    std::int64_t cutWeight() const
-    {
+    std::int64_t cutWeight() const {
         std::int64_t cut = 0;
-        for (const Edge &edge : edges)
-        {
+        for (const Edge& edge : edges) {
             const int a = sideOf(edge.source);
             const int b = sideOf(edge.target);
-            if (a >= 0 && b >= 0 && a != b)
-                cut += edge.weight;
+            if (a >= 0 && b >= 0 && a != b) cut += edge.weight;
         }
         return cut;
     }
-    std::int64_t totalEdgeWeight() const
-    {
+    std::int64_t totalEdgeWeight() const {
         std::int64_t total = 0;
-        for (const Edge &edge : edges)
-            total += edge.weight;
+        for (const Edge& edge : edges) total += edge.weight;
         return total;
     }
-    bool isComplete() const
-    {
-        if (side.size() != vertexIds.size())
-            return vertexIds.empty();
-        for (int value : side)
-        {
-            if (value < 0)
-                return false;
+    bool isComplete() const {
+        if (side.size() != vertexIds.size()) return vertexIds.empty();
+        for (int value : side) {
+            if (value < 0) return false;
         }
         return true;
     }
 
-    int sideOf(int vertex) const
-    {
+    int sideOf(int vertex) const {
         return static_cast<std::size_t>(vertex) < side.size() ? side[vertex] : kUnassigned;
     }
 };
@@ -198,14 +178,20 @@ struct MaxCutProblem
 // move exchanges a side-0 and a side-1 vertex (the side sizes stay). A
 // vertex with fixedSide >= 0 is pinned: never moved, swapped or ruined.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<mc::MaxCutProblem>
-{
+template <>
+struct optimaru::SolutionTraits<mc::MaxCutProblem> {
     static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
-    static int entity_count(const mc::MaxCutProblem &problem) { return problem.vertexCount(); }
-    static int value_count(const mc::MaxCutProblem & /*problem*/) { return mc::kSideCount; }
-    static int value_of(const mc::MaxCutProblem &problem, int vertex) { return problem.side[vertex]; }
-    static void assign(mc::MaxCutProblem &problem, int vertex, int value) { problem.side[vertex] = value; }
-    static bool is_pinned(const mc::MaxCutProblem &problem, int vertex) { return problem.is_pinned(vertex); }
+    static int entity_count(const mc::MaxCutProblem& problem) { return problem.vertexCount(); }
+    static int value_count(const mc::MaxCutProblem& /*problem*/) { return mc::kSideCount; }
+    static int value_of(const mc::MaxCutProblem& problem, int vertex) {
+        return problem.side[vertex];
+    }
+    static void assign(mc::MaxCutProblem& problem, int vertex, int value) {
+        problem.side[vertex] = value;
+    }
+    static bool is_pinned(const mc::MaxCutProblem& problem, int vertex) {
+        return problem.is_pinned(vertex);
+    }
 };
 
 #endif  // MC_DOMAIN_HPP

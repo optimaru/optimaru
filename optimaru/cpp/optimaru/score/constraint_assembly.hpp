@@ -24,7 +24,7 @@ namespace optimaru {
 // assembly for a domain that can build more constraints than it scores by
 // default (catalog_info() below).
 struct ConstraintInfo {
-    std::string name;      // the registry name ("facilityCapacityCost")
+    std::string name;  // the registry name ("facilityCapacityCost")
     Level default_level;
     double default_weight;  // in units of default_level
     bool level_flippable;
@@ -596,8 +596,8 @@ private:
             throw std::invalid_argument(
                     "Constraint '" + name + "' has " + std::to_string(count) +
                     " instances in this assembly, so its name alone does not say which one; "
-                    "pass the instance (0 to " + std::to_string(count - 1) +
-                    ") or use drop_all()");
+                    "pass the instance (0 to " +
+                    std::to_string(count - 1) + ") or use drop_all()");
         }
     }
 
@@ -656,7 +656,7 @@ private:
 // the drift the catalog exists to prevent.
 template <typename Solution>
 std::vector<ConstraintInfo> catalog_info(const ConstraintAssembly<Solution>& defaults,
-                                        const ConstraintAssembly<Solution>& catalog) {
+                                         const ConstraintAssembly<Solution>& catalog) {
     std::vector<ConstraintInfo> rows = defaults.info();
     const std::size_t default_count = rows.size();
     for (ConstraintInfo& row : catalog.info()) {

@@ -61,14 +61,12 @@ struct Construction {
 
     // Initialization order: decreasing difficulty if a hook is set (FFD),
     // otherwise index order (First Fit).
-    static std::vector<int> initialization_order(
-            const std::vector<int>& candidates,
-            const std::function<double(int)>& difficulty) {
+    static std::vector<int> initialization_order(const std::vector<int>& candidates,
+                                                 const std::function<double(int)>& difficulty) {
         std::vector<int> order = candidates;
         if (difficulty) {
-            std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
-                return difficulty(a) > difficulty(b);
-            });
+            std::stable_sort(order.begin(), order.end(),
+                             [&](int a, int b) { return difficulty(a) > difficulty(b); });
         }
         return order;
     }

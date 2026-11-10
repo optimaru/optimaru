@@ -3,8 +3,7 @@
 
 #include "cs/constraints/common.hpp"
 
-namespace cs
-{
+namespace cs {
 
 // Hard, weight 10: talkPrerequisiteTalksCost — a talk scheduled before (or
 // overlapping) a talk it lists as a prerequisite, weighed by their combined
@@ -13,18 +12,13 @@ namespace cs
 // for each prerequisite that ends after its dependent talk starts; 0 = no
 // violation (every prerequisite ends by the time the talk that needs it
 // starts).
-struct TalkPrerequisiteTalksCost final : BreakdownConstraint
-{
+struct TalkPrerequisiteTalksCost final : BreakdownConstraint {
     static constexpr double kDefaultWeight = 10.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit TalkPrerequisiteTalksCost(double weight = kDefaultWeight)
-        : BreakdownConstraint(
-              "talkPrerequisiteTalksCost", weight, kDefaultLevel)
-    {
-    }
-    std::int64_t select(const Breakdown &breakdown) const override
-    {
+        : BreakdownConstraint("talkPrerequisiteTalksCost", weight, kDefaultLevel) {}
+    std::int64_t select(const Breakdown& breakdown) const override {
         return breakdown.talkPrerequisiteTalksCost;
     }
 };

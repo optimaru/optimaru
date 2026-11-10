@@ -46,9 +46,7 @@ def _draw(rng: random.Random, cumulative: list[float]) -> int:
     return len(cumulative) - 1
 
 
-def _distinct_equipment(
-    rng: random.Random, cumulative: list[float], count: int
-) -> list[str]:
+def _distinct_equipment(rng: random.Random, cumulative: list[float], count: int) -> list[str]:
     chosen: list[str] = []
     while len(chosen) < count:
         item = EQUIPMENT_TYPES[_draw(rng, cumulative)]
@@ -64,17 +62,13 @@ def _build(room_count: int, last_day: int, seed: int) -> Any:
     import optimaru.bed_allocation as ba
 
     rng = random.Random(seed)
-    department = ba.Department(
-        "1", "Department", {"Specialty1": 1, "Specialty2": 2, "Specialty3": 2}
-    )
+    department = ba.Department("1", "Department", {"Specialty1": 1, "Specialty2": 2, "Specialty3": 2})
 
     capacities = [1] * room_count
     order = list(range(room_count))
     rng.shuffle(order)
     for i, room in enumerate(order):
-        capacities[room] = (
-            1 if i < 0.8 * room_count else (2 if i < 0.9 * room_count else 3)
-        )
+        capacities[room] = 1 if i < 0.8 * room_count else (2 if i < 0.9 * room_count else 3)
 
     equipment: list[list[str]] = [[] for _ in range(room_count)]
     rng.shuffle(order)
@@ -95,11 +89,7 @@ def _build(room_count: int, last_day: int, seed: int) -> Any:
         )
         for r in range(room_count)
     ]
-    beds = [
-        ba.Bed(f"{r}-bed{i}", r, i)
-        for r in range(room_count)
-        for i in range(capacities[r])
-    ]
+    beds = [ba.Bed(f"{r}-bed{i}", r, i) for r in range(room_count) for i in range(capacities[r])]
 
     stays = []
     last_ordinal = FIRST_DAY + last_day
@@ -117,9 +107,7 @@ def _build(room_count: int, last_day: int, seed: int) -> Any:
                 required = _distinct_equipment(rng, [0.22, 0.47, 0.72, 1.0], 1)
             elif required_count == 2:
                 required = _distinct_equipment(rng, [0.13, 0.29, 0.49, 1.0], 2)
-            preferred = _distinct_equipment(
-                rng, [0.32, 0.62, 0.90, 1.0], _draw(rng, [0.29, 0.82, 0.98, 1.0]) + 1
-            )
+            preferred = _distinct_equipment(rng, [0.32, 0.62, 0.90, 1.0], _draw(rng, [0.29, 0.82, 0.98, 1.0]) + 1)
             stays.append(
                 ba.Stay(
                     f"stay-{index}",
@@ -168,8 +156,9 @@ def self_report(problem: Any) -> tuple[float, ...]:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from optimaru.bed_allocation.models import BedPlanModel
     from external_solver.bed_allocation import solve
+
+    from optimaru.bed_allocation.models import BedPlanModel
 
     solved = solve(
         BedPlanModel.from_core(problem),

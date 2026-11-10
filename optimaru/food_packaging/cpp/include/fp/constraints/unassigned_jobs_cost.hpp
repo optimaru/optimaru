@@ -3,8 +3,7 @@
 
 #include "fp/constraints/common.hpp"
 
-namespace fp
-{
+namespace fp {
 
 // Medium, weight 1: unassignedJobsCost — the production minutes of every job
 // that is on no packaging LINE, so dropping a long job hurts more than
@@ -26,52 +25,38 @@ namespace fp
 //
 // It keeps the assigned minutes per line unit, so a touched list costs
 // O(its jobs) and the total is one subtraction.
-struct UnassignedJobsCost final : FpGlobalConstraint
-{
+struct UnassignedJobsCost final : FpGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
 
     explicit UnassignedJobsCost(double weight = kDefaultWeight)
-        : FpGlobalConstraint("unassignedJobsCost", weight, kDefaultLevel)
-    {
-    }
+        : FpGlobalConstraint("unassignedJobsCost", weight, kDefaultLevel) {}
 
-    void
-    reset(const PackagingSchedule &schedule,
-          const std::vector<std::vector<int>> & /*members_per_unit*/) override
-    {
+    void reset(const PackagingSchedule& schedule,
+               const std::vector<std::vector<int>>& /*members_per_unit*/) override {
         detail::requirePrepared(schedule);
         totalMinutes_ = 0;
-        for (const Job &job : schedule.jobs)
-            totalMinutes_ += job.durationMinutes;
+        for (const Job& job : schedule.jobs) totalMinutes_ += job.durationMinutes;
         assignedPerLine_.assign(schedule.lineCount(), 0);
         assignedMinutes_ = 0;
-        for (int line = 0; line < schedule.lineCount(); ++line)
-        {
+        for (int line = 0; line < schedule.lineCount(); ++line) {
             assignedPerLine_[line] = minutesOn(schedule, line);
             assignedMinutes_ += assignedPerLine_[line];
         }
     }
 
-    void on_unit_changed(const PackagingSchedule &schedule,
-                       int unit,
-                       const std::vector<int> & /*members*/) override
-    {
-        if (detail::isPool(schedule, unit))
-            return;  // the pool is "not on a line" either way
+    void on_unit_changed(const PackagingSchedule& schedule, int unit,
+                         const std::vector<int>& /*members*/) override {
+        if (detail::isPool(schedule, unit)) return;  // the pool is "not on a line" either way
         const std::int64_t minutes = minutesOn(schedule, unit);
         assignedMinutes_ += minutes - assignedPerLine_[unit];
         assignedPerLine_[unit] = minutes;
     }
 
-    double cost() const override
-    {
-        return static_cast<double>(totalMinutes_ - assignedMinutes_);
-    }
+    double cost() const override { return static_cast<double>(totalMinutes_ - assignedMinutes_); }
 
 private:
-    static std::int64_t minutesOn(const PackagingSchedule &schedule, int line)
-    {
+    static std::int64_t minutesOn(const PackagingSchedule& schedule, int line) {
         std::int64_t minutes = 0;
         for (int jobIndex : detail::jobsOfUnit(schedule, line))
             minutes += schedule.jobs[jobIndex].durationMinutes;

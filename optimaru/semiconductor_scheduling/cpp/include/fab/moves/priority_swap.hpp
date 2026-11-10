@@ -7,8 +7,7 @@
 #include "fab/domain.hpp"
 #include "optimaru/search/operators.hpp"
 
-namespace fab
-{
+namespace fab {
 
 // ---------------------------------------------------------------------------
 // PrioritySwapMove — exchange the decode priorities of two operations
@@ -21,39 +20,31 @@ namespace fab
 // The built-in assignment swap is no substitute: it exchanges whole values, so the
 // machine slot of one operation would land on another operation's option
 // list.
-class PrioritySwapMove final : public optimaru::MoveOperator<SemiconductorSchedule>
-{
+class PrioritySwapMove final : public optimaru::MoveOperator<SemiconductorSchedule> {
 public:
-    const char *name() const override { return "prioritySwap"; }
+    const char* name() const override { return "prioritySwap"; }
 
-    bool apply(optimaru::OperatorContext<SemiconductorSchedule> &ctx,
-               std::mt19937_64 &rng,
-               std::vector<int> &entities) override
-    {
-        SemiconductorSchedule &s = ctx.editor.solution();
+    bool apply(optimaru::OperatorContext<SemiconductorSchedule>& ctx, std::mt19937_64& rng,
+               std::vector<int>& entities) override {
+        SemiconductorSchedule& s = ctx.editor.solution();
         const int n = s.rowCount();
-        if (n < 2)
-            return false;
+        if (n < 2) return false;
         const int a = static_cast<int>(rng() % static_cast<std::uint64_t>(n));
         const int valueA = s.rows[static_cast<std::size_t>(a)].value;
-        if (valueA < 0)
-            return false;
+        if (valueA < 0) return false;
         const int rankA = s.rankOf(valueA);
         int b = -1;
-        for (int attempt = 0; attempt < 16; ++attempt)
-        {
+        for (int attempt = 0; attempt < 16; ++attempt) {
             int candidate = static_cast<int>(rng() % static_cast<std::uint64_t>(n - 1));
-            if (candidate >= a)
-                ++candidate;
+            if (candidate >= a) ++candidate;
             const int value = s.rows[static_cast<std::size_t>(candidate)].value;
-            if (value < 0 || s.rankOf(value) == rankA)
-                continue;
+            if (value < 0 || s.rankOf(value) == rankA) continue;
             b = candidate;
-            if (s.rows[static_cast<std::size_t>(candidate)].lot != s.rows[static_cast<std::size_t>(a)].lot)
+            if (s.rows[static_cast<std::size_t>(candidate)].lot !=
+                s.rows[static_cast<std::size_t>(a)].lot)
                 break;  // a different lot: the preferred partner
         }
-        if (b < 0)
-            return false;
+        if (b < 0) return false;
         const int valueB = s.rows[static_cast<std::size_t>(b)].value;
         a_ = a;
         b_ = b;
@@ -68,8 +59,7 @@ public:
         return true;
     }
 
-    void undo_last(optimaru::OperatorContext<SemiconductorSchedule> &ctx) override
-    {
+    void undo_last(optimaru::OperatorContext<SemiconductorSchedule>& ctx) override {
         ctx.editor.begin_batch();
         ctx.editor.assign(a_, oldA_);
         ctx.editor.assign(b_, oldB_);

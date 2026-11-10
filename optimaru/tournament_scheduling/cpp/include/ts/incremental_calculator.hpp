@@ -7,8 +7,7 @@
 #include "optimaru/score/objective.hpp"
 #include "ts/domain.hpp"
 
-namespace ts
-{
+namespace ts {
 
 // The tournament-scheduling implementation of the engine's
 // optimaru::Objective.
@@ -37,10 +36,9 @@ namespace ts
 // the tests and under ScoreChecks::ScoreChecks::Full); both assemble the final
 // double through ScoreCalculator::combinedSoft, so the comparison is exact.
 class TournamentSchedulingIncrementalScoreCalculator final
-    : public optimaru::Objective<TournamentSchedule>
-{
+    : public optimaru::Objective<TournamentSchedule> {
 public:
-    void rebuild(TournamentSchedule &solution) override;
+    void rebuild(TournamentSchedule& solution) override;
     void before_assign(int assignmentIndex) override;
     void after_assign(int assignmentIndex) override;
     Score score() override;
@@ -53,26 +51,20 @@ public:
     // per-(team, day) occupancy / penalty-fact counters that say whether a
     // team can take an assignment on a day without breaking a hard
     // constraint.
-    const std::vector<std::int64_t> &teamLoads() const { return teamLoad_; }
+    const std::vector<std::int64_t>& teamLoads() const { return teamLoad_; }
     int loadedTeamCount() const { return balN_; }
-    int cellCount(int team, int day) const
-    {
-        return cellCnt_[cellOffset(team, day)];
-    }
-    int penaltyCount(int team, int day) const
-    {
-        return penaltyCnt_[cellOffset(team, day)];
-    }
+    int cellCount(int team, int day) const { return cellCnt_[cellOffset(team, day)]; }
+    int penaltyCount(int team, int day) const { return penaltyCnt_[cellOffset(team, day)]; }
 
 private:
-    TournamentSchedule *schedule_ = nullptr;
+    TournamentSchedule* schedule_ = nullptr;
     int teamCount_ = 0;
     int dayCount_ = 0;
     std::vector<int> assign_;  // team per assignment (-1 == unassigned)
 
     // Occupancy and penalty-fact counters.
-    std::vector<int> cellCnt_;     // (team, day) -> assignment count
-    std::vector<int> penaltyCnt_;  // (team, day) -> UnavailabilityPenalty facts
+    std::vector<int> cellCnt_;            // (team, day) -> assignment count
+    std::vector<int> penaltyCnt_;         // (team, day) -> UnavailabilityPenalty facts
     std::vector<std::int64_t> teamLoad_;  // team -> assignment count
     std::vector<std::int64_t> confCnt_;   // (t1, t2), t1 < t2 -> confrontations
 
@@ -90,8 +82,7 @@ private:
     void retract(int assignmentIndex, int team);
     void addConfrontations(int t1, int t2, std::int64_t delta);
 
-    std::size_t cellOffset(int team, int day) const
-    {
+    std::size_t cellOffset(int team, int day) const {
         return static_cast<std::size_t>(team) * dayCount_ + day;
     }
     std::size_t pairOffset(int t1, int t2) const  // requires t1 < t2

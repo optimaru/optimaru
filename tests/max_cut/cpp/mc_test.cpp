@@ -32,13 +32,11 @@
 using namespace mc;
 using namespace mc_test;
 
-namespace
-{
+namespace {
 
 // The full recompute and a freshly reset incremental calculator on the
 // current partition; checks that they agree and returns the full one.
-Score scoreBothWays(MaxCutProblem &problem, const std::string &label)
-{
+Score scoreBothWays(MaxCutProblem& problem, const std::string& label) {
     const Score full = ScoreCalculator::score(problem);
     MaxCutIncrementalScoreCalculator incremental;
     incremental.rebuild(problem);
@@ -48,22 +46,19 @@ Score scoreBothWays(MaxCutProblem &problem, const std::string &label)
     return full;
 }
 
-void expectScore(MaxCutProblem &problem, std::int64_t hard, double soft, const std::string &label)
-{
+void expectScore(MaxCutProblem& problem, std::int64_t hard, double soft, const std::string& label) {
     const Score score = scoreBothWays(problem, label);
     check(score.hard == hard && score.soft == soft, label + " -> " + score.str());
 }
 
-bool pairIs(const std::int64_t (&costs)[kSideCount], std::int64_t a, std::int64_t b)
-{
+bool pairIs(const std::int64_t (&costs)[kSideCount], std::int64_t a, std::int64_t b) {
     return costs[0] == a && costs[1] == b;
 }
 
 // -------------------------------------------------------------------------
 // (1) Hand-calculated raw costs and scores.
 // -------------------------------------------------------------------------
-void verifyHandCalculated()
-{
+void verifyHandCalculated() {
     std::printf("== (1) Hand-calculated costs, positive and zero per constraint ==\n");
     {
         MaxCutProblem p = fixtureH();
@@ -83,10 +78,14 @@ void verifyHandCalculated()
         p.side = {0, 1, 1, 1};
         ScoreCalculator::prepare(p);
         const RawCosts raw = ScoreCalculator::rawCosts(p);
-        check(pairIs(raw.fixed, 1, 0), "fixedPartitionCost positive: A (fixed 1) on side 0 -> [1, 0]");
-        check(pairIs(raw.same, 1, 0), "samePartitionPairsCost positive: (A, B) split, charged to A's side 0");
-        check(pairIs(raw.different, 0, 1), "differentPartitionPairsCost positive: B, C both on side 1");
-        check(pairIs(raw.size, 1, 1), "partitionSizeBoundsCost positive: side 0 one short, side 1 one over");
+        check(pairIs(raw.fixed, 1, 0),
+              "fixedPartitionCost positive: A (fixed 1) on side 0 -> [1, 0]");
+        check(pairIs(raw.same, 1, 0),
+              "samePartitionPairsCost positive: (A, B) split, charged to A's side 0");
+        check(pairIs(raw.different, 0, 1),
+              "differentPartitionPairsCost positive: B, C both on side 1");
+        check(pairIs(raw.size, 1, 1),
+              "partitionSizeBoundsCost positive: side 0 one short, side 1 one over");
         check(raw.imbalance == 2, "partitionImbalanceCost positive: |1 - 3| = 2");
         check(raw.cut == 2, "cutWeightCost: only A-B (2) is cut");
         expectScore(p, -5, 2.0, "fixture H positive case");
@@ -105,8 +104,8 @@ void verifyHandCalculated()
         MaxCutProblem p = contractInstance();
         ScoreCalculator::prepare(p);
         const RawCosts raw = ScoreCalculator::rawCosts(p);
-        check(raw.fixedTotal() == 1 && raw.sameTotal() == 1 && raw.differentTotal() == 1 && raw.sizeTotal() == 0
-                  && raw.imbalance == 1 && raw.cut == 0,
+        check(raw.fixedTotal() == 1 && raw.sameTotal() == 1 && raw.differentTotal() == 1 &&
+                      raw.sizeTotal() == 0 && raw.imbalance == 1 && raw.cut == 0,
               "the contract instance: fixed / same / different 1 each, size 0, imbalance 1, cut 0");
         expectScore(p, -3, 0.0, "contract instance score");
     }
@@ -142,11 +141,13 @@ void verifyHandCalculated()
         p.maxPartitionSize = 3;
         p.side = {0, 0, 0, 0, 1};
         ScoreCalculator::prepare(p);
-        check(pairIs(ScoreCalculator::rawCosts(p).size, 1, 0), "max 3 only: side 0 holds 4 -> [1, 0]");
+        check(pairIs(ScoreCalculator::rawCosts(p).size, 1, 0),
+              "max 3 only: side 0 holds 4 -> [1, 0]");
         p.maxPartitionSize.reset();
         p.minPartitionSize = 2;
         ScoreCalculator::prepare(p);
-        check(pairIs(ScoreCalculator::rawCosts(p).size, 0, 1), "min 2 only: side 1 holds 1 -> [0, 1]");
+        check(pairIs(ScoreCalculator::rawCosts(p).size, 0, 1),
+              "min 2 only: side 1 holds 1 -> [0, 1]");
         p.side = {0, 0, 1, 1, 1};
         ScoreCalculator::prepare(p);
         check(pairIs(ScoreCalculator::rawCosts(p).size, 0, 0), "min 2 only: 2 + 3 -> [0, 0]");
@@ -165,9 +166,11 @@ void verifyHandCalculated()
         check(raw.cut == 0, "-1: an edge with an unassigned endpoint is not cut");
         check(pairIs(raw.same, 1, 0),
               "-1: (A, B) is split (A assigned, B not); (B, A) charges nothing (B unassigned)");
-        check(pairIs(raw.different, 0, 0), "-1: a pair with an unassigned endpoint is never joined");
+        check(pairIs(raw.different, 0, 0),
+              "-1: a pair with an unassigned endpoint is never joined");
         check(pairIs(raw.fixed, 0, 0), "-1: an unassigned fixed vertex is not off its side");
-        check(pairIs(raw.size, 0, 1) && raw.imbalance == 1, "-1: the sizes count assigned vertices only");
+        check(pairIs(raw.size, 0, 1) && raw.imbalance == 1,
+              "-1: the sizes count assigned vertices only");
         expectScore(p, -2, 0.0, "-1 score, incremental == full");
     }
     {
@@ -180,26 +183,25 @@ void verifyHandCalculated()
 // -------------------------------------------------------------------------
 // (2) Incremental == full recompute on random walks, per constraint.
 // -------------------------------------------------------------------------
-bool sameTotals(const MaxCutIncrementalScoreCalculator::Totals &totals, const RawCosts &raw)
-{
-    return totals.fixed == raw.fixedTotal() && totals.same == raw.sameTotal()
-           && totals.different == raw.differentTotal() && totals.size[0] == raw.size[0]
-           && totals.size[1] == raw.size[1] && totals.imbalance == raw.imbalance && totals.cut == raw.cut;
+bool sameTotals(const MaxCutIncrementalScoreCalculator::Totals& totals, const RawCosts& raw) {
+    return totals.fixed == raw.fixedTotal() && totals.same == raw.sameTotal() &&
+           totals.different == raw.differentTotal() && totals.size[0] == raw.size[0] &&
+           totals.size[1] == raw.size[1] && totals.imbalance == raw.imbalance &&
+           totals.cut == raw.cut;
 }
 
-void verifyIncrementalWalk()
-{
+void verifyIncrementalWalk() {
     std::printf("== (2) Incremental == full recompute on random walks, per constraint ==\n");
     // The catalog order; nonZero counts the steps on which each raw cost was
     // non-zero, so a constraint the walk never exercises fails the test.
-    const char *const names[] = {"fixedPartitionCost",      "samePartitionPairsCost", "differentPartitionPairsCost",
-                                 "partitionSizeBoundsCost", "partitionImbalanceCost", "cutWeightCost"};
+    const char* const names[] = {"fixedPartitionCost",          "samePartitionPairsCost",
+                                 "differentPartitionPairsCost", "partitionSizeBoundsCost",
+                                 "partitionImbalanceCost",      "cutWeightCost"};
     int nonZero[6] = {0, 0, 0, 0, 0, 0};
     int mismatches = 0;
     int costMismatches = 0;
     int steps = 0;
-    for (std::uint64_t seed = 1; seed <= 12; ++seed)
-    {
+    for (std::uint64_t seed = 1; seed <= 12; ++seed) {
         MaxCutProblem p = randomInstance(1 + static_cast<int>((seed * 7) % 40), seed, 0.1);
         ScoreCalculator::prepare(p);
         MaxCutIncrementalScoreCalculator calculator;
@@ -208,17 +210,13 @@ void verifyIncrementalWalk()
         std::mt19937_64 rng(seed * 101);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
         const int n = p.vertexCount();
-        for (int step = 0; step < 250; ++step, ++steps)
-        {
+        for (int step = 0; step < 250; ++step, ++steps) {
             const double u = unit(rng);
-            if (u < 0.6)
-            {
+            if (u < 0.6) {
                 const int v = static_cast<int>(rng() % n);
                 const int value = unit(rng) < 0.15 ? kUnassigned : static_cast<int>(rng() % 2);
                 editor.assign(v, value);
-            }
-            else
-            {
+            } else {
                 // A swap (or a random 3-vertex batch) as one composite change.
                 editor.begin_batch();
                 const int a = static_cast<int>(rng() % n);
@@ -234,32 +232,29 @@ void verifyIncrementalWalk()
             const Score full = ScoreCalculator::score(shadow);
             const RawCosts raw = ScoreCalculator::rawCosts(shadow);
             const Score incremental = editor.score();
-            if (!sameScore(full, incremental) && ++mismatches <= 3)
-            {
+            if (!sameScore(full, incremental) && ++mismatches <= 3) {
                 std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
                             static_cast<unsigned long long>(seed), step, incremental.str().c_str(),
                             full.str().c_str());
             }
             // Per constraint, so opposite errors in two terms cannot cancel
             // out and the weight-0 imbalance is checked too.
-            if (!sameTotals(calculator.totals(), raw) && ++costMismatches <= 3)
-            {
-                std::printf("  RAW COST MISMATCH seed %llu step %d\n", static_cast<unsigned long long>(seed), step);
+            if (!sameTotals(calculator.totals(), raw) && ++costMismatches <= 3) {
+                std::printf("  RAW COST MISMATCH seed %llu step %d\n",
+                            static_cast<unsigned long long>(seed), step);
             }
             const std::int64_t costs[6] = {raw.fixedTotal(), raw.sameTotal(), raw.differentTotal(),
                                            raw.sizeTotal(),  raw.imbalance,   raw.cut};
-            for (int c = 0; c < 6; ++c)
-                nonZero[c] += costs[c] != 0 ? 1 : 0;
+            for (int c = 0; c < 6; ++c) nonZero[c] += costs[c] != 0 ? 1 : 0;
         }
     }
     check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
-    check(costMismatches == 0,
-          std::to_string(steps) + " random moves, every constraint's incremental raw total == the full recompute's");
-    for (int c = 0; c < 6; ++c)
-    {
-        check(nonZero[c] > 0,
-              std::string(names[c]) + " non-zero on " + std::to_string(nonZero[c]) + "/" + std::to_string(steps)
-                  + " steps of the walk");
+    check(costMismatches == 0, std::to_string(steps) +
+                                       " random moves, every constraint's incremental raw total == "
+                                       "the full recompute's");
+    for (int c = 0; c < 6; ++c) {
+        check(nonZero[c] > 0, std::string(names[c]) + " non-zero on " + std::to_string(nonZero[c]) +
+                                      "/" + std::to_string(steps) + " steps of the walk");
     }
     std::printf("\n");
 }
@@ -267,8 +262,7 @@ void verifyIncrementalWalk()
 // -------------------------------------------------------------------------
 // (3) The solver.
 // -------------------------------------------------------------------------
-Solver::Config steps(std::int64_t count, std::uint64_t seed)
-{
+Solver::Config steps(std::int64_t count, std::uint64_t seed) {
     Solver::Config config;
     config.time_limit = std::chrono::seconds(30);
     config.step_limit = count;
@@ -276,14 +270,10 @@ Solver::Config steps(std::int64_t count, std::uint64_t seed)
     return config;
 }
 
-bool solvesCleanly(MaxCutProblem &p, const Solver::Config &config)
-{
-    try
-    {
+bool solvesCleanly(MaxCutProblem& p, const Solver::Config& config) {
+    try {
         Solver(config).solve(p);
-    }
-    catch (const std::exception &error)
-    {
+    } catch (const std::exception& error) {
         std::printf("  %s\n", error.what());
         return false;
     }
@@ -291,8 +281,7 @@ bool solvesCleanly(MaxCutProblem &p, const Solver::Config &config)
     return sameScore(p.score, ScoreCalculator::score(rescored));
 }
 
-void verifySolver()
-{
+void verifySolver() {
     std::printf("== (3) Solver ==\n");
     {
         // ScoreChecks::Full re-checks every incremental score against a reset; the
@@ -332,14 +321,15 @@ void verifySolver()
         Solver(config).solve(right);
         Solver(config).solve(wrong);
         check(right.sideSize(1) == 2 && right.score.hard == 0, "a right-size seed stays at 2 + 2");
-        check(right.score.soft == 9.0, "... and reaches the best balanced cut (A, C | B, D cuts all three edges: 9)");
-        check(wrong.sideSize(1) == 3 && wrong.score.hard == -2, "a wrong-size seed keeps 3 + 1 and its -2 hard");
+        check(right.score.soft == 9.0,
+              "... and reaches the best balanced cut (A, C | B, D cuts all three edges: 9)");
+        check(wrong.sideSize(1) == 3 && wrong.score.hard == -2,
+              "a wrong-size seed keeps 3 + 1 and its -2 hard");
     }
     {
         // Pinned vertices never move, under multi-start too.
         bool kept = true;
-        for (std::uint64_t seed = 0; seed < 5; ++seed)
-        {
+        for (std::uint64_t seed = 0; seed < 5; ++seed) {
             MaxCutProblem p = graph({"A", "B", "C", "D"}, {{0, 1, 2}, {1, 2, 3}, {2, 3, 4}});
             p.fixedSide = {1, kUnassigned, 1, kUnassigned};
             p.minPartitionSize = p.maxPartitionSize = 2;
@@ -368,15 +358,14 @@ void verifySolver()
         MaxCutProblem p = randomInstance(40, 31, 0.0, /*bounds=*/false);
         Solver::Config config;
         config.parallelSolverCount = 3;
-        config.on_new_best = [](std::int64_t, const Score &) { throw std::runtime_error("onNewBest failed"); };
+        config.on_new_best = [](std::int64_t, const Score&) {
+            throw std::runtime_error("onNewBest failed");
+        };
         const auto start = std::chrono::steady_clock::now();
         bool rethrown = false;
-        try
-        {
+        try {
             Solver(config).solve(p);
-        }
-        catch (const std::runtime_error &error)
-        {
+        } catch (const std::runtime_error& error) {
             rethrown = std::string(error.what()) == "onNewBest failed";
         }
         check(rethrown, "a throwing onNewBest under 3 parallel starts is rethrown by solve()");
@@ -409,7 +398,8 @@ void verifySolver()
     {
         MaxCutProblem empty = graph({}, {});
         Solver(steps(100, 1)).solve(empty);
-        check(empty.scored && sameScore(empty.score, Score{0, 0.0}), "the empty graph is scored, not searched");
+        check(empty.scored && sameScore(empty.score, Score{0, 0.0}),
+              "the empty graph is scored, not searched");
         MaxCutProblem single = graph({"A"}, {});
         single.minPartitionSize = single.maxPartitionSize = 0;
         Solver(steps(100, 1)).solve(single);
@@ -420,11 +410,10 @@ void verifySolver()
         // Brute-force optima on small random instances.
         int reached = 0;
         const int instances = 20;
-        for (std::uint64_t seed = 11; seed < 11 + instances; ++seed)
-        {
-            MaxCutProblem p = randomInstance(6 + static_cast<int>(seed % 7), seed, 0.0, /*bounds=*/seed % 2 == 0);
-            if (p.exactSize())
-                p.maxPartitionSize.reset();
+        for (std::uint64_t seed = 11; seed < 11 + instances; ++seed) {
+            MaxCutProblem p = randomInstance(6 + static_cast<int>(seed % 7), seed, 0.0,
+                                             /*bounds=*/seed % 2 == 0);
+            if (p.exactSize()) p.maxPartitionSize.reset();
             const Score optimum = bruteForceOptimum(p);
             Solver::Config config = steps(20000, seed);
             config.time_limit = std::chrono::seconds(5);
@@ -438,8 +427,8 @@ void verifySolver()
             Solver(config).solve(p);
             reached += sameScore(p.score, optimum) ? 1 : 0;
         }
-        check(reached == instances, std::to_string(reached) + "/" + std::to_string(instances)
-                                        + " small instances reach the brute-force optimum");
+        check(reached == instances, std::to_string(reached) + "/" + std::to_string(instances) +
+                                            " small instances reach the brute-force optimum");
     }
     {
         // Reproducible under a step limit; multi-start never scores below one
@@ -448,23 +437,21 @@ void verifySolver()
         MaxCutProblem b = a;
         Solver(steps(3000, 7)).solve(a);
         Solver(steps(3000, 7)).solve(b);
-        check(a.side == b.side && sameScore(a.score, b.score), "same seed and step limit: same partition");
+        check(a.side == b.side && sameScore(a.score, b.score),
+              "same seed and step limit: same partition");
         MaxCutProblem multi = randomInstance(40, 21, 0.0, false);
         Solver::Config config = steps(3000, 7);
         config.parallelSolverCount = 3;
         Solver(config).solve(multi);
-        check(a.score <= multi.score, "3 parallel starts (seed 7 included) score >= the single start");
+        check(a.score <= multi.score,
+              "3 parallel starts (seed 7 included) score >= the single start");
     }
     {
         // Validation.
-        auto rejects = [](MaxCutProblem p)
-        {
-            try
-            {
+        auto rejects = [](MaxCutProblem p) {
+            try {
                 ScoreCalculator::prepare(p);
-            }
-            catch (const std::invalid_argument &)
-            {
+            } catch (const std::invalid_argument&) {
                 return true;
             }
             return false;
@@ -505,12 +492,9 @@ void verifySolver()
         Solver::Config bad;
         bad.ruinRecreateRewards = {1.0};
         bool threw = false;
-        try
-        {
+        try {
             Solver(bad).solve(base);
-        }
-        catch (const std::invalid_argument &)
-        {
+        } catch (const std::invalid_argument&) {
             threw = true;
         }
         check(threw, "ruinRecreateRewards must hold 4 values");
@@ -520,13 +504,11 @@ void verifySolver()
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyHandCalculated();
     verifyIncrementalWalk();
     verifySolver();
-    if (failures)
-    {
+    if (failures) {
         std::printf("%d check(s) FAILED\n", failures);
         return 1;
     }

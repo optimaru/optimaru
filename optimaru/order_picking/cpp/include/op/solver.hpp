@@ -14,8 +14,7 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 
-namespace op
-{
+namespace op {
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/.
 // (following the school-timetabling Solver pattern,
@@ -24,18 +23,16 @@ namespace op
 // (ALNS, on by default) it registers a warehouse-distance nearby meter, which
 // biases move partners toward picks that are physically close — the natural
 // neighborhood for a travel-distance objective.
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above every
         // achievable score, so it never fires (termination is by time_limit).
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<double>::infinity()};
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;
@@ -54,8 +51,7 @@ public:
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; orders of magnitude
         // slower).
-        optimaru::ScoreChecks score_checks
-            = optimaru::ScoreChecks::Off;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
         // Adaptive ruin-and-recreate kicks when the search stagnates (the
         // engine's ALNS) — lets the trolley assignment escape the local
@@ -104,7 +100,7 @@ public:
         // between trolleys. See OrderConsolidateMove in solver.cpp.
         bool orderConsolidateMoves = true;
 
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
@@ -118,7 +114,7 @@ public:
     // Solves in place: mutates trolleys[*].pickTaskIndices, refreshes the
     // pick tasks' derived fields and stores the best score found in
     // solution.score.
-    void solve(OrderPickingSolution &solution);
+    void solve(OrderPickingSolution& solution);
 
     // Solves with a caller-assembled plugin calculator (see
     // op/constraints.hpp): pick components and weights, then pass the
@@ -132,9 +128,8 @@ public:
     // caller-owned calculator cannot be cloned across workers) and
     // orderConsolidateMoves (that operator reads the monolithic calculator's
     // live per-(trolley, order) volume table).
-    void solve(
-        OrderPickingSolution &solution,
-        optimaru::DecomposedObjective<OrderPickingSolution> &calculator);
+    void solve(OrderPickingSolution& solution,
+               optimaru::DecomposedObjective<OrderPickingSolution>& calculator);
 
 private:
     Config config_;

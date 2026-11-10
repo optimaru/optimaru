@@ -9,8 +9,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace alb
-{
+namespace alb {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
@@ -67,24 +66,18 @@ namespace alb
 // on every single variable change (also inside a batch), so the solution's
 // decision variables and the member lists agree at every call.
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<AssemblyLineBalancingProblem>;
-using ConstraintAssembly
-    = optimaru::ConstraintAssembly<AssemblyLineBalancingProblem>;
-using AlbUnitConstraint
-    = optimaru::UnitConstraint<AssemblyLineBalancingProblem>;
-using AlbGlobalConstraint
-    = optimaru::GlobalConstraint<AssemblyLineBalancingProblem>;
+using DecomposedCalculator = optimaru::DecomposedObjective<AssemblyLineBalancingProblem>;
+using ConstraintAssembly = optimaru::ConstraintAssembly<AssemblyLineBalancingProblem>;
+using AlbUnitConstraint = optimaru::UnitConstraint<AssemblyLineBalancingProblem>;
+using AlbGlobalConstraint = optimaru::GlobalConstraint<AssemblyLineBalancingProblem>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const AssemblyLineBalancingProblem &problem)
-{
-    if (!problem.prepared)
-    {
-        throw std::logic_error("alb constraints require "
-                               "ScoreCalculator::prepare(problem) first");
+inline void requirePrepared(const AssemblyLineBalancingProblem& problem) {
+    if (!problem.prepared) {
+        throw std::logic_error(
+                "alb constraints require "
+                "ScoreCalculator::prepare(problem) first");
     }
 }
 
@@ -99,34 +92,25 @@ inline void requirePrepared(const AssemblyLineBalancingProblem &problem)
 // from it. The raw cost of a station is the sum over its tasks, so the
 // exponent shapes that per-station sum (the pure-Python reference shapes
 // each task's term; the two agree at exponent 1).
-struct PerTaskConstraint : AlbUnitConstraint
-{
+struct PerTaskConstraint : AlbUnitConstraint {
     using AlbUnitConstraint::AlbUnitConstraint;
 
     // The raw cost task `task` incurs while it sits on `station`.
-    virtual double taskCost(const AssemblyLineBalancingProblem &problem,
-                            int station,
+    virtual double taskCost(const AssemblyLineBalancingProblem& problem, int station,
                             int task) const = 0;
 
-    void on_reset(const AssemblyLineBalancingProblem &problem) override
-    {
+    void on_reset(const AssemblyLineBalancingProblem& problem) override {
         detail::requirePrepared(problem);
     }
-    double cost(const AssemblyLineBalancingProblem &problem,
-                int unit,
-                const std::vector<int> &members) const override
-    {
+    double cost(const AssemblyLineBalancingProblem& problem, int unit,
+                const std::vector<int>& members) const override {
         double total = 0.0;
-        for (int task : members)
-            total += taskCost(problem, unit, task);
+        for (int task : members) total += taskCost(problem, unit, task);
         return total;
     }
     bool supports_delta() const override { return true; }
-    double delta_cost(const AssemblyLineBalancingProblem &problem,
-                     int unit,
-                     const std::vector<int> & /*members*/,
-                     int entity) const override
-    {
+    double delta_cost(const AssemblyLineBalancingProblem& problem, int unit,
+                      const std::vector<int>& /*members*/, int entity) const override {
         return taskCost(problem, unit, entity);
     }
 };
@@ -137,18 +121,15 @@ struct PerTaskConstraint : AlbUnitConstraint
 // Shared base of the four globals: all of them run on the member-change fast
 // path (every join / leave is delivered directly, also inside a batch), so
 // on_unit_changed is unreachable.
-struct MemberChangeGlobalConstraint : AlbGlobalConstraint
-{
+struct MemberChangeGlobalConstraint : AlbGlobalConstraint {
     using AlbGlobalConstraint::AlbGlobalConstraint;
 
     bool supports_member_change() const override { return true; }
-    void on_unit_changed(const AssemblyLineBalancingProblem & /*problem*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
-        throw std::logic_error(name
-                               + ": onUnitChanged is unreachable "
-                                 "(member-change fast path)");
+    void on_unit_changed(const AssemblyLineBalancingProblem& /*problem*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
+        throw std::logic_error(name +
+                               ": onUnitChanged is unreachable "
+                               "(member-change fast path)");
     }
 };
 

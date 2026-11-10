@@ -18,8 +18,8 @@ struct RouteDurationCost final : detail::PerVehicleConstraint {
         : PerVehicleConstraint("routeDurationCost", weight, kDefaultLevel) {}
     double cost(const VehicleRoutePlan& p, int u, const std::vector<int>& m) const override {
         if (detail::isPool(p, u) || m.empty()) return 0;
-        return static_cast<double>(detail::routeMetrics(p, u, m).endTime
-                                   - p.vehicles[u].departureTime);
+        return static_cast<double>(detail::routeMetrics(p, u, m).endTime -
+                                   p.vehicles[u].departureTime);
     }
 };
 

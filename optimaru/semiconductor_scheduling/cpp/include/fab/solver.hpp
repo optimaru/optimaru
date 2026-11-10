@@ -15,8 +15,7 @@
 #include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
 
-namespace fab
-{
+namespace fab {
 
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/:
 // it builds the search state (the default or the seeded (rank, machine)
@@ -35,18 +34,16 @@ namespace fab
 //   3. the result: assignments = the seed as supplied if the best values are
 //      the seed values, else their decode (batch ids included); score,
 //      makespan and totals in data mode; warmStart = false.
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // Wall-clock budget. 0 stops right after construction (the start is
         // returned as is; the zero-budget idiom of the tests).
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score (default: never).
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<double>::infinity()};
+                           std::numeric_limits<double>::infinity()};
         // Optional early exits; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;
@@ -99,7 +96,7 @@ public:
         std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
         std::int64_t ruinRecreatePolishSteps = 5000;
 
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
@@ -115,7 +112,7 @@ public:
     // If the search throws (for example the decoder giving up), the schedule
     // is back in data mode with its assignments untouched, and the error
     // propagates. Both overloads.
-    void solve(SemiconductorSchedule &schedule);
+    void solve(SemiconductorSchedule& schedule);
 
     // The same search scored by a caller-assembled plugin calculator (see
     // fab/constraints.hpp). The final score is computed by THIS calculator in
@@ -124,14 +121,14 @@ public:
     // totals come from every constraint, as always. Single start: the
     // caller-owned calculator cannot be cloned, so parallelSolverCount is
     // ignored.
-    void solve(SemiconductorSchedule &schedule,
-               optimaru::DecomposedObjective<SemiconductorSchedule> &calculator);
+    void solve(SemiconductorSchedule& schedule,
+               optimaru::DecomposedObjective<SemiconductorSchedule>& calculator);
 
 private:
     // solve(schedule) after beginSearch(): the starts and endSearch().
-    void searchFromBegun(SemiconductorSchedule &schedule);
-    void runSingle(SemiconductorSchedule &schedule,
-                   optimaru::Objective<SemiconductorSchedule> &calculator) const;
+    void searchFromBegun(SemiconductorSchedule& schedule);
+    void runSingle(SemiconductorSchedule& schedule,
+                   optimaru::Objective<SemiconductorSchedule>& calculator) const;
 
     Config config_;
 };
@@ -140,11 +137,11 @@ private:
 
 // Step 1 of Solver::solve: fills rows[*].value (and the seed fields) from
 // warmStart / assignments, and sets searching = true.
-void beginSearch(SemiconductorSchedule &schedule);
+void beginSearch(SemiconductorSchedule& schedule);
 // Step 3 of Solver::solve: assignments from the current values (the seed as
 // supplied, or the decode), searching = false, warmStart = false, and the
 // default data-mode score stored.
-void endSearch(SemiconductorSchedule &schedule);
+void endSearch(SemiconductorSchedule& schedule);
 
 }  // namespace fab
 

@@ -10,8 +10,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace ms
-{
+namespace ms {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -85,8 +84,7 @@ namespace ms
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<MeetingSchedule>;
+using DecomposedCalculator = optimaru::DecomposedObjective<MeetingSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<MeetingSchedule>;
 using MsUnitConstraint = optimaru::UnitConstraint<MeetingSchedule>;
 using MsGlobalConstraint = optimaru::GlobalConstraint<MeetingSchedule>;
@@ -97,54 +95,41 @@ using MsGlobalConstraint = optimaru::GlobalConstraint<MeetingSchedule>;
 // default weight stops being integral or if a component leaves the level the
 // monolith sums it into.
 template <typename Component, optimaru::Level kLevel>
-constexpr std::int64_t monolithicWeight()
-{
+constexpr std::int64_t monolithicWeight() {
     static_assert(Component::kDefaultLevel == kLevel,
                   "the monolithic calculators sum this constraint into "
                   "another level");
-    constexpr auto weight
-        = static_cast<std::int64_t>(Component::kDefaultWeight);
+    constexpr auto weight = static_cast<std::int64_t>(Component::kDefaultWeight);
     static_assert(weight == Component::kDefaultWeight,
                   "the monolithic calculators assume integral default "
                   "weights");
     return weight;
 }
 template <typename Component>
-constexpr std::int64_t kHardWeight
-    = monolithicWeight<Component, optimaru::Level::Hard>();
+constexpr std::int64_t kHardWeight = monolithicWeight<Component, optimaru::Level::Hard>();
 template <typename Component>
-constexpr std::int64_t kMediumWeight
-    = monolithicWeight<Component, optimaru::Level::Medium>();
+constexpr std::int64_t kMediumWeight = monolithicWeight<Component, optimaru::Level::Medium>();
 template <typename Component>
-constexpr std::int64_t kSoftWeight
-    = monolithicWeight<Component, optimaru::Level::Soft>();
+constexpr std::int64_t kSoftWeight = monolithicWeight<Component, optimaru::Level::Soft>();
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const MeetingSchedule &schedule)
-{
-    if (!schedule.prepared)
-    {
-        throw std::logic_error("ms constraints require "
-                               "ScoreCalculator::prepare(schedule) first");
+inline void requirePrepared(const MeetingSchedule& schedule) {
+    if (!schedule.prepared) {
+        throw std::logic_error(
+                "ms constraints require "
+                "ScoreCalculator::prepare(schedule) first");
     }
 }
 
 // The grain-index interval [start, end) an assignment occupies when placed in
 // `unit` (a composite grainRoom).
-inline void spanOf(const MeetingSchedule &schedule,
-                   int unit,
-                   int assignmentIndex,
-                   int &start,
-                   int &end)
-{
+inline void spanOf(const MeetingSchedule& schedule, int unit, int assignmentIndex, int& start,
+                   int& end) {
     const int pos = schedule.timeGrainPosOf(unit);
     start = schedule.timeGrains[pos].grainIndex;
-    end = start
-          + schedule
-                .meetings[schedule.meetingAssignments[assignmentIndex].meeting]
-                .durationInGrains;
+    end = start +
+          schedule.meetings[schedule.meetingAssignments[assignmentIndex].meeting].durationInGrains;
 }
 
 }  // namespace detail
@@ -156,34 +141,24 @@ inline void spanOf(const MeetingSchedule &schedule,
 // cell: their cost is a sum of independent per-(assignment, cell) terms, so
 // the subclass writes `assignmentCost` only and both the full re-cost and the
 // exact O(1) delta follow from it.
-struct PerAssignmentConstraint : MsUnitConstraint
-{
+struct PerAssignmentConstraint : MsUnitConstraint {
     using MsUnitConstraint::MsUnitConstraint;
 
     // The penalty units assignment `assignmentIndex` incurs in cell `unit`.
-    virtual double assignmentCost(const MeetingSchedule &schedule,
-                                  int unit,
+    virtual double assignmentCost(const MeetingSchedule& schedule, int unit,
                                   int assignmentIndex) const = 0;
 
-    void on_reset(const MeetingSchedule &schedule) override
-    {
-        detail::requirePrepared(schedule);
-    }
-    double cost(const MeetingSchedule &schedule,
-                int unit,
-                const std::vector<int> &members) const override
-    {
+    void on_reset(const MeetingSchedule& schedule) override { detail::requirePrepared(schedule); }
+    double cost(const MeetingSchedule& schedule, int unit,
+                const std::vector<int>& members) const override {
         double total = 0.0;
         for (int assignmentIndex : members)
             total += assignmentCost(schedule, unit, assignmentIndex);
         return total;
     }
     bool supports_delta() const override { return true; }
-    double delta_cost(const MeetingSchedule &schedule,
-                     int unit,
-                     const std::vector<int> & /*members*/,
-                     int entity) const override
-    {
+    double delta_cost(const MeetingSchedule& schedule, int unit,
+                      const std::vector<int>& /*members*/, int entity) const override {
         return assignmentCost(schedule, unit, entity);
     }
 };
@@ -198,45 +173,33 @@ struct PerAssignmentConstraint : MsUnitConstraint
 // against every other. Join adds the marginal before the placement is
 // recorded, leave subtracts it after the placement is cleared, so the
 // aggregate is exactly reversible.
-struct AssignmentPairConstraint : MsGlobalConstraint
-{
+struct AssignmentPairConstraint : MsGlobalConstraint {
     using MsGlobalConstraint::MsGlobalConstraint;
 
     bool supports_member_change() const override { return true; }
-    void on_unit_changed(const MeetingSchedule & /*schedule*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
-        throw std::logic_error(name
-                               + ": onUnitChanged is unreachable "
-                                 "(member-change fast path)");
+    void on_unit_changed(const MeetingSchedule& /*schedule*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
+        throw std::logic_error(name +
+                               ": onUnitChanged is unreachable "
+                               "(member-change fast path)");
     }
 
-    void reset(const MeetingSchedule &schedule,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+    void reset(const MeetingSchedule& schedule,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(schedule);
         placed_.assign(schedule.meetingAssignments.size(), -1);
         total_ = 0;
-        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
-        {
-            for (int assignmentIndex : members_per_unit[unit])
-            {
-                total_ += marginal(
-                    schedule, assignmentIndex, static_cast<int>(unit));
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit) {
+            for (int assignmentIndex : members_per_unit[unit]) {
+                total_ += marginal(schedule, assignmentIndex, static_cast<int>(unit));
                 placed_[assignmentIndex] = static_cast<int>(unit);
             }
         }
     }
 
-    void on_member_changed(const MeetingSchedule &schedule,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int entity,
-                         bool joined) override
-    {
-        if (joined)
-        {
+    void on_member_changed(const MeetingSchedule& schedule, int unit,
+                           const std::vector<int>& /*members*/, int entity, bool joined) override {
+        if (joined) {
             total_ += marginal(schedule, entity, unit);
             placed_[entity] = unit;
             return;
@@ -250,15 +213,11 @@ struct AssignmentPairConstraint : MsGlobalConstraint
 protected:
     // The cell assignment `assignmentIndex` currently occupies, or -1 — never
     // including the assignment whose marginal is being computed.
-    int placedUnit(int assignmentIndex) const
-    {
-        return placed_[assignmentIndex];
-    }
+    int placedUnit(int assignmentIndex) const { return placed_[assignmentIndex]; }
 
     // The pair terms `assignmentIndex` contributes when placed in `unit`,
     // against every OTHER currently placed assignment.
-    virtual std::int64_t marginal(const MeetingSchedule &schedule,
-                                  int assignmentIndex,
+    virtual std::int64_t marginal(const MeetingSchedule& schedule, int assignmentIndex,
                                   int unit) const = 0;
 
 private:
@@ -276,17 +235,14 @@ private:
 // only builds the per-meeting index; each component writes its own marginal,
 // because their pair terms differ in kind — three weigh overlap grains, one
 // looks at ordering and room changes.
-struct AttendanceArcConstraint : AssignmentPairConstraint
-{
+struct AttendanceArcConstraint : AssignmentPairConstraint {
     using AssignmentPairConstraint::AssignmentPairConstraint;
 
-    void reset(const MeetingSchedule &schedule,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+    void reset(const MeetingSchedule& schedule,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         arcsByMeeting_.assign(schedule.meetings.size(), {});
-        for (std::size_t i = 0; i < schedule.conflictArcs.size(); ++i)
-        {
-            const ConflictArc &arc = schedule.conflictArcs[i];
+        for (std::size_t i = 0; i < schedule.conflictArcs.size(); ++i) {
+            const ConflictArc& arc = schedule.conflictArcs[i];
             arcsByMeeting_[arc.meeting1].push_back(static_cast<int>(i));
             if (arc.meeting2 != arc.meeting1)
                 arcsByMeeting_[arc.meeting2].push_back(static_cast<int>(i));
@@ -296,27 +252,17 @@ struct AttendanceArcConstraint : AssignmentPairConstraint
 
 protected:
     // The arcs touching `meeting`, each listed once.
-    const std::vector<int> &arcsOf(int meeting) const
-    {
-        return arcsByMeeting_[meeting];
-    }
+    const std::vector<int>& arcsOf(int meeting) const { return arcsByMeeting_[meeting]; }
 
     // The other end of `arc` seen from `meeting`, resolved to its assignment
     // and current cell. Returns false when the partner is this meeting itself
     // or is not currently placed.
-    bool partnerOf(const MeetingSchedule &schedule,
-                   const ConflictArc &arc,
-                   int meeting,
-                   int &partnerAssignment,
-                   int &partnerUnit) const
-    {
-        const int partnerMeeting
-            = arc.meeting1 == meeting ? arc.meeting2 : arc.meeting1;
-        if (partnerMeeting == meeting)
-            return false;
+    bool partnerOf(const MeetingSchedule& schedule, const ConflictArc& arc, int meeting,
+                   int& partnerAssignment, int& partnerUnit) const {
+        const int partnerMeeting = arc.meeting1 == meeting ? arc.meeting2 : arc.meeting1;
+        if (partnerMeeting == meeting) return false;
         partnerAssignment = schedule.assignmentOfMeeting[partnerMeeting];
-        if (partnerAssignment < 0)
-            return false;
+        if (partnerAssignment < 0) return false;
         partnerUnit = placedUnit(partnerAssignment);
         return partnerUnit >= 0;
     }

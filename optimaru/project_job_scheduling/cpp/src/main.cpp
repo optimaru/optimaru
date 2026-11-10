@@ -17,36 +17,29 @@
 
 using namespace pjs;
 
-namespace
-{
+namespace {
 
-int randInt(std::mt19937_64 &rng, int minInclusive, int maxInclusive)
-{
+int randInt(std::mt19937_64& rng, int minInclusive, int maxInclusive) {
     std::uniform_int_distribution<int> pick(minInclusive, maxInclusive);
     return pick(rng);
 }
 
-double unitDraw(std::mt19937_64 &rng)
-{
+double unitDraw(std::mt19937_64& rng) {
     std::uniform_real_distribution<double> unit(0.0, 1.0);
     return unit(rng);
 }
 
 // Draws from a cumulative distribution table: the index of the first
 // cumulative threshold >= a unit draw.
-int drawIndex(std::mt19937_64 &rng, const std::vector<double> &cumulative)
-{
+int drawIndex(std::mt19937_64& rng, const std::vector<double>& cumulative) {
     const double draw = unitDraw(rng);
-    for (std::size_t i = 0; i < cumulative.size(); ++i)
-    {
-        if (draw <= cumulative[i])
-            return static_cast<int>(i);
+    for (std::size_t i = 0; i < cumulative.size(); ++i) {
+        if (draw <= cumulative[i]) return static_cast<int>(i);
     }
     return static_cast<int>(cumulative.size()) - 1;
 }
 
-ProjectJobSchedule generateDemoData()
-{
+ProjectJobSchedule generateDemoData() {
     std::mt19937_64 rng(0);
     ProjectJobSchedule schedule;
 
@@ -69,14 +62,12 @@ ProjectJobSchedule generateDemoData()
     int modeCounter = 0;
     int requirementCounter = 0;
     std::vector<std::vector<int>> successorJobs;  // global job indices
-    for (int p = 0; p < 2; ++p)
-    {
+    for (int p = 0; p < 2; ++p) {
         const int base = p * jobsCountPerProject;
         // The project's resource pool the generator draws from:
         // [global, local renewable, local non-renewable x2].
         const std::vector<int> pool = {0, 3 * p + 1, 3 * p + 2, 3 * p + 3};
-        for (int i = 0; i < jobsCountPerProject; ++i)
-        {
+        for (int i = 0; i < jobsCountPerProject; ++i) {
             Job job;
             job.id = std::to_string(base + i);
             job.project = p;
@@ -86,37 +77,28 @@ ProjectJobSchedule generateDemoData()
             schedule.jobs.push_back(job);
         }
         // Execution modes, in job order.
-        for (int i = 0; i < jobsCountPerProject; ++i)
-        {
-            Job &job = schedule.jobs[base + i];
-            if (job.jobType != JobType::STANDARD)
-            {
-                job.executionModes.push_back(
-                    {std::to_string(modeCounter++), 0, {}});
+        for (int i = 0; i < jobsCountPerProject; ++i) {
+            Job& job = schedule.jobs[base + i];
+            if (job.jobType != JobType::STANDARD) {
+                job.executionModes.push_back({std::to_string(modeCounter++), 0, {}});
                 continue;
             }
             // Three modes; the requirement count is drawn once per job.
             const int requirementsSize = randInt(rng, 1, 3);
-            for (int m = 0; m < 3; ++m)
-            {
+            for (int m = 0; m < 3; ++m) {
                 ExecutionMode mode;
                 mode.id = std::to_string(modeCounter++);
                 mode.duration = randInt(rng, 1, 5);
-                while (static_cast<int>(mode.resourceRequirements.size())
-                       < requirementsSize)
-                {
+                while (static_cast<int>(mode.resourceRequirements.size()) < requirementsSize) {
                     // 40% global, 20% / 15% / 25% the project's locals.
-                    const int resource
-                        = pool[drawIndex(rng, {0.4, 0.6, 0.75, 1.0})];
-                    const bool duplicate
-                        = std::any_of(mode.resourceRequirements.begin(),
-                                      mode.resourceRequirements.end(),
-                                      [resource](const ResourceRequirement &req)
-                                      { return req.resource == resource; });
-                    if (!duplicate)
-                    {
-                        mode.resourceRequirements.push_back(
-                            {resource, randInt(rng, 1, 5)});
+                    const int resource = pool[drawIndex(rng, {0.4, 0.6, 0.75, 1.0})];
+                    const bool duplicate = std::any_of(mode.resourceRequirements.begin(),
+                                                       mode.resourceRequirements.end(),
+                                                       [resource](const ResourceRequirement& req) {
+                                                           return req.resource == resource;
+                                                       });
+                    if (!duplicate) {
+                        mode.resourceRequirements.push_back({resource, randInt(rng, 1, 5)});
                         ++requirementCounter;
                     }
                 }
@@ -128,18 +110,13 @@ ProjectJobSchedule generateDemoData()
         // the last STANDARD job feeds the sink, the sink feeds nothing.
         std::vector<std::vector<int>> perProject(jobsCountPerProject);
         perProject[0] = {base + 1, base + 2, base + 3};
-        for (int i = 1; i < jobsCountPerProject; ++i)
-        {
+        for (int i = 1; i < jobsCountPerProject; ++i) {
             int count = drawIndex(rng, {0.54, 0.81, 1.0}) + 1;
             count = std::min(count, jobsCountPerProject - i - 1);
             std::vector<int> successors;
-            while (static_cast<int>(successors.size()) < count)
-            {
-                const int jobIdx
-                    = base + randInt(rng, i + 1, jobsCountPerProject - 1);
-                if (std::find(successors.begin(), successors.end(), jobIdx)
-                    == successors.end())
-                {
+            while (static_cast<int>(successors.size()) < count) {
+                const int jobIdx = base + randInt(rng, i + 1, jobsCountPerProject - 1);
+                if (std::find(successors.begin(), successors.end(), jobIdx) == successors.end()) {
                     successors.push_back(jobIdx);
                 }
             }
@@ -148,8 +125,7 @@ ProjectJobSchedule generateDemoData()
         }
         perProject[jobsCountPerProject - 2] = {base + jobsCountPerProject - 1};
         perProject[jobsCountPerProject - 1] = {};
-        successorJobs.insert(
-            successorJobs.end(), perProject.begin(), perProject.end());
+        successorJobs.insert(successorJobs.end(), perProject.begin(), perProject.end());
     }
     (void)requirementCounter;
 
@@ -158,60 +134,47 @@ ProjectJobSchedule generateDemoData()
     // pinned via their job type.
     const int jobCount = static_cast<int>(schedule.jobs.size());
     schedule.allocations.resize(jobCount);
-    for (int a = 0; a < jobCount; ++a)
-    {
+    for (int a = 0; a < jobCount; ++a) {
         schedule.allocations[a].id = std::to_string(a);
         schedule.allocations[a].job = a;
         if (schedule.jobs[a].jobType != JobType::STANDARD)
             schedule.allocations[a].modeDelay = 0;  // (mode 0, delay 0)
     }
-    for (int a = 0; a < jobCount; ++a)
-    {
-        for (int s : successorJobs[a])
-            schedule.allocations[s].predecessorAllocations.push_back(a);
+    for (int a = 0; a < jobCount; ++a) {
+        for (int s : successorJobs[a]) schedule.allocations[s].predecessorAllocations.push_back(a);
     }
     return schedule;
 }
 
-void printSummary(const ProjectJobSchedule &schedule)
-{
+void printSummary(const ProjectJobSchedule& schedule) {
     std::printf("  [completion per project]\n");
-    for (int a = 0; a < schedule.allocationCount(); ++a)
-    {
-        if (schedule.jobTypeOf(a) != JobType::SINK)
-            continue;
-        const Project &project
-            = schedule
-                  .projects[schedule.jobs[schedule.allocations[a].job].project];
+    for (int a = 0; a < schedule.allocationCount(); ++a) {
+        if (schedule.jobTypeOf(a) != JobType::SINK) continue;
+        const Project& project =
+                schedule.projects[schedule.jobs[schedule.allocations[a].job].project];
         const int endDate = schedule.allocations[a].endDate;
         const int criticalPathEnd = project.criticalPathEndDate();
-        std::printf("    project %s: completed day %d (critical path end %d, "
-                    "delay %d)\n",
-                    project.id.c_str(),
-                    endDate,
-                    criticalPathEnd,
-                    std::max(0, endDate - criticalPathEnd));
+        std::printf(
+                "    project %s: completed day %d (critical path end %d, "
+                "delay %d)\n",
+                project.id.c_str(), endDate, criticalPathEnd,
+                std::max(0, endDate - criticalPathEnd));
     }
 
     std::printf("  [allocations: first 12]\n");
-    for (int a = 0; a < schedule.allocationCount() && a < 12; ++a)
-    {
-        const Allocation &allocation = schedule.allocations[a];
-        const Job &job = schedule.jobs[allocation.job];
-        const char *type = job.jobType == JobType::SOURCE ? "SOURCE"
+    for (int a = 0; a < schedule.allocationCount() && a < 12; ++a) {
+        const Allocation& allocation = schedule.allocations[a];
+        const Job& job = schedule.jobs[allocation.job];
+        const char* type = job.jobType == JobType::SOURCE ? "SOURCE"
                            : job.jobType == JobType::SINK ? "SINK  "
                                                           : "STD   ";
-        if (allocation.modeDelay < 0)
-        {
+        if (allocation.modeDelay < 0) {
             std::printf("    Job %-2s %s  (unassigned)\n", job.id.c_str(), type);
             continue;
         }
-        std::printf("    Job %-2s %s  mode %d  delay %-3d  day %3d-%3d\n",
-                    job.id.c_str(),
-                    type,
+        std::printf("    Job %-2s %s  mode %d  delay %-3d  day %3d-%3d\n", job.id.c_str(), type,
                     schedule.executionModeIndexOfValue(a, allocation.modeDelay),
-                    schedule.delayOfValue(allocation.modeDelay),
-                    allocation.startDate,
+                    schedule.delayOfValue(allocation.modeDelay), allocation.startDate,
                     allocation.endDate);
     }
     std::printf("\n");
@@ -219,45 +182,35 @@ void printSummary(const ProjectJobSchedule &schedule)
 
 }  // namespace
 
-int main(int argc, char **argv)
-{
+int main(int argc, char** argv) {
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
 
     ProjectJobSchedule schedule = generateDemoData();
     int standardJobs = 0;
-    for (const Job &job : schedule.jobs)
-    {
-        if (job.jobType == JobType::STANDARD)
-            ++standardJobs;
+    for (const Job& job : schedule.jobs) {
+        if (job.jobType == JobType::STANDARD) ++standardJobs;
     }
-    std::printf("== project job scheduling demo (%zu projects, %zu resources, "
-                "%zu jobs (%d STANDARD), delay 0..%d, %d s) ==\n",
-                schedule.projects.size(),
-                schedule.resources.size(),
-                schedule.jobs.size(),
-                standardJobs,
-                schedule.delayRangeSize - 1,
-                seconds);
+    std::printf(
+            "== project job scheduling demo (%zu projects, %zu resources, "
+            "%zu jobs (%d STANDARD), delay 0..%d, %d s) ==\n",
+            schedule.projects.size(), schedule.resources.size(), schedule.jobs.size(), standardJobs,
+            schedule.delayRangeSize - 1, seconds);
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = 42;
-    config.on_new_best = [](std::int64_t step, const Score &score)
-    {
-        std::printf("    new best @step %-8lld %s\n",
-                    static_cast<long long>(step),
+    config.on_new_best = [](std::int64_t step, const Score& score) {
+        std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step),
                     score.str().c_str());
     };
     Solver solver(config);
     solver.solve(schedule);
 
-    std::printf("\n  final score: %s  (feasible=%s)\n\n",
-                schedule.score.str().c_str(),
+    std::printf("\n  final score: %s  (feasible=%s)\n\n", schedule.score.str().c_str(),
                 schedule.score.feasible() ? "true" : "false");
     printSummary(schedule);
 
-    if (schedule.score.hard == 0)
-    {
+    if (schedule.score.hard == 0) {
         std::printf("  reached hard 0: OK\n");
         return 0;
     }

@@ -7,8 +7,7 @@
 #include "ta/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace ta
-{
+namespace ta {
 
 // The task-assigning implementation of the engine's
 // optimaru::Objective.
@@ -33,16 +32,15 @@ namespace ta
 //   missingByEmployeeType_[e][t]  missing skills of type t for employee e
 //   durationByEmployeeTask_[e][i] duration of task i when employee e does it
 class TaskAssigningIncrementalScoreCalculator final
-    : public optimaru::Objective<TaskAssigningSolution>
-{
+    : public optimaru::Objective<TaskAssigningSolution> {
 public:
-    void rebuild(TaskAssigningSolution &solution) override;
+    void rebuild(TaskAssigningSolution& solution) override;
     void before_list_edit(int listIndex) override;
     void after_list_edit(int listIndex) override;
     optimaru::Score score() override;
 
 private:
-    TaskAssigningSolution *solution_ = nullptr;
+    TaskAssigningSolution* solution_ = nullptr;
 
     // Interned lookups (built once per rebuild).
     std::vector<std::vector<int>> missingByEmployeeType_;

@@ -3,8 +3,7 @@
 
 #include "cs/constraints/common.hpp"
 
-namespace cs
-{
+namespace cs {
 
 // Hard, weight 1: talkMutuallyExclusiveTalksTagsCost — two overlapping talks
 // carrying the same mutually-exclusive tag, weighed by shared tags times the
@@ -12,18 +11,13 @@ namespace cs
 // Raw cost (one global total) = the sum of shared mutually-exclusive tags x
 // overlapping minutes for each pair of overlapping talks; 0 = no violation (no
 // overlapping talks share such a tag).
-struct TalkMutuallyExclusiveTalksTagsCost final : BreakdownConstraint
-{
+struct TalkMutuallyExclusiveTalksTagsCost final : BreakdownConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit TalkMutuallyExclusiveTalksTagsCost(double weight = kDefaultWeight)
-        : BreakdownConstraint(
-              "talkMutuallyExclusiveTalksTagsCost", weight, kDefaultLevel)
-    {
-    }
-    std::int64_t select(const Breakdown &breakdown) const override
-    {
+        : BreakdownConstraint("talkMutuallyExclusiveTalksTagsCost", weight, kDefaultLevel) {}
+    std::int64_t select(const Breakdown& breakdown) const override {
         return breakdown.talkMutuallyExclusiveTalksTagsCost;
     }
 };

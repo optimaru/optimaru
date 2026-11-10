@@ -12,8 +12,7 @@
 #include "optimaru/score/score.hpp"
 #include "optimaru/score/levels.hpp"
 
-namespace fp
-{
+namespace fp {
 
 // ---------------------------------------------------------------------------
 // Time
@@ -56,54 +55,45 @@ constexpr Minutes kNoTime = std::numeric_limits<std::int64_t>::min();
 // therefore in medium units (afterIdealEndTimeCost, unassignedJobsCost: 1),
 // never 10^10.
 constexpr std::int64_t kMediumUnit = 10000000000LL;  // 10^10
-constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
+constexpr optimaru::MediumFold kMediumFold =
+        optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
 
-struct Score
-{
+struct Score {
     std::int64_t hard = 0;
     std::int64_t medium = 0;
     std::int64_t soft = 0;
 
     bool feasible() const { return hard >= 0; }
 
-    bool operator<(const Score &o) const
-    {
-        if (hard != o.hard)
-            return hard < o.hard;
-        if (medium != o.medium)
-            return medium < o.medium;
+    bool operator<(const Score& o) const {
+        if (hard != o.hard) return hard < o.hard;
+        if (medium != o.medium) return medium < o.medium;
         return soft < o.soft;
     }
-    bool operator>(const Score &o) const { return o < *this; }
-    bool operator<=(const Score &o) const { return !(o < *this); }
-    bool operator>=(const Score &o) const { return !(*this < o); }
-    bool operator==(const Score &o) const
-    {
+    bool operator>(const Score& o) const { return o < *this; }
+    bool operator<=(const Score& o) const { return !(o < *this); }
+    bool operator>=(const Score& o) const { return !(*this < o); }
+    bool operator==(const Score& o) const {
         return hard == o.hard && medium == o.medium && soft == o.soft;
     }
 
-    std::string str() const
-    {
-        return std::to_string(hard) + "hard/" + std::to_string(medium)
-               + "medium/" + std::to_string(soft) + "soft";
+    std::string str() const {
+        return std::to_string(hard) + "hard/" + std::to_string(medium) + "medium/" +
+               std::to_string(soft) + "soft";
     }
 };
 
-inline optimaru::Score toEngineScore(const Score &s)
-{
+inline optimaru::Score toEngineScore(const Score& s) {
     // soft + medium * 10^10: for the integral levels of this domain the same
     // value as the int64 `medium * kMediumUnit + soft` (exact while
     // |engine soft| < 2^53, see above).
-    return kMediumFold.to_engine(s.hard,
-                                static_cast<double>(s.medium),
-                                static_cast<double>(s.soft));
+    return kMediumFold.to_engine(s.hard, static_cast<double>(s.medium),
+                                 static_cast<double>(s.soft));
 }
 
 // Inverse of toEngineScore. Every constraint penalizes (medium/soft <= 0 and
 // integral), so truncating integer division decodes the two levels exactly.
-inline Score fromEngineScore(const optimaru::Score &e)
-{
+inline Score fromEngineScore(const optimaru::Score& e) {
     const std::int64_t combined = optimaru::round_score_level(e.soft, "soft");
     return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
 }
@@ -114,8 +104,7 @@ inline Score fromEngineScore(const optimaru::Score &e)
 // The cleaning duration of a product depends on the PREVIOUS product on the
 // line; the whole table lives on the solution as a flat P x P matrix (see
 // PackagingSchedule::cleanupMinutes).
-struct Product
-{
+struct Product {
     std::string id;
     std::string name;
 };
@@ -128,8 +117,7 @@ constexpr Minutes kMissingCleanup = -1;
 // ---------------------------------------------------------------------------
 // Operator  (assigned to lines through Line::operator_index)
 // ---------------------------------------------------------------------------
-struct Operator
-{
+struct Operator {
     std::string id;
 };
 
@@ -153,8 +141,7 @@ struct Operator
 // ScoreCalculator::updateShadowVariables materializes them onto the fields
 // below; during a solve the incremental calculator maintains the same values
 // internally per line (recomputed per touched list, O(list length)).
-struct Job
-{
+struct Job {
     std::string id;
     std::string name;
     int productIndex = -1;
@@ -190,13 +177,12 @@ struct Job
 // model per solution (here: the job lists), so the operator assignment is
 // optimized by fp::Solver in an alternating outer loop instead of jointly
 // (see solver.hpp for the exact semantics and the caveat).
-struct Line
-{
+struct Line {
     std::string id;
     std::string name;
     Minutes startDateTime = 0;
     int operator_index = -1;  // -1 == unassigned (no operator)
-    std::vector<int> jobs;   // ordered job indices
+    std::vector<int> jobs;    // ordered job indices
 };
 
 // ---------------------------------------------------------------------------
@@ -208,8 +194,7 @@ struct Line
 // so its moves can unassign a job by relocating it there. A job in no list
 // at all is engine-uninitialized: the construction heuristic will place it
 // (possibly into the pool, when leaving it unassigned scores best).
-struct PackagingSchedule
-{
+struct PackagingSchedule {
     Minutes fromMinute = 0;  // work calendar start (inclusive), midnight
     Minutes toMinute = 0;    // work calendar end (exclusive), midnight
 
@@ -238,22 +223,18 @@ struct PackagingSchedule
     int lineCount() const { return static_cast<int>(lines.size()); }
     int listCountWithPool() const { return lineCount() + 1; }
 
-    const std::vector<int> &rawList(int listIndex) const
-    {
+    const std::vector<int>& rawList(int listIndex) const {
         return listIndex < lineCount() ? lines[listIndex].jobs : unassignedJobs;
     }
-    std::vector<int> &rawList(int listIndex)
-    {
+    std::vector<int>& rawList(int listIndex) {
         return listIndex < lineCount() ? lines[listIndex].jobs : unassignedJobs;
     }
 
     // Cleanup duration when `product` follows `previousProduct` on a line;
     // kMissingCleanup when the pair has no entry (the caller throws).
-    Minutes cleanup(int previousProduct, int product) const
-    {
-        return cleanupMinutes[static_cast<std::size_t>(previousProduct)
-                                  * products.size()
-                              + static_cast<std::size_t>(product)];
+    Minutes cleanup(int previousProduct, int product) const {
+        return cleanupMinutes[static_cast<std::size_t>(previousProduct) * products.size() +
+                              static_cast<std::size_t>(product)];
     }
 };
 
@@ -268,44 +249,32 @@ struct PackagingSchedule
 // shifted, which is what pinning a list element means.
 // ScoreCalculator::prepare must run before the engine touches the solution.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<fp::PackagingSchedule>
-{
+template <>
+struct optimaru::SolutionTraits<fp::PackagingSchedule> {
     static constexpr optimaru::Shape shape = optimaru::Shape::Sequence;
 
-    static int list_count(const fp::PackagingSchedule &s)
-    {
-        return s.listCountWithPool();
-    }
-    static int element_count(const fp::PackagingSchedule &s)
-    {
+    static int list_count(const fp::PackagingSchedule& s) { return s.listCountWithPool(); }
+    static int element_count(const fp::PackagingSchedule& s) {
         return static_cast<int>(s.engineToJob.size());
     }
-    static int list_size(const fp::PackagingSchedule &s, int l)
-    {
+    static int list_size(const fp::PackagingSchedule& s, int l) {
         return static_cast<int>(s.rawList(l).size()) - s.pinnedPrefixLen[l];
     }
-    static int element_at(const fp::PackagingSchedule &s, int l, int p)
-    {
+    static int element_at(const fp::PackagingSchedule& s, int l, int p) {
         return s.jobToEngine[s.rawList(l)[s.pinnedPrefixLen[l] + p]];
     }
-    static void
-    insert_element(fp::PackagingSchedule &s, int l, int p, int element)
-    {
-        std::vector<int> &list = s.rawList(l);
-        list.insert(list.begin() + s.pinnedPrefixLen[l] + p,
-                    s.engineToJob[element]);
+    static void insert_element(fp::PackagingSchedule& s, int l, int p, int element) {
+        std::vector<int>& list = s.rawList(l);
+        list.insert(list.begin() + s.pinnedPrefixLen[l] + p, s.engineToJob[element]);
     }
-    static int remove_element(fp::PackagingSchedule &s, int l, int p)
-    {
-        std::vector<int> &list = s.rawList(l);
+    static int remove_element(fp::PackagingSchedule& s, int l, int p) {
+        std::vector<int>& list = s.rawList(l);
         const int job = list[s.pinnedPrefixLen[l] + p];
         list.erase(list.begin() + s.pinnedPrefixLen[l] + p);
         return s.jobToEngine[job];
     }
-    static void
-    reverse_segment(fp::PackagingSchedule &s, int l, int first, int last)
-    {
-        std::vector<int> &list = s.rawList(l);
+    static void reverse_segment(fp::PackagingSchedule& s, int l, int first, int last) {
+        std::vector<int>& list = s.rawList(l);
         std::reverse(list.begin() + s.pinnedPrefixLen[l] + first,
                      list.begin() + s.pinnedPrefixLen[l] + last + 1);
     }
@@ -316,8 +285,8 @@ template <> struct optimaru::SolutionTraits<fp::PackagingSchedule>
 // ---------------------------------------------------------------------------
 // The decomposed calculator folds its medium accumulator with the domain's
 // kMediumFold (see the Score adapter above).
-template <> struct optimaru::MediumFoldOf<fp::PackagingSchedule>
-{
+template <>
+struct optimaru::MediumFoldOf<fp::PackagingSchedule> {
     static constexpr optimaru::MediumFold value = fp::kMediumFold;
 };
 

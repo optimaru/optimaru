@@ -14,8 +14,7 @@
 
 using namespace cs;
 
-namespace
-{
+namespace {
 
 // Seeded, platform-independent draws (see optimaru/portable_random.hpp).
 using DemoRandom = optimaru::PortableRandom;
@@ -25,37 +24,26 @@ constexpr int BREAKOUT = 1;
 
 const std::vector<std::string> THEME_TAGS = {"Optimization", "AI", "Cloud"};
 const std::vector<std::string> SECTOR_TAGS = {"Green", "Blue", "Orange"};
-const std::vector<std::string> AUDIENCE_TAGS
-    = {"Programmers", "Analysts", "Managers"};
-const std::vector<std::string> CONTENT_TAGS
-    = {"Optimization", "Constraints", "Metaheuristics", "Kubernetes"};
+const std::vector<std::string> AUDIENCE_TAGS = {"Programmers", "Analysts", "Managers"};
+const std::vector<std::string> CONTENT_TAGS = {"Optimization", "Constraints", "Metaheuristics",
+                                               "Kubernetes"};
 
-int speakerIndex(const ConferenceSchedule &c, const std::string &name)
-{
-    for (int k = 0; k < static_cast<int>(c.speakers.size()); ++k)
-    {
-        if (c.speakers[k].name == name)
-            return k;
+int speakerIndex(const ConferenceSchedule& c, const std::string& name) {
+    for (int k = 0; k < static_cast<int>(c.speakers.size()); ++k) {
+        if (c.speakers[k].name == name) return k;
     }
     std::fprintf(stderr, "unknown speaker %s\n", name.c_str());
     std::abort();
 }
 
-ConferenceSchedule buildDemoConference()
-{
+ConferenceSchedule buildDemoConference() {
     ConferenceSchedule c;
     c.name = "Conference";
     c.talkTypes = {"Lab", "Breakout"};
 
     // Six timeslots on one day, in minutes from that day's midnight.
-    auto slot = [](const char *id,
-                   int startH,
-                   int startM,
-                   int endH,
-                   int endM,
-                   int talkType,
-                   std::vector<std::string> tags)
-    {
+    auto slot = [](const char* id, int startH, int startM, int endH, int endM, int talkType,
+                   std::vector<std::string> tags) {
         Timeslot t;
         t.id = id;
         t.startMinute = startH * 60 + startM;
@@ -65,20 +53,16 @@ ConferenceSchedule buildDemoConference()
         return t;
     };
     c.timeslots = {
-        slot("T1", 10, 15, 12, 15, LAB, {}),
-        slot("T2", 10, 15, 11, 0, BREAKOUT, {}),
-        slot("T3", 11, 30, 12, 15, BREAKOUT, {}),
-        slot("T4", 13, 0, 15, 0, LAB, {"After lunch"}),
-        slot("T5", 15, 30, 16, 15, BREAKOUT, {}),
-        slot("T6", 16, 30, 17, 15, BREAKOUT, {}),
+            slot("T1", 10, 15, 12, 15, LAB, {}),
+            slot("T2", 10, 15, 11, 0, BREAKOUT, {}),
+            slot("T3", 11, 30, 12, 15, BREAKOUT, {}),
+            slot("T4", 13, 0, 15, 0, LAB, {"After lunch"}),
+            slot("T5", 15, 30, 16, 15, BREAKOUT, {}),
+            slot("T6", 16, 30, 17, 15, BREAKOUT, {}),
     };
 
-    auto room = [](const char *id,
-                   const char *name,
-                   int capacity,
-                   int talkType,
-                   std::vector<std::string> tags)
-    {
+    auto room = [](const char* id, const char* name, int capacity, int talkType,
+                   std::vector<std::string> tags) {
         Room r;
         r.id = id;
         r.name = name;
@@ -88,27 +72,17 @@ ConferenceSchedule buildDemoConference()
         return r;
     };
     c.rooms = {
-        room("R1", "Room A", 60, BREAKOUT, {"Recorded"}),
-        room("R2", "Room B", 240, BREAKOUT, {}),
-        room("R3", "Room C", 630, BREAKOUT, {"Recorded", "Large"}),
-        room("R4", "Room D", 70, BREAKOUT, {"Recorded"}),
-        room("R5", "Room E (LAB)", 490, LAB, {"Recorded"}),
+            room("R1", "Room A", 60, BREAKOUT, {"Recorded"}),
+            room("R2", "Room B", 240, BREAKOUT, {}),
+            room("R3", "Room C", 630, BREAKOUT, {"Recorded", "Large"}),
+            room("R4", "Room D", 70, BREAKOUT, {"Recorded"}),
+            room("R5", "Room E (LAB)", 490, LAB, {"Recorded"}),
     };
 
-    const std::vector<std::string> speakerNames = {"Amy Cole",
-                                                   "Beth Fox",
-                                                   "Carl Green",
-                                                   "Dan Jones",
-                                                   "Elsa King",
-                                                   "Flo Li",
-                                                   "Gus Poe",
-                                                   "Hugo Rye",
-                                                   "Ivy Smith",
-                                                   "Jay Watt",
-                                                   "Amy Fox",
-                                                   "Beth Green"};
-    for (int k = 0; k < static_cast<int>(speakerNames.size()); ++k)
-    {
+    const std::vector<std::string> speakerNames = {
+            "Amy Cole", "Beth Fox", "Carl Green", "Dan Jones", "Elsa King", "Flo Li",
+            "Gus Poe",  "Hugo Rye", "Ivy Smith",  "Jay Watt",  "Amy Fox",   "Beth Green"};
+    for (int k = 0; k < static_cast<int>(speakerNames.size()); ++k) {
         Speaker s;
         s.id = std::to_string(k + 1);
         s.name = speakerNames[k];
@@ -117,20 +91,14 @@ ConferenceSchedule buildDemoConference()
     c.speakers.back().undesiredTimeslotTags = {"After lunch"};  // Beth Green
 
     DemoRandom random(0);
-    auto addTalk = [&](const char *code,
-                       const char *title,
-                       int talkType,
-                       std::vector<std::string> speakers,
-                       int audienceLevel,
-                       int favoriteCount,
-                       int crowdControlRisk)
-    {
+    auto addTalk = [&](const char* code, const char* title, int talkType,
+                       std::vector<std::string> speakers, int audienceLevel, int favoriteCount,
+                       int crowdControlRisk) {
         Talk t;
         t.code = code;
         t.title = title;
         t.talkType = talkType;
-        for (const std::string &name : speakers)
-            t.speakers.push_back(speakerIndex(c, name));
+        for (const std::string& name : speakers) t.speakers.push_back(speakerIndex(c, name));
         t.themeTrackTags = {THEME_TAGS[random.next_int(3)]};
         t.sectorTags = {SECTOR_TAGS[random.next_int(3)]};
         t.audienceTypes = {AUDIENCE_TAGS[random.next_int(3)]};
@@ -151,14 +119,11 @@ ConferenceSchedule buildDemoConference()
     c.talks[4].prerequisiteTalks = {1};  // S05 requires S02
     addTalk("S07", "Talk Seven", BREAKOUT, {"Jay Watt"}, 3, 568, 0);
     addTalk("S08", "Talk Eight", BREAKOUT, {"Amy Fox"}, 3, 183, 0);
-    addTalk(
-        "S09", "Talk Nine", BREAKOUT, {"Beth Green", "Amy Cole"}, 3, 619, 0);
+    addTalk("S09", "Talk Nine", BREAKOUT, {"Beth Green", "Amy Cole"}, 3, 619, 0);
     addTalk("S10", "Talk Ten", BREAKOUT, {"Beth Fox", "Carl Green"}, 3, 603, 1);
-    addTalk(
-        "S11", "Talk Eleven", BREAKOUT, {"Dan Jones", "Elsa King"}, 1, 39, 0);
+    addTalk("S11", "Talk Eleven", BREAKOUT, {"Dan Jones", "Elsa King"}, 1, 39, 0);
     addTalk("S12", "Talk Twelve", BREAKOUT, {"Flo Li", "Gus Poe"}, 3, 977, 0);
-    c.talks[10].mutuallyExclusiveTalksTags
-        = {CONTENT_TAGS[random.next_int(4)]};  // S11
+    c.talks[10].mutuallyExclusiveTalksTags = {CONTENT_TAGS[random.next_int(4)]};  // S11
     addTalk("S13", "Talk Thirteen", BREAKOUT, {"Hugo Rye"}, 3, 494, 0);
     addTalk("S14", "Talk Fourteen", BREAKOUT, {"Ivy Smith"}, 3, 500, 0);
     addTalk("S15", "Talk Fifteen", BREAKOUT, {"Jay Watt"}, 2, 658, 0);
@@ -167,85 +132,61 @@ ConferenceSchedule buildDemoConference()
     return c;
 }
 
-void printSchedule(const ConferenceSchedule &c)
-{
-    std::printf("  %-4s %-9s %-4s %-13s %s\n",
-                "talk",
-                "type",
-                "slot",
-                "room",
-                "speakers");
-    for (const Talk &talk : c.talks)
-    {
+void printSchedule(const ConferenceSchedule& c) {
+    std::printf("  %-4s %-9s %-4s %-13s %s\n", "talk", "type", "slot", "room", "speakers");
+    for (const Talk& talk : c.talks) {
         std::string speakers;
-        for (int k : talk.speakers)
-        {
-            if (!speakers.empty())
-                speakers += ", ";
+        for (int k : talk.speakers) {
+            if (!speakers.empty()) speakers += ", ";
             speakers += c.speakers[k].name;
         }
-        if (talk.slotRoom < 0)
-        {
-            std::printf("  %-4s %-9s (unassigned)  %s\n",
-                        talk.code.c_str(),
-                        c.talkTypes[talk.talkType].c_str(),
-                        speakers.c_str());
+        if (talk.slotRoom < 0) {
+            std::printf("  %-4s %-9s (unassigned)  %s\n", talk.code.c_str(),
+                        c.talkTypes[talk.talkType].c_str(), speakers.c_str());
             continue;
         }
         const int s = c.timeslotIndexOf(talk.slotRoom);
         const int r = c.roomIndexOf(talk.slotRoom);
-        std::printf("  %-4s %-9s %-4s %-13s %s\n",
-                    talk.code.c_str(),
-                    c.talkTypes[talk.talkType].c_str(),
-                    c.timeslots[s].id.c_str(),
-                    c.rooms[r].name.c_str(),
-                    speakers.c_str());
+        std::printf("  %-4s %-9s %-4s %-13s %s\n", talk.code.c_str(),
+                    c.talkTypes[talk.talkType].c_str(), c.timeslots[s].id.c_str(),
+                    c.rooms[r].name.c_str(), speakers.c_str());
     }
     std::printf("\n");
 }
 
 }  // namespace
 
-int main(int argc, char **argv)
-{
+int main(int argc, char** argv) {
     const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
 
     ConferenceSchedule conference = buildDemoConference();
-    std::printf("== Conference scheduling demo (talks %zu, timeslots %zu, "
-                "rooms %zu, speakers %zu, %ds) ==\n",
-                conference.talks.size(),
-                conference.timeslots.size(),
-                conference.rooms.size(),
-                conference.speakers.size(),
-                seconds);
+    std::printf(
+            "== Conference scheduling demo (talks %zu, timeslots %zu, "
+            "rooms %zu, speakers %zu, %ds) ==\n",
+            conference.talks.size(), conference.timeslots.size(), conference.rooms.size(),
+            conference.speakers.size(), seconds);
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = 42;
-    config.on_new_best = [](std::int64_t step, const Score &score)
-    {
-        std::printf("    new best @step %-8lld %s\n",
-                    static_cast<long long>(step),
+    config.on_new_best = [](std::int64_t step, const Score& score) {
+        std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step),
                     score.str().c_str());
     };
     Solver solver(config);
     solver.solve(conference);
 
-    std::printf("\n  final score: %s  (feasible=%s)\n\n",
-                conference.score.str().c_str(),
+    std::printf("\n  final score: %s  (feasible=%s)\n\n", conference.score.str().c_str(),
                 conference.score.feasible() ? "true" : "false");
     printSchedule(conference);
 
     bool allAssigned = true;
-    for (const Talk &talk : conference.talks)
-    {
-        if (talk.slotRoom < 0)
-            allAssigned = false;
+    for (const Talk& talk : conference.talks) {
+        if (talk.slotRoom < 0) allAssigned = false;
     }
     std::printf("  all talks assigned: %s\n", allAssigned ? "OK" : "FAIL");
 
-    if (conference.score.hard == 0 && allAssigned)
-    {
+    if (conference.score.hard == 0 && allAssigned) {
         std::printf("  hard 0 reached: OK\n");
         return 0;
     }

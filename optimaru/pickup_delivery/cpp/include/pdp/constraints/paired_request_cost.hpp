@@ -3,8 +3,7 @@
 
 #include "pdp/constraints/common.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
 // Hard, weight 1000 (ScoreCalculator::kCouplingPenalty): pairedRequestCost — a
 // request with one node routed and the other not. Half a delivery is worse
@@ -14,23 +13,15 @@ namespace pdp
 //
 // The CP-SAT reference enforces pairing structurally (its plugin refuses
 // level='soft'); the engine keeps it flippable.
-struct PairedRequestCost final : RequestCouplingConstraint
-{
-    static constexpr double kDefaultWeight
-        = static_cast<double>(ScoreCalculator::kCouplingPenalty);
+struct PairedRequestCost final : RequestCouplingConstraint {
+    static constexpr double kDefaultWeight = static_cast<double>(ScoreCalculator::kCouplingPenalty);
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit PairedRequestCost(double weight = kDefaultWeight)
-        : RequestCouplingConstraint("pairedRequestCost", weight, kDefaultLevel)
-    {
-    }
-    std::int64_t requestCost(const PdpRoutePlan & /*plan*/,
-                             const Delivery & /*delivery*/,
-                             int pickupUnit,
-                             int /*pickupPosition*/,
-                             int dropoffUnit,
-                             int /*dropoffPosition*/) const override
-    {
+        : RequestCouplingConstraint("pairedRequestCost", weight, kDefaultLevel) {}
+    std::int64_t requestCost(const PdpRoutePlan& /*plan*/, const Delivery& /*delivery*/,
+                             int pickupUnit, int /*pickupPosition*/, int dropoffUnit,
+                             int /*dropoffPosition*/) const override {
         return (pickupUnit >= 0) != (dropoffUnit >= 0) ? 1 : 0;
     }
 };

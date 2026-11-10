@@ -1,5 +1,4 @@
 from cpsat_plugins.benchmark import run_instance
-
 from employee_scheduling_cpsat import benchmark
 
 

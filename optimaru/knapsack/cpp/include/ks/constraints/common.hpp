@@ -9,8 +9,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace ks
-{
+namespace ks {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
@@ -67,60 +66,46 @@ using DecomposedCalculator = optimaru::DecomposedObjective<KnapsackProblem>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<KnapsackProblem>;
 using KsGlobalConstraint = optimaru::GlobalConstraint<KnapsackProblem>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const KnapsackProblem &problem)
-{
-    if (!problem.prepared)
-    {
-        throw std::logic_error("ks constraints require "
-                               "ScoreCalculator::prepare(problem) first");
+inline void requirePrepared(const KnapsackProblem& problem) {
+    if (!problem.prepared) {
+        throw std::logic_error(
+                "ks constraints require "
+                "ScoreCalculator::prepare(problem) first");
     }
 }
 
 // Selection flags of every item off the calculator's units (unit 1 = the
 // selected items); undecided and unselected items are both 0.
-inline std::vector<char> selectedFlags(const KnapsackProblem &problem,
-                                       const std::vector<std::vector<int>> &members_per_unit)
-{
+inline std::vector<char> selectedFlags(const KnapsackProblem& problem,
+                                       const std::vector<std::vector<int>>& members_per_unit) {
     std::vector<char> selected(problem.items.size(), 0);
-    if (members_per_unit.size() > static_cast<std::size_t>(kSelected))
-    {
-        for (int item : members_per_unit[kSelected])
-            selected[item] = 1;
+    if (members_per_unit.size() > static_cast<std::size_t>(kSelected)) {
+        for (int item : members_per_unit[kSelected]) selected[item] = 1;
     }
     return selected;
 }
 
 // The common shape of the seven components: a global constraint driven by
 // joins/leaves of unit 1.
-struct SelectionConstraint : KsGlobalConstraint
-{
+struct SelectionConstraint : KsGlobalConstraint {
     using KsGlobalConstraint::KsGlobalConstraint;
 
     bool supports_member_change() const final { return true; }
 
-    void on_member_changed(const KnapsackProblem &problem,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int item,
-                         bool joined) final
-    {
-        if (unit == kSelected)
-            onSelectionChanged(problem, item, joined);
+    void on_member_changed(const KnapsackProblem& problem, int unit,
+                           const std::vector<int>& /*members*/, int item, bool joined) final {
+        if (unit == kSelected) onSelectionChanged(problem, item, joined);
     }
 
     // Never called (supports_member_change): every change arrives as a
     // join/leave above.
-    void on_unit_changed(const KnapsackProblem & /*problem*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) final
-    {
-    }
+    void on_unit_changed(const KnapsackProblem& /*problem*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) final {}
 
     // `item` became selected (selected == true) or stopped being selected.
-    virtual void onSelectionChanged(const KnapsackProblem &problem, int item, bool selected) = 0;
+    virtual void onSelectionChanged(const KnapsackProblem& problem, int item, bool selected) = 0;
 };
 
 }  // namespace detail

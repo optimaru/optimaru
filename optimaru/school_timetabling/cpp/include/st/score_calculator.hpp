@@ -5,8 +5,7 @@
 
 #include "st/domain.hpp"
 
-namespace st
-{
+namespace st {
 
 // The quickstart model's score as one monolithic function: six pairwise
 // terms plus teacherUnavailabilityCost. The quickstart model has no
@@ -37,31 +36,26 @@ namespace st
 //                                        periods
 // Unassigned lessons (slotRoom == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
-    static Score score(Timetable &table);
+    static Score score(Timetable& table);
 
     // Interns teachers, student groups and (group, subject) pairs into dense
     // integer ids, builds the same-day period adjacency (nextSlot/prevSlot)
     // and flattens teacherUnavailable for O(1) lookup. Idempotent (guarded by
     // Timetable::prepared). Must run before scoring; score/solve
     // call it.
-    static void prepare(Timetable &table);
+    static void prepare(Timetable& table);
 
     // --- shared building blocks ---
 
     // Unordered pairs among n items: C(n, 2).
     static std::int64_t pairs(std::int64_t n) { return n * (n - 1) / 2; }
 
-    static bool teacherUnavailableAt(const Timetable &table,
-                                     int teacherId,
-                                     int timeslotIndex)
-    {
-        return table.teacherUnavailableFlat[static_cast<std::size_t>(teacherId)
-                                                * table.timeslotCount()
-                                            + timeslotIndex]
-               != 0;
+    static bool teacherUnavailableAt(const Timetable& table, int teacherId, int timeslotIndex) {
+        return table.teacherUnavailableFlat[static_cast<std::size_t>(teacherId) *
+                                                    table.timeslotCount() +
+                                            timeslotIndex] != 0;
     }
 };
 

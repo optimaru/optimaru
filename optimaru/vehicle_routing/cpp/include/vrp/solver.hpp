@@ -17,8 +17,7 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "vrp/domain.hpp"
 
-namespace vrp
-{
+namespace vrp {
 
 // ---------------------------------------------------------------------------
 // Solver
@@ -43,11 +42,9 @@ namespace vrp
 // the plan's virtual unassigned pool (see VehicleRoutePlan). solve() fills the
 // pool for you, so a plan built with visits simply left out of every route is
 // accepted as-is.
-class Solver
-{
+class Solver {
 public:
-    struct Config
-    {
+    struct Config {
         // --- termination -------------------------------------------------
         // Wall-clock budget.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
@@ -57,8 +54,8 @@ public:
         // fires — termination is by time_limit. To stop as soon as a feasible,
         // fully-assigned solution is found, set {0, 0, min}.
         Score target_score{std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<std::int64_t>::max(),
-                             std::numeric_limits<std::int64_t>::max()};
+                           std::numeric_limits<std::int64_t>::max(),
+                           std::numeric_limits<std::int64_t>::max()};
         // Optional early exits; 0 disables each criterion.
         std::chrono::milliseconds stall_time_limit{0};
         std::int64_t step_limit = 0;
@@ -70,8 +67,7 @@ public:
         bool firstFitDecreasing = true;
 
         // --- acceptance ---------------------------------------------------
-        optimaru::AcceptanceRule rule
-            = optimaru::AcceptanceRule::LateAcceptance;
+        optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::LateAcceptance;
         // Late-acceptance history length. 0 (the default) = auto:
         // clamp(60000 / visitCount, 100, 400) — the horizon SHRINKS as the
         // instance grows, keeping it roughly constant in wall-time as the
@@ -184,8 +180,8 @@ public:
         std::int64_t iterated_local_search_max_evaluations = 5000000;
 
         // Which adaptive scheme weights the ruin operators.
-        optimaru::SelectionScheme ruinRecreateSelectionType
-            = optimaru::SelectionScheme::RouletteWheel;
+        optimaru::SelectionScheme ruinRecreateSelectionType =
+                optimaru::SelectionScheme::RouletteWheel;
         double ruinRecreateOperatorDecay = 0.8;
         // Rewards indexed by outcome: NEW_BEST / BETTER / ACCEPTED / REJECTED.
         std::vector<double> ruinRecreateRewards{33.0, 9.0, 3.0, 0.0};
@@ -225,14 +221,13 @@ public:
         int parallelSolverCount = 1;
         // ScoreChecks::Full re-verifies the incremental score against a full
         // recompute after every move (debugging aid; far slower).
-        optimaru::ScoreChecks score_checks
-            = optimaru::ScoreChecks::Off;
+        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
 
         // Optional progress callback: (steps, bestScore). bestScore has the
         // same three levels as the final plan.score of the same solve: on the
         // plugin path both are read off the calculator before the medium fold,
         // so a soft total of 10^9 or more stays on soft in both.
-        std::function<void(std::int64_t, const Score &)> on_new_best;
+        std::function<void(std::int64_t, const Score&)> on_new_best;
         // Set by solve() on each parallel worker's copy, not by a caller (and
         // not bound to Python): the first worker that fails raises it, and the
         // other workers' engines stop at their next step instead of running out
@@ -246,7 +241,7 @@ public:
     // Solves in place: mutates plan.vehicles[*].visitIndices and
     // plan.unassignedVisitIndices, and stores the best score found in
     // plan.score.
-    void solve(VehicleRoutePlan &plan);
+    void solve(VehicleRoutePlan& plan);
 
     // Solves with a caller-assembled plugin calculator (see
     // vrp/constraints.hpp): pick components and weights, then pass the
@@ -258,8 +253,7 @@ public:
     // so constraint_totals() explains exactly that score. Single-start: the
     // caller-owned calculator cannot be cloned, so parallelSolverCount is
     // ignored.
-    void solve(VehicleRoutePlan &plan,
-               optimaru::DecomposedObjective<VehicleRoutePlan> &calculator);
+    void solve(VehicleRoutePlan& plan, optimaru::DecomposedObjective<VehicleRoutePlan>& calculator);
 
 private:
     Config config_;

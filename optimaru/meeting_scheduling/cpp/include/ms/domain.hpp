@@ -10,8 +10,7 @@
 #include "optimaru/score/score.hpp"
 #include "optimaru/score/levels.hpp"
 
-namespace ms
-{
+namespace ms {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -39,8 +38,7 @@ using Score = optimaru::Score;
 
 // The medium -> soft folding offset (see the Score comment above).
 constexpr double kMediumScale = 1e6;
-constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::into_soft(kMediumScale);
+constexpr optimaru::MediumFold kMediumFold = optimaru::MediumFold::into_soft(kMediumScale);
 
 // Length of one TimeGrain.
 constexpr int kGrainLengthInMinutes = 15;
@@ -49,8 +47,7 @@ constexpr int kGrainLengthInMinutes = 15;
 // Person  (fixed input)
 // ---------------------------------------------------------------------------
 // Attendances reference people by index into MeetingSchedule::people.
-struct Person
-{
+struct Person {
     std::string id;
     std::string fullName;
 };
@@ -62,8 +59,7 @@ struct Person
 // durations, overlaps and meeting end-time penalties are measured (the
 // demo data numbers grains 1..160). dayOfYear + startingMinuteOfDay define
 // the calendar position (dayCrossingCost, the roomChangeCost order).
-struct TimeGrain
-{
+struct TimeGrain {
     std::string id;
     int grainIndex = 0;
     int dayOfYear = 0;
@@ -73,8 +69,7 @@ struct TimeGrain
 // ---------------------------------------------------------------------------
 // Room  (fixed input, the other half of the composite variable)
 // ---------------------------------------------------------------------------
-struct Room
-{
+struct Room {
     std::string id;
     std::string name;
     int capacity = 0;
@@ -86,8 +81,7 @@ struct Room
 // requiredAttendees/preferredAttendees are the required / preferred
 // attendances, stored as person indices (one entry == one attendance).
 // requiredCapacity == required + preferred count.
-struct Meeting
-{
+struct Meeting {
     std::string id;
     std::string topic;
     int durationInGrains = 1;
@@ -95,10 +89,8 @@ struct Meeting
     std::vector<int> preferredAttendees;
     bool entireGroupMeeting = false;  // informational
 
-    int requiredCapacity() const
-    {
-        return static_cast<int>(requiredAttendees.size()
-                                + preferredAttendees.size());
+    int requiredCapacity() const {
+        return static_cast<int>(requiredAttendees.size() + preferredAttendees.size());
     }
 };
 
@@ -113,8 +105,7 @@ struct Meeting
 // (neither grain nor room). A meeting occupies durationInGrains consecutive
 // grain indices starting at its grain's grainIndex; every overlap constraint
 // measures that full interval, not just the starting grain.
-struct MeetingAssignment
-{
+struct MeetingAssignment {
     std::string id;
     int meeting = 0;  // index into MeetingSchedule::meetings (1:1, see below)
 
@@ -131,8 +122,7 @@ struct MeetingAssignment
 // One meeting pair that shares at least one attendee, with the pairwise
 // attendance-multiplicity weights used by the attendance constraints.
 // meeting1 < meeting2; the "forward" direction is meeting1 -> meeting2.
-struct ConflictArc
-{
+struct ConflictArc {
     int meeting1 = 0;
     int meeting2 = 0;
     std::int64_t requiredWeight = 0;    // shared required-attendance pairs
@@ -148,8 +138,7 @@ struct ConflictArc
 // Model note: meetings and meeting assignments are 1:1 (every Meeting has
 // exactly one MeetingAssignment); prepare() rejects duplicates. Attendances
 // are fixed input derived from the meetings.
-struct MeetingSchedule
-{
+struct MeetingSchedule {
     std::vector<Person> people;
     std::vector<TimeGrain> timeGrains;
     std::vector<Room> rooms;
@@ -195,25 +184,20 @@ struct MeetingSchedule
     int timeGrainCount() const { return static_cast<int>(timeGrains.size()); }
     int roomCount() const { return static_cast<int>(rooms.size()); }
     int grainRoomCount() const { return timeGrainCount() * roomCount(); }
-    int grainRoomOf(int timeGrainPos, int roomIndex) const
-    {
+    int grainRoomOf(int timeGrainPos, int roomIndex) const {
         return timeGrainPos * roomCount() + roomIndex;
     }
     int timeGrainPosOf(int grainRoom) const { return grainRoom / roomCount(); }
     int roomIndexOf(int grainRoom) const { return grainRoom % roomCount(); }
 
     // --- prepared-table lookups ---
-    int grainCountAtOffset(int offset) const
-    {
+    int grainCountAtOffset(int offset) const {
         return static_cast<int>(grainDaysAtOffset[offset].size());
     }
-    int grainCountAtOffsetOnDay(int offset, int dayOfYear) const
-    {
+    int grainCountAtOffsetOnDay(int offset, int dayOfYear) const {
         int count = 0;
-        for (int day : grainDaysAtOffset[offset])
-        {
-            if (day == dayOfYear)
-                ++count;
+        for (int day : grainDaysAtOffset[offset]) {
+            if (day == dayOfYear) ++count;
         }
         return count;
     }
@@ -226,29 +210,20 @@ struct MeetingSchedule
 // decision variable is MeetingAssignment::grainRoom, the value range is the
 // (timeGrain x room) grid.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<ms::MeetingSchedule>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const ms::MeetingSchedule &s)
-    {
+template <>
+struct optimaru::SolutionTraits<ms::MeetingSchedule> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const ms::MeetingSchedule& s) {
         return static_cast<int>(s.meetingAssignments.size());
     }
-    static int value_count(const ms::MeetingSchedule &s)
-    {
-        return s.grainRoomCount();
-    }
-    static int value_of(const ms::MeetingSchedule &s, int assignmentIndex)
-    {
+    static int value_count(const ms::MeetingSchedule& s) { return s.grainRoomCount(); }
+    static int value_of(const ms::MeetingSchedule& s, int assignmentIndex) {
         return s.meetingAssignments[assignmentIndex].grainRoom;
     }
-    static void
-    assign(ms::MeetingSchedule &s, int assignmentIndex, int grainRoom)
-    {
+    static void assign(ms::MeetingSchedule& s, int assignmentIndex, int grainRoom) {
         s.meetingAssignments[assignmentIndex].grainRoom = grainRoom;
     }
-    static bool is_pinned(const ms::MeetingSchedule &s, int assignmentIndex)
-    {
+    static bool is_pinned(const ms::MeetingSchedule& s, int assignmentIndex) {
         return s.meetingAssignments[assignmentIndex].pinned;
     }
 };
@@ -258,8 +233,8 @@ template <> struct optimaru::SolutionTraits<ms::MeetingSchedule>
 // ---------------------------------------------------------------------------
 // The decomposed calculator folds its medium accumulator with the domain's
 // kMediumFold (see the Score adapter above): engine soft = soft + medium * 1e6.
-template <> struct optimaru::MediumFoldOf<ms::MeetingSchedule>
-{
+template <>
+struct optimaru::MediumFoldOf<ms::MeetingSchedule> {
     static constexpr optimaru::MediumFold value = ms::kMediumFold;
 };
 

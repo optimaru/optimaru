@@ -91,28 +91,24 @@ public:
     //  - exchange: replace l1's [p1, p1+len1) with l2's [p2, p2+len2) and vice
     //    versa, l1 != l2, either length may be 0.
     virtual bool preview_segment_move(int /*from_list*/, int /*start*/, int /*len*/,
-                                    int /*to_list*/, int /*insert_at*/, Score& /*out*/) {
+                                      int /*to_list*/, int /*insert_at*/, Score& /*out*/) {
         return false;
     }
-    virtual bool preview_swap(int /*l1*/, int /*p1*/, int /*l2*/, int /*p2*/,
-                             Score& /*out*/) {
+    virtual bool preview_swap(int /*l1*/, int /*p1*/, int /*l2*/, int /*p2*/, Score& /*out*/) {
         return false;
     }
-    virtual bool preview_reverse(int /*list*/, int /*first*/, int /*last*/,
-                                Score& /*out*/) {
+    virtual bool preview_reverse(int /*list*/, int /*first*/, int /*last*/, Score& /*out*/) {
         return false;
     }
-    virtual bool preview_tail_swap(int /*l1*/, int /*c1*/, int /*l2*/, int /*c2*/,
-                                 Score& /*out*/) {
+    virtual bool preview_tail_swap(int /*l1*/, int /*c1*/, int /*l2*/, int /*c2*/, Score& /*out*/) {
         return false;
     }
     virtual bool preview_exchange(int /*l1*/, int /*p1*/, int /*len1*/, int /*l2*/, int /*p2*/,
-                                 int /*len2*/, Score& /*out*/) {
+                                  int /*len2*/, Score& /*out*/) {
         return false;
     }
     //  - insert: put `element`, currently in no list (ruined), at (list, pos).
-    virtual bool preview_insert(int /*list*/, int /*pos*/, int /*element*/,
-                               Score& /*out*/) {
+    virtual bool preview_insert(int /*list*/, int /*pos*/, int /*element*/, Score& /*out*/) {
         return false;
     }
 };

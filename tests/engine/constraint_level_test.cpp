@@ -89,9 +89,9 @@
 #include "optimaru/python/names.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 
-using optimaru::Score;
 using optimaru::Level;
 using optimaru::MediumFold;
+using optimaru::Score;
 
 namespace {
 
@@ -143,7 +143,7 @@ struct Routes {
     std::vector<std::pair<int, int>> city;  // grid coordinates per element; the depot is (0, 0)
     std::vector<int> demand;                // per element
     int capacity = 18;
-    std::vector<std::vector<int>> routes;   // the list decision variable
+    std::vector<std::vector<int>> routes;  // the list decision variable
 };
 struct SoftFoldRoutes : Routes {};  // medium folds into soft x1000
 struct HardFoldRoutes : Routes {};  // medium folds below hard, 100 per hard unit
@@ -213,7 +213,8 @@ struct ConflictCost final : optimaru::UnitConstraint<S> {
         for (std::size_t a = 0; a < members.size(); ++a)
             for (std::size_t b = a + 1; b < members.size(); ++b)
                 for (auto [x, y] : s.conflicts)
-                    if ((members[a] == x && members[b] == y) || (members[a] == y && members[b] == x))
+                    if ((members[a] == x && members[b] == y) ||
+                        (members[a] == y && members[b] == x))
                         c += 1;
         return c;
     }
@@ -372,7 +373,8 @@ void testLevelMetadata() {
     check(conflict.weight == ConflictCost<Tasks>::kDefaultWeight && conflict.level == Level::Hard,
           "the default constructor carries kDefaultWeight / kDefaultLevel");
     check(conflict.is_hard(), "isHard() reads level == Hard");
-    check(!conflict.reward && conflict.level_flippable, "reward=false, levelFlippable=true by default");
+    check(!conflict.reward && conflict.level_flippable,
+          "reward=false, levelFlippable=true by default");
     conflict.set_level(Level::Soft);
     check(conflict.level == Level::Soft && !conflict.is_hard(), "setLevel(Soft) clears isHard()");
     conflict.set_level(Level::Hard);
@@ -408,7 +410,8 @@ void testMediumFold() {
         bool levelsReported = true;
         for (const auto& total : calc.constraint_totals()) {
             if (total.name == "overloadCost")
-                levelsReported &= total.level == Level::Medium && total.cost == 1.0 && !total.is_hard;
+                levelsReported &=
+                        total.level == Level::Medium && total.cost == 1.0 && !total.is_hard;
             if (total.name == "conflictCost")
                 levelsReported &= total.level == Level::Hard && total.is_hard && total.cost == 3.0;
             if (total.name == "idleWorkerCost")
@@ -426,8 +429,8 @@ void testMediumFold() {
         Tasks s = assignmentA<Tasks>();
         check(throwsLogic(defaults<Tasks>(), s),
               "a medium constraint on a domain without a medium fold throws at reset");
-        const Score score = scoreOf(
-                defaults<Tasks>().soft("overloadCost").soft("idleWorkerCost"), s);
+        const Score score =
+                scoreOf(defaults<Tasks>().soft("overloadCost").soft("idleWorkerCost"), s);
         check(same(score, {-4, -28.5}),
               "the same constraints demoted to soft score on a fold-less domain");
     }
@@ -556,9 +559,7 @@ void testExponent() {
     // (1+1)^2); the global shapes its total: 2^2 = 4.
     SoftFoldTasks s;
     s.assignment = {0, 0, 0, 1, 1, 1};
-    auto pair = [] {
-        return defaults<SoftFoldTasks>().only({"overloadCost", "idleWorkerCost"});
-    };
+    auto pair = [] { return defaults<SoftFoldTasks>().only({"overloadCost", "idleWorkerCost"}); };
     check(same(scoreOf(pair(), s), {0, -4000.0}), "unshaped: medium 1 + 1 + 2 = 4");
     check(same(scoreOf(pair().exponent("overloadCost", 2.0).exponent("idleWorkerCost", 2.0), s),
                {0, -6000.0}),
@@ -571,7 +572,8 @@ void testExponent() {
           "shapeCost raises the magnitude of a negative raw cost and keeps its sign");
     check(same(scoreOf(defaults<SoftFoldTasks>().exponent("preferenceReward", 2.0), a),
                {-4, -(23.5 + 2 * 1000.0)}),
-          "exponent 2 on a reward: raw -3 -> -9, x0.5 = -4.5 soft (a larger reward, not a penalty)");
+          "exponent 2 on a reward: raw -3 -> -9, x0.5 = -4.5 soft (a larger reward, not a "
+          "penalty)");
     std::printf("\n");
 }
 
@@ -652,18 +654,21 @@ void testPythonName() {
     check(python_name("distanceFromFacilityCost") == "distance_from_facility_cost",
           "distanceFromFacilityCost -> distance_from_facility_cost");
     using optimaru::python::instance_keys;
-    check(instance_keys({"day_pattern_cost", "min_rest_cost", "day_pattern_cost", "day_pattern_cost"}) ==
-                  std::vector<std::string>{"day_pattern_cost", "min_rest_cost", "day_pattern_cost#2",
-                                           "day_pattern_cost#3"},
-          "instanceKeys: a repeated name's k-th instance is '<name>#<k>', a single one keeps its name");
+    check(instance_keys(
+                  {"day_pattern_cost", "min_rest_cost", "day_pattern_cost", "day_pattern_cost"}) ==
+                  std::vector<std::string>{"day_pattern_cost", "min_rest_cost",
+                                           "day_pattern_cost#2", "day_pattern_cost#3"},
+          "instanceKeys: a repeated name's k-th instance is '<name>#<k>', a single one keeps its "
+          "name");
     std::string refused;
     try {
         instance_keys({"min_rest_cost", "day_pattern_cost#2"});
     } catch (const std::invalid_argument& error) {
         refused = error.what();
     }
-    check(refused == "constraint 'day_pattern_cost#2': a name must not contain '#', which "
-                     "constraint_costs() keys repeated picks with ('<name>#<k>')",
+    check(refused ==
+                  "constraint 'day_pattern_cost#2': a name must not contain '#', which "
+                  "constraint_costs() keys repeated picks with ('<name>#<k>')",
           "instanceKeys refuses a name holding '#' (ValueError), in the Python base's words");
     std::printf("\n");
 }
@@ -696,7 +701,8 @@ void testComponentsOutsideAnAssembly() {
         c.set_level(Level::Hard);
         check(c.level == Level::Hard, "setLevel moves a flippable constraint");
         PreferenceReward<SoftFoldTasks> reward;
-        check(throwsInvalid([&] { reward.set_level(Level::Hard); }), "setLevel(Hard) on a reward throws");
+        check(throwsInvalid([&] { reward.set_level(Level::Hard); }),
+              "setLevel(Hard) on a reward throws");
         ForbiddenWorkerCost<SoftFoldTasks> forbidden;
         check(throwsInvalid([&] { forbidden.set_level(Level::Soft); }),
               "setLevel on a non-flippable constraint throws");
@@ -717,14 +723,17 @@ void testComponentsOutsideAnAssembly() {
         calc.add(std::move(second));
         calc.rebuild(s);
         const Score score = calc.score();
-        check(same(score, {0, -(28.0 + 3.0 * 15.0)}), "both instances score: 28 + 3 x 15, got " + str(score));
+        check(same(score, {0, -(28.0 + 3.0 * 15.0)}),
+              "both instances score: 28 + 3 x 15, got " + str(score));
         const auto totals = calc.constraint_totals();
         const auto costs = calc.constraint_costs();
-        check(totals.size() == 2 && totals[0].name == "taskCostCost" && totals[1].name == "taskCostCost" &&
-                      totals[0].label == "task cost (all workers)" && totals[1].label == "task cost (worker 0)" &&
-                      totals[1].cost == 45.0,
+        check(totals.size() == 2 && totals[0].name == "taskCostCost" &&
+                      totals[1].name == "taskCostCost" &&
+                      totals[0].label == "task cost (all workers)" &&
+                      totals[1].label == "task cost (worker 0)" && totals[1].cost == 45.0,
               "constraintTotals() report each instance under its registry name with its label");
-        check(costs.size() == 2 && costs[1].label == "task cost (worker 0)" && costs[1].weight == 3.0,
+        check(costs.size() == 2 && costs[1].label == "task cost (worker 0)" &&
+                      costs[1].weight == 3.0,
               "constraintCosts() carry the label and the instance's own weight");
     }
     {
@@ -732,7 +741,8 @@ void testComponentsOutsideAnAssembly() {
                 std::make_unique<PreferenceReward<SoftFoldTasks>>());
         check(wrapped->reward && !wrapped->level_flippable && wrapped->weight == 0.5 &&
                       wrapped->level == Level::Soft && wrapped->name == "preferenceReward",
-              "a wrapper copying the inner metadata keeps reward / levelFlippable / weight / level");
+              "a wrapper copying the inner metadata keeps reward / levelFlippable / weight / "
+              "level");
         check(throwsInvalid([&] { wrapped->set_level(Level::Hard); }),
               "so the reward guard still holds on the wrapper");
     }
@@ -748,12 +758,14 @@ void testComponentsOutsideAnAssembly() {
         catalog.emplace<ConflictCost<SoftFoldTasks>>();
         catalog.emplace<ForbiddenWorkerCost<SoftFoldTasks>>();
         const auto rows = optimaru::catalog_info(defaultSet, catalog);
-        check(rows.size() == 4 && rows[0].name == "conflictCost" && rows[1].name == "taskCostCost" &&
-                      rows[2].name == "overloadCost" && rows[3].name == "forbiddenWorkerCost",
+        check(rows.size() == 4 && rows[0].name == "conflictCost" &&
+                      rows[1].name == "taskCostCost" && rows[2].name == "overloadCost" &&
+                      rows[3].name == "forbiddenWorkerCost",
               "catalogInfo: the default rows first, then the catalog-only ones, each name once");
         check(rows[0].default_enabled && rows[1].default_enabled && !rows[2].default_enabled &&
                       !rows[3].default_enabled,
-              "defaultEnabled: in the defaults at weight > 0 (not an opt-in weight 0, not catalog-only)");
+              "defaultEnabled: in the defaults at weight > 0 (not an opt-in weight 0, not "
+              "catalog-only)");
         check(rows[3].default_level == Level::Hard && !rows[3].level_flippable,
               "a catalog-only row carries its component's own defaults");
         optimaru::ConstraintAssembly<SoftFoldTasks> drifted;
@@ -803,33 +815,41 @@ void testBindingLevelGuard() {
           "level='hard' on a reward is refused: 'is a reward'");
     check(checked_level(reward, Level::Soft, into_soft, "'preference_reward'") == Level::Soft,
           "level='soft' on a soft reward re-states its level");
-    check(refusal([&] { checked_level(reward, Level::Medium, below_hard, "'preference_reward'"); }) ==
-                  "constraint 'preference_reward' is a reward (raw cost <= 0) and cannot be "
-                  "medium here, where medium counts toward the hard score",
+    check(refusal([&] {
+              checked_level(reward, Level::Medium, below_hard, "'preference_reward'");
+          }) == "constraint 'preference_reward' is a reward (raw cost <= 0) and cannot be "
+                "medium here, where medium counts toward the hard score",
           "level='medium' on a reward is refused where medium lands in the hard level");
     const ForbiddenWorkerCost<SoftFoldTasks> forbidden;
-    check(refusal([&] { checked_level(forbidden, Level::Soft, into_soft, "'forbidden_worker_cost'"); }) ==
-                  "constraint 'forbidden_worker_cost' is always hard; level='soft' is not allowed",
+    check(refusal([&] {
+              checked_level(forbidden, Level::Soft, into_soft, "'forbidden_worker_cost'");
+          }) == "constraint 'forbidden_worker_cost' is always hard; level='soft' is not allowed",
           "level='soft' on a non-flippable hard constraint is refused: 'is always hard'");
-    check(refusal([&] { checked_level(forbidden, Level::Medium, into_soft, "'forbidden_worker_cost'"); }) ==
-                  "constraint 'forbidden_worker_cost' is always hard; level='medium' is not allowed",
+    check(refusal([&] {
+              checked_level(forbidden, Level::Medium, into_soft, "'forbidden_worker_cost'");
+          }) == "constraint 'forbidden_worker_cost' is always hard; level='medium' is not allowed",
           "level='medium' on it is refused too");
-    check(checked_level(forbidden, Level::Hard, into_soft, "'forbidden_worker_cost'") == Level::Hard,
+    check(checked_level(forbidden, Level::Hard, into_soft, "'forbidden_worker_cost'") ==
+                  Level::Hard,
           "level='hard' on it re-states its level");
     const OverloadCost<SoftFoldTasks> overload;
     check(checked_level(overload, Level::Soft, into_soft, "'overload_cost'") == Level::Soft &&
-                  checked_level(overload, Level::Hard, into_soft, "'overload_cost'") == Level::Hard &&
-                  checked_level(overload, Level::Medium, into_soft, "'overload_cost'") == Level::Medium,
+                  checked_level(overload, Level::Hard, into_soft, "'overload_cost'") ==
+                          Level::Hard &&
+                  checked_level(overload, Level::Medium, into_soft, "'overload_cost'") ==
+                          Level::Medium,
           "a flippable medium constraint takes every level");
     check(refusal([&] { checked_level(overload, Level::Medium, none, "'overload_cost'"); }) ==
                   "constraint 'overload_cost': this use case has no medium level",
           "level='medium' on a domain without a medium fold is refused");
     OverloadCost<SoftFoldTasks> fixedMedium;
     fixedMedium.level_flippable = false;
-    check(refusal([&] { checked_level(fixedMedium, Level::Soft, into_soft, "'overload_cost'"); }) ==
-                          "constraint 'overload_cost' is always medium; level='soft' is not allowed" &&
-                  refusal([&] { checked_level(fixedMedium, Level::Hard, into_soft, "'overload_cost'"); }) ==
-                          "constraint 'overload_cost' is always medium; level='hard' is not allowed",
+    check(refusal([&] {
+              checked_level(fixedMedium, Level::Soft, into_soft, "'overload_cost'");
+          }) == "constraint 'overload_cost' is always medium; level='soft' is not allowed" &&
+                  refusal([&] {
+                      checked_level(fixedMedium, Level::Hard, into_soft, "'overload_cost'");
+                  }) == "constraint 'overload_cost' is always medium; level='hard' is not allowed",
           "a non-flippable medium constraint refuses level='hard' and level='soft'");
     std::printf("\n");
 }
@@ -886,7 +906,8 @@ struct LongestRouteCost final : optimaru::GlobalConstraint<S> {
         return static_cast<double>(*std::max_element(sizes.begin(), sizes.end()));
     }
     bool supports_preview() const override { return true; }
-    double preview_cost(const S&, const optimaru::PreviewedUnit* changes, int count) const override {
+    double preview_cost(const S&, const optimaru::PreviewedUnit* changes,
+                        int count) const override {
         int longest = 0;
         for (std::size_t u = 0; u < sizes.size(); ++u) {
             int size = sizes[u];
@@ -956,14 +977,14 @@ void listMediumPreviews(const std::string& label, double mediumWeight, std::uint
     // each cell and the global like hard, so at w = 0.6 that is
     // llround(1.8) + llround(0.6) + llround(6.0) = 9, not llround(14 x 0.6) = 8.
     const double w = mediumWeight;
-    const double expected =
-            optimaru::MediumFoldOf<S>::value.rounds_medium()
-                    ? static_cast<double>(std::llround(3 * w) + std::llround(w) + std::llround(10 * w))
-                    : 14.0 * w;
+    const double expected = optimaru::MediumFoldOf<S>::value.rounds_medium()
+                                    ? static_cast<double>(std::llround(3 * w) + std::llround(w) +
+                                                          std::llround(10 * w))
+                                    : 14.0 * w;
     const double medium = calc.level_scores().medium;  // a score: -penalty
-    check(std::fabs(medium + expected) < 1e-9,
-          label + ": the medium penalty at the start is " + std::to_string(expected) + ", got " +
-                  std::to_string(-medium));
+    check(std::fabs(medium + expected) < 1e-9, label + ": the medium penalty at the start is " +
+                                                       std::to_string(expected) + ", got " +
+                                                       std::to_string(-medium));
     optimaru::testing::PreviewParity parity;
     bool corrupted = false;
     try {
@@ -974,7 +995,8 @@ void listMediumPreviews(const std::string& label, double mediumWeight, std::uint
     }
     std::printf("    %d previews checked, %d declined\n", parity.checked, parity.declined);
     check(!corrupted && parity.all_equal() && parity.declined == 0 && parity.checked > 1000,
-          label + ": every preview equals the applied score (ScoreChecks::Full: == a full recompute)");
+          label + ": every preview equals the applied score (ScoreChecks::Full: == a full "
+                  "recompute)");
 }
 
 void testListMediumPreviews() {
@@ -1070,13 +1092,15 @@ void testScoreRange() {
           "BelowHard: two busy workers at 4e16 fold exactly (8e18 fits)");
     const Score folded = busyScore<HardFoldTasks>(4e16, {0, 0, 1, 1, 2, 2});
     check(folded.hard == -kLimit,
-          "BelowHard: three busy workers at 4e16 fold past int64 -> -INT64_MAX, got " + str(folded));
+          "BelowHard: three busy workers at 4e16 fold past int64 -> -INT64_MAX, got " +
+                  str(folded));
     check(kHardFold.to_engine(-100000000000000000LL, -5.0, 0.0).hard == -kLimit,
           "MediumFold::to_engine(BelowHard) saturates like the objective");
     check(kHardFold.to_engine(-3, -5.0, 0.0).hard == -305,
           "MediumFold::to_engine(BelowHard) is exact in range");
     check(saturatingWalk<Tasks>(3e18, 61), "incremental == fresh across saturation (fold-less)");
-    check(saturatingWalk<HardFoldTasks>(3e16, 67), "incremental == fresh across saturation (BelowHard)");
+    check(saturatingWalk<HardFoldTasks>(3e16, 67),
+          "incremental == fresh across saturation (BelowHard)");
 
     // HardTotal: wraps and comes back exactly.
     optimaru::HardTotal total;
@@ -1273,8 +1297,10 @@ void testRestateKnobs() {
         soft.level = Level::Soft;
         soft.weight = 2.5;
         ForbiddenWorkerCost<Tasks> forbidden;
-        check(refusal([&] { restate_knobs(forbidden, soft, kSoftFold, "'forbidden_worker_cost'"); }) ==
-                      "constraint 'forbidden_worker_cost' is always hard; level='soft' is not allowed",
+        check(refusal([&] {
+                  restate_knobs(forbidden, soft, kSoftFold, "'forbidden_worker_cost'");
+              }) == "constraint 'forbidden_worker_cost' is always hard; level='soft' is not "
+                    "allowed",
               "level='soft' on a non-flippable component is refused on the component path too");
     }
     std::printf("\n");
@@ -1323,7 +1349,6 @@ void testReportedDefaults() {
     std::printf("\n");
 }
 
-
 // --- (o) offset / clip ----------------------------------------------------
 
 // A scoped unit constraint: one raw unit per task on workers 0 and 2 only
@@ -1361,13 +1386,17 @@ void testOffsetClip() {
     using optimaru::shape_cost;
     // The formula itself.
     check(shape_cost(15.0, 1.0, 5.0, true) == 10.0 && shape_cost(3.0, 1.0, 5.0, true) == 0.0 &&
-                  shape_cost(0.0, 2.0, 5.0, true) == 0.0 && shape_cost(-8.0, 2.0, 5.0, true) == -9.0,
-          "threshold: sign(x) * max(0, |x| - offset)^e (15 -> 10, 3 -> 0, 0 -> 0, -8 -> -9 at e 2)");
-    check(shape_cost(15.0, 3.0, 10.0, false) == 125.0 && shape_cost(7.0, 3.0, 10.0, false) == -27.0 &&
+                  shape_cost(0.0, 2.0, 5.0, true) == 0.0 &&
+                  shape_cost(-8.0, 2.0, 5.0, true) == -9.0,
+          "threshold: sign(x) * max(0, |x| - offset)^e (15 -> 10, 3 -> 0, 0 -> 0, -8 -> -9 at e "
+          "2)");
+    check(shape_cost(15.0, 3.0, 10.0, false) == 125.0 &&
+                  shape_cost(7.0, 3.0, 10.0, false) == -27.0 &&
                   shape_cost(0.0, 1.0, 10.0, false) == -10.0,
           "literal: shape(x - offset, e) ((15-10)^3 = 125, (7-10)^3 = -27, a raw 0 -> -10)");
     check(shape_cost(4.0, 2.0, -1.0, true) == 25.0 && shape_cost(0.0, 2.0, -1.0, true) == 0.0 &&
-                  shape_cost(-4.0, 1.0, -1.0, true) == -5.0 && shape_cost(0.0, 2.0, -1.0, false) == 1.0,
+                  shape_cost(-4.0, 1.0, -1.0, true) == -5.0 &&
+                  shape_cost(0.0, 2.0, -1.0, false) == 1.0,
           "a negative offset: threshold adds |offset| to every non-zero x, literal to every x");
     bool samePlain = true;
     for (double x : {-7.5, -1.0, -0.0, 0.0, 0.3, 1.0, 2.0, 17.25, 1e10}) {
@@ -1391,7 +1420,9 @@ void testOffsetClip() {
     check(softOf(one<Tasks>("taskCostCost").offset("taskCostCost", 5.0).clip("taskCostCost", false),
                  t) == 8.0,
           "literal offset 5: [10, 6, -5, -3] = 8 soft (the empty worker 2 is rewarded too)");
-    check(softOf(one<Tasks>("taskCostCost").offset("taskCostCost", 5.0).exponent("taskCostCost", 2.0),
+    check(softOf(one<Tasks>("taskCostCost")
+                         .offset("taskCostCost", 5.0)
+                         .exponent("taskCostCost", 2.0),
                  t) == 136.0,
           "threshold offset 5, exponent 2: 100 + 36 = 136");
     check(softOf(one<Tasks>("taskCostCost")
@@ -1401,8 +1432,9 @@ void testOffsetClip() {
                  t) == 102.0,
           "literal offset 5, exponent 2: 100 + 36 - 25 - 9 = 102 (sign-preserving)");
     check(softOf(one<Tasks>("taskCostCost").offset("taskCostCost", -1.0), t) == 31.0 &&
-                  softOf(one<Tasks>("taskCostCost").offset("taskCostCost", -1.0).clip("taskCostCost",
-                                                                                      false),
+                  softOf(one<Tasks>("taskCostCost")
+                                 .offset("taskCostCost", -1.0)
+                                 .clip("taskCostCost", false),
                          t) == 32.0,
           "offset -1: threshold [16, 12, 0, 3] = 31, literal [16, 12, 1, 3] = 32");
     // A reward (raw [-3, 0, 0, 0], weight 0.5) next to the 28 of taskCostCost.
@@ -1422,7 +1454,9 @@ void testOffsetClip() {
           "threshold offset 0.5 on a hard constraint: rounded per unit, half away from zero");
     // The literal formula on hard is refused at reset (section (q)); on soft
     // it keeps its numbers: [1, 0, -1, -1] = -1 soft (a reward below 1).
-    check(throwsLogic(one<Tasks>("conflictCost").offset("conflictCost", 1.0).clip("conflictCost", false),
+    check(throwsLogic(one<Tasks>("conflictCost")
+                              .offset("conflictCost", 1.0)
+                              .clip("conflictCost", false),
                       t),
           "literal offset 1 on a hard constraint: refused at reset");
     check(softOf(one<Tasks>("conflictCost")
@@ -1441,9 +1475,11 @@ void testOffsetClip() {
     };
     check(softOf(idle(), c) == 2.0, "the global's total: 2 idle workers");
     check(softOf(idle().offset("idleWorkerCost", 1.0).exponent("idleWorkerCost", 2.0), c) == 1.0,
-          "global threshold offset 1, exponent 2: max(0, 2 - 1)^2 = 1 (on the total, not per worker)");
-    check(softOf(idle().offset("idleWorkerCost", 3.0).exponent("idleWorkerCost", 2.0).clip(
-                         "idleWorkerCost", false),
+          "global threshold offset 1, exponent 2: max(0, 2 - 1)^2 = 1 (on the total, not per "
+          "worker)");
+    check(softOf(idle().offset("idleWorkerCost", 3.0)
+                         .exponent("idleWorkerCost", 2.0)
+                         .clip("idleWorkerCost", false),
                  c) == -1.0,
           "global literal offset 3, exponent 2: shape(2 - 3, 2) = -1");
     check(softOf(idle().offset("idleWorkerCost", 3.0), c) == 0.0,
@@ -1501,8 +1537,9 @@ void testOffsetClip() {
         knobs.clip = false;
         TaskCostCost<Tasks> bare;
         optimaru::python::restate_knobs(bare, knobs, optimaru::MediumFold::none(),
-                                       "'task_cost_cost'");
-        check(bare.offset == -2.0 && !bare.clip, "restateKnobs applies offset / clip to a component");
+                                        "'task_cost_cost'");
+        check(bare.offset == -2.0 && !bare.clip,
+              "restateKnobs applies offset / clip to a component");
     }
     {
         // An assembly with offset 0 scores exactly like the plain shaping.
@@ -1537,18 +1574,19 @@ optimaru::ConstraintAssembly<S> repeated(bool shared = false) {
             assembly.add_instances(std::move(copy));
         }
     };
-    join(
-            one<S>("taskCostCost").exponent("taskCostCost", 2.0).offset("taskCostCost", 5.0));
+    join(one<S>("taskCostCost").exponent("taskCostCost", 2.0).offset("taskCostCost", 5.0));
     join(one<S>("taskCostCost")
-                                  .weight("taskCostCost", 0.5)
-                                  .offset("taskCostCost", 10.0)
-                                  .clip("taskCostCost", false));
+                 .weight("taskCostCost", 0.5)
+                 .offset("taskCostCost", 10.0)
+                 .clip("taskCostCost", false));
     join(one<S>("conflictCost")
-                                  .soft("conflictCost")
-                                  .offset("conflictCost", 1.0)
-                                  .clip("conflictCost", false));
+                 .soft("conflictCost")
+                 .offset("conflictCost", 1.0)
+                 .clip("conflictCost", false));
     auto idle = one<S>("idleWorkerCost");
-    idle.offset("idleWorkerCost", 1.0).exponent("idleWorkerCost", 2.0).clip("idleWorkerCost", false);
+    idle.offset("idleWorkerCost", 1.0)
+            .exponent("idleWorkerCost", 2.0)
+            .clip("idleWorkerCost", false);
     if constexpr (optimaru::MediumFoldOf<S>::value.rounds_medium()) idle.soft("idleWorkerCost");
     join(std::move(idle));
     join(one<S>("overloadCost").offset("overloadCost", -1.0).weight("overloadCost", 2.0));
@@ -1659,7 +1697,9 @@ optimaru::ConstraintAssembly<S> routeRepeats(bool shared = false) {
     auto copy = routeDefaults<S>();
     copy.only({"routeDistanceCost", "longestRouteCost", "routeDemandCost"});
     copy.exponent("routeDistanceCost", 2.0).offset("routeDistanceCost", -3.0);
-    copy.offset("longestRouteCost", 9.0).clip("longestRouteCost", false).weight("longestRouteCost", 0.6);
+    copy.offset("longestRouteCost", 9.0)
+            .clip("longestRouteCost", false)
+            .weight("longestRouteCost", 0.6);
     // The literal formula stays off the levels that count toward the hard
     // score: the hard routeDemandCost copy moves to soft, and so does the
     // medium longestRouteCost copy where medium folds below hard.
@@ -1693,7 +1733,8 @@ void listRepeatPreviews(const std::string& label, std::uint64_t seed, bool share
     }
     std::printf("    %d previews checked, %d declined\n", parity.checked, parity.declined);
     check(!corrupted && parity.all_equal() && parity.declined == 0 && parity.checked > 1000,
-          label + ": repeated, offset picks: every preview equals the applied score (ScoreChecks::Full)");
+          label + ": repeated, offset picks: every preview equals the applied score "
+                  "(ScoreChecks::Full)");
 }
 
 void testInstances() {
@@ -1712,16 +1753,17 @@ void testInstances() {
         }
         check(threw, "a by-name edit of a name held twice throws");
         assembly.exponent("taskCostCost", 0, 2.0);  // the first instance only
-        check(assembly.size() == 2 && assembly.names() ==
-                                              std::vector<std::string>{"taskCostCost", "taskCostCost"},
+        check(assembly.size() == 2 &&
+                      assembly.names() == std::vector<std::string>{"taskCostCost", "taskCostCost"},
               "emplaceInstance keeps the instance already held");
         check(softOf(std::move(assembly), t) == 15 * 15 + 11 * 11 + 2 * 2 + 28.0,
               "an edit by instance addresses that instance: 354 (shaped) + 28 (the copy)");
     }
     {
         auto assembly = one<Tasks>("taskCostCost");
-        assembly.add_instances(
-                one<Tasks>("taskCostCost").exponent("taskCostCost", 2.0).offset("taskCostCost", 5.0));
+        assembly.add_instances(one<Tasks>("taskCostCost")
+                                       .exponent("taskCostCost", 2.0)
+                                       .offset("taskCostCost", 5.0));
         check(softOf(std::move(assembly), t) == 28.0 + 136.0,
               "x + max(0, x - 5)^2 per unit: 28 + 136 = 164 (two instances, each its own knobs)");
     }
@@ -1778,7 +1820,8 @@ void testInstances() {
     check(walkAgrees<SoftFoldTasks>([] { return repeated<SoftFoldTasks>(); }, 23),
           "IntoSoft: repeated + offset picks, incremental == fresh over 2000 moves (1/3 rejected)");
     check(walkAgrees<HardFoldTasks>([] { return repeated<HardFoldTasks>(); }, 29),
-          "BelowHard: repeated + offset picks, incremental == fresh over 2000 moves (1/3 rejected)");
+          "BelowHard: repeated + offset picks, incremental == fresh over 2000 moves (1/3 "
+          "rejected)");
     check(walkAgrees<Tasks>(
                   [] {
                       optimaru::ConstraintAssembly<Tasks> assembly;
@@ -1801,8 +1844,8 @@ void testInstances() {
         calc.rebuild(a);
         const Score score = calc.score();
         check(calc.delta_group_count() == 1 && same(score, {-130, 8.0}),
-              "five instances of a grouped component share one delta group: -130hard / 8soft, got " +
-                      str(score));
+              "five instances of a grouped component share one delta group: -130hard / 8soft, "
+              "got " + str(score));
     }
     check(walkAgrees<Tasks>([] { return groupedRepeats<Tasks>(); }, 37),
           "grouped deltas: the direct hard fold for the unshaped instances, the shaped path for "
@@ -1845,7 +1888,8 @@ std::string mediumMessage(const std::string& quoted) {
 }
 
 void testLiteralOffsetGuard() {
-    std::printf("== (q) clip=false with an offset: refused where it counts toward the hard score ==\n");
+    std::printf(
+            "== (q) clip=false with an offset: refused where it counts toward the hard score ==\n");
     using optimaru::python::check_literal_offset;
     using optimaru::python::Knobs;
     using optimaru::python::restate_knobs;
@@ -1872,8 +1916,9 @@ void testLiteralOffsetGuard() {
         ForbiddenWorkerCost<Tasks> forbidden;  // structural hard
         forbidden.set_offset(offset);
         forbidden.set_clip(false);
-        check(refusal([&] { check_literal_offset(forbidden, kSoftFold, "'forbidden_worker_cost'"); }) ==
-                      hardMessage("'forbidden_worker_cost'"),
+        check(refusal([&] {
+                  check_literal_offset(forbidden, kSoftFold, "'forbidden_worker_cost'");
+              }) == hardMessage("'forbidden_worker_cost'"),
               "checkLiteralOffset, " + sign + ": a non-flippable hard constraint is refused");
         OverloadCost<Tasks> overload;  // default level medium
         overload.set_offset(offset);
@@ -1881,7 +1926,9 @@ void testLiteralOffsetGuard() {
         check(refusal([&] { check_literal_offset(overload, kHardFold, "'overload_cost'"); }) ==
                       mediumMessage("'overload_cost'"),
               "checkLiteralOffset, " + sign + ": medium below hard is refused, the medium message");
-        check(refusal([&] { check_literal_offset(overload, kSoftFold, "'overload_cost'"); }).empty(),
+        check(refusal([&] {
+                  check_literal_offset(overload, kSoftFold, "'overload_cost'");
+              }).empty(),
               "checkLiteralOffset, " + sign + ": medium into soft is allowed");
         TaskCostCost<Tasks> soft;
         soft.set_offset(offset);
@@ -1897,7 +1944,8 @@ void testLiteralOffsetGuard() {
         ConflictCost<Tasks> unshifted;
         unshifted.set_clip(false);  // offset stays 0
         check(refusal([&] { check_literal_offset(unshifted, none, "'conflict_cost'"); }).empty(),
-              "checkLiteralOffset: clip=False with offset 0 on hard is allowed (the plain shaping)");
+              "checkLiteralOffset: clip=False with offset 0 on hard is allowed (the plain "
+              "shaping)");
     }
 
     // Both restate_knobs overloads check once every knob is re-stated, so the
@@ -1913,25 +1961,33 @@ void testLiteralOffsetGuard() {
     literalMedium.level = Level::Medium;
     {
         auto assembly = defaults<SoftFoldTasks>();
-        check(refusal([&] { restate_knobs(assembly, "conflictCost", literal, "'conflict_cost'"); }) ==
-                      hardMessage("'conflict_cost'"),
+        check(refusal([&] {
+                  restate_knobs(assembly, "conflictCost", literal, "'conflict_cost'");
+              }) == hardMessage("'conflict_cost'"),
               "restateKnobs (assembly): a literal offset on the default hard level is refused");
         check(refusal([&] {
-                  restate_knobs(assembly, "forbiddenWorkerCost", literal, "'forbidden_worker_cost'");
+                  restate_knobs(assembly, "forbiddenWorkerCost", literal,
+                                "'forbidden_worker_cost'");
               }) == hardMessage("'forbidden_worker_cost'"),
               "restateKnobs (assembly): ... and on a structural hard one");
-        check(refusal([&] { restate_knobs(assembly, "taskCostCost", literalHard, "'task_cost_cost'"); }) ==
-                      hardMessage("'task_cost_cost'"),
-              "restateKnobs (assembly): level='hard' with a literal offset on a soft one is refused");
-        check(refusal([&] { restate_knobs(assembly, "taskCostCost", literalMedium, "'task_cost_cost'"); })
-                      .empty(),
-              "restateKnobs (assembly): level='medium' with it where medium folds into soft is allowed");
+        check(refusal([&] {
+                  restate_knobs(assembly, "taskCostCost", literalHard, "'task_cost_cost'");
+              }) == hardMessage("'task_cost_cost'"),
+              "restateKnobs (assembly): level='hard' with a literal offset on a soft one is "
+              "refused");
+        check(refusal([&] {
+                  restate_knobs(assembly, "taskCostCost", literalMedium, "'task_cost_cost'");
+              }).empty(),
+              "restateKnobs (assembly): level='medium' with it where medium folds into soft is "
+              "allowed");
     }
     {
         auto assembly = defaults<SoftFoldTasks>();
-        check(refusal([&] { restate_knobs(assembly, "conflictCost", literalSoft, "'conflict_cost'"); })
-                      .empty(),
-              "restateKnobs (assembly): level='soft' with a literal offset on a hard one is allowed");
+        check(refusal([&] {
+                  restate_knobs(assembly, "conflictCost", literalSoft, "'conflict_cost'");
+              }).empty(),
+              "restateKnobs (assembly): level='soft' with a literal offset on a hard one is "
+              "allowed");
         const optimaru::ConstraintMetadata* conflict = assembly.find("conflictCost");
         check(conflict->level == Level::Soft && conflict->offset == 3.0 && !conflict->clip,
               "...and every knob of it is applied");
@@ -1940,12 +1996,16 @@ void testLiteralOffsetGuard() {
     }
     {
         auto assembly = defaults<HardFoldTasks>();
-        check(refusal([&] { restate_knobs(assembly, "overloadCost", literal, "'overload_cost'"); }) ==
-                      mediumMessage("'overload_cost'"),
-              "restateKnobs (assembly): a literal offset on the default medium below hard is refused");
-        check(refusal([&] { restate_knobs(assembly, "taskCostCost", literalMedium, "'task_cost_cost'"); }) ==
-                      mediumMessage("'task_cost_cost'"),
-              "restateKnobs (assembly): level='medium' with a literal offset below hard is refused");
+        check(refusal([&] {
+                  restate_knobs(assembly, "overloadCost", literal, "'overload_cost'");
+              }) == mediumMessage("'overload_cost'"),
+              "restateKnobs (assembly): a literal offset on the default medium below hard is "
+              "refused");
+        check(refusal([&] {
+                  restate_knobs(assembly, "taskCostCost", literalMedium, "'task_cost_cost'");
+              }) == mediumMessage("'task_cost_cost'"),
+              "restateKnobs (assembly): level='medium' with a literal offset below hard is "
+              "refused");
     }
     {
         ConflictCost<Tasks> conflict;
@@ -1957,10 +2017,14 @@ void testLiteralOffsetGuard() {
                       mediumMessage("'overload_cost'"),
               "restateKnobs (component): ... and on medium below hard, the medium message");
         OverloadCost<SoftFoldTasks> into_soft;
-        check(refusal([&] { restate_knobs(into_soft, literal, kSoftFold, "'overload_cost'"); }).empty(),
+        check(refusal([&] {
+                  restate_knobs(into_soft, literal, kSoftFold, "'overload_cost'");
+              }).empty(),
               "restateKnobs (component): medium into soft is allowed");
         ConflictCost<Tasks> moved;
-        check(refusal([&] { restate_knobs(moved, literalSoft, none, "'conflict_cost'"); }).empty() &&
+        check(refusal([&] {
+                  restate_knobs(moved, literalSoft, none, "'conflict_cost'");
+              }).empty() &&
                       moved.level == Level::Soft && !moved.clip,
               "restateKnobs (component): level='soft' with a literal offset is allowed");
         Knobs threshold;
@@ -1973,11 +2037,13 @@ void testLiteralOffsetGuard() {
     // The engine itself, at reset: the C++ API (ConstraintAssembly::offset /
     // clip / level in any order, and components set up directly).
     const std::string conflict = engineMessage("conflictCost");
-    check(resetRefusal(one<Tasks>("conflictCost").offset("conflictCost", 2.0).clip("conflictCost", false)) ==
-                  conflict,
+    check(resetRefusal(one<Tasks>("conflictCost")
+                               .offset("conflictCost", 2.0)
+                               .clip("conflictCost", false)) == conflict,
           "reset refuses offset then clip(false) on a hard constraint, in the engine's words");
-    check(resetRefusal(one<Tasks>("conflictCost").clip("conflictCost", false).offset("conflictCost", -2.0)) ==
-                  conflict,
+    check(resetRefusal(one<Tasks>("conflictCost")
+                               .clip("conflictCost", false)
+                               .offset("conflictCost", -2.0)) == conflict,
           "reset refuses clip(false) then a negative offset on a hard constraint");
     check(resetRefusal(one<Tasks>("taskCostCost")
                                .offset("taskCostCost", 2.0)
@@ -2160,7 +2226,7 @@ struct ExcessLoadCost final : optimaru::UnitConstraint<S> {
     }
     bool supports_piecewise_preview() const override { return true; }
     bool piecewise_cost(const S& s, int, const optimaru::ListPiece* pieces, int count,
-                       double& out) const override {
+                        double& out) const override {
         ++piecewiseCalls;
         double total = 0.0;
         for (int i = 0; i < count; ++i) {
@@ -2185,9 +2251,7 @@ struct ExcessLoadCost final : optimaru::UnitConstraint<S> {
 using LoadCalc = optimaru::DecomposedObjective<Loads>;
 using LoadAssembly = optimaru::ConstraintAssembly<Loads>;
 
-bool identical(const Score& a, const Score& b) {
-    return a.hard == b.hard && a.soft == b.soft;
-}
+bool identical(const Score& a, const Score& b) { return a.hard == b.hard && a.soft == b.soft; }
 
 // A threshold at offset -1 (a fixed charge of 1 per non-zero worker) on one
 // component, the rest of the assembly as given.
@@ -2338,7 +2402,8 @@ void exactRandomWalk() {
             }
         }
     }
-    check(hardExact && softClose, "random walk: incremental == fresh (hard exactly) over 3000 moves");
+    check(hardExact && softClose,
+          "random walk: incremental == fresh (hard exactly) over 3000 moves");
     check(zerosExact, "random walk: a raw that is 0 from scratch is exactly 0 incrementally");
     check(controlDrift > 0, "random walk: the unshifted control's accumulated raw drifts off 0 (" +
                                     std::to_string(controlDrift) + " cells), harmlessly");
@@ -2378,11 +2443,13 @@ void testHashInAssemblyNames() {
     };
     check(refusal([](LoadAssembly& a) { a.emplace<HashedTotal>(); }).find("'total#'") !=
                           std::string::npos &&
-                  refusal([](LoadAssembly& a) { a.emplace_instance<HashedTotal>(); })
-                                  .find("must not contain '#'") != std::string::npos,
+                  refusal([](LoadAssembly& a) {
+                      a.emplace_instance<HashedTotal>();
+                  }).find("must not contain '#'") != std::string::npos,
           "a global constraint named 'total#' is refused too");
-    check(refusal([](LoadAssembly& a) { a.emplace<LoadCost<Loads>>(Level::Soft, "load_2Cost"); })
-                  .empty(),
+    check(refusal([](LoadAssembly& a) {
+              a.emplace<LoadCost<Loads>>(Level::Soft, "load_2Cost");
+          }).empty(),
           "any other name is accepted");
     std::printf("\n");
 }
@@ -2394,8 +2461,10 @@ void testExactNegativeThreshold() {
     check(optimaru::shape_cost(2.8e-17, 1.0, -1.0, true) == 1.0 &&
                   optimaru::shape_cost(0.0, 1.0, -1.0, true) == 0.0,
           "premise: the threshold at offset -1 charges 1 for any non-zero raw, 0 for 0");
-    check(optimaru::shaping_jumps_at_zero(-1.0, true) && !optimaru::shaping_jumps_at_zero(-1.0, false) &&
-                  !optimaru::shaping_jumps_at_zero(1.0, true) && !optimaru::shaping_jumps_at_zero(0.0, true),
+    check(optimaru::shaping_jumps_at_zero(-1.0, true) &&
+                  !optimaru::shaping_jumps_at_zero(-1.0, false) &&
+                  !optimaru::shaping_jumps_at_zero(1.0, true) &&
+                  !optimaru::shaping_jumps_at_zero(0.0, true),
           "shapingJumpsAtZero: only clip=true with offset < 0");
 
     exactSequence("unit constraint (kVirtualDelta), soft", [] {
@@ -2498,8 +2567,7 @@ void testExactNegativeThreshold() {
             optimaru::ConstraintAssembly<LoadRoutes> assembly;
             assembly.emplace<ExcessLoadCost<LoadRoutes>>();
             std::move(assembly).offset("excessLoadCost", offset).into(calc);
-            optimaru::Editor<LoadRoutes> editor(s, calc,
-                                                         optimaru::ScoreChecks::Full);
+            optimaru::Editor<LoadRoutes> editor(s, calc, optimaru::ScoreChecks::Full);
             editor.score();
             optimaru::testing::PreviewParity parity;
             bool corrupted = false;
@@ -2514,7 +2582,8 @@ void testExactNegativeThreshold() {
                             .piecewiseCalls;
             if (offset < 0.0) {
                 check(!corrupted && parity.all_equal() && parity.checked > 1000 && calls == 0,
-                      "sequence, offset -1: every preview equals the applied score, through cost()");
+                      "sequence, offset -1: every preview equals the applied score, through "
+                      "cost()");
             } else {
                 check(!corrupted && parity.all_equal() && calls > 0,
                       "sequence, offset 0: the piecewise answer still serves the previews");
@@ -2533,7 +2602,8 @@ void testExactNegativeThreshold() {
 template <typename S>
 struct SignedUnitCost final : optimaru::UnitConstraint<S> {
     explicit SignedUnitCost(std::vector<double> taskValues)
-        : optimaru::UnitConstraint<S>("signedUnitCost", 1.0, Level::Soft), values(std::move(taskValues)) {}
+        : optimaru::UnitConstraint<S>("signedUnitCost", 1.0, Level::Soft),
+          values(std::move(taskValues)) {}
     std::vector<double> values;
     double cost(const S&, int, const std::vector<int>& members) const override {
         double c = 0;
@@ -2548,12 +2618,14 @@ struct SignedUnitCost final : optimaru::UnitConstraint<S> {
 template <typename S>
 struct SignedGlobalCost final : optimaru::GlobalConstraint<S> {
     explicit SignedGlobalCost(std::vector<double> taskValues)
-        : optimaru::GlobalConstraint<S>("signedGlobalCost", 1.0, Level::Soft), values(std::move(taskValues)) {}
+        : optimaru::GlobalConstraint<S>("signedGlobalCost", 1.0, Level::Soft),
+          values(std::move(taskValues)) {}
     std::vector<double> values;
     std::vector<double> perUnit;
     void reset(const S&, const std::vector<std::vector<int>>& members_per_unit) override {
         perUnit.assign(members_per_unit.size(), 0.0);
-        for (std::size_t u = 0; u < members_per_unit.size(); ++u) on_unit_changed(S{}, static_cast<int>(u), members_per_unit[u]);
+        for (std::size_t u = 0; u < members_per_unit.size(); ++u)
+            on_unit_changed(S{}, static_cast<int>(u), members_per_unit[u]);
     }
     void on_unit_changed(const S&, int unit, const std::vector<int>& members) override {
         double c = 0;
@@ -2664,7 +2736,9 @@ void testSharedRepeats() {
             repeats.emplace_instance<LoadCost<Loads>>();
             repeats.emplace_instance<LoadCost<Loads>>();
             repeats.emplace_instance<LoadCost<Loads>>();
-            repeats.exponent("loadCost", 0, 2.0).offset("loadCost", 1, -1.0).offset("loadCost", 2, -2.0);
+            repeats.exponent("loadCost", 0, 2.0)
+                    .offset("loadCost", 1, -1.0)
+                    .offset("loadCost", 2, -2.0);
             assembly.add_repeats(std::move(repeats));
             assembly.emplace_instance<LoadCost<Loads>>();
             return assembly;
@@ -2672,8 +2746,10 @@ void testSharedRepeats() {
         auto independent = [] {
             LoadAssembly assembly;
             for (int i = 0; i < 5; ++i) assembly.emplace_instance<LoadCost<Loads>>();
-            return std::move(assembly).exponent("loadCost", 1, 2.0).offset("loadCost", 2, -1.0).offset(
-                    "loadCost", 3, -2.0);
+            return std::move(assembly)
+                    .exponent("loadCost", 1, 2.0)
+                    .offset("loadCost", 2, -1.0)
+                    .offset("loadCost", 3, -2.0);
         };
         LoadCalc calc;
         build().into(calc);
@@ -2756,7 +2832,8 @@ void testSharedRepeats() {
         struct ScaledLoadCost final : LoadCost<Loads> {
             double scale;
             explicit ScaledLoadCost(double s) : scale(s) {}
-            double cost(const Loads& loads, int unit, const std::vector<int>& members) const override {
+            double cost(const Loads& loads, int unit,
+                        const std::vector<int>& members) const override {
                 return scale * LoadCost<Loads>::cost(loads, unit, members);
             }
         };
@@ -2781,7 +2858,8 @@ void testSharedRepeats() {
             return true;
         };
         check(resets(1.0) && !resets(2.0),
-              "a repeat built with another parameter is refused at reset, when its raw cost differs");
+              "a repeat built with another parameter is refused at reset, when its raw cost "
+              "differs");
     }
     std::printf("\n");
 }
@@ -2790,28 +2868,32 @@ void testSignedCostLevel() {
     std::printf("== (s) a raw cost that can be negative stays off the hard score ==\n");
     using optimaru::SignedCostLevelError;
     // Assignment A: worker0 {0,1,2}, worker1 {3,4}, worker3 {5}; 3 hard conflicts.
-    const std::vector<double> bonus{-1, -1, -1, 0, 0, 0};    // can be negative: -3 in total
-    const std::vector<double> plain{1, 0, 2, 0, 0, 1};       // never negative
+    const std::vector<double> bonus{-1, -1, -1, 0, 0, 0};  // can be negative: -3 in total
+    const std::vector<double> plain{1, 0, 2, 0, 0, 1};     // never negative
     const std::string hardText =
             "Constraint 'signedGlobalCost' can have a negative raw cost on this problem (a bonus) "
             "and cannot be hard";
     check(SignedCostLevelError::message("signed_global_cost", Level::Hard) ==
-                  "constraint 'signed_global_cost' can have a negative raw cost on this problem (a bonus) "
+                  "constraint 'signed_global_cost' can have a negative raw cost on this problem (a "
+                  "bonus) "
                   "and cannot be hard",
           "the Python wording, hard (what the bindings raise as ValueError)");
     check(SignedCostLevelError::message("signed_global_cost", Level::Medium) ==
-                  "constraint 'signed_global_cost' can have a negative raw cost on this problem (a bonus) "
+                  "constraint 'signed_global_cost' can have a negative raw cost on this problem (a "
+                  "bonus) "
                   "and cannot be medium here, where medium counts toward the hard score",
           "the Python wording, a below_hard medium");
     {
         auto global = std::make_unique<SignedGlobalCost<Tasks>>(bonus);
         global->set_level(Level::Hard);  // flippable: the setter cannot know the data
         check(signedRefusal(std::move(global), assignmentA<Tasks>()) == hardText,
-              "a hard global over negative data is refused at reset (it would cancel the 3 conflicts)");
+              "a hard global over negative data is refused at reset (it would cancel the 3 "
+              "conflicts)");
         auto unit = std::make_unique<SignedUnitCost<Tasks>>(bonus);
         unit->set_level(Level::Hard);
         check(signedRefusal(std::move(unit), assignmentA<Tasks>()) ==
-                      "Constraint 'signedUnitCost' can have a negative raw cost on this problem (a bonus) "
+                      "Constraint 'signedUnitCost' can have a negative raw cost on this problem (a "
+                      "bonus) "
                       "and cannot be hard",
               "a hard unit constraint over negative data is refused at reset");
     }
@@ -2819,7 +2901,8 @@ void testSignedCostLevel() {
         auto global = std::make_unique<SignedGlobalCost<HardFoldTasks>>(bonus);
         global->set_level(Level::Medium);
         check(signedRefusal(std::move(global), assignmentA<HardFoldTasks>()) ==
-                      "Constraint 'signedGlobalCost' can have a negative raw cost on this problem (a bonus) "
+                      "Constraint 'signedGlobalCost' can have a negative raw cost on this problem "
+                      "(a bonus) "
                       "and cannot be medium here, where medium counts toward the hard score",
               "medium below hard is refused too");
         auto into_soft = std::make_unique<SignedGlobalCost<SoftFoldTasks>>(bonus);
@@ -2827,7 +2910,8 @@ void testSignedCostLevel() {
         check(signedRefusal(std::move(into_soft), assignmentA<SoftFoldTasks>()).empty(),
               "medium into soft is allowed");
     }
-    check(signedRefusal(std::make_unique<SignedGlobalCost<Tasks>>(bonus), assignmentA<Tasks>()).empty(),
+    check(signedRefusal(std::make_unique<SignedGlobalCost<Tasks>>(bonus), assignmentA<Tasks>())
+                  .empty(),
           "on soft, a negative total is a bonus as before");
     {
         auto global = std::make_unique<SignedGlobalCost<Tasks>>(plain);
@@ -2874,7 +2958,9 @@ bool throwsLogicReset(optimaru::DecomposedObjective<Tasks>& calc, Tasks& s) {
 }
 
 void testReportedKnobsAreSampledAtReset() {
-    std::printf("== (t) constraintTotals() / constraintCosts() report the knobs of the last reset ==\n");
+    std::printf(
+            "== (t) constraintTotals() / constraintCosts() report the knobs of the last reset "
+            "==\n");
     optimaru::DecomposedObjective<Tasks> calc;
     auto global = std::make_unique<IdleWorkerCost<Tasks>>();
     IdleWorkerCost<Tasks>* idle = global.get();
@@ -2888,10 +2974,12 @@ void testReportedKnobsAreSampledAtReset() {
     const Score before = calc.score();
     auto totalsOf = [&] {
         double hard = 0, soft = 0;
-        for (const auto& total : calc.constraint_totals()) (total.is_hard ? hard : soft) += total.cost;
+        for (const auto& total : calc.constraint_totals())
+            (total.is_hard ? hard : soft) += total.cost;
         return std::make_pair(hard, soft);
     };
-    check(before.hard == -4 && totalsOf() == std::make_pair(4.0, 0.0), "after reset: 3 + 1 hard, explained");
+    check(before.hard == -4 && totalsOf() == std::make_pair(4.0, 0.0),
+          "after reset: 3 + 1 hard, explained");
     // Edits through the pointers a C++ client still holds, with the
     // validating setters, but no reset.
     idle->set_clip(false);
@@ -2901,10 +2989,12 @@ void testReportedKnobsAreSampledAtReset() {
     conflict->set_weight(7.0);
     check(same(calc.score(), before), "the score keeps the knobs of the last reset");
     check(totalsOf() == std::make_pair(4.0, 0.0),
-          "constraintTotals() explains that score (no literal 'hard reward' of -5, no re-levelled cache)");
+          "constraintTotals() explains that score (no literal 'hard reward' of -5, no re-levelled "
+          "cache)");
     const auto costs = calc.constraint_costs();
-    check(costs.size() == 2 && costs[0].is_hard && costs[0].level == Level::Hard && costs[0].weight == 1.0 &&
-                  costs[1].is_hard && costs[1].offset == 0.0 && costs[1].clip && costs[1].weight == 1.0,
+    check(costs.size() == 2 && costs[0].is_hard && costs[0].level == Level::Hard &&
+                  costs[0].weight == 1.0 && costs[1].is_hard && costs[1].offset == 0.0 &&
+                  costs[1].clip && costs[1].weight == 1.0,
           "constraintCosts() reports the sampled weight / level / offset / clip");
     check(throwsLogicReset(calc, s), "the next reset refuses the literal offset on hard");
     idle->set_clip(true);
@@ -2912,7 +3002,8 @@ void testReportedKnobsAreSampledAtReset() {
     const auto after = calc.constraint_costs();
     check(calc.score().hard == 0 && after[0].level == Level::Soft && after[0].weight == 7.0 &&
                   after[1].offset == 5.0 && totalsOf() == std::make_pair(0.0, 21.0),
-          "after the reset the edits are in effect: conflicts 3 x 7 soft, 1 idle below the threshold 5");
+          "after the reset the edits are in effect: conflicts 3 x 7 soft, 1 idle below the "
+          "threshold 5");
     std::printf("\n");
 }
 

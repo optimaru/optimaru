@@ -6,8 +6,7 @@
 
 #include "alb/constraints/common.hpp"
 
-namespace alb
-{
+namespace alb {
 
 // Hard, weight 1: forbiddenTaskStationsCost — tasks on one of their
 // forbidden_stations. A task costs 1 while it sits on a station its list
@@ -16,38 +15,29 @@ namespace alb
 //
 // The lookup is a binary search in the sorted unique copy prepare() builds;
 // the component is scoped to the stations some task forbids.
-struct ForbiddenTaskStationsCost final : PerTaskConstraint
-{
+struct ForbiddenTaskStationsCost final : PerTaskConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit ForbiddenTaskStationsCost(double weight = kDefaultWeight)
-        : PerTaskConstraint("forbiddenTaskStationsCost", weight, kDefaultLevel)
-    {
-    }
-    void on_reset(const AssemblyLineBalancingProblem &problem) override
-    {
+        : PerTaskConstraint("forbiddenTaskStationsCost", weight, kDefaultLevel) {}
+    void on_reset(const AssemblyLineBalancingProblem& problem) override {
         PerTaskConstraint::on_reset(problem);
         scoped_.clear();
-        for (const std::vector<int> &forbidden : problem.forbiddenSorted)
-        {
-            for (int station : forbidden)
-            {
-                if (station >= 0 && station < problem.stationCount)
-                    scoped_.push_back(station);
+        for (const std::vector<int>& forbidden : problem.forbiddenSorted) {
+            for (int station : forbidden) {
+                if (station >= 0 && station < problem.stationCount) scoped_.push_back(station);
             }
         }
         std::sort(scoped_.begin(), scoped_.end());
         scoped_.erase(std::unique(scoped_.begin(), scoped_.end()), scoped_.end());
     }
-    double taskCost(const AssemblyLineBalancingProblem &problem,
-                    int station,
-                    int task) const override
-    {
-        const std::vector<int> &forbidden = problem.forbiddenSorted[task];
+    double taskCost(const AssemblyLineBalancingProblem& problem, int station,
+                    int task) const override {
+        const std::vector<int>& forbidden = problem.forbiddenSorted[task];
         return std::binary_search(forbidden.begin(), forbidden.end(), station) ? 1.0 : 0.0;
     }
-    const std::vector<int> *scoped_units() const override { return &scoped_; }
+    const std::vector<int>* scoped_units() const override { return &scoped_; }
 
 private:
     std::vector<int> scoped_;

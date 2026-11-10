@@ -7,8 +7,7 @@
 #include "mc/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace mc
-{
+namespace mc {
 
 // The max-cut implementation of the engine's
 // optimaru::Objective: the monolithic fast path of the
@@ -27,8 +26,7 @@ namespace mc
 // full-recompute reference is ScoreCalculator::score (checked in the
 // tests and under ScoreChecks::ScoreChecks::Full). Requires
 // ScoreCalculator::prepare(problem).
-class MaxCutIncrementalScoreCalculator final : public optimaru::Objective<MaxCutProblem>
-{
+class MaxCutIncrementalScoreCalculator final : public optimaru::Objective<MaxCutProblem> {
 public:
     // The raw cost of every default constraint, read from the running
     // totals: fixed / same / different summed over both sides (the
@@ -36,8 +34,7 @@ public:
     // side, the imbalance and the cut weight (+cut; cutWeightCost is -cut).
     // score() weighs exactly these; the tests compare them with
     // ScoreCalculator::rawCosts after every move.
-    struct Totals
-    {
+    struct Totals {
         std::int64_t fixed = 0;
         std::int64_t same = 0;
         std::int64_t different = 0;
@@ -46,14 +43,14 @@ public:
         std::int64_t cut = 0;
     };
 
-    void rebuild(MaxCutProblem &solution) override;
+    void rebuild(MaxCutProblem& solution) override;
     void before_assign(int vertex) override;
     void after_assign(int vertex) override;
     Score score() override;
     Totals totals() const;
 
 private:
-    MaxCutProblem *problem_ = nullptr;
+    MaxCutProblem* problem_ = nullptr;
     std::vector<int> side_;  // the sides as last seen
 
     // Running raw totals, all >= 0 (signs and weights applied in

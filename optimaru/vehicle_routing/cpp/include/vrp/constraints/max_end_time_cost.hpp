@@ -7,10 +7,9 @@ namespace vrp {
 
 // Hard, weight 1: maxEndTimeCost -- the minutes a visit's service runs past
 // the end of its time window (Visit::maxEndTime), rounded up. Measured from
-// the ARRIVAL time rather than the start of service. Raw cost per vehicle = the sum over its visits of
-// ceil(max(0, arrival + service - maxEndTime) / 60 s); 0 = every service
-// finishes in its window (the pool list costs 0). The vehicle's own end time
-// is vehicleMaxEndTimeCost.
+// the ARRIVAL time rather than the start of service. Raw cost per vehicle = the sum over its visits
+// of ceil(max(0, arrival + service - maxEndTime) / 60 s); 0 = every service finishes in its window
+// (the pool list costs 0). The vehicle's own end time is vehicleMaxEndTimeCost.
 //
 // Lateness is not a sum along the route, so the sums answer a preview only
 // as "none": on a plan where no visit waits for its window, every service on
@@ -25,13 +24,14 @@ struct MaxEndTimeCost final : detail::SummedUnitConstraint {
         : SummedUnitConstraint("maxEndTimeCost", weight, kDefaultLevel) {}
 
     bool piecewise_cost(const VehicleRoutePlan& plan, int unit, const optimaru::ListPiece* pieces,
-                       int count, double& out) const override {
+                        int count, double& out) const override {
         if (detail::isPool(plan, unit)) {
             out = 0.0;
             return true;
         }
         if (!sums_->noWaiting()) return false;
-        const detail::RouteSumsContext::PieceWalk walk = sums_->walk(unit, pieces, count, /*withMinEnd=*/true);
+        const detail::RouteSumsContext::PieceWalk walk =
+                sums_->walk(unit, pieces, count, /*withMinEnd=*/true);
         if (!walk.any) {
             out = 0.0;
             return true;

@@ -3,8 +3,7 @@
 
 #include "qap/constraints/common.hpp"
 
-namespace qap
-{
+namespace qap {
 
 // Hard, weight 1: forbiddenAssignmentsCost — facilities standing at a location
 // a forbidden_assignments row forbids them. Raw cost per location = the number
@@ -13,41 +12,31 @@ namespace qap
 // exactly like the Python reference scorer and the CP-SAT reference.
 //
 // A pure sum of per-member terms, so the exact delta is one mask lookup.
-struct ForbiddenAssignmentsCost final : QapUnitConstraint
-{
+struct ForbiddenAssignmentsCost final : QapUnitConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit ForbiddenAssignmentsCost(double weight = kDefaultWeight)
-        : QapUnitConstraint("forbiddenAssignmentsCost", weight, kDefaultLevel)
-    {
-    }
-    void on_reset(const QuadraticAssignmentProblem &problem) override
-    {
+        : QapUnitConstraint("forbiddenAssignmentsCost", weight, kDefaultLevel) {}
+    void on_reset(const QuadraticAssignmentProblem& problem) override {
         detail::requirePrepared(problem);
         scope_ = &problem.forbiddenLocations;
     }
-    double cost(const QuadraticAssignmentProblem &problem,
-                int unit,
-                const std::vector<int> &members) const override
-    {
+    double cost(const QuadraticAssignmentProblem& problem, int unit,
+                const std::vector<int>& members) const override {
         int count = 0;
-        for (int facility : members)
-            count += problem.isForbidden(facility, unit) ? 1 : 0;
+        for (int facility : members) count += problem.isForbidden(facility, unit) ? 1 : 0;
         return static_cast<double>(count);
     }
     bool supports_delta() const override { return true; }
-    double delta_cost(const QuadraticAssignmentProblem &problem,
-                     int unit,
-                     const std::vector<int> & /*members*/,
-                     int entity) const override
-    {
+    double delta_cost(const QuadraticAssignmentProblem& problem, int unit,
+                      const std::vector<int>& /*members*/, int entity) const override {
         return problem.isForbidden(entity, unit) ? 1.0 : 0.0;
     }
-    const std::vector<int> *scoped_units() const override { return scope_; }
+    const std::vector<int>* scoped_units() const override { return scope_; }
 
 private:
-    const std::vector<int> *scope_ = nullptr;
+    const std::vector<int>* scope_ = nullptr;
 };
 
 }  // namespace qap

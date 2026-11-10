@@ -17,16 +17,8 @@ def _plan(points, *, depot=(0.0, 0.0), max_route_radius=0.0):
     for delivery_index in range((len(points) + 1) // 2):
         pickup = 2 * delivery_index
         dropoff = min(pickup + 1, len(points) - 1)
-        nodes.append(
-            pdp.Node(
-                f"P{delivery_index}", pickup + 1, 0, 100_000, 0, delivery_index, True
-            )
-        )
-        nodes.append(
-            pdp.Node(
-                f"D{delivery_index}", dropoff + 1, 0, 100_000, 0, delivery_index, False
-            )
-        )
+        nodes.append(pdp.Node(f"P{delivery_index}", pickup + 1, 0, 100_000, 0, delivery_index, True))
+        nodes.append(pdp.Node(f"D{delivery_index}", dropoff + 1, 0, 100_000, 0, delivery_index, False))
         deliveries.append(pdp.Delivery(str(delivery_index), pickup, pickup + 1, 1))
     vehicle = pdp.Vehicle("V", 100, 0, max_route_radius_meters=max_route_radius)
     vehicle.node_indices = list(range(len(nodes)))

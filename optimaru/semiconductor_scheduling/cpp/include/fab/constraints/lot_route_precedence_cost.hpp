@@ -3,38 +3,33 @@
 
 #include "fab/constraints/common.hpp"
 
-namespace fab
-{
+namespace fab {
 
 // Hard, weight 1: lotRoutePrecedenceCost — route steps that start too early.
 // Raw cost per lot = max(0, release time - start of its first step) when the
 // first step is assigned, plus max(0, previous end - start) for each
 // consecutive pair of assigned route steps. 0 = every lot starts at or after
 // its release and runs its route in order.
-struct LotRoutePrecedenceCost final : ScheduleViewConstraint
-{
+struct LotRoutePrecedenceCost final : ScheduleViewConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
     static constexpr Term kTerm = Term::LotRoutePrecedenceCost;
 
     explicit LotRoutePrecedenceCost(double weight = kDefaultWeight)
-        : ScheduleViewConstraint("lotRoutePrecedenceCost", weight, kDefaultLevel, kTerm)
-    {
-    }
+        : ScheduleViewConstraint("lotRoutePrecedenceCost", weight, kDefaultLevel, kTerm) {}
 
     // One lot; route[i] is the assignment of route step i (nullptr = none).
-    static std::int64_t lotCost(const SemiconductorSchedule &schedule, int lot,
-                                const ScorePlacement *const *route,
-                                std::vector<std::int64_t> *items)
-    {
-        const Lot &l = schedule.lots[static_cast<std::size_t>(lot)];
+    static std::int64_t lotCost(const SemiconductorSchedule& schedule, int lot,
+                                const ScorePlacement* const* route,
+                                std::vector<std::int64_t>* items) {
+        const Lot& l = schedule.lots[static_cast<std::size_t>(lot)];
         std::int64_t total = 0;
         if (route[0] != nullptr)
-            total = checked::add(total, terms::emit(items, std::max<Time>(0, checked::sub(l.releaseTime, route[0]->start))));
-        for (std::size_t i = 1; i < l.operations.size(); ++i)
-        {
-            if (route[i - 1] == nullptr || route[i] == nullptr)
-                continue;
+            total = checked::add(
+                    total, terms::emit(items, std::max<Time>(0, checked::sub(l.releaseTime,
+                                                                             route[0]->start))));
+        for (std::size_t i = 1; i < l.operations.size(); ++i) {
+            if (route[i - 1] == nullptr || route[i] == nullptr) continue;
             // max(0, -wait), wait = start - previous end
             const Time early = checked::sub(route[i - 1]->end, route[i]->start);
             total = checked::add(total, terms::emit(items, std::max<Time>(0, early)));

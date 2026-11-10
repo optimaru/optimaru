@@ -9,8 +9,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace fl
-{
+namespace fl {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -31,8 +30,7 @@ using Score = optimaru::Score;
 // Location  (problem fact)
 // ---------------------------------------------------------------------------
 // Latitude and longitude in degrees, distance approximated with 1 degree = 111 km.
-struct Location
-{
+struct Location {
     // Approximate metric equivalent of one degree (valid for latitude
     // anywhere and for longitude at the equator): 1 deg = 111 km.
     static constexpr double kMetersPerDegree = 111000.0;
@@ -42,14 +40,12 @@ struct Location
 
     // Distance in meters: ceil of the Euclidean degree-distance scaled to
     // meters.
-    std::int64_t distanceTo(const Location &other) const
-    {
+    std::int64_t distanceTo(const Location& other) const {
         const double latitudeDiff = other.latitude - latitude;
         const double longitudeDiff = other.longitude - longitude;
         return static_cast<std::int64_t>(
-            std::ceil(std::sqrt(latitudeDiff * latitudeDiff
-                                + longitudeDiff * longitudeDiff)
-                      * kMetersPerDegree));
+                std::ceil(std::sqrt(latitudeDiff * latitudeDiff + longitudeDiff * longitudeDiff) *
+                          kMetersPerDegree));
     }
 };
 
@@ -59,8 +55,7 @@ struct Location
 // A plain fact: the per-facility aggregates the capacity/setup-cost
 // constraints need (used demand, consumer count) live in the score
 // calculators, not here.
-struct Facility
-{
+struct Facility {
     std::string id;
     Location location;
     std::int64_t setupCost = 0;
@@ -72,8 +67,7 @@ struct Facility
 // ---------------------------------------------------------------------------
 // `facility` is the single assignment decision variable: the index into
 // FacilityLocationProblem::facilities, -1 == unassigned.
-struct Consumer
-{
+struct Consumer {
     std::string id;
     Location location;
     std::int64_t demand = 0;
@@ -86,8 +80,7 @@ struct Consumer
 // ---------------------------------------------------------------------------
 // FacilityLocationProblem  (solution)
 // ---------------------------------------------------------------------------
-struct FacilityLocationProblem
-{
+struct FacilityLocationProblem {
     std::vector<Facility> facilities;
     std::vector<Consumer> consumers;
 
@@ -112,68 +105,51 @@ struct FacilityLocationProblem
     int facilityCount() const { return static_cast<int>(facilities.size()); }
     int consumerCount() const { return static_cast<int>(consumers.size()); }
 
-    std::int64_t distanceOf(int consumerIndex, int facilityIndex) const
-    {
-        return distanceMeters[static_cast<std::size_t>(consumerIndex)
-                                  * facilityCount()
-                              + facilityIndex];
+    std::int64_t distanceOf(int consumerIndex, int facilityIndex) const {
+        return distanceMeters[static_cast<std::size_t>(consumerIndex) * facilityCount() +
+                              facilityIndex];
     }
 
     // --- summary getters ---
 
     // Sum of the setup costs of facilities serving at least one consumer.
-    std::int64_t totalCost() const
-    {
+    std::int64_t totalCost() const {
         std::vector<char> used(facilities.size(), 0);
-        for (const Consumer &consumer : consumers)
-        {
-            if (consumer.isAssigned())
-                used[consumer.facility] = 1;
+        for (const Consumer& consumer : consumers) {
+            if (consumer.isAssigned()) used[consumer.facility] = 1;
         }
         std::int64_t cost = 0;
-        for (std::size_t f = 0; f < facilities.size(); ++f)
-        {
-            if (used[f])
-                cost += facilities[f].setupCost;
+        for (std::size_t f = 0; f < facilities.size(); ++f) {
+            if (used[f]) cost += facilities[f].setupCost;
         }
         return cost;
     }
 
     // Sum of every facility's setup cost.
-    std::int64_t potentialCost() const
-    {
+    std::int64_t potentialCost() const {
         std::int64_t cost = 0;
-        for (const Facility &facility : facilities)
-            cost += facility.setupCost;
+        for (const Facility& facility : facilities) cost += facility.setupCost;
         return cost;
     }
 
     // Total consumer->facility distance in meters.
-    std::int64_t totalDistanceMeters() const
-    {
+    std::int64_t totalDistanceMeters() const {
         std::int64_t distance = 0;
-        for (const Consumer &consumer : consumers)
-        {
-            if (consumer.isAssigned())
-            {
-                distance += facilities[consumer.facility].location.distanceTo(
-                    consumer.location);
+        for (const Consumer& consumer : consumers) {
+            if (consumer.isAssigned()) {
+                distance += facilities[consumer.facility].location.distanceTo(consumer.location);
             }
         }
         return distance;
     }
 
-    int usedFacilityCount() const
-    {
+    int usedFacilityCount() const {
         std::vector<char> used(facilities.size(), 0);
-        for (const Consumer &consumer : consumers)
-        {
-            if (consumer.isAssigned())
-                used[consumer.facility] = 1;
+        for (const Consumer& consumer : consumers) {
+            if (consumer.isAssigned()) used[consumer.facility] = 1;
         }
         int count = 0;
-        for (char u : used)
-            count += u;
+        for (char u : used) count += u;
         return count;
     }
 };
@@ -185,27 +161,19 @@ struct FacilityLocationProblem
 // variable is Consumer::facility, the value range is the facility list
 // (FacilityLocationProblem::facilities).
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<fl::FacilityLocationProblem>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const fl::FacilityLocationProblem &problem)
-    {
+template <>
+struct optimaru::SolutionTraits<fl::FacilityLocationProblem> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const fl::FacilityLocationProblem& problem) {
         return problem.consumerCount();
     }
-    static int value_count(const fl::FacilityLocationProblem &problem)
-    {
+    static int value_count(const fl::FacilityLocationProblem& problem) {
         return problem.facilityCount();
     }
-    static int value_of(const fl::FacilityLocationProblem &problem,
-                           int consumerIndex)
-    {
+    static int value_of(const fl::FacilityLocationProblem& problem, int consumerIndex) {
         return problem.consumers[consumerIndex].facility;
     }
-    static void assign(fl::FacilityLocationProblem &problem,
-                            int consumerIndex,
-                            int facilityIndex)
-    {
+    static void assign(fl::FacilityLocationProblem& problem, int consumerIndex, int facilityIndex) {
         problem.consumers[consumerIndex].facility = facilityIndex;
     }
 };

@@ -3,24 +3,21 @@
 
 #include "pdp/domain.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
 // The same driving-time model as the vehicle-routing use case's
 // HaversineDrivingTimeCalculator:
 // haversine distance in meters at a fixed average speed. Duplicated rather
 // than shared so the two use cases stay independently buildable, exactly like
 // every other pair of use cases in this repo.
-class HaversineDrivingTimeCalculator
-{
+class HaversineDrivingTimeCalculator {
 public:
     static constexpr int AVERAGE_SPEED_KMPH = 50;
     static constexpr long EARTH_RADIUS_IN_M = 6371000;
     static constexpr long TWICE_EARTH_RADIUS_IN_M = 2 * EARTH_RADIUS_IN_M;
 
-    static Seconds calculateDrivingTime(const Location &from,
-                                        const Location &to);
-    static void initDrivingTimeMatrix(PdpRoutePlan &plan);
+    static Seconds calculateDrivingTime(const Location& from, const Location& to);
+    static void initDrivingTimeMatrix(PdpRoutePlan& plan);
     static Seconds metersToDrivingSeconds(long meters);
 };
 

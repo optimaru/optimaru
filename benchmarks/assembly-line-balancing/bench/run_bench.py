@@ -5,9 +5,8 @@ import json
 import time
 from pathlib import Path
 
-from optimaru import assembly_line_balancing
-
 from bench.data import DATASETS, load_suite
+from optimaru import assembly_line_balancing
 
 
 def _gap(value: int, reference: int | None) -> float | None:
@@ -35,15 +34,14 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
     elapsed = time.perf_counter() - started
     objective = _rescore(problem)
     if objective != problem.stations_used:
-        raise AssertionError(
-            f"engine self-report mismatch: {problem.stations_used} != {objective}"
-        )
+        raise AssertionError(f"engine self-report mismatch: {problem.stations_used} != {objective}")
     return {"solver": "engine", "stations": objective, "seconds": elapsed}
 
 
 def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
-    import assembly_line_balancing_cpsat  # noqa: F401 - points external_solver at the checkout engine
     from external_solver import assembly_line_balancing as cpsat
+
+    import assembly_line_balancing_cpsat  # noqa: F401 - points external_solver at the checkout engine
 
     started = time.perf_counter()
     try:
@@ -63,25 +61,19 @@ def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
     elapsed = time.perf_counter() - started
     objective = _rescore(solved)
     if objective != solved.stations_used:
-        raise AssertionError(
-            f"CP-SAT self-report mismatch: {solved.stations_used} != {objective}"
-        )
+        raise AssertionError(f"CP-SAT self-report mismatch: {solved.stations_used} != {objective}")
     return {"solver": "cp-sat", "stations": objective, "seconds": elapsed}
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Run our SALBP engines on the Otto et al. SALBP-1 benchmark archive."
-    )
+    parser = argparse.ArgumentParser(description="Run our SALBP engines on the Otto et al. SALBP-1 benchmark archive.")
     parser.add_argument("--dataset", choices=DATASETS, default="large")
     parser.add_argument(
         "--instance",
         action="append",
         help="instance stem; repeat to select multiple instances",
     )
-    parser.add_argument(
-        "--all", action="store_true", help="run every instance in the selected dataset"
-    )
+    parser.add_argument("--all", action="store_true", help="run every instance in the selected dataset")
     parser.add_argument("--seconds", type=float, default=60.0)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--workers", type=int, default=8)
@@ -91,9 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         default=100,
         help="run CP-SAT up to this task count; 0 disables it",
     )
-    parser.add_argument(
-        "--cache-dir", type=Path, default=Path(__file__).resolve().parent / ".cache"
-    )
+    parser.add_argument("--cache-dir", type=Path, default=Path(__file__).resolve().parent / ".cache")
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
 
@@ -108,15 +98,9 @@ def main(argv: list[str] | None = None) -> int:
         source, best_known = suite[name]
         runs = [_run_engine(source.model_copy(deep=True), args.seconds, args.seed)]
         if args.exact_max_size and len(source.tasks) <= args.exact_max_size:
-            runs.append(
-                _run_cpsat(
-                    source.model_copy(deep=True), args.seconds, args.seed, args.workers
-                )
-            )
+            runs.append(_run_cpsat(source.model_copy(deep=True), args.seconds, args.seed, args.workers))
         for run in runs:
-            run["gap_to_best_known_percent"] = (
-                None if run["stations"] is None else _gap(run["stations"], best_known)
-            )
+            run["gap_to_best_known_percent"] = None if run["stations"] is None else _gap(run["stations"], best_known)
         results.append(
             {
                 "instance": name,
@@ -130,9 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(results, indent=2))
         return 0
     print(f"SALBP {args.dataset} — {args.seconds:g}s per solver, seed {args.seed}")
-    print(
-        f"{'instance':<28} {'n':>5} {'solver':<9} {'stations':>9} {'BKS':>7} {'gap':>9} {'seconds':>9}"
-    )
+    print(f"{'instance':<28} {'n':>5} {'solver':<9} {'stations':>9} {'BKS':>7} {'gap':>9} {'seconds':>9}")
     for result in results:
         for run in result["runs"]:
             gap = run["gap_to_best_known_percent"]

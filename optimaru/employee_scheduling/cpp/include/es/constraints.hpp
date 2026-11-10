@@ -79,12 +79,10 @@ inline ConstraintAssembly defaultConstraints() {
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator& calc) {
-    defaultConstraints().into(calc);
-}
+inline void addDefaultConstraints(DecomposedCalculator& calc) { defaultConstraints().into(calc); }
 
-// Every component the rule factory (optimaru/employee_scheduling/cpp/bindings.cpp addConstraintByName)
-// can build, once each, at its default parameters and kDefaultWeight /
+// Every component the rule factory (optimaru/employee_scheduling/cpp/bindings.cpp
+// addConstraintByName) can build, once each, at its default parameters and kDefaultWeight /
 // kDefaultLevel, in factory order (= CONSTRAINT_NAMES): the catalog behind
 // constraint_info() (optimaru::catalog_info(defaultConstraints(),
 // catalogConstraints()) = the eight defaults first, then the 22 rule-only

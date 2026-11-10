@@ -12,34 +12,25 @@
 #include "pdp/constraints/vehicle_capacity_cost.hpp"
 #include "pdp/score_calculator.hpp"
 
-namespace pdp
-{
+namespace pdp {
 
-namespace
-{
+namespace {
 
 // The same constants the components and ScoreCalculator read (integral; see
 // score_calculator.cpp).
-constexpr auto kCapacityWeight
-    = static_cast<std::int64_t>(VehicleCapacityCost::kDefaultWeight);
-constexpr auto kTimeWindowWeight
-    = static_cast<std::int64_t>(MaxEndTimeCost::kDefaultWeight);
-constexpr auto kPairedWeight
-    = static_cast<std::int64_t>(PairedRequestCost::kDefaultWeight);
-constexpr auto kSameVehicleWeight
-    = static_cast<std::int64_t>(SameVehicleCost::kDefaultWeight);
-constexpr auto kPrecedenceWeight
-    = static_cast<std::int64_t>(PickupBeforeDropoffCost::kDefaultWeight);
-constexpr auto kUnassignedWeight
-    = static_cast<std::int64_t>(UnassignedRequestsCost::kDefaultWeight);
-constexpr auto kTravelWeight
-    = static_cast<std::int64_t>(TravelTimeCost::kDefaultWeight);
+constexpr auto kCapacityWeight = static_cast<std::int64_t>(VehicleCapacityCost::kDefaultWeight);
+constexpr auto kTimeWindowWeight = static_cast<std::int64_t>(MaxEndTimeCost::kDefaultWeight);
+constexpr auto kPairedWeight = static_cast<std::int64_t>(PairedRequestCost::kDefaultWeight);
+constexpr auto kSameVehicleWeight = static_cast<std::int64_t>(SameVehicleCost::kDefaultWeight);
+constexpr auto kPrecedenceWeight =
+        static_cast<std::int64_t>(PickupBeforeDropoffCost::kDefaultWeight);
+constexpr auto kUnassignedWeight =
+        static_cast<std::int64_t>(UnassignedRequestsCost::kDefaultWeight);
+constexpr auto kTravelWeight = static_cast<std::int64_t>(TravelTimeCost::kDefaultWeight);
 
 }  // namespace
 
-void PdpIncrementalScoreCalculator::rebuild(
-    PdpRoutePlan &solution)
-{
+void PdpIncrementalScoreCalculator::rebuild(PdpRoutePlan& solution) {
     plan_ = &solution;
     vehicleCount_ = static_cast<int>(plan_->vehicles.size());
     const std::size_t nodeCount = plan_->nodes.size();
@@ -52,15 +43,12 @@ void PdpIncrementalScoreCalculator::rebuild(
     // routeOf() is what translates an index back into a vehicle or "unrouted".
     nodeList_.assign(nodeCount, -1);
     nodePos_.assign(nodeCount, -1);
-    for (int l = 0; l <= vehicleCount_; ++l)
-    {
-        const std::vector<int> &members
-            = optimaru::SolutionTraits<PdpRoutePlan>::list_of(*plan_, l);
-        for (std::size_t p = 0; p < members.size(); ++p)
-        {
+    for (int l = 0; l <= vehicleCount_; ++l) {
+        const std::vector<int>& members =
+                optimaru::SolutionTraits<PdpRoutePlan>::list_of(*plan_, l);
+        for (std::size_t p = 0; p < members.size(); ++p) {
             nodeList_[static_cast<std::size_t>(members[p])] = l;
-            nodePos_[static_cast<std::size_t>(members[p])]
-                = static_cast<int>(p);
+            nodePos_[static_cast<std::size_t>(members[p])] = static_cast<int>(p);
         }
     }
 
@@ -68,10 +56,9 @@ void PdpIncrementalScoreCalculator::rebuild(
     capacityTotal_ = 0;
     latenessTotal_ = 0;
     drivingTotal_ = 0;
-    for (int v = 0; v < vehicleCount_; ++v)
-    {
+    for (int v = 0; v < vehicleCount_; ++v) {
         terms_[static_cast<std::size_t>(v)] = evaluateRoute(v);
-        const RouteTerms &t = terms_[static_cast<std::size_t>(v)];
+        const RouteTerms& t = terms_[static_cast<std::size_t>(v)];
         capacityTotal_ += t.capacityExcess;
         latenessTotal_ += t.lateness;
         drivingTotal_ += t.driving;
@@ -81,8 +68,7 @@ void PdpIncrementalScoreCalculator::rebuild(
     unassignedPenalty_.assign(deliveryCount, 0);
     couplingTotal_ = 0;
     unassignedTotal_ = 0;
-    for (std::size_t d = 0; d < deliveryCount; ++d)
-    {
+    for (std::size_t d = 0; d < deliveryCount; ++d) {
         pairPenalty_[d] = couplingPenalty(static_cast<int>(d));
         unassignedPenalty_[d] = unassignedMinutes(static_cast<int>(d));
         couplingTotal_ += pairPenalty_[d];
@@ -94,21 +80,17 @@ void PdpIncrementalScoreCalculator::rebuild(
     oldMembers_.clear();
 }
 
-void PdpIncrementalScoreCalculator::markDelivery(int deliveryIndex)
-{
+void PdpIncrementalScoreCalculator::markDelivery(int deliveryIndex) {
     const auto d = static_cast<std::size_t>(deliveryIndex);
-    if (pendingMark_[d])
-        return;
+    if (pendingMark_[d]) return;
     pendingMark_[d] = 1;
     pendingDeliveries_.push_back(deliveryIndex);
     couplingTotal_ -= pairPenalty_[d];
     unassignedTotal_ -= unassignedPenalty_[d];
 }
 
-void PdpIncrementalScoreCalculator::flushDeliveries()
-{
-    for (int deliveryIndex : pendingDeliveries_)
-    {
+void PdpIncrementalScoreCalculator::flushDeliveries() {
+    for (int deliveryIndex : pendingDeliveries_) {
         const auto d = static_cast<std::size_t>(deliveryIndex);
         pairPenalty_[d] = couplingPenalty(deliveryIndex);
         unassignedPenalty_[d] = unassignedMinutes(deliveryIndex);
@@ -119,30 +101,26 @@ void PdpIncrementalScoreCalculator::flushDeliveries()
     pendingDeliveries_.clear();
 }
 
-void PdpIncrementalScoreCalculator::before_list_edit(int listIndex)
-{
+void PdpIncrementalScoreCalculator::before_list_edit(int listIndex) {
     using Descriptor = optimaru::SolutionTraits<PdpRoutePlan>;
 
     // Snapshot the old membership so after_list_edit can tell which nodes
     // left the list (they become unassigned) from which merely moved within it.
-    const std::vector<int> &members = Descriptor::list_of(*plan_, listIndex);
+    const std::vector<int>& members = Descriptor::list_of(*plan_, listIndex);
     oldMembers_.assign(members.begin(), members.end());
 
     for (int nodeIndex : oldMembers_)
-        markDelivery(
-            plan_->nodes[static_cast<std::size_t>(nodeIndex)].deliveryIndex);
+        markDelivery(plan_->nodes[static_cast<std::size_t>(nodeIndex)].deliveryIndex);
 
-    if (listIndex < vehicleCount_)
-    {
-        const RouteTerms &t = terms_[static_cast<std::size_t>(listIndex)];
+    if (listIndex < vehicleCount_) {
+        const RouteTerms& t = terms_[static_cast<std::size_t>(listIndex)];
         capacityTotal_ -= t.capacityExcess;
         latenessTotal_ -= t.lateness;
         drivingTotal_ -= t.driving;
     }
 }
 
-void PdpIncrementalScoreCalculator::after_list_edit(int listIndex)
-{
+void PdpIncrementalScoreCalculator::after_list_edit(int listIndex) {
     using Descriptor = optimaru::SolutionTraits<PdpRoutePlan>;
 
     // Release the nodes that were here — but ONLY those this list still owns.
@@ -152,27 +130,23 @@ void PdpIncrementalScoreCalculator::after_list_edit(int listIndex)
     // the destination, and blindly clearing it here would strand a node that
     // is in fact routed. Checking ownership first is what keeps the index
     // truthful through every move shape.
-    for (int nodeIndex : oldMembers_)
-    {
+    for (int nodeIndex : oldMembers_) {
         const auto n = static_cast<std::size_t>(nodeIndex);
-        if (nodeList_[n] != listIndex)
-            continue;  // already re-homed by an earlier hook pair
+        if (nodeList_[n] != listIndex) continue;  // already re-homed by an earlier hook pair
         nodeList_[n] = -1;
         nodePos_[n] = -1;
     }
     oldMembers_.clear();
 
-    const std::vector<int> &members = Descriptor::list_of(*plan_, listIndex);
-    for (std::size_t p = 0; p < members.size(); ++p)
-    {
+    const std::vector<int>& members = Descriptor::list_of(*plan_, listIndex);
+    for (std::size_t p = 0; p < members.size(); ++p) {
         const auto n = static_cast<std::size_t>(members[p]);
         nodeList_[n] = listIndex;
         nodePos_[n] = static_cast<int>(p);
         markDelivery(plan_->nodes[n].deliveryIndex);
     }
 
-    if (listIndex < vehicleCount_)
-    {
+    if (listIndex < vehicleCount_) {
         RouteTerms t = evaluateRoute(listIndex);
         capacityTotal_ += t.capacityExcess;
         latenessTotal_ += t.lateness;
@@ -184,95 +158,67 @@ void PdpIncrementalScoreCalculator::after_list_edit(int listIndex)
 }
 
 // One walk of the route derives all three per-vehicle terms.
-PdpIncrementalScoreCalculator::RouteTerms
-PdpIncrementalScoreCalculator::evaluateRoute(int vehicleIndex) const
-{
-    const Vehicle &vehicle
-        = plan_->vehicles[static_cast<std::size_t>(vehicleIndex)];
+PdpIncrementalScoreCalculator::RouteTerms PdpIncrementalScoreCalculator::evaluateRoute(
+        int vehicleIndex) const {
+    const Vehicle& vehicle = plan_->vehicles[static_cast<std::size_t>(vehicleIndex)];
     RouteTerms terms;
-    if (vehicle.nodeIndices.empty())
-        return terms;
+    if (vehicle.nodeIndices.empty()) return terms;
 
     std::int64_t load = 0;
     Seconds previousDeparture = vehicle.departureTime;
     int previousLocation = vehicle.homeLocationIndex;
 
-    for (int nodeIndex : vehicle.nodeIndices)
-    {
-        const Node &node = plan_->nodes[static_cast<std::size_t>(nodeIndex)];
-        const Delivery &delivery
-            = plan_->deliveries[static_cast<std::size_t>(node.deliveryIndex)];
+    for (int nodeIndex : vehicle.nodeIndices) {
+        const Node& node = plan_->nodes[static_cast<std::size_t>(nodeIndex)];
+        const Delivery& delivery = plan_->deliveries[static_cast<std::size_t>(node.deliveryIndex)];
 
         load += node.pickup ? delivery.demand : -delivery.demand;
-        if (load > vehicle.capacity)
-            terms.capacityExcess += load - vehicle.capacity;
+        if (load > vehicle.capacity) terms.capacityExcess += load - vehicle.capacity;
 
-        const Seconds drive
-            = plan_->drivingTime(previousLocation, node.locationIndex);
+        const Seconds drive = plan_->drivingTime(previousLocation, node.locationIndex);
         terms.driving += drive;
 
         const Seconds arrival = previousDeparture + drive;
         const Seconds serviceFinished = arrival + node.serviceDuration;
-        if (serviceFinished > node.maxEndTime)
-        {
-            terms.lateness += ScoreCalculator::ceilToMinutes(serviceFinished
-                                                             - node.maxEndTime);
+        if (serviceFinished > node.maxEndTime) {
+            terms.lateness += ScoreCalculator::ceilToMinutes(serviceFinished - node.maxEndTime);
         }
 
-        previousDeparture
-            = std::max(arrival, node.minStartTime) + node.serviceDuration;
+        previousDeparture = std::max(arrival, node.minStartTime) + node.serviceDuration;
         previousLocation = node.locationIndex;
     }
     terms.driving += vehicle.homeLeg(plan_->drivingSeconds, previousLocation);
     return terms;
 }
 
-std::int64_t
-PdpIncrementalScoreCalculator::couplingPenalty(int deliveryIndex) const
-{
-    const Delivery &delivery
-        = plan_->deliveries[static_cast<std::size_t>(deliveryIndex)];
+std::int64_t PdpIncrementalScoreCalculator::couplingPenalty(int deliveryIndex) const {
+    const Delivery& delivery = plan_->deliveries[static_cast<std::size_t>(deliveryIndex)];
     const int pickupRoute = routeOf(delivery.pickupNodeIndex);
     const int dropoffRoute = routeOf(delivery.dropoffNodeIndex);
 
-    if ((pickupRoute >= 0) != (dropoffRoute >= 0))
-        return kPairedWeight;  // half-assigned
-    if (pickupRoute < 0)
-        return 0;  // both unrouted: a dropped request (medium level)
-    if (pickupRoute != dropoffRoute)
-        return kSameVehicleWeight;  // split across vehicles
-    if (nodePos_[static_cast<std::size_t>(delivery.pickupNodeIndex)]
-        > nodePos_[static_cast<std::size_t>(delivery.dropoffNodeIndex)])
+    if ((pickupRoute >= 0) != (dropoffRoute >= 0)) return kPairedWeight;  // half-assigned
+    if (pickupRoute < 0) return 0;  // both unrouted: a dropped request (medium level)
+    if (pickupRoute != dropoffRoute) return kSameVehicleWeight;  // split across vehicles
+    if (nodePos_[static_cast<std::size_t>(delivery.pickupNodeIndex)] >
+        nodePos_[static_cast<std::size_t>(delivery.dropoffNodeIndex)])
         return kPrecedenceWeight;  // dropoff before pickup
     return 0;
 }
 
-std::int64_t
-PdpIncrementalScoreCalculator::unassignedMinutes(int deliveryIndex) const
-{
-    const Delivery &delivery
-        = plan_->deliveries[static_cast<std::size_t>(deliveryIndex)];
-    if (routeOf(delivery.pickupNodeIndex) >= 0
-        || routeOf(delivery.dropoffNodeIndex) >= 0)
-        return 0;
-    const Node &pickup
-        = plan_->nodes[static_cast<std::size_t>(delivery.pickupNodeIndex)];
-    const Node &dropoff
-        = plan_->nodes[static_cast<std::size_t>(delivery.dropoffNodeIndex)];
+std::int64_t PdpIncrementalScoreCalculator::unassignedMinutes(int deliveryIndex) const {
+    const Delivery& delivery = plan_->deliveries[static_cast<std::size_t>(deliveryIndex)];
+    if (routeOf(delivery.pickupNodeIndex) >= 0 || routeOf(delivery.dropoffNodeIndex) >= 0) return 0;
+    const Node& pickup = plan_->nodes[static_cast<std::size_t>(delivery.pickupNodeIndex)];
+    const Node& dropoff = plan_->nodes[static_cast<std::size_t>(delivery.dropoffNodeIndex)];
     return (pickup.serviceDuration + dropoff.serviceDuration) / 60;
 }
 
-Score PdpIncrementalScoreCalculator::current_score() const
-{
-    return Score{-(kCapacityWeight * capacityTotal_
-                   + kTimeWindowWeight * latenessTotal_ + couplingTotal_),
-                 -kUnassignedWeight * unassignedTotal_,
-                 -kTravelWeight * drivingTotal_};
+Score PdpIncrementalScoreCalculator::current_score() const {
+    return Score{-(kCapacityWeight * capacityTotal_ + kTimeWindowWeight * latenessTotal_ +
+                   couplingTotal_),
+                 -kUnassignedWeight * unassignedTotal_, -kTravelWeight * drivingTotal_};
 }
 
-optimaru::Score PdpIncrementalScoreCalculator::score()
-{
-    return toEngineScore(current_score());
-}
+optimaru::Score PdpIncrementalScoreCalculator::score() { return toEngineScore(current_score()); }
 
 }  // namespace pdp

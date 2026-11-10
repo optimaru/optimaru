@@ -18,8 +18,7 @@
 #include "fl/constraints/facility_capacity_cost.hpp"
 #include "fl/constraints/facility_setup_cost.hpp"
 
-namespace fl
-{
+namespace fl {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -48,8 +47,7 @@ namespace fl
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<FacilityCapacityCost>();
     assembly.emplace<FacilitySetupCost>();
@@ -57,8 +55,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

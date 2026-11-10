@@ -77,9 +77,7 @@ class BenchmarkCase(Protocol):
     def instances(self) -> dict[str, Callable[[], Any]]: ...
     def describe(self, problem: Any) -> str: ...
     def solve_engine(self, problem: Any, seconds: float, seed: int) -> None: ...
-    def solve_cpsat(
-        self, problem: Any, seconds: float, seed: int, workers: int
-    ) -> Any: ...
+    def solve_cpsat(self, problem: Any, seconds: float, seed: int, workers: int) -> Any: ...
 
 
 def score_solution(package: str, solution: Any) -> Score:
@@ -126,9 +124,7 @@ def _self_report(case: Any, problem: Any) -> tuple[float, ...] | None:
     return tuple(level for level in levels if level is not None)
 
 
-def _solve_cpsat(
-    case: BenchmarkCase, problem: Any, seconds: float, seed: int, workers: int
-) -> SolverRun:
+def _solve_cpsat(case: BenchmarkCase, problem: Any, seconds: float, seed: int, workers: int) -> SolverRun:
     started = time.perf_counter()
     try:
         solved = case.solve_cpsat(problem, seconds, seed, workers)
@@ -147,9 +143,7 @@ def _solve_cpsat(
     )
 
 
-def _cpsat_child(
-    module: str, instance: str, seconds: float, seed: int, workers: int, conn: Any
-) -> None:
+def _cpsat_child(module: str, instance: str, seconds: float, seed: int, workers: int, conn: Any) -> None:
     case = importlib.import_module(module)
     try:
         problem = case.instances()[instance]()
@@ -185,9 +179,7 @@ def _solve_cpsat_bounded(
             kind, payload = receive.recv()
         except EOFError:
             child.join(5)
-            raise RuntimeError(
-                f"CP-SAT child process died (exit code {child.exitcode})"
-            ) from None
+            raise RuntimeError(f"CP-SAT child process died (exit code {child.exitcode})") from None
     finally:
         child.kill()
         child.join()
@@ -219,9 +211,7 @@ def run_instance(
 
     # Only an importable case module can be rebuilt in a child process.
     if deadline is not None and getattr(case, "__spec__", None) is not None:
-        cpsat_run = _solve_cpsat_bounded(
-            case, instance, seconds, seed, workers, deadline
-        )
+        cpsat_run = _solve_cpsat_bounded(case, instance, seconds, seed, workers, deadline)
     else:
         cpsat_run = _solve_cpsat(case, factory(), seconds, seed, workers)
 
@@ -239,9 +229,7 @@ def run_instance(
 
 
 def _run(result: dict, solver: str) -> dict | None:
-    return next(
-        (run for run in result.get("runs", []) if run["solver"] == solver), None
-    )
+    return next((run for run in result.get("runs", []) if run["solver"] == solver), None)
 
 
 def _score_text(run: dict | None) -> str:

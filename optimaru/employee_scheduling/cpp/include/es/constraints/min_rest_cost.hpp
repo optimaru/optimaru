@@ -37,8 +37,8 @@ struct MinRestCost final : GroupableAssignmentConstraint {
         return static_cast<double>(c);
     }
     bool supports_delta() const override { return true; }
-    double delta_cost(const EmployeeSchedule&, int /*unit*/,
-                     const std::vector<int>& members, int entity) const override {
+    double delta_cost(const EmployeeSchedule&, int /*unit*/, const std::vector<int>& members,
+                      int entity) const override {
         std::int64_t c = 0;
         for (int i : members) {
             if (i != entity) c += pairShortfall(entity, i);

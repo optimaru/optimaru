@@ -227,7 +227,9 @@ def test_selections_at_integral_weights_score_like_the_oracle():
         raw = max_cut.constraint_costs(Model.model_validate(data))
         for _ in range(3):
             selection = _random_selection(rng)
-            assert score(raw, selection) == ref.score_costs(ref.constraint_costs(dumped), _reference_selection(selection)), (
+            assert score(raw, selection) == ref.score_costs(
+                ref.constraint_costs(dumped), _reference_selection(selection)
+            ), (
                 name,
                 selection,
             )

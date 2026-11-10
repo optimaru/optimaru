@@ -42,9 +42,9 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from optimaru.food_packaging.models import PackagingScheduleModel
-
     from external_solver.food_packaging import solve
+
+    from optimaru.food_packaging.models import PackagingScheduleModel
 
     solved = solve(
         PackagingScheduleModel.from_core(problem),

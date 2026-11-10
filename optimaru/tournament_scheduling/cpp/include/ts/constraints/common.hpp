@@ -11,8 +11,7 @@
 #include "ts/domain.hpp"
 #include "ts/score_calculator.hpp"
 
-namespace ts
-{
+namespace ts {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -84,8 +83,7 @@ namespace ts
 // Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty; the calculator negates into the score.
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<TournamentSchedule>;
+using DecomposedCalculator = optimaru::DecomposedObjective<TournamentSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<TournamentSchedule>;
 using TsUnitConstraint = optimaru::UnitConstraint<TournamentSchedule>;
 using TsGlobalConstraint = optimaru::GlobalConstraint<TournamentSchedule>;
@@ -96,33 +94,26 @@ using TsGlobalConstraint = optimaru::GlobalConstraint<TournamentSchedule>;
 // stops being integral or if a component leaves the level the monolith sums
 // it into.
 template <typename Component, optimaru::Level kLevel>
-constexpr std::int64_t monolithicWeight()
-{
+constexpr std::int64_t monolithicWeight() {
     static_assert(Component::kDefaultLevel == kLevel,
                   "the monolithic calculators sum this constraint into "
                   "another level");
-    constexpr auto weight
-        = static_cast<std::int64_t>(Component::kDefaultWeight);
+    constexpr auto weight = static_cast<std::int64_t>(Component::kDefaultWeight);
     static_assert(weight == Component::kDefaultWeight,
                   "the monolithic calculators assume integral default "
                   "weights");
     return weight;
 }
 template <typename Component>
-constexpr std::int64_t kHardWeight
-    = monolithicWeight<Component, optimaru::Level::Hard>();
+constexpr std::int64_t kHardWeight = monolithicWeight<Component, optimaru::Level::Hard>();
 template <typename Component>
-constexpr std::int64_t kMediumWeight
-    = monolithicWeight<Component, optimaru::Level::Medium>();
+constexpr std::int64_t kMediumWeight = monolithicWeight<Component, optimaru::Level::Medium>();
 template <typename Component>
-constexpr std::int64_t kSoftWeight
-    = monolithicWeight<Component, optimaru::Level::Soft>();
+constexpr std::int64_t kSoftWeight = monolithicWeight<Component, optimaru::Level::Soft>();
 
-namespace detail
-{
+namespace detail {
 
-inline int dayOf(const TournamentSchedule &schedule, int assignmentIndex)
-{
+inline int dayOf(const TournamentSchedule& schedule, int assignmentIndex) {
     return schedule.teamAssignments[assignmentIndex].day;
 }
 
@@ -133,17 +124,14 @@ inline int dayOf(const TournamentSchedule &schedule, int assignmentIndex)
 // ---------------------------------------------------------------------------
 // Shared base: supports_member_change() routes everything through
 // on_member_changed; the unit-diff hook is unreachable for assignment-shaped solutions.
-struct MemberChangeGlobalConstraint : TsGlobalConstraint
-{
+struct MemberChangeGlobalConstraint : TsGlobalConstraint {
     using TsGlobalConstraint::TsGlobalConstraint;
     bool supports_member_change() const override { return true; }
-    void on_unit_changed(const TournamentSchedule & /*schedule*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
-        throw std::logic_error(name
-                               + ": onUnitChanged is unreachable "
-                                 "(member-change fast path)");
+    void on_unit_changed(const TournamentSchedule& /*schedule*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
+        throw std::logic_error(name +
+                               ": onUnitChanged is unreachable "
+                               "(member-change fast path)");
     }
 };
 

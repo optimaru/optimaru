@@ -5,28 +5,23 @@
 
 #include "bp/domain.hpp"
 
-namespace bp
-{
+namespace bp {
 
 // The raw total of each default constraint (0 = no violation), before the
 // weights: what score and the monolithic incremental calculator
 // weigh by the components' kDefaultWeight. Each field is the sum of that
 // component's per-bin costs (usedBins: its single global cost).
-struct RawCosts
-{
+struct RawCosts {
     std::int64_t binCapacity = 0;    // binCapacityCost
     std::int64_t colorConflict = 0;  // colorConflictCost
     std::int64_t itemConflict = 0;   // itemConflictCost
     std::int64_t usedBins = 0;       // usedBinsCost
 
-    bool operator==(const RawCosts &other) const
-    {
-        return binCapacity == other.binCapacity
-               && colorConflict == other.colorConflict
-               && itemConflict == other.itemConflict
-               && usedBins == other.usedBins;
+    bool operator==(const RawCosts& other) const {
+        return binCapacity == other.binCapacity && colorConflict == other.colorConflict &&
+               itemConflict == other.itemConflict && usedBins == other.usedBins;
     }
-    bool operator!=(const RawCosts &other) const { return !(*this == other); }
+    bool operator!=(const RawCosts& other) const { return !(*this == other); }
 };
 
 // The bin-packing score, computed from scratch.
@@ -45,13 +40,12 @@ struct RawCosts
 //                                   items share a bin
 //   soft 4. usedBinsCost            -1 per bin holding at least one item
 // Unassigned items (bin == -1) contribute nothing.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
-    static Score score(BinPackingProblem &problem);
+    static Score score(BinPackingProblem& problem);
 
     // The four raw totals score weighs (runs prepare first).
-    static RawCosts rawCosts(BinPackingProblem &problem);
+    static RawCosts rawCosts(BinPackingProblem& problem);
 
     // Validates the facts and builds the derived lookups (colour classes,
     // resolved conflict pairs and partner lists) the calculators and the
@@ -67,10 +61,10 @@ public:
     // Must run before scoring; score, rawCosts, the incremental
     // calculator's reset, Solver::solve and the bindings' calculate_score /
     // constraint_costs call it.
-    static void prepare(BinPackingProblem &problem);
+    static void prepare(BinPackingProblem& problem);
 
     // The checks on the decision variable alone (the last bullet above).
-    static void requireBinsInRange(const BinPackingProblem &problem);
+    static void requireBinsInRange(const BinPackingProblem& problem);
 };
 
 }  // namespace bp

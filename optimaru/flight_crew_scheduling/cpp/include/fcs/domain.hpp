@@ -9,8 +9,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace fcs
-{
+namespace fcs {
 
 // ---------------------------------------------------------------------------
 // Time
@@ -25,11 +24,9 @@ using DayIndex = std::int64_t;
 
 constexpr Minutes MINUTES_PER_DAY = 24 * 60;
 
-inline DayIndex dayOf(Minutes m)
-{
+inline DayIndex dayOf(Minutes m) {
     // Floor division (minutes may in principle be negative).
-    return m >= 0 ? m / MINUTES_PER_DAY
-                  : -((-m + MINUTES_PER_DAY - 1) / MINUTES_PER_DAY);
+    return m >= 0 ? m / MINUTES_PER_DAY : -((-m + MINUTES_PER_DAY - 1) / MINUTES_PER_DAY);
 }
 
 // ---------------------------------------------------------------------------
@@ -48,8 +45,7 @@ using Score = optimaru::Score;
 // ---------------------------------------------------------------------------
 // Referenced everywhere by index into FlightCrewSchedule::airports; two
 // airports are the same airport iff their indices are equal.
-struct Airport
-{
+struct Airport {
     std::string code;  // IATA 3-letter code
     std::string name;
     double latitude = 0.0;
@@ -59,8 +55,7 @@ struct Airport
 // ---------------------------------------------------------------------------
 // Employee  (problem fact, the value range)
 // ---------------------------------------------------------------------------
-struct Employee
-{
+struct Employee {
     std::string id;
     std::string name;
     int homeAirport = -1;  // index into airports
@@ -71,8 +66,7 @@ struct Employee
 // ---------------------------------------------------------------------------
 // Flight  (problem fact)
 // ---------------------------------------------------------------------------
-struct Flight
-{
+struct Flight {
     std::string flightNumber;
     int departureAirport = -1;  // index into airports
     Minutes departureUTC = 0;
@@ -85,8 +79,7 @@ struct Flight
 // ---------------------------------------------------------------------------
 // One crew seat on one flight. `employee` is the decision variable:
 // which employee fills the seat. -1 means unassigned.
-struct FlightAssignment
-{
+struct FlightAssignment {
     std::string id;
     int flight = -1;  // index into flights
     int indexInFlight = 0;
@@ -94,8 +87,8 @@ struct FlightAssignment
 
     int employee = -1;  // decision variable; -1 == unassigned
 
-    // Pinned assignments keep their employee fixed (e.g. a captain confirmed on a leg). They are scored like
-    // any assignment but never moved/reassigned by the solver.
+    // Pinned assignments keep their employee fixed (e.g. a captain confirmed on a leg). They are
+    // scored like any assignment but never moved/reassigned by the solver.
     bool pinned = false;
 
     // Precomputed by ScoreCalculator::prepare (kept at the end so the
@@ -106,8 +99,7 @@ struct FlightAssignment
 // ---------------------------------------------------------------------------
 // FlightCrewSchedule  (solution)
 // ---------------------------------------------------------------------------
-struct FlightCrewSchedule
-{
+struct FlightCrewSchedule {
     std::vector<Airport> airports;
     std::vector<Employee> employees;
     std::vector<Flight> flights;
@@ -133,41 +125,28 @@ struct FlightCrewSchedule
     std::vector<DayIndex> flightArrDay;
 
     // --- prepared-lookup helpers ---
-    bool employeeHasSkill(int employeeIndex, int skillId) const
-    {
-        return employeeSkillFlat[static_cast<std::size_t>(employeeIndex)
-                                     * skillCount
-                                 + skillId]
-               != 0;
+    bool employeeHasSkill(int employeeIndex, int skillId) const {
+        return employeeSkillFlat[static_cast<std::size_t>(employeeIndex) * skillCount + skillId] !=
+               0;
     }
-    bool employeeUnavailableOn(int employeeIndex, DayIndex day) const
-    {
-        if (day < minDay || day >= minDay + dayCount)
-            return false;
-        return employeeUnavailableFlat[static_cast<std::size_t>(employeeIndex)
-                                           * dayCount
-                                       + static_cast<std::size_t>(day - minDay)]
-               != 0;
+    bool employeeUnavailableOn(int employeeIndex, DayIndex day) const {
+        if (day < minDay || day >= minDay + dayCount) return false;
+        return employeeUnavailableFlat[static_cast<std::size_t>(employeeIndex) * dayCount +
+                                       static_cast<std::size_t>(day - minDay)] != 0;
     }
 
     // --- assignment-side convenience ---
-    Minutes departureOf(int assignmentIndex) const
-    {
+    Minutes departureOf(int assignmentIndex) const {
         return flights[flightAssignments[assignmentIndex].flight].departureUTC;
     }
-    Minutes arrivalOf(int assignmentIndex) const
-    {
+    Minutes arrivalOf(int assignmentIndex) const {
         return flights[flightAssignments[assignmentIndex].flight].arrivalUTC;
     }
-    int departureAirportOf(int assignmentIndex) const
-    {
-        return flights[flightAssignments[assignmentIndex].flight]
-            .departureAirport;
+    int departureAirportOf(int assignmentIndex) const {
+        return flights[flightAssignments[assignmentIndex].flight].departureAirport;
     }
-    int arrivalAirportOf(int assignmentIndex) const
-    {
-        return flights[flightAssignments[assignmentIndex].flight]
-            .arrivalAirport;
+    int arrivalAirportOf(int assignmentIndex) const {
+        return flights[flightAssignments[assignmentIndex].flight].arrivalAirport;
     }
 };
 
@@ -178,31 +157,22 @@ struct FlightCrewSchedule
 // decision variable is FlightAssignment::employee, the value range is the
 // employee list.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<fcs::FlightCrewSchedule>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const fcs::FlightCrewSchedule &s)
-    {
+template <>
+struct optimaru::SolutionTraits<fcs::FlightCrewSchedule> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const fcs::FlightCrewSchedule& s) {
         return static_cast<int>(s.flightAssignments.size());
     }
-    static int value_count(const fcs::FlightCrewSchedule &s)
-    {
+    static int value_count(const fcs::FlightCrewSchedule& s) {
         return static_cast<int>(s.employees.size());
     }
-    static int value_of(const fcs::FlightCrewSchedule &s,
-                           int assignmentIndex)
-    {
+    static int value_of(const fcs::FlightCrewSchedule& s, int assignmentIndex) {
         return s.flightAssignments[assignmentIndex].employee;
     }
-    static void assign(fcs::FlightCrewSchedule &s,
-                            int assignmentIndex,
-                            int employeeIndex)
-    {
+    static void assign(fcs::FlightCrewSchedule& s, int assignmentIndex, int employeeIndex) {
         s.flightAssignments[assignmentIndex].employee = employeeIndex;
     }
-    static bool is_pinned(const fcs::FlightCrewSchedule &s, int assignmentIndex)
-    {
+    static bool is_pinned(const fcs::FlightCrewSchedule& s, int assignmentIndex) {
         return s.flightAssignments[assignmentIndex].pinned;
     }
 };

@@ -5,14 +5,12 @@
 
 #include "alb/domain.hpp"
 
-namespace alb
-{
+namespace alb {
 
 // The raw total of every default constraint (before weight, exponent and
 // level), named after the registry names of alb/constraints/*.hpp. All of
 // them are integers; 0 = no violation.
-struct RawCosts
-{
+struct RawCosts {
     std::int64_t stationCapacityCost = 0;
     std::int64_t taskPrecedenceCost = 0;
     std::int64_t maxStationsCost = 0;
@@ -44,15 +42,14 @@ struct RawCosts
 // Unassigned tasks (station == -1) contribute nothing — the engine
 // convention: an arc, pair or group member counts only while its tasks are
 // assigned.
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // Full recompute at the default weights; stores problem.score. Runs
     // prepare() first if the problem has never been prepared.
-    static Score score(AssemblyLineBalancingProblem &problem);
+    static Score score(AssemblyLineBalancingProblem& problem);
 
     // The raw total of every default constraint (prepare() first if needed).
-    static RawCosts rawCosts(AssemblyLineBalancingProblem &problem);
+    static RawCosts rawCosts(AssemblyLineBalancingProblem& problem);
 
     // Validates the facts and the stations and (re)builds the derived lookups
     // (adjacency per task, distinct group members, pairs per task, sorted
@@ -64,7 +61,7 @@ public:
     // (the Solver, the Python calculate_score / constraint_costs do); never
     // during one, since the station count must stay frozen while the engine
     // runs.
-    static void prepare(AssemblyLineBalancingProblem &problem);
+    static void prepare(AssemblyLineBalancingProblem& problem);
 };
 
 }  // namespace alb

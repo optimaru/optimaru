@@ -15,11 +15,9 @@
 #include <intrin.h>
 #endif
 
-namespace st::bits
-{
+namespace st::bits {
 
-inline int popcount(std::uint32_t x)
-{
+inline int popcount(std::uint32_t x) {
 #if defined(_MSC_VER) && !defined(__clang__)
     x = x - ((x >> 1) & 0x55555555u);
     x = (x & 0x33333333u) + ((x >> 2) & 0x33333333u);
@@ -31,8 +29,7 @@ inline int popcount(std::uint32_t x)
 }
 
 /// Count trailing zeros; x must be non-zero.
-inline int ctz(std::uint32_t x)
-{
+inline int ctz(std::uint32_t x) {
 #if defined(_MSC_VER) && !defined(__clang__)
     unsigned long index;
     _BitScanForward(&index, x);
@@ -43,8 +40,7 @@ inline int ctz(std::uint32_t x)
 }
 
 /// Count leading zeros; x must be non-zero.
-inline int clz(std::uint32_t x)
-{
+inline int clz(std::uint32_t x) {
 #if defined(_MSC_VER) && !defined(__clang__)
     unsigned long index;
     _BitScanReverse(&index, x);
@@ -54,4 +50,4 @@ inline int clz(std::uint32_t x)
 #endif
 }
 
-} // namespace st::bits
+}  // namespace st::bits

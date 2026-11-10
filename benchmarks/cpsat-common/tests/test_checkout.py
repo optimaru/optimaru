@@ -1,6 +1,7 @@
 import sys
 
 import pytest
+
 from cpsat_plugins import checkout
 
 

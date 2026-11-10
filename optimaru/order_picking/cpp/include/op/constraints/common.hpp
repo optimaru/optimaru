@@ -9,8 +9,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace op
-{
+namespace op {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -65,8 +64,7 @@ namespace op
 // four components at their default weights therefore scores bit-for-bit like
 // ScoreCalculator::score.
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<OrderPickingSolution>;
+using DecomposedCalculator = optimaru::DecomposedObjective<OrderPickingSolution>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<OrderPickingSolution>;
 using OpUnitConstraint = optimaru::UnitConstraint<OrderPickingSolution>;
 using OpGlobalConstraint = optimaru::GlobalConstraint<OrderPickingSolution>;
@@ -77,24 +75,20 @@ using OpGlobalConstraint = optimaru::GlobalConstraint<OrderPickingSolution>;
 // compile if a default weight stops being
 // integral or if a component leaves the level the monolith sums it into.
 template <typename Component, optimaru::Level kLevel>
-constexpr std::int64_t monolithicWeight()
-{
+constexpr std::int64_t monolithicWeight() {
     static_assert(Component::kDefaultLevel == kLevel,
                   "the monolithic calculators sum this constraint into "
                   "another level");
-    constexpr auto weight
-        = static_cast<std::int64_t>(Component::kDefaultWeight);
+    constexpr auto weight = static_cast<std::int64_t>(Component::kDefaultWeight);
     static_assert(weight == Component::kDefaultWeight,
                   "the monolithic calculators assume integral default "
                   "weights");
     return weight;
 }
 template <typename Component>
-constexpr std::int64_t kHardWeight
-    = monolithicWeight<Component, optimaru::Level::Hard>();
+constexpr std::int64_t kHardWeight = monolithicWeight<Component, optimaru::Level::Hard>();
 template <typename Component>
-constexpr std::int64_t kSoftWeight
-    = monolithicWeight<Component, optimaru::Level::Soft>();
+constexpr std::int64_t kSoftWeight = monolithicWeight<Component, optimaru::Level::Soft>();
 
 }  // namespace op
 

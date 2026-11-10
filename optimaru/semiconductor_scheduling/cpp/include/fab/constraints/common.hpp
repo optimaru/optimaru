@@ -12,8 +12,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace fab
-{
+namespace fab {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
@@ -67,15 +66,13 @@ using DecomposedCalculator = optimaru::DecomposedObjective<SemiconductorSchedule
 using ConstraintAssembly = optimaru::ConstraintAssembly<SemiconductorSchedule>;
 using FabGlobalConstraint = optimaru::GlobalConstraint<SemiconductorSchedule>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const SemiconductorSchedule &schedule)
-{
-    if (!schedule.prepared)
-    {
-        throw std::logic_error("fab constraints require "
-                               "ScoreCalculator::prepare(schedule) first");
+inline void requirePrepared(const SemiconductorSchedule& schedule) {
+    if (!schedule.prepared) {
+        throw std::logic_error(
+                "fab constraints require "
+                "ScoreCalculator::prepare(schedule) first");
     }
 }
 
@@ -84,12 +81,9 @@ inline void requirePrepared(const SemiconductorSchedule &schedule)
 // The shared per-calculator view: one ScheduleEvaluator, reset once per
 // calculator reset, told about every decision-value change, asked for the
 // raw totals at most once per score (it caches them until the next change).
-struct ScheduleView final : optimaru::SharedConstraintContext
-{
-    void resetOnce(const SemiconductorSchedule &schedule)
-    {
-        if (resetGeneration_ == generation)
-            return;
+struct ScheduleView final : optimaru::SharedConstraintContext {
+    void resetOnce(const SemiconductorSchedule& schedule) {
+        if (resetGeneration_ == generation) return;
         resetGeneration_ = generation;
         evaluator_.reset(schedule);
     }
@@ -104,52 +98,44 @@ private:
 
 // Shared base of the 20 components: the subclass names its Term; the view
 // does the rest.
-struct ScheduleViewConstraint : FabGlobalConstraint
-{
+struct ScheduleViewConstraint : FabGlobalConstraint {
     ScheduleViewConstraint(std::string constraint_name, double constraintWeight,
                            optimaru::Level constraintLevel, Term term)
         : FabGlobalConstraint(std::move(constraint_name), constraintWeight, constraintLevel),
-          term_(term)
-    {
-    }
+          term_(term) {}
 
     Term term() const { return term_; }
 
-    const char *shared_context_key() const override { return "fab.schedule"; }
-    std::unique_ptr<optimaru::SharedConstraintContext> create_shared_context() const override
-    {
+    const char* shared_context_key() const override { return "fab.schedule"; }
+    std::unique_ptr<optimaru::SharedConstraintContext> create_shared_context() const override {
         return std::make_unique<ScheduleView>();
     }
-    void bind_shared_context(optimaru::SharedConstraintContext &context) override
-    {
-        view_ = static_cast<ScheduleView *>(&context);
+    void bind_shared_context(optimaru::SharedConstraintContext& context) override {
+        view_ = static_cast<ScheduleView*>(&context);
     }
 
-    void reset(const SemiconductorSchedule &schedule,
-               const std::vector<std::vector<int>> & /*members_per_unit*/) override
-    {
+    void reset(const SemiconductorSchedule& schedule,
+               const std::vector<std::vector<int>>& /*members_per_unit*/) override {
         detail::requirePrepared(schedule);
         view_->resetOnce(schedule);
     }
     // A row's value moved: every component hears it; the view keeps one mark.
     bool supports_member_change() const override { return true; }
-    void on_member_changed(const SemiconductorSchedule & /*schedule*/, int /*unit*/,
-                         const std::vector<int> & /*members*/, int row, bool /*joined*/) override
-    {
+    void on_member_changed(const SemiconductorSchedule& /*schedule*/, int /*unit*/,
+                           const std::vector<int>& /*members*/, int row, bool /*joined*/) override {
         view_->markChanged(row);
     }
     // Not called while supports_member_change() holds; a unit notification
     // cannot say who left, so it re-reads every row.
-    void on_unit_changed(const SemiconductorSchedule & /*schedule*/, int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
+    void on_unit_changed(const SemiconductorSchedule& /*schedule*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
         view_->markAllChanged();
     }
     double cost() const override { return static_cast<double>(view_->total(term_)); }
 
 private:
     Term term_;
-    ScheduleView *view_ = nullptr;
+    ScheduleView* view_ = nullptr;
 };
 
 }  // namespace fab

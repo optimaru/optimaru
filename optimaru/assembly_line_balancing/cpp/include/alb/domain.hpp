@@ -10,8 +10,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
 
-namespace alb
-{
+namespace alb {
 
 // ---------------------------------------------------------------------------
 // Score
@@ -36,8 +35,7 @@ using Score = optimaru::Score;
 // `station` is the single assignment decision variable: a station index
 // (0-based), -1 == unassigned. Stations are not bounded above by the facts:
 // the value range is AssemblyLineBalancingProblem::stationCount (see there).
-struct Task
-{
+struct Task {
     std::string id;
     std::int64_t duration = 0;  // > 0 (checked by ScoreCalculator::prepare)
     int minStation = 0;
@@ -55,24 +53,21 @@ struct Task
 // `before` must not sit on a later station than `after` (task indices; a
 // duplicate arc counts once per copy, a self-arc never costs anything but
 // makes the construction refuse the graph as cyclic).
-struct Precedence
-{
+struct Precedence {
     int before = 0;
     int after = 0;
 };
 
 // Tasks that should share one station (indices as given; a task listed twice
 // counts once).
-struct TaskGroup
-{
+struct TaskGroup {
     std::string id;
     std::vector<int> tasks;
 };
 
 // Two tasks that must not share a station (first == second is allowed and
 // then always costs 1 while the task is assigned).
-struct TaskPair
-{
+struct TaskPair {
     int first = 0;
     int second = 0;
 };
@@ -80,8 +75,7 @@ struct TaskPair
 // ---------------------------------------------------------------------------
 // AssemblyLineBalancingProblem  (solution)
 // ---------------------------------------------------------------------------
-struct AssemblyLineBalancingProblem
-{
+struct AssemblyLineBalancingProblem {
     std::int64_t cycleTime = 0;  // > 0: the capacity of every station
     std::vector<Task> tasks;
     std::vector<Precedence> precedences;
@@ -108,11 +102,11 @@ struct AssemblyLineBalancingProblem
 
     // --- derived lookups, rebuilt by ScoreCalculator::prepare() -------------
     bool prepared = false;
-    std::vector<std::vector<int>> arcsOut;  // per task: arcs it is `before` of (no self-arcs)
-    std::vector<std::vector<int>> arcsIn;   // per task: arcs it is `after` of (no self-arcs)
+    std::vector<std::vector<int>> arcsOut;       // per task: arcs it is `before` of (no self-arcs)
+    std::vector<std::vector<int>> arcsIn;        // per task: arcs it is `after` of (no self-arcs)
     std::vector<std::vector<int>> groupMembers;  // per group: distinct members, first-seen order
     std::vector<std::vector<int>> groupsOf;      // per task: the groups it belongs to (once each)
-    std::vector<std::vector<int>> pairsOf;  // per task: its pairs (a self-pair once)
+    std::vector<std::vector<int>> pairsOf;       // per task: its pairs (a self-pair once)
     std::vector<std::vector<int>> forbiddenSorted;  // per task: sorted, unique
 
     int taskCount() const { return static_cast<int>(tasks.size()); }
@@ -120,36 +114,28 @@ struct AssemblyLineBalancingProblem
     // Processing time per station 0..max(station) (empty middle stations
     // listed as 0); unassigned tasks carry no load. The model's
     // station_loads output.
-    std::vector<std::int64_t> stationLoads() const
-    {
+    std::vector<std::int64_t> stationLoads() const {
         int top = -1;
-        for (const Task &task : tasks)
-            top = task.station > top ? task.station : top;
+        for (const Task& task : tasks) top = task.station > top ? task.station : top;
         std::vector<std::int64_t> loads(static_cast<std::size_t>(top + 1), 0);
-        for (const Task &task : tasks)
-        {
-            if (task.isAssigned())
-                loads[task.station] += task.duration;
+        for (const Task& task : tasks) {
+            if (task.isAssigned()) loads[task.station] += task.duration;
         }
         return loads;
     }
 
     // Stations with a load > 0 (durations are > 0, so: non-empty stations).
-    int stationsUsed() const
-    {
+    int stationsUsed() const {
         int used = 0;
-        for (std::int64_t load : stationLoads())
-            used += load > 0 ? 1 : 0;
+        for (std::int64_t load : stationLoads()) used += load > 0 ? 1 : 0;
         return used;
     }
 
     // The current station per task (-1 == unassigned).
-    std::vector<int> assignment() const
-    {
+    std::vector<int> assignment() const {
         std::vector<int> stations;
         stations.reserve(tasks.size());
-        for (const Task &task : tasks)
-            stations.push_back(task.station);
+        for (const Task& task : tasks) stations.push_back(task.station);
         return stations;
     }
 };
@@ -160,34 +146,26 @@ struct AssemblyLineBalancingProblem
 // SolutionTraits specialization: entities are tasks, the decision
 // variable is Task::station, the value range is the frozen station count.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<alb::AssemblyLineBalancingProblem>
-{
-    static constexpr optimaru::Shape shape
-        = optimaru::Shape::Assignment;
-    static int entity_count(const alb::AssemblyLineBalancingProblem &problem)
-    {
+template <>
+struct optimaru::SolutionTraits<alb::AssemblyLineBalancingProblem> {
+    static constexpr optimaru::Shape shape = optimaru::Shape::Assignment;
+    static int entity_count(const alb::AssemblyLineBalancingProblem& problem) {
         return problem.taskCount();
     }
-    static int value_count(const alb::AssemblyLineBalancingProblem &problem)
-    {
+    static int value_count(const alb::AssemblyLineBalancingProblem& problem) {
         // Never a live max(station): a calculator sizes its per-station
         // caches from this at reset, so it must not change mid-search.
-        if (!problem.prepared)
-        {
-            throw std::logic_error("alb: ScoreCalculator::prepare(problem) "
-                                   "must run before scoring or solving");
+        if (!problem.prepared) {
+            throw std::logic_error(
+                    "alb: ScoreCalculator::prepare(problem) "
+                    "must run before scoring or solving");
         }
         return problem.stationCount;
     }
-    static int value_of(const alb::AssemblyLineBalancingProblem &problem,
-                           int taskIndex)
-    {
+    static int value_of(const alb::AssemblyLineBalancingProblem& problem, int taskIndex) {
         return problem.tasks[taskIndex].station;
     }
-    static void assign(alb::AssemblyLineBalancingProblem &problem,
-                            int taskIndex,
-                            int station)
-    {
+    static void assign(alb::AssemblyLineBalancingProblem& problem, int taskIndex, int station) {
         problem.tasks[taskIndex].station = station;
     }
 };

@@ -42,72 +42,46 @@
 
 using namespace ms;
 
-namespace
-{
+namespace {
 
 int failures = 0;
 
-void check(bool ok, const std::string &label)
-{
+void check(bool ok, const std::string& label) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-void checkScore(const std::string &label,
-                const Score &actual,
-                long long expectedHard,
-                double expectedSoft)
-{
-    const bool ok = (actual.hard == expectedHard
-                     && std::fabs(actual.soft - expectedSoft) < 1e-6);
-    std::printf("  [%s] %-48s got=%s expected=%lldhard/%gsoft\n",
-                ok ? "PASS" : "FAIL",
-                label.c_str(),
-                actual.str().c_str(),
-                expectedHard,
-                expectedSoft);
-    if (!ok)
-        ++failures;
+void checkScore(const std::string& label, const Score& actual, long long expectedHard,
+                double expectedSoft) {
+    const bool ok = (actual.hard == expectedHard && std::fabs(actual.soft - expectedSoft) < 1e-6);
+    std::printf("  [%s] %-48s got=%s expected=%lldhard/%gsoft\n", ok ? "PASS" : "FAIL",
+                label.c_str(), actual.str().c_str(), expectedHard, expectedSoft);
+    if (!ok) ++failures;
 }
 
-bool sameScore(const Score &a, const Score &b)
-{
+bool sameScore(const Score& a, const Score& b) {
     return a.hard == b.hard && std::fabs(a.soft - b.soft) < 1e-6;
 }
 
-MeetingSchedule makeBase(int days,
-                         int grainsPerDay,
-                         const std::vector<int> &roomCapacities,
-                         int personCount = 4)
-{
+MeetingSchedule makeBase(int days, int grainsPerDay, const std::vector<int>& roomCapacities,
+                         int personCount = 4) {
     MeetingSchedule s;
-    for (int p = 0; p < personCount; ++p)
-        s.people.push_back({"P" + std::to_string(p), "Person"});
+    for (int p = 0; p < personCount; ++p) s.people.push_back({"P" + std::to_string(p), "Person"});
     int index = 0;
-    for (int d = 0; d < days; ++d)
-    {
-        for (int g = 0; g < grainsPerDay; ++g)
-        {
-            s.timeGrains.push_back(
-                {std::to_string(index), index, 100 + d, 8 * 60 + 15 * g});
+    for (int d = 0; d < days; ++d) {
+        for (int g = 0; g < grainsPerDay; ++g) {
+            s.timeGrains.push_back({std::to_string(index), index, 100 + d, 8 * 60 + 15 * g});
             ++index;
         }
     }
-    for (std::size_t r = 0; r < roomCapacities.size(); ++r)
-    {
+    for (std::size_t r = 0; r < roomCapacities.size(); ++r) {
         s.rooms.push_back({"R" + std::to_string(r), "Room", roomCapacities[r]});
     }
     return s;
 }
 
-void addMeeting(MeetingSchedule &s,
-                int durationInGrains,
-                const std::vector<int> &required,
-                const std::vector<int> &preferred,
-                int grainPos = -1,
-                int roomIndex = 0)
-{
+void addMeeting(MeetingSchedule& s, int durationInGrains, const std::vector<int>& required,
+                const std::vector<int>& preferred, int grainPos = -1, int roomIndex = 0) {
     Meeting meeting;
     meeting.id = std::to_string(s.meetings.size());
     meeting.topic = "M" + meeting.id;
@@ -119,50 +93,38 @@ void addMeeting(MeetingSchedule &s,
     MeetingAssignment assignment;
     assignment.id = meeting.id;
     assignment.meeting = static_cast<int>(s.meetings.size()) - 1;
-    assignment.grainRoom
-        = grainPos < 0 ? -1 : s.grainRoomOf(grainPos, roomIndex);
+    assignment.grainRoom = grainPos < 0 ? -1 : s.grainRoomOf(grainPos, roomIndex);
     s.meetingAssignments.push_back(assignment);
 }
 
-MeetingSchedule buildRandomInstance(int meetingCount, std::uint64_t seed)
-{
-    MeetingSchedule s
-        = makeBase(/*days*/ 2, /*grainsPerDay*/ 14, {8, 5, 3}, /*people*/ 8);
+MeetingSchedule buildRandomInstance(int meetingCount, std::uint64_t seed) {
+    MeetingSchedule s = makeBase(/*days*/ 2, /*grainsPerDay*/ 14, {8, 5, 3}, /*people*/ 8);
     std::mt19937_64 rng(seed);
-    for (int i = 0; i < meetingCount; ++i)
-    {
+    for (int i = 0; i < meetingCount; ++i) {
         const int duration = 1 + static_cast<int>(rng() % 6);
         std::vector<int> required;
         std::vector<int> preferred;
         const int requiredCount = 1 + static_cast<int>(rng() % 3);
-        for (int k = 0; k < requiredCount; ++k)
-        {
+        for (int k = 0; k < requiredCount; ++k) {
             const int person = static_cast<int>(rng() % s.people.size());
             bool duplicate = false;
-            for (int existing : required)
-                duplicate = duplicate || existing == person;
-            if (!duplicate)
-                required.push_back(person);
+            for (int existing : required) duplicate = duplicate || existing == person;
+            if (!duplicate) required.push_back(person);
         }
         const int preferredCount = static_cast<int>(rng() % 3);
-        for (int k = 0; k < preferredCount; ++k)
-        {
+        for (int k = 0; k < preferredCount; ++k) {
             const int person = static_cast<int>(rng() % s.people.size());
             bool duplicate = false;
-            for (int existing : preferred)
-                duplicate = duplicate || existing == person;
-            for (int existing : required)
-                duplicate = duplicate || existing == person;
-            if (!duplicate)
-                preferred.push_back(person);
+            for (int existing : preferred) duplicate = duplicate || existing == person;
+            for (int existing : required) duplicate = duplicate || existing == person;
+            if (!duplicate) preferred.push_back(person);
         }
         addMeeting(s, duration, required, preferred);
     }
     return s;
 }
 
-Score scoreWith(DecomposedCalculator &calculator, MeetingSchedule &s)
-{
+Score scoreWith(DecomposedCalculator& calculator, MeetingSchedule& s) {
     ScoreCalculator::prepare(s);  // idempotent; the components require it
     calculator.rebuild(s);
     return calculator.score();
@@ -171,8 +133,7 @@ Score scoreWith(DecomposedCalculator &calculator, MeetingSchedule &s)
 // -------------------------------------------------------------------------
 // (a) The default assembly == the monolithic full recompute.
 // -------------------------------------------------------------------------
-void verifyAssemblyParity()
-{
+void verifyAssemblyParity() {
     std::printf("== (a) Default assembly == monolithic score ==\n");
     MeetingSchedule s = buildRandomInstance(/*meetings*/ 14, /*seed*/ 7);
     ScoreCalculator::prepare(s);
@@ -184,38 +145,28 @@ void verifyAssemblyParity()
     std::uniform_real_distribution<double> unit(0.0, 1.0);
     int mismatches = 0;
     const int rounds = 400;
-    for (int round = 0; round < rounds; ++round)
-    {
-        for (MeetingAssignment &assignment : s.meetingAssignments)
-        {
-            assignment.grainRoom
-                = unit(rng) < 0.10
-                      ? -1
-                      : static_cast<int>(rng() % s.grainRoomCount());
+    for (int round = 0; round < rounds; ++round) {
+        for (MeetingAssignment& assignment : s.meetingAssignments) {
+            assignment.grainRoom =
+                    unit(rng) < 0.10 ? -1 : static_cast<int>(rng() % s.grainRoomCount());
         }
         const Score plugin = scoreWith(calculator, s);
         const Score monolithic = ScoreCalculator::score(s);
-        if (!sameScore(plugin, monolithic))
-        {
-            if (++mismatches <= 3)
-            {
-                std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n",
-                            round,
-                            plugin.str().c_str(),
-                            monolithic.str().c_str());
+        if (!sameScore(plugin, monolithic)) {
+            if (++mismatches <= 3) {
+                std::printf("  MISMATCH @round %d: plugin=%s monolithic=%s\n", round,
+                            plugin.str().c_str(), monolithic.str().c_str());
             }
         }
     }
-    check(mismatches == 0,
-          std::to_string(rounds) + " random assignments score identically");
+    check(mismatches == 0, std::to_string(rounds) + " random assignments score identically");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
 // (b) Incremental score == full recompute across a random walk.
 // -------------------------------------------------------------------------
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (b) Plugin incremental == full recompute ==\n");
     MeetingSchedule s = buildRandomInstance(/*meetings*/ 14, /*seed*/ 7);
     ScoreCalculator::prepare(s);
@@ -232,18 +183,12 @@ void verifyIncremental()
 
     int mismatches = 0;
     const int steps = 2000;
-    for (int step = 0; step < steps; ++step)
-    {
-        if (unit(rng) < 0.75)
-        {
+    for (int step = 0; step < steps; ++step) {
+        if (unit(rng) < 0.75) {
             const int assignment = static_cast<int>(rng() % assignmentCount);
-            const int value = (unit(rng) < 0.10)
-                                  ? -1
-                                  : static_cast<int>(rng() % value_count);
+            const int value = (unit(rng) < 0.10) ? -1 : static_cast<int>(rng() % value_count);
             editor.assign(assignment, value);
-        }
-        else
-        {
+        } else {
             const int a = static_cast<int>(rng() % assignmentCount);
             const int b = static_cast<int>(rng() % assignmentCount);
             const int va = s.meetingAssignments[a].grainRoom;
@@ -252,32 +197,24 @@ void verifyIncremental()
             editor.assign(b, va);
         }
         for (int i = 0; i < assignmentCount; ++i)
-            shadow.meetingAssignments[i].grainRoom
-                = s.meetingAssignments[i].grainRoom;
+            shadow.meetingAssignments[i].grainRoom = s.meetingAssignments[i].grainRoom;
         const Score full = ScoreCalculator::score(shadow);
         const Score incremental = editor.score();
-        if (!sameScore(full, incremental))
-        {
-            if (++mismatches <= 3)
-            {
-                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                            step,
-                            incremental.str().c_str(),
-                            full.str().c_str());
+        if (!sameScore(full, incremental)) {
+            if (++mismatches <= 3) {
+                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
     }
-    check(mismatches == 0,
-          std::to_string(steps)
-              + " random moves, incremental == full recompute");
+    check(mismatches == 0, std::to_string(steps) + " random moves, incremental == full recompute");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
 // (c) Single-component assemblies on hand-computed cases.
 // -------------------------------------------------------------------------
-void verifyPartialAssemblies()
-{
+void verifyPartialAssemblies() {
     std::printf("== (c) Single-component assemblies ==\n");
 
     {  // roomConflictCost alone: same room, overlapping by 2 grains.
@@ -294,8 +231,7 @@ void verifyPartialAssemblies()
         addMeeting(s, 4, {}, {}, 2, 1);
         DecomposedCalculator calculator;
         calculator.emplace<RoomConflictCost>();
-        checkScore(
-            "roomConflictCost across rooms", scoreWith(calculator, s), 0, 0.0);
+        checkScore("roomConflictCost across rooms", scoreWith(calculator, s), 0, 0.0);
     }
     {  // overtimeCost alone: a 4-grain meeting starting at the last grain of
         // a 4-grain calendar ends at index 4, where no grain exists.
@@ -319,10 +255,7 @@ void verifyPartialAssemblies()
         addMeeting(s, 4, {0}, {}, 2, 1);
         DecomposedCalculator calculator;
         calculator.emplace<RequiredAttendanceConflictCost>();
-        checkScore("requiredAttendanceConflictCost alone",
-                   scoreWith(calculator, s),
-                   -2,
-                   0.0);
+        checkScore("requiredAttendanceConflictCost alone", scoreWith(calculator, s), -2, 0.0);
     }
     {  // preferredAttendanceConflictCost alone: the same shape on the medium
         // level, folded at kMediumScale.
@@ -331,9 +264,7 @@ void verifyPartialAssemblies()
         addMeeting(s, 4, {}, {0}, 2, 1);
         DecomposedCalculator calculator;
         calculator.emplace<PreferredAttendanceConflictCost>();
-        checkScore("preferredAttendanceConflictCost alone",
-                   scoreWith(calculator, s),
-                   0,
+        checkScore("preferredAttendanceConflictCost alone", scoreWith(calculator, s), 0,
                    -2.0 * kMediumScale);
     }
     {  // requiredAndPreferredAttendanceConflictCost alone: required in one,
@@ -343,9 +274,7 @@ void verifyPartialAssemblies()
         addMeeting(s, 4, {}, {0}, 2, 1);
         DecomposedCalculator calculator;
         calculator.emplace<RequiredAndPreferredAttendanceConflictCost>();
-        checkScore("requiredAndPreferredAttendanceConflictCost alone",
-                   scoreWith(calculator, s),
-                   0,
+        checkScore("requiredAndPreferredAttendanceConflictCost alone", scoreWith(calculator, s), 0,
                    -2.0 * kMediumScale);
     }
     {  // consecutiveMeetingsCost alone: back to back, no gap.
@@ -354,10 +283,7 @@ void verifyPartialAssemblies()
         addMeeting(s, 4, {}, {}, 4, 1);
         DecomposedCalculator calculator;
         calculator.emplace<ConsecutiveMeetingsCost>();
-        checkScore("consecutiveMeetingsCost alone",
-                   scoreWith(calculator, s),
-                   0,
-                   -100.0);
+        checkScore("consecutiveMeetingsCost alone", scoreWith(calculator, s), 0, -100.0);
     }
     {  // meetingOverlapCost alone: 2 shared grains at x 10.
         MeetingSchedule s = makeBase(1, 12, {5, 5});
@@ -365,8 +291,7 @@ void verifyPartialAssemblies()
         addMeeting(s, 4, {}, {}, 2, 1);
         DecomposedCalculator calculator;
         calculator.emplace<MeetingOverlapCost>();
-        checkScore(
-            "meetingOverlapCost alone", scoreWith(calculator, s), 0, -20.0);
+        checkScore("meetingOverlapCost alone", scoreWith(calculator, s), 0, -20.0);
     }
     {  // roomChangeCost alone: a shared attendee moves rooms with a 1-grain
         // gap (<= 2), so somebody has to walk.
@@ -383,8 +308,7 @@ void verifyPartialAssemblies()
         addMeeting(s, 2, {0}, {}, 8, 1);
         DecomposedCalculator calculator;
         calculator.emplace<RoomChangeCost>();
-        checkScore(
-            "roomChangeCost with a wide gap", scoreWith(calculator, s), 0, 0.0);
+        checkScore("roomChangeCost with a wide gap", scoreWith(calculator, s), 0, 0.0);
     }
     std::printf("\n");
 }
@@ -392,8 +316,7 @@ void verifyPartialAssemblies()
 // -------------------------------------------------------------------------
 // (d) Metadata overrides.
 // -------------------------------------------------------------------------
-void verifyOverrides()
-{
+void verifyOverrides() {
     std::printf("== (d) Weight / level overrides ==\n");
     MeetingSchedule s = makeBase(1, 12, {5, 5});
     addMeeting(s, 4, {}, {}, 0, 0);
@@ -402,20 +325,14 @@ void verifyOverrides()
     {
         DecomposedCalculator calculator;
         calculator.emplace<RoomConflictCost>(10.0);
-        checkScore("roomConflictCost re-weighted to 10",
-                   scoreWith(calculator, s),
-                   -20,
-                   0.0);
+        checkScore("roomConflictCost re-weighted to 10", scoreWith(calculator, s), -20, 0.0);
     }
     {
         DecomposedCalculator calculator;
         auto component = std::make_unique<RoomConflictCost>();
         component->level = optimaru::Level::Soft;
         calculator.add(std::move(component));
-        checkScore("roomConflictCost demoted to soft",
-                   scoreWith(calculator, s),
-                   0,
-                   -2.0);
+        checkScore("roomConflictCost demoted to soft", scoreWith(calculator, s), 0, -2.0);
     }
     {
         // exponent 2 shapes the raw overlap (2 grains) before the weight.
@@ -423,10 +340,7 @@ void verifyOverrides()
         auto component = std::make_unique<RoomConflictCost>();
         component->exponent = 2.0;
         calculator.add(std::move(component));
-        checkScore("roomConflictCost with exponent 2",
-                   scoreWith(calculator, s),
-                   -4,
-                   0.0);
+        checkScore("roomConflictCost with exponent 2", scoreWith(calculator, s), -4, 0.0);
     }
     std::printf("\n");
 }
@@ -434,13 +348,12 @@ void verifyOverrides()
 // -------------------------------------------------------------------------
 // (e) constraint_totals(): the per-constraint breakdown adds up.
 // -------------------------------------------------------------------------
-void verifyConstraintTotals()
-{
+void verifyConstraintTotals() {
     std::printf("== (e) constraintTotals() explains the score ==\n");
     MeetingSchedule s = buildRandomInstance(/*meetings*/ 10, /*seed*/ 13);
     ScoreCalculator::prepare(s);
     std::mt19937_64 rng(5);
-    for (MeetingAssignment &assignment : s.meetingAssignments)
+    for (MeetingAssignment& assignment : s.meetingAssignments)
         assignment.grainRoom = static_cast<int>(rng() % s.grainRoomCount());
 
     DecomposedCalculator calculator;
@@ -451,8 +364,7 @@ void verifyConstraintTotals()
     // is folded here the way the calculator folds its medium accumulator.
     double hard = 0.0;
     double soft = 0.0;
-    for (const optimaru::ConstraintTotal &total : calculator.constraint_totals())
-    {
+    for (const optimaru::ConstraintTotal& total : calculator.constraint_totals()) {
         if (total.level == optimaru::Level::Hard)
             hard += total.cost;
         else if (total.level == optimaru::Level::Medium)
@@ -460,19 +372,17 @@ void verifyConstraintTotals()
         else
             soft += total.cost;
     }
-    check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9
-              && std::fabs(-soft - score.soft) < 1e-3,
+    check(std::fabs(-hard - static_cast<double>(score.hard)) < 1e-9 &&
+                  std::fabs(-soft - score.soft) < 1e-3,
           "per-constraint totals sum to the reported score");
-    check(calculator.constraint_totals().size() == 12,
-          "one total per assembled component");
+    check(calculator.constraint_totals().size() == 12, "one total per assembled component");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
 // (f) ScoreChecks::Full solve on the plugin path.
 // -------------------------------------------------------------------------
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (f) FULL_ASSERT plugin solve ==\n");
     MeetingSchedule s = buildRandomInstance(/*meetings*/ 8, /*seed*/ 11);
 
@@ -487,22 +397,17 @@ void verifyFullAssertSolve()
     addDefaultConstraints(calculator);
 
     bool corrupted = false;
-    try
-    {
+    try {
         Solver solver(config);
         solver.solve(s, calculator);
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "2s FULL_ASSERT plugin solve without score corruption");
-    if (!corrupted)
-    {
+    if (!corrupted) {
         const Score recomputed = ScoreCalculator::score(s);
-        check(sameScore(s.score, recomputed),
-              "plugin-reported score == monolithic full recompute");
+        check(sameScore(s.score, recomputed), "plugin-reported score == monolithic full recompute");
     }
     std::printf("\n");
 }
@@ -511,57 +416,41 @@ void verifyFullAssertSolve()
 // (g) Raw costs by hand: one positive and one zero case per constraint,
 // read through constraint_costs() (unweighted, before exponent and level).
 // -------------------------------------------------------------------------
-double rawTotal(MeetingSchedule &s, const std::string &name)
-{
+double rawTotal(MeetingSchedule& s, const std::string& name) {
     ScoreCalculator::prepare(s);
     DecomposedCalculator calculator;
     addDefaultConstraints(calculator);
     calculator.rebuild(s);
     calculator.score();
-    for (const auto &entry : calculator.constraint_costs())
-    {
-        if (entry.name != name)
-            continue;
+    for (const auto& entry : calculator.constraint_costs()) {
+        if (entry.name != name) continue;
         double total = 0.0;
-        for (double cost : entry.unit_costs)
-            total += cost;
+        for (double cost : entry.unit_costs) total += cost;
         return total;
     }
     return -1.0;  // unknown name: never a raw cost of this domain
 }
 
-void checkRaw(const std::string &label,
-              MeetingSchedule s,
-              const std::string &name,
-              double expected)
-{
+void checkRaw(const std::string& label, MeetingSchedule s, const std::string& name,
+              double expected) {
     const double actual = rawTotal(s, name);
     const bool ok = actual == expected;
-    std::printf("  [%s] %-56s got=%g expected=%g\n",
-                ok ? "PASS" : "FAIL",
-                label.c_str(),
-                actual,
+    std::printf("  [%s] %-56s got=%g expected=%g\n", ok ? "PASS" : "FAIL", label.c_str(), actual,
                 expected);
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-void verifyRawCostsByHand()
-{
+void verifyRawCostsByHand() {
     std::printf("== (g) Raw costs by hand (positive / zero) ==\n");
     {  // Same room, [0,4) and [2,6): 2 shared grains; back to back: 0.
         MeetingSchedule positive = makeBase(1, 12, {5, 5});
         addMeeting(positive, 4, {}, {}, 0, 0);
         addMeeting(positive, 4, {}, {}, 2, 0);
-        checkRaw("roomConflictCost: 2 shared grains",
-                 positive,
-                 "roomConflictCost",
-                 2.0);
+        checkRaw("roomConflictCost: 2 shared grains", positive, "roomConflictCost", 2.0);
         MeetingSchedule zero = makeBase(1, 12, {5, 5});
         addMeeting(zero, 4, {}, {}, 0, 0);
         addMeeting(zero, 4, {}, {}, 4, 0);
-        checkRaw(
-            "roomConflictCost: back to back", zero, "roomConflictCost", 0.0);
+        checkRaw("roomConflictCost: back to back", zero, "roomConflictCost", 0.0);
     }
     {  // Grains 0..3; a 4-grain meeting from grain 2 ends at index 5, which
         // does not exist: the raw cost is that last index, 5. From grain 0
@@ -577,25 +466,18 @@ void verifyRawCostsByHand()
         MeetingSchedule positive = makeBase(1, 12, {5, 5});
         addMeeting(positive, 4, {0}, {}, 0, 0);
         addMeeting(positive, 4, {0}, {}, 2, 1);
-        checkRaw("requiredAttendanceConflictCost: 2 person-grains",
-                 positive,
-                 "requiredAttendanceConflictCost",
-                 2.0);
+        checkRaw("requiredAttendanceConflictCost: 2 person-grains", positive,
+                 "requiredAttendanceConflictCost", 2.0);
         MeetingSchedule zero = makeBase(1, 12, {5, 5});
         addMeeting(zero, 4, {0}, {}, 0, 0);
         addMeeting(zero, 4, {0}, {}, 4, 1);
-        checkRaw("requiredAttendanceConflictCost: back to back",
-                 zero,
-                 "requiredAttendanceConflictCost",
-                 0.0);
+        checkRaw("requiredAttendanceConflictCost: back to back", zero,
+                 "requiredAttendanceConflictCost", 0.0);
     }
     {  // 1 required + 1 preferred = 2 seats: capacity 1 is 1 short, 2 fits.
         MeetingSchedule positive = makeBase(1, 12, {1});
         addMeeting(positive, 4, {0}, {1}, 0, 0);
-        checkRaw("roomCapacityCost: 1 seat short",
-                 positive,
-                 "roomCapacityCost",
-                 1.0);
+        checkRaw("roomCapacityCost: 1 seat short", positive, "roomCapacityCost", 1.0);
         MeetingSchedule zero = makeBase(1, 12, {2});
         addMeeting(zero, 4, {0}, {1}, 0, 0);
         checkRaw("roomCapacityCost: fits", zero, "roomCapacityCost", 0.0);
@@ -603,122 +485,84 @@ void verifyRawCostsByHand()
     {  // 2 days x 4 grains: from grain 2 (day 100) to grain 5 (day 101).
         MeetingSchedule positive = makeBase(2, 4, {5});
         addMeeting(positive, 4, {}, {}, 2, 0);
-        checkRaw("dayCrossingCost: crosses into day 101",
-                 positive,
-                 "dayCrossingCost",
-                 1.0);
+        checkRaw("dayCrossingCost: crosses into day 101", positive, "dayCrossingCost", 1.0);
         MeetingSchedule zero = makeBase(2, 4, {5});
         addMeeting(zero, 4, {}, {}, 0, 0);
-        checkRaw(
-            "dayCrossingCost: within day 100", zero, "dayCrossingCost", 0.0);
+        checkRaw("dayCrossingCost: within day 100", zero, "dayCrossingCost", 0.0);
     }
     {  // Person 0 required at one, preferred at the other, full overlap of 4.
         MeetingSchedule positive = makeBase(1, 12, {5, 5});
         addMeeting(positive, 4, {0}, {}, 0, 0);
         addMeeting(positive, 4, {}, {0}, 0, 1);
-        checkRaw("requiredAndPreferredAttendanceConflictCost: 4",
-                 positive,
-                 "requiredAndPreferredAttendanceConflictCost",
-                 4.0);
+        checkRaw("requiredAndPreferredAttendanceConflictCost: 4", positive,
+                 "requiredAndPreferredAttendanceConflictCost", 4.0);
         MeetingSchedule zero = makeBase(1, 12, {5, 5});
         addMeeting(zero, 4, {0}, {}, 0, 0);
         addMeeting(zero, 4, {}, {0}, 4, 1);
-        checkRaw("requiredAndPreferredAttendanceConflictCost: back to back",
-                 zero,
-                 "requiredAndPreferredAttendanceConflictCost",
-                 0.0);
+        checkRaw("requiredAndPreferredAttendanceConflictCost: back to back", zero,
+                 "requiredAndPreferredAttendanceConflictCost", 0.0);
     }
     {  // Person 0 preferred at both, full overlap of 4.
         MeetingSchedule positive = makeBase(1, 12, {5, 5});
         addMeeting(positive, 4, {}, {0}, 0, 0);
         addMeeting(positive, 4, {}, {0}, 0, 1);
-        checkRaw("preferredAttendanceConflictCost: 4 person-grains",
-                 positive,
-                 "preferredAttendanceConflictCost",
-                 4.0);
+        checkRaw("preferredAttendanceConflictCost: 4 person-grains", positive,
+                 "preferredAttendanceConflictCost", 4.0);
         MeetingSchedule zero = makeBase(1, 12, {5, 5});
         addMeeting(zero, 4, {}, {0}, 0, 0);
         addMeeting(zero, 4, {}, {0}, 4, 1);
-        checkRaw("preferredAttendanceConflictCost: back to back",
-                 zero,
-                 "preferredAttendanceConflictCost",
-                 0.0);
+        checkRaw("preferredAttendanceConflictCost: back to back", zero,
+                 "preferredAttendanceConflictCost", 0.0);
     }
     {  // [0,4) ends on grain 3; a 1-grain meeting at grain 0 ends on 0.
         MeetingSchedule positive = makeBase(1, 12, {5});
         addMeeting(positive, 4, {}, {}, 0, 0);
-        checkRaw("meetingEndTimeCost: last index 3",
-                 positive,
-                 "meetingEndTimeCost",
-                 3.0);
+        checkRaw("meetingEndTimeCost: last index 3", positive, "meetingEndTimeCost", 3.0);
         MeetingSchedule zero = makeBase(1, 12, {5});
         addMeeting(zero, 1, {}, {}, 0, 0);
-        checkRaw("meetingEndTimeCost: ends on grain 0",
-                 zero,
-                 "meetingEndTimeCost",
-                 0.0);
+        checkRaw("meetingEndTimeCost: ends on grain 0", zero, "meetingEndTimeCost", 0.0);
     }
     {  // [0,4) then [4,8): one back-to-back pair; both from grain 0: none.
         MeetingSchedule positive = makeBase(1, 12, {5, 5});
         addMeeting(positive, 4, {}, {}, 0, 0);
         addMeeting(positive, 4, {}, {}, 4, 1);
-        checkRaw("consecutiveMeetingsCost: one pair",
-                 positive,
-                 "consecutiveMeetingsCost",
-                 1.0);
+        checkRaw("consecutiveMeetingsCost: one pair", positive, "consecutiveMeetingsCost", 1.0);
         MeetingSchedule zero = makeBase(1, 12, {5, 5});
         addMeeting(zero, 4, {}, {}, 0, 0);
         addMeeting(zero, 4, {}, {}, 0, 1);
-        checkRaw("consecutiveMeetingsCost: overlapping, not adjacent",
-                 zero,
-                 "consecutiveMeetingsCost",
-                 0.0);
+        checkRaw("consecutiveMeetingsCost: overlapping, not adjacent", zero,
+                 "consecutiveMeetingsCost", 0.0);
     }
     {  // [1,4) vs [0,3): 2 shared grains in different rooms; [0,4)/[4,8): 0.
         MeetingSchedule positive = makeBase(1, 12, {5, 5});
         addMeeting(positive, 3, {}, {}, 1, 0);
         addMeeting(positive, 3, {}, {}, 0, 1);
-        checkRaw("meetingOverlapCost: 2 shared grains",
-                 positive,
-                 "meetingOverlapCost",
-                 2.0);
+        checkRaw("meetingOverlapCost: 2 shared grains", positive, "meetingOverlapCost", 2.0);
         MeetingSchedule zero = makeBase(1, 12, {5, 5});
         addMeeting(zero, 4, {}, {}, 0, 0);
         addMeeting(zero, 4, {}, {}, 4, 1);
-        checkRaw("meetingOverlapCost: back to back",
-                 zero,
-                 "meetingOverlapCost",
-                 0.0);
+        checkRaw("meetingOverlapCost: back to back", zero, "meetingOverlapCost", 0.0);
     }
     {  // Rooms of capacity 1 and 2: the small one leaves 2 - 1 = 1 unused in
         // the larger room; the largest room leaves nothing.
         MeetingSchedule positive = makeBase(1, 12, {1, 2});
         addMeeting(positive, 4, {}, {}, 0, 0);
-        checkRaw("largerRoomCapacityCost: 1 seat in a larger room",
-                 positive,
-                 "largerRoomCapacityCost",
-                 1.0);
+        checkRaw("largerRoomCapacityCost: 1 seat in a larger room", positive,
+                 "largerRoomCapacityCost", 1.0);
         MeetingSchedule zero = makeBase(1, 12, {1, 2});
         addMeeting(zero, 4, {}, {}, 0, 1);
-        checkRaw("largerRoomCapacityCost: largest room",
-                 zero,
-                 "largerRoomCapacityCost",
-                 0.0);
+        checkRaw("largerRoomCapacityCost: largest room", zero, "largerRoomCapacityCost", 0.0);
     }
     {  // Person 0 goes from room 0 [0,4) to room 1 [4,8): gap 0 <= 2, one
         // switch; with the second meeting at [8,12) the gap is 4: none.
         MeetingSchedule positive = makeBase(1, 16, {5, 5});
         addMeeting(positive, 4, {0}, {}, 0, 0);
         addMeeting(positive, 4, {0}, {}, 4, 1);
-        checkRaw("roomChangeCost: one attendee switch",
-                 positive,
-                 "roomChangeCost",
-                 1.0);
+        checkRaw("roomChangeCost: one attendee switch", positive, "roomChangeCost", 1.0);
         MeetingSchedule zero = makeBase(1, 16, {5, 5});
         addMeeting(zero, 4, {0}, {}, 0, 0);
         addMeeting(zero, 4, {0}, {}, 8, 1);
-        checkRaw(
-            "roomChangeCost: gap of 4 grains", zero, "roomChangeCost", 0.0);
+        checkRaw("roomChangeCost: gap of 4 grains", zero, "roomChangeCost", 0.0);
     }
     std::printf("\n");
 }
@@ -727,67 +571,45 @@ void verifyRawCostsByHand()
 // (h) The catalog read off the default assembly == the components' constants.
 // -------------------------------------------------------------------------
 template <typename Component>
-bool rowIs(const optimaru::ConstraintInfo &row,
-           const char *name,
-           optimaru::Level level,
-           double weight,
-           bool is_global)
-{
-    return row.name == name && row.default_level == Component::kDefaultLevel
-           && row.default_weight == Component::kDefaultWeight
-           && row.default_level == level && row.default_weight == weight
-           && row.level_flippable && !row.reward && row.is_global == is_global
-           && row.default_enabled;
+bool rowIs(const optimaru::ConstraintInfo& row, const char* name, optimaru::Level level,
+           double weight, bool is_global) {
+    return row.name == name && row.default_level == Component::kDefaultLevel &&
+           row.default_weight == Component::kDefaultWeight && row.default_level == level &&
+           row.default_weight == weight && row.level_flippable && !row.reward &&
+           row.is_global == is_global && row.default_enabled;
 }
 
-void verifyCatalog()
-{
+void verifyCatalog() {
     std::printf("== (h) Catalog == component constants ==\n");
     using optimaru::Level;
     const auto rows = defaultConstraints().info();
     check(rows.size() == 12, "12 catalog rows");
-    if (rows.size() != 12)
-        return;
+    if (rows.size() != 12) return;
     // Unit constraints first, then the globals, in emplace order: the
     // list_constraints() order.
-    check(rowIs<OvertimeCost>(rows[0], "overtimeCost", Level::Hard, 1.0, false)
-              && rowIs<RoomCapacityCost>(
-                  rows[1], "roomCapacityCost", Level::Hard, 1.0, false)
-              && rowIs<DayCrossingCost>(
-                  rows[2], "dayCrossingCost", Level::Hard, 1.0, false)
-              && rowIs<MeetingEndTimeCost>(
-                  rows[3], "meetingEndTimeCost", Level::Soft, 1.0, false)
-              && rowIs<LargerRoomCapacityCost>(
-                  rows[4], "largerRoomCapacityCost", Level::Soft, 1.0, false)
-              && rowIs<RoomConflictCost>(
-                  rows[5], "roomConflictCost", Level::Hard, 1.0, true)
-              && rowIs<RequiredAttendanceConflictCost>(
-                  rows[6],
-                  "requiredAttendanceConflictCost",
-                  Level::Hard,
-                  1.0,
-                  true)
-              && rowIs<RequiredAndPreferredAttendanceConflictCost>(
-                  rows[7],
-                  "requiredAndPreferredAttendanceConflictCost",
-                  Level::Medium,
-                  1.0,
-                  true)
-              && rowIs<PreferredAttendanceConflictCost>(
-                  rows[8],
-                  "preferredAttendanceConflictCost",
-                  Level::Medium,
-                  1.0,
-                  true)
-              && rowIs<ConsecutiveMeetingsCost>(
-                  rows[9], "consecutiveMeetingsCost", Level::Soft, 100.0, true)
-              && rowIs<MeetingOverlapCost>(
-                  rows[10], "meetingOverlapCost", Level::Soft, 10.0, true)
-              && rowIs<RoomChangeCost>(
-                  rows[11], "roomChangeCost", Level::Soft, 1.0, true),
+    check(rowIs<OvertimeCost>(rows[0], "overtimeCost", Level::Hard, 1.0, false) &&
+                  rowIs<RoomCapacityCost>(rows[1], "roomCapacityCost", Level::Hard, 1.0, false) &&
+                  rowIs<DayCrossingCost>(rows[2], "dayCrossingCost", Level::Hard, 1.0, false) &&
+                  rowIs<MeetingEndTimeCost>(rows[3], "meetingEndTimeCost", Level::Soft, 1.0,
+                                            false) &&
+                  rowIs<LargerRoomCapacityCost>(rows[4], "largerRoomCapacityCost", Level::Soft, 1.0,
+                                                false) &&
+                  rowIs<RoomConflictCost>(rows[5], "roomConflictCost", Level::Hard, 1.0, true) &&
+                  rowIs<RequiredAttendanceConflictCost>(rows[6], "requiredAttendanceConflictCost",
+                                                        Level::Hard, 1.0, true) &&
+                  rowIs<RequiredAndPreferredAttendanceConflictCost>(
+                          rows[7], "requiredAndPreferredAttendanceConflictCost", Level::Medium, 1.0,
+                          true) &&
+                  rowIs<PreferredAttendanceConflictCost>(rows[8], "preferredAttendanceConflictCost",
+                                                         Level::Medium, 1.0, true) &&
+                  rowIs<ConsecutiveMeetingsCost>(rows[9], "consecutiveMeetingsCost", Level::Soft,
+                                                 100.0, true) &&
+                  rowIs<MeetingOverlapCost>(rows[10], "meetingOverlapCost", Level::Soft, 10.0,
+                                            true) &&
+                  rowIs<RoomChangeCost>(rows[11], "roomChangeCost", Level::Soft, 1.0, true),
           "info() == the components' kDefaultWeight / kDefaultLevel");
-    check(kMediumFold.kind == optimaru::MediumFold::Kind::IntoSoft
-              && kMediumFold.unit == kMediumScale && kMediumScale == 1e6,
+    check(kMediumFold.kind == optimaru::MediumFold::Kind::IntoSoft &&
+                  kMediumFold.unit == kMediumScale && kMediumScale == 1e6,
           "the domain folds medium into soft at 1e6");
     std::printf("\n");
 }
@@ -796,9 +618,7 @@ void verifyCatalog()
 // (i) The medium level: requiredAndPreferredAttendanceConflictCost and
 // preferredAttendanceConflictCost.
 // -------------------------------------------------------------------------
-DecomposedCalculator::LevelScores levelsWith(ConstraintAssembly assembly,
-                                             MeetingSchedule &s)
-{
+DecomposedCalculator::LevelScores levelsWith(ConstraintAssembly assembly, MeetingSchedule& s) {
     ScoreCalculator::prepare(s);
     DecomposedCalculator calculator;
     std::move(assembly).into(calculator);
@@ -807,8 +627,7 @@ DecomposedCalculator::LevelScores levelsWith(ConstraintAssembly assembly,
     return calculator.level_scores();
 }
 
-void verifyMediumLevel()
-{
+void verifyMediumLevel() {
     std::printf("== (i) Medium level ==\n");
     // Person 0 required at [0,4) in room 0 and preferred at [2,6) in room 1:
     // 2 required-and-preferred person-grains; person 1 preferred at both:
@@ -820,9 +639,9 @@ void verifyMediumLevel()
     addMeeting(s, 4, {0}, {1}, 0, 0);
     addMeeting(s, 4, {}, {0, 1}, 2, 1);
     const Breakdown breakdown = ScoreCalculator::computeBreakdown(s);
-    check(breakdown.requiredAndPreferredAttendanceConflictCost == 2
-              && breakdown.preferredAttendanceConflictCost == 2
-              && breakdown.hardTotal() == 0 && breakdown.softTotal() == 30,
+    check(breakdown.requiredAndPreferredAttendanceConflictCost == 2 &&
+                  breakdown.preferredAttendanceConflictCost == 2 && breakdown.hardTotal() == 0 &&
+                  breakdown.softTotal() == 30,
           "the hand instance: 2 + 2 medium person-grains, 30 soft");
     const Score monolithic = ScoreCalculator::score(s);
     check(monolithic.hard == 0 && monolithic.soft == -30.0 - 4.0 * 1e6,
@@ -837,23 +656,20 @@ void verifyMediumLevel()
         check(levels.hard == 0 && levels.medium == -4.0 && levels.soft == -30.0,
               "levelScores() reports the unfolded levels");
     }
-    const char *mixed = "requiredAndPreferredAttendanceConflictCost";
-    const char *preferred = "preferredAttendanceConflictCost";
+    const char* mixed = "requiredAndPreferredAttendanceConflictCost";
+    const char* preferred = "preferredAttendanceConflictCost";
     {
         const auto levels = levelsWith(defaultConstraints().hard(mixed), s);
-        check(levels.hard == -2 && levels.medium == -2.0
-                  && levels.soft == -30.0,
+        check(levels.hard == -2 && levels.medium == -2.0 && levels.soft == -30.0,
               "hard(): one hard unit per raw person-grain");
     }
     {
-        const auto levels
-            = levelsWith(defaultConstraints().soft(mixed).soft(preferred), s);
+        const auto levels = levelsWith(defaultConstraints().soft(mixed).soft(preferred), s);
         check(levels.hard == 0 && levels.medium == 0.0 && levels.soft == -34.0,
               "soft(): one soft unit per raw person-grain, outside the fold");
     }
     {
-        const auto levels
-            = levelsWith(defaultConstraints().weight(preferred, 3), s);
+        const auto levels = levelsWith(defaultConstraints().weight(preferred, 3), s);
         check(levels.hard == 0 && levels.medium == -8.0 && levels.soft == -30.0,
               "weight 3 stays in medium units");
     }
@@ -862,19 +678,14 @@ void verifyMediumLevel()
 
 // Incremental == full recompute with the medium terms overridden, through
 // the Editor protocol.
-void verifyMediumIncremental()
-{
+void verifyMediumIncremental() {
     std::printf("== (i) Medium overrides: incremental == full ==\n");
-    const char *mixed = "requiredAndPreferredAttendanceConflictCost";
-    const char *preferred = "preferredAttendanceConflictCost";
-    const std::vector<
-        std::pair<std::string, std::function<ConstraintAssembly()>>>
-        variants{
+    const char* mixed = "requiredAndPreferredAttendanceConflictCost";
+    const char* preferred = "preferredAttendanceConflictCost";
+    const std::vector<std::pair<std::string, std::function<ConstraintAssembly()>>> variants{
             {"default", [] { return defaultConstraints(); }},
-            {"hard",
-             [=] { return defaultConstraints().hard(mixed).hard(preferred); }},
-            {"soft",
-             [=] { return defaultConstraints().soft(mixed).soft(preferred); }},
+            {"hard", [=] { return defaultConstraints().hard(mixed).hard(preferred); }},
+            {"soft", [=] { return defaultConstraints().soft(mixed).soft(preferred); }},
             {"weight 3", [=] { return defaultConstraints().weight(mixed, 3); }},
             // Any component may move onto medium: a unit one, a global soft
             // one and a global hard one.
@@ -882,25 +693,22 @@ void verifyMediumIncremental()
              [] {
                  using optimaru::Level;
                  return defaultConstraints()
-                     .level("meetingEndTimeCost", Level::Medium)
-                     .level("meetingOverlapCost", Level::Medium)
-                     .level("roomConflictCost", Level::Medium);
+                         .level("meetingEndTimeCost", Level::Medium)
+                         .level("meetingOverlapCost", Level::Medium)
+                         .level("roomConflictCost", Level::Medium);
              }},
-        };
-    for (const auto &variant : variants)
-    {
+    };
+    for (const auto& variant : variants) {
         MeetingSchedule s = buildRandomInstance(/*meetings*/ 12, /*seed*/ 17);
         ScoreCalculator::prepare(s);
         DecomposedCalculator calculator;
         variant.second().into(calculator);
         optimaru::Editor<MeetingSchedule> editor(s, calculator);
         std::mt19937_64 rng(41);
-        const int assignmentCount
-            = static_cast<int>(s.meetingAssignments.size());
+        const int assignmentCount = static_cast<int>(s.meetingAssignments.size());
         int mismatches = 0;
         int mediumSteps = 0;
-        for (int step = 0; step < 600; ++step)
-        {
+        for (int step = 0; step < 600; ++step) {
             const int assignment = static_cast<int>(rng() % assignmentCount);
             const int value = static_cast<int>(rng() % s.grainRoomCount());
             editor.assign(assignment, value);
@@ -908,18 +716,14 @@ void verifyMediumIncremental()
             DecomposedCalculator fresh;
             variant.second().into(fresh);
             const Score full = scoreWith(fresh, s);
-            if (fresh.level_scores().medium != 0.0)
-                ++mediumSteps;
-            if (!sameScore(incremental, full))
-                ++mismatches;
+            if (fresh.level_scores().medium != 0.0) ++mediumSteps;
+            if (!sameScore(incremental, full)) ++mismatches;
         }
         check(mismatches == 0,
-              "medium " + variant.first
-                  + ": 600 random moves, incremental == full recompute");
-        if (variant.first == "default" || variant.first == "weight 3"
-            || variant.first == "onto medium")
-            check(mediumSteps > 0,
-                  variant.first + ": the walk visits medium states");
+              "medium " + variant.first + ": 600 random moves, incremental == full recompute");
+        if (variant.first == "default" || variant.first == "weight 3" ||
+            variant.first == "onto medium")
+            check(mediumSteps > 0, variant.first + ": the walk visits medium states");
     }
     std::printf("\n");
 }
@@ -930,8 +734,7 @@ void verifyMediumIncremental()
 // knobs re-stated) appended with add_instances(), as the Python bindings
 // build it from a pick list.
 // -------------------------------------------------------------------------
-ConstraintAssembly copyOf(const std::string &name)
-{
+ConstraintAssembly copyOf(const std::string& name) {
     ConstraintAssembly copy = defaultConstraints();
     copy.only({name});
     return copy;
@@ -940,8 +743,7 @@ ConstraintAssembly copyOf(const std::string &name)
 // The medium-level hand instance (12 grains x 2 rooms = 24 cells):
 // meetingEndTimeCost 3 in cell 0 and 5 in cell 5, meetingOverlapCost 2,
 // roomChangeCost 2, the two mediums 2 each; every hard cost 0.
-MeetingSchedule repeatInstance()
-{
+MeetingSchedule repeatInstance() {
     MeetingSchedule s = makeBase(1, 12, {5, 5}, /*people*/ 2);
     addMeeting(s, 4, {0}, {1}, 0, 0);
     addMeeting(s, 4, {}, {0, 1}, 2, 1);
@@ -949,109 +751,98 @@ MeetingSchedule repeatInstance()
     return s;
 }
 
-ConstraintAssembly repeatedAssembly()
-{
-    const char *mixed = "requiredAndPreferredAttendanceConflictCost";
-    const char *preferred = "preferredAttendanceConflictCost";
+ConstraintAssembly repeatedAssembly() {
+    const char* mixed = "requiredAndPreferredAttendanceConflictCost";
+    const char* preferred = "preferredAttendanceConflictCost";
     ConstraintAssembly assembly = defaultConstraints();
     assembly.offset("meetingEndTimeCost", 4.0);
     assembly.offset(preferred, 1.0).clip(preferred, false);
     assembly.add_instances(std::move(copyOf("meetingEndTimeCost")
-                                        .weight("meetingEndTimeCost", 0.25)
-                                        .exponent("meetingEndTimeCost", 2.0)
-                                        .offset("meetingEndTimeCost", 10.0)
-                                        .clip("meetingEndTimeCost", false)));
+                                             .weight("meetingEndTimeCost", 0.25)
+                                             .exponent("meetingEndTimeCost", 2.0)
+                                             .offset("meetingEndTimeCost", 10.0)
+                                             .clip("meetingEndTimeCost", false)));
     // The literal copies of hard components sit on soft: hard refuses the
     // literal formula with an offset (hard 0 must mean no violation). The
     // hard copy is a threshold.
     assembly.add_instances(std::move(copyOf("overtimeCost")
-                                        .soft("overtimeCost")
-                                        .weight("overtimeCost", 2.0)
-                                        .offset("overtimeCost", 1.0)
-                                        .clip("overtimeCost", false)));
-    assembly.add_instances(std::move(copyOf("overtimeCost")
-                                        .weight("overtimeCost", 2.0)
-                                        .offset("overtimeCost", 1.0)));
+                                             .soft("overtimeCost")
+                                             .weight("overtimeCost", 2.0)
+                                             .offset("overtimeCost", 1.0)
+                                             .clip("overtimeCost", false)));
+    assembly.add_instances(std::move(
+            copyOf("overtimeCost").weight("overtimeCost", 2.0).offset("overtimeCost", 1.0)));
     assembly.add_instances(std::move(copyOf("meetingOverlapCost")
-                                        .weight("meetingOverlapCost", 3.0)
-                                        .offset("meetingOverlapCost", -3.0)));
+                                             .weight("meetingOverlapCost", 3.0)
+                                             .offset("meetingOverlapCost", -3.0)));
     assembly.add_instances(std::move(copyOf("roomConflictCost")
-                                        .soft("roomConflictCost")
-                                        .offset("roomConflictCost", 2.0)
-                                        .clip("roomConflictCost", false)));
-    assembly.add_instances(
-        std::move(copyOf(mixed).weight(mixed, 2.0).offset(mixed, 1.5)));
+                                             .soft("roomConflictCost")
+                                             .offset("roomConflictCost", 2.0)
+                                             .clip("roomConflictCost", false)));
+    assembly.add_instances(std::move(copyOf(mixed).weight(mixed, 2.0).offset(mixed, 1.5)));
     // Repeats on their own levels: a soft unit component and a hard global
     // one moved onto medium, a medium one onto hard, each shifted.
     using optimaru::Level;
     assembly.add_instances(std::move(copyOf("meetingEndTimeCost")
-                                        .level("meetingEndTimeCost", Level::Medium)
-                                        .offset("meetingEndTimeCost", 6.0)));
+                                             .level("meetingEndTimeCost", Level::Medium)
+                                             .offset("meetingEndTimeCost", 6.0)));
     assembly.add_instances(std::move(copyOf("roomConflictCost")
-                                        .level("roomConflictCost", Level::Medium)
-                                        .weight("roomConflictCost", 2.0)
-                                        .offset("roomConflictCost", 1.0)
-                                        .clip("roomConflictCost", false)));
-    assembly.add_instances(std::move(
-        copyOf(preferred).level(preferred, Level::Hard).offset(preferred, 2.0)));
+                                             .level("roomConflictCost", Level::Medium)
+                                             .weight("roomConflictCost", 2.0)
+                                             .offset("roomConflictCost", 1.0)
+                                             .clip("roomConflictCost", false)));
+    assembly.add_instances(
+            std::move(copyOf(preferred).level(preferred, Level::Hard).offset(preferred, 2.0)));
     return assembly;
 }
 
-void verifyRepeatsAndOffsets()
-{
+void verifyRepeatsAndOffsets() {
     std::printf("== (j) Repeated components, offset / clip ==\n");
     {
         MeetingSchedule s = repeatInstance();
         ConstraintAssembly assembly = copyOf("meetingEndTimeCost");
         assembly.add_instances(std::move(copyOf("meetingEndTimeCost")
-                                            .weight("meetingEndTimeCost", 0.5)
-                                            .exponent("meetingEndTimeCost", 2.0)));
+                                                 .weight("meetingEndTimeCost", 0.5)
+                                                 .exponent("meetingEndTimeCost", 2.0)));
         DecomposedCalculator calculator;
         assembly.into(calculator);
-        checkScore("end time + 0.5 x end time^2: -(8 + 17)",
-                   scoreWith(calculator, s), 0, -25.0);
+        checkScore("end time + 0.5 x end time^2: -(8 + 17)", scoreWith(calculator, s), 0, -25.0);
         const auto entries = calculator.constraint_costs();
-        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs
-                  && entries[0].unit_costs.size() == 24
-                  && entries[1].weight == 0.5 && entries[1].exponent == 2.0
-                  && entries[1].default_weight == 1.0,
+        check(entries.size() == 2 && entries[0].unit_costs == entries[1].unit_costs &&
+                      entries[0].unit_costs.size() == 24 && entries[1].weight == 0.5 &&
+                      entries[1].exponent == 2.0 && entries[1].default_weight == 1.0,
               "two instances, the same 24 raw cells, each with its own knobs");
     }
     {
         MeetingSchedule s = repeatInstance();
         DecomposedCalculator threshold;
-        copyOf("meetingEndTimeCost")
-            .offset("meetingEndTimeCost", 4.0)
-            .into(threshold);
-        checkScore("unit threshold offset 4: (5 - 4) in one cell",
-                   scoreWith(threshold, s), 0, -1.0);
+        copyOf("meetingEndTimeCost").offset("meetingEndTimeCost", 4.0).into(threshold);
+        checkScore("unit threshold offset 4: (5 - 4) in one cell", scoreWith(threshold, s), 0,
+                   -1.0);
         DecomposedCalculator literal;
         copyOf("meetingEndTimeCost")
-            .offset("meetingEndTimeCost", 4.0)
-            .clip("meetingEndTimeCost", false)
-            .into(literal);
-        checkScore("unit literal offset 4: -1 + 1 + 22 empty cells x -4",
-                   scoreWith(literal, s), 0, 88.0);
+                .offset("meetingEndTimeCost", 4.0)
+                .clip("meetingEndTimeCost", false)
+                .into(literal);
+        checkScore("unit literal offset 4: -1 + 1 + 22 empty cells x -4", scoreWith(literal, s), 0,
+                   88.0);
         DecomposedCalculator negative;
-        copyOf("meetingEndTimeCost")
-            .offset("meetingEndTimeCost", -1.0)
-            .into(negative);
-        checkScore("unit threshold offset -1: the two non-zero cells + 1",
-                   scoreWith(negative, s), 0, -10.0);
+        copyOf("meetingEndTimeCost").offset("meetingEndTimeCost", -1.0).into(negative);
+        checkScore("unit threshold offset -1: the two non-zero cells + 1", scoreWith(negative, s),
+                   0, -10.0);
         DecomposedCalculator global;
         copyOf("meetingOverlapCost")
-            .offset("meetingOverlapCost", 5.0)
-            .clip("meetingOverlapCost", false)
-            .into(global);
-        checkScore("global literal offset 5: 10 x (2 - 5)",
-                   scoreWith(global, s), 0, 30.0);
+                .offset("meetingOverlapCost", 5.0)
+                .clip("meetingOverlapCost", false)
+                .into(global);
+        checkScore("global literal offset 5: 10 x (2 - 5)", scoreWith(global, s), 0, 30.0);
         // A hard pick rounds per cell: end time 3 and 5 beyond the threshold
         // 2.5 are 0.5 -> 1 and 2.5 -> 3, -4 hard.
         DecomposedCalculator hard;
         copyOf("meetingEndTimeCost")
-            .hard("meetingEndTimeCost")
-            .offset("meetingEndTimeCost", 2.5)
-            .into(hard);
+                .hard("meetingEndTimeCost")
+                .offset("meetingEndTimeCost", 2.5)
+                .into(hard);
         checkScore("hard unit threshold offset 2.5: llround(0.5) + llround(2.5) = 4 hard",
                    scoreWith(hard, s), -4, 0.0);
         // The literal overtime pick on soft charges every cell, 3 x (0 - 0.5)
@@ -1059,48 +850,45 @@ void verifyRepeatsAndOffsets()
         // folds into soft) it is allowed too: +36 medium.
         DecomposedCalculator soft;
         copyOf("overtimeCost")
-            .soft("overtimeCost")
-            .weight("overtimeCost", 3.0)
-            .offset("overtimeCost", 0.5)
-            .clip("overtimeCost", false)
-            .into(soft);
-        checkScore("soft unit literal offset 0.5 at weight 3: 24 x 1.5",
-                   scoreWith(soft, s), 0, 36.0);
-        const auto literalMedium = levelsWith(copyOf("overtimeCost")
-                                                  .level("overtimeCost", optimaru::Level::Medium)
-                                                  .weight("overtimeCost", 3.0)
-                                                  .offset("overtimeCost", 0.5)
-                                                  .clip("overtimeCost", false),
-                                              s);
-        check(literalMedium.hard == 0 && literalMedium.medium == 36.0
-                  && literalMedium.soft == 0.0,
+                .soft("overtimeCost")
+                .weight("overtimeCost", 3.0)
+                .offset("overtimeCost", 0.5)
+                .clip("overtimeCost", false)
+                .into(soft);
+        checkScore("soft unit literal offset 0.5 at weight 3: 24 x 1.5", scoreWith(soft, s), 0,
+                   36.0);
+        const auto literalMedium =
+                levelsWith(copyOf("overtimeCost")
+                                   .level("overtimeCost", optimaru::Level::Medium)
+                                   .weight("overtimeCost", 3.0)
+                                   .offset("overtimeCost", 0.5)
+                                   .clip("overtimeCost", false),
+                           s);
+        check(literalMedium.hard == 0 && literalMedium.medium == 36.0 && literalMedium.soft == 0.0,
               "medium unit literal offset 0.5 at weight 3: +36 medium (into soft)");
         // The medium level: a threshold and a repeat stay medium.
-        const char *preferred = "preferredAttendanceConflictCost";
-        const auto shifted
-            = levelsWith(copyOf(preferred).offset(preferred, 1.0), s);
+        const char* preferred = "preferredAttendanceConflictCost";
+        const auto shifted = levelsWith(copyOf(preferred).offset(preferred, 1.0), s);
         check(shifted.hard == 0 && shifted.medium == -1.0 && shifted.soft == 0.0,
               "medium threshold offset 1: (2 - 1) medium");
         ConstraintAssembly twice = copyOf(preferred);
         twice.add_instances(std::move(copyOf(preferred).weight(preferred, 2.0)));
         const auto repeated = levelsWith(std::move(twice), s);
-        check(repeated.hard == 0 && repeated.medium == -6.0
-                  && repeated.soft == 0.0,
+        check(repeated.hard == 0 && repeated.medium == -6.0 && repeated.soft == 0.0,
               "a repeated medium pick: 2 + 2 x 2 medium");
         // Each repeat on its own level: end time soft (3 + 5), again on
         // medium beyond 4 (5 - 4 = 1) and on hard at weight 2 beyond 4 (2).
         using optimaru::Level;
         ConstraintAssembly levels = copyOf("meetingEndTimeCost");
         levels.add_instances(std::move(copyOf("meetingEndTimeCost")
-                                          .level("meetingEndTimeCost", Level::Medium)
-                                          .offset("meetingEndTimeCost", 4.0)));
+                                               .level("meetingEndTimeCost", Level::Medium)
+                                               .offset("meetingEndTimeCost", 4.0)));
         levels.add_instances(std::move(copyOf("meetingEndTimeCost")
-                                          .level("meetingEndTimeCost", Level::Hard)
-                                          .weight("meetingEndTimeCost", 2.0)
-                                          .offset("meetingEndTimeCost", 4.0)));
+                                               .level("meetingEndTimeCost", Level::Hard)
+                                               .weight("meetingEndTimeCost", 2.0)
+                                               .offset("meetingEndTimeCost", 4.0)));
         const auto onLevels = levelsWith(std::move(levels), s);
-        check(onLevels.hard == -2 && onLevels.medium == -1.0
-                  && onLevels.soft == -8.0,
+        check(onLevels.hard == -2 && onLevels.medium == -1.0 && onLevels.soft == -8.0,
               "one component repeated on three levels: -2 hard, -1 medium, -8 soft");
     }
     {
@@ -1112,56 +900,47 @@ void verifyRepeatsAndOffsets()
             MeetingSchedule s = repeatInstance();
             DecomposedCalculator calculator;
             assembly.into(calculator);
-            try
-            {
+            try {
                 scoreWith(calculator, s);
-            }
-            catch (const std::logic_error &error)
-            {
+            } catch (const std::logic_error& error) {
                 return std::string(error.what());
             }
             return std::string();
         };
-        auto refusal = [](const std::string &name) {
-            return "Constraint '" + name
-                   + "' cannot use clip=false with a non-zero offset on a level "
-                     "that counts toward the hard score (hard 0 must mean no "
-                     "violation)";
+        auto refusal = [](const std::string& name) {
+            return "Constraint '" + name +
+                   "' cannot use clip=false with a non-zero offset on a level "
+                   "that counts toward the hard score (hard 0 must mean no "
+                   "violation)";
         };
         check(resetRefusal(copyOf("overtimeCost")
-                               .offset("overtimeCost", 0.5)
-                               .clip("overtimeCost", false))
-                      == refusal("overtimeCost")
-                  && resetRefusal(copyOf("overtimeCost")
-                                      .clip("overtimeCost", false)
-                                      .offset("overtimeCost", -0.5))
-                         == refusal("overtimeCost"),
+                                   .offset("overtimeCost", 0.5)
+                                   .clip("overtimeCost", false)) == refusal("overtimeCost") &&
+                      resetRefusal(copyOf("overtimeCost")
+                                           .clip("overtimeCost", false)
+                                           .offset("overtimeCost", -0.5)) ==
+                              refusal("overtimeCost"),
               "overtime literal offset +-0.5 on hard: refused at reset");
-        const char *preferred = "preferredAttendanceConflictCost";
+        const char* preferred = "preferredAttendanceConflictCost";
         check(resetRefusal(copyOf("roomConflictCost")
-                               .offset("roomConflictCost", 2.0)
-                               .clip("roomConflictCost", false))
-                      == refusal("roomConflictCost")
-                  && resetRefusal(copyOf(preferred)
-                                      .offset(preferred, 1.0)
-                                      .clip(preferred, false)
-                                      .hard(preferred))
-                         == refusal(preferred),
+                                   .offset("roomConflictCost", 2.0)
+                                   .clip("roomConflictCost", false)) ==
+                              refusal("roomConflictCost") &&
+                      resetRefusal(copyOf(preferred)
+                                           .offset(preferred, 1.0)
+                                           .clip(preferred, false)
+                                           .hard(preferred)) == refusal(preferred),
               "a global hard literal offset, and a medium one moved to hard "
               "afterwards: refused at reset");
         ConstraintAssembly repeated = copyOf("overtimeCost");
-        repeated.add_instances(std::move(copyOf("overtimeCost")
-                                            .offset("overtimeCost", 0.5)
-                                            .clip("overtimeCost", false)));
+        repeated.add_instances(std::move(
+                copyOf("overtimeCost").offset("overtimeCost", 0.5).clip("overtimeCost", false)));
         check(resetRefusal(std::move(repeated)) == refusal("overtimeCost"),
               "a literal hard repeat next to the default: refused at reset");
-        check(resetRefusal(copyOf("overtimeCost").offset("overtimeCost", 0.5)).empty()
-                  && resetRefusal(copyOf("overtimeCost").clip("overtimeCost", false))
-                         .empty()
-                  && resetRefusal(copyOf(preferred)
-                                      .offset(preferred, 1.0)
-                                      .clip(preferred, false))
-                         .empty(),
+        check(resetRefusal(copyOf("overtimeCost").offset("overtimeCost", 0.5)).empty() &&
+                      resetRefusal(copyOf("overtimeCost").clip("overtimeCost", false)).empty() &&
+                      resetRefusal(copyOf(preferred).offset(preferred, 1.0).clip(preferred, false))
+                              .empty(),
               "overtime: a threshold offset or clip=false with offset 0 on hard, "
               "and a literal offset on the medium level (into soft), are allowed");
     }
@@ -1174,40 +953,30 @@ void verifyRepeatsAndOffsets()
         optimaru::Editor<MeetingSchedule> editor(s, calculator);
         std::mt19937_64 rng(321);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
-        const int assignmentCount
-            = static_cast<int>(s.meetingAssignments.size());
+        const int assignmentCount = static_cast<int>(s.meetingAssignments.size());
         int mismatches = 0;
         int mediumSteps = 0;
         const int steps = 1500;
-        for (int step = 0; step < steps; ++step)
-        {
+        for (int step = 0; step < steps; ++step) {
             const int assignment = static_cast<int>(rng() % assignmentCount);
-            const int value = unit(rng) < 0.1
-                                  ? -1
-                                  : static_cast<int>(rng() % s.grainRoomCount());
+            const int value = unit(rng) < 0.1 ? -1 : static_cast<int>(rng() % s.grainRoomCount());
             editor.assign(assignment, value);
             MeetingSchedule shadow = s;
             DecomposedCalculator fresh;
             repeatedAssembly().into(fresh);
             const Score full = scoreWith(fresh, shadow);
-            if (fresh.level_scores().medium != 0.0)
-                ++mediumSteps;
+            if (fresh.level_scores().medium != 0.0) ++mediumSteps;
             const Score incremental = editor.score();
-            if (!optimaru::scores_agree(incremental, full))
-            {
-                if (++mismatches <= 3)
-                {
-                    std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                                step,
-                                incremental.str().c_str(),
-                                full.str().c_str());
+            if (!optimaru::scores_agree(incremental, full)) {
+                if (++mismatches <= 3) {
+                    std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                                incremental.str().c_str(), full.str().c_str());
                 }
             }
         }
-        check(mismatches == 0,
-              std::to_string(steps)
-                  + " random moves with repeated, shifted components: "
-                    "incremental == fresh");
+        check(mismatches == 0, std::to_string(steps) +
+                                       " random moves with repeated, shifted components: "
+                                       "incremental == fresh");
         check(mediumSteps > 0, "the walk visits medium states");
     }
     {
@@ -1221,18 +990,14 @@ void verifyRepeatsAndOffsets()
         DecomposedCalculator calculator;
         repeatedAssembly().into(calculator);
         bool corrupted = false;
-        try
-        {
+        try {
             Solver solver(config);
             solver.solve(s, calculator);
-        }
-        catch (const optimaru::ScoreMismatchError &e)
-        {
+        } catch (const optimaru::ScoreMismatchError& e) {
             corrupted = true;
             std::printf("  ScoreCorruptionError: %s\n", e.what());
         }
-        check(!corrupted,
-              "2s FULL_ASSERT solve with repeated, shifted components");
+        check(!corrupted, "2s FULL_ASSERT solve with repeated, shifted components");
         DecomposedCalculator fresh;
         repeatedAssembly().into(fresh);
         check(!corrupted && sameScore(s.score, scoreWith(fresh, s)),
@@ -1243,8 +1008,7 @@ void verifyRepeatsAndOffsets()
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyAssemblyParity();
     verifyIncremental();
     verifyPartialAssemblies();
@@ -1257,8 +1021,7 @@ int main()
     verifyMediumIncremental();
     verifyRepeatsAndOffsets();
 
-    if (failures == 0)
-    {
+    if (failures == 0) {
         std::printf("All meeting-scheduling plugin checks PASSED.\n");
         return 0;
     }

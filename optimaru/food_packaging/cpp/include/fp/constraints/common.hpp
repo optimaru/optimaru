@@ -12,8 +12,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace fp
-{
+namespace fp {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -88,28 +87,23 @@ namespace fp
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<PackagingSchedule>;
+using DecomposedCalculator = optimaru::DecomposedObjective<PackagingSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<PackagingSchedule>;
 using FpUnitConstraint = optimaru::UnitConstraint<PackagingSchedule>;
 using FpGlobalConstraint = optimaru::GlobalConstraint<PackagingSchedule>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const PackagingSchedule &schedule)
-{
-    if (schedule.pinnedPrefixLen.size()
-        != static_cast<std::size_t>(schedule.listCountWithPool()))
-    {
-        throw std::logic_error("fp constraints require "
-                               "ScoreCalculator::prepare(schedule) first");
+inline void requirePrepared(const PackagingSchedule& schedule) {
+    if (schedule.pinnedPrefixLen.size() != static_cast<std::size_t>(schedule.listCountWithPool())) {
+        throw std::logic_error(
+                "fp constraints require "
+                "ScoreCalculator::prepare(schedule) first");
     }
 }
 
 // Is this list the unassigned pool rather than a real packaging line?
-inline bool isPool(const PackagingSchedule &schedule, int unit)
-{
+inline bool isPool(const PackagingSchedule& schedule, int unit) {
     return unit >= schedule.lineCount();
 }
 
@@ -120,17 +114,15 @@ inline bool isPool(const PackagingSchedule &schedule, int unit)
 // (clip = false) charges shape_cost(0 - offset): every line, an empty one
 // included, and never the pool, which is no line. constraint_costs() reports
 // the scope as "units", so the Python score() charges the same lines.
-struct PerLineConstraint : optimaru::UnitConstraint<PackagingSchedule>
-{
+struct PerLineConstraint : optimaru::UnitConstraint<PackagingSchedule> {
     using optimaru::UnitConstraint<PackagingSchedule>::UnitConstraint;
 
-    void on_reset(const PackagingSchedule &schedule) override
-    {
+    void on_reset(const PackagingSchedule& schedule) override {
         requirePrepared(schedule);
         lines_.resize(static_cast<std::size_t>(schedule.lineCount()));
         std::iota(lines_.begin(), lines_.end(), 0);
     }
-    const std::vector<int> *scoped_units() const override { return &lines_; }
+    const std::vector<int>* scoped_units() const override { return &lines_; }
 
 private:
     std::vector<int> lines_;
@@ -140,9 +132,7 @@ private:
 // prefix from a calculator (`members` is only the movable suffix, in engine
 // element ids), but the schedule's own list is the full ordered truth — and
 // it is exactly what the monolithic calculator scores.
-inline const std::vector<int> &jobsOfUnit(const PackagingSchedule &schedule,
-                                          int unit)
-{
+inline const std::vector<int>& jobsOfUnit(const PackagingSchedule& schedule, int unit) {
     return schedule.rawList(unit);
 }
 
@@ -154,30 +144,21 @@ inline const std::vector<int> &jobsOfUnit(const PackagingSchedule &schedule,
 // Calls onJob(jobIndex, startCleaning, startProduction, end) in order and
 // returns the end time of the last job (kNoTime for an empty line).
 template <typename F>
-inline Minutes walkChain(const PackagingSchedule &schedule,
-                         int lineIndex,
-                         const std::vector<int> &members,
-                         F &&onJob)
-{
-    const Line &line = schedule.lines[lineIndex];  // never the pool
+inline Minutes walkChain(const PackagingSchedule& schedule, int lineIndex,
+                         const std::vector<int>& members, F&& onJob) {
+    const Line& line = schedule.lines[lineIndex];  // never the pool
     Minutes previousEnd = kNoTime;
     int previousProduct = -1;
-    for (int jobIndex : members)
-    {
-        const Job &job = schedule.jobs[jobIndex];
+    for (int jobIndex : members) {
+        const Job& job = schedule.jobs[jobIndex];
         Minutes startCleaning = 0;
         Minutes startProduction = 0;
-        if (previousProduct < 0)
-        {
+        if (previousProduct < 0) {
             startCleaning = line.startDateTime;
             startProduction = line.startDateTime;
-        }
-        else
-        {
+        } else {
             startCleaning = previousEnd;
-            startProduction
-                = startCleaning
-                  + schedule.cleanup(previousProduct, job.productIndex);
+            startProduction = startCleaning + schedule.cleanup(previousProduct, job.productIndex);
         }
         previousEnd = startProduction + job.durationMinutes;
         previousProduct = job.productIndex;

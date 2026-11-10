@@ -172,9 +172,7 @@ def list_constraints() -> list[str]:
     repeat_match_on_next_day_cost, home_to_away_hop_cost, away_to_away_hop_cost,
     away_to_home_hop_cost. The same names optimaru.sports_league_scheduling.constraints uses."""
 
-def constraint_costs(
-    schedule: LeagueSchedule, constraints: Iterable[Any] | None = ...
-) -> dict[str, dict[str, Any]]:
+def constraint_costs(schedule: LeagueSchedule, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
     """Per-constraint **raw** costs — before weight/exponent/offset/level rounding:
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",

@@ -10,8 +10,7 @@
 #include "bp/score_calculator.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace bp
-{
+namespace bp {
 
 // The bin-packing implementation of the engine's
 // optimaru::Objective.
@@ -35,32 +34,26 @@ namespace bp
 // Unassigned items (bin == -1) contribute nothing. The full-recompute
 // reference is ScoreCalculator::score (checked in the tests and
 // under ScoreChecks::ScoreChecks::Full).
-class BinPackingIncrementalScoreCalculator final
-    : public optimaru::Objective<BinPackingProblem>
-{
+class BinPackingIncrementalScoreCalculator final : public optimaru::Objective<BinPackingProblem> {
 public:
     // Above this many (bin, colour class) cells the colour counts live in a
     // hash map instead of a flat array.
-    static constexpr std::size_t kDefaultMaxFlatColorCells
-        = std::size_t{1} << 22;
+    static constexpr std::size_t kDefaultMaxFlatColorCells = std::size_t{1} << 22;
 
     BinPackingIncrementalScoreCalculator() = default;
     // A different flat-array limit (0 = always the hash map, so the tests can
     // cover that path on small instances).
     explicit BinPackingIncrementalScoreCalculator(std::size_t maxFlatColorCells)
-        : maxFlatColorCells_(maxFlatColorCells)
-    {
-    }
+        : maxFlatColorCells_(maxFlatColorCells) {}
 
-    void rebuild(BinPackingProblem &solution) override;
+    void rebuild(BinPackingProblem& solution) override;
     void before_assign(int itemIndex) override;
     void after_assign(int itemIndex) override;
     Score score() override;
 
     // The running raw totals score weighs; equal to
     // ScoreCalculator::rawCosts on the current assignment.
-    RawCosts totals() const
-    {
+    RawCosts totals() const {
         RawCosts raw;
         raw.binCapacity = overCapacity_;
         raw.colorConflict = colorExcess_;
@@ -73,7 +66,7 @@ public:
 
 private:
     std::size_t maxFlatColorCells_ = kDefaultMaxFlatColorCells;
-    BinPackingProblem *problem_ = nullptr;
+    BinPackingProblem* problem_ = nullptr;
     std::vector<int> assign_;  // bin per item (-1 == unassigned)
 
     // Per-bin aggregates.
@@ -94,10 +87,9 @@ private:
 
     void insert(int itemIndex, int bin);
     void retract(int itemIndex, int bin);
-    int &colorCount(int bin, int cls);
+    int& colorCount(int bin, int cls);
 
-    std::int64_t capacityPenalty(int bin) const
-    {
+    std::int64_t capacityPenalty(int bin) const {
         const std::int64_t over = load_[bin] - problem_->binCapacity;
         return over > 0 ? over : 0;
     }

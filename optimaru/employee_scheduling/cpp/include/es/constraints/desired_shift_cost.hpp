@@ -33,8 +33,7 @@ struct DesiredShiftCost final : GroupableAssignmentConstraint {
             }
         }
     }
-    double cost(const EmployeeSchedule&, int unit,
-                const std::vector<int>& members) const override {
+    double cost(const EmployeeSchedule&, int unit, const std::vector<int>& members) const override {
         const std::uint8_t* row = match_.data() + static_cast<std::size_t>(unit) * shiftCount_;
         double c = 0;
         for (int i : members) c += row[i];
@@ -42,12 +41,11 @@ struct DesiredShiftCost final : GroupableAssignmentConstraint {
     }
     bool supports_delta() const override { return true; }
     double delta_cost(const EmployeeSchedule&, int unit, const std::vector<int>&,
-                     int entity) const override {
+                      int entity) const override {
         return memberDelta(unit, entity);
     }
     double memberDelta(int unit, int entity) const {
-        return -static_cast<double>(
-                match_[static_cast<std::size_t>(unit) * shiftCount_ + entity]);
+        return -static_cast<double>(match_[static_cast<std::size_t>(unit) * shiftCount_ + entity]);
     }
 
 private:

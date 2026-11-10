@@ -31,36 +31,31 @@
 using namespace ks;
 using namespace ks_test;
 
-namespace
-{
+namespace {
 
 // The full recompute and a freshly reset incremental calculator on the
 // current selection; checks that they agree and returns the full one.
-Score scoreBothWays(KnapsackProblem &problem, const std::string &label)
-{
+Score scoreBothWays(KnapsackProblem& problem, const std::string& label) {
     const Score full = ScoreCalculator::score(problem);
     KnapsackIncrementalScoreCalculator incremental;
     incremental.rebuild(problem);
     const Score fast = incremental.score();
-    if (!sameScore(full, fast))
-    {
+    if (!sameScore(full, fast)) {
         check(false, label + ": incremental " + fast.str() + " != full " + full.str());
     }
     return full;
 }
 
-void expectScore(KnapsackProblem &problem, std::int64_t hard, double soft, const std::string &label)
-{
+void expectScore(KnapsackProblem& problem, std::int64_t hard, double soft,
+                 const std::string& label) {
     const Score score = scoreBothWays(problem, label);
-    check(score.hard == hard && std::fabs(score.soft - soft) < 1e-9,
-          label + " -> " + score.str());
+    check(score.hard == hard && std::fabs(score.soft - soft) < 1e-9, label + " -> " + score.str());
 }
 
 // -------------------------------------------------------------------------
 // (1) Hand-calculated scores.
 // -------------------------------------------------------------------------
-void verifyHandCalculated()
-{
+void verifyHandCalculated() {
     std::printf("== (1) Hand-calculated scores (full and incremental) ==\n");
     {
         // A + C: weight 11 on capacity 10 -> 1 over; value 9 + 8 = 17.
@@ -181,25 +176,28 @@ void verifyHandCalculated()
 // -------------------------------------------------------------------------
 // The raw totals in catalog order (defaultConstraints()), the selected value
 // as the reward's raw cost (-value).
-std::vector<std::int64_t> catalogOrder(const RawCosts &raw)
-{
-    return {raw.capacityOverflow, raw.resourceOverflow,  raw.missingMandatory, raw.chosenForbidden,
-            raw.groupViolation,   raw.unmetDependencies, -raw.value};
+std::vector<std::int64_t> catalogOrder(const RawCosts& raw) {
+    return {raw.capacityOverflow,
+            raw.resourceOverflow,
+            raw.missingMandatory,
+            raw.chosenForbidden,
+            raw.groupViolation,
+            raw.unmetDependencies,
+            -raw.value};
 }
 
-const char *const kCatalogNames[] = {"knapsackCapacityCost",     "resourceCapacityCost", "mandatoryItemsCost",
-                                     "forbiddenItemsCost",       "selectionGroupBoundsCost",
-                                     "itemDependencyCost",       "selectedValueCost"};
+const char* const kCatalogNames[] = {"knapsackCapacityCost",     "resourceCapacityCost",
+                                     "mandatoryItemsCost",       "forbiddenItemsCost",
+                                     "selectionGroupBoundsCost", "itemDependencyCost",
+                                     "selectedValueCost"};
 
-void verifyIncrementalWalk()
-{
+void verifyIncrementalWalk() {
     std::printf("== (2) Incremental == full recompute on random walks, per constraint ==\n");
     int mismatches = 0;
     int costMismatches = 0;
     int nonZero[7] = {0, 0, 0, 0, 0, 0, 0};
     int steps = 0;
-    for (std::uint64_t seed = 1; seed <= 6; ++seed)
-    {
+    for (std::uint64_t seed = 1; seed <= 6; ++seed) {
         KnapsackProblem p = randomInstance(12 + static_cast<int>(seed) * 4, seed, 0.1);
         ScoreCalculator::prepare(p);
         KnapsackIncrementalScoreCalculator calculator;
@@ -208,17 +206,13 @@ void verifyIncrementalWalk()
         std::mt19937_64 rng(seed * 101);
         std::uniform_real_distribution<double> unit(0.0, 1.0);
         const int n = p.itemCount();
-        for (int step = 0; step < 500; ++step, ++steps)
-        {
+        for (int step = 0; step < 500; ++step, ++steps) {
             const double u = unit(rng);
-            if (u < 0.6)
-            {
+            if (u < 0.6) {
                 const int item = static_cast<int>(rng() % n);
                 const int value = unit(rng) < 0.15 ? kUndecided : static_cast<int>(rng() % 2);
                 editor.assign(item, value);
-            }
-            else
-            {
+            } else {
                 // A swap (or a random 3-item batch) as one composite change.
                 editor.begin_batch();
                 const int a = static_cast<int>(rng() % n);
@@ -230,38 +224,38 @@ void verifyIncrementalWalk()
                     editor.assign(static_cast<int>(rng() % n), static_cast<int>(rng() % 2));
                 editor.end_batch();
             }
-            for (int i = 0; i < n; ++i)
-                shadow.items[i].selected = p.items[i].selected;
+            for (int i = 0; i < n; ++i) shadow.items[i].selected = p.items[i].selected;
             const Score full = ScoreCalculator::score(shadow);
             const Score incremental = editor.score();
-            if (!sameScore(full, incremental) && ++mismatches <= 3)
-            {
+            if (!sameScore(full, incremental) && ++mismatches <= 3) {
                 std::printf("  MISMATCH seed %llu step %d: incremental=%s full=%s\n",
-                            static_cast<unsigned long long>(seed), step,
-                            incremental.str().c_str(), full.str().c_str());
+                            static_cast<unsigned long long>(seed), step, incremental.str().c_str(),
+                            full.str().c_str());
             }
-            const std::vector<std::int64_t> expected = catalogOrder(ScoreCalculator::rawCosts(shadow));
+            const std::vector<std::int64_t> expected =
+                    catalogOrder(ScoreCalculator::rawCosts(shadow));
             const std::vector<std::int64_t> running = catalogOrder(calculator.totals());
-            for (int c = 0; c < 7; ++c)
-            {
-                if (running[c] != expected[c] && ++costMismatches <= 3)
-                {
-                    std::printf("  RAW COST MISMATCH seed %llu step %d %s: incremental=%lld full=%lld\n",
-                                static_cast<unsigned long long>(seed), step, kCatalogNames[c],
-                                static_cast<long long>(running[c]), static_cast<long long>(expected[c]));
+            for (int c = 0; c < 7; ++c) {
+                if (running[c] != expected[c] && ++costMismatches <= 3) {
+                    std::printf(
+                            "  RAW COST MISMATCH seed %llu step %d %s: incremental=%lld "
+                            "full=%lld\n",
+                            static_cast<unsigned long long>(seed), step, kCatalogNames[c],
+                            static_cast<long long>(running[c]),
+                            static_cast<long long>(expected[c]));
                 }
-                if (expected[c] != 0)
-                    ++nonZero[c];
+                if (expected[c] != 0) ++nonZero[c];
             }
         }
     }
-    check(mismatches == 0, std::to_string(steps) + " random moves, incremental score == full recompute");
+    check(mismatches == 0,
+          std::to_string(steps) + " random moves, incremental score == full recompute");
     check(costMismatches == 0,
-          std::to_string(steps) + " random moves, every constraint's incremental raw total == full recompute");
-    for (int c = 0; c < 7; ++c)
-    {
-        check(nonZero[c] > 0, std::string(kCatalogNames[c]) + " is non-zero on " + std::to_string(nonZero[c])
-                                  + " of the walk's states");
+          std::to_string(steps) +
+                  " random moves, every constraint's incremental raw total == full recompute");
+    for (int c = 0; c < 7; ++c) {
+        check(nonZero[c] > 0, std::string(kCatalogNames[c]) + " is non-zero on " +
+                                      std::to_string(nonZero[c]) + " of the walk's states");
     }
     std::printf("\n");
 }
@@ -269,8 +263,7 @@ void verifyIncrementalWalk()
 // -------------------------------------------------------------------------
 // (3) The greedy construction.
 // -------------------------------------------------------------------------
-void verifyGreedy()
-{
+void verifyGreedy() {
     std::printf("== (3) Greedy construction ==\n");
     KnapsackProblem p = basicInstance();
     ScoreCalculator::prepare(p);
@@ -281,55 +274,49 @@ void verifyGreedy()
     // B fixed out: C (5), A would make 11.
     check(greedySelection(p, {-1, 0, -1}) == std::vector<int>{0, 0, 1}, "B fixed out -> {C}");
     // A complete decision is returned as given, even overweight.
-    check(greedySelection(p, {1, 1, 1}) == std::vector<int>{1, 1, 1}, "complete seed kept as given");
+    check(greedySelection(p, {1, 1, 1}) == std::vector<int>{1, 1, 1},
+          "complete seed kept as given");
 
     // Equal densities keep item order: X, Y, Z all density 2, room for two.
     KnapsackProblem ties;
     ties.capacity = 4;
     ties.items = {makeItem("X", 2, 4), makeItem("Y", 2, 4), makeItem("Z", 2, 4)};
     ScoreCalculator::prepare(ties);
-    check(greedySelection(ties, {-1, -1, -1}) == std::vector<int>{1, 1, 0}, "density ties keep item order");
+    check(greedySelection(ties, {-1, -1, -1}) == std::vector<int>{1, 1, 0},
+          "density ties keep item order");
     // A later, lighter item still fits after a heavier one is skipped.
     KnapsackProblem skip;
     skip.capacity = 5;
     skip.items = {makeItem("big", 4, 40), makeItem("huge", 3, 27), makeItem("small", 1, 1)};
     ScoreCalculator::prepare(skip);
-    check(greedySelection(skip, {-1, -1, -1}) == std::vector<int>{1, 0, 1}, "skips what does not fit, keeps going");
+    check(greedySelection(skip, {-1, -1, -1}) == std::vector<int>{1, 0, 1},
+          "skips what does not fit, keeps going");
 
     bool threw = false;
-    try
-    {
+    try {
         greedySelection(p, {-1, -1});
-    }
-    catch (const std::invalid_argument &)
-    {
+    } catch (const std::invalid_argument&) {
         threw = true;
     }
     check(threw, "a fixed list of the wrong length throws");
     threw = false;
-    try
-    {
+    try {
         greedySelection(p, {2, -1, -1});
-    }
-    catch (const std::invalid_argument &)
-    {
+    } catch (const std::invalid_argument&) {
         threw = true;
     }
     check(threw, "a fixed value outside {-1, 0, 1} throws");
     std::printf("\n");
 }
 
-Score bruteForceOptimum(KnapsackProblem problem)
-{
+Score bruteForceOptimum(KnapsackProblem problem) {
     const int n = problem.itemCount();
     Score best{std::numeric_limits<std::int64_t>::min(), -std::numeric_limits<double>::infinity()};
-    for (std::uint32_t mask = 0; mask < (1u << n); ++mask)
-    {
+    for (std::uint32_t mask = 0; mask < (1u << n); ++mask) {
         for (int i = 0; i < n; ++i)
             problem.items[i].selected = (mask >> i) & 1u ? kSelected : kNotSelected;
         const Score score = ScoreCalculator::score(problem);
-        if (score > best)
-            best = score;
+        if (score > best) best = score;
     }
     return best;
 }
@@ -337,8 +324,7 @@ Score bruteForceOptimum(KnapsackProblem problem)
 // -------------------------------------------------------------------------
 // (4) The solver.
 // -------------------------------------------------------------------------
-void verifySolver()
-{
+void verifySolver() {
     std::printf("== (4) Solver ==\n");
     {
         // ScoreChecks::Full re-checks every incremental score against a reset.
@@ -350,12 +336,9 @@ void verifySolver()
         config.score_checks = optimaru::ScoreChecks::Full;
         config.ruinRecreateUnimprovedStepTrigger = 200;  // exercise the -1 ruins too
         bool ok = true;
-        try
-        {
+        try {
             Solver(config).solve(p);
-        }
-        catch (const std::exception &error)
-        {
+        } catch (const std::exception& error) {
             std::printf("  %s\n", error.what());
             ok = false;
         }
@@ -368,8 +351,7 @@ void verifySolver()
         // reaches the brute-force optimum.
         int reached = 0;
         const int instances = 8;
-        for (std::uint64_t seed = 11; seed < 11 + instances; ++seed)
-        {
+        for (std::uint64_t seed = 11; seed < 11 + instances; ++seed) {
             KnapsackProblem p = randomInstance(8 + static_cast<int>(seed % 6), seed, 0.0, false);
             const Score optimum = bruteForceOptimum(p);
             Solver::Config config;
@@ -383,7 +365,8 @@ void verifySolver()
                 std::printf("  seed %llu: %s, optimum %s\n", static_cast<unsigned long long>(seed),
                             p.score.str().c_str(), optimum.str().c_str());
         }
-        check(reached == instances, "random 0/1 knapsacks with <= 13 items reach the brute-force optimum");
+        check(reached == instances,
+              "random 0/1 knapsacks with <= 13 items reach the brute-force optimum");
     }
     {
         // Instances with every fact (mandatory / forbidden items, groups,
@@ -396,8 +379,7 @@ void verifySolver()
         int reached = 0;
         bool bounded = true;
         const int instances = 40;
-        for (std::uint64_t seed = 21; seed < 21 + instances; ++seed)
-        {
+        for (std::uint64_t seed = 21; seed < 21 + instances; ++seed) {
             KnapsackProblem p = randomInstance(8 + static_cast<int>(seed % 6), seed);
             const Score optimum = bruteForceOptimum(p);
             KnapsackProblem start = p;
@@ -434,14 +416,16 @@ void verifySolver()
         // Without the seed, the zero budget returns the greedy construction.
         select(p, {0, 1, 2});
         Solver(config).solve(p);
-        check(p.assignment() == std::vector<int>{0, 1, 1}, "zero budget without a seed: the greedy {B, C}");
+        check(p.assignment() == std::vector<int>{0, 1, 1},
+              "zero budget without a seed: the greedy {B, C}");
         // A seed with undecided items: the greedy fills them around its load.
         p.items[0].selected = kSelected;
         p.items[1].selected = kUndecided;
         p.items[2].selected = kUndecided;
         p.warmStart = true;
         Solver(config).solve(p);
-        check(p.assignment() == std::vector<int>{1, 1, 0}, "partial seed: A kept, B filled in, C does not fit");
+        check(p.assignment() == std::vector<int>{1, 1, 0},
+              "partial seed: A kept, B filled in, C does not fit");
     }
     {
         KnapsackProblem a = randomInstance(60, 5);
@@ -462,7 +446,7 @@ void verifySolver()
         config.parallelSolverCount = 4;
         config.seed = 1;
         std::int64_t calls = 0;
-        config.on_new_best = [&calls](std::int64_t, const Score &) { ++calls; };
+        config.on_new_best = [&calls](std::int64_t, const Score&) { ++calls; };
         Solver(config).solve(p);
         KnapsackProblem rescored = p;
         check(sameScore(p.score, ScoreCalculator::score(rescored)) && calls > 0,
@@ -476,14 +460,10 @@ void verifySolver()
     }
     {
         int thrown = 0;
-        auto expectInvalid = [&thrown](KnapsackProblem p)
-        {
-            try
-            {
+        auto expectInvalid = [&thrown](KnapsackProblem p) {
+            try {
                 ScoreCalculator::prepare(p);
-            }
-            catch (const std::invalid_argument &)
-            {
+            } catch (const std::invalid_argument&) {
                 ++thrown;
             }
         };
@@ -525,14 +505,12 @@ void verifySolver()
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyHandCalculated();
     verifyIncrementalWalk();
     verifyGreedy();
     verifySolver();
-    if (failures)
-    {
+    if (failures) {
         std::printf("%d check(s) FAILED\n", failures);
         return 1;
     }

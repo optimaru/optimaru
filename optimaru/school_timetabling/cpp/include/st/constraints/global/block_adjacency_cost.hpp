@@ -3,8 +3,7 @@
 
 #include "st/constraints/global/global_constraint.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // blockAdjacencyCost — hard, weight 1. Raw cost = sum over the block groups
 // (a course's block_periods consecutive periods) of: with k assigned
@@ -16,65 +15,48 @@ namespace st::canon
 // group is recomputed per touch, from this component's own slot map (the
 // solution's variable already holds the NEW value while the old unit's leave
 // is delivered).
-struct BlockAdjacencyCost final : MemberChangeGlobalConstraint
-{
+struct BlockAdjacencyCost final : MemberChangeGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit BlockAdjacencyCost(double weight = kDefaultWeight)
-        : MemberChangeGlobalConstraint(
-              "blockAdjacencyCost", weight, kDefaultLevel)
-    {
-    }
-    void reset(const Timetable &table,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+        : MemberChangeGlobalConstraint("blockAdjacencyCost", weight, kDefaultLevel) {}
+    void reset(const Timetable& table,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         detail::requirePrepared(table);
         slotOf_.assign(table.lessons.size(), -1);
         groupOf_.resize(table.lessons.size());
         for (std::size_t i = 0; i < table.lessons.size(); ++i)
             groupOf_[i] = table.lessons[i].blockGroup;
-        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
-        {
-            for (int entity : members_per_unit[unit])
-                slotOf_[entity] = static_cast<int>(unit);
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit) {
+            for (int entity : members_per_unit[unit]) slotOf_[entity] = static_cast<int>(unit);
         }
         violation_.assign(table.blockGroupCount, 0);
         total_ = 0;
-        for (int group = 0; group < table.blockGroupCount; ++group)
-            refresh(table, group);
+        for (int group = 0; group < table.blockGroupCount; ++group) refresh(table, group);
     }
-    void on_member_changed(const Timetable &table,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int entity,
-                         bool joined) override
-    {
+    void on_member_changed(const Timetable& table, int unit, const std::vector<int>& /*members*/,
+                           int entity, bool joined) override {
         slotOf_[entity] = joined ? unit : -1;
         const int group = groupOf_[entity];
-        if (group >= 0)
-            refresh(table, group);
+        if (group >= 0) refresh(table, group);
     }
     double cost() const override { return static_cast<double>(total_); }
 
 private:
-    void refresh(const Timetable &table, int group)
-    {
+    void refresh(const Timetable& table, int group) {
         scratch_.clear();
-        for (int i : table.blockMembers[group])
-        {
+        for (int i : table.blockMembers[group]) {
             const int slot = slotOf_[i];
-            if (slot >= 0)
-            {
-                scratch_.emplace_back(table.dayOfSlot[slot],
-                                      table.periodOfSlot[slot]);
+            if (slot >= 0) {
+                scratch_.emplace_back(table.dayOfSlot[slot], table.periodOfSlot[slot]);
             }
         }
         // The missing-member charge lives in the shared helper, so this path,
         // the monolithic incremental calculator and computeBreakdown cannot
         // drift apart — canonical_plugin_test (a)/(b) gate exactly that.
-        const std::int64_t violation = ScoreCalculator::blockViolation(
-            scratch_, table.blockMembers[group].size());
+        const std::int64_t violation =
+                ScoreCalculator::blockViolation(scratch_, table.blockMembers[group].size());
         total_ += violation - violation_[group];
         violation_[group] = violation;
     }

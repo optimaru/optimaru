@@ -3,8 +3,7 @@
 
 #include "ts/constraints/common.hpp"
 
-namespace ts
-{
+namespace ts {
 
 // Medium, weight 1 (medium units): assignmentCountImbalanceCost — how unevenly
 // the assignments are spread over the teams. Raw cost (global) = the
@@ -21,47 +20,33 @@ namespace ts
 // them. Its three aggregates (sum, sum of squares, loaded-team count) update
 // in O(1) per join/leave and are exactly reversible, so it rides the
 // member-change fast path.
-struct AssignmentCountImbalanceCost final : MemberChangeGlobalConstraint
-{
+struct AssignmentCountImbalanceCost final : MemberChangeGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
 
     explicit AssignmentCountImbalanceCost(double weight = kDefaultWeight)
-        : MemberChangeGlobalConstraint("assignmentCountImbalanceCost",
-                                       weight,
-                                       kDefaultLevel)
-    {
-    }
-    void reset(const TournamentSchedule & /*schedule*/,
-               const std::vector<std::vector<int>> &members_per_unit) override
-    {
+        : MemberChangeGlobalConstraint("assignmentCountImbalanceCost", weight, kDefaultLevel) {}
+    void reset(const TournamentSchedule& /*schedule*/,
+               const std::vector<std::vector<int>>& members_per_unit) override {
         loads_.assign(members_per_unit.size(), 0);
         sum_ = 0;
         sumSquares_ = 0;
         loaded_ = 0;
-        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit)
-        {
-            const std::int64_t load
-                = static_cast<std::int64_t>(members_per_unit[unit].size());
+        for (std::size_t unit = 0; unit < members_per_unit.size(); ++unit) {
+            const std::int64_t load = static_cast<std::int64_t>(members_per_unit[unit].size());
             loads_[unit] = load;
-            if (load == 0)
-                continue;
+            if (load == 0) continue;
             sum_ += load;
             sumSquares_ += load * load;
             ++loaded_;
         }
     }
-    void on_member_changed(const TournamentSchedule & /*schedule*/,
-                         int unit,
-                         const std::vector<int> & /*members*/,
-                         int /*entity*/,
-                         bool joined) override
-    {
-        std::int64_t &load = loads_[unit];
-        if (joined)
-        {
-            if (load == 0)
-                ++loaded_;
+    void on_member_changed(const TournamentSchedule& /*schedule*/, int unit,
+                           const std::vector<int>& /*members*/, int /*entity*/,
+                           bool joined) override {
+        std::int64_t& load = loads_[unit];
+        if (joined) {
+            if (load == 0) ++loaded_;
             sum_ += 1;
             sumSquares_ += 2 * load + 1;
             ++load;
@@ -70,13 +55,10 @@ struct AssignmentCountImbalanceCost final : MemberChangeGlobalConstraint
         sum_ -= 1;
         sumSquares_ += (load - 1) * (load - 1) - load * load;
         --load;
-        if (load == 0)
-            --loaded_;
+        if (load == 0) --loaded_;
     }
-    double cost() const override
-    {
-        return ScoreCalculator::unfairnessFromAggregates(
-            sum_, sumSquares_, loaded_);
+    double cost() const override {
+        return ScoreCalculator::unfairnessFromAggregates(sum_, sumSquares_, loaded_);
     }
 
 private:

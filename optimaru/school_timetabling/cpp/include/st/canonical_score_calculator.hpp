@@ -8,8 +8,7 @@
 
 #include "st/canonical_domain.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 struct ObjectiveWeights;  // st/objective_weights.hpp
 
@@ -22,16 +21,15 @@ struct ObjectiveWeights;  // st/objective_weights.hpp
 // hard member times its component's kDefaultWeight); softPenalty(weights)
 // the weighted soft penalty (soft score = -softPenalty). Both are defined in
 // canonical_score_calculator.cpp, next to the component constants.
-struct Breakdown
-{
+struct Breakdown {
     // Hard.
-    std::int64_t unassignedLessonsCost = 0;  // lessons with slot == -1
-    std::int64_t classConflictCost = 0;      // C(n,2) per (class, slot)
-    std::int64_t teacherConflictCost = 0;    // C(n,2) per (teacher, slot)
-    std::int64_t disallowedSlotCost = 0;     // lessons outside allowedSlot
-    std::int64_t roomCapacityCost = 0;       // demand excess per (type, slot)
+    std::int64_t unassignedLessonsCost = 0;       // lessons with slot == -1
+    std::int64_t classConflictCost = 0;           // C(n,2) per (class, slot)
+    std::int64_t teacherConflictCost = 0;         // C(n,2) per (teacher, slot)
+    std::int64_t disallowedSlotCost = 0;          // lessons outside allowedSlot
+    std::int64_t roomCapacityCost = 0;            // demand excess per (type, slot)
     std::int64_t courseMaxPeriodsPerDayCost = 0;  // excess per (course, day)
-    std::int64_t blockAdjacencyCost = 0;  // missing adjacencies per group
+    std::int64_t blockAdjacencyCost = 0;          // missing adjacencies per group
     // Daily (over maxPerDay) plus weekly (over maxPerWeek) excess.
     std::int64_t teacherMaxPeriodsCost = 0;
     std::int64_t teacherMaxConsecutivePeriodsCost = 0;  // run excess
@@ -49,8 +47,8 @@ struct Breakdown
     std::int64_t nonPreferredPeriodCost = 0;
 
     std::int64_t hardTotal() const;
-    double softPenalty(const ObjectiveWeights &weights) const;
-    Score toScore(const ObjectiveWeights &weights) const;
+    double softPenalty(const ObjectiveWeights& weights) const;
+    Score toScore(const ObjectiveWeights& weights) const;
 };
 
 // Full-recompute scoring for the canonical domain — the reference the
@@ -97,25 +95,23 @@ struct Breakdown
 //                               in the avoided mask
 //   nonPreferredPeriodCost      per assigned preference unit off a non-empty
 //                               preferred mask
-class ScoreCalculator
-{
+class ScoreCalculator {
 public:
     // Full recompute of the score (also stored in table.score): hard at the
     // components' kDefaultWeight, soft at `weights` (default: the soft
     // components' kDefaultWeight). The model carries no weights.
-    static Score score(Timetable &table);
-    static Score score(Timetable &table,
-                                const ObjectiveWeights &weights);
+    static Score score(Timetable& table);
+    static Score score(Timetable& table, const ObjectiveWeights& weights);
 
     // Full per-constraint recompute (used by tests and score).
-    static Breakdown computeBreakdown(Timetable &table);
+    static Breakdown computeBreakdown(Timetable& table);
 
     // Normalizes the instance in place: derives teacher/class/course/roomType
     // counts, sizes every per-id vector with the CP-SAT defaults, builds the
     // block-group member lists and the (day, period) -> slot table. Idempotent
     // (guarded by Timetable::prepared). Throws std::invalid_argument on
     // malformed input. Must run before scoring; score/solve call it.
-    static void prepare(Timetable &table);
+    static void prepare(Timetable& table);
 
     // --- shared building blocks (also used by the incremental calculator) ---
 
@@ -126,10 +122,8 @@ public:
 
     // teacherGapCost / classGapCost of one day's busy-period mask:
     // last - first + 1 - count (0 for an empty mask).
-    static int gapOf(unsigned mask)
-    {
-        if (mask == 0)
-            return 0;
+    static int gapOf(unsigned mask) {
+        if (mask == 0) return 0;
         const int hi = 31 - st::bits::clz(mask);
         const int lo = st::bits::ctz(mask);
         return hi - lo + 1 - st::bits::popcount(mask);
@@ -137,15 +131,12 @@ public:
 
     // teacherMaxConsecutivePeriodsCost of one day's busy-period mask: sum
     // over maximal 1-runs of max(0, runLength - limit).
-    static std::int64_t runExcessOf(unsigned mask, int limit)
-    {
+    static std::int64_t runExcessOf(unsigned mask, int limit) {
         std::int64_t excess = 0;
-        while (mask != 0)
-        {
+        while (mask != 0) {
             mask >>= st::bits::ctz(mask);          // skip to the next run
             const int run = st::bits::ctz(~mask);  // its length
-            if (run > limit)
-                excess += run - limit;
+            if (run > limit) excess += run - limit;
             mask >>= run;
         }
         return excess;
@@ -165,9 +156,8 @@ public:
     // A group with NOTHING assigned stays at 0 on purpose — that is the one
     // shape partial solving may leave behind, and unassignedLessonsCost
     // charges for it there.
-    static std::int64_t
-    blockViolation(std::vector<std::pair<int, int>> &dayPeriods,
-                   std::size_t groupSize);
+    static std::int64_t blockViolation(std::vector<std::pair<int, int>>& dayPeriods,
+                                       std::size_t groupSize);
 };
 
 }  // namespace st::canon

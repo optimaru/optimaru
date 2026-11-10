@@ -20,8 +20,7 @@
 #include "fp/constraints/squared_makespan_cost.hpp"
 #include "fp/constraints/unassigned_jobs_cost.hpp"
 
-namespace fp
-{
+namespace fp {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -56,8 +55,7 @@ namespace fp
 //
 // `addDefaultConstraints(calc)` is the same set poured straight into a
 // calculator, for callers that change nothing.
-inline ConstraintAssembly defaultConstraints()
-{
+inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<MaxEndTimeCost>();
     assembly.emplace<OperatorCleaningConflictCost>();
@@ -67,8 +65,7 @@ inline ConstraintAssembly defaultConstraints()
     return assembly;
 }
 
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

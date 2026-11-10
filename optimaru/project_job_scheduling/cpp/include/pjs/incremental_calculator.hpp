@@ -8,8 +8,7 @@
 #include "pjs/domain.hpp"
 #include "optimaru/score/objective.hpp"
 
-namespace pjs
-{
+namespace pjs {
 
 // The project-job-scheduling implementation of the engine's
 // optimaru::Objective.
@@ -39,16 +38,15 @@ namespace pjs
 // reference is ScoreCalculator::score (checked in the tests and under
 // ScoreChecks::ScoreChecks::Full).
 class ProjectJobSchedulingIncrementalScoreCalculator final
-    : public optimaru::Objective<ProjectJobSchedule>
-{
+    : public optimaru::Objective<ProjectJobSchedule> {
 public:
-    void rebuild(ProjectJobSchedule &solution) override;
+    void rebuild(ProjectJobSchedule& solution) override;
     void before_assign(int allocationIndex) override;
     void after_assign(int allocationIndex) override;
     optimaru::Score score() override;
 
 private:
-    ProjectJobSchedule *schedule_ = nullptr;
+    ProjectJobSchedule* schedule_ = nullptr;
 
     // Recorded state per allocation (as of the last processed hook).
     std::vector<int> assign_;   // assigned value (-1 unassigned)
@@ -83,11 +81,7 @@ private:
     // Adds (sign=+1) or retracts (sign=-1) the renewable usage of mode
     // `modeIndex` of `allocationIndex` over the days [startDate, endDate),
     // maintaining hardRenewable_. No-op for modeIndex < 0.
-    void applyRenewable(int allocationIndex,
-                        int modeIndex,
-                        int startDate,
-                        int endDate,
-                        int sign);
+    void applyRenewable(int allocationIndex, int modeIndex, int startDate, int endDate, int sign);
     // Same for the non-renewable (date-independent) usage.
     void applyNonRenewable(int allocationIndex, int modeIndex, int sign);
     // Rewrites the recorded dates of an allocation, maintaining the sink

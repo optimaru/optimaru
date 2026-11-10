@@ -49,8 +49,7 @@
 #include "st/constraints/teacher/teacher_max_periods_cost.hpp"
 #include "st/constraints/teacher/teacher_workday_cost.hpp"
 
-namespace st::canon
-{
+namespace st::canon {
 
 // ---------------------------------------------------------------------------
 // Standard assembly
@@ -76,11 +75,9 @@ namespace st::canon
 // will join (sharedTeacherMaskHub) when adding to a calculator that already
 // holds family members; the hub must only ever be shared by constraints of
 // one calculator.
-namespace detail
-{
+namespace detail {
 
-struct DefaultSet
-{
+struct DefaultSet {
     ConstraintAssembly assembly;
     std::vector<std::string> order;  // registry names, in emplace order
 };
@@ -90,13 +87,10 @@ struct DefaultSet
 // the six soft terms), then the two structural constraints — which
 // ConstraintAssembly itself does not keep (it reports its unit constraints
 // before its global ones), so the order is recorded alongside.
-inline DefaultSet buildDefaultSet(std::shared_ptr<TeacherMaskHub> maskHub)
-{
-    if (maskHub == nullptr)
-        maskHub = std::make_shared<TeacherMaskHub>();
+inline DefaultSet buildDefaultSet(std::shared_ptr<TeacherMaskHub> maskHub) {
+    if (maskHub == nullptr) maskHub = std::make_shared<TeacherMaskHub>();
     DefaultSet set;
-    auto add = [&set](auto component)
-    {
+    auto add = [&set](auto component) {
         set.order.push_back(component->name);
         set.assembly.add(std::move(component));
     };
@@ -107,16 +101,12 @@ inline DefaultSet buildDefaultSet(std::shared_ptr<TeacherMaskHub> maskHub)
     add(std::make_unique<RoomCapacityCost>());
     add(std::make_unique<CourseMaxPeriodsPerDayCost>());
     add(std::make_unique<BlockAdjacencyCost>());
-    add(std::make_unique<TeacherMaxPeriodsCost>(
-        TeacherMaxPeriodsCost::kDefaultWeight, maskHub));
+    add(std::make_unique<TeacherMaxPeriodsCost>(TeacherMaxPeriodsCost::kDefaultWeight, maskHub));
     add(std::make_unique<TeacherMaxConsecutivePeriodsCost>(
-        TeacherMaxConsecutivePeriodsCost::kDefaultWeight, maskHub));
-    add(std::make_unique<TeacherGapCost>(TeacherGapCost::kDefaultWeight,
-                                         maskHub));
-    add(std::make_unique<TeacherWorkdayCost>(TeacherWorkdayCost::kDefaultWeight,
-                                             maskHub));
-    add(std::make_unique<TeacherFreeDayCost>(TeacherFreeDayCost::kDefaultWeight,
-                                             maskHub));
+            TeacherMaxConsecutivePeriodsCost::kDefaultWeight, maskHub));
+    add(std::make_unique<TeacherGapCost>(TeacherGapCost::kDefaultWeight, maskHub));
+    add(std::make_unique<TeacherWorkdayCost>(TeacherWorkdayCost::kDefaultWeight, maskHub));
+    add(std::make_unique<TeacherFreeDayCost>(TeacherFreeDayCost::kDefaultWeight, maskHub));
     add(std::make_unique<ClassGapCost>());
     add(std::make_unique<AvoidedPeriodCost>());
     add(std::make_unique<NonPreferredPeriodCost>());
@@ -127,23 +117,17 @@ inline DefaultSet buildDefaultSet(std::shared_ptr<TeacherMaskHub> maskHub)
 
 }  // namespace detail
 
-inline ConstraintAssembly
-defaultConstraints(std::shared_ptr<TeacherMaskHub> maskHub = nullptr)
-{
+inline ConstraintAssembly defaultConstraints(std::shared_ptr<TeacherMaskHub> maskHub = nullptr) {
     return std::move(detail::buildDefaultSet(std::move(maskHub)).assembly);
 }
 
 // The default set's registry names in catalog order: what list_constraints()
 // and constraint_info() follow (canonical_plugin_test checks it names
 // exactly defaultConstraints()).
-inline std::vector<std::string> constraintOrder()
-{
-    return detail::buildDefaultSet(nullptr).order;
-}
+inline std::vector<std::string> constraintOrder() { return detail::buildDefaultSet(nullptr).order; }
 
 // Pours the default set straight into a calculator.
-inline void addDefaultConstraints(DecomposedCalculator &calculator)
-{
+inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 

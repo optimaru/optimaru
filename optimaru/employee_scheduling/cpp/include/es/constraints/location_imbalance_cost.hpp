@@ -25,8 +25,11 @@ struct LocationImbalanceCost final : EsGlobalConstraint {
                                    std::string workerSkill = {}, std::string metric = "ssd",
                                    int tolerance = 0, std::vector<int> offTargetDays = {})
         : EsGlobalConstraint("locationImbalanceCost", weight, kDefaultLevel),
-          loc_(std::move(location)), skill_(std::move(workerSkill)), metric_(std::move(metric)),
-          tolerance_(tolerance), target_(std::move(offTargetDays)) {
+          loc_(std::move(location)),
+          skill_(std::move(workerSkill)),
+          metric_(std::move(metric)),
+          tolerance_(tolerance),
+          target_(std::move(offTargetDays)) {
         label = "Balance[" +
                 (!target_.empty() ? std::string("off-target")
                                   : (loc_.empty() ? std::string("work") : loc_)) +
@@ -48,7 +51,10 @@ struct LocationImbalanceCost final : EsGlobalConstraint {
         nTarget_ = 0;
         if (useOff_)
             for (int d : target_)
-                if (d >= 0 && d < horizon_ && !isTarget_[d]) { isTarget_[d] = 1; ++nTarget_; }
+                if (d >= 0 && d < horizon_ && !isTarget_[d]) {
+                    isTarget_[d] = 1;
+                    ++nTarget_;
+                }
         applies_.assign(members_per_unit.size(), skill_.empty() ? 1 : 0);
         if (!skill_.empty())
             for (std::size_t e = 0; e < s.employees.size(); ++e)
@@ -76,7 +82,7 @@ struct LocationImbalanceCost final : EsGlobalConstraint {
         tightenHistogram();
     }
     void on_unit_changed(const EmployeeSchedule&, int unit,
-                       const std::vector<int>& members) override {
+                         const std::vector<int>& members) override {
         if (!applies_[unit]) return;
         updateCount(unit, computeCount(members));
     }
@@ -114,7 +120,10 @@ private:
         if (useOff_) {
             long worked = 0;
             for (int i : members)
-                if (isTarget_[day_[i]] && !seen_[day_[i]]) { seen_[day_[i]] = 1; ++worked; }
+                if (isTarget_[day_[i]] && !seen_[day_[i]]) {
+                    seen_[day_[i]] = 1;
+                    ++worked;
+                }
             for (int i : members) seen_[day_[i]] = 0;
             return nTarget_ - worked;  // off days among the target set
         }

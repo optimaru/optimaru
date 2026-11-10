@@ -15,7 +15,13 @@ def demo_problem() -> dict:
         {"id": "KOR", "name": "Korean", "required_room_type": None, "preferred_periods": [], "avoided_periods": []},
         {"id": "MATH", "name": "Math", "required_room_type": None, "preferred_periods": [1, 2], "avoided_periods": []},
         {"id": "ENG", "name": "English", "required_room_type": None, "preferred_periods": [], "avoided_periods": []},
-        {"id": "SCI", "name": "Science", "required_room_type": "science lab", "preferred_periods": [], "avoided_periods": []},
+        {
+            "id": "SCI",
+            "name": "Science",
+            "required_room_type": "science lab",
+            "preferred_periods": [],
+            "avoided_periods": [],
+        },
         {"id": "PE", "name": "PE", "required_room_type": "gym", "preferred_periods": [], "avoided_periods": [1]},
         {"id": "MUS", "name": "Music", "required_room_type": None, "preferred_periods": [], "avoided_periods": []},
     ]

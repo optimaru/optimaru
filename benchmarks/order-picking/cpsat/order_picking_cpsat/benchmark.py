@@ -33,15 +33,22 @@ _REQUESTS: dict[int, Any] = {}
 
 def _build(order_count: int, trolley_count: int, seed: int) -> Any:
     from optimaru.order_picking.models import (
-        LocationModel, OrderModel, OrderPickingRequest, ProductModel, TrolleyModel, to_solution,
+        LocationModel,
+        OrderModel,
+        OrderPickingRequest,
+        ProductModel,
+        TrolleyModel,
+        to_solution,
     )
 
     rng = random.Random(seed)
 
     def location() -> LocationModel:
         return LocationModel(
-            column=rng.choice("ABCDE"), shelving_row=rng.randint(1, 3),
-            side=rng.choice(["LEFT", "RIGHT"]), row=rng.randint(0, 10),
+            column=rng.choice("ABCDE"),
+            shelving_row=rng.randint(1, 3),
+            side=rng.choice(["LEFT", "RIGHT"]),
+            row=rng.randint(0, 10),
         )
 
     origin = LocationModel(column="A", shelving_row=1, side="LEFT", row=0)

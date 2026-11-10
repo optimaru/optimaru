@@ -37,30 +37,20 @@
 
 using namespace fp;
 
-namespace
-{
+namespace {
 
 int failures = 0;
 
-void check(bool ok, const std::string &label)
-{
+void check(bool ok, const std::string& label) {
     std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", label.c_str());
-    if (!ok)
-        ++failures;
+    if (!ok) ++failures;
 }
 
-void checkScore(const std::string &label,
-                const Score &actual,
-                const Score &expected)
-{
+void checkScore(const std::string& label, const Score& actual, const Score& expected) {
     const bool ok = actual == expected;
-    std::printf("  [%s] %-46s got=%s expected=%s\n",
-                ok ? "PASS" : "FAIL",
-                label.c_str(),
-                actual.str().c_str(),
-                expected.str().c_str());
-    if (!ok)
-        ++failures;
+    std::printf("  [%s] %-46s got=%s expected=%s\n", ok ? "PASS" : "FAIL", label.c_str(),
+                actual.str().c_str(), expected.str().c_str());
+    if (!ok) ++failures;
 }
 
 // A time far in the future: maxEnd/idealEnd constraints never fire.
@@ -69,29 +59,23 @@ constexpr Minutes BIG = 1000000000LL;
 // The test products: 0 = A small, 1 = A large, 2 = B, with a fixed
 // cleaning-duration matrix plus 0-minute self entries (the demo generator also
 // emits self = 0) so same-product sequences work through the chain.
-void addTestProducts(PackagingSchedule &s)
-{
-    s.products = {
-        {"1", "Product A small"}, {"2", "Product A large"}, {"3", "Product B"}};
+void addTestProducts(PackagingSchedule& s) {
+    s.products = {{"1", "Product A small"}, {"2", "Product A large"}, {"3", "Product B"}};
     // cleanupMinutes[previous * 3 + current]
     s.cleanupMinutes = {
-        0,
-        0,
-        40,  // previous: A small
-        5,
-        0,
-        40,  // previous: A large
-        60,
-        60,
-        0,  // previous: B
+            0,  0,
+            40,  // previous: A small
+            5,  0,
+            40,  // previous: A large
+            60, 60,
+            0,  // previous: B
     };
 }
 
 constexpr int PA_S = 0;  // product index 1 ("Product A large") is unused by
 constexpr int PB = 2;    // the cases below but keeps the 3 x 3 test matrix
 
-struct JobSpec
-{
+struct JobSpec {
     int product;
     Minutes duration;
     Minutes idealEnd = BIG;
@@ -99,8 +83,7 @@ struct JobSpec
     bool pinned = false;
 };
 
-int addJob(PackagingSchedule &s, const JobSpec &spec)
-{
+int addJob(PackagingSchedule& s, const JobSpec& spec) {
     Job job;
     job.id = std::to_string(s.jobs.size());
     job.name = "job" + job.id;
@@ -114,22 +97,17 @@ int addJob(PackagingSchedule &s, const JobSpec &spec)
     return static_cast<int>(s.jobs.size()) - 1;
 }
 
-void addLine(PackagingSchedule &s,
-             int operator_index,
-             const std::vector<JobSpec> &specs)
-{
+void addLine(PackagingSchedule& s, int operator_index, const std::vector<JobSpec>& specs) {
     Line line;
     line.id = std::to_string(s.lines.size());
     line.name = "Line " + line.id;
     line.startDateTime = 0;
     line.operator_index = operator_index;
-    for (const JobSpec &spec : specs)
-        line.jobs.push_back(addJob(s, spec));
+    for (const JobSpec& spec : specs) line.jobs.push_back(addJob(s, spec));
     s.lines.push_back(std::move(line));
 }
 
-PackagingSchedule baseSchedule(int operatorCount)
-{
+PackagingSchedule baseSchedule(int operatorCount) {
     PackagingSchedule s;
     s.fromMinute = 0;
     s.toMinute = 14 * 24 * 60;
@@ -142,8 +120,7 @@ PackagingSchedule baseSchedule(int operatorCount)
 // -------------------------------------------------------------------------
 // (a) Hand-computed full scores through the derived job times.
 // -------------------------------------------------------------------------
-void verifyConstraints()
-{
+void verifyConstraints() {
     std::printf("== (a) Verifying each constraint (hand-computed) ==\n");
 
     {
@@ -152,8 +129,7 @@ void verifyConstraints()
         // against maxEnd 250; makespan 350^2.
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {{PA_S, 200, BIG, 200}, {PA_S, 150, BIG, 250}});
-        checkScore("maxEndTimeCost 100 minutes late",
-                   ScoreCalculator::score(s),
+        checkScore("maxEndTimeCost 100 minutes late", ScoreCalculator::score(s),
                    {-100, 0, -350 * 350});
     }
     {
@@ -162,16 +138,15 @@ void verifyConstraints()
         // runs 160..260.
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {{PB, 100}, {PA_S, 100}});
-        checkScore("cleanup chain (B -> A small = 60)",
-                   ScoreCalculator::score(s),
+        checkScore("cleanup chain (B -> A small = 60)", ScoreCalculator::score(s),
                    {0, 0, -260 * 260});
-        const Job &j1 = s.jobs[1];
-        check(j1.lineIndex == 0 && j1.startCleaningDateTime == 100
-                  && j1.startProductionDateTime == 160 && j1.endDateTime == 260,
+        const Job& j1 = s.jobs[1];
+        check(j1.lineIndex == 0 && j1.startCleaningDateTime == 100 &&
+                      j1.startProductionDateTime == 160 && j1.endDateTime == 260,
               "derived job times (startCleaning/startProduction/end)");
-        const Job &j0 = s.jobs[0];
-        check(j0.startCleaningDateTime == 0 && j0.startProductionDateTime == 0
-                  && j0.endDateTime == 100,
+        const Job& j0 = s.jobs[0];
+        check(j0.startCleaningDateTime == 0 && j0.startProductionDateTime == 0 &&
+                      j0.endDateTime == 100,
               "first job: zero-length cleaning window at line start");
     }
     {
@@ -184,8 +159,7 @@ void verifyConstraints()
         addLine(s, 0, {{PB, 10}, {PA_S, 100}});
         addLine(s, 0, {{PB, 30}, {PA_S, 100}});
         addLine(s, 1, {{PB, 5}, {PA_S, 100}});
-        checkScore("operatorCleaningConflictCost 40 overlap minutes",
-                   ScoreCalculator::score(s),
+        checkScore("operatorCleaningConflictCost 40 overlap minutes", ScoreCalculator::score(s),
                    {-40, 0, -(170 * 170 + 190 * 190 + 165 * 165)});
     }
     {
@@ -193,8 +167,7 @@ void verifyConstraints()
         // medium level (ends 200 and 350 against ideals 200 and 250).
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {{PA_S, 200, 200, BIG}, {PA_S, 150, 250, BIG}});
-        checkScore("afterIdealEndTimeCost 100 minutes late",
-                   ScoreCalculator::score(s),
+        checkScore("afterIdealEndTimeCost 100 minutes late", ScoreCalculator::score(s),
                    {0, -100, -350 * 350});
     }
     {
@@ -204,8 +177,7 @@ void verifyConstraints()
         addLine(s, 0, {{PA_S, 100}});
         addJob(s, {PA_S, 200});                           // loose
         s.unassignedJobs.push_back(addJob(s, {PB, 50}));  // pooled
-        checkScore("unassignedJobsCost 250 unassigned minutes",
-                   ScoreCalculator::score(s),
+        checkScore("unassignedJobsCost 250 unassigned minutes", ScoreCalculator::score(s),
                    {0, -250, -100 * 100});
     }
     {
@@ -216,17 +188,14 @@ void verifyConstraints()
         addLine(s, 0, {{PA_S, 100}});
         addLine(s, 1, {{PA_S, 200}, {PB, 1000}});
         addJob(s, {PA_S, 6000});
-        checkScore("squaredMakespanCost 100^2 + 1240^2",
-                   ScoreCalculator::score(s),
+        checkScore("squaredMakespanCost 100^2 + 1240^2", ScoreCalculator::score(s),
                    {0, -6000, -(100 * 100 + 1240 * 1240)});
     }
     {
         // An empty line contributes nothing (no makespan term).
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {});
-        checkScore("empty line scores 0",
-                   ScoreCalculator::score(s),
-                   {0, 0, 0});
+        checkScore("empty line scores 0", ScoreCalculator::score(s), {0, 0, 0});
     }
     std::printf("\n");
 }
@@ -235,8 +204,7 @@ void verifyConstraints()
 // Random mid-size instance: 4 lines over 2 shared operators, full random
 // cleanup matrix, one pinned line prefix + one pinned unassigned job.
 // -------------------------------------------------------------------------
-PackagingSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
-{
+PackagingSchedule buildRandomInstance(int jobCount, std::uint64_t seed) {
     std::mt19937_64 rng(seed);
     PackagingSchedule s;
     s.fromMinute = 0;
@@ -244,22 +212,18 @@ PackagingSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
 
     const int productCount = 4;
     for (int p = 0; p < productCount; ++p)
-        s.products.push_back(
-            {std::to_string(p), "Product " + std::to_string(p)});
+        s.products.push_back({std::to_string(p), "Product " + std::to_string(p)});
     s.cleanupMinutes.assign(productCount * productCount, 0);
-    for (int prev = 0; prev < productCount; ++prev)
-    {
-        for (int cur = 0; cur < productCount; ++cur)
-        {
-            s.cleanupMinutes[prev * productCount + cur]
-                = prev == cur ? 0 : static_cast<Minutes>(rng() % 80);
+    for (int prev = 0; prev < productCount; ++prev) {
+        for (int cur = 0; cur < productCount; ++cur) {
+            s.cleanupMinutes[prev * productCount + cur] =
+                    prev == cur ? 0 : static_cast<Minutes>(rng() % 80);
         }
     }
 
     s.operators.push_back({"Operator 1"});
     s.operators.push_back({"Operator 2"});
-    for (int l = 0; l < 4; ++l)
-    {
+    for (int l = 0; l < 4; ++l) {
         Line line;
         line.id = std::to_string(l);
         line.name = "Line " + line.id;
@@ -268,8 +232,7 @@ PackagingSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
         s.lines.push_back(std::move(line));
     }
 
-    for (int i = 0; i < jobCount; ++i)
-    {
+    for (int i = 0; i < jobCount; ++i) {
         Job job;
         job.id = std::to_string(i);
         job.name = "job" + job.id;
@@ -277,8 +240,7 @@ PackagingSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
         job.durationMinutes = 30 + static_cast<Minutes>(rng() % 270);
         job.minStartTime = 0;
         job.idealEndTime = static_cast<Minutes>(rng() % 4000);
-        job.maxEndTime
-            = job.idealEndTime + 500 + static_cast<Minutes>(rng() % 3000);
+        job.maxEndTime = job.idealEndTime + 500 + static_cast<Minutes>(rng() % 3000);
         s.jobs.push_back(std::move(job));
     }
     // Job 0: pinned as the prefix of line 0. Job 1: pinned unassigned
@@ -287,8 +249,7 @@ PackagingSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
     s.lines[0].jobs.push_back(0);
     s.jobs[1].pinned = true;
     // Spread the remaining jobs: lines round-robin, every 7th to the pool.
-    for (int i = 2; i < jobCount; ++i)
-    {
+    for (int i = 2; i < jobCount; ++i) {
         if (i % 7 == 0)
             s.unassignedJobs.push_back(i);
         else
@@ -302,8 +263,7 @@ PackagingSchedule buildRandomInstance(int jobCount, std::uint64_t seed)
 // through the Editor (the exact before/mutate/after protocol the
 // engine uses), against the independently coded full calculator.
 // -------------------------------------------------------------------------
-void verifyIncremental()
-{
+void verifyIncremental() {
     std::printf("== (b) Verifying incremental scoring == full recompute ==\n");
     PackagingSchedule s = buildRandomInstance(/*jobCount*/ 30, /*seed*/ 7);
     ScoreCalculator::prepare(s);
@@ -316,87 +276,61 @@ void verifyIncremental()
     const int list_count = Descriptor::list_count(s);
     int mismatches = 0;
     const int steps = 2000;
-    for (int step = 0; step < steps; ++step)
-    {
+    for (int step = 0; step < steps; ++step) {
         const int kind = static_cast<int>(rng() % 5);
-        if (kind < 3)
-        {
+        if (kind < 3) {
             // Relocate: remove a random element, insert at a random slot
             // (possibly the pool == unassign, exactly the engine's move).
             int from = static_cast<int>(rng() % list_count);
-            while (Descriptor::list_size(s, from) == 0)
-                from = static_cast<int>(rng() % list_count);
+            while (Descriptor::list_size(s, from) == 0) from = static_cast<int>(rng() % list_count);
             const int fromPos = static_cast<int>(
-                rng()
-                % static_cast<std::uint64_t>(Descriptor::list_size(s, from)));
+                    rng() % static_cast<std::uint64_t>(Descriptor::list_size(s, from)));
             const int element = editor.remove(from, fromPos);
             const int to = static_cast<int>(rng() % list_count);
             const int toPos = static_cast<int>(
-                rng()
-                % static_cast<std::uint64_t>(Descriptor::list_size(s, to) + 1));
+                    rng() % static_cast<std::uint64_t>(Descriptor::list_size(s, to) + 1));
             editor.insert(to, toPos, element);
-        }
-        else if (kind == 3)
-        {
+        } else if (kind == 3) {
             // Swap two elements across (possibly equal) lists.
             int l1 = static_cast<int>(rng() % list_count);
-            while (Descriptor::list_size(s, l1) == 0)
-                l1 = static_cast<int>(rng() % list_count);
+            while (Descriptor::list_size(s, l1) == 0) l1 = static_cast<int>(rng() % list_count);
             int l2 = static_cast<int>(rng() % list_count);
-            while (Descriptor::list_size(s, l2) == 0)
-                l2 = static_cast<int>(rng() % list_count);
+            while (Descriptor::list_size(s, l2) == 0) l2 = static_cast<int>(rng() % list_count);
             const int p1 = static_cast<int>(
-                rng()
-                % static_cast<std::uint64_t>(Descriptor::list_size(s, l1)));
+                    rng() % static_cast<std::uint64_t>(Descriptor::list_size(s, l1)));
             const int p2 = static_cast<int>(
-                rng()
-                % static_cast<std::uint64_t>(Descriptor::list_size(s, l2)));
-            if (l1 == l2 && p1 == p2)
-                continue;
+                    rng() % static_cast<std::uint64_t>(Descriptor::list_size(s, l2)));
+            if (l1 == l2 && p1 == p2) continue;
             const int e1 = Descriptor::element_at(s, l1, p1);
             const int e2 = Descriptor::element_at(s, l2, p2);
             editor.remove(l1, p1);
             editor.insert(l1, p1, e2);
             editor.remove(l2, p2);
             editor.insert(l2, p2, e1);
-        }
-        else
-        {
+        } else {
             // 2-opt: reverse a random segment.
             int l = static_cast<int>(rng() % list_count);
-            while (Descriptor::list_size(s, l) < 2)
-                l = static_cast<int>(rng() % list_count);
+            while (Descriptor::list_size(s, l) < 2) l = static_cast<int>(rng() % list_count);
             const int size = Descriptor::list_size(s, l);
-            int first
-                = static_cast<int>(rng() % static_cast<std::uint64_t>(size));
-            int last
-                = static_cast<int>(rng() % static_cast<std::uint64_t>(size));
-            if (first > last)
-                std::swap(first, last);
-            if (first == last)
-                continue;
+            int first = static_cast<int>(rng() % static_cast<std::uint64_t>(size));
+            int last = static_cast<int>(rng() % static_cast<std::uint64_t>(size));
+            if (first > last) std::swap(first, last);
+            if (first == last) continue;
             editor.reverse(l, first, last);
         }
 
         const optimaru::Score incremental = editor.score();
         PackagingSchedule shadow = s;  // full recompute on a copy
-        const optimaru::Score full
-            = toEngineScore(ScoreCalculator::score(shadow));
-        if (incremental.hard != full.hard
-            || std::fabs(incremental.soft - full.soft) > 1e-9)
-        {
-            if (++mismatches <= 3)
-            {
-                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n",
-                            step,
-                            incremental.str().c_str(),
-                            full.str().c_str());
+        const optimaru::Score full = toEngineScore(ScoreCalculator::score(shadow));
+        if (incremental.hard != full.hard || std::fabs(incremental.soft - full.soft) > 1e-9) {
+            if (++mismatches <= 3) {
+                std::printf("  MISMATCH @step %d: incremental=%s full=%s\n", step,
+                            incremental.str().c_str(), full.str().c_str());
             }
         }
     }
     check(mismatches == 0,
-          std::to_string(steps)
-              + " random list moves, incremental == full recompute");
+          std::to_string(steps) + " random list moves, incremental == full recompute");
 
     // The pinned prefix and the pinned pool job were untouchable throughout.
     check(!s.lines[0].jobs.empty() && s.lines[0].jobs[0] == 0,
@@ -411,8 +345,7 @@ void verifyIncremental()
 // against a full reset + recompute after every single move (including the
 // LNS ruin/recreate path) and throws ScoreMismatchError on divergence.
 // -------------------------------------------------------------------------
-void verifyFullAssertSolve()
-{
+void verifyFullAssertSolve() {
     std::printf("== (c) FULL_ASSERT solve ==\n");
     PackagingSchedule s = buildRandomInstance(/*jobCount*/ 14, /*seed*/ 11);
 
@@ -426,20 +359,16 @@ void verifyFullAssertSolve()
 
     bool corrupted = false;
     Score final{};
-    try
-    {
+    try {
         Solver solver(config);
         solver.solve(s);
         final = s.score;
-    }
-    catch (const optimaru::ScoreMismatchError &e)
-    {
+    } catch (const optimaru::ScoreMismatchError& e) {
         corrupted = true;
         std::printf("  ScoreCorruptionError: %s\n", e.what());
     }
     check(!corrupted, "2s FULL_ASSERT solve without score corruption");
-    if (!corrupted)
-    {
+    if (!corrupted) {
         const Score recomputed = ScoreCalculator::score(s);
         check(final == recomputed, "solver-reported score == full recompute");
     }
@@ -449,8 +378,7 @@ void verifyFullAssertSolve()
 // -------------------------------------------------------------------------
 // (d) Pinning + the unassigned pool through a real solve.
 // -------------------------------------------------------------------------
-void verifyPinnedSolve()
-{
+void verifyPinnedSolve() {
     std::printf("== (d) Pinned jobs and the unassigned pool ==\n");
     PackagingSchedule s = buildRandomInstance(/*jobCount*/ 20, /*seed*/ 21);
 
@@ -463,21 +391,17 @@ void verifyPinnedSolve()
     check(!s.lines[0].jobs.empty() && s.lines[0].jobs[0] == 0,
           "pinned job 0 kept position 0 of line 0");
     check(s.jobs[0].lineIndex == 0, "pinned job 0 derived lineIndex == 0");
-    check(s.jobs[1].lineIndex == -1
-              && std::find(s.unassignedJobs.begin(), s.unassignedJobs.end(), 1)
-                     != s.unassignedJobs.end(),
+    check(s.jobs[1].lineIndex == -1 && std::find(s.unassignedJobs.begin(), s.unassignedJobs.end(),
+                                                 1) != s.unassignedJobs.end(),
           "pinned job 1 stayed unassigned (in the pool)");
 
     // Every unpinned job ended up in exactly one list (lines or pool).
     std::vector<int> membership(s.jobs.size(), 0);
-    for (int l = 0; l < s.listCountWithPool(); ++l)
-    {
-        for (const int j : s.rawList(l))
-            ++membership[j];
+    for (int l = 0; l < s.listCountWithPool(); ++l) {
+        for (const int j : s.rawList(l)) ++membership[j];
     }
     bool eachOnce = true;
-    for (std::size_t j = 0; j < s.jobs.size(); ++j)
-        eachOnce = eachOnce && membership[j] == 1;
+    for (std::size_t j = 0; j < s.jobs.size(); ++j) eachOnce = eachOnce && membership[j] == 1;
     check(eachOnce, "every job in exactly one list after the solve");
 
     const Score recomputed = ScoreCalculator::score(s);
@@ -488,8 +412,7 @@ void verifyPinnedSolve()
 // -------------------------------------------------------------------------
 // (e) The Line.operator variable: seeding + hill-climbing reassignment.
 // -------------------------------------------------------------------------
-void verifyOperatorAssignment()
-{
+void verifyOperatorAssignment() {
     std::printf("== (e) Operator assignment (Line.operator stand-in) ==\n");
     {
         PackagingSchedule s = baseSchedule(5);
@@ -497,8 +420,8 @@ void verifyOperatorAssignment()
         addLine(s, -1, {});
         addLine(s, -1, {});
         assignMissingOperators(s);
-        check(s.lines[0].operator_index == 0 && s.lines[1].operator_index == 1
-                  && s.lines[2].operator_index == 2,
+        check(s.lines[0].operator_index == 0 && s.lines[1].operator_index == 1 &&
+                      s.lines[2].operator_index == 2,
               "seeding is injective while operators remain (0,1,2)");
     }
     {
@@ -511,14 +434,12 @@ void verifyOperatorAssignment()
         addLine(s, 0, {{PB, 12}, {PA_S, 100}});
         addLine(s, 1, {{PB, 300}, {PA_S, 100}});
         ScoreCalculator::prepare(s);
-        const std::int64_t conflictBefore
-            = ScoreCalculator::analyze(s).operatorCleaningConflictCost;
+        const std::int64_t conflictBefore =
+                ScoreCalculator::analyze(s).operatorCleaningConflictCost;
         check(conflictBefore == 58, "shared operator costs 58 before");
         const bool changed = improveOperatorAssignment(s);
-        const std::int64_t conflictAfter
-            = ScoreCalculator::analyze(s).operatorCleaningConflictCost;
-        check(changed && conflictAfter == 0,
-              "hill climb resolves the operator conflict to 0");
+        const std::int64_t conflictAfter = ScoreCalculator::analyze(s).operatorCleaningConflictCost;
+        check(changed && conflictAfter == 0, "hill climb resolves the operator conflict to 0");
     }
     std::printf("\n");
 }
@@ -526,12 +447,10 @@ void verifyOperatorAssignment()
 // -------------------------------------------------------------------------
 // (f) The demo instance: shape checks + a solve to 0hard.
 // -------------------------------------------------------------------------
-void verifyDemo()
-{
+void verifyDemo() {
     std::printf("== (f) demo instance (seed 37) ==\n");
     PackagingSchedule s = generateDemoData();
-    check(static_cast<int>(s.products.size()) == 60,
-          "60 products (10 ingredients x 6)");
+    check(static_cast<int>(s.products.size()) == 60, "60 products (10 ingredients x 6)");
     check(s.lineCount() == 5 && s.operators.size() == 5 && s.jobs.size() == 100,
           "5 lines, 5 operators, 100 jobs");
 
@@ -541,51 +460,43 @@ void verifyDemo()
     check(sortedByName, "jobs sorted by name");
 
     bool windowsOk = true;
-    for (const Job &job : s.jobs)
-    {
-        windowsOk = windowsOk && job.durationMinutes >= 120
-                    && job.durationMinutes < 300 && job.minStartTime >= 0
-                    && job.minStartTime % (24 * 60) == 0
-                    && job.idealEndTime % (24 * 60) == 16 * 60
-                    && job.maxEndTime >= job.idealEndTime + 24 * 60;
+    for (const Job& job : s.jobs) {
+        windowsOk = windowsOk && job.durationMinutes >= 120 && job.durationMinutes < 300 &&
+                    job.minStartTime >= 0 && job.minStartTime % (24 * 60) == 0 &&
+                    job.idealEndTime % (24 * 60) == 16 * 60 &&
+                    job.maxEndTime >= job.idealEndTime + 24 * 60;
     }
     check(windowsOk, "job durations and time windows match the generator");
 
     bool cleanupOk = true;
     const int productCount = static_cast<int>(s.products.size());
-    for (int prev = 0; prev < productCount; ++prev)
-    {
-        for (int cur = 0; cur < productCount; ++cur)
-        {
+    for (int prev = 0; prev < productCount; ++prev) {
+        for (int cur = 0; cur < productCount; ++cur) {
             const Minutes cleanup = s.cleanup(prev, cur);
             if (prev == cur)
                 cleanupOk = cleanupOk && cleanup == 0;
             else
-                cleanupOk
-                    = cleanupOk
-                      && (cleanup == 10 || (cleanup >= 30 && cleanup < 60));
+                cleanupOk = cleanupOk && (cleanup == 10 || (cleanup >= 30 && cleanup < 60));
         }
     }
     check(cleanupOk, "cleanup matrix: self 0, others 10 or [30, 60)");
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(15);
-    config.target_score = {0, -std::numeric_limits<double>::infinity()};  // stop at the first feasible
+    config.target_score = {0,
+                           -std::numeric_limits<double>::infinity()};  // stop at the first feasible
     config.seed = 1;
     Solver solver(config);
     solver.solve(s);
-    check(s.score.hard == 0,
-          "demo reaches 0hard (got " + s.score.str() + ")");
-    check(s.score == ScoreCalculator::score(s),
-          "reported score == full recompute");
+    check(s.score.hard == 0, "demo reaches 0hard (got " + s.score.str() + ")");
+    check(s.score == ScoreCalculator::score(s), "reported score == full recompute");
     std::printf("\n");
 }
 
 // -------------------------------------------------------------------------
 // (g) Score mapping roundtrip + validation errors.
 // -------------------------------------------------------------------------
-void verifyMappingAndValidation()
-{
+void verifyMappingAndValidation() {
     std::printf("== (g) Score mapping and input validation ==\n");
     {
         const Score samples[] = {{0, 0, 0},
@@ -594,31 +505,24 @@ void verifyMappingAndValidation()
                                  {-42, 0, -1},
                                  {0, -900000, -9999999999LL}};
         bool ok = true;
-        for (const Score &score : samples)
-        {
+        for (const Score& score : samples) {
             const Score back = fromEngineScore(toEngineScore(score));
             ok = ok && back == score;
         }
         check(ok, "hard/medium/soft <-> engine hard/soft roundtrip is exact");
         // The fold is 10^10, and the MediumFold packing is bit-for-bit the
         // int64 `medium * kMediumUnit + soft`.
-        bool packed = kMediumFold.kind == optimaru::MediumFold::Kind::IntoSoft
-                      && kMediumFold.unit == 1e10 && kMediumUnit == 10000000000LL
-                      && optimaru::MediumFoldOf<PackagingSchedule>::value.unit
-                             == kMediumFold.unit;
-        for (const Score &score : samples)
-        {
+        bool packed = kMediumFold.kind == optimaru::MediumFold::Kind::IntoSoft &&
+                      kMediumFold.unit == 1e10 && kMediumUnit == 10000000000LL &&
+                      optimaru::MediumFoldOf<PackagingSchedule>::value.unit == kMediumFold.unit;
+        for (const Score& score : samples) {
             const optimaru::Score engine = toEngineScore(score);
-            packed = packed && engine.hard == score.hard
-                     && engine.soft
-                            == static_cast<double>(score.medium * kMediumUnit
-                                                   + score.soft);
+            packed = packed && engine.hard == score.hard &&
+                     engine.soft == static_cast<double>(score.medium * kMediumUnit + score.soft);
         }
-        check(packed,
-              "medium fold = intoSoft(10^10), identical to the int64 packing");
-        check(toEngineScore({-1, 0, 0}) < toEngineScore({0, -900000, 0})
-                  && toEngineScore({0, -1, 0})
-                         < toEngineScore({0, 0, -9999999999LL}),
+        check(packed, "medium fold = intoSoft(10^10), identical to the int64 packing");
+        check(toEngineScore({-1, 0, 0}) < toEngineScore({0, -900000, 0}) &&
+                      toEngineScore({0, -1, 0}) < toEngineScore({0, 0, -9999999999LL}),
               "level dominance survives the mapping");
     }
     {
@@ -627,12 +531,9 @@ void verifyMappingAndValidation()
         s.cleanupMinutes[PB * 3 + PA_S] = kMissingCleanup;
         addLine(s, 0, {{PB, 100}, {PA_S, 100}});
         bool threw = false;
-        try
-        {
+        try {
             ScoreCalculator::score(s);
-        }
-        catch (const std::invalid_argument &)
-        {
+        } catch (const std::invalid_argument&) {
             threw = true;
         }
         check(threw, "missing cleanup entry throws on first use");
@@ -642,12 +543,9 @@ void verifyMappingAndValidation()
         PackagingSchedule s = baseSchedule(1);
         addLine(s, 0, {{PA_S, 100}, {PA_S, 100, BIG, BIG, true}});
         bool threw = false;
-        try
-        {
+        try {
             ScoreCalculator::prepare(s);
-        }
-        catch (const std::invalid_argument &)
-        {
+        } catch (const std::invalid_argument&) {
             threw = true;
         }
         check(threw, "pinned job after an unpinned one is rejected");
@@ -658,12 +556,9 @@ void verifyMappingAndValidation()
         addLine(s, 0, {{PA_S, 100}});
         s.unassignedJobs.push_back(0);
         bool threw = false;
-        try
-        {
+        try {
             ScoreCalculator::prepare(s);
-        }
-        catch (const std::invalid_argument &)
-        {
+        } catch (const std::invalid_argument&) {
             threw = true;
         }
         check(threw, "job in two lists is rejected");
@@ -673,8 +568,7 @@ void verifyMappingAndValidation()
 
 }  // namespace
 
-int main()
-{
+int main() {
     verifyConstraints();
     verifyIncremental();
     verifyFullAssertSolve();
@@ -683,8 +577,7 @@ int main()
     verifyDemo();
     verifyMappingAndValidation();
 
-    if (failures == 0)
-    {
+    if (failures == 0) {
         std::printf("All food-packaging checks PASSED.\n");
         return 0;
     }

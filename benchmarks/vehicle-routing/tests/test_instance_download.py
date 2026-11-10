@@ -20,9 +20,7 @@ def test_unknown_augerat_instance_lists_the_set(tmp_path) -> None:
 
 
 def test_checksum_mismatch_is_not_cached(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(
-        instance.urllib.request, "urlopen", lambda *a, **k: _Response(b"<html>busy</html>")
-    )
+    monkeypatch.setattr(instance.urllib.request, "urlopen", lambda *a, **k: _Response(b"<html>busy</html>"))
 
     with pytest.raises(ValueError, match="checksum mismatch"):
         instance.load_augerat_instance("A-n32-k5", tmp_path)
@@ -36,9 +34,7 @@ def test_bad_cached_copy_is_fetched_again(tmp_path, monkeypatch) -> None:
         "DEMAND_SECTION\n1 0\n2 1\nDEPOT_SECTION\n1\n-1\nEOF\n"
     ).encode()
     catalog_id, _ = instance.AUGERAT_A["A-n32-k5"]
-    monkeypatch.setitem(
-        instance.AUGERAT_A, "A-n32-k5", (catalog_id, hashlib.sha256(text).hexdigest())
-    )
+    monkeypatch.setitem(instance.AUGERAT_A, "A-n32-k5", (catalog_id, hashlib.sha256(text).hexdigest()))
     cached = tmp_path / "cvrplib-a" / "A-n32-k5.vrp"
     cached.parent.mkdir(parents=True)
     cached.write_bytes(b"stale error page")

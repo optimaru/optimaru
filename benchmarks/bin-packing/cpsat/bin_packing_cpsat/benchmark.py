@@ -62,8 +62,9 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
-    from optimaru.bin_packing.models import BinPackingProblemModel
     from external_solver.bin_packing import solve
+
+    from optimaru.bin_packing.models import BinPackingProblemModel
 
     solved = solve(
         BinPackingProblemModel.from_core(problem),

@@ -168,9 +168,7 @@ class _CatalogParser(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "a" and self._anchor_href is not None:
-            self._anchors.append(
-                (self._anchor_href, " ".join(self._anchor_text).strip())
-            )
+            self._anchors.append((self._anchor_href, " ".join(self._anchor_text).strip()))
             self._anchor_href = None
             self._anchor_text = []
         elif tag == "tr" and self._in_row:
@@ -179,11 +177,7 @@ class _CatalogParser(HTMLParser):
 
     def _finish_row(self) -> None:
         instance = next(
-            (
-                (href, text)
-                for href, text in self._anchors
-                if "/download/instance/" in href and text.startswith("X-n")
-            ),
+            ((href, text) for href, text in self._anchors if "/download/instance/" in href and text.startswith("X-n")),
             None,
         )
         bks = next(
@@ -216,9 +210,7 @@ class _CatalogParser(HTMLParser):
 def parse_x_catalog(text: str) -> tuple[CatalogEntry, ...]:
     parser = _CatalogParser()
     parser.feed(text)
-    entries = tuple(
-        sorted(parser.entries, key=lambda entry: (entry.customer_count, entry.name))
-    )
+    entries = tuple(sorted(parser.entries, key=lambda entry: (entry.customer_count, entry.name)))
     if not entries:
         raise ValueError("CVRPLIB catalog contains no Set X instances")
     if len({entry.name for entry in entries}) != len(entries):
@@ -249,18 +241,14 @@ def mirror_entry(name: str, solution_text: str | None = None) -> CatalogEntry:
         name=name,
         customer_count=int(name_match.group(1)) - 1,
         vehicle_count=int(name_match.group(2)),
-        best_known_distance=(
-            None if solution_text is None else parse_mirror_solution_cost(solution_text)
-        ),
+        best_known_distance=(None if solution_text is None else parse_mirror_solution_cost(solution_text)),
         # The mirror does not say which BKS are proven optimal.
         proven_optimal=False,
         instance_url=f"{MIRROR_BASE_URL}{name}.vrp",
     )
 
 
-def resolve_mirror_bks(
-    entry: CatalogEntry, cache_dir: Path, *, refresh: bool
-) -> CatalogEntry:
+def resolve_mirror_bks(entry: CatalogEntry, cache_dir: Path, *, refresh: bool) -> CatalogEntry:
     """Fill in the BKS of a mirror entry from its `.sol`, cached beside the `.vrp`.
 
     Only the instances a run selects pay this download. With `refresh` the
@@ -289,9 +277,7 @@ def resolve_mirror_bks(
         except (OSError, http.client.HTTPException) as exc:
             if not cached.exists():
                 raise
-            print(
-                f"mirror BKS refresh for {entry.name} failed ({exc}); using the cached copy"
-            )
+            print(f"mirror BKS refresh for {entry.name} failed ({exc}); using the cached copy")
     try:
         cost = parse_mirror_solution_cost(cached.read_text())
     except ValueError:
@@ -300,9 +286,7 @@ def resolve_mirror_bks(
         # parse is a real error.
         if downloaded:
             raise
-        print(
-            f"cached mirror solution for {entry.name} is unreadable; fetching it again"
-        )
+        print(f"cached mirror solution for {entry.name} is unreadable; fetching it again")
         fetch()
         cost = parse_mirror_solution_cost(cached.read_text())
     return replace(entry, best_known_distance=cost)
@@ -320,13 +304,9 @@ def _load_mirror_catalog(cache_dir: Path, *, refresh: bool) -> tuple[CatalogEntr
     )
 
 
-def load_x_catalog(
-    cache_dir: Path, *, refresh: bool = False, source: str = "auto"
-) -> tuple[CatalogEntry, ...]:
+def load_x_catalog(cache_dir: Path, *, refresh: bool = False, source: str = "auto") -> tuple[CatalogEntry, ...]:
     if source not in CATALOG_SOURCES:
-        raise ValueError(
-            f"unknown catalog source {source!r}; expected one of {CATALOG_SOURCES}"
-        )
+        raise ValueError(f"unknown catalog source {source!r}; expected one of {CATALOG_SOURCES}")
     cache_dir.mkdir(parents=True, exist_ok=True)
     if source == "mirror":
         return _load_mirror_catalog(cache_dir, refresh=refresh)
@@ -338,23 +318,17 @@ def load_x_catalog(
             if cached.exists():
                 # A refresh is best effort: the official catalog already on
                 # disk beats switching sources.
-                print(
-                    f"CVRPLIB catalog refresh failed ({exc}); using the cached catalog"
-                )
+                print(f"CVRPLIB catalog refresh failed ({exc}); using the cached catalog")
             elif source == "cvrplib":
                 raise
             else:
-                print(
-                    f"CVRPLIB catalog unreachable ({exc}); using the PyVRP/Instances mirror"
-                )
+                print(f"CVRPLIB catalog unreachable ({exc}); using the PyVRP/Instances mirror")
                 return _load_mirror_catalog(cache_dir, refresh=refresh)
     entries = parse_x_catalog(cached.read_text())
     if not entries and source == "auto":
         # A page that downloads but no longer parses (a redesign, a block
         # page) is as good as unreachable.
-        print(
-            "CVRPLIB catalog page parsed to nothing; using the PyVRP/Instances mirror"
-        )
+        print("CVRPLIB catalog page parsed to nothing; using the PyVRP/Instances mirror")
         return _load_mirror_catalog(cache_dir, refresh=refresh)
     return entries
 

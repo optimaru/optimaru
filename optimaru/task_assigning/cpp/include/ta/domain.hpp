@@ -12,8 +12,7 @@
 #include "optimaru/score/score.hpp"
 #include "optimaru/score/levels.hpp"
 
-namespace ta
-{
+namespace ta {
 
 // ---------------------------------------------------------------------------
 // Time
@@ -66,11 +65,9 @@ constexpr Minutes kNullTime = -1;  // startTime of an unassigned task
 // have soft0 == 0, so feasibility coincides with hard == 0.
 constexpr std::int64_t kMissingSkillUnit = 1000000000LL;
 constexpr std::int64_t kMakespanUnit = 10000000LL;
-constexpr optimaru::MediumFold kMediumFold
-    = optimaru::MediumFold::below_hard(kMissingSkillUnit);
+constexpr optimaru::MediumFold kMediumFold = optimaru::MediumFold::below_hard(kMissingSkillUnit);
 
-struct Score
-{
+struct Score {
     std::int64_t hard = 0;   // hard[0]: missing skills
     std::int64_t soft0 = 0;  // soft[0]: unassigned tasks (the medium level)
     std::int64_t soft1 = 0;  // soft[1]: sum of employee endTime^2
@@ -78,43 +75,32 @@ struct Score
 
     bool feasible() const { return hard >= 0; }
 
-    bool operator<(const Score &o) const
-    {
-        if (hard != o.hard)
-            return hard < o.hard;
-        if (soft0 != o.soft0)
-            return soft0 < o.soft0;
-        if (soft1 != o.soft1)
-            return soft1 < o.soft1;
+    bool operator<(const Score& o) const {
+        if (hard != o.hard) return hard < o.hard;
+        if (soft0 != o.soft0) return soft0 < o.soft0;
+        if (soft1 != o.soft1) return soft1 < o.soft1;
         return soft2 < o.soft2;
     }
-    bool operator>(const Score &o) const { return o < *this; }
-    bool operator<=(const Score &o) const { return !(o < *this); }
-    bool operator>=(const Score &o) const { return !(*this < o); }
-    bool operator==(const Score &o) const
-    {
-        return hard == o.hard && soft0 == o.soft0 && soft1 == o.soft1
-               && soft2 == o.soft2;
+    bool operator>(const Score& o) const { return o < *this; }
+    bool operator<=(const Score& o) const { return !(o < *this); }
+    bool operator>=(const Score& o) const { return !(*this < o); }
+    bool operator==(const Score& o) const {
+        return hard == o.hard && soft0 == o.soft0 && soft1 == o.soft1 && soft2 == o.soft2;
     }
 
     // Printed as: [0]hard/[0/-3725/-77]soft
-    std::string str() const
-    {
-        return "[" + std::to_string(hard) + "]hard/[" + std::to_string(soft0)
-               + "/" + std::to_string(soft1) + "/" + std::to_string(soft2)
-               + "]soft";
+    std::string str() const {
+        return "[" + std::to_string(hard) + "]hard/[" + std::to_string(soft0) + "/" +
+               std::to_string(soft1) + "/" + std::to_string(soft2) + "]soft";
     }
 };
 
 // hard -> hard, soft0 -> medium (below hard), soft1 * kMakespanUnit + soft2
 // -> soft, through the domain's medium fold.
-inline optimaru::Score toEngineScore(const Score &s)
-{
-    return kMediumFold.to_engine(
-        s.hard,
-        static_cast<double>(s.soft0),
-        static_cast<double>(s.soft1) * static_cast<double>(kMakespanUnit)
-            + static_cast<double>(s.soft2));
+inline optimaru::Score toEngineScore(const Score& s) {
+    return kMediumFold.to_engine(s.hard, static_cast<double>(s.soft0),
+                                 static_cast<double>(s.soft1) * static_cast<double>(kMakespanUnit) +
+                                         static_cast<double>(s.soft2));
 }
 
 // A best-score LIMIT (Solver::Config::target_score) in engine terms.
@@ -126,8 +112,7 @@ inline optimaru::Score toEngineScore(const Score &s)
 // assigned. Any other limit folds as a score.
 constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
 
-inline optimaru::Score toEngineScoreLimit(const Score &limit)
-{
+inline optimaru::Score toEngineScoreLimit(const Score& limit) {
     if (limit.soft1 == kNoLevelFloor || limit.soft2 == kNoLevelFloor)
         return {toEngineScore({limit.hard, limit.soft0, 0, 0}).hard,
                 -std::numeric_limits<double>::infinity()};
@@ -136,12 +121,9 @@ inline optimaru::Score toEngineScoreLimit(const Score &limit)
 
 // Inverse of toEngineScore. Every constraint penalizes (all levels <= 0 and
 // integral), so truncating integer division decodes the levels exactly.
-inline Score fromEngineScore(const optimaru::Score &e)
-{
+inline Score fromEngineScore(const optimaru::Score& e) {
     const std::int64_t combinedSoft = optimaru::round_score_level(e.soft, "soft");
-    return {e.hard / kMissingSkillUnit,
-            e.hard % kMissingSkillUnit,
-            combinedSoft / kMakespanUnit,
+    return {e.hard / kMissingSkillUnit, e.hard % kMissingSkillUnit, combinedSoft / kMakespanUnit,
             combinedSoft % kMakespanUnit};
 }
 
@@ -150,42 +132,33 @@ inline Score fromEngineScore(const optimaru::Score &e)
 // ---------------------------------------------------------------------------
 // Affinity of an employee for a customer: better affinity means the task
 // takes fewer minutes (baseDuration x multiplier).
-enum class Affinity
-{
+enum class Affinity {
     NONE,    // multiplier 4
     LOW,     // multiplier 3
     MEDIUM,  // multiplier 2
     HIGH     // multiplier 1
 };
 
-inline int durationMultiplier(Affinity affinity)
-{
-    switch (affinity)
-    {
-    case Affinity::HIGH:
-        return 1;
-    case Affinity::MEDIUM:
-        return 2;
-    case Affinity::LOW:
-        return 3;
-    case Affinity::NONE:
-    default:
-        return 4;
+inline int durationMultiplier(Affinity affinity) {
+    switch (affinity) {
+        case Affinity::HIGH:
+            return 1;
+        case Affinity::MEDIUM:
+            return 2;
+        case Affinity::LOW:
+            return 3;
+        case Affinity::NONE:
+        default:
+            return 4;
     }
 }
 
-enum class Priority
-{
-    MINOR,
-    MAJOR,
-    CRITICAL
-};
+enum class Priority { MINOR, MAJOR, CRITICAL };
 
 // ---------------------------------------------------------------------------
 // Customer  (problem fact)
 // ---------------------------------------------------------------------------
-struct Customer
-{
+struct Customer {
     std::string id;
     std::string name;
 };
@@ -193,8 +166,7 @@ struct Customer
 // ---------------------------------------------------------------------------
 // TaskType  (problem fact)
 // ---------------------------------------------------------------------------
-struct TaskType
-{
+struct TaskType {
     std::string code;
     std::string title;
     Minutes baseDuration = 0;  // minutes
@@ -210,8 +182,7 @@ struct TaskType
 //             = minStartTime                  if first in the list
 //             = max(previous.endTime, minStartTime) otherwise
 //   endTime   = startTime + baseDuration * affinityMultiplier
-struct Task
-{
+struct Task {
     std::string id;
     int taskType = -1;  // index into TaskAssigningSolution::taskTypes
     int indexInTaskType = 0;
@@ -229,8 +200,7 @@ struct Task
 // ---------------------------------------------------------------------------
 // tasks is the decision variable: the ordered task indices this employee
 // performs back to back. A task in no list is unassigned.
-struct Employee
-{
+struct Employee {
     std::string id;
     std::string fullName;
     std::vector<std::string> skills;
@@ -238,10 +208,8 @@ struct Employee
     std::vector<Affinity> affinityByCustomer;
     std::vector<int> tasks;  // ordered task indices — the decision variable
 
-    Affinity affinity(int customerIndex) const
-    {
-        if (customerIndex < 0
-            || customerIndex >= static_cast<int>(affinityByCustomer.size()))
+    Affinity affinity(int customerIndex) const {
+        if (customerIndex < 0 || customerIndex >= static_cast<int>(affinityByCustomer.size()))
             return Affinity::NONE;
         return affinityByCustomer[customerIndex];
     }
@@ -250,8 +218,7 @@ struct Employee
 // ---------------------------------------------------------------------------
 // TaskAssigningSolution  (the problem and its solution)
 // ---------------------------------------------------------------------------
-struct TaskAssigningSolution
-{
+struct TaskAssigningSolution {
     std::vector<TaskType> taskTypes;
     std::vector<Customer> customers;
     std::vector<Task> tasks;
@@ -261,37 +228,28 @@ struct TaskAssigningSolution
 
     // Duration of `task` when done by `employeeIndex`:
     // baseDuration x the affinity multiplier; unassigned uses NONE (x 4).
-    Minutes taskDuration(const Task &task, int employeeIndex) const
-    {
-        const Affinity affinity
-            = employeeIndex < 0
-                  ? Affinity::NONE
-                  : employees[employeeIndex].affinity(task.customer);
-        return taskTypes[task.taskType].baseDuration
-               * durationMultiplier(affinity);
+    Minutes taskDuration(const Task& task, int employeeIndex) const {
+        const Affinity affinity = employeeIndex < 0
+                                          ? Affinity::NONE
+                                          : employees[employeeIndex].affinity(task.customer);
+        return taskTypes[task.taskType].baseDuration * durationMultiplier(affinity);
     }
 
     // Missing skill count: required skills of the task's type that the
     // employee does not have.
-    int missingSkillCount(const Task &task, int employeeIndex) const
-    {
-        if (employeeIndex < 0)
-            return 0;
-        const Employee &employee = employees[employeeIndex];
+    int missingSkillCount(const Task& task, int employeeIndex) const {
+        if (employeeIndex < 0) return 0;
+        const Employee& employee = employees[employeeIndex];
         int count = 0;
-        for (const std::string &skill : taskTypes[task.taskType].requiredSkills)
-        {
+        for (const std::string& skill : taskTypes[task.taskType].requiredSkills) {
             bool found = false;
-            for (const std::string &owned : employee.skills)
-            {
-                if (owned == skill)
-                {
+            for (const std::string& owned : employee.skills) {
+                if (owned == skill) {
                     found = true;
                     break;
                 }
             }
-            if (!found)
-                ++count;
+            if (!found) ++count;
         }
         return count;
     }
@@ -306,56 +264,42 @@ struct TaskAssigningSolution
 // engine's construction heuristic assigns every task and local search keeps
 // them assigned. No task is pinned, so no is_pinned hook is declared.
 // ---------------------------------------------------------------------------
-template <> struct optimaru::SolutionTraits<ta::TaskAssigningSolution>
-{
+template <>
+struct optimaru::SolutionTraits<ta::TaskAssigningSolution> {
     static constexpr optimaru::Shape shape = optimaru::Shape::Sequence;
-    static int list_count(const ta::TaskAssigningSolution &s)
-    {
+    static int list_count(const ta::TaskAssigningSolution& s) {
         return static_cast<int>(s.employees.size());
     }
-    static int element_count(const ta::TaskAssigningSolution &s)
-    {
+    static int element_count(const ta::TaskAssigningSolution& s) {
         return static_cast<int>(s.tasks.size());
     }
-    static int list_size(const ta::TaskAssigningSolution &s, int listIndex)
-    {
+    static int list_size(const ta::TaskAssigningSolution& s, int listIndex) {
         return static_cast<int>(s.employees[listIndex].tasks.size());
     }
-    static int
-    element_at(const ta::TaskAssigningSolution &s, int listIndex, int position)
-    {
+    static int element_at(const ta::TaskAssigningSolution& s, int listIndex, int position) {
         return s.employees[listIndex].tasks[position];
     }
-    static void insert_element(ta::TaskAssigningSolution &s,
-                              int listIndex,
-                              int position,
-                              int element)
-    {
-        std::vector<int> &tasks = s.employees[listIndex].tasks;
+    static void insert_element(ta::TaskAssigningSolution& s, int listIndex, int position,
+                               int element) {
+        std::vector<int>& tasks = s.employees[listIndex].tasks;
         tasks.insert(tasks.begin() + position, element);
     }
-    static int
-    remove_element(ta::TaskAssigningSolution &s, int listIndex, int position)
-    {
-        std::vector<int> &tasks = s.employees[listIndex].tasks;
+    static int remove_element(ta::TaskAssigningSolution& s, int listIndex, int position) {
+        std::vector<int>& tasks = s.employees[listIndex].tasks;
         const int element = tasks[position];
         tasks.erase(tasks.begin() + position);
         return element;
     }
-    static void reverse_segment(ta::TaskAssigningSolution &s,
-                               int listIndex,
-                               int first,
-                               int last)
-    {
-        std::vector<int> &tasks = s.employees[listIndex].tasks;
+    static void reverse_segment(ta::TaskAssigningSolution& s, int listIndex, int first, int last) {
+        std::vector<int>& tasks = s.employees[listIndex].tasks;
         std::reverse(tasks.begin() + first, tasks.begin() + last + 1);
     }
 };
 
 // The domain's medium fold for the decomposed calculator (see the Score
 // adapter above): unassignedTasksCost (Level::Medium) folds below hard.
-template <> struct optimaru::MediumFoldOf<ta::TaskAssigningSolution>
-{
+template <>
+struct optimaru::MediumFoldOf<ta::TaskAssigningSolution> {
     static constexpr optimaru::MediumFold value = ta::kMediumFold;
 };
 

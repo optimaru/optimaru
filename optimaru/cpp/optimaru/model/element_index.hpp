@@ -77,8 +77,7 @@ public:
     // (the lists may be the same). One hook pair per element, like the
     // relocate it generalizes. Undone by move_segment(to, insert_at, len, from,
     // start).
-    void move_segment(Editor<Solution>& editor, int from, int start, int len, int to,
-                     int at) {
+    void move_segment(Editor<Solution>& editor, int from, int start, int len, int to, int at) {
         scratch1_.resize(static_cast<std::size_t>(len));
         for (int k = 0; k < len; ++k) {
             scratch1_[static_cast<std::size_t>(k)] = remove_at(editor, from, start);
@@ -89,7 +88,7 @@ public:
     }
 
     void swap_elements(Editor<Solution>& editor, int list1, int pos1, int list2, int pos2,
-                      int element1, int element2) {
+                       int element1, int element2) {
         set_element(editor, list1, pos1, element2);
         set_element(editor, list2, pos2, element1);
         std::swap(list_[element1], list_[element2]);
@@ -118,8 +117,8 @@ public:
     // (l2, i2), across two distinct lists. Undone by the same call with the
     // lengths swapped: afterwards l1 holds len2 elements at i1 and l2 holds
     // len1 at i2.
-    void exchange_segments(Editor<Solution>& editor, int l1, int i1, int len1, int l2,
-                          int i2, int len2) {
+    void exchange_segments(Editor<Solution>& editor, int l1, int i1, int len1, int l2, int i2,
+                           int len2) {
         Solution& solution = editor.solution();
         scratch1_.clear();
         scratch2_.clear();
@@ -146,8 +145,7 @@ public:
     }
 
     // Replace the element at a position (one coherent list change).
-    static void set_element(Editor<Solution>& editor, int list, int position,
-                           int element) {
+    static void set_element(Editor<Solution>& editor, int list, int position, int element) {
         editor.begin_list_edit(list);
         Traits::remove_element(editor.solution(), list, position);
         Traits::insert_element(editor.solution(), list, position, element);
@@ -156,7 +154,7 @@ public:
 
 private:
     static void replace_tail(Editor<Solution>& editor, int list, int cut,
-                            const std::vector<int>& tail) {
+                             const std::vector<int>& tail) {
         Solution& solution = editor.solution();
         editor.begin_list_edit(list);
         while (Traits::list_size(solution, list) > cut) {

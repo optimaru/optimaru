@@ -44,7 +44,8 @@ inline void logPhase(const char* name, Clock::time_point start) {
 inline std::chrono::milliseconds localSearchLimit(const Solver::Config& config) {
     const double fraction = std::clamp(config.greedyRepairBudgetFraction, 0.0, 0.9);
     const auto ms = static_cast<std::int64_t>(
-            std::chrono::duration<double, std::milli>(config.time_limit).count() * (1.0 - fraction));
+            std::chrono::duration<double, std::milli>(config.time_limit).count() *
+            (1.0 - fraction));
     return std::chrono::milliseconds(ms);
 }
 
@@ -134,8 +135,8 @@ public:
                 for (int employee : pool) addCandidate(candidates_, employee, oldEmployee, limit);
             } else {
                 const int maxAttempts = std::max(12, limit * 6);
-                for (int attempt = 0; attempt < maxAttempts &&
-                                      static_cast<int>(candidates_.size()) < limit;
+                for (int attempt = 0;
+                     attempt < maxAttempts && static_cast<int>(candidates_.size()) < limit;
                      ++attempt) {
                     addCandidate(candidates_, pool[rng() % pool.size()], oldEmployee, limit);
                 }
@@ -188,8 +189,8 @@ private:
 
 class EmployeeWindowSwapMove final : public optimaru::MoveOperator<EmployeeSchedule> {
 public:
-    EmployeeWindowSwapMove(const EmployeeSchedule& schedule, int maxDays,
-                           PenalizedGetter penalized, ShiftsOfGetter shiftsOf)
+    EmployeeWindowSwapMove(const EmployeeSchedule& schedule, int maxDays, PenalizedGetter penalized,
+                           ShiftsOfGetter shiftsOf)
         : maxDays_(std::max(1, maxDays)),
           penalized_(std::move(penalized)),
           shiftsOf_(std::move(shiftsOf)) {
@@ -218,8 +219,7 @@ public:
             if (seedShift < 0) return false;
             const int employeeA = schedule.shifts[seedShift].employeeIndex;
             if (employeeA < 0) continue;
-            int employeeB =
-                    static_cast<int>(rng() % static_cast<std::uint64_t>(employeeCount - 1));
+            int employeeB = static_cast<int>(rng() % static_cast<std::uint64_t>(employeeCount - 1));
             if (employeeB >= employeeA) ++employeeB;
 
             const int windowLength =
@@ -245,8 +245,7 @@ public:
             if (lastChanged_.size() >= 2) {
                 ctx.editor.begin_batch();
                 for (auto [shift, employee] : lastChanged_) {
-                    ctx.editor.assign(shift,
-                                                employee == employeeA ? employeeB : employeeA);
+                    ctx.editor.assign(shift, employee == employeeA ? employeeB : employeeA);
                     entities.push_back(shift);
                 }
                 ctx.editor.end_batch();
@@ -325,9 +324,8 @@ public:
             for (int g : group)
                 if (schedule.shifts[g].employeeIndex >= 0) ++occ;
             if (occ < 2) continue;  // keep at least one assigned in the group
-            const bool undesired =
-                    schedule.employees[emp].undesiredDates.count(schedule.shifts[shift].startDay) >
-                    0;
+            const bool undesired = schedule.employees[emp].undesiredDates.count(
+                                           schedule.shifts[shift].startDay) > 0;
             const long worth = (undesired ? 1000 : 0) + occ;
             if (worth > bestWorth) {
                 bestWorth = worth;
@@ -363,7 +361,7 @@ public:
     const char* name() const override { return "employeeHotRuin"; }
 
     std::vector<int> select_ruin_set(optimaru::OperatorContext<EmployeeSchedule>& ctx,
-                                   int ruinCount, std::mt19937_64& rng) override {
+                                     int ruinCount, std::mt19937_64& rng) override {
         const EmployeeSchedule& schedule = ctx.editor.solution();
         const int shiftCount = static_cast<int>(schedule.shifts.size());
         const int employeeCount = static_cast<int>(schedule.employees.size());
@@ -387,8 +385,7 @@ public:
             employee = hot[rng() % hot.size()];
         } else if (employeeCount > 0) {
             for (int attempt = 0; attempt < employeeCount * 2; ++attempt) {
-                int candidate =
-                        static_cast<int>(rng() % static_cast<std::uint64_t>(employeeCount));
+                int candidate = static_cast<int>(rng() % static_cast<std::uint64_t>(employeeCount));
                 if (!shiftsOf_(candidate).empty()) {
                     employee = candidate;
                     break;
@@ -403,9 +400,9 @@ public:
                 const int windowLength =
                         1 + static_cast<int>(rng() % static_cast<std::uint64_t>(maxDays_));
                 const int seedDay = schedule.shifts[seedShift].startDay;
-                const int startDay = seedDay - static_cast<int>(
-                                                       rng() %
-                                                       static_cast<std::uint64_t>(windowLength));
+                const int startDay =
+                        seedDay -
+                        static_cast<int>(rng() % static_cast<std::uint64_t>(windowLength));
                 const int endDay = startDay + windowLength;
 
                 for (int shift : assigned) {
@@ -519,10 +516,9 @@ void seedDayAwareInitialRoster(const Solver::Config& config, EmployeeSchedule& s
                         (wouldExceed == bestWouldExceed &&
                          (undesiredToday < bestUndesired ||
                           (undesiredToday == bestUndesired &&
-                           (run < bestRun ||
-                            (run == bestRun &&
-                             (flexibility < bestFlexibility ||
-                              (flexibility == bestFlexibility && employeeLoad < bestLoad)))))));
+                           (run < bestRun || (run == bestRun && (flexibility < bestFlexibility ||
+                                                                 (flexibility == bestFlexibility &&
+                                                                  employeeLoad < bestLoad)))))));
                 if (better) {
                     bestEmployee = employee;
                     bestWouldExceed = wouldExceed;
@@ -553,8 +549,7 @@ struct RelocationRepair {
     int shift2 = -1;
     int oldEmployee2 = -1;
     int newEmployee2 = -1;
-    Score score{std::numeric_limits<std::int64_t>::min(),
-                -std::numeric_limits<double>::infinity()};
+    Score score{std::numeric_limits<std::int64_t>::min(), -std::numeric_limits<double>::infinity()};
 };
 
 struct EmployeeDayIndex {
@@ -567,9 +562,7 @@ struct EmployeeDayIndex {
         return static_cast<std::size_t>(employee) * horizon + day;
     }
 
-    int load(int employee, int day) const {
-        return dayLoad[offset(employee, day)];
-    }
+    int load(int employee, int day) const { return dayLoad[offset(employee, day)]; }
 
     int singleShiftOnDay(int employee, int day) const {
         const std::size_t index = offset(employee, day);
@@ -605,8 +598,7 @@ EmployeeDayIndex buildEmployeeDayIndex(const EmployeeSchedule& schedule) {
     return index;
 }
 
-void applyRepair(optimaru::Editor<EmployeeSchedule>& editor,
-                 const RelocationRepair& repair) {
+void applyRepair(optimaru::Editor<EmployeeSchedule>& editor, const RelocationRepair& repair) {
     if (repair.shift2 >= 0) editor.begin_batch();
     editor.assign(repair.shift, repair.newEmployee);
     if (repair.shift2 >= 0) editor.assign(repair.shift2, repair.newEmployee2);
@@ -689,7 +681,8 @@ RelocationRepair bestRunRepair(optimaru::Editor<EmployeeSchedule>& editor,
                         const int shiftOnDay = dayIndex.singleShiftOnDay(employee, d);
                         if (shiftOnDay < 0 || schedule.shifts[shiftOnDay].pinned) continue;
                         for (int target : eligible[shiftOnDay]) {
-                            if (target == employee || target < 0 || target >= employeeCount) continue;
+                            if (target == employee || target < 0 || target >= employeeCount)
+                                continue;
                             if (dayIndex.load(target, d) != 0) continue;
                             editor.assign(shiftOnDay, target);
                             Score score = editor.score();
@@ -842,8 +835,8 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
 // calculator's penalizedEmployees()/employeeShifts() or the decomposed
 // calculator's penalized_units()/members_per_unit().
 template <typename Calculator, typename PenalizedFn, typename ShiftsOfFn>
-void runEngine(const Solver::Config& config, EmployeeSchedule& schedule,
-               Calculator& calculator, PenalizedFn penalized, ShiftsOfFn shiftsOf,
+void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calculator& calculator,
+               PenalizedFn penalized, ShiftsOfFn shiftsOf,
                std::chrono::milliseconds localSearchLimit) {
     const int shiftCount = static_cast<int>(schedule.shifts.size());
 
@@ -897,8 +890,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule,
         // currently has a hard violation (the "hot spots"). Once feasible there
         // are no penalized employees, so this naturally falls back to uniform
         // exploration for soft optimisation.
-        engineConfig.search.entity_hint =
-                [penalized, shiftsOf](std::mt19937_64& rng) -> int {
+        engineConfig.search.entity_hint = [penalized, shiftsOf](std::mt19937_64& rng) -> int {
             const std::vector<int>& hot = penalized();
             if (hot.empty()) return -1;
             std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -990,20 +982,21 @@ void Solver::solve(EmployeeSchedule& schedule) {
         auto stop = std::make_shared<std::atomic<bool>>(false);
         // A worker that cannot be started (std::system_error) stops and joins
         // the ones already running before the error is rethrown here.
-        optimaru::run_worker_threads(workerCount, *stop, [this, &candidates, &failures, &stop](int i) {
-            try {
-                Config workerConfig = config_;
-                workerConfig.parallelSolverCount = 1;
-                workerConfig.stop_flag = stop;
-                workerConfig.seed += static_cast<std::uint64_t>(i);
-                if (i != 0) workerConfig.on_new_best = nullptr;
-                Solver worker(std::move(workerConfig));
-                worker.solve(candidates[i]);
-            } catch (...) {
-                failures[i] = std::current_exception();
-                stop->store(true);
-            }
-        });
+        optimaru::run_worker_threads(workerCount, *stop,
+                                     [this, &candidates, &failures, &stop](int i) {
+                                         try {
+                                             Config workerConfig = config_;
+                                             workerConfig.parallelSolverCount = 1;
+                                             workerConfig.stop_flag = stop;
+                                             workerConfig.seed += static_cast<std::uint64_t>(i);
+                                             if (i != 0) workerConfig.on_new_best = nullptr;
+                                             Solver worker(std::move(workerConfig));
+                                             worker.solve(candidates[i]);
+                                         } catch (...) {
+                                             failures[i] = std::current_exception();
+                                             stop->store(true);
+                                         }
+                                     });
         for (const std::exception_ptr& failure : failures) {
             if (failure) std::rethrow_exception(failure);
         }
@@ -1016,14 +1009,13 @@ void Solver::solve(EmployeeSchedule& schedule) {
     }
 
     EmployeeSchedulingIncrementalScoreCalculator calculator;
-    runEngine(config_, schedule, calculator,
-              [&calculator]() -> const std::vector<int>& {
-                  return calculator.penalizedEmployees();
-              },
-              [&calculator](int e) -> const std::vector<int>& {
-                  return calculator.employeeShifts()[e];
-              },
-              localSearchLimit(config_));
+    runEngine(
+            config_, schedule, calculator,
+            [&calculator]() -> const std::vector<int>& { return calculator.penalizedEmployees(); },
+            [&calculator](int e) -> const std::vector<int>& {
+                return calculator.employeeShifts()[e];
+            },
+            localSearchLimit(config_));
     greedyHardRepair(config_, schedule, calculator, deadline);
 
     schedule.score = ScoreCalculator::score(schedule);
@@ -1042,14 +1034,13 @@ void Solver::solve(EmployeeSchedule& schedule,
         // DecomposedObjective compiles compatible delta constraints into
         // structural groups at reset and leaves all others on the generic path.
         const auto tEngine = Clock::now();
-        runEngine(config_, schedule, calculator,
-                  [&calculator]() -> const std::vector<int>& {
-                      return calculator.penalized_units();
-                  },
-                  [&calculator](int e) -> const std::vector<int>& {
-                      return calculator.members_per_unit()[e];
-                  },
-                  localSearchLimit(config_));
+        runEngine(
+                config_, schedule, calculator,
+                [&calculator]() -> const std::vector<int>& { return calculator.penalized_units(); },
+                [&calculator](int e) -> const std::vector<int>& {
+                    return calculator.members_per_unit()[e];
+                },
+                localSearchLimit(config_));
         logPhase("engine(CH+LS)", tEngine);
         const auto tRepair = Clock::now();
         greedyHardRepair(config_, schedule, calculator, deadline);

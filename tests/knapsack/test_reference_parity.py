@@ -361,7 +361,10 @@ def test_fractional_hard_weights_round_per_constraint():
     """The reference rounds the hard total once (0.5 + 0.5 -> -1); the engine rounds each constraint (-2)."""
     data = _samples()["extended"]  # A selected: mandatory 1, forbidden 1
     reference = ref.constraint_costs(_dump(data))
-    assert ref.score_costs(reference, [("mandatory_items", 0.5, None, 1.0), ("forbidden_items", 0.5, None, 1.0)]) == (-1, 0.0)
+    assert ref.score_costs(reference, [("mandatory_items", 0.5, None, 1.0), ("forbidden_items", 0.5, None, 1.0)]) == (
+        -1,
+        0.0,
+    )
     raw = knapsack.constraint_costs(Model.model_validate(data).to_core())
     assert score(raw, [MandatoryItemsCost(weight=0.5), ForbiddenItemsCost(weight=0.5)]) == (-2, 0.0)
 

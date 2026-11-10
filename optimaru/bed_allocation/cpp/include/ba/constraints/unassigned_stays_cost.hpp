@@ -3,8 +3,7 @@
 
 #include "ba/constraints/common.hpp"
 
-namespace ba
-{
+namespace ba {
 
 // Medium, weight 1: unassignedStaysCost — every night a stay spends in the
 // "no bed" sentinel (the stay is left unassigned). Raw cost (on the sentinel
@@ -21,25 +20,19 @@ namespace ba
 //
 // The only unit this can ever be non-zero for is the sentinel, so it declares
 // that scope and the calculator skips it on every real bed.
-struct UnassignedStaysCost final : PerStayConstraint
-{
+struct UnassignedStaysCost final : PerStayConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Medium;
 
     explicit UnassignedStaysCost(double weight = kDefaultWeight)
-        : PerStayConstraint("unassignedStaysCost", weight, kDefaultLevel)
-    {
-    }
-    void on_reset(const BedPlan &plan) override
-    {
+        : PerStayConstraint("unassignedStaysCost", weight, kDefaultLevel) {}
+    void on_reset(const BedPlan& plan) override {
         PerStayConstraint::on_reset(plan);
         sentinel_.assign(1, plan.noBedValue());
     }
-    const std::vector<int> *scoped_units() const override { return &sentinel_; }
-    double stayCost(const BedPlan &plan, int unit, int stayIndex) const override
-    {
-        if (unit != plan.noBedValue())
-            return 0.0;
+    const std::vector<int>* scoped_units() const override { return &sentinel_; }
+    double stayCost(const BedPlan& plan, int unit, int stayIndex) const override {
+        if (unit != plan.noBedValue()) return 0.0;
         return static_cast<double>(plan.stays[stayIndex].nightCount());
     }
 

@@ -22,7 +22,8 @@ struct RestAfterConsecutiveWorkCost final : EsUnitConstraint {
     explicit RestAfterConsecutiveWorkCost(double weight = kDefaultWeight, int workDays = 6,
                                           int restDays = 3)
         : EsUnitConstraint("restAfterConsecutiveWorkCost", weight, kDefaultLevel),
-          workDays_(workDays), restDays_(restDays) {}
+          workDays_(workDays),
+          restDays_(restDays) {}
     void on_reset(const EmployeeSchedule& s) override {
         horizon_ = 0;
         day_.resize(s.shifts.size());
@@ -36,20 +37,22 @@ struct RestAfterConsecutiveWorkCost final : EsUnitConstraint {
                 const std::vector<int>& members) const override {
         for (int i : members) worked_[day_[i]] = 1;
         double c = 0;
-        std::int32_t run = 0;         // current run of consecutive worked days
-        std::int32_t gap = 0;         // current run of consecutive rest days
-        std::int32_t priorRun = 0;    // worked-run preceding the current gap
+        std::int32_t run = 0;       // current run of consecutive worked days
+        std::int32_t gap = 0;       // current run of consecutive rest days
+        std::int32_t priorRun = 0;  // worked-run preceding the current gap
         for (std::int32_t d = 0; d < horizon_; ++d) {
             if (worked_[d]) {
                 if (gap > 0) {  // a rest gap ends because work resumes here
-                    if (priorRun >= workDays_ && gap < restDays_)
-                        c += restDays_ - gap;
+                    if (priorRun >= workDays_ && gap < restDays_) c += restDays_ - gap;
                     gap = 0;
                     priorRun = 0;
                 }
                 ++run;
             } else {
-                if (run > 0) { priorRun = run; run = 0; }
+                if (run > 0) {
+                    priorRun = run;
+                    run = 0;
+                }
                 ++gap;
             }
         }
@@ -59,8 +62,8 @@ struct RestAfterConsecutiveWorkCost final : EsUnitConstraint {
 
 private:
     std::int32_t workDays_, restDays_;
-    std::vector<std::int32_t> day_;      // shift -> start day
-    mutable std::vector<char> worked_;   // scratch, zeroed after use
+    std::vector<std::int32_t> day_;     // shift -> start day
+    mutable std::vector<char> worked_;  // scratch, zeroed after use
     std::int32_t horizon_ = 0;
 };
 

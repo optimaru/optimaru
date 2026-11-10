@@ -34,9 +34,7 @@ def test_local_runner_compares_one_case(monkeypatch, capsys) -> None:
     monkeypatch.setattr(
         benchmark,
         "score_solution",
-        lambda package, problem: benchmark.Score(
-            (0, float(problem.value)), ("hard", "soft")
-        ),
+        lambda package, problem: benchmark.Score((0, float(problem.value)), ("hard", "soft")),
     )
 
     assert benchmark.run_cli(FakeCase, ["--json", "--seconds", "0.01"]) == 0

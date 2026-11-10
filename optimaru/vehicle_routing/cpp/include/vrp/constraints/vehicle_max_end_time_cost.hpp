@@ -18,8 +18,8 @@ struct VehicleMaxEndTimeCost final : detail::PerVehicleConstraint {
         : PerVehicleConstraint("vehicleMaxEndTimeCost", weight, kDefaultLevel) {}
     double cost(const VehicleRoutePlan& p, int u, const std::vector<int>& m) const override {
         if (detail::isPool(p, u) || p.vehicles[u].maxEndTime <= 0) return 0;
-        return static_cast<double>(std::max<Seconds>(0,
-            detail::routeMetrics(p, u, m).endTime - p.vehicles[u].maxEndTime));
+        return static_cast<double>(std::max<Seconds>(
+                0, detail::routeMetrics(p, u, m).endTime - p.vehicles[u].maxEndTime));
     }
 };
 

@@ -11,22 +11,19 @@
 
 #include "ta/domain.hpp"
 
-namespace ta
-{
-namespace demo
-{
+namespace ta {
+namespace demo {
 
 // Skill names.
-inline const char *const kProblemSolving = "Problem Solving";
-inline const char *const kTeamBuilding = "Team Building";
-inline const char *const kBusinessStorytelling = "Business Storytelling";
-inline const char *const kRiskManagement = "Risk Management";
-inline const char *const kCreativeThinking = "Creative Thinking";
-inline const char *const kStrategicPlanning = "Strategic Planning";
+inline const char* const kProblemSolving = "Problem Solving";
+inline const char* const kTeamBuilding = "Team Building";
+inline const char* const kBusinessStorytelling = "Business Storytelling";
+inline const char* const kRiskManagement = "Risk Management";
+inline const char* const kCreativeThinking = "Creative Thinking";
+inline const char* const kStrategicPlanning = "Strategic Planning";
 
 // Task type indices.
-enum : int
-{
+enum : int {
     kImproveSales = 0,  // IS
     kExpandTax = 1,     // ET
     kShrinkVat = 2,     // SV
@@ -34,20 +31,10 @@ enum : int
 };
 
 // Customer indices.
-enum : int
-{
-    kSteelInc = 0,
-    kPaperCorp = 1,
-    kStoneLimited = 2,
-    kWoodExpress = 3
-};
+enum : int { kSteelInc = 0, kPaperCorp = 1, kStoneLimited = 2, kWoodExpress = 3 };
 
-inline void addTask(TaskAssigningSolution &solution,
-                    int taskType,
-                    int indexInTaskType,
-                    int customer,
-                    Priority priority)
-{
+inline void addTask(TaskAssigningSolution& solution, int taskType, int indexInTaskType,
+                    int customer, Priority priority) {
     Task task;
     task.id = std::to_string(solution.tasks.size() + 1);
     task.taskType = taskType;
@@ -57,11 +44,8 @@ inline void addTask(TaskAssigningSolution &solution,
     solution.tasks.push_back(task);
 }
 
-inline void addEmployee(TaskAssigningSolution &solution,
-                        const std::string &fullName,
-                        std::vector<std::string> skills,
-                        std::vector<Affinity> affinityByCustomer)
-{
+inline void addEmployee(TaskAssigningSolution& solution, const std::string& fullName,
+                        std::vector<std::string> skills, std::vector<Affinity> affinityByCustomer) {
     Employee employee;
     employee.id = std::to_string(solution.employees.size() + 1);
     employee.fullName = fullName;
@@ -70,54 +54,34 @@ inline void addEmployee(TaskAssigningSolution &solution,
     solution.employees.push_back(employee);
 }
 
-inline TaskAssigningSolution generateDemoData()
-{
+inline TaskAssigningSolution generateDemoData() {
     TaskAssigningSolution solution;
 
-    solution.taskTypes
-        = {{"IS", "Improve Sales", 46, {kStrategicPlanning}},
-           {"ET", "Expand Tax", 63, {kProblemSolving, kTeamBuilding}},
-           {"SV", "Shrink VAT", 63, {kStrategicPlanning}},
-           {"AL", "Approve Legal", 40, {kRiskManagement}}};
+    solution.taskTypes = {{"IS", "Improve Sales", 46, {kStrategicPlanning}},
+                          {"ET", "Expand Tax", 63, {kProblemSolving, kTeamBuilding}},
+                          {"SV", "Shrink VAT", 63, {kStrategicPlanning}},
+                          {"AL", "Approve Legal", 40, {kRiskManagement}}};
 
-    solution.customers = {{"1", "Steel Inc"},
-                          {"2", "Paper Corp"},
-                          {"3", "Stone Limited"},
-                          {"4", "Wood Express"}};
+    solution.customers = {
+            {"1", "Steel Inc"}, {"2", "Paper Corp"}, {"3", "Stone Limited"}, {"4", "Wood Express"}};
 
     // Employees (affinities ordered Steel, Paper, Stone, Wood).
     using A = Affinity;
-    addEmployee(solution,
-                "Amy",
-                {kProblemSolving, kBusinessStorytelling, kTeamBuilding},
+    addEmployee(solution, "Amy", {kProblemSolving, kBusinessStorytelling, kTeamBuilding},
                 {A::HIGH, A::MEDIUM, A::HIGH, A::MEDIUM});
-    addEmployee(solution,
-                "Beth",
-                {kRiskManagement, kCreativeThinking},
+    addEmployee(solution, "Beth", {kRiskManagement, kCreativeThinking},
                 {A::LOW, A::HIGH, A::LOW, A::MEDIUM});
-    addEmployee(solution,
-                "Carl",
-                {kStrategicPlanning, kProblemSolving},
+    addEmployee(solution, "Carl", {kStrategicPlanning, kProblemSolving},
                 {A::MEDIUM, A::HIGH, A::MEDIUM, A::LOW});
-    addEmployee(solution,
-                "Dan",
-                {kBusinessStorytelling, kTeamBuilding},
+    addEmployee(solution, "Dan", {kBusinessStorytelling, kTeamBuilding},
                 {A::LOW, A::HIGH, A::HIGH, A::MEDIUM});
-    addEmployee(solution,
-                "Elsa",
-                {kRiskManagement, kStrategicPlanning, kCreativeThinking},
+    addEmployee(solution, "Elsa", {kRiskManagement, kStrategicPlanning, kCreativeThinking},
                 {A::MEDIUM, A::HIGH, A::HIGH, A::MEDIUM});
-    addEmployee(solution,
-                "Flo",
-                {kProblemSolving, kTeamBuilding},
+    addEmployee(solution, "Flo", {kProblemSolving, kTeamBuilding},
                 {A::HIGH, A::HIGH, A::NONE, A::MEDIUM});
-    addEmployee(solution,
-                "Gus",
-                {kRiskManagement, kCreativeThinking, kBusinessStorytelling},
+    addEmployee(solution, "Gus", {kRiskManagement, kCreativeThinking, kBusinessStorytelling},
                 {A::LOW, A::MEDIUM, A::MEDIUM, A::LOW});
-    addEmployee(solution,
-                "Hugo",
-                {kStrategicPlanning, kProblemSolving, kTeamBuilding},
+    addEmployee(solution, "Hugo", {kStrategicPlanning, kProblemSolving, kTeamBuilding},
                 {A::NONE, A::MEDIUM, A::NONE, A::LOW});
 
     // Tasks 1..28.

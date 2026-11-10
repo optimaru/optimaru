@@ -3,8 +3,7 @@
 
 #include "fp/constraints/common.hpp"
 
-namespace fp
-{
+namespace fp {
 
 // Hard, weight 1: operatorCleaningConflictCost — the minutes two cleaning
 // windows overlap on lines that share one operator. A person cannot clean two
@@ -23,77 +22,53 @@ namespace fp
 // the pair sum. cost() runs once per score, so a move costs O(jobs) plus the
 // constraint's own O(jobs^2) pair scan — the same shape as the full recompute,
 // which is the trade this assembly path is for.
-struct OperatorCleaningConflictCost final : FpGlobalConstraint
-{
+struct OperatorCleaningConflictCost final : FpGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit OperatorCleaningConflictCost(double weight = kDefaultWeight)
-        : FpGlobalConstraint("operatorCleaningConflictCost",
-                             weight,
-                             kDefaultLevel)
-    {
-    }
+        : FpGlobalConstraint("operatorCleaningConflictCost", weight, kDefaultLevel) {}
 
-    void
-    reset(const PackagingSchedule &schedule,
-          const std::vector<std::vector<int>> & /*members_per_unit*/) override
-    {
+    void reset(const PackagingSchedule& schedule,
+               const std::vector<std::vector<int>>& /*members_per_unit*/) override {
         detail::requirePrepared(schedule);
         schedule_ = &schedule;
         dirty_ = true;
     }
-    void on_unit_changed(const PackagingSchedule &schedule,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
+    void on_unit_changed(const PackagingSchedule& schedule, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
         schedule_ = &schedule;
         dirty_ = true;
     }
-    double cost() const override
-    {
-        if (!dirty_)
-            return value_;
-        const PackagingSchedule &schedule = *schedule_;
+    double cost() const override {
+        if (!dirty_) return value_;
+        const PackagingSchedule& schedule = *schedule_;
         const int jobCount = static_cast<int>(schedule.jobs.size());
         startCleaning_.assign(jobCount, kNoTime);
         startProduction_.assign(jobCount, kNoTime);
         lineOf_.assign(jobCount, -1);
-        for (int line = 0; line < schedule.lineCount(); ++line)
-        {
-            detail::walkChain(schedule,
-                              line,
-                              detail::jobsOfUnit(schedule, line),
-                              [&](int jobIndex,
-                                  Minutes cleaning,
-                                  Minutes production,
-                                  Minutes /*end*/)
-                              {
-                                  startCleaning_[jobIndex] = cleaning;
-                                  startProduction_[jobIndex] = production;
-                                  lineOf_[jobIndex] = line;
-                              });
+        for (int line = 0; line < schedule.lineCount(); ++line) {
+            detail::walkChain(
+                    schedule, line, detail::jobsOfUnit(schedule, line),
+                    [&](int jobIndex, Minutes cleaning, Minutes production, Minutes /*end*/) {
+                        startCleaning_[jobIndex] = cleaning;
+                        startProduction_[jobIndex] = production;
+                        lineOf_[jobIndex] = line;
+                    });
         }
         // Every unordered pair of assigned jobs whose lines share an
         // operator (lines with no operator count as sharing one, too).
         std::int64_t overlap = 0;
-        for (int a = 0; a < jobCount; ++a)
-        {
-            if (lineOf_[a] < 0)
-                continue;
-            for (int b = a + 1; b < jobCount; ++b)
-            {
-                if (lineOf_[b] < 0)
+        for (int a = 0; a < jobCount; ++a) {
+            if (lineOf_[a] < 0) continue;
+            for (int b = a + 1; b < jobCount; ++b) {
+                if (lineOf_[b] < 0) continue;
+                if (schedule.lines[lineOf_[a]].operator_index !=
+                    schedule.lines[lineOf_[b]].operator_index)
                     continue;
-                if (schedule.lines[lineOf_[a]].operator_index
-                    != schedule.lines[lineOf_[b]].operator_index)
-                    continue;
-                const Minutes start
-                    = std::max(startCleaning_[a], startCleaning_[b]);
-                const Minutes end
-                    = std::min(startProduction_[a], startProduction_[b]);
-                if (start < end)
-                    overlap += end - start;
+                const Minutes start = std::max(startCleaning_[a], startCleaning_[b]);
+                const Minutes end = std::min(startProduction_[a], startProduction_[b]);
+                if (start < end) overlap += end - start;
             }
         }
         value_ = static_cast<double>(overlap);
@@ -102,7 +77,7 @@ struct OperatorCleaningConflictCost final : FpGlobalConstraint
     }
 
 private:
-    const PackagingSchedule *schedule_ = nullptr;
+    const PackagingSchedule* schedule_ = nullptr;
     mutable std::vector<Minutes> startCleaning_;
     mutable std::vector<Minutes> startProduction_;
     mutable std::vector<int> lineOf_;

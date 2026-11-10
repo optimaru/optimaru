@@ -5,85 +5,64 @@
 
 #include "ts/constraints.hpp"
 
-namespace ts
-{
+namespace ts {
 
 // The monolithic score is the default assembly (ts/constraints.hpp), so it
 // reads the same kDefaultWeight constants the components carry (kHardWeight /
 // kMediumWeight / kSoftWeight check that each one is integral and on the
 // level it is summed into).
 
-double ScoreCalculator::unfairnessFromAggregates(std::int64_t sumOfLoads,
-                                                 std::int64_t sumOfSquares,
-                                                 int itemCount)
-{
-    if (itemCount == 0)
-        return 0.0;
+double ScoreCalculator::unfairnessFromAggregates(std::int64_t sumOfLoads, std::int64_t sumOfSquares,
+                                                 int itemCount) {
+    if (itemCount == 0) return 0.0;
     // ssd = sum(load^2) - sum(load)^2 / n (identical to the n==1 special
     // case, where it is always 0).
-    double ssd = static_cast<double>(sumOfSquares)
-                 - (static_cast<double>(sumOfLoads) * sumOfLoads)
-                       / static_cast<double>(itemCount);
-    if (ssd < 0)
-        ssd = 0;
+    double ssd = static_cast<double>(sumOfSquares) -
+                 (static_cast<double>(sumOfLoads) * sumOfLoads) / static_cast<double>(itemCount);
+    if (ssd < 0) ssd = 0;
     const double root = std::sqrt(ssd);
-    if (root == 0.0)
-        return 0.0;
+    if (root == 0.0) return 0.0;
     // Round to 6 significant figures, HALF_EVEN. Avoid log10()/pow() in the
     // per-move hot path: the loop finds ceil(log10(root)) with comparisons.
     int digitsBeforePoint = 0;
     double magnitude = 1.0;
-    if (root > 1.0)
-    {
-        while (magnitude < root)
-        {
+    if (root > 1.0) {
+        while (magnitude < root) {
             magnitude *= 10.0;
             ++digitsBeforePoint;
         }
-    }
-    else
-    {
-        while (magnitude / 10.0 >= root)
-        {
+    } else {
+        while (magnitude / 10.0 >= root) {
             magnitude /= 10.0;
             --digitsBeforePoint;
         }
     }
     double factor = 1.0;
     const int exponent = 6 - digitsBeforePoint;
-    if (exponent >= 0)
-    {
-        for (int i = 0; i < exponent; ++i)
-            factor *= 10.0;
-    }
-    else
-    {
-        for (int i = 0; i > exponent; --i)
-            factor /= 10.0;
+    if (exponent >= 0) {
+        for (int i = 0; i < exponent; ++i) factor *= 10.0;
+    } else {
+        for (int i = 0; i > exponent; --i) factor /= 10.0;
     }
     const double scaled = root * factor;
     const double lower = std::floor(scaled);
     const double fraction = scaled - lower;
-    const double rounded
-        = fraction > 0.5 || (fraction == 0.5 && std::fmod(lower, 2.0) != 0.0)
-              ? lower + 1.0
-              : lower;
+    const double rounded = fraction > 0.5 || (fraction == 0.5 && std::fmod(lower, 2.0) != 0.0)
+                                   ? lower + 1.0
+                                   : lower;
     return rounded / factor;
 }
 
-double ScoreCalculator::unfairness(const std::vector<std::int64_t> &loads)
-{
+double ScoreCalculator::unfairness(const std::vector<std::int64_t>& loads) {
     std::int64_t sum = 0, sumSq = 0;
-    for (std::int64_t v : loads)
-    {
+    for (std::int64_t v : loads) {
         sum += v;
         sumSq += v * v;
     }
     return unfairnessFromAggregates(sum, sumSq, static_cast<int>(loads.size()));
 }
 
-Score ScoreCalculator::score(TournamentSchedule &schedule)
-{
+Score ScoreCalculator::score(TournamentSchedule& schedule) {
     const int teamCount = schedule.teamCount();
     const int dayCount = schedule.dayCount();
     Score score;
@@ -91,28 +70,20 @@ Score ScoreCalculator::score(TournamentSchedule &schedule)
     // Occupancy per (team, day) cell.
     std::vector<int> cellCnt(static_cast<std::size_t>(teamCount) * dayCount, 0);
     std::vector<std::int64_t> teamLoad(teamCount, 0);
-    for (const TeamAssignment &assignment : schedule.teamAssignments)
-    {
-        if (assignment.team < 0)
-            continue;  // unassigned contributes nothing
-        ++cellCnt[static_cast<std::size_t>(assignment.team) * dayCount
-                  + assignment.day];
+    for (const TeamAssignment& assignment : schedule.teamAssignments) {
+        if (assignment.team < 0) continue;  // unassigned contributes nothing
+        ++cellCnt[static_cast<std::size_t>(assignment.team) * dayCount + assignment.day];
         ++teamLoad[assignment.team];
     }
 
     // hard 1: teamConflictCost — C(c, 2) per cell.
     std::int64_t teamConflicts = 0;
-    for (int c : cellCnt)
-        teamConflicts += pairs(c);
+    for (int c : cellCnt) teamConflicts += pairs(c);
 
     // hard 2: teamUnavailabilityCost — one per fact with a hit cell.
     std::int64_t unavailableHits = 0;
-    for (const UnavailabilityPenalty &penalty :
-         schedule.unavailabilityPenalties)
-    {
-        if (cellCnt[static_cast<std::size_t>(penalty.team) * dayCount
-                    + penalty.day]
-            > 0)
+    for (const UnavailabilityPenalty& penalty : schedule.unavailabilityPenalties) {
+        if (cellCnt[static_cast<std::size_t>(penalty.team) * dayCount + penalty.day] > 0)
             ++unavailableHits;
     }
 
@@ -120,10 +91,8 @@ Score ScoreCalculator::score(TournamentSchedule &schedule)
     // teams with >= 1 assignment (unloaded teams are left out).
     std::int64_t balSum = 0, balSumSq = 0;
     int balN = 0;
-    for (int t = 0; t < teamCount; ++t)
-    {
-        if (teamLoad[t] == 0)
-            continue;
+    for (int t = 0; t < teamCount; ++t) {
+        if (teamLoad[t] == 0) continue;
         balSum += teamLoad[t];
         balSumSq += teamLoad[t] * teamLoad[t];
         ++balN;
@@ -136,20 +105,15 @@ Score ScoreCalculator::score(TournamentSchedule &schedule)
     // confrontation).
     std::int64_t confSum = 0, confSumSq = 0;
     int confN = 0;
-    for (int t1 = 0; t1 < teamCount; ++t1)
-    {
-        for (int t2 = t1 + 1; t2 < teamCount; ++t2)
-        {
+    for (int t1 = 0; t1 < teamCount; ++t1) {
+        for (int t2 = t1 + 1; t2 < teamCount; ++t2) {
             std::int64_t confrontations = 0;
-            for (int d = 0; d < dayCount; ++d)
-            {
-                confrontations
-                    += static_cast<std::int64_t>(
-                           cellCnt[static_cast<std::size_t>(t1) * dayCount + d])
-                       * cellCnt[static_cast<std::size_t>(t2) * dayCount + d];
+            for (int d = 0; d < dayCount; ++d) {
+                confrontations += static_cast<std::int64_t>(
+                                          cellCnt[static_cast<std::size_t>(t1) * dayCount + d]) *
+                                  cellCnt[static_cast<std::size_t>(t2) * dayCount + d];
             }
-            if (confrontations == 0)
-                continue;
+            if (confrontations == 0) continue;
             confSum += confrontations;
             confSumSq += confrontations * confrontations;
             ++confN;
@@ -157,13 +121,11 @@ Score ScoreCalculator::score(TournamentSchedule &schedule)
     }
     const double soft = unfairnessFromAggregates(confSum, confSumSq, confN);
 
-    score.hard = -(kHardWeight<TeamConflictCost> * teamConflicts
-                   + kHardWeight<TeamUnavailabilityCost> * unavailableHits);
-    score.soft = combinedSoft(
-        static_cast<double>(kMediumWeight<AssignmentCountImbalanceCost>)
-            * medium,
-        static_cast<double>(kSoftWeight<ConfrontationCountImbalanceCost>)
-            * soft);
+    score.hard = -(kHardWeight<TeamConflictCost> * teamConflicts +
+                   kHardWeight<TeamUnavailabilityCost> * unavailableHits);
+    score.soft =
+            combinedSoft(static_cast<double>(kMediumWeight<AssignmentCountImbalanceCost>) * medium,
+                         static_cast<double>(kSoftWeight<ConfrontationCountImbalanceCost>) * soft);
     schedule.score = score;
     return score;
 }

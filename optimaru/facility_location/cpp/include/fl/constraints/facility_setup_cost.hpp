@@ -3,8 +3,7 @@
 
 #include "fl/constraints/common.hpp"
 
-namespace fl
-{
+namespace fl {
 
 // Soft, weight 2: facilitySetupCost — a facility serving at least one
 // consumer costs its setup price once. Raw cost per facility = its setup cost
@@ -15,26 +14,18 @@ namespace fl
 //
 // No delta contract needed: cost() is already O(1) (it only looks at whether
 // `members` is empty), so the full re-cost path is as cheap as a marginal one.
-struct FacilitySetupCost final : FlUnitConstraint
-{
+struct FacilitySetupCost final : FlUnitConstraint {
     static constexpr double kDefaultWeight = 2.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
 
     explicit FacilitySetupCost(double weight = kDefaultWeight)
-        : FlUnitConstraint("facilitySetupCost", weight, kDefaultLevel)
-    {
-    }
-    void on_reset(const FacilityLocationProblem &problem) override
-    {
+        : FlUnitConstraint("facilitySetupCost", weight, kDefaultLevel) {}
+    void on_reset(const FacilityLocationProblem& problem) override {
         detail::requirePrepared(problem);
     }
-    double cost(const FacilityLocationProblem &problem,
-                int unit,
-                const std::vector<int> &members) const override
-    {
-        return members.empty()
-                   ? 0.0
-                   : static_cast<double>(problem.facilities[unit].setupCost);
+    double cost(const FacilityLocationProblem& problem, int unit,
+                const std::vector<int>& members) const override {
+        return members.empty() ? 0.0 : static_cast<double>(problem.facilities[unit].setupCost);
     }
 };
 

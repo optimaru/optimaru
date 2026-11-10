@@ -66,18 +66,16 @@ class LocalSearch {
     using Snapshot = SolutionSnapshot<Solution>;
 
 public:
-    LocalSearch(
-            const Settings& config, const Neighborhoods& nearby,
-            const std::vector<std::unique_ptr<MoveOperator<Solution>>>& move_operators,
-            const std::vector<std::unique_ptr<RuinOperator<Solution>>>& ruin_operators,
-            const std::function<std::unique_ptr<Acceptor>(const Score&)>& acceptor_factory)
+    LocalSearch(const Settings& config, const Neighborhoods& nearby,
+                const std::vector<std::unique_ptr<MoveOperator<Solution>>>& move_operators,
+                const std::vector<std::unique_ptr<RuinOperator<Solution>>>& ruin_operators,
+                const std::function<std::unique_ptr<Acceptor>(const Score&)>& acceptor_factory)
         : config_(config),
           nearby_(nearby),
           move_operators_(move_operators),
           ruin_operators_(ruin_operators),
           acceptor_factory_(acceptor_factory),
-          repair_(index_, nearby, config.search.ruin_recreate,
-                  config.search.unassigned_list) {}
+          repair_(index_, nearby, config.search.ruin_recreate, config.search.unassigned_list) {}
 
     Score run(Editor<Solution>& editor, StopCondition& stop) {
         Solution& solution = editor.solution();
@@ -110,8 +108,7 @@ public:
         // floating-point division on every move for the default LA path.
         const bool needs_time_gradient =
                 static_cast<bool>(acceptor_factory_) ||
-                config_.search.acceptance.rule ==
-                        AcceptanceRule::SimulatedAnnealing;
+                config_.search.acceptance.rule == AcceptanceRule::SimulatedAnnealing;
         // The built-in ruins are plugins like any other: one file each in
         // ruin_recreate/, registered ahead of the caller's operators so the
         // adaptive selector sees a single uniform list.
@@ -119,7 +116,7 @@ public:
         RelatedRuin<Solution> related_ruin;
         WorstRuin<Solution> worst_ruin;
         [[maybe_unused]] SisrRuin<Solution> sisr_ruin(lns.sisr_max_string_removals,
-                                                    lns.sisr_max_string_size);
+                                                      lns.sisr_max_string_size);
         [[maybe_unused]] RouteRuin<Solution> route_ruin;
         std::vector<RuinOperator<Solution>*> ruins{&random_ruin, &related_ruin, &worst_ruin};
         // sequence shape only — and not merely as an optimization. Both delegate to
@@ -142,7 +139,7 @@ public:
         // only consulted when custom move operators are registered.
         auto move_selector = make_selector(1 + move_operators_.size());
         OperatorContext<Solution> operator_context{editor, nearby_, index_.lists(),
-                                                  index_.positions()};
+                                                   index_.positions()};
 
         // The built-in strategies: plugins like any other MoveOperator, drawn
         // by weight before the ordinary move mix gets its turn. Their weights
@@ -150,13 +147,13 @@ public:
         // sampled move — and the header of SearchSettings records why that
         // is a configured number here rather than something the adaptive
         // selector above is asked to discover.
-        [[maybe_unused]] RouteElimination<Solution> route_elimination(index_, repair_,
-                                                                     ls.route_elimination_max_size);
+        [[maybe_unused]] RouteElimination<Solution> route_elimination(
+                index_, repair_, ls.route_elimination_max_size);
         Descent<Solution> descent(index_, nearby_, ls.descent_max_sweeps, ls.entity_hint,
                                   ls.descent_list_advanced, ls.descent_list_max_segment,
                                   ls.descent_list_candidate_routes, ls.unassigned_list);
         RuinRecreateMove<Solution> ruin_recreate_move(index_, repair_, ruins, *ruin_selector,
-                                                    lns.as_move_max_ruin);
+                                                      lns.as_move_max_ruin);
         [[maybe_unused]] EjectionChain<Solution> ejection_chain(
                 index_, nearby_, ls.unassigned_list, ls.ejection_chain_max_steps,
                 ls.ejection_chain_candidate_lists, ls.ejection_chain_max_evaluations);
@@ -227,7 +224,7 @@ public:
             force_time_check = false;
             if (lns.enabled && steps_since_best_or_lns >= std::max(lns_trigger, 8 * ema_best_gap)) {
                 current_score = lns_iteration(editor, current_score, best_score, *ruin_selector,
-                                            ruins, operator_context, rng);
+                                              ruins, operator_context, rng);
                 force_time_check = true;
                 // A perturbation kick becomes the new incumbent uncondition-
                 // ally and the acceptor restarts fresh, so
@@ -259,9 +256,9 @@ public:
                 // touching the solution, and applied only if accepted. Most
                 // moves are rejected, so this is where the apply/score/undo
                 // cost of a step disappears.
-                AppliedMove move;        // the move mix's own move
+                AppliedMove move;  // the move mix's own move
                 bool previewed = false;
-                bool applied = true;     // false: the operator found no move
+                bool applied = true;  // false: the operator found no move
                 Score candidate_score;
                 const int* entities = move.entities;
                 int entity_count = 0;
@@ -356,7 +353,7 @@ private:
     // this same code so the numbers are self-consistent — but the ORDER below
     // is a priority, and raising a weight dilutes everything after it.
     MoveOperator<Solution>* draw_strategy(const std::vector<WeightedStrategy>& strategies,
-                                         std::mt19937_64& rng) {
+                                          std::mt19937_64& rng) {
         for (const WeightedStrategy& s : strategies) {
             if (unit_(rng) < s.weight) return s.op;
         }
@@ -403,31 +400,26 @@ private:
             case AcceptanceRule::EntityTabu:
                 return std::make_unique<EntityTabu>(c.tabu_tenure);
             case AcceptanceRule::SimulatedAnnealing:
-                return std::make_unique<SimulatedAnnealing>(
-                        c.start_temperature);
+                return std::make_unique<SimulatedAnnealing>(c.start_temperature);
             case AcceptanceRule::GreatDeluge:
-                return std::make_unique<GreatDeluge>(initial_score,
-                                                             c.water_level_step);
+                return std::make_unique<GreatDeluge>(initial_score, c.water_level_step);
             case AcceptanceRule::StepCountingHillClimbing:
-                return std::make_unique<StepCountingHillClimbing>(
-                        c.recount_interval, initial_score);
+                return std::make_unique<StepCountingHillClimbing>(c.recount_interval,
+                                                                  initial_score);
             case AcceptanceRule::RecordToRecordTravel: {
                 // The threshold schedule spans the whole solve, so it needs a
                 // step count. Prefer the configured limit; otherwise assume a
                 // long run (10^6 steps) — overshooting only makes the
                 // threshold decay more slowly, which RRT tolerates, whereas
                 // undershooting collapses it to hill climbing immediately.
-                const std::int64_t steps = config_.limits.step_limit > 0
-                                                   ? config_.limits.step_limit
-                                                   : 1000000;
-                return std::make_unique<RecordToRecordTravel>(
-                        RecordToRecordTravel::autofit(initial_score.soft, c.rrt_start_gap,
-                                                      c.rrt_end_gap, steps));
+                const std::int64_t steps =
+                        config_.limits.step_limit > 0 ? config_.limits.step_limit : 1000000;
+                return std::make_unique<RecordToRecordTravel>(RecordToRecordTravel::autofit(
+                        initial_score.soft, c.rrt_start_gap, c.rrt_end_gap, steps));
             }
             case AcceptanceRule::LateAcceptance:
             default:
-                return std::make_unique<LateAcceptance>(c.history_length,
-                                                                initial_score);
+                return std::make_unique<LateAcceptance>(c.history_length, initial_score);
         }
     }
 
@@ -507,8 +499,8 @@ private:
             int e2 = nearby_pick(e, rng);
             if (e2 < 0) e2 = entity_pick(rng);
             e2 = movable_entity(solution, e2, entity_pick, rng);  // no pinned swap partner
-            for (int attempt = 0; attempt < 8 &&
-                                  (e2 == e || Traits::value_of(solution, e2) == old_value);
+            for (int attempt = 0;
+                 attempt < 8 && (e2 == e || Traits::value_of(solution, e2) == old_value);
                  ++attempt) {
                 e2 = movable_entity(solution, entity_pick(rng), entity_pick, rng);
             }
@@ -565,8 +557,7 @@ private:
         const double w_two_opt = size1 < 2 ? 0.0 : ms.two_opt_weight;
         const double w_or_opt = element_count < 3 ? 0.0 : ms.or_opt_weight;
         const double w_tail_swap = list_count < 2 ? 0.0 : ms.tail_swap_weight;
-        const double w_inter_exchange =
-                list_count < 2 ? 0.0 : ms.cross_exchange_weight;
+        const double w_inter_exchange = list_count < 2 ? 0.0 : ms.cross_exchange_weight;
         const double total =
                 w_relocate + w_swap + w_two_opt + w_or_opt + w_tail_swap + w_inter_exchange;
 
@@ -748,17 +739,15 @@ private:
     // unconditionally (perturbation-style); outcomes are still classified to
     // adapt the ruin-operator weights.
     Score lns_iteration(Editor<Solution>& editor, const Score& current_score,
-                               const Score& best_score,
-                               OperatorSelectionScheme& ruin_selector,
-                               const std::vector<RuinOperator<Solution>*>& ruins,
-                               OperatorContext<Solution>& operator_context,
-                               std::mt19937_64& rng) {
+                        const Score& best_score, OperatorSelectionScheme& ruin_selector,
+                        const std::vector<RuinOperator<Solution>*>& ruins,
+                        OperatorContext<Solution>& operator_context, std::mt19937_64& rng) {
         const RuinRecreateSettings& lns = config_.search.ruin_recreate;
         const int n = ruin_candidate_count(operator_context);
         std::uniform_real_distribution<double> fraction(lns.min_ruin_fraction,
                                                         lns.max_ruin_fraction);
         int ruin_count = std::clamp(static_cast<int>(fraction(rng) * n), 1,
-                                   std::min(n - 1, lns.max_ruin_count));
+                                    std::min(n - 1, lns.max_ruin_count));
 
         int op = ruin_selector.select(rng);
         std::vector<int> ruined = ruins[op]->select_ruin_set(operator_context, ruin_count, rng);

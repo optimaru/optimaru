@@ -11,8 +11,7 @@
 #include "qap/domain.hpp"
 #include "qap/score_calculator.hpp"
 
-namespace qap
-{
+namespace qap {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components
@@ -81,13 +80,10 @@ using ConstraintAssembly = optimaru::ConstraintAssembly<QuadraticAssignmentProbl
 using QapUnitConstraint = optimaru::UnitConstraint<QuadraticAssignmentProblem>;
 using QapGlobalConstraint = optimaru::GlobalConstraint<QuadraticAssignmentProblem>;
 
-namespace detail
-{
+namespace detail {
 
-inline void requirePrepared(const QuadraticAssignmentProblem &problem)
-{
-    if (!problem.prepared)
-    {
+inline void requirePrepared(const QuadraticAssignmentProblem& problem) {
+    if (!problem.prepared) {
         throw std::logic_error("qap constraints require ScoreCalculator::prepare(problem) first");
     }
 }
@@ -95,21 +91,16 @@ inline void requirePrepared(const QuadraticAssignmentProblem &problem)
 // Whether a matrix of the facts holds a negative entry: what makes an
 // objective's total possibly negative (raw_cost_can_be_negative). Read from the
 // facts themselves, so it needs no prepare().
-inline bool hasNegative(const std::vector<std::vector<std::int64_t>> &matrix)
-{
-    for (const auto &row : matrix)
-    {
-        for (std::int64_t value : row)
-        {
-            if (value < 0)
-                return true;
+inline bool hasNegative(const std::vector<std::vector<std::int64_t>>& matrix) {
+    for (const auto& row : matrix) {
+        for (std::int64_t value : row) {
+            if (value < 0) return true;
         }
     }
     return false;
 }
 
-inline bool hasNegative(const std::optional<std::vector<std::vector<std::int64_t>>> &matrix)
-{
+inline bool hasNegative(const std::optional<std::vector<std::vector<std::int64_t>>>& matrix) {
     return matrix.has_value() && hasNegative(*matrix);
 }
 
@@ -118,15 +109,12 @@ inline bool hasNegative(const std::optional<std::vector<std::vector<std::int64_t
 // A GlobalConstraint maintained purely from member joins / leaves (the
 // engine's assignment fast path): the calculator never diffs a unit for it, so
 // on_unit_changed is unreachable.
-struct QapMemberChangeGlobalConstraint : QapGlobalConstraint
-{
+struct QapMemberChangeGlobalConstraint : QapGlobalConstraint {
     using QapGlobalConstraint::QapGlobalConstraint;
 
     bool supports_member_change() const override { return true; }
-    void on_unit_changed(const QuadraticAssignmentProblem & /*problem*/,
-                       int /*unit*/,
-                       const std::vector<int> & /*members*/) override
-    {
+    void on_unit_changed(const QuadraticAssignmentProblem& /*problem*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) override {
         throw std::logic_error("constraint '" + name + "' is maintained by member changes only");
     }
 };

@@ -3,8 +3,7 @@
 
 #include "mnt/constraints/common.hpp"
 
-namespace mnt
-{
+namespace mnt {
 
 // Hard, weight 1: crewConflictCost — the calendar days two jobs of the same
 // crew overlap. Raw cost (one global total) = the summed pairwise overlap in
@@ -14,24 +13,17 @@ namespace mnt
 //
 // Global because the pairs span units: two jobs of one crew that start on
 // different dates sit in different (start date, crew) cells.
-struct CrewConflictCost final : DayOverlapGlobalConstraint
-{
+struct CrewConflictCost final : DayOverlapGlobalConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit CrewConflictCost(double weight = kDefaultWeight)
-        : DayOverlapGlobalConstraint("crewConflictCost", weight, kDefaultLevel)
-    {
-    }
-    int ownerCount(const MaintenanceSchedule &schedule) const override
-    {
+        : DayOverlapGlobalConstraint("crewConflictCost", weight, kDefaultLevel) {}
+    int ownerCount(const MaintenanceSchedule& schedule) const override {
         return schedule.crewCount();
     }
-    void ownersOf(const MaintenanceSchedule &schedule,
-                  int unit,
-                  int /*jobIndex*/,
-                  std::vector<int> &owners) const override
-    {
+    void ownersOf(const MaintenanceSchedule& schedule, int unit, int /*jobIndex*/,
+                  std::vector<int>& owners) const override {
         owners.push_back(schedule.crewIndexOf(unit));
     }
 };

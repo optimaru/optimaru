@@ -7,8 +7,7 @@
 
 #include "fab/domain.hpp"
 
-namespace fab
-{
+namespace fab {
 
 // ---------------------------------------------------------------------------
 // The serial schedule-generation decoder
@@ -49,13 +48,11 @@ namespace fab
 // decodes on from there: after a change of rows R, truncating to
 // min over R of readyStep and running again gives exactly the decode from
 // scratch.
-class Decoder
-{
+class Decoder {
 public:
     static constexpr int kNever = INT_MAX;
 
-    struct Placement
-    {
+    struct Placement {
         int step = -1;  // -1 = not placed
         int machine = -1;
         Time start = 0;
@@ -66,25 +63,21 @@ public:
     };
 
     // Binds a prepared schedule, places the pins and decodes nothing yet.
-    void bind(const SemiconductorSchedule &schedule);
+    void bind(const SemiconductorSchedule& schedule);
     // Forget steps >= step (no-op past the end).
     void truncate(int step);
     // Decode on from the current end until no lot has a ready row.
     // option[row] is the option index (< 0 = unassigned); rank[row] any int.
-    void run(const int *option, const std::int64_t *rank);
+    void run(const int* option, const std::int64_t* rank);
 
     int stepCount() const { return static_cast<int>(steps_.size()); }
     int readyStep(int row) const { return readyStep_[static_cast<std::size_t>(row)]; }
-    const Placement &placement(int row) const
-    {
-        return placement_[static_cast<std::size_t>(row)];
-    }
+    const Placement& placement(int row) const { return placement_[static_cast<std::size_t>(row)]; }
     // Rows in assignment-list order (the order they were placed).
-    const std::vector<int> &output() const { return output_; }
+    const std::vector<int>& output() const { return output_; }
     // The output index of the first row placed at `step` (output().size()
     // when step == stepCount()).
-    int outputStartOf(int step) const
-    {
+    int outputStartOf(int step) const {
         return step >= stepCount() ? static_cast<int>(output_.size())
                                    : steps_[static_cast<std::size_t>(step)];
     }
@@ -92,26 +85,24 @@ public:
     std::vector<Assignment> assignments() const;
 
 private:
-    struct MachineItem
-    {
+    struct MachineItem {
         Time start;
         Time end;
         int family;
         int stamp;  // the step that placed it; -1 = a pin
         int row;
     };
-    struct ResourceItem
-    {
+    struct ResourceItem {
         Time start;
         Time end;
         int stamp;
     };
 
-    Time earliestStart(int machine, const Operation &operation, Time ready, Time duration) const;
-    bool before(int a, int b, const std::int64_t *rank) const;
+    Time earliestStart(int machine, const Operation& operation, Time ready, Time duration) const;
+    bool before(int a, int b, const std::int64_t* rank) const;
     void placeRow(int row, int machine, Time start, Time end, bool pinned, int entry, int step);
 
-    const SemiconductorSchedule *schedule_ = nullptr;
+    const SemiconductorSchedule* schedule_ = nullptr;
     std::vector<std::vector<MachineItem>> machineItems_;
     std::vector<std::vector<ResourceItem>> resourceItems_;
     std::vector<int> pinEntry_;  // per pin: its item index on its machine
@@ -129,29 +120,26 @@ private:
 
 // The solve start: per row, the option with the least
 // (preference cost, duration), the first on ties.
-std::vector<int> defaultChoices(const SemiconductorSchedule &schedule);
+std::vector<int> defaultChoices(const SemiconductorSchedule& schedule);
 
 // The seed state: `schedule.assignments` as a (choices, ranks)
 // state. A seeded row takes the LAST option with the seeded machine and
 // duration (else keeps choices[row]); ranks follow (unseeded last, seeded
 // start, row).
-void seedState(const SemiconductorSchedule &schedule,
-               const std::vector<int> &choices,
-               std::vector<int> &selected,
-               std::vector<int> &ranks);
+void seedState(const SemiconductorSchedule& schedule, const std::vector<int>& choices,
+               std::vector<int>& selected, std::vector<int>& ranks);
 
 // Decode (option index per row, rank per row); option < 0 = unassigned.
-std::vector<Assignment> decode(const SemiconductorSchedule &schedule,
-                               const std::vector<int> &option,
-                               const std::vector<std::int64_t> &rank);
+std::vector<Assignment> decode(const SemiconductorSchedule& schedule,
+                               const std::vector<int>& option,
+                               const std::vector<std::int64_t>& rank);
 
 // Decode the decision values of schedule.rows.
-std::vector<Assignment> decodeValues(const SemiconductorSchedule &schedule);
+std::vector<Assignment> decodeValues(const SemiconductorSchedule& schedule);
 
 // The per-row (option, rank) arrays of a value vector.
-void valuesToState(const SemiconductorSchedule &schedule,
-                   std::vector<int> &option,
-                   std::vector<std::int64_t> &rank);
+void valuesToState(const SemiconductorSchedule& schedule, std::vector<int>& option,
+                   std::vector<std::int64_t>& rank);
 
 }  // namespace fab
 

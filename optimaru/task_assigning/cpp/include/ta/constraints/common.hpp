@@ -10,8 +10,7 @@
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 
-namespace ta
-{
+namespace ta {
 
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
@@ -77,14 +76,12 @@ namespace ta
 // Cost sign convention (see score/decomposed_objective.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score.
 
-using DecomposedCalculator
-    = optimaru::DecomposedObjective<TaskAssigningSolution>;
+using DecomposedCalculator = optimaru::DecomposedObjective<TaskAssigningSolution>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<TaskAssigningSolution>;
 using TaUnitConstraint = optimaru::UnitConstraint<TaskAssigningSolution>;
 using TaGlobalConstraint = optimaru::GlobalConstraint<TaskAssigningSolution>;
 
-namespace detail
-{
+namespace detail {
 
 // Walks one employee's task chain in execution order, calling
 // `onTaskEnd(taskIndex, endTime)` for each task, and returns the employee's
@@ -96,19 +93,14 @@ namespace detail
 // function of the unit's members, so a partially updated derived state can
 // never leak into a score.
 template <typename F>
-inline Minutes walkChain(const TaskAssigningSolution &solution,
-                         int employeeIndex,
-                         const std::vector<int> &members,
-                         F &&onTaskEnd)
-{
+inline Minutes walkChain(const TaskAssigningSolution& solution, int employeeIndex,
+                         const std::vector<int>& members, F&& onTaskEnd) {
     Minutes previousEnd = 0;
     bool first = true;
-    for (int taskIndex : members)
-    {
-        const Task &task = solution.tasks[taskIndex];
-        const Minutes startTime
-            = first ? task.minStartTime
-                    : std::max(previousEnd, task.minStartTime);
+    for (int taskIndex : members) {
+        const Task& task = solution.tasks[taskIndex];
+        const Minutes startTime =
+                first ? task.minStartTime : std::max(previousEnd, task.minStartTime);
         previousEnd = startTime + solution.taskDuration(task, employeeIndex);
         first = false;
         onTaskEnd(taskIndex, previousEnd);
@@ -127,32 +119,18 @@ inline Minutes walkChain(const TaskAssigningSolution &solution,
 // so re-pricing one priority is a weight override like any other. Raw cost
 // per employee = the summed end times (minutes) of its tasks of that
 // priority; 0 = no task of that priority on the list.
-struct PriorityTaskEndTimeCostBase : TaUnitConstraint
-{
-    PriorityTaskEndTimeCostBase(std::string constraint_name,
-                                double weight,
-                                optimaru::Level level,
+struct PriorityTaskEndTimeCostBase : TaUnitConstraint {
+    PriorityTaskEndTimeCostBase(std::string constraint_name, double weight, optimaru::Level level,
                                 Priority priority)
-        : TaUnitConstraint(std::move(constraint_name), weight, level),
-          priority_(priority)
-    {
-    }
+        : TaUnitConstraint(std::move(constraint_name), weight, level), priority_(priority) {}
 
-    double cost(const TaskAssigningSolution &solution,
-                int unit,
-                const std::vector<int> &members) const override
-    {
+    double cost(const TaskAssigningSolution& solution, int unit,
+                const std::vector<int>& members) const override {
         std::int64_t total = 0;
         const Priority priority = priority_;
-        detail::walkChain(solution,
-                          unit,
-                          members,
-                          [&](int taskIndex, Minutes endTime)
-                          {
-                              if (solution.tasks[taskIndex].priority
-                                  == priority)
-                                  total += endTime;
-                          });
+        detail::walkChain(solution, unit, members, [&](int taskIndex, Minutes endTime) {
+            if (solution.tasks[taskIndex].priority == priority) total += endTime;
+        });
         return static_cast<double>(total);
     }
 

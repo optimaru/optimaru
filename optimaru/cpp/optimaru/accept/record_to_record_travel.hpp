@@ -48,8 +48,8 @@ public:
         return RecordToRecordTravel(start, end, (start - end) / n);
     }
 
-    bool accepts(const Score& candidate, const Score&, const Score& best, const int*, int,
-                 double, std::mt19937_64&) override {
+    bool accepts(const Score& candidate, const Score&, const Score& best, const int*, int, double,
+                 std::mt19937_64&) override {
         const bool accepted = candidate.hard != best.hard
                                       ? candidate.hard > best.hard
                                       : best.soft - candidate.soft <= threshold_;

@@ -50,7 +50,7 @@ private:
     int n_ = 0;                                // employee count (balance items)
     std::vector<int> assign_;                  // employee per shift (-1 == unassigned)
     std::vector<std::vector<int>> empShifts_;  // shift indices per employee
-    std::vector<int> shiftPosition_;            // position inside empShifts_[assign_[shift]]
+    std::vector<int> shiftPosition_;           // position inside empShifts_[assign_[shift]]
     int shiftCount_ = 0;
     // Day-bucketed shift lists per employee for the sparse marginal path.
     // pairHardPenalty(a, b) is provably zero once the two start days differ by
@@ -73,16 +73,16 @@ private:
         std::int64_t penalty;
         std::int64_t soft;
     };
-    std::vector<ShiftTerms> shiftTerms_;       // employee * shiftCount + shift
-    std::vector<std::int64_t> pairPenalty_;    // shift * shiftCount + shift
+    std::vector<ShiftTerms> shiftTerms_;     // employee * shiftCount + shift
+    std::vector<std::int64_t> pairPenalty_;  // shift * shiftCount + shift
     std::size_t pairCacheBudgetBytes_;
     bool pairPenaltyCached_ = false;
-    std::vector<std::int64_t> empPenalty_;     // hard penalty magnitude per employee (>= 0)
-    std::vector<std::int64_t> empSoft_;        // net soft per employee
-    std::int64_t totalPenalty_ = 0;            // sum of empPenalty_
-    std::int64_t totalSoft_ = 0;               // sum of empSoft_
-    long balSum_ = 0;                          // sum of counts (= assigned shifts)
-    long balSumSq_ = 0;                        // sum of counts^2
+    std::vector<std::int64_t> empPenalty_;  // hard penalty magnitude per employee (>= 0)
+    std::vector<std::int64_t> empSoft_;     // net soft per employee
+    std::int64_t totalPenalty_ = 0;         // sum of empPenalty_
+    std::int64_t totalSoft_ = 0;            // sum of empSoft_
+    long balSum_ = 0;                       // sum of counts (= assigned shifts)
+    long balSumSq_ = 0;                     // sum of counts^2
     long cachedBalSum_ = 0;
     long cachedBalSumSq_ = 0;
     double cachedUnfairness_ = 0.0;
@@ -101,8 +101,8 @@ private:
     void bucketRemove(int e, int s);
 
     // Full contribution of employee `e` given its shift list (used at reset).
-    void contributionOf(int e, const std::vector<int>& list,
-                        std::int64_t& penalty, std::int64_t& soft) const;
+    void contributionOf(int e, const std::vector<int>& list, std::int64_t& penalty,
+                        std::int64_t& soft) const;
     // Marginal contribution of shift `s` to employee `e`: s's per-shift terms
     // plus its pairs with e's current shifts (skipping s itself).
     void marginalOf(int e, int s, std::int64_t& penalty, std::int64_t& soft) const;

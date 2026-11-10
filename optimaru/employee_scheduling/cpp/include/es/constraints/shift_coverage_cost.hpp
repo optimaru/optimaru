@@ -79,7 +79,7 @@ struct ShiftCoverageCost final : EsGlobalConstraint {
         for (int count : groupCount_) totalCost_ += groupCost(count);
     }
     void on_unit_changed(const EmployeeSchedule&, int unit,
-                       const std::vector<int>& members) override {
+                         const std::vector<int>& members) override {
         if (hasSkill_[unit]) {
             for (int i : members_[unit])
                 if (groupOf_[i] >= 0) changeGroup(groupOf_[i], -1);
@@ -89,17 +89,17 @@ struct ShiftCoverageCost final : EsGlobalConstraint {
         members_[unit] = members;
     }
     bool supports_member_change() const override { return true; }
-    void on_member_changed(const EmployeeSchedule&, int unit, const std::vector<int>&,
-                         int entity, bool joined) override {
-        if (hasSkill_[unit] && groupOf_[entity] >= 0) changeGroup(groupOf_[entity], joined ? 1 : -1);
+    void on_member_changed(const EmployeeSchedule&, int unit, const std::vector<int>&, int entity,
+                           bool joined) override {
+        if (hasSkill_[unit] && groupOf_[entity] >= 0)
+            changeGroup(groupOf_[entity], joined ? 1 : -1);
     }
     double cost() const override { return totalCost_; }
 
 private:
     static std::string makeLabel(const std::string& sk, int mn, int mx) {
         return "Shift coverage[" + (sk.empty() ? std::string("any") : sk) + " " +
-               std::to_string(mn) + ".." + (mx < 0 ? std::string("inf") : std::to_string(mx)) +
-               "]";
+               std::to_string(mn) + ".." + (mx < 0 ? std::string("inf") : std::to_string(mx)) + "]";
     }
     double groupCost(int count) const {
         double cost = 0;
@@ -115,12 +115,12 @@ private:
     }
     std::string skill_;
     int min_, max_, nGroups_ = 0;
-    std::vector<int> groupOf_;                 // shift -> group id
-    std::vector<int> groupCount_;              // group -> count of matching assignments
-    std::vector<char> hasSkill_;               // unit -> counts toward this coverage
-    std::vector<std::vector<int>> members_;    // per-unit member snapshot (for diffs)
-    std::vector<int> workerIdx_;               // scope: counting workers (empty = all)
-    std::vector<int> shiftIdx_;                // scope: shifts forming groups (empty = all)
+    std::vector<int> groupOf_;               // shift -> group id
+    std::vector<int> groupCount_;            // group -> count of matching assignments
+    std::vector<char> hasSkill_;             // unit -> counts toward this coverage
+    std::vector<std::vector<int>> members_;  // per-unit member snapshot (for diffs)
+    std::vector<int> workerIdx_;             // scope: counting workers (empty = all)
+    std::vector<int> shiftIdx_;              // scope: shifts forming groups (empty = all)
     double totalCost_ = 0;
 };
 
