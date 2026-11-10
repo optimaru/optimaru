@@ -39,6 +39,18 @@
   return the first instance; `contains(name)` never throws. A name held once
   behaves as before, and so does the Python API,
   which never edits a repeated name.
+- **Engine: repeated picks share the raw cost.** The second and later picks
+  of a constraint used to run its cost and delta code once more each. They
+  now join as repeats (`ConstraintAssembly::add_repeats()`, which the Python
+  bindings use), and `DecomposedObjective` asks one instance of a unit
+  constraint per unit and shapes the answer for each pick. Scores do not
+  change. A vehicle-routing solve with `TravelTimeCost()` and
+  `TravelTimeCost(exponent=2)` took about a quarter more steps per second, and
+  one with a third pick at `exponent=3` about half more (400 visits). Picks
+  are still computed separately when the engine handles them differently (one with a negative
+  threshold next to one without), for constraints with domain parameters
+  (employee scheduling), for the members of a compiled delta group, and for
+  global constraints. `add_instances()` keeps independent instances.
 - **Docs: the cost of a negative threshold.** The guides now say that a
   negative `offset` with `clip=True` (a fixed charge per non-zero unit) is
   recomputed for every unit a move changes, which about halves the steps per

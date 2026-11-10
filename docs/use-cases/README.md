@@ -132,7 +132,10 @@ A constraint may be picked several times. Each pick is its own instance with its
 own knobs (its level included) and, where the constraint has domain parameters,
 its own parameters. The instances are scored independently and add up, so
 `[TravelTimeCost(exponent=2), TravelTimeCost(exponent=3)]` is `x**2 + x**3`, and
-two identical picks simply count twice. An empty list is an error, and so is an
+two identical picks simply count twice. A further pick of a constraint without
+domain parameters usually reuses the raw cost the engine computed for the first
+one and only shapes it again, so it costs much less than a new constraint.
+An empty list is an error, and so is an
 unknown name. Each package's `constraints` module also holds ready-made default
 instances under the snake-case names (`vehicle_capacity_cost` is
 `VehicleCapacityCost()`); the docs and examples use the class calls.

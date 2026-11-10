@@ -43,6 +43,10 @@
 //       its own knobs, constraint_costs() in instance order; incremental ==
 //       fresh recompute on random walks with repeated and offset picks (both
 //       folds, rejected trial moves), and sequence previews under ScoreChecks::Full
+//   (u) repeats (add_repeats) share the raw cost: one cost() / delta_cost()
+//       call per share class, the same score bit for bit as independent
+//       instances on random walks (trials, batches) and previews, and the
+//       instances that cannot share (another dispatch, another type)
 //   (q) the literal offset formula (clip false, offset != 0) stays off the
 //       levels that count toward the hard score: python::check_literal_offset
 //       (both messages, both offset signs, the default level, a structural
@@ -1516,7 +1520,9 @@ void testOffsetClip() {
 // --- (p) several instances of one name ------------------------------------
 
 template <typename S>
-optimaru::ConstraintAssembly<S> repeated() {
+optimaru::ConstraintAssembly<S> repeated(bool shared = false) {
+    // shared: the copies join as repeats (add_repeats), whose raw cost the
+    // objective computes once per name where it can; the score is the same.
     // taskCostCost three times: as is, exponent 2 with the threshold at 5, and
     // the literal formula at 10 at weight 0.5; conflictCost twice (the copy
     // moved to soft with the literal offset 1, which hard refuses);
@@ -1524,21 +1530,28 @@ optimaru::ConstraintAssembly<S> repeated() {
     // medium where medium folds into soft, on soft where it counts toward
     // the hard score); overloadCost (full re-cost) twice, the copy shifted.
     auto assembly = defaults<S>();
-    assembly.add_instances(
+    auto join = [&](optimaru::ConstraintAssembly<S>&& copy) {
+        if (shared) {
+            assembly.add_repeats(std::move(copy));
+        } else {
+            assembly.add_instances(std::move(copy));
+        }
+    };
+    join(
             one<S>("taskCostCost").exponent("taskCostCost", 2.0).offset("taskCostCost", 5.0));
-    assembly.add_instances(one<S>("taskCostCost")
+    join(one<S>("taskCostCost")
                                   .weight("taskCostCost", 0.5)
                                   .offset("taskCostCost", 10.0)
                                   .clip("taskCostCost", false));
-    assembly.add_instances(one<S>("conflictCost")
+    join(one<S>("conflictCost")
                                   .soft("conflictCost")
                                   .offset("conflictCost", 1.0)
                                   .clip("conflictCost", false));
     auto idle = one<S>("idleWorkerCost");
     idle.offset("idleWorkerCost", 1.0).exponent("idleWorkerCost", 2.0).clip("idleWorkerCost", false);
     if constexpr (optimaru::MediumFoldOf<S>::value.rounds_medium()) idle.soft("idleWorkerCost");
-    assembly.add_instances(std::move(idle));
-    assembly.add_instances(one<S>("overloadCost").offset("overloadCost", -1.0).weight("overloadCost", 2.0));
+    join(std::move(idle));
+    join(one<S>("overloadCost").offset("overloadCost", -1.0).weight("overloadCost", 2.0));
     return assembly;
 }
 
@@ -1639,7 +1652,7 @@ optimaru::ConstraintAssembly<S> groupedRepeats() {
 }
 
 template <typename S>
-optimaru::ConstraintAssembly<S> routeRepeats() {
+optimaru::ConstraintAssembly<S> routeRepeats(bool shared = false) {
     auto assembly = routeDefaults<S>();
     assembly.offset("routeDistanceCost", 20.0).clip("routeDistanceCost", false);
     assembly.offset("longestRouteCost", 8.0);
@@ -1655,15 +1668,19 @@ optimaru::ConstraintAssembly<S> routeRepeats() {
             .offset("routeDemandCost", 2.0)
             .clip("routeDemandCost", false)
             .weight("routeDemandCost", 0.5);
-    assembly.add_instances(std::move(copy));
+    if (shared) {
+        assembly.add_repeats(std::move(copy));
+    } else {
+        assembly.add_instances(std::move(copy));
+    }
     return assembly;
 }
 
 template <typename S>
-void listRepeatPreviews(const std::string& label, std::uint64_t seed) {
+void listRepeatPreviews(const std::string& label, std::uint64_t seed, bool shared = false) {
     S s = routesStart<S>();
     optimaru::DecomposedObjective<S> calc;
-    routeRepeats<S>().into(calc);
+    routeRepeats<S>(shared).into(calc);
     optimaru::Editor<S> editor(s, calc, optimaru::ScoreChecks::Full);
     editor.score();
     optimaru::testing::PreviewParity parity;
@@ -2569,6 +2586,206 @@ std::string signedRefusal(std::unique_ptr<C> component, S s) {
     return "";
 }
 
+// --- (u) repeats share the raw cost ----------------------------------------
+
+// The same random walk (plain moves, rejected trials, batches of two moves)
+// on an assembly whose copies joined as repeats and on one whose copies are
+// independent instances: the scores and the raw costs must be identical.
+template <typename S>
+bool sharedWalkIdentical(unsigned seed) {
+    S a = assignmentA<S>();
+    S b = assignmentA<S>();
+    optimaru::DecomposedObjective<S> shared, independent;
+    repeated<S>(true).into(shared);
+    repeated<S>(false).into(independent);
+    shared.rebuild(a);
+    independent.rebuild(b);
+    std::mt19937_64 rng(seed);
+    bool agree = true;
+    auto assign = [&](int task, int worker) {
+        shared.before_assign(task);
+        a.assignment[task] = worker;
+        shared.after_assign(task);
+        independent.before_assign(task);
+        b.assignment[task] = worker;
+        independent.after_assign(task);
+    };
+    auto compare = [&] {
+        const Score x = shared.score(), y = independent.score();
+        agree &= x.hard == y.hard && x.soft == y.soft;
+        const auto left = shared.constraint_costs(), right = independent.constraint_costs();
+        for (std::size_t i = 0; i < left.size(); ++i) {
+            agree &= left[i].name == right[i].name && left[i].unit_costs == right[i].unit_costs;
+        }
+    };
+    compare();
+    for (int step = 0; step < 2000; ++step) {
+        const int kind = static_cast<int>(rng() % 3);
+        const int t1 = static_cast<int>(rng() % 6), t2 = static_cast<int>(rng() % 6);
+        const int w1 = (rng() % 7 == 0) ? -1 : static_cast<int>(rng() % 4);
+        const int w2 = static_cast<int>(rng() % 4);
+        if (kind == 0) {
+            assign(t1, w1);
+        } else if (kind == 1) {
+            const int old = a.assignment[t1];
+            shared.begin_trial();
+            independent.begin_trial();
+            assign(t1, w1);
+            compare();
+            shared.begin_rollback();
+            independent.begin_rollback();
+            assign(t1, old);
+            shared.end_trial(false);
+            independent.end_trial(false);
+        } else {
+            shared.begin_batch();
+            independent.begin_batch();
+            assign(t1, w1);
+            assign(t2, w2);
+            shared.end_batch();
+            independent.end_batch();
+        }
+        compare();
+    }
+    return agree;
+}
+
+void testSharedRepeats() {
+    std::printf("== (u) repeats share the raw cost ==\n");
+    {
+        // Five instances of one cost. The first and its plain repeat take
+        // deltas and form one class; the two repeats with a negative
+        // threshold re-cost and form another; the independent instance
+        // (add_instance) is not a repeat and is asked on its own.
+        auto build = [] {
+            LoadAssembly assembly;
+            assembly.emplace<LoadCost<Loads>>();
+            LoadAssembly repeats;
+            repeats.emplace_instance<LoadCost<Loads>>();
+            repeats.emplace_instance<LoadCost<Loads>>();
+            repeats.emplace_instance<LoadCost<Loads>>();
+            repeats.exponent("loadCost", 0, 2.0).offset("loadCost", 1, -1.0).offset("loadCost", 2, -2.0);
+            assembly.add_repeats(std::move(repeats));
+            assembly.emplace_instance<LoadCost<Loads>>();
+            return assembly;
+        };
+        auto independent = [] {
+            LoadAssembly assembly;
+            for (int i = 0; i < 5; ++i) assembly.emplace_instance<LoadCost<Loads>>();
+            return std::move(assembly).exponent("loadCost", 1, 2.0).offset("loadCost", 2, -1.0).offset(
+                    "loadCost", 3, -2.0);
+        };
+        LoadCalc calc;
+        build().into(calc);
+        Loads s;
+        calc.rebuild(s);
+        for (int t = 0; t < 6; ++t) move(calc, s, t, t % 4);
+        auto calls = [&](std::size_t i) { return component<LoadCost<Loads>>(calc, i).costCalls; };
+        // Each repeat is asked once per worker at the reset, which checks it
+        // against its class (verify_share_classes), and never after.
+        check(calls(0) == 4 && calls(1) == 4,
+              "a repeat on the delta path is asked at the reset only, like the first instance");
+        check(calls(2) == 4 + 6 && calls(3) == 4,
+              "two repeats that re-cost share one cost() call per touched worker");
+        check(calls(4) == 4, "an instance added with add_instance() is asked on its own");
+        LoadCalc plain;
+        independent().into(plain);
+        Loads other;
+        plain.rebuild(other);
+        for (int t = 0; t < 6; ++t) move(plain, other, t, t % 4);
+        check(identical(calc.score(), plain.score()),
+              "the shared score is the independent instances' score, bit for bit");
+    }
+    check(sharedWalkIdentical<SoftFoldTasks>(41),
+          "IntoSoft: repeats == independent instances over 2000 moves (trials, batches), raw costs "
+          "included");
+    check(sharedWalkIdentical<HardFoldTasks>(43),
+          "BelowHard: repeats == independent instances over 2000 moves (trials, batches)");
+    check(walkAgrees<SoftFoldTasks>([] { return repeated<SoftFoldTasks>(true); }, 47),
+          "repeats: incremental == fresh over 2000 moves (1/3 rejected)");
+    check(walkAgrees<Tasks>(
+                  [] {
+                      // The members of a compiled delta group are evaluated by
+                      // the group and stay out of the share classes.
+                      optimaru::ConstraintAssembly<Tasks> assembly;
+                      assembly.emplace<GroupedTaskCost<Tasks>>();
+                      optimaru::ConstraintAssembly<Tasks> copies;
+                      copies.emplace_instance<GroupedTaskCost<Tasks>>(2.0);
+                      copies.emplace_instance<GroupedTaskCost<Tasks>>(3.0);
+                      copies.offset("groupedTaskCost", 1, 10.0);
+                      assembly.add_repeats(std::move(copies));
+                      return assembly;
+                  },
+                  53),
+          "repeats of a grouped component keep the group path: incremental == fresh");
+    listRepeatPreviews<SoftFoldRoutes>("sequence IntoSoft, repeats", 67, /*shared=*/true);
+    listRepeatPreviews<HardFoldRoutes>("sequence BelowHard, repeats", 71, /*shared=*/true);
+    {
+        // A repeat must be the first instance's component again.
+        LoadAssembly assembly;
+        assembly.emplace<LoadCost<Loads>>();
+        LoadAssembly other;
+        other.emplace<GroupedLoadCost<Loads, false>>(Level::Soft, 0.0);
+        bool unheld = false;
+        try {
+            assembly.add_repeats(std::move(other));
+        } catch (const std::invalid_argument&) {
+            unheld = true;
+        }
+        check(unheld, "add_repeats() refuses a name the assembly does not hold");
+
+        struct OtherLoadCost final : LoadCost<Loads> {};
+        LoadAssembly mismatched;
+        mismatched.emplace<LoadCost<Loads>>();
+        LoadAssembly wrong;
+        wrong.emplace<OtherLoadCost>();
+        mismatched.add_repeats(std::move(wrong));
+        LoadCalc calc;
+        mismatched.into(calc);
+        Loads s;
+        bool refused = false;
+        try {
+            calc.rebuild(s);
+        } catch (const std::logic_error&) {
+            refused = true;
+        }
+        check(refused, "a repeat of another component type is refused at reset");
+
+        // The same type with another parameter: its raw cost differs from
+        // the first instance's, which the reset notices.
+        struct ScaledLoadCost final : LoadCost<Loads> {
+            double scale;
+            explicit ScaledLoadCost(double s) : scale(s) {}
+            double cost(const Loads& loads, int unit, const std::vector<int>& members) const override {
+                return scale * LoadCost<Loads>::cost(loads, unit, members);
+            }
+        };
+        auto scaled = [](double scale) {
+            LoadAssembly first;
+            first.emplace<ScaledLoadCost>(1.0);
+            LoadAssembly repeat;
+            repeat.emplace<ScaledLoadCost>(scale);
+            first.add_repeats(std::move(repeat));
+            return first;
+        };
+        auto resets = [&](double scale) {
+            LoadCalc other;
+            scaled(scale).into(other);
+            Loads loads;
+            loads.assignment[0] = 0;
+            try {
+                other.rebuild(loads);
+            } catch (const std::logic_error&) {
+                return false;
+            }
+            return true;
+        };
+        check(resets(1.0) && !resets(2.0),
+              "a repeat built with another parameter is refused at reset, when its raw cost differs");
+    }
+    std::printf("\n");
+}
+
 void testSignedCostLevel() {
     std::printf("== (s) a raw cost that can be negative stays off the hard score ==\n");
     using optimaru::SignedCostLevelError;
@@ -2721,6 +2938,7 @@ int main() {
     testLiteralOffsetGuard();
     testHashInAssemblyNames();
     testExactNegativeThreshold();
+    testSharedRepeats();
     testSignedCostLevel();
     testReportedKnobsAreSampledAtReset();
     if (failures == 0) {

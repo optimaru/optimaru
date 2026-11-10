@@ -368,8 +368,9 @@ inline void apply_knobs(ConstraintMetadata& constraint, const py::handle& item,
 // picks simply count twice). The first pick of a name re-states the default
 // component; each further pick is a fresh copy of it, taken from a new
 // default assembly (so the same domain parameters as the default instance),
-// with that pick's knobs, appended after it (ConstraintAssembly::
-// add_instances). constraint_costs() keys the k-th instance "<name>#<k>"
+// with that pick's knobs, appended after it as a repeat (ConstraintAssembly::
+// add_repeats), so the objective computes the raw cost of a unit constraint
+// once for all its picks. constraint_costs() keys the k-th instance "<name>#<k>"
 // (instance_keys), the order Python's instance_keys derives from the list.
 //
 //   tfpy::apply_constraints([] { return defaultConstraints(); }, constraints)
@@ -379,8 +380,10 @@ inline void apply_knobs(ConstraintMetadata& constraint, const py::handle& item,
 // called once, plus once per repeated pick. That assembly must hold every
 // name ONCE: the knobs are re-stated by name (restate_knobs), which
 // ConstraintAssembly refuses for a name held several times. Repeats only
-// ever join through add_instances() below, after every by-name edit. A pick's domain parameters
-// (params()) are not read here: a domain whose constraints take parameters
+// ever join through add_repeats() below, after every by-name edit. Every
+// call must build the same components (the same types with the same domain
+// parameters): that is what makes a copy a repeat whose raw cost is the
+// first instance's. A pick's domain parameters (params()) are not read here: a domain whose constraints take parameters
 // builds each pick's component itself and re-states its knobs with
 // apply_knobs (employee-scheduling's rule factory).
 template <typename Factory,
@@ -415,7 +418,7 @@ std::decay_t<std::invoke_result_t<Factory&>> apply_constraints(Factory&& default
         throw py::value_error("constraints must not be empty (pass None for the defaults)");
     }
     assembly.only(picked);
-    for (Assembly& copy : copies) assembly.add_instances(std::move(copy));
+    for (Assembly& copy : copies) assembly.add_repeats(std::move(copy));
     return assembly;
 }
 
