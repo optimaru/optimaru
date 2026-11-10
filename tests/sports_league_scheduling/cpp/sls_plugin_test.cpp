@@ -773,7 +773,7 @@ ConstraintAssembly repeatedAssembly() {
                                              .offset("homeToAwayHopCost", 30.0)));
     assembly.add_instances(std::move(
             copyOf("consecutiveHomeMatchesCost").offset("consecutiveHomeMatchesCost", -1.0)));
-    assembly.add_instances(std::move(copyOf("repeatMatchOnNextDayCost")));
+    assembly.add_instances(copyOf("repeatMatchOnNextDayCost"));
     assembly.add_instances(std::move(copyOf("workdayClassicMatchesCost")
                                              .offset("workdayClassicMatchesCost", 1.0)
                                              .clip("workdayClassicMatchesCost", false)));

@@ -2,6 +2,7 @@
 
 #include <random>
 #include <string>
+#include <utility>
 
 #include "pdp/haversine.hpp"
 
@@ -26,8 +27,12 @@ PdpRoutePlan buildRandomInstance(int requestCount, int vehicleCount, std::uint64
 
     for (int v = 0; v < vehicleCount; ++v) {
         const int home = addLocation(plan, latitude(rng), longitude(rng));
-        plan.vehicles.push_back(
-                Vehicle{std::to_string(v + 1), capacity(rng), home, hourMinute(7, 30), {}});
+        Vehicle vehicle;
+        vehicle.id = std::to_string(v + 1);
+        vehicle.capacity = capacity(rng);
+        vehicle.homeLocationIndex = home;
+        vehicle.departureTime = hourMinute(7, 30);
+        plan.vehicles.push_back(std::move(vehicle));
     }
 
     for (int r = 0; r < requestCount; ++r) {

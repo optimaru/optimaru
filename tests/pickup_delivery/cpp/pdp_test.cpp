@@ -1,13 +1,14 @@
 // Pickup-and-delivery tests: the coupling constraints, the incremental
 // calculator against the full recompute, and the engine integration.
 #include <chrono>
-#include <cstdio>
-#include <limits>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "pdp/demo_data.hpp"
@@ -28,6 +29,17 @@ void check(bool ok, const std::string& label) {
     if (!ok) ++failures;
 }
 
+// A vehicle with the four fields these tests set; every other field keeps its
+// default (no route policy, an empty route).
+Vehicle vehicleAt(std::string id, int capacity, int home, Seconds departure) {
+    Vehicle vehicle;
+    vehicle.id = std::move(id);
+    vehicle.capacity = capacity;
+    vehicle.homeLocationIndex = home;
+    vehicle.departureTime = departure;
+    return vehicle;
+}
+
 // A two-request instance with one vehicle, built by hand so the constraint
 // expectations are exact. `demand` is per request; the vehicle's capacity is
 // 10, so demand 4 leaves both requests carryable at once and demand 6 does not
@@ -41,7 +53,7 @@ PdpRoutePlan buildTinyInstance(int demand = 4) {
     const int p2 = addLocation(plan, 43.76, 11.24);
     const int d2 = addLocation(plan, 43.75, 11.23);
 
-    plan.vehicles = {Vehicle{"1", 10, home, hourMinute(7, 0), {}}};
+    plan.vehicles = {vehicleAt("1", 10, home, hourMinute(7, 0))};
     plan.nodes = {
             Node{"p1", p1, hourMinute(8, 0), hourMinute(18, 0), 300, 0, true, -1, NULL_TIME},
             Node{"d1", d1, hourMinute(8, 0), hourMinute(18, 0), 300, 0, false, -1, NULL_TIME},
@@ -125,7 +137,7 @@ void testCouplingConstraints() {
 
     // Split across vehicles.
     PdpRoutePlan split = buildTinyInstance();
-    split.vehicles.push_back(Vehicle{"2", 10, 0, hourMinute(7, 0), {}});
+    split.vehicles.push_back(vehicleAt("2", 10, 0, hourMinute(7, 0)));
     split.vehicles[0].nodeIndices = {0, 2, 3};
     split.vehicles[1].nodeIndices = {1};
     split.rebuildUnassignedPool();
@@ -329,7 +341,7 @@ PdpRoutePlan buildLine(const std::vector<Seconds>& homes,
     for (std::size_t i = 0; i < places.size(); ++i) addLocation(plan, 0.0, 0.0);
     const int stops = static_cast<int>(homes.size());
     for (std::size_t v = 0; v < homes.size(); ++v) {
-        plan.vehicles.push_back(Vehicle{std::to_string(v), 1, static_cast<int>(v), 0, {}});
+        plan.vehicles.push_back(vehicleAt(std::to_string(v), 1, static_cast<int>(v), 0));
     }
     for (std::size_t r = 0; r < requests.size(); ++r) {
         const int request = static_cast<int>(r);
