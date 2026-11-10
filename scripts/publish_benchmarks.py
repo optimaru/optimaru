@@ -23,6 +23,10 @@ whose file is missing keeps its README text and its homepage entry.
   "size": "6 classes / 15 teachers / 72 courses", "engine": 231, "ortools": 320}, ...]}}``
   (track 2 weighted penalties).
 
+``--seconds`` and ``--workers`` are what the harnesses were run with: the tables state
+them, and a result that records another budget or worker count is refused. Which instances
+a table holds, and up to which size CP-SAT was run, is read from the results.
+
 Every README results block between ``<!-- results:start -->`` and ``<!-- results:end -->``
 of a data set with results is regenerated. The homepage file (``src/data/benchmarks.ts``)
 holds one entry per data set; its prose lives in the homepage repository.
@@ -116,6 +120,49 @@ def _signed(percent: float) -> str:
     return "0.0%" if text in ("+0.0%", "-0.0%") else text
 
 
+def _listed(items: list[str]) -> str:
+    """'a', 'a and b', 'a, b and c'."""
+    items = list(items)
+    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+def _shared_numbers(names: list[str]) -> list[str] | None:
+    """The instance numbers every class of a sample has in common (`u120_00`, `t60_00`, ... ->
+    ['00', ...]); None when the classes were sampled differently."""
+    by_class: dict[str, list[str]] = {}
+    for name in names:
+        stem, _, number = name.rpartition("_")
+        by_class.setdefault(stem, []).append(number)
+    picks = list(by_class.values())
+    return picks[0] if picks and all(pick == picks[0] for pick in picks) else None
+
+
+def _exact_cap(results: list[dict], size: str) -> int | None:
+    """The size up to which CP-SAT was run, when larger instances were left to the engine."""
+    stated = {result["exact_max_size"] for result in results if result.get("exact_max_size")}
+    if len(stated) == 1:
+        return stated.pop()
+    ran = [result[size] for result in results if "cp-sat" in _runs(result)]
+    skipped = [result[size] for result in results if "cp-sat" not in _runs(result)]
+    return max(ran) if ran and skipped else None
+
+
+def _check_protocol(what: str, results: list[dict], args: argparse.Namespace) -> None:
+    """Refuse results that were run with another budget or worker count than the tables will state.
+
+    A harness records `budget` (and `workers`) in each result; results written before they did
+    carry neither and pass.
+    """
+    for result in results:
+        budget, workers = result.get("budget"), result.get("workers")
+        if budget is not None and budget != args.seconds:
+            raise SystemExit(f"{what}: {result['instance']} was run with {budget:g} s, not --seconds {args.seconds:g}")
+        if workers is not None and workers != args.workers and "cp-sat" in _runs(result):
+            raise SystemExit(
+                f"{what}: {result['instance']} gave CP-SAT {workers} workers, not --workers {args.workers}"
+            )
+
+
 def _bold(cells: dict[str, dict], texts: dict[str, str]) -> dict[str, str]:
     best = _lowest(cells)
     return {name: f"**{text}**" if name in best else text for name, text in texts.items()}
@@ -203,7 +250,10 @@ def _vrp_instances(data: dict) -> dict[str, dict[str, dict]]:
 
 
 def _vrp_bucket(customers: int) -> str:
-    return next(label for label, lower, upper in VRP_BUCKETS if lower <= customers < upper)
+    for label, lower, upper in VRP_BUCKETS:
+        if lower <= customers < upper:
+            return label
+    raise ValueError(f"{customers} customers is outside the Set X size buckets (100 to 1000)")
 
 
 def _vrp_means(runs_by_instance: dict[str, dict[str, dict]], label: str | None) -> dict[str, tuple]:
@@ -289,14 +339,21 @@ def _pdp_cell(run: dict | None) -> tuple[dict, str]:
     """Homepage cell and README text of one pickup-delivery run."""
     if run is None:
         return {"value": None, "status": "not run"}, "not run"
+    outcome = run.get("outcome")
+    if outcome == "mismatch":
+        raise SystemExit(f"pickup-delivery: a run cannot be published: {run['status']}")
     if run["distance"] is None:
         status = run["status"]
-        if status.startswith("no solution"):
+        if outcome is None:
+            # Results written before a run carried its outcome: read it from the words.
+            if status.startswith("no solution"):
+                outcome = "no solution"
+            else:
+                outcome = "incomplete" if "do not cover" in status else "infeasible"
+        if outcome == "no solution":
             return {"value": None, "status": "no solution"}, "no solution in time"
-        reason = status.removeprefix("rejected: ")
-        kind = "incomplete" if "do not cover" in reason else "infeasible"
-        note = "leaves stops unserved" if kind == "incomplete" else reason
-        return {"value": None, "status": kind}, f"{kind} ({note})"
+        note = "leaves stops unserved" if outcome == "incomplete" else status.removeprefix("rejected: ")
+        return {"value": None, "status": outcome}, f"{outcome} ({note})"
     distance = round(run["distance"], 1)
     return (
         {"value": distance, "detail": f"{run['vehicles']} vehicles"},
@@ -337,9 +394,14 @@ def pdp_li_lim_block(cases: list[dict], args: argparse.Namespace) -> str:
         "leg rounded to a tenth of a unit; lower is better. Cells are vehicles / distance.",
     ]
     if head:
+        names = list(dict.fromkeys(case["instance"] for case in head))
+        partial = sorted({case["requests"] for case in head if case["requests"] < case["total_requests"]})
+        sizes = [f"their first {_listed([str(count) for count in partial])} requests"] if partial else []
+        if any(case["requests"] == case["total_requests"] for case in head):
+            sizes.append("whole")
         lines += [
             "",
-            "**Engine and CP-SAT**, the first instance of each class at 10 requests, 25 requests and whole:",
+            f"**Engine and CP-SAT** on {_listed(names)}, at {' and '.join(sizes)}:",
             "",
             "| Instance | Requests | engine | CP-SAT |",
             "| --- | --- | --- | --- |",
@@ -372,10 +434,12 @@ def pdp_li_lim_block(cases: list[dict], args: argparse.Namespace) -> str:
 
 
 def pdp_synthetic_block(cases: list[dict]) -> str:
+    # A synthetic instance is named synthetic-<requests>-s<seed>.
+    seeds = sorted({case["instance"].rsplit("-s", 1)[-1] for case in cases})
     lines = [
-        "**Synthetic Li & Lim-shaped instances** (`--synthetic N`, seed 0): customers in a 100 x 100",
-        "square, half in six clusters, service time 90, one vehicle per three requests. Cells are",
-        "vehicles / distance.",
+        f"**Synthetic Li & Lim-shaped instances** (`--synthetic N`, seed {_listed(seeds)}): customers in a",
+        "100 x 100 square, half in six clusters, service time 90, one vehicle per three requests. Cells",
+        "are vehicles / distance.",
         "",
         "| Requests | engine | CP-SAT |",
         "| --- | --- | --- |",
@@ -388,10 +452,11 @@ def pdp_synthetic_block(cases: list[dict]) -> str:
         if "ortools" not in cells:
             engine_only.append(str(case["requests"]))
     if engine_only:
+        measured = " (at 400 requests it was still being built after 10 minutes at 11 GB, 2026-10-29)"
         lines += [
             "",
-            f"CP-SAT is not run at {' and '.join(engine_only)} requests: at that size its model was still being",
-            "built after 10 minutes at 11 GB (2026-10-29).",
+            f"CP-SAT is not run at {_listed(engine_only)} requests: its model takes minutes and gigabytes to"
+            f" build{measured if '400' in engine_only else ''}.",
         ]
     return "\n".join(lines)
 
@@ -432,11 +497,13 @@ def rcpsp_block(results: list[dict], args: argparse.Namespace) -> str:
 
 
 def bpp_block(results: list[dict], args: argparse.Namespace) -> str:
+    numbers = _shared_numbers([result["instance"] for result in results])
+    sample = f"instances {_listed(numbers)} of each class" if numbers else f"{len(results)} instances"
+    cap = _exact_cap(results, "items")
     lines = [
         "## Results",
         "",
-        "Falkenauer instances 00, 10 and 19 of each class (`--sample-per-class 3`). Bins used; lower is better and",
-        "the best value is bold.",
+        f"Falkenauer: {sample}. Bins used; lower is better and the best value is bold.",
         "",
         "| Instance | Items | Best known | optimaru engine | CP-SAT |",
         "| --- | ---: | ---: | ---: | ---: |",
@@ -450,7 +517,8 @@ def bpp_block(results: list[dict], args: argparse.Namespace) -> str:
         )
     lines += [
         "",
-        "CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, 120 items). " + _footer(args, 1),
+        (f"CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, {cap} items). " if cap else "")
+        + _footer(args, 1),
     ]
     return "\n".join(lines)
 
@@ -485,21 +553,26 @@ def qaplib_block(results: list[dict], args: argparse.Namespace) -> str:
             f"| {result['instance']} | {result['size']} | {'—' if best is None else f'{best:,}'} | "
             f"{'—' if objective is None else f'{objective:,}'} | {'—' if gap is None else f'{gap:.2f}%'} |"
         )
-    lines += [
-        "",
+    summary = (
         f"Mean gap {statistics.fmean(gaps):.2f}%, median {statistics.median(gaps):.2f}%, worst {max(gaps):.2f}%. "
-        + _footer(args, 1, workers=False),
-    ]
+        if gaps
+        else ""
+    )
+    lines += ["", summary + _footer(args, 1, workers=False)]
     return "\n".join(lines)
 
 
 def salbp_block(sets: dict[str, list[dict]], args: argparse.Namespace) -> str:
+    everything = [result for name, _ in SALBP_SETS for result in sets.get(name, [])]
+    numbers = _shared_numbers([result["instance"] for result in everything])
+    sample = f"instances {_listed(numbers)} of each data set" if numbers else f"{len(everything)} instances"
+    cap = _exact_cap(everything, "tasks")
     lines = [
         "## Results",
         "",
-        "SALBP-1 instances 1, 125, 250, 375 and 500 of each data set. Stations used; lower is better and",
-        "the best value is bold. The upper bound is the one in the archive's details workbook: the optimum",
-        "where the workbook's lower bound meets it, otherwise the best its authors' solver found in 100 s.",
+        f"SALBP-1: {sample}. Stations used; lower is better and the best value is bold. The upper bound",
+        "is the one in the archive's details workbook: the optimum where the workbook's lower bound meets",
+        "it, otherwise the best its authors' solver found in 100 s.",
         "",
         "| Data set | Instance | Tasks | Archive upper bound | optimaru engine | CP-SAT |",
         "| --- | --- | ---: | ---: | ---: | ---: |",
@@ -514,7 +587,8 @@ def salbp_block(sets: dict[str, list[dict]], args: argparse.Namespace) -> str:
             )
     lines += [
         "",
-        "CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, 100 tasks). " + _footer(args, 1),
+        (f"CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, {cap} tasks). " if cap else "")
+        + _footer(args, 1),
     ]
     return "\n".join(lines)
 
@@ -689,6 +763,22 @@ def pdp_row(case: dict, *, size: str, reference: bool) -> dict:
 
 def pdp_li_lim_dataset(cases: list[dict], seconds: float) -> dict:
     full, head = _pdp_split(cases)
+    commands = []
+    if full:
+        commands.append(f"uv run pickup-delivery-public-bench --all --seconds {seconds:g} --backend engine")
+    if head:
+        # The head-to-head command of one instance, at the sizes the table has it.
+        first = head[0]["instance"]
+        sizes = [
+            0 if case["requests"] == case["total_requests"] else case["requests"]
+            for case in head
+            if case["instance"] == first
+        ]
+        commands.append(
+            f"uv run pickup-delivery-public-bench --instance {first} "
+            + " ".join(f"--requests {size}" for size in sizes)
+            + f" --seconds {seconds:g} --workers 8"
+        )
     sections = []
     if full:
         rows = []
@@ -710,9 +800,7 @@ def pdp_li_lim_dataset(cases: list[dict], seconds: float) -> dict:
         "public",
         "cp-sat",
         "pickup-delivery/cpsat",
-        f"uv run pickup-delivery-public-bench --all --requests 0 --seconds {seconds:g} --backend engine\n"
-        "uv run pickup-delivery-public-bench --instance lc101 --requests 10 --requests 25 --requests 0 "
-        f"--seconds {seconds:g} --workers 8",
+        "\n".join(commands),
         sections,
     )
 
@@ -766,13 +854,22 @@ def rcpsp_dataset(results: list[dict], seconds: float) -> dict:
 
 def bpp_dataset(results: list[dict], seconds: float) -> dict:
     rows = _count_rows(results, "bins", lambda result: f"{result['items']} items")
+    # `--sample-per-class N` picks N evenly spread instances of the twenty a class has (bench.run_bench).
+    numbers = _shared_numbers([result["instance"] for result in results]) or []
+    count = len(numbers)
+    spread = [f"{(i * 19 + (count - 1) // 2) // (count - 1):02d}" for i in range(count)] if count > 1 else None
+    selection = (
+        f"--sample-per-class {count}"
+        if numbers == spread
+        else " ".join(f"--instance {result['instance']}" for result in results)
+    )
     return _dataset(
         "falkenauer-bin-packing",
         "bin-packing",
         "public",
         "cp-sat",
         "bin-packing",
-        f"uv run --project cpsat python -m bench.run_bench --sample-per-class 3 --seconds {seconds:g}",
+        f"uv run --project cpsat python -m bench.run_bench {selection} --seconds {seconds:g}",
         [_section("instances", "bins", rows)],
     )
 
@@ -863,6 +960,7 @@ def _current_datasets(path: Path) -> dict[str, dict]:
     marker = "export const datasets"
     if marker not in text:
         return {}
+    # Reads to the end of the file: write_homepage() writes `datasets` last.
     start = text.index("= [", text.index(marker)) + 2
     return {entry["slug"]: entry for entry in json.loads(text[start:].rstrip().rstrip(";"))}
 
@@ -971,11 +1069,9 @@ def main() -> None:
     for slug in COMPARED:
         if slug not in compare:
             continue
+        _check_protocol(slug, [result for result in compare[slug] if "error" not in result], args)
         datasets[slug] = compare_dataset(slug, compare[slug], args.seconds)
-        try:
-            _replace_block(_readme_of(slug), compare_block(compare[slug], footer))
-        except FileNotFoundError:
-            pass  # project-job-scheduling keeps its results in PUBLIC_BENCHMARKS.md
+        _replace_block(_readme_of(slug), compare_block(compare[slug], footer))
 
     set_x, set_a = _load(args.results, "vrp-x.json"), _load(args.results, "vrp-a.json")
     if set_x or set_a:
@@ -988,11 +1084,13 @@ def main() -> None:
     li_lim, synthetic = _load(args.results, "pdp-li-lim.json"), _load(args.results, "pdp-synthetic.json")
     pdp = BENCHMARKS / "pickup-delivery"
     if li_lim:
+        _check_protocol("pickup-delivery (Li & Lim)", li_lim, args)
         datasets["li-lim-pdptw"] = pdp_li_lim_dataset(li_lim, args.seconds)
         _replace_block(
             pdp / "cpsat" / "PUBLIC_BENCHMARKS.md", pdp_li_lim_block(li_lim, args) + "\n\n" + _footer(args, 0)
         )
     if synthetic:
+        _check_protocol("pickup-delivery (synthetic)", synthetic, args)
         datasets["pickup-delivery-synthetic"] = pdp_synthetic_dataset(synthetic, args.seconds)
         _replace_block(
             pdp / "README.md",
@@ -1004,6 +1102,7 @@ def main() -> None:
 
     rcpsp = _load(args.results, "rcpsp.json")
     if rcpsp:
+        _check_protocol("project-job-scheduling (RG30)", rcpsp, args)
         datasets["rg30-rcpsp"] = rcpsp_dataset(rcpsp, args.seconds)
         _replace_block(
             BENCHMARKS / "project-job-scheduling" / "cpsat" / "PUBLIC_BENCHMARKS.md", rcpsp_block(rcpsp, args)
@@ -1011,11 +1110,13 @@ def main() -> None:
 
     bpp = _load(args.results, "bpp.json")
     if bpp:
+        _check_protocol("bin-packing", bpp, args)
         datasets["falkenauer-bin-packing"] = bpp_dataset(bpp, args.seconds)
         _replace_block(BENCHMARKS / "bin-packing" / "README.md", bpp_block(bpp, args))
 
     qaplib = _load(args.results, "qaplib.json")
     if qaplib:
+        _check_protocol("quadratic-assignment (QAPLIB)", qaplib, args)
         datasets["qaplib"] = qaplib_dataset(qaplib, args.seconds)
         body = qaplib_block(qaplib, args)
         _replace_block(BENCHMARKS / "quadratic-assignment" / "README.md", "## QAPLIB\n\n" + body, "qaplib")
@@ -1024,6 +1125,8 @@ def main() -> None:
     salbp = {name: _load(args.results, f"salbp-{name}.json") for name, _ in SALBP_SETS}
     salbp = {name: results for name, results in salbp.items() if results}
     if salbp:
+        for name, results in salbp.items():
+            _check_protocol(f"assembly-line-balancing ({name})", results, args)
         datasets["salbp-1"] = salbp_dataset(salbp, args.seconds)
         block = salbp_block(salbp, args)
         _replace_block(BENCHMARKS / "assembly-line-balancing" / "README.md", block)

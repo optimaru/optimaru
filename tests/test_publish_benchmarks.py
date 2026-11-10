@@ -216,3 +216,76 @@ def test_a_use_case_that_scores_a_reward_is_shown_as_scores() -> None:
     penalty = publish.compare_dataset("bed-allocation", [_compared([0, -30], [-2, -10]), _compared([0, 0], [0, 0])], 30)
     assert penalty["sections"][0]["metric"] == "penalty"
     assert penalty["sections"][0]["rows"][0]["cells"]["ortools"]["value"] == 2.0
+
+
+def test_pickup_delivery_cells_follow_the_recorded_outcome() -> None:
+    def run(outcome, status):
+        return {"solver": "cp-sat", "vehicles": None, "distance": None, "outcome": outcome, "status": status}
+
+    # The outcome decides, whatever the words of the status are.
+    assert publish._pdp_cell(run("incomplete", "rejected: reworded"))[0] == {"value": None, "status": "incomplete"}
+    assert publish._pdp_cell(run("infeasible", "rejected: time window violated at node 7"))[0]["status"] == "infeasible"
+    assert publish._pdp_cell(run("no solution", "no solution: status=UNKNOWN"))[1] == "no solution in time"
+    with pytest.raises(SystemExit, match="cannot be published"):
+        publish._pdp_cell(run("mismatch", "mismatch: the solver reports 5, the independent scorer 6"))
+
+
+def test_results_run_with_another_budget_or_worker_count_are_refused() -> None:
+    engine, cpsat = {"solver": "engine"}, {"solver": "cp-sat"}
+    publish._check_protocol("x", [{"instance": "a", "runs": [engine, cpsat]}], ARGS)  # nothing recorded
+    publish._check_protocol("x", [{"instance": "a", "budget": 30.0, "workers": 8, "runs": [engine, cpsat]}], ARGS)
+    # An engine-only run has no CP-SAT workers to state.
+    publish._check_protocol("x", [{"instance": "a", "budget": 30.0, "workers": 1, "runs": [engine]}], ARGS)
+    with pytest.raises(SystemExit, match="10 s, not --seconds 30"):
+        publish._check_protocol("x", [{"instance": "a", "budget": 10.0, "runs": [engine]}], ARGS)
+    with pytest.raises(SystemExit, match="1 workers, not --workers 8"):
+        publish._check_protocol("x", [{"instance": "a", "budget": 30.0, "workers": 1, "runs": [engine, cpsat]}], ARGS)
+
+
+def _qap(instance, objective, best):
+    gap = None if best is None else 100 * (objective - best) / best
+    run = {"solver": "engine", "objective": objective, "gap_to_qaplib_percent": gap}
+    return {"instance": instance, "size": 30, "qaplib_best_known": best, "runs": [run]}
+
+
+def test_qaplib_tables_leave_out_what_has_no_reference() -> None:
+    results = [_qap("esc32a", 140, None), _qap("nug30", 6256, 6124), _qap("lipa30b", 151426, 151426)]
+    block = publish.qaplib_block(results, ARGS)
+    assert "no solution file for esc32a" in block
+    assert "| esc32a | 30 | — | 140 | — |" in block and "| nug30 | 30 | 6,124 | 6,256 | 2.16% |" in block
+    assert "Mean gap 1.08%, median 1.08%, worst 2.16%." in block
+    rows = publish.qaplib_dataset(results, 30)["sections"][0]["rows"]
+    assert [row["instance"] for row in rows] == ["nug30", "lipa30b"]
+    assert rows[0]["cells"] == {"engine": {"value": 2.16, "detail": "6,256"}} and rows[0]["reference"] == "6,124"
+    # Nothing but instances without a reference: a table, and no statistics to divide by zero.
+    assert "Mean gap" not in publish.qaplib_block([_qap("esc32a", 140, None)], ARGS)
+
+
+def test_sample_and_size_cap_in_the_prose_come_from_the_results() -> None:
+    def station(instance, tasks, engine, cpsat=None):
+        runs = [{"solver": "engine", "stations": engine}]
+        if cpsat is not None:
+            runs.append({"solver": "cp-sat", "stations": cpsat})
+        return {"instance": instance, "tasks": tasks, "best_known": engine, "runs": runs}
+
+    sets = {
+        "large": [station("instance_n=100_1", 100, 24, 23), station("instance_n=100_500", 100, 14, 14)],
+        "very-large": [station("instance_n=1000_1", 1000, 137), station("instance_n=1000_500", 1000, 555)],
+    }
+    block = publish.salbp_block(sets, ARGS)
+    assert "SALBP-1: instances 1 and 500 of each data set." in block
+    assert "(`--exact-max-size`, 100 tasks)" in block
+    assert "| large | instance_n=100_1 | 100 | 24 | 24 | **23** |" in block
+    assert "| very-large | instance_n=1000_1 | 1000 | 137 | 137 | not run (size cap) |" in block
+    command = publish.salbp_dataset(sets, 30)["command"]
+    assert command.endswith("--dataset large --instance instance_n=100_1 --instance instance_n=100_500 --seconds 30")
+
+    def bins(instance, items):
+        return {"instance": instance, "items": items, "best_known": 20, "runs": [{"solver": "engine", "bins": 21}]}
+
+    sampled = [bins(f"{name}_{number}", 60) for name in ("u120", "t60") for number in ("00", "10", "19")]
+    assert "Falkenauer: instances 00, 10 and 19 of each class." in publish.bpp_block(sampled, ARGS)
+    assert "--sample-per-class 3 --seconds 30" in publish.bpp_dataset(sampled, 30)["command"]
+    uneven = [bins("u120_00", 120), bins("u120_04", 120), bins("t60_00", 60)]
+    assert "Falkenauer: 3 instances." in publish.bpp_block(uneven, ARGS)
+    assert "--instance u120_00 --instance u120_04 --instance t60_00" in publish.bpp_dataset(uneven, 30)["command"]

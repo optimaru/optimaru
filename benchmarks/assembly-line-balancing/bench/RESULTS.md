@@ -10,9 +10,9 @@ bound meets it, and otherwise the best solution its authors' solver found in
 100 seconds, so on the 1,000-task instances a result below it is possible.
 
 <!-- results:start -->
-SALBP-1 instances 1, 125, 250, 375 and 500 of each data set. Stations used; lower is better and
-the best value is bold. The upper bound is the one in the archive's details workbook: the optimum
-where the workbook's lower bound meets it, otherwise the best its authors' solver found in 100 s.
+SALBP-1: instances 1, 125, 250, 375 and 500 of each data set. Stations used; lower is better and the best value is bold. The upper bound
+is the one in the archive's details workbook: the optimum where the workbook's lower bound meets
+it, otherwise the best its authors' solver found in 100 s.
 
 | Data set | Instance | Tasks | Archive upper bound | optimaru engine | CP-SAT |
 | --- | --- | ---: | ---: | ---: | ---: |

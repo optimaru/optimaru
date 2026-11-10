@@ -138,6 +138,10 @@ def main(argv: list[str] | None = None) -> int:
                 "items": len(source.items),
                 "lower_bound": lower_bound,
                 "best_known": best_known,
+                "budget": args.seconds,
+                "seed": args.seed,
+                "workers": args.workers,
+                "exact_max_size": args.exact_max_size,
                 "runs": runs,
             }
         )

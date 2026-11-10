@@ -311,6 +311,10 @@ def make_request(
     )
 
 
+class IncompletePlan(ValueError):
+    """The routes leave a selected stop out (or serve one twice)."""
+
+
 def rescore(
     instance: PdptwInstance,
     requests: tuple[tuple[Node, Node], ...],
@@ -357,7 +361,7 @@ def rescore(
         if clock > instance.depot.due * DISTANCE_SCALE:
             raise ValueError("vehicle returned after the depot horizon")
     if sorted(seen) != sorted(selected):
-        raise ValueError("returned routes do not cover every selected stop exactly once")
+        raise IncompletePlan("returned routes do not cover every selected stop exactly once")
     return used, distance
 
 
@@ -412,6 +416,8 @@ def run_case(
             "distance": None,
             "seconds": None,
             "score": None,
+            # ok, no solution, incomplete, infeasible or mismatch; `status` has the words.
+            "outcome": "ok",
             "status": "",
         }
         runs.append(run)
@@ -420,6 +426,7 @@ def run_case(
             solution, elapsed = _run(backend, request)
         except RuntimeError as exc:  # e.g. CP-SAT found no solution in time
             run["seconds"] = time.perf_counter() - started
+            run["outcome"] = "no solution"
             run["status"] = f"no solution: {exc}"
             log(f"{backend:6} no solution: {exc}")
             continue
@@ -428,11 +435,19 @@ def run_case(
         try:
             used, distance = rescore(instance, selected, solution.routes)
         except ValueError as exc:  # incomplete or rule-breaking plan
+            run["outcome"] = "incomplete" if isinstance(exc, IncompletePlan) else "infeasible"
             run["status"] = f"rejected: {exc}"
             log(f"{backend:6} rejected: {exc} elapsed={elapsed:.2f}s score={solution.score}")
             continue
         if solution.total_driving_seconds != distance:
-            raise ValueError("solver report and independent distance disagree")
+            # A harness or adapter bug, not a result. Recorded, so a sweep of many
+            # instances keeps what it has measured; the publisher refuses it.
+            run["outcome"] = "mismatch"
+            run["status"] = (
+                f"mismatch: the solver reports {solution.total_driving_seconds}, the independent scorer {distance}"
+            )
+            log(f"{backend:6} {run['status']}")
+            continue
         run["vehicles"] = used
         run["distance"] = distance / DISTANCE_SCALE
         log(
@@ -448,6 +463,10 @@ def run_case(
         "vehicles": len(request.model_input.vehicles),
         "capacity": instance.capacity,
         "best_known": (None if reference is None else {"vehicles": reference[0], "distance": reference[1]}),
+        # What the run was given, so a table can state it and a publisher can check it.
+        "budget": seconds,
+        "seed": seed,
+        "workers": workers,
         "runs": runs,
     }
 
@@ -460,7 +479,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=f"Li & Lim instance stem; repeat to select several (default {DEFAULT_INSTANCE})",
     )
-    parser.add_argument("--all", action="store_true", help="run every instance of the archive")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="run every instance of the archive, whole unless --requests says otherwise",
+    )
     parser.add_argument("--seconds", type=float, default=10.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
@@ -474,8 +497,8 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         action="append",
         default=None,
-        help="request pairs taken from each official instance (default 10); repeat for "
-        "several sizes; use 0 for the full file",
+        help="request pairs taken from each official instance (default 10, or the full file "
+        "with --all); repeat for several sizes; use 0 for the full file",
     )
     parser.add_argument(
         "--synthetic",
@@ -503,7 +526,10 @@ def main(argv: list[str] | None = None) -> int:
     else:
         names = instance_names(args.cache_dir) if args.all else (args.instance or [DEFAULT_INSTANCE])
         cases = [
-            (load_instance(name, args.cache_dir), limit or None) for name in names for limit in (args.requests or [10])
+            (load_instance(name, args.cache_dir), limit or None)
+            for name in names
+            # The whole archive is run on whole instances unless a size is asked for.
+            for limit in (args.requests or ([0] if args.all else [10]))
         ]
     backends = ("engine", "cpsat") if args.backend == "both" else (args.backend,)
 

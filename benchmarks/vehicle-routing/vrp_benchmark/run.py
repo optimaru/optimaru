@@ -378,6 +378,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--fail-on-incomplete inspects engine results; add engine to --backend")
     if args.only and not args.series:
         parser.error("--only selects instances of a --series; use --instance for a single Augerat instance")
+    if args.limit_per_bucket and (args.series != "x" or args.only):
+        parser.error("--limit-per-bucket samples Set X by size; it does not go with --only or another series")
 
     if args.series == "x":
         return run_series(args)

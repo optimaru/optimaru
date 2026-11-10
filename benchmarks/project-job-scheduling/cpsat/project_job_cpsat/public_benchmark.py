@@ -83,7 +83,11 @@ def parse_instance(text: str, *, name: str = "instance") -> RcpspInstance:
 
 
 def _verified(payload: bytes) -> bool:
-    """Whether the archive holds exactly the five pinned instance files."""
+    """Whether the archive holds the five pinned instance files, byte for byte.
+
+    Whatever else a rebuilt archive carries (its sample programs, a further
+    instance) is not read and does not matter.
+    """
     try:
         with zipfile.ZipFile(io.BytesIO(payload)) as archive:
             found = {
@@ -93,7 +97,7 @@ def _verified(payload: bytes) -> bool:
             }
     except zipfile.BadZipFile:
         return False
-    return found == INSTANCE_SHA256
+    return all(found.get(name) == digest for name, digest in INSTANCE_SHA256.items())
 
 
 def _download(cache_dir: Path) -> bytes:
@@ -329,6 +333,10 @@ def run_case(
         "tasks": len(instance.tasks),
         "resources": len(instance.capacities),
         "critical_path": critical_path(instance),
+        # What the run was given, so a table can state it and a publisher can check it.
+        "budget": seconds,
+        "seed": seed,
+        "workers": workers,
         "runs": runs,
     }
 

@@ -106,6 +106,10 @@ def main(argv: list[str] | None = None) -> int:
                 "instance": name,
                 "tasks": len(source.tasks),
                 "best_known": best_known,
+                "budget": args.seconds,
+                "seed": args.seed,
+                "workers": args.workers,
+                "exact_max_size": args.exact_max_size,
                 "runs": runs,
             }
         )

@@ -19,7 +19,8 @@
     travel is rounded to a tenth of a unit and a request of the `lr` and `lrc`
     classes can no longer be left out for free (their 10-unit service time was
     under a whole service minute). `--instance`, `--requests` and `--synthetic`
-    repeat, `--all` runs the archive, `--json` prints the results, and the engine
+    repeat, `--all` runs the archive (whole instances unless `--requests` is
+    given), `--json` prints the results with each run's outcome, and the engine
     runs single-threaded whatever `--workers` says, as the READMEs stated.
   - *Project scheduling.* The RG30 archive is checked by the SHA-256 of its five
     instance files: the archive itself is rebuilt upstream, and the pinned archive

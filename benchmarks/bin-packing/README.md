@@ -38,8 +38,7 @@ objective is built.
 <!-- results:start -->
 ## Results
 
-Falkenauer instances 00, 10 and 19 of each class (`--sample-per-class 3`). Bins used; lower is better and
-the best value is bold.
+Falkenauer: instances 00, 10 and 19 of each class. Bins used; lower is better and the best value is bold.
 
 | Instance | Items | Best known | optimaru engine | CP-SAT |
 | --- | ---: | ---: | ---: | ---: |

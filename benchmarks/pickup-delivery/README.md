@@ -24,9 +24,9 @@ its time includes model construction.
 <!-- results:start -->
 ## Results
 
-**Synthetic Li & Lim-shaped instances** (`--synthetic N`, seed 0): customers in a 100 x 100
-square, half in six clusters, service time 90, one vehicle per three requests. Cells are
-vehicles / distance.
+**Synthetic Li & Lim-shaped instances** (`--synthetic N`, seed 0): customers in a
+100 x 100 square, half in six clusters, service time 90, one vehicle per three requests. Cells
+are vehicles / distance.
 
 | Requests | engine | CP-SAT |
 | --- | --- | --- |
@@ -35,8 +35,7 @@ vehicles / distance.
 | 200 | **40 / 11,321.7** | no solution in time |
 | 400 | 54 / 22,224.5 | not run |
 
-CP-SAT is not run at 400 requests: at that size its model was still being
-built after 10 minutes at 11 GB (2026-10-29).
+CP-SAT is not run at 400 requests: its model takes minutes and gigabytes to build (at 400 requests it was still being built after 10 minutes at 11 GB, 2026-10-29).
 
 The Li & Lim results are in [`cpsat/PUBLIC_BENCHMARKS.md`](cpsat/PUBLIC_BENCHMARKS.md).
 

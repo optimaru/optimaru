@@ -33,12 +33,14 @@ uv run pickup-delivery-public-bench --instance lc101 --instance lc201 --instance
   --instance lr201 --instance lrc101 --instance lrc201 \
   --requests 10 --requests 25 --requests 0 --seconds 30 --workers 8
 # the engine on all 56 whole instances
-uv run pickup-delivery-public-bench --all --requests 0 --seconds 30 --backend engine
+uv run pickup-delivery-public-bench --all --seconds 30 --backend engine
 ```
 
 `--instance` and `--requests` repeat; `--requests 0` takes every pair of the
-source file, `--all` every instance of the archive, and `--json` prints the
-results as JSON (progress goes to stderr). The engine always runs
+source file, `--all` runs every instance of the archive (whole, unless
+`--requests` says otherwise), and `--json` prints the results as JSON (progress
+goes to stderr). A run records its outcome (`ok`, `no solution`, `incomplete`,
+`infeasible`) and the budget, seed and workers it was given. The engine always runs
 single-threaded; `--workers` is CP-SAT's. The CP-SAT circuit model grows
 quadratically per vehicle, so a whole instance (about 50 requests, 25 vehicles)
 is past what it solves in 30 s.
@@ -48,7 +50,7 @@ Each plan is re-verified independently: every request served, pickup before drop
 same vehicle, capacity and every time window. Distance is the Li & Lim round trip, with every
 leg rounded to a tenth of a unit; lower is better. Cells are vehicles / distance.
 
-**Engine and CP-SAT**, the first instance of each class at 10 requests, 25 requests and whole:
+**Engine and CP-SAT** on lc101, lc201, lr101, lr201, lrc101 and lrc201, at their first 10 and 25 requests and whole:
 
 | Instance | Requests | engine | CP-SAT |
 | --- | --- | --- | --- |

@@ -2,11 +2,14 @@ import hashlib
 import io
 import zipfile
 
+import pytest
+
 from project_job_cpsat.public_benchmark import (
     INSTANCE_SHA256,
     _verified,
     critical_path,
     instance_names,
+    main,
     make_model,
     parse_instance,
     run_case,
@@ -45,8 +48,10 @@ def test_archive_is_checked_by_its_instance_files(monkeypatch) -> None:
     files = {f"rcpsp/instances/Pat{i}.rcp": f"instance {i}".encode() for i in range(1, 6)}
     pins = {name.rsplit("/", 1)[1][:-4]: hashlib.sha256(payload).hexdigest() for name, payload in files.items()}
     monkeypatch.setattr("project_job_cpsat.public_benchmark.INSTANCE_SHA256", pins)
-    # Other members (the vendor's sample programs) and the zip's own bytes do not matter.
+    # Other members (the vendor's sample programs, a further instance) and the zip's own
+    # bytes do not matter.
     assert _verified(_archive(files | {"rcpsp/rcpsp.py": b"anything"}))
+    assert _verified(_archive(files | {"rcpsp/instances/Pat6.rcp": b"one more"}))
     assert not _verified(_archive(files | {"rcpsp/instances/Pat1.rcp": b"edited"}))
     assert not _verified(_archive({name: files[name] for name in list(files)[:4]}))
     assert not _verified(b"<html>not a zip</html>")
@@ -64,8 +69,15 @@ def test_run_case_reports_both_backends() -> None:
         log=lines.append,
     )
     assert (result["tasks"], result["resources"], result["critical_path"]) == (4, 1, 3)
+    assert (result["budget"], result["seed"], result["workers"]) == (1, 0, 1)
     assert [run["solver"] for run in result["runs"]] == ["engine", "cp-sat"]
     for run in result["runs"]:
         # Tasks 2 and 3 need 1 and 2 of the 2 units: they cannot overlap, so 2 + 3.
         assert run["feasible"] and run["makespan"] == 5 and run["status"] == ""
     assert lines[0].startswith("tiny: 4 tasks, 1 resources")
+
+
+def test_all_and_instance_do_not_go_together() -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--all", "--instance", "Pat1"])
+    assert exit_info.value.code == 2

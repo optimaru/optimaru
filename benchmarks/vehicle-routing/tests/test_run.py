@@ -157,3 +157,21 @@ def test_markdown_summary_of_set_a_has_no_bucket_table() -> None:
     assert "every instance of the set" in table and "Bucket" not in table
     rows = [line for line in table.splitlines() if line.startswith("| A-")]
     assert rows == ["| A-n32-k5 | 31 | 0.77% |", "| A-n33-k5 | 32 | 0.00% |", "| A-n33-k6 | 32 | 0.00% |"]
+
+
+def test_the_free_fleet_leaves_room_for_the_set_x_solution_closest_to_it() -> None:
+    # X-n524-k153 (total demand 17067, capacity 125): its best-known solution uses 155
+    # routes, the most of any Set X instance relative to the fleet (the mirror's .sol
+    # files, 2026-11-10). A smaller margin has to stay above that.
+    assert free_fleet((17067,), 125) == 181
+    assert free_fleet((17067,), 125) > 155
+
+
+def test_limit_per_bucket_goes_with_a_set_x_sample_only() -> None:
+    for argv in (
+        ["--series", "a", "--limit-per-bucket", "2"],
+        ["--series", "x", "--only", "X-n101-k25", "--limit-per-bucket", "1"],
+    ):
+        with pytest.raises(SystemExit) as exit_info:
+            main(argv)
+        assert exit_info.value.code == 2
