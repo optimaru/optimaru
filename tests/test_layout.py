@@ -55,3 +55,20 @@ def test_every_use_case_has_a_guide_and_a_benchmark():
         slug = name.replace("_", "-")
         assert (ROOT / "docs" / "use-cases" / slug / "README.md").is_file(), slug
         assert (ROOT / "benchmarks" / slug).is_dir(), slug
+
+
+def test_ruff_is_configured_in_one_place():
+    """The root pyproject.toml configures ruff for the benchmark projects too, so an import
+    sorts the same way from every directory."""
+    strays = [
+        str(path.relative_to(ROOT))
+        for pattern in ("*/pyproject.toml", "*/*/pyproject.toml")
+        for path in (ROOT / "benchmarks").glob(pattern)
+        if "[tool.ruff" in path.read_text()
+    ]
+    strays += [
+        str(path.relative_to(ROOT))
+        for pattern in ("*/ruff.toml", "*/*/ruff.toml", "*/.ruff.toml", "*/*/.ruff.toml")
+        for path in (ROOT / "benchmarks").glob(pattern)
+    ]
+    assert not strays, f"ruff is configured in the root pyproject.toml only: {strays}"
