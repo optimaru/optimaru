@@ -37,8 +37,9 @@
 //       (zero-raw units and a scoped constraint's units in literal mode,
 //       negative offsets, rewards, hard rounding) and on the total for a
 //       global; offset 0 is the plain shaping bit for bit; the knob checks
-//   (p) several instances of one name: add_instance()/add_instances(), by-name
-//       edits on the first instance, each instance scored on its own with
+//   (p) several instances of one name: add_instance()/add_instances(), edits
+//       by instance (a by-name edit of a repeated name throws; engine_test
+//       covers every setter), each instance scored on its own with
 //       its own knobs, constraint_costs() in instance order; incremental ==
 //       fresh recompute on random walks with repeated and offset picks (both
 //       folds, rejected trial moves), and sequence previews under ScoreChecks::Full
@@ -1686,12 +1687,19 @@ void testInstances() {
     {
         auto assembly = one<Tasks>("taskCostCost");
         assembly.emplace_instance<TaskCostCost<Tasks>>();
-        assembly.exponent("taskCostCost", 2.0);  // the FIRST instance only
+        bool threw = false;
+        try {
+            assembly.exponent("taskCostCost", 2.0);  // which of the two?
+        } catch (const std::invalid_argument&) {
+            threw = true;
+        }
+        check(threw, "a by-name edit of a name held twice throws");
+        assembly.exponent("taskCostCost", 0, 2.0);  // the first instance only
         check(assembly.size() == 2 && assembly.names() ==
                                               std::vector<std::string>{"taskCostCost", "taskCostCost"},
               "emplaceInstance keeps the instance already held");
         check(softOf(std::move(assembly), t) == 15 * 15 + 11 * 11 + 2 * 2 + 28.0,
-              "a by-name edit addresses the first instance: 354 (shaped) + 28 (the copy)");
+              "an edit by instance addresses that instance: 354 (shaped) + 28 (the copy)");
     }
     {
         auto assembly = one<Tasks>("taskCostCost");
@@ -1708,9 +1716,9 @@ void testInstances() {
     {
         auto assembly = one<Tasks>("taskCostCost");
         assembly.emplace_instance<TaskCostCost<Tasks>>(3.0);
-        assembly.drop("taskCostCost");
+        assembly.drop("taskCostCost", 0);
         check(assembly.size() == 1 && assembly.find("taskCostCost")->weight == 3.0,
-              "drop() removes the first instance; the second becomes the first");
+              "drop(name, 0) removes the first instance; the second becomes the first");
         auto both = defaults<Tasks>();
         both.emplace_instance<TaskCostCost<Tasks>>(3.0);
         both.only({"taskCostCost"});
@@ -2424,7 +2432,8 @@ void testExactNegativeThreshold() {
             LoadAssembly assembly;
             assembly.emplace<GroupedLoadCost<Loads, true>>();
             assembly.emplace_instance<GroupedLoadCost<Loads, true>>();
-            return negativeThreshold(std::move(assembly), "integralLoadCost");
+            // On the first of the two members.
+            return std::move(assembly).offset("integralLoadCost", 0, -1.0);
         };
         Loads s;
         s.load = {1.0, 2.0, 7.0, 3.0, 6.0, 4.0};

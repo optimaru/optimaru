@@ -1944,6 +1944,82 @@ void testConstraintAssembly() {
     }
     check(threw == 3, "an unknown constraint name throws on weight/drop/only");
 
+    // A name held several times: its name alone does not say which instance,
+    // so every by-name edit and lookup throws instead of touching the first
+    // and leaving the others in the score.
+    auto repeated = [&] {
+        return defaults().add_instance(std::make_unique<TaConflict>(s, 3.0));
+    };
+    check(repeated().size() == 4 && repeated().instance_count("conflict") == 2 &&
+                  repeated().instance_count("cost") == 1 && repeated().instance_count("nope") == 0,
+          "instance_count() counts the instances of a name");
+    const std::vector<std::function<void()>> ambiguous = {
+            [&] { repeated().weight("conflict", 0.0); },
+            [&] { repeated().level("conflict", optimaru::Level::Soft); },
+            [&] { repeated().hard("conflict"); },
+            [&] { repeated().soft("conflict"); },
+            [&] { repeated().exponent("conflict", 2.0); },
+            [&] { repeated().offset("conflict", 1.0); },
+            [&] { repeated().clip("conflict", false); },
+            [&] { repeated().find("conflict"); },
+            [&] { repeated().drop("conflict"); },
+            [&] { repeated().add(std::make_unique<TaConflict>(s, 9.0)); },
+    };
+    threw = 0;
+    for (const auto& edit : ambiguous) {
+        try {
+            edit();
+        } catch (const std::invalid_argument&) {
+            ++threw;
+        }
+    }
+    check(threw == static_cast<int>(ambiguous.size()),
+          "a by-name edit or lookup of a name held several times throws");
+
+    // The instance overloads say which one (from 0, in the order added).
+    check(repeated().find("conflict", 0)->weight == 2.0 &&
+                  repeated().find("conflict", 1)->weight == 3.0 &&
+                  repeated().find("conflict", 2) == nullptr && repeated().find("nope", 0) == nullptr,
+          "find(name, instance) reads one instance, nullptr past the last");
+    check(scoreOf(repeated().weight("conflict", 1, 0.0)) == scoreOf(defaults()),
+          "weight(name, 1, 0) takes the second instance out of the score");
+    check(scoreOf(repeated().weight("conflict", 0, 5.0).drop("conflict", 1)) ==
+                  scoreOf(defaults().weight("conflict", 5.0)),
+          "weight(name, 0, w) + drop(name, 1) == the single instance re-weighted");
+    check(scoreOf(repeated().soft("conflict", 0).soft("conflict", 1)).hard == 0,
+          "soft(name, instance) flips each instance");
+    auto knobs = repeated()
+                         .soft("conflict", 0)
+                         .level("conflict", 1, optimaru::Level::Soft)
+                         .hard("conflict", 1)
+                         .clip("conflict", 1, false)
+                         .exponent("conflict", 1, 2.0)
+                         .offset("conflict", 0, 1.0);
+    const optimaru::ConstraintMetadata& first = *knobs.find("conflict", 0);
+    const optimaru::ConstraintMetadata& other = *knobs.find("conflict", 1);
+    check(first.level == optimaru::Level::Soft && first.clip && first.exponent == 1.0 &&
+                  first.offset == 1.0 && other.level == optimaru::Level::Hard && !other.clip &&
+                  other.exponent == 2.0 && other.offset == 0.0,
+          "level / hard / clip / exponent / offset by instance leave the other instance alone");
+    auto second = repeated().drop("conflict", 0);
+    check(second.instance_count("conflict") == 1 && second.find("conflict")->weight == 3.0,
+          "after drop(name, 0) the name is unambiguous again and names the former second");
+    auto none = repeated().drop_all("conflict");
+    check(none.size() == 2 && !none.contains("conflict"), "drop_all() removes every instance");
+    check(repeated().only({"conflict"}).size() == 2, "only() keeps every instance of a name");
+    threw = 0;
+    for (auto&& edit : {std::function<void()>([&] { repeated().weight("conflict", 2, 1.0); }),
+                        std::function<void()>([&] { repeated().drop("conflict", 2); }),
+                        std::function<void()>([&] { repeated().weight("nope", 0, 1.0); }),
+                        std::function<void()>([&] { repeated().drop_all("nope"); })}) {
+        try {
+            edit();
+        } catch (const std::invalid_argument&) {
+            ++threw;
+        }
+    }
+    check(threw == 4, "an instance or a name the assembly does not hold throws");
+
     // into() spends the assembly: the components moved out.
     auto spent = defaults();
     optimaru::DecomposedObjective<TaskAssignment> sink;

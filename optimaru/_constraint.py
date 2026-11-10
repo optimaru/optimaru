@@ -40,7 +40,11 @@ Every spec takes the same five knobs, and only those:
                same granularity as ``exponent``. Keyword-only.
 - ``clip``     what happens below the offset (keyword-only). ``True`` (the
                default, the threshold): ``sign(x) * max(0, |x| - offset) **
-               exponent``, so only the part beyond the offset counts.
+               exponent``, so only the part beyond the offset counts. With a
+               negative offset that is a fixed charge per non-zero unit, which
+               the engine recomputes for every unit a move changes instead of
+               updating it by the difference: the same score, but a slower
+               solve (about half the steps per second in vehicle routing).
                ``False`` (the literal formula): ``shape(x - offset,
                exponent)``, which is negative below the offset (a reward) and
                charges every unit the constraint evaluates, a raw 0 included.
@@ -434,7 +438,10 @@ def _engine_order(read: list[tuple], costs: Mapping[str, Mapping[str, Any]]) -> 
     def rank(item: tuple[int, tuple]) -> tuple:
         index, (name, key, entry, *_rest) = item
         repeat = "#" in key
-        return (bool(entry.get("global", False)), repeat, index if repeat else position.get(name, index))
+        # A first pick was read from costs[name], so the name its entry
+        # carries is in `position` (a KeyError here is a bug in this module).
+        first = index if repeat else position[str(entry.get("name") or name)]
+        return (bool(entry.get("global", False)), repeat, first)
 
     return [pick for _index, pick in sorted(enumerate(read), key=rank)]
 

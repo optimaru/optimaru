@@ -77,13 +77,21 @@ struct ConstraintInfo {
 // time) is the same component added more than once. add() keeps its
 // override semantics; add_instance() / add_instances() append further
 // instances next to the one already held, each scored on its own with its
-// own metadata, and the instances add up. Every by-name edit and lookup
-// (weight(), level(), hard(), soft(), exponent(), offset(), clip(), find(),
-// add()'s replacement) addresses the FIRST instance of the name; drop()
-// removes the first, only() keeps every instance of the names it is given.
+// own metadata, and the instances add up. A name that is held once is
+// addressed by the name alone. A name held SEVERAL times is ambiguous, so
+// every by-name edit and lookup (weight(), level(), hard(), soft(),
+// exponent(), offset(), clip(), find(), drop(), add()'s replacement) THROWS
+// std::invalid_argument for it instead of touching one instance and leaving
+// the others in the score. Say which one with the instance overloads
+// (weight(name, instance, w), ..., find(name, instance), drop(name,
+// instance)), where `instance` counts from 0 in the order the instances were
+// added and instance_count(name) is how many there are, or address them all:
+// drop_all(name) removes every instance, only() keeps every instance of the
+// names it is given, contains() is true for any count.
 // The objective, and the Python constraint_costs() keys
 // (python::instance_keys: "<name>", "<name>#2", ...), see the instances of a
-// name in the order they were added. Those keys are why a name must not
+// name in that same order: instance 0 is "<name>", instance 1 is "<name>#2".
+// Those keys are why a name must not
 // contain '#': every add / add_instance / emplace refuses one
 // (std::invalid_argument naming the constraint).
 
@@ -105,8 +113,12 @@ public:
     // name (override semantics: stating a constraint twice means "this one",
     // not "count it twice"). Use add_instance() below when you really do want
     // the same cost counted more than once (each instance with its own knobs).
+    // A name the assembly already holds several times has no single instance
+    // to replace, so this throws for it: drop_all(name) first.
     ConstraintAssembly& add(std::unique_ptr<Unit> constraint) & {
-        replace_or_append(units_, checked_name(std::move(constraint)));
+        constraint = checked_name(std::move(constraint));
+        require_unambiguous(constraint->name);
+        replace_or_append(units_, std::move(constraint));
         return *this;
     }
     ConstraintAssembly&& add(std::unique_ptr<Unit> constraint) && {
@@ -114,7 +126,9 @@ public:
         return std::move(*this);
     }
     ConstraintAssembly& add(std::unique_ptr<Global> constraint) & {
-        replace_or_append(globals_, checked_name(std::move(constraint)));
+        constraint = checked_name(std::move(constraint));
+        require_unambiguous(constraint->name);
+        replace_or_append(globals_, std::move(constraint));
         return *this;
     }
     ConstraintAssembly&& add(std::unique_ptr<Global> constraint) && {
@@ -191,6 +205,12 @@ public:
     // The rule that spans several knobs (the hard-0 rule, python::
     // check_literal_offset) is checked at reset (validate_level), so the
     // setters may come in any order.
+    //
+    // Each setter has a by-name form for a name the assembly holds once and
+    // an instance form, `(name, instance, value)`, for one of several
+    // (`instance` from 0, see "One name, several instances" above). The
+    // by-name form throws for a name held several times; both throw for a
+    // name, or an instance, the assembly does not hold.
 
     ConstraintAssembly& weight(const std::string& name, double weight) & {
         require(name).set_weight(weight);
@@ -198,6 +218,14 @@ public:
     }
     ConstraintAssembly&& weight(const std::string& name, double weight) && {
         this->weight(name, weight);  // the parameter shadows the method name
+        return std::move(*this);
+    }
+    ConstraintAssembly& weight(const std::string& name, std::size_t instance, double weight) & {
+        require(name, instance).set_weight(weight);
+        return *this;
+    }
+    ConstraintAssembly&& weight(const std::string& name, std::size_t instance, double weight) && {
+        this->weight(name, instance, weight);
         return std::move(*this);
     }
     // Any level, Medium included (the domain must declare a medium fold, or
@@ -211,6 +239,14 @@ public:
         this->level(name, level);  // the parameter shadows the method
         return std::move(*this);
     }
+    ConstraintAssembly& level(const std::string& name, std::size_t instance, Level level) & {
+        require(name, instance).set_level(level);
+        return *this;
+    }
+    ConstraintAssembly&& level(const std::string& name, std::size_t instance, Level level) && {
+        this->level(name, instance, level);
+        return std::move(*this);
+    }
     // hard(name) == level(name, Level::Hard): throws for a reward and for a
     // non-flippable soft constraint. A medium constraint becomes hard at the
     // same weight (one hard unit per raw unit).
@@ -219,11 +255,25 @@ public:
         hard(name);
         return std::move(*this);
     }
+    ConstraintAssembly& hard(const std::string& name, std::size_t instance) & {
+        return level(name, instance, Level::Hard);
+    }
+    ConstraintAssembly&& hard(const std::string& name, std::size_t instance) && {
+        hard(name, instance);
+        return std::move(*this);
+    }
     // soft(name) == level(name, Level::Soft): demotes a hard or a medium
     // constraint; throws for a non-flippable hard one.
     ConstraintAssembly& soft(const std::string& name) & { return level(name, Level::Soft); }
     ConstraintAssembly&& soft(const std::string& name) && {
         soft(name);
+        return std::move(*this);
+    }
+    ConstraintAssembly& soft(const std::string& name, std::size_t instance) & {
+        return level(name, instance, Level::Soft);
+    }
+    ConstraintAssembly&& soft(const std::string& name, std::size_t instance) && {
+        soft(name, instance);
         return std::move(*this);
     }
     // Sign-preserving power shaping: per unit before the weight for a unit
@@ -237,6 +287,15 @@ public:
         this->exponent(name, exponent);  // the parameter shadows the method
         return std::move(*this);
     }
+    ConstraintAssembly& exponent(const std::string& name, std::size_t instance, double exponent) & {
+        require(name, instance).set_exponent(exponent);
+        return *this;
+    }
+    ConstraintAssembly&& exponent(const std::string& name, std::size_t instance,
+                                  double exponent) && {
+        this->exponent(name, instance, exponent);
+        return std::move(*this);
+    }
     // The offset and clip knobs of the shaping: see shape_cost
     // (decomposed_objective.hpp) for the formula.
     ConstraintAssembly& offset(const std::string& name, double offset) & {
@@ -247,6 +306,14 @@ public:
         this->offset(name, offset);  // the parameter shadows the method
         return std::move(*this);
     }
+    ConstraintAssembly& offset(const std::string& name, std::size_t instance, double offset) & {
+        require(name, instance).set_offset(offset);
+        return *this;
+    }
+    ConstraintAssembly&& offset(const std::string& name, std::size_t instance, double offset) && {
+        this->offset(name, instance, offset);
+        return std::move(*this);
+    }
     ConstraintAssembly& clip(const std::string& name, bool clip) & {
         require(name).set_clip(clip);
         return *this;
@@ -255,19 +322,50 @@ public:
         this->clip(name, clip);  // the parameter shadows the method
         return std::move(*this);
     }
+    ConstraintAssembly& clip(const std::string& name, std::size_t instance, bool clip) & {
+        require(name, instance).set_clip(clip);
+        return *this;
+    }
+    ConstraintAssembly&& clip(const std::string& name, std::size_t instance, bool clip) && {
+        this->clip(name, instance, clip);
+        return std::move(*this);
+    }
 
     // Removes a constraint. Throws when it is not in the assembly, so dropping
     // something twice (or misspelling it) is an error rather than a silent
-    // no-op.
+    // no-op, and when the assembly holds the name several times (dropping one
+    // instance would leave the others in the score): drop(name, instance)
+    // removes one of them, drop_all(name) every one.
     ConstraintAssembly& drop(const std::string& name) & {
-        if (!erase_by_name(units_, name) && !erase_by_name(globals_, name)) {
-            throw std::invalid_argument("Constraint '" + name +
-                                        "' is not in this assembly; it holds " + name_list());
-        }
+        require(name);
+        erase_instance(name, 0);
         return *this;
     }
     ConstraintAssembly&& drop(const std::string& name) && {
         drop(name);
+        return std::move(*this);
+    }
+    // Removes one instance. The instances after it move up by one, so
+    // dropping instance 0 twice removes the first two.
+    ConstraintAssembly& drop(const std::string& name, std::size_t instance) & {
+        require(name, instance);
+        erase_instance(name, instance);
+        return *this;
+    }
+    ConstraintAssembly&& drop(const std::string& name, std::size_t instance) && {
+        drop(name, instance);
+        return std::move(*this);
+    }
+    // Removes every instance of a name, however many there are. Throws when
+    // the assembly holds none.
+    ConstraintAssembly& drop_all(const std::string& name) & {
+        if (instance_count(name) == 0) throw_missing(name);
+        erase_all(units_, name);
+        erase_all(globals_, name);
+        return *this;
+    }
+    ConstraintAssembly&& drop_all(const std::string& name) && {
+        drop_all(name);
         return std::move(*this);
     }
 
@@ -296,8 +394,10 @@ public:
 
     // --- inspecting -------------------------------------------------------
 
-    bool contains(const std::string& name) const {
-        return find_in(units_, name) != nullptr || find_in(globals_, name) != nullptr;
+    bool contains(const std::string& name) const { return instance_count(name) > 0; }
+    // How many instances of a name the assembly holds (0 = none).
+    std::size_t instance_count(const std::string& name) const {
+        return count_in(units_, name) + count_in(globals_, name);
     }
     std::vector<std::string> names() const {
         std::vector<std::string> all;
@@ -309,12 +409,17 @@ public:
     std::size_t size() const { return units_.size() + globals_.size(); }
     bool empty() const { return size() == 0; }
 
-    // The metadata of one component, or nullptr. Read-only: edits go through
-    // the validating setters above.
+    // The metadata of one component, or nullptr when the assembly does not
+    // hold it. Read-only: edits go through the validating setters above.
+    // The by-name form throws for a name held several times, like the
+    // setters; find(name, instance) reads one of them (nullptr when
+    // `instance` is past the last one).
     const ConstraintMetadata* find(const std::string& name) const {
-        if (const Unit* unit = find_in(units_, name)) return unit;
-        if (const Global* global = find_in(globals_, name)) return global;
-        return nullptr;
+        require_unambiguous(name);
+        return find(name, 0);
+    }
+    const ConstraintMetadata* find(const std::string& name, std::size_t instance) const {
+        return nth(name, instance);
     }
 
     // The catalog rows of this assembly, in assembly order (units first, then
@@ -372,23 +477,61 @@ private:
     }
 
     template <typename Vector>
-    static auto find_in(const Vector& vector, const std::string& name) ->
+    static std::size_t count_in(const Vector& vector, const std::string& name) {
+        std::size_t count = 0;
+        for (const auto& constraint : vector) count += constraint->name == name ? 1 : 0;
+        return count;
+    }
+
+    // The `instance`-th component of a name in one vector, or nullptr.
+    // `instance` is taken down by the matches passed, so the caller carries
+    // it on from the units to the globals (the order the objective holds
+    // them in).
+    template <typename Vector>
+    static auto nth_in(const Vector& vector, const std::string& name, std::size_t& instance) ->
             typename Vector::value_type::element_type* {
         for (const auto& constraint : vector) {
-            if (constraint->name == name) return constraint.get();
+            if (constraint->name != name) continue;
+            if (instance == 0) return constraint.get();
+            --instance;
         }
         return nullptr;
     }
 
+    // The metadata of the `instance`-th component of a name (units before
+    // globals), or nullptr.
+    ConstraintMetadata* nth(const std::string& name, std::size_t instance) const {
+        if (Unit* unit = nth_in(units_, name, instance)) return unit;
+        if (Global* global = nth_in(globals_, name, instance)) return global;
+        return nullptr;
+    }
+
     template <typename Vector>
-    static bool erase_by_name(Vector& vector, const std::string& name) {
+    static bool erase_nth(Vector& vector, const std::string& name, std::size_t& instance) {
         for (auto it = vector.begin(); it != vector.end(); ++it) {
-            if ((*it)->name == name) {
+            if ((*it)->name != name) continue;
+            if (instance == 0) {
                 vector.erase(it);
                 return true;
             }
+            --instance;
         }
         return false;
+    }
+
+    // Removes the `instance`-th component of a name; the caller has checked
+    // that it exists.
+    void erase_instance(const std::string& name, std::size_t instance) {
+        if (!erase_nth(units_, name, instance)) erase_nth(globals_, name, instance);
+    }
+
+    template <typename Vector>
+    static void erase_all(Vector& vector, const std::string& name) {
+        Vector kept;
+        for (auto& constraint : vector) {
+            if (constraint->name != name) kept.push_back(std::move(constraint));
+        }
+        vector = std::move(kept);
     }
 
     template <typename Vector, typename Names>
@@ -408,22 +551,48 @@ private:
     template <typename Names>
     void only_impl(const Names& names) {
         for (const std::string& name : names) {
-            if (!contains(name)) {
-                throw std::invalid_argument("Constraint '" + name +
-                                            "' is not in this assembly; it holds " + name_list());
-            }
+            if (!contains(name)) throw_missing(name);
         }
         keep_only(units_, names);
         keep_only(globals_, names);
     }
 
-    // The named constraint's metadata, whichever kind it is (both bases share
-    // ConstraintMetadata). Throws with the available names when it misses.
-    ConstraintMetadata& require(const std::string& name) {
-        if (Unit* unit = find_in(units_, name)) return *unit;
-        if (Global* global = find_in(globals_, name)) return *global;
+    [[noreturn]] void throw_missing(const std::string& name) const {
         throw std::invalid_argument("Constraint '" + name + "' is not in this assembly; it holds " +
                                     name_list());
+    }
+
+    // A by-name edit or lookup needs a name the assembly holds at most once.
+    void require_unambiguous(const std::string& name) const {
+        const std::size_t count = instance_count(name);
+        if (count > 1) {
+            throw std::invalid_argument(
+                    "Constraint '" + name + "' has " + std::to_string(count) +
+                    " instances in this assembly, so its name alone does not say which one; "
+                    "pass the instance (0 to " + std::to_string(count - 1) +
+                    ") or use drop_all()");
+        }
+    }
+
+    // The metadata of the one constraint of a name, whichever kind it is
+    // (both bases share ConstraintMetadata). Throws with the available names
+    // when it misses, and when the name is held several times.
+    ConstraintMetadata& require(const std::string& name) {
+        require_unambiguous(name);
+        if (ConstraintMetadata* constraint = nth(name, 0)) return *constraint;
+        throw_missing(name);
+    }
+
+    // The metadata of one instance of a name. Throws when the assembly does
+    // not hold the name, or holds fewer instances.
+    ConstraintMetadata& require(const std::string& name, std::size_t instance) {
+        if (ConstraintMetadata* constraint = nth(name, instance)) return *constraint;
+        const std::size_t count = instance_count(name);
+        if (count == 0) throw_missing(name);
+        throw std::invalid_argument("Constraint '" + name + "' has " + std::to_string(count) +
+                                    (count == 1 ? " instance" : " instances") +
+                                    " in this assembly; there is no instance " +
+                                    std::to_string(instance));
     }
 
     std::string name_list() const {

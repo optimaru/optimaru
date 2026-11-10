@@ -82,6 +82,15 @@ vehicle, and the soft `TravelTimeCost(offset=10, exponent=3, clip=False)` adds
 not to the total. With `offset=0` both modes are the plain `x ** exponent`. A
 weight of 0 contributes exactly 0 at any exponent and offset.
 
+A negative offset with `clip=True` is a fixed charge per unit in use:
+`TravelTimeCost(offset=-60)` adds `x + 60` for a vehicle that drives and 0 for
+an idle one. That jump at 0 needs the raw cost exactly, so the engine recomputes
+such a constraint for every unit a move changes instead of updating it by the
+difference. The score is the same, but the solve is slower: in vehicle routing
+it took about half as many steps per second as `TravelTimeCost()` on 100 to
+1,000 visits. A positive threshold and `clip=False` are not recomputed this
+way.
+
 A constraint may be picked several times. Each pick is its own instance with its
 own knobs (its level included) and, where the constraint has domain parameters,
 its own parameters. The instances are scored independently and add up, so

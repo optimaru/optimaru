@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **Engine: repeated instances in `ConstraintAssembly`.** A by-name edit or
+  lookup (`weight()`, `level()`, `hard()`, `soft()`, `exponent()`, `offset()`,
+  `clip()`, `find()`, `drop()`, and `add()`'s replacement) of a name the
+  assembly holds several times now throws `std::invalid_argument`. It used to
+  touch the first instance only, so `weight("x", 0)` after `add_instance()`
+  left the second instance in the score. New overloads take the instance,
+  counted from 0: `weight(name, instance, w)` and the same for the other
+  setters, `find(name, instance)` and `drop(name, instance)`.
+  `instance_count(name)` says how many there are and `drop_all(name)` removes
+  them all. `find(name)` throws for such a name as well, where it used to
+  return the first instance; `contains(name)` never throws. A name held once
+  behaves as before, and so does the Python API,
+  which never edits a repeated name.
+- **Docs: the cost of a negative threshold.** The guides now say that a
+  negative `offset` with `clip=True` (a fixed charge per non-zero unit) is
+  recomputed for every unit a move changes, which about halves the steps per
+  second of a vehicle-routing solve.
 - **Docs and messages.** The guides, docstrings and comments describe each use
   case in its own terms and no longer compare it with the examples it was
   derived from. Two `optimaru.project_job_scheduling` error messages changed

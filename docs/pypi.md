@@ -84,7 +84,11 @@ Every constraint takes the same five knobs:
   reward, below 10. A negative threshold, `TravelTimeCost(offset=-60)`, is a
   fixed charge: `x + 60` for every vehicle that drives at all, 0 for an idle
   one, and the engine computes the raw cost of such a constraint exactly, so a
-  vehicle back at 0 is never charged.
+  vehicle back at 0 is never charged. That costs speed: the engine recomputes
+  the constraint for every unit a move changes instead of updating it by the
+  difference, and a routing solve with `TravelTimeCost(offset=-60)` took about
+  half as many steps per second as one with `TravelTimeCost()` (100 to 1,000
+  visits). A positive threshold and `clip=False` are not recomputed this way.
   Either formula applies per unit: per vehicle, per slot and so on, on every
   unit the constraint evaluates, raw 0 included. It is not one formula over the
   total violation, so with `clip=False` an idle vehicle contributes

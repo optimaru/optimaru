@@ -376,7 +376,10 @@ inline void apply_knobs(ConstraintMetadata& constraint, const py::handle& item,
 //   tfpy::apply_constraints([&] { return defaultConstraints(problem); }, constraints)
 //
 // `defaults` is a callable returning the domain's default assembly; it is
-// called once, plus once per repeated pick. A pick's domain parameters
+// called once, plus once per repeated pick. That assembly must hold every
+// name ONCE: the knobs are re-stated by name (restate_knobs), which
+// ConstraintAssembly refuses for a name held several times. Repeats only
+// ever join through add_instances() below, after every by-name edit. A pick's domain parameters
 // (params()) are not read here: a domain whose constraints take parameters
 // builds each pick's component itself and re-states its knobs with
 // apply_knobs (employee-scheduling's rule factory).

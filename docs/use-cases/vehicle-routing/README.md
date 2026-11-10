@@ -108,8 +108,10 @@ every vehicle below the offset, an idle one included; the unassigned pool is no 
 and is never charged); `offset=0` is the plain power. Both apply per vehicle, not to the
 total. `clip=False` with an offset is refused on hard (by default, every constraint the
 table lists as hard), because hard 0 must mean no violation; medium folds into soft here,
-so it takes the literal formula. Each pick is its own instance with its own knobs, and the
-instances add up:
+so it takes the literal formula. A negative offset with `clip=True`, such as
+`TravelTimeCost(offset=-60)`, is a fixed charge of 60 per vehicle that drives; the engine
+recomputes it for every route a move changes, so the solve takes about half as many steps
+per second. Each pick is its own instance with its own knobs, and the instances add up:
 
 ```python
 from optimaru.vehicle_routing.constraints import TravelTimeCost, UnassignedVisitsCost, VehicleCapacityCost
