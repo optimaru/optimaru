@@ -1,21 +1,15 @@
 #ifndef PDP_SOLVER_HPP
 #define PDP_SOLVER_HPP
 
-#include <atomic>
-#include <chrono>
-#include <cstddef>
 #include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
 #include <utility>
-#include <vector>
 
 #include "pdp/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
 #include "optimaru/select/schemes.hpp"
+#include "optimaru/solver_config.hpp"
 
 namespace pdp {
 
@@ -40,15 +34,18 @@ namespace pdp {
 // weight is learned rather than fixed.
 class Solver {
 public:
-    struct Config {
-        // --- termination ---
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<std::int64_t>::max()};
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   on_new_best  reports each new best in the same levels as the final
+    //                plan.score of the solve() overload in use
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
+        // Two ruin & recreate defaults differ from the shared ones: a kick
+        // ruins up to 40% (30% there), and the rewards are {3, 2, 1, 0.5}
+        // ({33, 9, 3, 0} there).
+        Config() {
+            ruin_recreate_max_ruin_fraction = 0.40;
+            ruin_recreate_rewards = {3.0, 2.0, 1.0, 0.5};
+        }
 
         // --- construction heuristic ---
         // Tightest time window / largest demand first.
@@ -60,7 +57,6 @@ public:
 
         // --- acceptance ---
         optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::LateAcceptance;
-        std::size_t history_length = 0;  // 0 = auto
         double record_to_record_start_gap = 0.02;
         double record_to_record_end_gap = 0.0;
 
@@ -93,13 +89,7 @@ public:
         double pair_assignment_probability = 0.1;
 
         // --- adaptive ruin & recreate (ALNS) ---
-        bool ruin_recreate = true;
         bool pair_ruin = true;
-        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
-        double ruin_recreate_min_ruin_fraction = 0.10;
-        double ruin_recreate_max_ruin_fraction = 0.40;
-        int ruin_recreate_max_ruin_count = 60;
-        std::int64_t ruin_recreate_polish_steps = 5000;
         // Search-strategy parity with vehicle-routing. These
         // remain opt-in for PDP because the generic variants manipulate
         // individual nodes; pair-aware move/ruin operators are the defaults.
@@ -111,8 +101,6 @@ public:
         int route_elimination_max_size = 12;
         optimaru::SelectionScheme ruin_recreate_selection_type =
                 optimaru::SelectionScheme::RouletteWheel;
-        double ruin_recreate_operator_decay = 0.8;
-        std::vector<double> ruin_recreate_rewards{3.0, 2.0, 1.0, 0.5};
         std::int64_t ruin_recreate_selection_segment_length = 100;
         double ruin_recreate_selection_alpha = 0.05;
         bool sisr_ruin = true;
@@ -126,19 +114,6 @@ public:
         bool driving_time_nearby = true;
         int driving_time_nearby_size = 20;
         double driving_time_nearby_probability = 0.8;
-
-        // --- engine ---
-        std::uint64_t seed = 0;
-        int parallel_solver_count = 1;
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-        // Called with each new best score, in the same levels as the final
-        // plan.score of the solve() overload in use.
-        std::function<void(std::int64_t, const Score&)> on_new_best;
-        // Set by solve() on each parallel worker's copy, not by a caller (and
-        // not bound to Python): the first worker that fails raises it, and the
-        // other workers' engines stop at their next step instead of running out
-        // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;
