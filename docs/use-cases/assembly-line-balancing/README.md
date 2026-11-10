@@ -25,7 +25,7 @@ problem = AssemblyLineBalancingProblemModel(
     tasks=[TaskModel(id="A", duration=3), TaskModel(id="B", duration=3), TaskModel(id="C", duration=2)],
     precedences=[PrecedenceModel(before="A", after="B")],
 )
-alb.solve(problem, time_limit_seconds=1.0, random_seed=42)          # the model, in place
+problem = alb.solve(problem, time_limit_seconds=1.0, random_seed=42)   # the model: returns a new, solved model
 print({task.id: task.station for task in problem.tasks}, problem.stations_used)
 
 core = problem.to_core()                                            # or the engine object
@@ -33,15 +33,14 @@ alb.solve(core, time_limit_seconds=1.0, random_seed=42)
 print(AssemblyLineBalancingProblemModel.from_core(core).station_loads)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `on_new_best`, a full `config` (`alb.SolverConfig`) and
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`alb.SolverConfig`) and
 `constraints`:
 
 ```python
 from optimaru.assembly_line_balancing.constraints import UsedStationsCost, WorkloadImbalanceCost, get_constraints, score
 
 alb.constraint_info()          # [ConstraintInfo(name='station_capacity_cost', default_level='hard', ...), ...]
-alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+problem = alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
 raw = alb.constraint_costs(problem)                 # raw costs, re-priced in pure Python:
 score(raw), score(raw, [*get_constraints()[:-1], WorkloadImbalanceCost(weight=2)])
 score(raw, [UsedStationsCost(), UsedStationsCost(weight=10, offset=4)])   # a repeat, shifted
@@ -122,7 +121,7 @@ is its own instance with its own knobs, its level included, and the instances ad
 ```python
 from optimaru.assembly_line_balancing.constraints import UsedStationsCost, get_constraints
 
-alb.solve(problem, constraints=[
+solved = alb.solve(problem, constraints=[
     *get_constraints(),                        # the defaults
     UsedStationsCost(weight=10, offset=4),     # + 10 per used station beyond the fourth
 ])
@@ -141,7 +140,8 @@ integral offsets.
   `close_station_moves`, `best_score_limit`, `on_new_best(step, score)`. Zero budget =
   `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded search
   = `step_count_limit = N`.
-- `solve()` takes the engine object or the model and returns it, solved in place. The
+- `solve()` takes the engine object (solved in place and returned) or the model (left as
+  it was: a new, solved model is returned, with `warm_start` back to False). The
   score is on the result: `.score` (`.hard`, `.soft`) of the engine object, `score_hard` /
   `score_soft` of the model. `calculate_score(problem, constraints)` returns
   the engine `Score` for the defaults and a `constraints.Score(hard, soft)` named tuple
@@ -196,7 +196,7 @@ stations raise `ValueError`.
 from optimaru.assembly_line_balancing import with_initial_solution
 
 warm = with_initial_solution(problem, problem.model_dump(mode="json"))
-alb.solve(warm, time_limit_seconds=1.0, random_seed=42)
+warm = alb.solve(warm, time_limit_seconds=1.0, random_seed=42)
 print({task.id: task.station for task in warm.tasks}, warm.stations_used)
 ```
 

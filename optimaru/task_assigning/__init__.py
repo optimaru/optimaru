@@ -40,6 +40,7 @@ The pydantic mirror (for serialization) is in `optimaru.task_assigning.models` (
 """
 
 import copy
+from typing import TypeVar
 
 from ._core import (
     Affinity,
@@ -120,8 +121,12 @@ def _build_config(
     return cfg
 
 
+# solve() returns what it was given: the compiled problem, or its pydantic model.
+_Problem = TypeVar("_Problem")
+
+
 def solve(
-    solution,
+    solution: _Problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -131,12 +136,12 @@ def solve(
     on_new_best=None,
     config=None,
     constraints=None,
-):
+) -> _Problem:
     """High-level API that solves a task assigning problem and returns it in the same shape.
 
     ``solution`` is a `_core.TaskAssigningSolution` (solved in place and
     returned) or a `models.TaskAssigningSolutionModel` (converted to the engine shape,
-    solved, and returned as a new `TaskAssigningSolutionModel`; needs pydantic).
+    solved, and returned as a new model, the one passed in left as it was; needs pydantic).
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine default
     30 s budget). Explicit keyword arguments override config.

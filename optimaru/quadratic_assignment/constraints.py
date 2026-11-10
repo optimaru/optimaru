@@ -12,9 +12,9 @@ A constraint list reads one way: one class call per constraint::
         FlowDistanceCost, PinnedAssignmentsCost, get_constraints,
     )
 
-    qap.solve(problem, constraints=get_constraints())                        # defaults as-is
-    qap.solve(problem, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
-    qap.solve(problem, constraints=[PinnedAssignmentsCost(), FlowDistanceCost()])   # picked
+    problem = qap.solve(problem, constraints=get_constraints())                        # defaults as-is
+    problem = qap.solve(problem, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
+    problem = qap.solve(problem, constraints=[PinnedAssignmentsCost(), FlowDistanceCost()])   # picked
 
 Only listed constraints are scored — leave one out and its term disappears from the
 score. (The module also carries ready-made default instances: ``flow_distance_cost``
@@ -51,7 +51,7 @@ The same constraint may be picked several times; each pick is scored on its own 
 its own knobs (its level included) and the picks add up. The flow cost plus a steep
 penalty on what exceeds a budget of 1000::
 
-    qap.solve(problem, constraints=[
+    problem = qap.solve(problem, constraints=[
         *get_constraints()[:-1],
         FlowDistanceCost(),
         FlowDistanceCost(weight=10, offset=1000),

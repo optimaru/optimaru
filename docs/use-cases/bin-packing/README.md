@@ -20,8 +20,7 @@ print(problem.bins_used(), problem.bin_loads(), problem.assignment())
 ```
 
 `solve` returns the problem it was given, solved in place; the score is its `score`
-(`.hard`, `.soft`). It takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `on_new_best`, a full `config` (`bin_packing.SolverConfig`)
+(`.hard`, `.soft`). It takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`bin_packing.SolverConfig`)
 and `constraints`:
 
 ```python

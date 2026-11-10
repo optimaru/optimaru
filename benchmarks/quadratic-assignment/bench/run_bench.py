@@ -28,7 +28,7 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
     config.spent_limit_seconds = seconds
     config.random_seed = seed
     started = time.perf_counter()
-    quadratic_assignment.solve(problem, config=config)
+    problem = quadratic_assignment.solve(problem, config=config)
     elapsed = time.perf_counter() - started
     objective = _objective(problem)
     if objective != problem.total_cost:

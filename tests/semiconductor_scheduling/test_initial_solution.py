@@ -117,11 +117,11 @@ def _decoded(seeded: SemiconductorScheduleModel) -> list[AssignmentModel]:
 
 def test_complete_seed_comes_back_unchanged_with_zero_budget():
     plain = _queue_problem()
-    solve(plain, config=_no_search())
+    plain = solve(plain, config=_no_search())
     assert {(a.operation_id, a.start) for a in plain.assignments} == {("A", 0), ("B", 2), ("X", 4)}
 
     seeded = with_initial_solution(_queue_problem(), {"assignments": QUEUE_SEED})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignments == [AssignmentModel(**row) for row in QUEUE_SEED]
     assert seeded.score_hard == 0
     assert seeded.makespan == 12
@@ -140,7 +140,7 @@ def test_seed_the_decoder_cannot_keep_is_never_lost_to_the_search():
         seeded = with_initial_solution(_queue_problem(), {"assignments": QUEUE_SEED})
         seed_score = calculate_score(seeded.model_copy(deep=True))
         config = _config(step_count_limit=200, random_seed=random_seed)
-        solve(seeded, config=config)
+        seeded = solve(seeded, config=config)
         assert (seeded.score_hard, seeded.score_soft) >= tuple(seed_score)
 
 
@@ -148,7 +148,7 @@ def test_decoder_merges_runs_that_the_seed_keeps_apart_but_solve_returns_the_see
     runs = [_assignment("L1", "O", "F1", 0, 5, batch_id="RUN1"), _assignment("L2", "O", "F1", 5, 10, batch_id="RUN2")]
     seeded = with_initial_solution(_batch_problem(), {"assignments": runs})
     assert {(item.start, item.end) for item in _decoded(seeded)} == {(0, 5)}
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignments == [AssignmentModel(**row) for row in runs]
 
 
@@ -156,29 +156,29 @@ def test_seed_with_idle_time_stays_as_given_until_the_search_runs():
     idle = [_assignment("L1", "O", "M1", 4, 7), _assignment("L2", "O", "M1", 7, 10)]
     seeded = with_initial_solution(_choice_problem(), {"assignments": idle})
     seed_score = calculate_score(seeded.model_copy(deep=True))
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignments == [AssignmentModel(**row) for row in idle]
 
     searched = with_initial_solution(_choice_problem(), {"assignments": idle})
-    solve(searched, config=_config(step_count_limit=100, random_seed=1))
+    searched = solve(searched, config=_config(step_count_limit=100, random_seed=1))
     assert (searched.score_hard, searched.score_soft) > tuple(seed_score)
 
 
 @pytest.mark.parametrize("as_dict", [False, True])
 def test_solved_result_feeds_back(as_dict):
     solved = _queue_problem()
-    solve(solved, time_limit_seconds=0.05, random_seed=3)
+    solved = solve(solved, time_limit_seconds=0.05, random_seed=3)
     solution = solved.model_dump(mode="json") if as_dict else solved
     seeded = with_initial_solution(_queue_problem(), solution)
     assert seeded.warm_start is True
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignments == solved.assignments
     assert (seeded.score_hard, seeded.score_soft) == (solved.score_hard, solved.score_soft)
 
 
 def test_partial_seed_keeps_its_machine_and_order_and_constructs_the_rest():
     seeded = with_initial_solution(_choice_problem(), {"assignments": [_assignment("L2", "O", "M2", 8, 11)]})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     placed = {item.lot_id: (item.machine_id, item.start) for item in seeded.assignments}
     assert placed == {"L1": ("M1", 0), "L2": ("M2", 0)}
     assert seeded.score_hard == 0
@@ -186,7 +186,7 @@ def test_partial_seed_keeps_its_machine_and_order_and_constructs_the_rest():
 
 def test_partial_seed_ranks_the_left_out_operations_last():
     seeded = with_initial_solution(_queue_problem(), {"assignments": [_assignment("L2", "X", "M2", 3, 13)]})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     placed = {item.operation_id: item.start for item in seeded.assignments}
     assert placed == {"X": 0, "A": 0, "B": 10}
 
@@ -195,10 +195,10 @@ def test_seed_against_a_pin_is_scored_as_given_and_the_search_restores_the_pin()
     pin = AssignmentModel(lot_id="L1", operation_id="O", machine_id="M1", start=0, end=3)
     seed = [_assignment("L1", "O", "M1", 5, 8), _assignment("L2", "O", "M1", 0, 3)]
     seeded = with_initial_solution(_choice_problem(pinned_assignments=[pin]), {"assignments": seed})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert _raw(seeded, "pinned_assignments_cost") == 1
     searched = with_initial_solution(_choice_problem(pinned_assignments=[pin]), {"assignments": seed})
-    solve(searched, config=_config(step_count_limit=100, random_seed=1))
+    searched = solve(searched, config=_config(step_count_limit=100, random_seed=1))
     assert _raw(searched, "pinned_assignments_cost") == 0
 
 
@@ -207,7 +207,7 @@ def test_left_out_pinned_operation_stays_on_its_pin():
     seeded = with_initial_solution(
         _choice_problem(pinned_assignments=[pin]), {"assignments": [_assignment("L2", "O", "M1", 0, 3)]}
     )
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert pin in seeded.assignments
 
 
@@ -260,10 +260,10 @@ def test_hard_infeasible_result_feeds_back_unchanged():
         ],
     )
     solved = problem.model_copy(deep=True)
-    solve(solved, config=_config(step_count_limit=50, random_seed=1))
+    solved = solve(solved, config=_config(step_count_limit=50, random_seed=1))
     assert solved.score_hard < 0
     seeded = with_initial_solution(problem, solved.model_dump(mode="json"))
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignments == solved.assignments
     assert (seeded.score_hard, seeded.score_soft) == (solved.score_hard, solved.score_soft)
 
@@ -284,23 +284,23 @@ def test_result_on_a_repeated_machine_option_feeds_back_with_its_own_choice():
         ],
     )
     solved = problem.model_copy(deep=True)
-    solve(solved, config=_no_search())
+    solved = solve(solved, config=_no_search())
     assert solved.score_hard < 0
     assert (solved.assignments[0].start, solved.assignments[0].end) == (0, 3)
     seeded = with_initial_solution(problem, solved)
     assert _seed_state(seeded, _operation_rows(seeded), [1])[0] == [0]
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.assignments == solved.assignments
 
 
 def test_input_problem_is_not_mutated():
     problem = _queue_problem()
-    solve(problem, config=_no_search())
+    problem = solve(problem, config=_no_search())
     before = problem.model_dump()
     seeded = with_initial_solution(problem, {"assignments": QUEUE_SEED})
     assert seeded.score_hard is None
     assert seeded.makespan is None
-    solve(seeded, config=_config(step_count_limit=50, random_seed=1))
+    seeded = solve(seeded, config=_config(step_count_limit=50, random_seed=1))
     assert problem.model_dump() == before
 
 
@@ -308,13 +308,13 @@ def test_plain_solve_still_ignores_input_assignments():
     fresh = _queue_problem()
     preset = _queue_problem(assignments=[AssignmentModel(**row) for row in QUEUE_SEED])
     assert preset.warm_start is False
-    solve(fresh, config=_config(step_count_limit=200, random_seed=5))
-    solve(preset, config=_config(step_count_limit=200, random_seed=5))
+    fresh = solve(fresh, config=_config(step_count_limit=200, random_seed=5))
+    preset = solve(preset, config=_config(step_count_limit=200, random_seed=5))
     assert fresh.assignments == preset.assignments
 
 
 def test_a_seed_is_used_once():
     seeded = with_initial_solution(_queue_problem(), {"assignments": QUEUE_SEED})
     assert seeded.warm_start is True
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.warm_start is False

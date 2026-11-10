@@ -27,7 +27,7 @@ qap.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='flow_distance_cost', default_level='soft', default_weight=1.0,
 #                 level_flippable=True, reward=False, default_enabled=True)]
-qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
+problem = qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
 raw = qap.constraint_costs(problem)   # {name: {"costs": [...], "weight": ..., ...}}
 score(raw), score(raw, [LocationCapacityCost(exponent=2.0)])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip
@@ -72,7 +72,7 @@ from optimaru import quadratic_assignment as qap
 from optimaru.quadratic_assignment.models import QuadraticAssignmentProblemModel
 
 problem = QuadraticAssignmentProblemModel.model_validate(data)    # the canonical JSON
-qap.solve(problem, time_limit_seconds=5.0, random_seed=42)          # in place: assignment, total_cost, score
+problem = qap.solve(problem, time_limit_seconds=5.0, random_seed=42)   # a new model: assignment, total_cost, score
 print(problem.score_hard, problem.score_soft, problem.assignment, problem.total_cost)
 
 core = problem.to_core()                                            # the engine object

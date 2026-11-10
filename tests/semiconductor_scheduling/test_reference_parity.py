@@ -115,5 +115,5 @@ def test_a_zero_budget_solve_is_the_oracle_start(name, data):
     expected = _rows(ref.construct(model, ref.default_choices(model), list(range(len(rows)))))
     config = fab.SolverConfig()
     config.spent_limit_seconds = 0
-    fab.solve(model, config=config)
+    model = fab.solve(model, config=config)
     assert _rows(model.assignments) == expected

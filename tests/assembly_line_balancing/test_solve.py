@@ -39,7 +39,7 @@ def test_solve_assigns_everything_feasibly():
 def test_the_web_demo_reaches_the_lower_bound():
     """12 tasks, total duration 50 on cycle 12: 5 stations is optimal, with every zoning rule met."""
     model = AssemblyLineBalancingProblemModel.model_validate(json.loads(WEB_DEMO.read_text()))
-    alb.solve(model, time_limit_seconds=0.5, random_seed=42)
+    model = alb.solve(model, time_limit_seconds=0.5, random_seed=42)
     assert (model.score_hard, model.score_soft) == (0, -5.0)
     assert model.stations_used == 5
     stations = {task.id: task.station for task in model.tasks}

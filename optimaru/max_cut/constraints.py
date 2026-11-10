@@ -12,9 +12,9 @@ A constraint list reads one way: one class call per constraint::
         CutWeightCost, PartitionImbalanceCost, PartitionSizeBoundsCost, get_constraints,
     )
 
-    max_cut.solve(problem, constraints=get_constraints())                       # defaults as-is
-    max_cut.solve(problem, constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()])
-    max_cut.solve(problem, constraints=[PartitionSizeBoundsCost(), CutWeightCost()])   # picked
+    problem = max_cut.solve(problem, constraints=get_constraints())                       # defaults as-is
+    problem = max_cut.solve(problem, constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()])
+    problem = max_cut.solve(problem, constraints=[PartitionSizeBoundsCost(), CutWeightCost()])   # picked
 
 Only listed constraints are scored — leave one out and its term disappears from the
 score. (The module also carries ready-made default instances: ``cut_weight_cost`` is
@@ -50,7 +50,7 @@ The same constraint may be picked several times; each pick is scored on its own 
 its own knobs (its level included) and the picks add up. The imbalance plus its square
 beyond 2 vertices::
 
-    max_cut.solve(problem, constraints=[
+    problem = max_cut.solve(problem, constraints=[
         *get_constraints()[:4],
         PartitionImbalanceCost(weight=1),
         PartitionImbalanceCost(weight=5, exponent=2, offset=2),

@@ -21,7 +21,7 @@ result = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score_hard, result.score_soft)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`tournament_scheduling.SolverConfig`) and `constraints` (see below).
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`tournament_scheduling.SolverConfig`) and `constraints` (see below).
 
 ## Constraints
 

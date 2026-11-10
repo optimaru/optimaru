@@ -206,7 +206,7 @@ def test_a_solved_sample_matches_the_oracle(name):
     config.spent_limit_seconds = 600
     config.step_count_limit = 500
     config.random_seed = 42
-    qap.solve(model, config=config)
+    model = qap.solve(model, config=config)
     data = model.model_dump()
     _assert_parity(data)
     assert (model.score_hard, model.score_soft) == ref.calculate_score(data)
@@ -217,7 +217,7 @@ def test_the_identity_start_matches_the_oracle():
     """The zero-budget solve returns the identity starting point (facility i at location i)."""
     for name, problem in _samples().items():
         model = Model.model_validate(problem)
-        qap.solve(model, time_limit_seconds=0)
+        model = qap.solve(model, time_limit_seconds=0)
         identity = _with_assignment(problem, problem["facilities"])
         assert model.assignment == identity["assignment"], name
         assert (model.score_hard, model.score_soft) == ref.calculate_score(_dump(identity)), name

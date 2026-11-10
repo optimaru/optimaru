@@ -9,8 +9,8 @@ by id); `to_core()` builds the engine object
     quadratic_assignment.solve(core, time_limit_seconds=5)
     result = QuadraticAssignmentProblemModel.from_core(core)
 
-`quadratic_assignment.solve(model)` does the same round trip and writes the result
-back into the model in place.
+`quadratic_assignment.solve(model)` does the same round trip and returns the result
+as a new model; the model passed in is not changed.
 """
 
 from __future__ import annotations

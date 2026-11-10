@@ -125,7 +125,7 @@ def test_semiconductor_missing_transport_time_matches_manual_shortfall():
 
 def test_semiconductor_meta_builds_a_feasible_reentrant_schedule():
     problem = _fab_problem(with_assignments=False)
-    solve_fab(problem, time_limit_seconds=0.05, random_seed=3)
+    problem = solve_fab(problem, time_limit_seconds=0.05, random_seed=3)
     costs = fab_costs(problem)
     for name in (
         "machine_eligibility_cost",

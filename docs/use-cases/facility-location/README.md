@@ -27,7 +27,7 @@ fl.solve(problem, time_limit_seconds=5.0, random_seed=42)          # solves in p
 print(problem.score, problem.total_cost())
 ```
 
-`solve` returns the problem it was given, solved in place; the score is its `score` (`.hard`, `.soft`). It takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`facility_location.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` returns the problem it was given, solved in place; the score is its `score` (`.hard`, `.soft`). It takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`facility_location.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=facility_location && cmake --build build -j

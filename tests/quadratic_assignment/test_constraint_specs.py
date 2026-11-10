@@ -82,8 +82,7 @@ def solved(constraints=None, problem=None) -> QuadraticAssignmentProblemModel:
     config = qap.SolverConfig()
     config.step_count_limit = 2000
     config.random_seed = 1
-    qap.solve(problem, config=config, constraints=constraints)
-    return problem
+    return qap.solve(problem, config=config, constraints=constraints)
 
 
 def engine_score(problem: QuadraticAssignmentProblemModel, constraints) -> tuple[int, float]:
@@ -274,12 +273,14 @@ def test_weights_steer_the_solve():
     problem.forbidden_assignments = []
     problem.location_capacities = {}
     problem.assignment_costs = [[0, 100], [100, 0]]  # identity is direct-cheap, flow-dear (22 vs 23)
-    qap.solve(problem, time_limit_seconds=0.2, random_seed=1, constraints=[flow_distance_cost])
+    problem = qap.solve(problem, time_limit_seconds=0.2, random_seed=1, constraints=[flow_distance_cost])
     assert problem.assignment == {"L1": "F1", "L2": "F2"}  # flow alone prefers 22 over 23
     problem.flows = [[0, 2], [3, 0]]  # now the identity costs 23 in flow, the swap 22
-    qap.solve(problem, time_limit_seconds=0.2, random_seed=1, constraints=[flow_distance_cost])
+    problem = qap.solve(problem, time_limit_seconds=0.2, random_seed=1, constraints=[flow_distance_cost])
     assert problem.assignment == {"L1": "F2", "L2": "F1"}
-    qap.solve(problem, time_limit_seconds=0.2, random_seed=1, constraints=[flow_distance_cost, assignment_cost])
+    problem = qap.solve(
+        problem, time_limit_seconds=0.2, random_seed=1, constraints=[flow_distance_cost, assignment_cost]
+    )
     assert problem.assignment == {"L1": "F1", "L2": "F2"}  # the direct cost outweighs one unit of flow
 
 

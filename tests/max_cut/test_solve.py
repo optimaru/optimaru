@@ -66,9 +66,11 @@ def test_unknown_config_knobs_are_refused():
 
 def test_solve_on_the_engine_object_and_on_the_model_agree():
     core = demo().to_core()
-    model = demo()
     assert max_cut.solve(core, config=steps(3000, seed=7)) is core
-    assert max_cut.solve(model, config=steps(3000, seed=7)) is model
+    problem = demo()
+    model = max_cut.solve(problem, config=steps(3000, seed=7))
+    assert isinstance(model, MaxCutProblemModel) and model is not problem
+    assert problem.model_dump() == demo().model_dump()  # a model is not solved in place
     assert isinstance(core.score, max_cut.Score)
     assert (core.score.hard, core.score.soft) == (model.score_hard, model.score_soft)
     assert model.partition == dict(zip(model.vertices, core.assignment(), strict=True))
@@ -77,8 +79,7 @@ def test_solve_on_the_engine_object_and_on_the_model_agree():
 
 def test_the_web_demo_solves_to_a_feasible_partition():
     """The sample has min = max = 4: the exact-size swap-only path."""
-    model = demo()
-    assert max_cut.solve(model, time_limit_seconds=1.0, random_seed=1) is model
+    model = max_cut.solve(demo(), time_limit_seconds=1.0, random_seed=1)
     assert model.score_hard >= 0  # feasible
     sides = model.partition
     assert sum(sides.values()) == 4
@@ -202,7 +203,7 @@ def test_the_server_flow_round_trips_with_a_reweighted_selection():
 def test_zero_budget_returns_the_start_partition():
     """No warm start: vertex i on side i % 2, a fixed vertex on its side (the default start)."""
     model = demo()
-    max_cut.solve(model, time_limit_seconds=0)
+    model = max_cut.solve(model, time_limit_seconds=0)
     assert model.partition == {vertex: index % 2 for index, vertex in enumerate(model.vertices)}  # A fixed to 0
     assert model.cut_weight is not None and model.warm_start is False
 
@@ -222,7 +223,7 @@ def test_an_empty_problem_solves():
     score = max_cut.solve(core, time_limit_seconds=1).score
     assert (score.hard, score.soft) == (0, 0.0)
     model = MaxCutProblemModel(vertices=[], edges=[])
-    max_cut.solve(model, time_limit_seconds=1)
+    model = max_cut.solve(model, time_limit_seconds=1)
     assert (model.partition, model.cut_weight, model.score_hard, model.score_soft) == ({}, 0, 0, 0.0)
 
 

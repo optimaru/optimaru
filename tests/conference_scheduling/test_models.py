@@ -96,3 +96,21 @@ def test_an_index_into_an_empty_list_says_the_list_is_empty():
     data["talk_types"] = []
     with pytest.raises(ValueError, match=r"talk_type \d+ is out of range \(the list is empty\)"):
         ConferenceScheduleModel.model_validate(data)
+
+
+def test_solve_takes_the_model_and_leaves_it_as_it_was():
+    model = ConferenceScheduleModel.from_core(cs.demo_conference())
+    before = model.model_dump()
+    config = cs.SolverConfig()
+    config.step_count_limit = 500
+    solved = cs.solve(model, config=config, random_seed=3)
+    assert isinstance(solved, ConferenceScheduleModel) and solved is not model
+    assert model.model_dump() == before
+    core = model.to_core()
+    cs.solve(core, config=config, random_seed=3)
+    assert (solved.score_hard, solved.score_soft) == (core.score.hard, core.score.soft)
+
+
+def test_solve_refuses_anything_but_the_schedule_or_its_model():
+    with pytest.raises(TypeError, match="must be a"):
+        cs.solve(3)

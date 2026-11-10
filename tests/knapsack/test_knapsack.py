@@ -14,7 +14,7 @@ def test_manual_score_and_meta_optimum():
     problem.items[0].selected = problem.items[2].selected = True
     result = calculate_score(problem)
     assert (result.hard, result.soft) == (-1, 17.0)
-    solve(problem, time_limit_seconds=0.05, random_seed=2)
+    problem = solve(problem, time_limit_seconds=0.05, random_seed=2)
     assert (problem.total_weight, problem.total_value, problem.score_hard) in {(9, 15, 0), (10, 16, 0)}
 
 

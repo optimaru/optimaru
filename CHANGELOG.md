@@ -13,8 +13,14 @@
     the problem it was given: write `uc.solve(problem).score` for a compiled
     problem, or read `score_hard` / `score_soft` from the solved pydantic
     model.
-  - *New:* `solve()` in `bin_packing`, `facility_location`, `food_packaging`
-    and `maintenance_scheduling` also takes the use case's pydantic problem
+  - *Breaking:* given a pydantic model, `solve()` in
+    `assembly_line_balancing`, `knapsack`, `max_cut`, `quadratic_assignment`
+    and `semiconductor_scheduling` wrote the result into that model. It now
+    returns a new solved model and leaves the one passed in as it was, as the
+    other use cases do: write `model = uc.solve(model)`.
+  - *New:* `solve()` in `bin_packing`, `conference_scheduling`,
+    `facility_location`, `food_packaging`, `maintenance_scheduling` and
+    `sports_league_scheduling` also takes the use case's pydantic problem
     model and returns a solved model, as the others do. (Employee scheduling,
     order picking, pickup & delivery and vehicle routing keep
     `models.solve_request` for their request models.)
@@ -87,6 +93,11 @@
   layout in the README lists every directory. `CONTRIBUTING.md` and a section
   near the top of the README give the short version of adding a constraint or
   a move and link to the guide.
+- **Bindings.** The part of `SolverConfig` that every use case shares (the
+  limits, the seed, `parallel_solver_count`, `late_acceptance_size`,
+  `full_assert`, `ruin_recreate_rewards`) is bound by one helper,
+  `optimaru::python::bind_solver_config`, instead of 22 copies. Names, defaults
+  and error messages are unchanged.
 - **Engine internals.** The step loop (`search/local_search.hpp`) and the
   decomposed objective (`score/decomposed_objective.hpp`) are shorter: the
   move mix, the kick's polish loop and the adaptive selectors share one

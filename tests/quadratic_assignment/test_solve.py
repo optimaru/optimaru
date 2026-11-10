@@ -65,9 +65,11 @@ def test_no_permutation_breaking_knob_is_exposed():
 
 def test_solve_on_the_engine_object_and_on_the_model_agree():
     core = demo().to_core()
-    model = demo()
     assert qap.solve(core, config=steps(3000, seed=7)) is core
-    assert qap.solve(model, config=steps(3000, seed=7)) is model
+    problem = demo()
+    model = qap.solve(problem, config=steps(3000, seed=7))
+    assert isinstance(model, QuadraticAssignmentProblemModel) and model is not problem
+    assert problem.model_dump() == demo().model_dump()  # a model is not solved in place
     assert isinstance(core.score, qap.Score)
     assert (core.score.hard, core.score.soft) == (model.score_hard, model.score_soft)
     ids = [facility.id for facility in core.facilities]
@@ -76,8 +78,7 @@ def test_solve_on_the_engine_object_and_on_the_model_agree():
 
 
 def test_the_web_demo_solves_to_a_feasible_bijection():
-    model = demo()
-    assert qap.solve(model, time_limit_seconds=1.0, random_seed=1) is model
+    model = qap.solve(demo(), time_limit_seconds=1.0, random_seed=1)
     assert model.score_hard >= 0  # feasible
     assert sorted(model.assignment) == sorted(model.locations)
     assert sorted(model.assignment.values()) == sorted(model.facilities)
@@ -95,7 +96,7 @@ def test_the_web_demo_reaches_its_brute_force_optimum():
         result = qap.calculate_score(candidate)
         key = (result.hard, result.soft)
         best = key if best is None or key > best else best
-    qap.solve(model, config=steps(20000, seed=3))
+    model = qap.solve(model, config=steps(20000, seed=3))
     assert (model.score_hard, model.score_soft) == best
 
 
@@ -164,7 +165,7 @@ def test_the_constraints_path_scores_with_the_picks():
 
 def test_zero_budget_returns_the_identity_start():
     model = demo()
-    qap.solve(model, time_limit_seconds=0)
+    model = qap.solve(model, time_limit_seconds=0)
     assert model.assignment == dict(zip(model.locations, model.facilities))
     assert model.total_cost == 374
 

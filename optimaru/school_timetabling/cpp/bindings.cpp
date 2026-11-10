@@ -47,60 +47,6 @@ namespace
 template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
 {
     cls.def(py::init<>())
-        .def_property(
-            "spent_limit_seconds",
-            [](const Config &c)
-            { return std::chrono::duration<double>(c.time_limit).count(); },
-            [](Config &c, double s)
-            { c.time_limit = optimaru::python::seconds_to_millis(s, "spent_limit_seconds"); })
-        .def_property(
-            "unimproved_spent_limit_seconds",
-            [](const Config &c) {
-                return std::chrono::duration<double>(c.stall_time_limit)
-                    .count();
-            },
-            [](Config &c, double s)
-            { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
-        .def_readwrite("step_count_limit", &Config::step_limit)
-        .def_readwrite("unimproved_step_count_limit",
-                       &Config::stall_step_limit)
-        .def_readwrite("random_seed", &Config::seed)
-        .def_property(
-            "parallel_solver_count",
-            [](const Config &c) { return c.parallelSolverCount; },
-            [](Config &c, int count)
-            {
-                if (count <= 0)
-                    throw py::value_error(
-                        "parallel_solver_count must be positive");
-                c.parallelSolverCount = count;
-            })
-        // 0 = auto: the solver scales the history with the instance size
-        // (quickstart clamp(8 * lessons, 400, 3200), canonical clamp(4 *
-        // lessons, 400, 3200)).
-        .def_property(
-            "late_acceptance_size",
-            [](const Config &c) { return c.history_length; },
-            [](Config &c, std::int64_t size)
-            {
-                if (size < 0)
-                    throw py::value_error(
-                        "late_acceptance_size must be >= 0 (0 = auto)");
-                c.history_length = static_cast<std::size_t>(size);
-            })
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (debugging aid; much slower).
-        .def_property(
-            "full_assert",
-            [](const Config &c) {
-                return c.score_checks
-                       == optimaru::ScoreChecks::Full;
-            },
-            [](Config &c, bool on)
-            {
-                c.score_checks = on ? optimaru::ScoreChecks::Full
-                                       : optimaru::ScoreChecks::Off;
-            })
         .def_readwrite("ruin_recreate", &Config::ruin_recreate)
         .def_readwrite("ruin_recreate_unimproved_step_trigger",
                        &Config::ruinRecreateUnimprovedStepTrigger)
@@ -112,16 +58,6 @@ template <typename Config> void bindSolverConfigCommon(py::class_<Config> &cls)
                        &Config::ruinRecreateMaxRuinCount)
         .def_readwrite("ruin_recreate_operator_decay",
                        &Config::ruinRecreateOperatorDecay)
-        .def_property(
-            "ruin_recreate_rewards",
-            [](const Config &c) { return c.ruinRecreateRewards; },
-            [](Config &c, std::vector<double> rewards)
-            {
-                if (rewards.size() != 4)
-                    throw py::value_error(
-                        "ruin_recreate_rewards must contain exactly 4 values");
-                c.ruinRecreateRewards = std::move(rewards);
-            })
         .def_readwrite("ruin_recreate_polish_steps",
                        &Config::ruinRecreatePolishSteps)
         .def_readwrite("ruin_recreate_as_move_weight",
@@ -676,7 +612,7 @@ void bindCanon(py::module_ &canon)
     py::class_<cn::Solver::Config> config(
         canon, "SolverConfig", py::module_local());
 
-    optimaru::python::bind_config_copy(config);
+    optimaru::python::bind_solver_config(config);
     bindSolverConfigCommon(config);
     // The fast path's soft weights (solve(table) only; the model carries
     // none, the plugin path's components carry their own).
@@ -857,7 +793,7 @@ PYBIND11_MODULE(_core, m)
 
     py::class_<Solver::Config> config(m, "SolverConfig", py::module_local());
 
-    optimaru::python::bind_config_copy(config);
+    optimaru::python::bind_solver_config(config);
     bindSolverConfigCommon(config);
     // Same-group nearby swap bias (see st/solver.hpp).
     config.def_readwrite("same_group_nearby", &Solver::Config::sameGroupNearby);

@@ -33,12 +33,12 @@ def _steps(count: int, seed: int, parallel_solver_count: int = 1) -> SolverConfi
 
 def test_complete_seed_comes_back_unchanged_with_zero_budget():
     plain = _problem()
-    solve(plain, config=_no_search())
+    plain = solve(plain, config=_no_search())
     assert plain.partition == {"A": 0, "B": 1, "C": 0, "D": 1}
 
     seed = {"D": 0, "C": 0, "B": 1, "A": 1}
     seeded = with_initial_solution(_problem(), {"partition": seed})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.partition == seed
     assert seeded.cut_weight == 3
 
@@ -46,11 +46,11 @@ def test_complete_seed_comes_back_unchanged_with_zero_budget():
 @pytest.mark.parametrize("as_dict", [False, True])
 def test_solved_result_feeds_back(as_dict):
     solved = _problem()
-    solve(solved, time_limit_seconds=0.05, random_seed=3)
+    solved = solve(solved, time_limit_seconds=0.05, random_seed=3)
     solution = solved.model_dump(mode="json") if as_dict else solved
     seeded = with_initial_solution(_problem(), solution)
     assert seeded.warm_start is True
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.partition == solved.partition
     assert (seeded.score_hard, seeded.score_soft) == (solved.score_hard, solved.score_soft)
 
@@ -58,20 +58,20 @@ def test_solved_result_feeds_back(as_dict):
 def test_search_from_a_seed_never_scores_below_it():
     seeded = with_initial_solution(_problem(), {"partition": {"A": 0, "B": 0, "C": 0, "D": 0}})
     seed_score = calculate_score(seeded.model_copy(deep=True))
-    solve(seeded, config=_steps(500, seed=1))
+    seeded = solve(seeded, config=_steps(500, seed=1))
     assert (seeded.score_hard, seeded.score_soft) >= (seed_score.hard, seed_score.soft)
 
 
 def test_partial_seed_keeps_its_part_and_alternates_the_rest():
     seeded = with_initial_solution(_problem(), {"partition": {"A": 1, "B": 0}})
     assert seeded.partition == {"A": 1, "B": 0}
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.partition == {"A": 1, "B": 0, "C": 0, "D": 1}
 
 
 def test_vertex_left_out_takes_its_fixed_side():
     seeded = with_initial_solution(_problem(fixed_partition={"C": 1}), {"partition": {"A": 1}})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.partition == {"A": 1, "B": 1, "C": 1, "D": 1}
 
 
@@ -84,11 +84,11 @@ def test_wrong_size_complete_seed_keeps_its_size_and_hard_penalty():
     problem = _problem(min_partition_size=2, max_partition_size=2)
     seed = {"A": 1, "B": 1, "C": 1, "D": 0}
     seeded = with_initial_solution(problem, {"partition": seed})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.partition == seed
     assert seeded.score_hard == -2
     searched = with_initial_solution(problem, {"partition": seed})
-    solve(searched, config=_steps(200, seed=1))
+    searched = solve(searched, config=_steps(200, seed=1))
     assert sum(searched.partition.values()) == 3
 
 
@@ -96,17 +96,17 @@ def test_right_size_seed_is_kept_and_searched_under_exact_size_bounds():
     problem = _problem(min_partition_size=2, max_partition_size=2)
     seed = {"A": 1, "B": 1, "C": 0, "D": 0}
     seeded = with_initial_solution(problem, {"partition": seed})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.partition == seed
     searched = with_initial_solution(problem, {"partition": seed})
-    solve(searched, config=_steps(200, seed=1))
+    searched = solve(searched, config=_steps(200, seed=1))
     assert sum(searched.partition.values()) == 2
 
 
 def test_partial_seed_that_completes_to_the_wrong_size_is_accepted():
     problem = _problem(min_partition_size=2, max_partition_size=2)
     seeded = with_initial_solution(problem, {"partition": {"A": 1}})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.partition == {"A": 1, "B": 1, "C": 0, "D": 1}
     assert seeded.score_hard == -2
 
@@ -119,28 +119,28 @@ def test_unbalanced_default_start_stays_infeasible_under_exact_size_bounds():
     """
     problem = _problem(fixed_partition={"A": 1}, min_partition_size=2, max_partition_size=2)
     plain = problem.model_copy(deep=True)
-    solve(plain, config=_steps(500, seed=1))
+    plain = solve(plain, config=_steps(500, seed=1))
     assert plain.partition == {"A": 1, "B": 1, "C": 0, "D": 1}
     assert (plain.score_hard, plain.score_soft) == (-2, 7.0)
     seeded = with_initial_solution(problem, {"partition": {"A": 1, "B": 1, "C": 0, "D": 0}})
-    solve(seeded, config=_steps(500, seed=1))
+    seeded = solve(seeded, config=_steps(500, seed=1))
     assert (seeded.score_hard, seeded.score_soft) == (0, 9.0)  # A, C | B, D cuts all three edges
 
 
 def test_wrong_size_seed_is_allowed_when_the_bounds_are_a_range():
     problem = _problem(min_partition_size=1, max_partition_size=3)
     seeded = with_initial_solution(problem, {"partition": {"A": 0, "B": 0, "C": 0, "D": 0}})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.score_hard == -2
 
 
 def test_hard_infeasible_result_feeds_back_unchanged():
     problem = _problem(fixed_partition={"A": 1, "B": 1, "C": 1}, min_partition_size=2, max_partition_size=2)
     solved = problem.model_copy(deep=True)
-    solve(solved, config=_steps(50, seed=1))
+    solved = solve(solved, config=_steps(50, seed=1))
     assert solved.score_hard < 0
     seeded = with_initial_solution(problem, solved.model_dump(mode="json"))
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.partition == solved.partition
     assert (seeded.score_hard, seeded.score_soft) == (solved.score_hard, solved.score_soft)
 
@@ -149,7 +149,7 @@ def test_plain_solve_never_moves_a_fixed_vertex():
     for random_seed in range(5):
         problem = _problem(fixed_partition={"A": 1, "C": 1}, min_partition_size=2, max_partition_size=2)
         config = _steps(200, seed=random_seed, parallel_solver_count=3)
-        solve(problem, config=config)
+        problem = solve(problem, config=config)
         assert (problem.partition["A"], problem.partition["C"]) == (1, 1)
 
 
@@ -176,16 +176,16 @@ def test_malformed_solution_raises(solution):
 
 def test_input_problem_is_not_mutated():
     problem = _problem()
-    solve(problem, config=_no_search())
+    problem = solve(problem, config=_no_search())
     before = problem.model_dump()
     seeded = with_initial_solution(problem, {"partition": {"A": 1}})
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert problem.model_dump() == before
 
 
 def test_prior_partition_is_replaced():
     problem = _problem()
-    solve(problem, config=_no_search())
+    problem = solve(problem, config=_no_search())
     seeded = with_initial_solution(problem, {"partition": {"A": 1}})
     assert seeded.partition == {"A": 1}
 
@@ -194,13 +194,13 @@ def test_plain_solve_still_ignores_input_partition():
     fresh = _problem()
     preset = _problem(partition={"A": 1, "B": 1, "C": 1, "D": 1})
     assert preset.warm_start is False
-    solve(fresh, time_limit_seconds=0.05, random_seed=5)
-    solve(preset, time_limit_seconds=0.05, random_seed=5)
+    fresh = solve(fresh, time_limit_seconds=0.05, random_seed=5)
+    preset = solve(preset, time_limit_seconds=0.05, random_seed=5)
     assert fresh.partition == preset.partition
 
 
 def test_a_seed_is_used_once():
     seeded = with_initial_solution(_problem(), {"partition": {}})
     assert seeded.warm_start is True
-    solve(seeded, config=_no_search())
+    seeded = solve(seeded, config=_no_search())
     assert seeded.warm_start is False

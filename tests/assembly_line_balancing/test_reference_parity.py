@@ -157,7 +157,7 @@ def test_a_solved_sample_matches_the_oracle(name):
     config.spent_limit_seconds = 600
     config.step_count_limit = 300
     config.random_seed = 42
-    alb.solve(model, config=config)
+    model = alb.solve(model, config=config)
     _assert_parity(model.model_dump())
     assert (model.score_hard, model.score_soft) == ref.default_score(model.model_dump())
 

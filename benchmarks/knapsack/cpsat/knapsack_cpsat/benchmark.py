@@ -21,8 +21,8 @@ CPSAT_CAVEAT = ""
 
 
 def self_report(problem: Any) -> tuple[float, ...]:
-    # The engine's own score of its answer (the model's score fields after
-    # knapsack.solve), cross-checked against the rescored one.
+    # The engine's own score of its answer (the score fields solve_engine copies
+    # from the solved model), cross-checked against the rescored one.
     return (problem.score_hard, problem.score_soft)
 
 
@@ -49,7 +49,10 @@ def describe(problem: Any) -> str:
 def solve_engine(problem: Any, seconds: float, seed: int) -> None:
     from optimaru import knapsack
 
-    knapsack.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
+    solved = knapsack.solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=1)
+    # knapsack.solve returns a new model; the runner scores the one it handed in.
+    for name in type(solved).model_fields:
+        setattr(problem, name, getattr(solved, name))
 
 
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:

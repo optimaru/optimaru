@@ -25,6 +25,7 @@ The pydantic mirror (for serialization) is in `optimaru.facility_location.models
 """
 
 import copy
+from typing import TypeVar
 
 from ._core import (
     ConstraintInfo,
@@ -69,8 +70,12 @@ def with_initial_solution(problem, solution):
     return models.with_initial_solution(problem, solution)
 
 
+# solve() returns what it was given: the compiled problem, or its pydantic model.
+_Problem = TypeVar("_Problem")
+
+
 def solve(
-    problem,
+    problem: _Problem,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -80,11 +85,12 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-):
+) -> _Problem:
     """High-level API that solves `problem` in place and returns it.
 
     `problem` is a `FacilityLocationProblem` (solved in place and returned) or a
-    `models.FacilityLocationProblemModel` (converted, solved, and returned as a new model).
+    `models.FacilityLocationProblemModel` (converted, solved, and returned as a new model; the
+    one passed in is left as it was).
 
     The score is on the result: ``solve(problem).score`` (``.hard``, ``.soft``).
 

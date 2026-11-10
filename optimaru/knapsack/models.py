@@ -8,8 +8,8 @@ engine object (`optimaru.knapsack._core.KnapsackProblem`, items by index) and
     knapsack.solve(core, time_limit_seconds=5)
     result = KnapsackProblemModel.from_core(core)
 
-`knapsack.solve(model)` does the same round trip and writes the result back into
-the model in place.
+`knapsack.solve(model)` does the same round trip on a copy: it returns a new, solved
+model and leaves the one passed in as it was.
 """
 
 from __future__ import annotations
@@ -134,8 +134,8 @@ class KnapsackProblemModel(BaseModel):
         An item's `resource_usage` comes back with its keys sorted: the engine keeps it
         in a map, so only the order differs from the model `to_core()` was built from
         (the dicts compare equal). `resource_capacities` keeps its declaration order.
-        `knapsack.solve(model)` writes only the selection and the results back, so the
-        model keeps its own order.
+        `knapsack.solve(model)` fills only the selection and the results into a copy of
+        the model, so its result keeps the model's own order.
         """
         ids = [item.id for item in problem.items]
         return cls(

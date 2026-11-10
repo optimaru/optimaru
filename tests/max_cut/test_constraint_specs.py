@@ -79,8 +79,7 @@ def solved(constraints=None, problem=None) -> MaxCutProblemModel:
     config = max_cut.SolverConfig()
     config.step_count_limit = 2000
     config.random_seed = 1
-    max_cut.solve(problem, config=config, constraints=constraints)
-    return problem
+    return max_cut.solve(problem, config=config, constraints=constraints)
 
 
 def _zero() -> max_cut.SolverConfig:

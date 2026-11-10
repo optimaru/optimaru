@@ -66,9 +66,12 @@ def test_unknown_config_knobs_are_refused():
 
 def test_solve_on_the_engine_object_and_on_the_model_agree():
     core = demo().to_core()
-    model = demo()
-    assert knapsack.solve(core, config=steps(3000, seed=7)) is core
-    assert knapsack.solve(model, config=steps(3000, seed=7)) is model
+    problem = demo()
+    before = problem.model_dump()
+    assert knapsack.solve(core, config=steps(3000, seed=7)) is core  # the engine object is solved in place
+    model = knapsack.solve(problem, config=steps(3000, seed=7))
+    assert isinstance(model, KnapsackProblemModel) and model is not problem
+    assert problem.model_dump() == before  # the model passed in stays the problem it was
     assert isinstance(core.score, knapsack.Score)
     assert (core.score.hard, core.score.soft) == (model.score_hard, model.score_soft)
     assert [item.selected for item in model.items] == [value == 1 for value in core.assignment()]
@@ -76,8 +79,7 @@ def test_solve_on_the_engine_object_and_on_the_model_agree():
 
 
 def test_the_web_demo_solves_to_a_feasible_selection():
-    model = demo()
-    assert knapsack.solve(model, time_limit_seconds=1.0, random_seed=1) is model
+    model = knapsack.solve(demo(), time_limit_seconds=1.0, random_seed=1)
     assert model.score_hard >= 0  # feasible
     assert model.total_weight <= model.capacity
     chosen = {item.id for item in model.items if item.selected}
@@ -149,8 +151,7 @@ def test_the_constraints_path_scores_with_the_picks():
 
 
 def test_zero_budget_returns_the_greedy_construction():
-    model = demo()
-    knapsack.solve(model, time_limit_seconds=0)
+    model = knapsack.solve(demo(), time_limit_seconds=0)
     core = demo().to_core()
     greedy = knapsack._core.greedy_selection(core, [-1] * core.item_count())
     assert [item.selected for item in model.items] == greedy

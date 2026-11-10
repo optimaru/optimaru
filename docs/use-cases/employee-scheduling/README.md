@@ -28,8 +28,7 @@ print(solved.score)                                                   # 0hard/0s
 print([solved.employees[who].name for who in solved.assignment()])    # ['Worker 01', 'Worker 02']
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config`
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config`
 (`es.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`,
 `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and
 `constraints`: a list of constraint specs or a `DecomposedCalculator` (see

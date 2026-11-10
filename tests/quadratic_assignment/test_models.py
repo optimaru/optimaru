@@ -124,10 +124,13 @@ def test_the_web_demo_validates_and_converts():
     assert QuadraticAssignmentProblemModel.from_core(core).model_dump() == model.model_dump()
 
 
-def test_solving_the_model_writes_the_result_back_in_place():
-    model = rich()
-    model.warm_start = True
-    assert qap.solve(model, time_limit_seconds=0.2, random_seed=3) is model
+def test_solving_the_model_returns_a_new_solved_model_and_leaves_the_input_alone():
+    problem = rich()
+    problem.warm_start = True
+    before = problem.model_dump()
+    model = qap.solve(problem, time_limit_seconds=0.2, random_seed=3)
+    assert isinstance(model, qap.QuadraticAssignmentProblemModel) and model is not problem
+    assert problem.model_dump() == before
     result = qap.calculate_score(model.model_copy(deep=True))
     assert (model.score_hard, model.score_soft) == (result.hard, result.soft)
     assert model.warm_start is False
@@ -166,7 +169,7 @@ def test_model_level_scoring_needs_a_complete_assignment():
 
 def test_a_plain_solve_ignores_a_valid_input_assignment_but_validates_it():
     model = rich()
-    qap.solve(model, time_limit_seconds=0)
+    model = qap.solve(model, time_limit_seconds=0)
     assert model.assignment == {"Lw": "Fa", "Lx": "Fb", "Ly": "Fc", "Lz": "Fd"}  # the identity start
     bad = rich({"Lw": "Fa", "Lx": "Fa"})
     with pytest.raises(ValueError, match="assigned to both"):

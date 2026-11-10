@@ -22,7 +22,7 @@ timetable = st.solve(problem, time_limit_seconds=5.0, random_seed=42)  # canonic
 print(timetable["status"], len(timetable["lessons"]))
 ```
 
-`solve` takes `mode` (`"canonical"`, the default, or `"quickstart"`), `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `weights`, `on_new_best`, a full `config` (`optimaru.school_timetabling.canon.SolverConfig` in the default mode, `optimaru.school_timetabling.SolverConfig` in quickstart mode, or a `models.SolveConfig`), `initial_solution` (below) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `mode` (`"canonical"`, the default, or `"quickstart"`), `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `weights`, `on_new_best`, a full `config` (`optimaru.school_timetabling.canon.SolverConfig` in the default mode, `optimaru.school_timetabling.SolverConfig` in quickstart mode, or a `models.SolveConfig`), `initial_solution` (below) and `constraints` (see below). The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=school_timetabling && cmake --build build -j
