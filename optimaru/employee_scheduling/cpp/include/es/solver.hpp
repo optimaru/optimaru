@@ -1,18 +1,11 @@
 #ifndef ES_SOLVER_HPP
 #define ES_SOLVER_HPP
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
 #include <utility>
-#include <vector>
 
 #include "es/domain.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
-#include "optimaru/model/editor.hpp"  // ScoreChecks
+#include "optimaru/solver_config.hpp"
 
 namespace es {
 
@@ -22,20 +15,18 @@ namespace es {
 // optimaru::Solver<EmployeeSchedule>.
 class Solver {
 public:
-    struct Config {
-        std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
-
-        // Stop early once bestScore >= target_score. Default is above every
-        // achievable score, so it never fires (termination is by time_limit).
-        Score target_score{std::numeric_limits<std::int64_t>::max(),
-                           std::numeric_limits<double>::infinity()};
-        // Optional early exits; 0 disables each criterion.
-        std::chrono::milliseconds stall_time_limit{0};
-        std::int64_t step_limit = 0;
-        std::int64_t stall_step_limit = 0;
-
-        std::size_t history_length = 400;
-        std::uint64_t seed = 0;
+    // The limits, the seed, the parallel starts, the callback and the ruin &
+    // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
+    //   history_length         400 by default. There is no automatic size: 0
+    //                          is refused
+    //   parallel_solver_count  only solve(schedule) honors it;
+    //                          solve(schedule, calculator) ignores it and runs
+    //                          one search. Python goes through the calculator
+    //                          overload and gets its parallel starts from
+    //                          separate processes instead (see
+    //                          optimaru.employee_scheduling.models.solve_request)
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
+        Config() { history_length = 400; }
 
         // Fraction of the total time budget reserved for the post-local-search
         // greedy hard-repair. Local search runs for time_limit*(1-fraction) and
@@ -51,41 +42,14 @@ public:
         // closes the gap.
         double greedy_repair_budget_fraction = 0.0;
 
-        // Independent parallel starts. Each worker receives seed + i
-        // and the full wall-clock budget; the best solution wins. This is
-        // generally more scalable than synchronizing candidate evaluation
-        // around one mutable incremental score editor.
-        // Only solve(schedule) honors this; solve(schedule, calculator) ignores
-        // it and runs one search. Python goes through the calculator overload
-        // and gets its parallel starts from separate processes instead (see
-        // optimaru.employee_scheduling.models.solve_request).
-        int parallel_solver_count = 1;
-
-        // ScoreChecks::Full re-verifies the incremental score against a full
-        // recompute after every move (a debugging aid for the C++ tests;
-        // orders of magnitude slower, not exposed to Python).
-        optimaru::ScoreChecks score_checks = optimaru::ScoreChecks::Off;
-
         // Guided move selection (A: pick a skill-capable, available target
         // employee; B: bias the shift toward employees with hard violations).
         // Set false for plain uniform-random move selection.
         bool guided_moves = true;
         bool employee_greedy_construction = true;
 
-        // Adaptive ruin-and-recreate kicks when the search stagnates (the
-        // engine's ALNS). Without this the late-acceptance search can lock into a local
-        // optimum within milliseconds on small instances and never escape.
-        bool ruin_recreate = true;
-        std::int64_t ruin_recreate_unimproved_step_trigger = 5000;
-        double ruin_recreate_min_ruin_fraction = 0.10;
-        double ruin_recreate_max_ruin_fraction = 0.30;
-        int ruin_recreate_max_ruin_count = 60;
-        double ruin_recreate_operator_decay = 0.8;
-        std::vector<double> ruin_recreate_rewards{33.0, 9.0, 3.0, 0.0};
-        std::int64_t ruin_recreate_polish_steps = 5000;
-
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
-        // the stagnation kick above (engine
+        // the stagnation kick (engine
         // RuinRecreateSettings::as_move_weight). Probability that a step is a
         // small ruin + greedy repair instead of a sampled change/swap; a
         // rejected one is rolled back like any other move. It draws from the
@@ -166,13 +130,6 @@ public:
         double two_opt_weight = 0.2;
         double or_opt_weight = 0.0;
         double tail_swap_weight = 0.0;
-
-        std::function<void(std::int64_t, const Score&)> on_new_best;
-        // Set by solve() on each parallel worker's copy, not by a caller (and
-        // not bound to Python): the first worker that fails raises it, and the
-        // other workers' engines stop at their next step instead of running out
-        // their budget before the error reaches the caller.
-        std::shared_ptr<std::atomic<bool>> stop_flag;
     };
 
     Solver() = default;

@@ -5,7 +5,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
-#include <exception>
 #include <limits>
 #include <map>
 #include <memory>
@@ -19,7 +18,6 @@
 #include "es/score_calculator.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/solver.hpp"
-#include "optimaru/worker_threads.hpp"
 
 namespace es {
 
@@ -841,15 +839,13 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
                std::chrono::milliseconds localSearchLimit) {
     const int shiftCount = static_cast<int>(schedule.shifts.size());
 
-    optimaru::Settings engineConfig;
+    optimaru::Settings engineConfig = optimaru::settings_from(config);
+    // Local search gets its share of the budget; the greedy repair has the rest.
     engineConfig.limits.time_limit = localSearchLimit;
-    engineConfig.limits.target_score = config.target_score;
-    engineConfig.limits.stall_time_limit = config.stall_time_limit;
-    engineConfig.limits.step_limit = config.step_limit;
-    engineConfig.limits.stall_step_limit = config.stall_step_limit;
     if (config.history_length == 0) {
         throw std::invalid_argument("lateAcceptanceSize must be positive");
     }
+    optimaru::check_config(config);
     engineConfig.search.acceptance.history_length = config.history_length;
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
@@ -858,26 +854,9 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
     engineConfig.search.moves.two_opt_weight = config.two_opt_weight;
     engineConfig.search.moves.or_opt_weight = config.or_opt_weight;
     engineConfig.search.moves.tail_swap_weight = config.tail_swap_weight;
-    auto& lns = engineConfig.search.ruin_recreate;
-    lns.enabled = config.ruin_recreate;
-    lns.unimproved_step_trigger = config.ruin_recreate_unimproved_step_trigger;
-    lns.min_ruin_fraction = config.ruin_recreate_min_ruin_fraction;
-    lns.max_ruin_fraction = config.ruin_recreate_max_ruin_fraction;
-    lns.max_ruin_count = config.ruin_recreate_max_ruin_count;
-    lns.operator_decay = config.ruin_recreate_operator_decay;
-    if (config.ruin_recreate_rewards.size() != 4) {
-        throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
-    }
-    lns.rewards = config.ruin_recreate_rewards;
-    lns.polish_steps = config.ruin_recreate_polish_steps;
-    lns.as_move_weight = config.ruin_recreate_as_move_weight;
-    lns.as_move_max_ruin = config.ruin_recreate_as_move_max_ruin;
     engineConfig.search.descent_weight = config.descent_weight;
     engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
     engineConfig.search.custom_move_probability = config.custom_move_probability;
-    engineConfig.seed = config.seed;
-    engineConfig.score_checks = config.score_checks;
-    engineConfig.on_new_best = config.on_new_best;
 
     // Guided move selection: the domain heuristics plugged into the engine's
     // recommender hooks (returning -1 falls back to uniform-random selection).
@@ -974,38 +953,14 @@ void Solver::solve(EmployeeSchedule& schedule) {
     ScoreCalculator::prepare(schedule);  // intern skills / precompute day indices
     seedDayAwareInitialRoster(config_, schedule);
 
-    const int workerCount = std::max(1, config_.parallel_solver_count);
-    if (workerCount > 1) {
-        std::vector<EmployeeSchedule> candidates(workerCount, schedule);
-        std::vector<std::exception_ptr> failures(workerCount);
-        // Raised by the first worker that fails: every worker's engine checks
-        // it once a step, so the others stop instead of using up their budget.
-        auto stop = std::make_shared<std::atomic<bool>>(false);
-        // A worker that cannot be started (std::system_error) stops and joins
-        // the ones already running before the error is rethrown here.
-        optimaru::run_worker_threads(workerCount, *stop,
-                                     [this, &candidates, &failures, &stop](int i) {
-                                         try {
-                                             Config workerConfig = config_;
-                                             workerConfig.parallel_solver_count = 1;
-                                             workerConfig.stop_flag = stop;
-                                             workerConfig.seed += static_cast<std::uint64_t>(i);
-                                             if (i != 0) workerConfig.on_new_best = nullptr;
-                                             Solver worker(std::move(workerConfig));
-                                             worker.solve(candidates[i]);
-                                         } catch (...) {
-                                             failures[i] = std::current_exception();
-                                             stop->store(true);
-                                         }
-                                     });
-        for (const std::exception_ptr& failure : failures) {
-            if (failure) std::rethrow_exception(failure);
-        }
-        int best = 0;
-        for (int i = 1; i < workerCount; ++i) {
-            if (candidates[i].score > candidates[best].score) best = i;
-        }
-        schedule = std::move(candidates[best]);
+    // Independent parallel starts: each one is a single-start Solver of its
+    // own, on a copy of the seeded roster.
+    if (config_.parallel_solver_count > 1) {
+        optimaru::solve_parallel_starts(config_, schedule,
+                                        [](const Config& config, EmployeeSchedule& candidate, int) {
+                                            Solver worker(config);
+                                            worker.solve(candidate);
+                                        });
         return;
     }
 

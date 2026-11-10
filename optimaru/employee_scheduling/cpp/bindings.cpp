@@ -581,23 +581,6 @@ PYBIND11_MODULE(_core, m) {
                                     "greedy_repair_budget_fraction must be in [0, 0.9)");
                         c.greedy_repair_budget_fraction = fraction;
                     })
-            .def_readwrite("ruin_recreate", &Solver::Config::ruin_recreate)
-            .def_readwrite("ruin_recreate_unimproved_step_trigger",
-                           &Solver::Config::ruin_recreate_unimproved_step_trigger)
-            .def_readwrite("ruin_recreate_min_ruin_fraction",
-                           &Solver::Config::ruin_recreate_min_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_fraction",
-                           &Solver::Config::ruin_recreate_max_ruin_fraction)
-            .def_readwrite("ruin_recreate_max_ruin_count",
-                           &Solver::Config::ruin_recreate_max_ruin_count)
-            .def_readwrite("ruin_recreate_operator_decay",
-                           &Solver::Config::ruin_recreate_operator_decay)
-            .def_readwrite("ruin_recreate_polish_steps",
-                           &Solver::Config::ruin_recreate_polish_steps)
-            .def_readwrite("ruin_recreate_as_move_weight",
-                           &Solver::Config::ruin_recreate_as_move_weight)
-            .def_readwrite("ruin_recreate_as_move_max_ruin",
-                           &Solver::Config::ruin_recreate_as_move_max_ruin)
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             .def_readwrite("descent_max_sweeps", &Solver::Config::descent_max_sweeps)
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
@@ -655,20 +638,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("list_swap_move_weight", &Solver::Config::list_swap_weight)
             .def_readwrite("two_opt_move_weight", &Solver::Config::two_opt_weight)
             .def_readwrite("or_opt_move_weight", &Solver::Config::or_opt_weight)
-            .def_readwrite("tail_swap_move_weight", &Solver::Config::tail_swap_weight)
-            // Early termination once bestScore >= (hard, soft), e.g. (0, -inf)
-            // stops at the first feasible solution.
-            .def_property(
-                    "best_score_limit",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.target_score.hard, c.target_score.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.target_score = Score{hs.first, hs.second};
-                    })
-            // Callback fired on every new best solution: on_new_best(step, score).
-            // The pybind11 wrapper re-acquires the GIL, which solve() releases.
-            .def_readwrite("on_new_best", &Solver::Config::on_new_best);
+            .def_readwrite("tail_swap_move_weight", &Solver::Config::tail_swap_weight);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())
