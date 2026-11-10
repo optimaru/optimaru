@@ -26,8 +26,7 @@ class Solver
 public:
     struct Config
     {
-        // Wall-clock budget, mirroring termination.spent-limit (30s in the
-        // quickstart's application.properties).
+        // Wall-clock budget (30s by default).
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above every
@@ -100,8 +99,7 @@ public:
     // derived dates and stores the best score found in schedule.score.
     // Pinned allocations (all SOURCE/SINK ones plus user-pinned STANDARD
     // ones) keep their assignment; a pinned allocation that arrives
-    // unassigned is fixed at (first execution mode, delay 0) first — the
-    // Java DemoDataGenerator's convention for sources and sinks.
+    // unassigned is fixed at (first execution mode, delay 0) first.
     void solve(ProjectJobSchedule &schedule);
 
     // Solves with a caller-assembled plugin calculator (see

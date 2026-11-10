@@ -8,9 +8,7 @@ namespace fl
 
 // Soft, weight 6: distanceFromFacilityCost — the meters every assigned
 // consumer stands from its facility. Raw cost per facility = the summed
-// distance of its consumers (0 for an unused facility). The provider declares
-// ofSoft(5), but the quickstart solution overrides it to 6 with
-// ConstraintWeightOverrides, so 6 is the effective default carried here.
+// distance of its consumers (0 for an unused facility).
 //
 // A pure sum of per-member terms, so the exact delta is one precomputed matrix
 // lookup: the calculator maintains it incrementally in O(1) per move.

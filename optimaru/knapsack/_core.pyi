@@ -1,8 +1,8 @@
 """Type stubs for `optimaru.knapsack._core` — the knapsack C++ solver.
 
-The problem is the planning solution: each item's `selected` (1 = selected,
+The problem object holds the solution: each item's `selected` (1 = selected,
 0 = not, -1 = undecided, counted as not selected) is the single assignment-shape
-planning variable.
+decision variable.
 
 Score (hard/soft, lexicographic), at the default weights: hard =
 -(weight over capacity + resource overflow + unselected mandatory entries +
@@ -30,7 +30,7 @@ class Resource:
     capacity: int
 
 class Item:
-    """Planning entity: one candidate item."""
+    """One candidate item."""
 
     def __init__(
         self,
@@ -50,7 +50,7 @@ class Item:
     """Indices of the items that must be selected with this one (the model's
     `requires`); repeats count separately, a self-dependency never counts."""
     selected: int
-    """The planning variable: 1 = selected, 0 = not selected, -1 = undecided."""
+    """The decision variable: 1 = selected, 0 = not selected, -1 = undecided."""
     def is_selected(self) -> bool: ...
 
 class SelectionGroup:
@@ -64,7 +64,7 @@ class SelectionGroup:
     """None = the group size."""
 
 class KnapsackProblem:
-    """Planning solution. NOTE: `items` (and the other lists) element access
+    """Problem and solution in one object. NOTE: `items` (and the other lists) element access
     returns copies; use set_assignment for bulk selection writes."""
 
     def __init__(
@@ -95,9 +95,9 @@ class KnapsackProblem:
     def total_value(self) -> int:
         """Value of the selected items."""
     def assignment(self) -> list[int]:
-        """The planning variable per item (1 / 0 / -1)."""
+        """The decision variable per item (1 / 0 / -1)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """Bulk write of the planning variable (each value -1, 0 or 1)."""
+        """Bulk write of the decision variable (each value -1, 0 or 1)."""
 
 def calculate_score(problem: KnapsackProblem) -> Score:
     """Full recompute of the score at the default constraints (also stores

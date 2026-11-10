@@ -1030,7 +1030,7 @@ void Solver::solve(
         engine.solve(plan, calculator);
     }
 
-    // Refresh the node shadow variables (vehicleIndex / arrivalTime) on the
+    // Refresh the node derived fields (vehicleIndex / arrivalTime) on the
     // best solution — the plugin components derive their own chain and never
     // write these — then score it with the caller's constraint assembly,
     // leaving the calculator primed on it so constraint_totals() explains

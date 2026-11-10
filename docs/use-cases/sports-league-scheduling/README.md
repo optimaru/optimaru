@@ -1,9 +1,8 @@
 # Sports League Scheduling (C++ / Python)
 
-The Timefold Quickstarts `sports-league-scheduling` example model
-(Apache-2.0; see the repository [NOTICE](../../../NOTICE))
-ported, with modifications,
-onto the generic C++ engine in `optimaru/cpp/optimaru/`. Assigns a round (`Round`) to
+Derived from the Timefold Quickstarts `sports-league-scheduling` example
+(Apache-2.0; see the repository [NOTICE](../../../NOTICE)), with modifications,
+on the generic C++ engine in `optimaru/cpp/optimaru/`. Assigns a round (`Round`) to
 every match (`Match`) of the league (one assignment variable: `Match::round`).
 
 - `optimaru/sports_league_scheduling/cpp/` — domain (`sls::LeagueSchedule`), full-recompute scorer, O(delta)
@@ -32,9 +31,9 @@ OPTIMARU_USE_CASES=sports_league_scheduling uv sync && uv run pytest -q tests/sp
 
 ## Score mapping
 
-The Java original already uses `Score`, so it maps identically onto the engine's
+This use case scores hard and soft only, so it maps identically onto the engine's
 `Score(int64 hard, double soft)` (soft stored as an integer value in the double).
-The 10 constraints have the same semantics as Java `SportsLeagueSchedulingConstraintProvider`
+The 10 constraints
 (more detail in [`python.md`](python.md) and the comments in `optimaru/sports_league_scheduling/cpp/include/sls/
 score_calculator.hpp`):
 
@@ -57,8 +56,7 @@ flippable (`level="hard"` / `level="soft"`, or `Level.HARD` / `Level.SOFT`;
 `level="medium"` raises `ValueError`, the domain has no medium level), none is a reward
 and all ten are scored by default (`default_enabled`); `optimaru.sports_league_scheduling.constraint_info()`
 reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`).
-The consecutive rules charge the whole run length (a run of 4 costs 4), as the Java
-provider does.
+The consecutive rules charge the whole run length (a run of 4 costs 4).
 
 `constraint_costs()` is the per-constraint surface. The CP-SAT reference reads its
 defaults from `constraint_info()`, so it cannot disagree with the engine on a default.

@@ -1,10 +1,9 @@
 // Food-packaging unit tests (engine test/ style: check() + non-zero exit on any
 // failure):
 //   (a) every constraint verified against hand-computed full scores (the
-//       Java FoodPackagingConstraintProviderTest cases re-derived through
-//       the real shadow chain — the Java ConstraintVerifier presets shadow
-//       values and isolates one constraint; a full-score calculator cannot,
-//       so every expectation here accounts for all five constraints)
+//       job times are derived from the lists, and a full-score calculator
+//       cannot isolate one constraint, so every expectation here accounts
+//       for all five constraints)
 //   (b) incremental score == full recompute across a long random walk of
 //       LIST moves driven through the engine's Editor protocol,
 //       with shared operators, a pinned line prefix and a pinned
@@ -12,13 +11,13 @@
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //       (including the LNS ruin/recreate path)
 //   (d) pinned jobs keep their exact position / stay unassigned through a
-//       solve; the unassigned pool works as the allowsUnassignedValues
-//       stand-in
-//   (e) operator-assignment helpers (Java's Line.operator variable, handled
-//       by the wrapper's alternating loop)
+//       solve; the unassigned pool holds the jobs left
+//       on no line
+//   (e) operator-assignment helpers (the Line::operator_index variable,
+//       handled by the wrapper's alternating loop)
 //   (f) the demo instance (seed 37) has the expected shape
 //       and reaches 0hard
-//   (g) HardMediumSoft <-> engine HardSoft mapping roundtrip (the domain's
+//   (g) hard/medium/soft <-> engine hard/soft mapping roundtrip (the domain's
 //       medium fold, into_soft(10^10)) + input validation errors
 #include <chrono>
 #include <cmath>
@@ -67,8 +66,8 @@ void checkScore(const std::string &label,
 // A time far in the future: maxEnd/idealEnd constraints never fire.
 constexpr Minutes BIG = 1000000000LL;
 
-// The Java test's products: 0 = A small, 1 = A large, 2 = B, with the same
-// cleaning-duration maps plus 0-minute self entries (the demo generator also
+// The test products: 0 = A small, 1 = A large, 2 = B, with a fixed
+// cleaning-duration matrix plus 0-minute self entries (the demo generator also
 // emits self = 0) so same-product sequences work through the chain.
 void addTestProducts(PackagingSchedule &s)
 {
@@ -89,7 +88,7 @@ void addTestProducts(PackagingSchedule &s)
 }
 
 constexpr int PA_S = 0;  // product index 1 ("Product A large") is unused by
-constexpr int PB = 2;    // the cases below but keeps the Java test's matrix
+constexpr int PB = 2;    // the cases below but keeps the 3 x 3 test matrix
 
 struct JobSpec
 {
@@ -141,7 +140,7 @@ PackagingSchedule baseSchedule(int operatorCount)
 }
 
 // -------------------------------------------------------------------------
-// (a) Hand-computed full scores through the real shadow chain.
+// (a) Hand-computed full scores through the derived job times.
 // -------------------------------------------------------------------------
 void verifyConstraints()
 {
@@ -158,7 +157,7 @@ void verifyConstraints()
                    {-100, 0, -350 * 350});
     }
     {
-        // The cleanup chain and the shadow values themselves. J1 cleans
+        // The cleanup chain and the derived values themselves. J1 cleans
         // from J0's end (100) for cleanup(B -> A small) = 60, so production
         // runs 160..260.
         PackagingSchedule s = baseSchedule(1);
@@ -169,7 +168,7 @@ void verifyConstraints()
         const Job &j1 = s.jobs[1];
         check(j1.lineIndex == 0 && j1.startCleaningDateTime == 100
                   && j1.startProductionDateTime == 160 && j1.endDateTime == 260,
-              "shadow chain values (startCleaning/startProduction/end)");
+              "derived job times (startCleaning/startProduction/end)");
         const Job &j0 = s.jobs[0];
         check(j0.startCleaningDateTime == 0 && j0.startProductionDateTime == 0
                   && j0.endDateTime == 100,
@@ -463,7 +462,7 @@ void verifyPinnedSolve()
 
     check(!s.lines[0].jobs.empty() && s.lines[0].jobs[0] == 0,
           "pinned job 0 kept position 0 of line 0");
-    check(s.jobs[0].lineIndex == 0, "pinned job 0 shadow lineIndex == 0");
+    check(s.jobs[0].lineIndex == 0, "pinned job 0 derived lineIndex == 0");
     check(s.jobs[1].lineIndex == -1
               && std::find(s.unassignedJobs.begin(), s.unassignedJobs.end(), 1)
                      != s.unassignedJobs.end(),
@@ -539,7 +538,7 @@ void verifyDemo()
     bool sortedByName = true;
     for (std::size_t i = 1; i < s.jobs.size(); ++i)
         sortedByName = sortedByName && s.jobs[i - 1].name <= s.jobs[i].name;
-    check(sortedByName, "jobs sorted by name (Java post-sort)");
+    check(sortedByName, "jobs sorted by name");
 
     bool windowsOk = true;
     for (const Job &job : s.jobs)
@@ -600,7 +599,7 @@ void verifyMappingAndValidation()
             const Score back = fromEngineScore(toEngineScore(score));
             ok = ok && back == score;
         }
-        check(ok, "HardMediumSoft <-> engine HardSoft roundtrip is exact");
+        check(ok, "hard/medium/soft <-> engine hard/soft roundtrip is exact");
         // The fold is 10^10, and the MediumFold packing is bit-for-bit the
         // int64 `medium * kMediumUnit + soft`.
         bool packed = kMediumFold.kind == optimaru::MediumFold::Kind::IntoSoft
@@ -623,8 +622,7 @@ void verifyMappingAndValidation()
               "level dominance survives the mapping");
     }
     {
-        // Missing cleanup entry: querying the pair throws, like Java's
-        // Product.getCleanupDuration.
+        // Missing cleanup entry: querying the pair throws.
         PackagingSchedule s = baseSchedule(1);
         s.cleanupMinutes[PB * 3 + PA_S] = kMissingCleanup;
         addLine(s, 0, {{PB, 100}, {PA_S, 100}});

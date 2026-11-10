@@ -2,7 +2,7 @@
 // The Python extension links the existing st::* implementations and imports
 // the generic optimaru engine from ../../../include; the engine itself
 // is not modified here. Two domains are exposed:
-//   - the quickstart port (st::Timetable, slotRoom composite encoding) at the
+//   - the quickstart model (st::Timetable, slotRoom composite encoding) at the
 //     module top level;
 //   - the canonical full-parity domain (st::canon) in the `canon` submodule,
 //     mirroring the CP-SAT reference package's constraints under the same
@@ -460,7 +460,7 @@ void bindCanon(py::module_ &canon)
                      a.push_back(lesson.slot);
                  return a;
              })
-        // Bulk write of the planning variable (lesson access via .lessons
+        // Bulk write of the decision variable (lesson access via .lessons
         // returns copies, so per-lesson writes would be lost).
         .def(
             "set_assignment",
@@ -836,7 +836,7 @@ PYBIND11_MODULE(_core, m)
                      a.push_back(l.slotRoom);
                  return a;
              })
-        // Bulk write of the planning variable (lesson access via .lessons
+        // Bulk write of the decision variable (lesson access via .lessons
         // returns copies, so per-lesson writes would be lost).
         .def(
             "set_assignment",

@@ -174,7 +174,7 @@ int main(int argc, char **argv)
     std::printf("\n  final score: %s  (feasible=%s)\n",
                 schedule.score.str().c_str(),
                 schedule.score.feasible() ? "true" : "false");
-    // Decompose back into the Java score levels for readability.
+    // Decompose back into the three score levels for readability.
     {
         std::vector<std::int64_t> loads;
         std::vector<std::int64_t> confrontations;
@@ -204,7 +204,7 @@ int main(int argc, char **argv)
                     confrontations.push_back(count);
             }
         }
-        std::printf("  (at Java score levels: %lldhard/-%.6fmedium/-%.6fsoft)\n\n",
+        std::printf("  (by score level: %lldhard/-%.6fmedium/-%.6fsoft)\n\n",
                     static_cast<long long>(schedule.score.hard),
                     ScoreCalculator::unfairness(loads),
                     ScoreCalculator::unfairness(confrontations));

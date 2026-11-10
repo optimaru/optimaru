@@ -16,8 +16,7 @@ namespace ms
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The twelve constraints of the reference meeting-scheduling
-// MeetingSchedulingConstraintProvider, split into one small component each on
+// The twelve meeting-scheduling constraints, one small component each on
 // the engine's DecomposedObjective — an optional assembly path NEXT TO
 // the monolithic MeetingSchedulingIncrementalScoreCalculator, which stays the
 // tuned default fast path.
@@ -37,7 +36,7 @@ namespace ms
 //
 // The three attendance-conflict rules fold their same-meeting "self" term
 // (a meeting whose attendee list lists someone twice conflicts with itself)
-// into the same marginal, so each provider rule stays exactly one component.
+// into the same marginal, so each rule stays exactly one component.
 //
 // Names and defaults: every component is one `<Subject>Cost` struct in
 // constraints/<subject>_cost.hpp whose registry name is the struct name with a
@@ -48,13 +47,13 @@ namespace ms
 // reference read them from there, and the monolithic calculators read the
 // same constants (score_calculator.cpp / incremental_calculator.cpp).
 //
-// Score levels: the quickstart scores with HardMediumSoftScore. This domain
+// Score levels: hard, medium and soft. This domain
 // keeps the engine's Score and declares how its medium level folds
 // into soft ONCE, in domain.hpp (kMediumFold = into_soft(kMediumScale = 1e6),
 // registered through optimaru::MediumFoldOf<MeetingSchedule>). The two medium
 // components are `Level::Medium` at weight 1 in medium units, the decomposed
 // calculator keeps a separate medium accumulator and folds it with that
-// constant; the soft ones carry the Java x 1 / x 100 / x 10 factors.
+// constant; the soft ones carry the x 1 / x 100 / x 10 factors.
 //
 //   DecomposedCalculator calc;
 //   defaultConstraints()                          // the whole default set

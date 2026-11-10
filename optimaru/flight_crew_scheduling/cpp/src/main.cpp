@@ -1,5 +1,5 @@
-// Flight-crew-scheduling demo: reproduces the Java DemoDataGenerator's
-// instance shape (6 airports, 5 days, 14 flights in home-based round trips,
+// Flight-crew-scheduling demo: generates an
+// instance (6 airports, 5 days, 14 flights in home-based round trips,
 // 2 pilots + 2-3 attendants per flight, two teams of crew per departure
 // airport, 28%/4% unavailability), solves for N seconds and asserts a
 // feasible (hard 0) result.
@@ -31,7 +31,7 @@ const std::vector<std::string> LAST_NAMES
        "Rye",  "Smith", "Watt",  "Howe",  "Lowe", "Wise", "Clay",
        "Carr", "Hood",  "Long",  "Horn",  "Haas", "Meza"};
 
-// Same 6 airports and pairwise flight durations (hours) as the Java demo.
+// The 6 airports and their pairwise flight durations (hours).
 const std::vector<Airport> AIRPORTS = {
     {"LHR", "LHR", 51.4775, -0.461389},
     {"JFK", "JFK", 40.639722, -73.778889},
@@ -78,8 +78,7 @@ FlightCrewSchedule generateDemoData(std::uint64_t seed)
             remainingAirports.push_back(a);
     }
 
-    // Routes of 2/4/6 flights leaving from and returning to a home airport
-    // (the Java generateFlights loop).
+    // Routes of 2/4/6 flights leaving from and returning to a home airport.
     struct Route
     {
         int departure;
@@ -108,8 +107,8 @@ FlightCrewSchedule generateDemoData(std::uint64_t seed)
     }
 
     // Departure/arrival times: spread the flights over the 5 days (2-3 per
-    // day), departures on the hour 00..22 (the Java time groups), duration
-    // from the distance table. Day 0 minute 1 plays LocalDateTime.now(): any
+    // day), departures on the hour 00..22, duration
+    // from the distance table. Day 0 minute 1 is "now": any
     // draw before it is pushed to now + rand(4) hours.
     const Minutes startDateTime = 1;
     std::vector<int> flightDay(COUNT_FLIGHTS);
@@ -134,7 +133,7 @@ FlightCrewSchedule generateDemoData(std::uint64_t seed)
     }
 
     // Flight assignments: 2 pilots + 2 attendants, plus a 3rd attendant on
-    // CNF flights (the Java generateFlightAssignments).
+    // CNF flights.
     int assignmentId = 0;
     for (int f = 0; f < COUNT_FLIGHTS; ++f)
     {
@@ -159,7 +158,7 @@ FlightCrewSchedule generateDemoData(std::uint64_t seed)
     }
 
     // Employees: two teams (2 pilots + 2 attendants, +1 attendant at CNF)
-    // per distinct flight departure airport (the Java generateEmployees).
+    // per distinct flight departure airport.
     std::vector<int> flightAirports;
     for (int f = 0; f < COUNT_FLIGHTS; ++f)
     {

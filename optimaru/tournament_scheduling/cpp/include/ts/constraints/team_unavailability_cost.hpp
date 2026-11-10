@@ -11,8 +11,7 @@ namespace ts
 // FACTS whose (team, day) cell holds at least one assignment, so 0 = the team
 // plays on none of its unavailable days. Per fact, not per assignment: two
 // facts for the same cell cost two, one fact over a cell with three
-// assignments still costs one (the Java
-// forEach(UnavailabilityPenalty).ifExists(TeamAssignment)).
+// assignments still costs one.
 //
 // That "at least one" is a clamp, so the cost is not a sum of per-member
 // terms and the component offers no delta; the calculator re-costs a touched

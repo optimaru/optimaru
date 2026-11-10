@@ -16,8 +16,7 @@ namespace fcs
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The six constraints of the reference flight-crew-scheduling
-// FlightCrewSchedulingConstraintProvider, split into one small component each
+// The six flight-crew-scheduling constraints, one small component each
 // on the engine's DecomposedObjective — an optional assembly path NEXT
 // TO the monolithic FlightCrewSchedulingIncrementalScoreCalculator, which
 // stays the tuned default fast path.
@@ -53,8 +52,8 @@ namespace fcs
 // kDefaultWeight / kDefaultLevel passed to the base constructor; they are
 // assembly-time metadata, not part of the cost. Override them per instance
 // with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent`, or by name through ConstraintAssembly. The Java weights (100 /
-// 10 / 1 / 10 / 1'000 / 1'000) are exactly these defaults, and the monolithic
+// `exponent`, or by name through ConstraintAssembly. The defaults are 100 /
+// 10 / 1 / 10 / 1'000 / 1'000, and the monolithic
 // calculators read the same kDefaultWeight constants, which is why the
 // default assembly scores bit-for-bit like them. Every constraint is flippable
 // (hard <-> soft); there is no medium level, no reward and no structural rule

@@ -29,8 +29,7 @@ class Solver
 public:
     struct Config
     {
-        // Wall-clock budget, mirroring termination.spent-limit (30s in the
-        // quickstart's application.properties).
+        // Wall-clock budget.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above every
@@ -117,14 +116,14 @@ public:
     explicit Solver(Config config) : config_(std::move(config)) {}
 
     // Solves in place: mutates trolleys[*].pickTaskIndices, refreshes the
-    // pick tasks' shadow variables and stores the best score found in
+    // pick tasks' derived fields and stores the best score found in
     // solution.score.
     void solve(OrderPickingSolution &solution);
 
     // Solves with a caller-assembled plugin calculator (see
     // op/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies, distance-nearby selection
-    // included. Weights come from the assembly, NOT from the quickstart
+    // included. Weights come from the assembly, NOT from the
     // defaults. The final solution.score is computed by THIS calculator and
     // the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score.

@@ -22,7 +22,7 @@ def test_to_core_from_core_round_trip():
 
     ba.calculate_score(plan)
     back = BedPlanModel.from_core(plan)
-    # Everything but the score fields must match the original (unassigned, so every bed_id is None).
+    # Everything but the score fields must match the input model (unassigned, so every bed_id is None).
     assert back.model_dump(exclude={"score_hard", "score_medium", "score_soft"}) == model.model_dump(
         exclude={"score_hard", "score_medium", "score_soft"}
     )

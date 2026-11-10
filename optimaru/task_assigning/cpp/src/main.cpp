@@ -1,4 +1,4 @@
-// Task-assigning demo: rebuilds the Java quickstart's DemoDataGenerator
+// Task-assigning demo: builds the demo
 // instance (4 task types, 4 customers, 8 employees, 28 tasks), solves for
 // N seconds and asserts the result is feasible (hard == 0) with every task
 // assigned.

@@ -2,8 +2,8 @@
 
 `Location`, `Visit`, `Vehicle`, `VehicleRoutePlan`, `Score`, `Solver`,
 `SolverConfig`, `AcceptorType`, `OperatorSelectionType` and `calculate_score`
-come from the compiled C++ core (`_core`). The plan is the planning solution:
-each vehicle's ordered `visit_indices` list is the planning variable; a visit
+come from the compiled C++ core (`_core`). Each vehicle's ordered
+`visit_indices` list (its route) is the decision; a visit
 missing from every route is unassigned (penalized on the medium score level)
 and ends up in `plan.unassigned_visit_indices` after solving.
 
@@ -23,8 +23,7 @@ large instances; with it the nearby neighbourhood is 25 visits
 (`driving_time_nearby_size`). See `Solver::Config` for the measurements behind
 each default.
 
-Score convention (HardMediumSoft, as in the reference VRP example model), at
-the default weights:
+Score convention (hard / medium / soft), at the default weights:
 
 * **hard** — capacity excess (`vehicle_capacity_cost`) + time-window lateness
   (`max_end_time_cost`), plus the optional route policies

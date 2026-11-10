@@ -421,7 +421,7 @@ def with_initial_solution(
     construction. A solution that routes every request is the exact starting
     point.
 
-    A vehicle's `pinned_stops` stay problem facts: its route in `solution` must
+    A vehicle's `pinned_stops` stay fixed input: its route in `solution` must
     start with them. Raises ValueError otherwise, on an unknown vehicle, and on
     whatever the initial routes refuse: an unknown stop, a stop routed twice, or
     a request whose pickup and dropoff are not together, pickup first. That

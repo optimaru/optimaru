@@ -157,7 +157,7 @@ class ConsecutiveAwayMatchesCost(Constraint):
 class RepeatMatchOnNextDayCost(Constraint):
     """Matches whose return fixture is played in the very next round. Default: hard, weight 1.
 
-    At most 1 point per match however many return fixtures are there (Java's ifExists)."""
+    At most 1 point per match however many return fixtures are there."""
 
     name = "repeat_match_on_next_day_cost"
     label_en = "Return match in the next round"

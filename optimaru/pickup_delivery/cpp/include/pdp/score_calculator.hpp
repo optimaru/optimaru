@@ -51,11 +51,11 @@ public:
     // kDefaultWeight.
     static constexpr std::int64_t kPinnedPenalty = 1'000'000'000'000;
 
-    // Recomputes every node's shadow variables (vehicleIndex, arrivalTime)
+    // Recomputes every node's derived fields (vehicleIndex, arrivalTime)
     // from the current vehicle routes.
     static void updateShadowVariables(PdpRoutePlan &plan);
 
-    // Recomputes shadow variables, then the HardMediumSoftScore, storing it in
+    // Recomputes the derived fields, then the Score, storing it in
     // plan.score and returning it.
     static Score score(PdpRoutePlan &plan);
 

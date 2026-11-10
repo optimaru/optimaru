@@ -1,8 +1,8 @@
 """Type stubs for `optimaru.quadratic_assignment._core` — the quadratic-assignment C++
 solver.
 
-The problem is the planning solution: each facility's `location` (an index
-into `problem.locations`, -1 == unassigned) is the single assignment-shape planning
+The problem object holds the solution: each facility's `location` (an index
+into `problem.locations`, -1 == unassigned) is the single assignment-shape decision
 variable. The solver keeps the facilities a permutation of the locations
 (swap moves only).
 
@@ -25,14 +25,14 @@ class Score:
         """True iff hard >= 0."""
 
 class Facility:
-    """Planning entity: a facility placed at exactly one location."""
+    """A facility placed at exactly one location."""
 
     def __init__(self, id: str, demand: int | None = None, location: int = -1) -> None: ...
     id: str
     demand: int | None
     """facility_demands[id]; None = not listed (scored as demand 0)."""
     location: int
-    """The planning variable: index into problem.locations; -1 == unassigned."""
+    """The decision variable: index into problem.locations; -1 == unassigned."""
     def is_assigned(self) -> bool: ...
 
 class Location:
@@ -59,7 +59,7 @@ class ForbiddenAssignment:
     location: int
 
 class QuadraticAssignmentProblem:
-    """Planning solution. NOTE: element access returns copies (use
+    """Problem and solution in one object. NOTE: element access returns copies (use
     set_assignment for bulk location writes); assigning a fact drops the
     prepared caches, so the next score or solve re-validates the problem."""
 
@@ -107,7 +107,7 @@ class QuadraticAssignmentProblem:
     def assignment(self) -> list[int]:
         """Per location, the index of the facility standing there (-1 = empty)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """Bulk write of the planning variable, per location (-1 = empty). A
+        """Bulk write of the decision variable, per location (-1 = empty). A
         facility named twice or an index out of range raises ValueError;
         facilities not named become unassigned."""
 

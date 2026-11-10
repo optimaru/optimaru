@@ -1,7 +1,7 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (`fcs.solve(schedule)`) enables all six constraints at their default
-weights (the Java provider's weights). This module is the alternative path next to it:
+weights. This module is the alternative path next to it:
 pick constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(schedule, constraints=...)`.
 
@@ -85,7 +85,7 @@ __all__ = [
 class RequiredSkillCost(Constraint):
     """Crew assignments lacking the skill the seat requires. Default: hard, weight 100.
 
-    The heaviest hard rule of the provider — a crew member who cannot take the seat is
+    The heaviest hard rule — a crew member who cannot take the seat is
     worse than any scheduling inconvenience."""
 
     name = "required_skill_cost"
@@ -126,8 +126,8 @@ class FlightConflictCost(Constraint):
 class TransferBetweenTwoFlightsCost(Constraint):
     """Arrival airport differing from the next departure airport. Default: hard, weight 1.
 
-    Someone has to move the crew in between by plane or car. "Next" follows the Java
-    stream exactly — assignments with the same departure time do not start a pair, and
+    Someone has to move the crew in between by plane or car. "Next" is by departure
+    time — assignments with the same departure time do not start a pair, and
     all ties at the later end count."""
 
     name = "transfer_between_two_flights_cost"

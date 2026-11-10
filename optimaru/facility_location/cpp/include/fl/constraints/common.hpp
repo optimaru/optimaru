@@ -16,19 +16,17 @@ namespace fl
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The three constraints of the reference facility-location
-// FacilityLocationConstraintProvider, split into one small component each on
+// The three facility-location constraints, one small component each on
 // the engine's DecomposedObjective — an optional assembly path NEXT TO
 // the monolithic FacilityLocationIncrementalScoreCalculator, which stays the
 // tuned default fast path.
 //
 // Unit choice: the BASIC descriptor's unit is the VALUE, i.e. one facility;
-// members are the consumers currently assigned to it. That is exactly the
-// grouping the Java provider does (groupBy(Consumer::getFacility)), so all
-// three constraints decompose per unit and none of them needs a
-// GlobalConstraint. "Facility serves at least one consumer" — the condition
-// gating both the capacity and the setup-cost term in Java — is simply
-// `!members.empty()` here.
+// members are the consumers currently assigned to it. Every constraint is a
+// function of one facility and its consumers, so all three decompose per
+// unit and none of them needs a GlobalConstraint. "Facility serves at least
+// one consumer" — the condition gating both the capacity and the setup-cost
+// term — is simply `!members.empty()` here.
 //
 //   DecomposedCalculator calc;
 //   defaultConstraints()                     // the whole default set

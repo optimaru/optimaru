@@ -172,8 +172,8 @@ ScoreCalculator::itineraryStats(const FlightCrewSchedule &schedule,
         // hard 3: transferBetweenTwoFlightsCost — a pair (a, b) is
         // departure-consecutive iff a is ALONE on its departure time and b is
         // in the very next group (any other same-time-as-a assignment `c`
-        // satisfies dep(a) <= dep(c) < dep(b), so the Java ifNotExists kills
-        // the pair).
+        // satisfies dep(a) <= dep(c) < dep(b), which rules the
+        // pair out).
         if (prevGroupStart >= 0 && prevGroupEnd - prevGroupStart == 1)
         {
             const int a = sorted[prevGroupStart];

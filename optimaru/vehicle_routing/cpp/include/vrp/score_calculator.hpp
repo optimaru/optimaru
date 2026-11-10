@@ -5,7 +5,7 @@
 
 namespace vrp {
 
-// Port of org.acme.vehiclerouting.solver.VehicleRoutingConstraintProvider:
+// The four core constraints:
 //
 //   HARD   vehicleCapacityCost    route demand over capacity
 //   HARD   maxEndTimeCost         time-window lateness, in whole minutes
@@ -18,17 +18,16 @@ namespace vrp {
 // that sets none of their parameters, which is when the assembly and this
 // calculator agree bit for bit.
 //
-// Unlike an incremental constraint-stream engine, this recomputes the
-// full score from the current vehicle routes. For the quickstart's problem size
-// (tens of visits) a full O(n) recompute per move is more than fast enough.
+// This recomputes the full score from the current vehicle routes; the
+// search itself uses the incremental calculator.
 class ScoreCalculator {
 public:
-    // Recomputes every visit's shadow variables (vehicleIndex, arrivalTime)
+    // Recomputes every visit's derived fields (vehicleIndex, arrivalTime)
     // from the current vehicle.visitIndices lists. Must be called before
     // score whenever routes change.
     static void updateShadowVariables(VehicleRoutePlan& plan);
 
-    // Recomputes shadow variables, then the HardMediumSoftScore, storing it in
+    // Recomputes the derived fields, then the Score, storing it in
     // plan.score and returning it.
     static Score score(VehicleRoutePlan& plan);
 

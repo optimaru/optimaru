@@ -1,8 +1,7 @@
 // Meeting-scheduling unit tests (engine test/ style: check() + non-zero exit on
 // any failure):
 //   (a) every constraint verified in isolation against hand-computed counts
-//       (the Java MeetingSchedulingConstraintProviderTest cases, ported to
-//       the Breakdown of the full recompute)
+//       (on the Breakdown of the full recompute)
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's Editor protocol (before/set/after)
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
@@ -51,7 +50,7 @@ void checkCount(const std::string &label,
 }
 
 // Base problem: `days` x `grainsPerDay` time grains (grainIndex 0-based
-// contiguous like the Java tests, dayOfYear 100+day, 08:00 + 15min steps)
+// contiguous, dayOfYear 100+day, 08:00 + 15min steps)
 // and one room per given capacity. No meetings yet.
 MeetingSchedule makeBase(int days,
                          int grainsPerDay,
@@ -103,7 +102,7 @@ void addMeeting(MeetingSchedule &s,
 }
 
 // -------------------------------------------------------------------------
-// (a) Each constraint in isolation (the Java ConstraintVerifier cases).
+// (a) Each constraint in isolation.
 // -------------------------------------------------------------------------
 void verifyConstraints()
 {
@@ -120,7 +119,7 @@ void verifyConstraints()
         checkCount(
             "  ... consecutive pair counted", b.consecutiveMeetingsCost, 1);
     }
-    // hard 1: overlap of 2 grains in the same room (Java: penalizesBy 2).
+    // hard 1: overlap of 2 grains in the same room: 2.
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {}, {}, 0, 0);
@@ -147,7 +146,7 @@ void verifyConstraints()
         checkCount("overtimeCost unpenalized", b.overtimeCost, 0);
     }
     // hard 2: last grain index 5 does not exist (grains 0..3): penalty 5
-    // (Java penalizes by the lastTimeGrainIndex itself).
+    // (the lastTimeGrainIndex itself).
     {
         MeetingSchedule s = makeBase(1, 4, {5});
         addMeeting(s, 4, {}, {}, 2, 0);
@@ -185,7 +184,7 @@ void verifyConstraints()
                    2);
     }
     // hard 4: roomCapacityCost — 1 required + 1 preferred vs capacity 2
-    // (Java: unpenalized) and capacity 1 (Java: penalizes by 1).
+    // (0) and capacity 1 (1).
     {
         MeetingSchedule s = makeBase(1, 12, {2});
         addMeeting(s, 4, {0}, {1}, 0, 0);
@@ -214,7 +213,7 @@ void verifyConstraints()
         checkCount("  ... not overtime (grain exists)", b.overtimeCost, 0);
     }
     // medium 6: requiredAndPreferredAttendanceConflictCost — required in one
-    // meeting, preferred in another, full overlap of 4 (Java: 4).
+    // meeting, preferred in another, full overlap of 4: 4.
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {0}, {}, 0, 0);
@@ -237,7 +236,7 @@ void verifyConstraints()
                    0);
     }
     // medium 7: preferredAttendanceConflictCost — shared preferred person, full
-    // overlap of 4 (Java: 4).
+    // overlap of 4: 4.
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {}, {0}, 0, 0);
@@ -248,7 +247,7 @@ void verifyConstraints()
                    4);
     }
     // soft 8: meetingEndTimeCost — duration 1 at grain 0: last
-    // index 0 (Java: 0); duration 4 at grain 0: last index 3 (Java: 3).
+    // index 0; duration 4 at grain 0: last index 3.
     {
         MeetingSchedule s = makeBase(1, 12, {5});
         addMeeting(s, 1, {}, {}, 0, 0);
@@ -262,7 +261,7 @@ void verifyConstraints()
         checkCount("meetingEndTimeCost", b.meetingEndTimeCost, 3);
     }
     // soft 9: consecutiveMeetingsCost — overlap (start equal) is
-    // not back-to-back (Java: 0); end 3 then start 4 is (Java: 1).
+    // not back-to-back (0); end 3 then start 4 is (1).
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 4, {}, {}, 0, 0);
@@ -280,7 +279,7 @@ void verifyConstraints()
         checkCount(
             "consecutiveMeetingsCost penalized", b.consecutiveMeetingsCost, 1);
     }
-    // soft 10: meetingOverlapCost — [1,4) vs [0,3): overlap 2 (Java: 2).
+    // soft 10: meetingOverlapCost — [1,4) vs [0,3): overlap 2.
     {
         MeetingSchedule s = makeBase(1, 12, {5, 5});
         addMeeting(s, 3, {}, {}, 1, 0);
@@ -289,7 +288,7 @@ void verifyConstraints()
         checkCount("meetingOverlapCost", b.meetingOverlapCost, 2);
     }
     // soft 11: largerRoomCapacityCost — capacity-1 room while a capacity-2
-    // room exists: 1 (Java: 1); in the largest room: 0.
+    // room exists: 1; in the largest room: 0.
     {
         MeetingSchedule s = makeBase(1, 12, {1, 2});
         addMeeting(s, 4, {}, {}, 0, 0);
@@ -305,7 +304,7 @@ void verifyConstraints()
             "largerRoomCapacityCost largest room", b.largerRoomCapacityCost, 0);
     }
     // soft 12: roomChangeCost — shared attendee, different rooms, gap 0
-    // grains (end 3, start 4): 1 (Java: 1); gap 4 grains: 0 (Java: 0).
+    // grains (end 3, start 4): 1; gap 4 grains: 0.
     {
         MeetingSchedule s = makeBase(1, 16, {5, 5});
         addMeeting(s, 4, {0}, {}, 0, 0);
@@ -515,8 +514,8 @@ void verifyFullAssertSolve()
 }
 
 // -------------------------------------------------------------------------
-// (d) Pinned assignments keep their value through a solve; the Java demo
-// reproduction reaches hard 0 within the test budget.
+// (d) Pinned assignments keep their value through a solve; the demo
+// instance reaches hard 0 within the test budget.
 // -------------------------------------------------------------------------
 void verifyPinnedAndDemoSolve()
 {

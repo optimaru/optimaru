@@ -11,8 +11,8 @@ namespace ts
 // LoadBalance unfairness of the per-team assignment counts,
 // sqrt(sum(load^2) - sum(load)^2 / n) rounded to 6 significant figures, so
 // 0 = every loaded team holds the same number of assignments. Only teams that
-// actually hold an assignment enter the balance (the Java rule has no
-// complement), which is why `n` is maintained separately from the team count.
+// actually hold an assignment enter the balance (an unloaded team is not
+// counted as load 0), which is why `n` is maintained separately from the team count.
 //
 // Folded into the engine's soft level as `medium * kMediumScale` (1e6) by the
 // calculator (kMediumFold in domain.hpp), not by this weight.

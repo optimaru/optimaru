@@ -17,14 +17,13 @@ namespace ba
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The twelve constraints of the reference bed-allocation
-// BedAllocationConstraintProvider, split into one small component each on the
+// The twelve bed-allocation constraints, one small component each on the
 // engine's DecomposedObjective — an optional assembly path NEXT TO the
 // monolithic BedAllocationIncrementalScoreCalculator, which stays the tuned
 // default fast path.
 //
 // Unit choice: with the BASIC descriptor the calculator's unit is the VALUE,
-// i.e. one planning value — a real bed, or the "no bed" sentinel
+// i.e. one assignable value — a real bed, or the "no bed" sentinel
 // (BedPlan::noBedValue()); members are the stays currently assigned to it.
 // Uninitialized stays (bed == -1) belong to no unit and so contribute
 // nothing, exactly like in the monolithic path. The per-bed rules evaluate
@@ -38,8 +37,8 @@ namespace ba
 // units (its pairs share a ROOM, and a room holds several beds), so it runs
 // as a GlobalConstraint on the on_member_changed fast path.
 //
-// Score levels: the quickstart scores with HardMediumSoftScore, which this
-// domain folds into the engine's Score as
+// Score levels: the domain scores on hard / medium / soft levels, which it
+// folds into the engine's Score as
 // `soft = medium * kMediumUnit + soft` (kMediumFold in domain.hpp, registered
 // as optimaru::MediumFoldOf<BedPlan>). The decomposed calculator keeps a
 // separate medium accumulator and applies that fold itself, so a medium
@@ -99,7 +98,7 @@ inline void requirePrepared(const BedPlan &plan)
     }
 }
 
-// Is this planning value a real bed (rather than the "no bed" sentinel)?
+// Is this value a real bed (rather than the "no bed" sentinel)?
 inline bool isRealBed(const BedPlan &plan, int value)
 {
     return value >= 0 && value < plan.bedCount();
@@ -138,7 +137,7 @@ struct PerStayConstraint : BaUnitConstraint
 {
     using BaUnitConstraint::BaUnitConstraint;
 
-    // The penalty units stay `stayIndex` incurs while assigned to planning
+    // The penalty units stay `stayIndex` incurs while assigned to
     // value `unit`, in this constraint's own (unweighted) unit of account.
     virtual double stayCost(const BedPlan &plan, int unit, int stayIndex) const
         = 0;

@@ -24,7 +24,7 @@ namespace fl
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider, every component at its own defaults:
+// The full constraint set, every component at its own defaults:
 //
 //   facilityCapacityCost       hard, weight 1
 //   facilitySetupCost          soft, weight 2

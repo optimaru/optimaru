@@ -1,7 +1,6 @@
 // Order-picking demo: builds the demo warehouse (5 trolleys x 4 buckets x 60x40x20cm, 8 orders over the 37
 // product catalog, seed 37), solves it for a few seconds and
-// prints the trolley paths — the C++ analog of pressing "Solve" in the
-// quickstart's webapp.
+// prints the trolley paths.
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
@@ -31,7 +30,7 @@ int main()
     config.time_limit = std::chrono::seconds(10);
     // Every pick assigned and no trolley short on buckets: hard 0. Stop as
     // soon as a feasible solution is reached? No — keep polishing the travel
-    // distance for the full budget, like the quickstart does.
+    // distance for the full budget.
     config.seed = 0;
     config.on_new_best = [](std::int64_t step, const Score &score)
     {

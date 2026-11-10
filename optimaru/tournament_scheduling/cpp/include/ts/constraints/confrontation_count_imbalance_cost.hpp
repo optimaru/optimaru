@@ -11,8 +11,8 @@ namespace ts
 // the LoadBalance unfairness of the confrontation counts per team pair,
 // sqrt(sum(count^2) - sum(count)^2 / n) rounded to 6 significant figures, so
 // 0 = every confronting pair meets equally often. Two teams confront each
-// other once per pair of same-day assignments they hold (the Java
-// lessThan(teamId) join, so a team never confronts itself), and only pairs
+// other once per pair of same-day assignments they hold (distinct teams
+// only, so a team never confronts itself), and only pairs
 // with at least one confrontation enter the balance.
 //
 // Global because the statistic is over team PAIRS, which no single unit owns.

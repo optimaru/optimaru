@@ -11,8 +11,7 @@ namespace ts
 {
 
 // The tournament-scheduling implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective.
 //
 // Every constraint is a function of per-(team, day) occupancy counts and of
 // two load-balance aggregate triples (sum, sum of squares, item count), so a
@@ -24,7 +23,7 @@ namespace ts
 //     total changes only when a cell's occupancy crosses 0 <-> 1.
 //   - medium 3 (assignmentCountImbalanceCost): the (sum, sumSq, n) aggregates
 //     of the per-team loads; one load changing by 1 is an O(1) update
-//     (n counts only teams with load >= 1 — Java has no complement here).
+//     (n counts only teams with load >= 1 — unloaded teams are left out).
 //   - soft 4 (confrontationCountImbalanceCost): per-team-pair confrontation
 //     counts; inserting an assignment of team t on day d adds cellCnt[u][d]
 //     confrontations to pair (t, u) for every other team u — the O(teamCount)

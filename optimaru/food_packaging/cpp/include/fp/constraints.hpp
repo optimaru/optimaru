@@ -26,7 +26,7 @@ namespace fp
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider, every component at its own defaults:
+// The full constraint set, every component at its own defaults:
 //
 //   maxEndTimeCost                 hard,   weight 1   (unit: line)
 //   operatorCleaningConflictCost   hard,   weight 1   (global)

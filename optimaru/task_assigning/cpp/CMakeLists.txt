@@ -18,8 +18,8 @@ add_executable(ta_test ${OPTIMARU_TESTS_DIR}/task_assigning/cpp/ta_test.cpp)
 target_link_libraries(ta_test PRIVATE ta_core)
 target_compile_options(ta_test PRIVATE -Wall -Wextra)
 
-# Plugin-assembly path (ta/constraints.hpp): the same provider decomposed into
-# one component each on the engine's DecomposedObjective, checked
+# Plugin-assembly path (ta/constraints.hpp): the same constraints decomposed
+# into one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(ta_plugin_test ${OPTIMARU_TESTS_DIR}/task_assigning/cpp/ta_plugin_test.cpp)
 target_link_libraries(ta_plugin_test PRIVATE ta_core)

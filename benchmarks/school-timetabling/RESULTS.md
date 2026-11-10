@@ -14,14 +14,12 @@ of the C++ canonical solver against CP-SAT on the full real-world model; track
 each solver fills (partial timetabling; see README.md "Track 3"). CI publishes
 all three tables; the tables below cover tracks 1 and 2.
 
-### Track 1 — the quickstart's six constraints
+### Track 1 — the quickstart model's six constraints
 
-- **Constraints**: exactly the original Java quickstart's six — room_conflict_cost /
+- **Constraints**: exactly the quickstart model's six — room_conflict_cost /
   teacher_conflict_cost / class_conflict_cost (hard), teacher_room_change_cost /
-  teacher_time_efficiency_cost / class_subject_repeat_cost (soft; the Java
-  roomConflict / teacherConflict / studentGroupConflict, teacherRoomStability /
-  teacherTimeEfficiency / studentGroupSubjectVariety). The
-  teacher_unavailability_cost extension of this repository's C++ domain gets empty
+  teacher_time_efficiency_cost / class_subject_repeat_cost (soft). The
+  model's seventh term, teacher_unavailability_cost, gets empty
   data in these instances, so it contributes 0 (fairness).
 - **Instances**: `optimaru/school_timetabling/cpp/bench/st_quality_bench.cpp`
   generates them deterministically and dumps JSON; both solvers read the

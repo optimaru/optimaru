@@ -10,8 +10,8 @@ indices (the pydantic mirror `optimaru.flight_crew_scheduling.models` uses code/
 Time unit: minutes from a reference epoch (Unix in the model). Dates are day indices
 obtained as floor(minutes / 1440).
 
-Score convention: hard/soft, at the default weights — the same weights as the Java
-quickstart, which are the C++ components' defaults (constraint_info()):
+Score convention: hard/soft, at the default weights — the C++ components'
+defaults (constraint_info()):
   hard 1. required_skill_cost                -100 per assignment without the skill
   hard 2. flight_conflict_cost               -10 per overlapping assignment pair of one crew member
   hard 3. transfer_between_two_flights_cost  -1 per disconnected consecutive assignment pair
@@ -82,7 +82,7 @@ class Flight:
     arrival_utc: int
 
 class FlightAssignment:
-    """Planning entity: one crew seat of a flight. `employee` is the planning
+    """One crew seat of a flight. `employee` is the decision
     variable (-1 == unassigned), written by the solver."""
     def __init__(
         self,
@@ -103,7 +103,7 @@ class FlightAssignment:
     """If True, employee is fixed (it counts in the score but never moves)."""
 
 class FlightCrewSchedule:
-    """Planning solution. solve changes the flight_assignments' `employee` and
+    """Problem and solution in one object. solve changes the flight_assignments' `employee` and
     `score` in place.
 
     Note: list attributes such as `flight_assignments` return copies, so use
@@ -126,7 +126,7 @@ class FlightCrewSchedule:
     def assignment(self) -> list[int]:
         """Current employee index per seat (-1 == unassigned)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """Bulk-write the planning variable (length == number of seats)."""
+        """Bulk-write the decision variable (length == number of seats)."""
 
 def calculate_score(schedule: FlightCrewSchedule) -> Score:
     """Full recalculation (also stored in schedule.score)."""

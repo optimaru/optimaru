@@ -1,6 +1,6 @@
 # conference-scheduling-cpsat
 
-CP-SAT alternative exposing the conference constraint provider as a selectable
+CP-SAT alternative exposing the conference constraints as a selectable
 catalog. Passing `constraints` replaces the default catalog. The model is
 `external_solver.conference_scheduling` from
 [external-solver](https://github.com/optimaru/external-solver); this project runs it

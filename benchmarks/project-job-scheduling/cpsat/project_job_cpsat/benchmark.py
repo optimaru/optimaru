@@ -28,8 +28,8 @@ def _draw_index(rng: random.Random, cumulative: list[float]) -> int:
 
 
 def _build(project_count: int, jobs_per_project: int, seed: int) -> Any:
-    """Structural transcription of the C++ demo's ``generateDemoData``
-    (itself the Java generator). Python's RNG stream differs, so the instance
+    """Structural transcription of the C++ demo's ``generateDemoData``.
+    Python's RNG stream differs, so the instance
     matches in scale and distribution rather than bit-for-bit."""
     import optimaru.project_job_scheduling as pjs
 

@@ -9,8 +9,8 @@ namespace fcs
 // Hard, weight 100: requiredSkillCost — an assignment whose employee does not
 // hold the skill the seat requires. Raw cost per employee = the number of
 // their assignments whose required skill they lack, so 0 = every seat is
-// flown by a qualified crew member. The heaviest hard rule of the provider
-// (the Java weight 100): a crew member who cannot fly the seat is worse than
+// flown by a qualified crew member. The heaviest hard rule
+// (weight 100): a crew member who cannot fly the seat is worse than
 // any schedule awkwardness.
 struct RequiredSkillCost final : PerAssignmentConstraint
 {

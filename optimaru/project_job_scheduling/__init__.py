@@ -5,21 +5,20 @@ solver on the optimaru engine.
 `ProjectJobSchedule`/`JobType`/`Score`/`Solver`/`SolverConfig` and
 `calculate_score` come from the compiled C++ core (`_core`).
 
-The Java quickstart's two planning variables (executionMode, delay∈[0, 500)) are
-ported as one composite-encoded assignment-shape variable `Allocation.mode_delay`::
+The two decisions per allocation (execution mode, delay∈[0, 500)) are one
+composite-encoded assignment-shape variable `Allocation.mode_delay`::
 
     -1                                  uninitialized (no resource use;
                                         dates pass through with delay 0/duration 0)
     delay * max_mode_count + mode_slot  (real mode index = mode_slot %
                                         the job's mode count)
 
-Java's shadow variable chain (predecessorsDoneDate → startDate → endDate) is
-reproduced as derived state: `calculate_score` / `Solver.solve` recompute it in
-topological order and fill `Allocation.start_date`/`end_date`. SOURCE/SINK
-allocations are always pinned (exactly Java's @PlanningPin + setPinned), and if
+The dates (predecessors done → start → end) are derived state: `calculate_score` /
+`Solver.solve` recompute them in topological order and fill
+`Allocation.start_date`/`end_date`. SOURCE/SINK allocations are always pinned, and if
 uninitialized before solving they are fixed to (first mode, delay 0).
 
-Score convention (HardMediumSoftScore, as in the Java quickstart), at the default weights:
+Score convention (hard / medium / soft levels), at the default weights:
   hard   1. non_renewable_resource_capacity_cost  use per non-renewable resource above
                                                   capacity, over the whole horizon
   hard   2. renewable_resource_capacity_cost      use per renewable resource x day above

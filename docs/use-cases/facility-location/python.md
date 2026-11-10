@@ -1,6 +1,6 @@
 # facility_location (Python)
 
-The pybind11 package of the facility-location example-model port (`optimaru/facility_location/cpp`).
+The pybind11 package of the facility-location use case (C++ in `optimaru/facility_location/cpp`).
 Picks one facility per consumer — `Consumer.facility` is the only
 decision variable (facility index, -1 = unassigned).
 
@@ -9,8 +9,6 @@ Score, at the default weights:
 - hard = -(sum over used facilities of `max(0, assigned demand - capacity)`) — `facility_capacity_cost`, hard x1
 - soft = -(2 x setup cost of used facilities + 6 x consumer-facility distance (m)) —
   `facility_setup_cost` soft x2, `distance_from_facility_cost` soft x6
-  - distance weight 6 = the `ConstraintWeightOverrides` value of the Java solution (provider
-    default 5).
 
 The problem carries no weights. Pick, re-weight or flip constraints with
 `optimaru.facility_location.constraints`, and read the defaults with `fl.constraint_info()`:
@@ -25,7 +23,7 @@ fl.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...]
 fl.solve(problem, time_limit_seconds=1.0, constraints=[
     FacilityCapacityCost(), FacilitySetupCost(), DistanceFromFacilityCost(weight=5),
-])                                        # the un-overridden provider
+])                                        # distance weighted 5 instead of 6
 raw = fl.constraint_costs(problem)        # raw per-facility costs, re-priced in pure Python:
 score(raw), score(raw, [DistanceFromFacilityCost(exponent=2.0)])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip

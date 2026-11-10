@@ -138,7 +138,7 @@ VehicleRoutingIncrementalScoreCalculator::evaluateElements(int vehicleIndex,
         terms.driving += drive;
 
         const Seconds arrival = previousDeparture + drive;
-        // Faithful to the Java quickstart: lateness is measured from
+        // Lateness is measured from
         // arrivalTime, not from the (possibly later) service start.
         const Seconds serviceFinished = arrival + visit.serviceDuration;
         if (serviceFinished > visit.maxEndTime)

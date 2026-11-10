@@ -1,7 +1,7 @@
-"""Track-1 CP-SAT solver: solves the quickstart's six constraints with OR-Tools CP-SAT.
+"""Track-1 CP-SAT solver: solves the quickstart model's six constraints with OR-Tools CP-SAT.
 
 Reads the instance JSON dumped by the C++ `st_quality_bench` and looks for a
-lesson → (timeslot, room) assignment. The score scale is the quickstart's six
+lesson → (timeslot, room) assignment. The score scale is the quickstart model's six
 constraints, shared by both solvers:
 
 - the 3 hard ones (room_conflict_cost / teacher_conflict_cost / class_conflict_cost)

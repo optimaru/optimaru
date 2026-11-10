@@ -7,7 +7,7 @@ namespace op
 {
 
 // Hard, weight 1: trolleyCapacityCost — how many buckets a trolley is short
-// of (the quickstart's "Required number of buckets" rule). Raw cost per
+// of. Raw cost per
 // trolley = max(0, required buckets - bucketCount), so 0 = the trolley carries
 // enough buckets. Each ORDER on the trolley rounds its own volume up to a
 // whole number of buckets, because buckets are never shared between orders;

@@ -9,13 +9,12 @@
 namespace ts
 {
 
-// Port of the reference tournament-scheduling
-// TournamentScheduleConstraintProvider.
+// The four tournament-scheduling constraints.
 //
 // score does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under ScoreChecks::Full).
 //
-// Constraints (Java HardMediumSoftBigDecimalScore, mapped per ts::Score;
+// Constraints (hard / medium / soft levels, mapped per ts::Score;
 // default weights per unit are the components' kDefaultWeight, see
 // ts/constraints/<subject>_cost.hpp):
 //   hard 1. teamConflictCost             -1 per assignment pair with the same
@@ -25,7 +24,7 @@ namespace ts
 //                                        whose (team, day) has >= 1 assignment
 //   med  3. assignmentCountImbalanceCost -unfairness of the per-team
 //                                        assignment counts (teams with >= 1
-//                                        assignment; no complement in Java)
+//                                        assignment; unloaded teams excluded)
 //   soft 4. confrontationCountImbalanceCost
 //                                        -unfairness of the confrontation
 //                                        counts per team pair: one
@@ -34,9 +33,9 @@ namespace ts
 //                                        teamId2 (strict: same-team pairs
 //                                        excluded)
 //
-// "unfairness" is the reference model's load-balance unfairness: sqrt(sum(load^2) -
+// "unfairness" is the load-balance unfairness: sqrt(sum(load^2) -
 // sum(load)^2 / n) over the n currently loaded items, rounded to 6
-// significant figures HALF_EVEN (BigDecimal.sqrt with MathContext(6)).
+// significant figures HALF_EVEN.
 // Unassigned assignments (team == -1) contribute nothing: the construction
 // heuristic scores partially initialized solutions.
 class ScoreCalculator
@@ -51,7 +50,7 @@ public:
 
     // Load-balance unfairness from the running aggregates:
     // sqrt(sumOfSquares - sumOfLoads^2 / itemCount), 0 when itemCount == 0,
-    // rounded to 6 significant figures HALF_EVEN like the BigDecimal sqrt.
+    // rounded to 6 significant figures HALF_EVEN.
     static double unfairnessFromAggregates(std::int64_t sumOfLoads,
                                            std::int64_t sumOfSquares,
                                            int itemCount);

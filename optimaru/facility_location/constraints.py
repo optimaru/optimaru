@@ -25,8 +25,7 @@ Every spec takes five knobs:
 
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (FacilityCapacityCost 1, FacilitySetupCost 2,
-               DistanceFromFacilityCost 6 — the distance 6 is the
-               ConstraintWeightOverrides value of the Java solution). The problem
+               DistanceFromFacilityCost 6). The problem
                carries no weights; ``fl.constraint_info()`` reports the defaults.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use

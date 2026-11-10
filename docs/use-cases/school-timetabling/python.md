@@ -249,7 +249,7 @@ With full parity, what remains are properties of the search and the design, not 
 
 ## Quickstart mode (`mode="quickstart"`)
 
-The approximate conversion to the quickstart's 7-term domain (slotRoom
+The approximate conversion to the 7-term quickstart domain (slotRoom
 composite encoding) remains in `optimaru.school_timetabling.quickstart`. It cannot express
 blocks, parallel sections, forbidden times, period caps, preferred periods and
 the like, and its soft objective is replaced by the engine's built-in

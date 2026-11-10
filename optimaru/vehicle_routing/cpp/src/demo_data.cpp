@@ -15,10 +15,10 @@ int addLocation(VehicleRoutePlan &plan, double latitude, double longitude)
     return index;
 }
 
-VehicleRoutePlan buildJavaFixturePlan()
+VehicleRoutePlan buildFixturePlan()
 {
     VehicleRoutePlan plan;
-    plan.name = "java-fixture";
+    plan.name = "fixture";
     addLocation(plan, 49.288087, 16.562172);              // LOCATION_1 (home)
     addLocation(plan, 49.190922, 16.624466);              // LOCATION_2
     addLocation(plan, 49.1767533245638, 16.50422914190477);  // LOCATION_3
@@ -32,7 +32,7 @@ buildRandomInstance(int visitCount, int vehicleCount, std::uint64_t seed)
     VehicleRoutePlan plan;
     plan.name = "random-demo";
     std::mt19937_64 rng(seed);
-    // Bounding box around Firenze, like the Java DemoData FIRENZE preset.
+    // Bounding box around Firenze.
     std::uniform_real_distribution<double> latitude(43.751466, 43.809291);
     std::uniform_real_distribution<double> longitude(11.177210, 11.290195);
     std::uniform_int_distribution<int> demand(1, 2);

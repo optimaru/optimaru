@@ -19,7 +19,7 @@ namespace
 std::int64_t pairs(std::int64_t n) { return n * (n - 1) / 2; }
 
 // Attendance multiplicity of one person in one meeting (normally (1, 0) or
-// (0, 1); Java allows duplicates through the setters, so counted generally).
+// (0, 1); duplicates are allowed, so counted generally).
 struct PersonMeetingEntry
 {
     int meeting = 0;
@@ -131,8 +131,8 @@ void ScoreCalculator::prepare(MeetingSchedule &schedule)
 
     // --- attendance conflict arcs ------------------------------------------
     // Per person, the meetings they attend with multiplicities; then per
-    // meeting pair, the pairwise attendance weights (Java pairs attendance
-    // facts, so multiplicities multiply).
+    // meeting pair, the pairwise attendance weights (attendances are paired
+    // one by one, so multiplicities multiply).
     std::vector<std::vector<PersonMeetingEntry>> byPerson(personCount);
     for (int m = 0; m < meetingCount; ++m)
     {

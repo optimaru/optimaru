@@ -112,7 +112,7 @@ void Solver::solve(TaskAssigningSolution &solution)
         });
 
     // The authoritative final score — a full recompute that also re-derives
-    // the task shadow variables (employee, startTime) on the best solution.
+    // the derived task fields (employee, startTime) on the best solution.
     ScoreCalculator::score(solution);
 }
 
@@ -146,7 +146,7 @@ void Solver::solve(
         engine.solve(solution, calculator);
     }
 
-    // Re-derive the task shadow variables (employee, startTime) on the best
+    // Recompute the derived task fields (employee, startTime) on the best
     // solution, then score it with the caller's constraint assembly (custom
     // weights included), leaving the calculator primed on it so
     // constraint_totals() explains exactly this score.

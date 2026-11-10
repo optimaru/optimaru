@@ -27,8 +27,7 @@ namespace fcs
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider, every component at its own defaults (the Java
-// quickstart's weights):
+// The full constraint set, every component at its own defaults:
 //
 //   requiredSkillCost                         hard, weight 100
 //   flightConflictCost                        hard, weight 10

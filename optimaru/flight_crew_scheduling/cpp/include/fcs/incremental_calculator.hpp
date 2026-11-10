@@ -12,8 +12,8 @@ namespace fcs
 {
 
 // The flight-crew-scheduling implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective: one hand-written incremental calculator for all
+// six constraints.
 //
 // Every constraint is a function of ONE employee's itinerary (plus two unary
 // terms), so a single variable change is O(delta): it only touches the old

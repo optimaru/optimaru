@@ -198,8 +198,8 @@ class UnassignedTasksCost(Constraint):
     """Tasks on no employee's list. Default: medium, weight 1.
 
     Bendable soft[0], the domain's medium level: it folds into the engine's hard level
-    **below** the missing-skill count (``engine.hard = hard * 10^9 + medium``) — the same
-    lexicographically dominated spot as in Java. Unassigned tasks belong to no unit, so
+    **below** the missing-skill count (``engine.hard = hard * 10^9 + medium``), which
+    dominates it lexicographically. Unassigned tasks belong to no unit, so
     this is a global constraint."""
 
     name = "unassigned_tasks_cost"

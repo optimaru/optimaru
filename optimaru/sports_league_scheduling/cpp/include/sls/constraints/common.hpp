@@ -18,8 +18,7 @@ namespace sls
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The ten constraints of the reference sports-league-scheduling
-// SportsLeagueSchedulingConstraintProvider, split into one small component
+// The ten constraints of this use case, split into one small component
 // each on the engine's DecomposedObjective — an optional assembly path
 // NEXT TO the monolithic SportsLeagueSchedulingIncrementalScoreCalculator,
 // which stays the tuned default fast path.
@@ -77,7 +76,7 @@ namespace sls
 //     exponent are assembly-time metadata, not part of the cost: override
 //     them per instance through the validated setters or the assembly's
 //     named edits. The travel-hop rules cost plain kilometres at weight 1,
-//     and workdayClassicMatchesCost carries the quickstart's x 1'000.
+//     and workdayClassicMatchesCost carries x 1'000.
 //
 // Cost sign convention (see decomposed_score_calculator.hpp): positive =
 // penalty, 0 = no violation; the calculator negates into the score. An

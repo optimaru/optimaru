@@ -1,10 +1,11 @@
-# Vehicle Routing — C++ port
+# Vehicle Routing — C++
 
 The C++ lives in [`optimaru/vehicle_routing/cpp/`](../../../optimaru/vehicle_routing/cpp); the paths below are relative to it,
 and its C++ tests are in [`tests/vehicle_routing/cpp/`](../../../tests/vehicle_routing/cpp).
 
-A C++17 port of the optimization **core** of the `vehicle-routing`
-Java example model (Apache-2.0; see the repository NOTICE): the domain model, the scoring (HardMediumSoftScore) and the
+The C++17 optimization **core** of the vehicle-routing use case, derived from the
+Timefold Quickstarts `vehicle-routing` example (Apache-2.0; see the repository NOTICE): the
+domain model, the scoring (hard / medium / soft levels) and the
 solve, running on the generic engine in [`optimaru/cpp/optimaru/`](../../../optimaru/cpp/optimaru).
 
 Scope: optimization core only — no REST layer, no web UI.
@@ -16,27 +17,27 @@ cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
 ./build/vehicle_routing/vrp_demo                 # default: 25 visits, 6 vehicles, 3s
 ./build/vehicle_routing/vrp_demo 77 6 5          # 77 visits, 6 vehicles, 5s
 ./build/vehicle_routing/vrp_demo 77 6 5 --no-alns # ruin & recreate off, as a control
-./build/vehicle_routing/vrp_test                 # Java fixtures + engine integration
+./build/vehicle_routing/vrp_test                 # hand-computed fixtures + engine integration
 ```
 
-## How it maps to the Java code
+## The C++ types
 
-| Java (reference model)                                      | C++ port                                        |
-| ----------------------------------------------------------- | ----------------------------------------------- |
-| `@PlanningSolution VehicleRoutePlan`                        | `struct VehicleRoutePlan` (`domain.hpp`)        |
-| `@PlanningEntity Vehicle` + `@PlanningListVariable visits`  | `struct Vehicle` + `std::vector<int> visitIndices` |
-| `@PlanningEntity Visit` + shadow vars                       | `struct Visit` (+ derived `vehicleIndex`, `arrivalTime`) |
-| `@InverseRelationShadowVariable` / `@PreviousElementShadowVariable` / `arrivalTimeSupplier` | `ScoreCalculator::updateShadowVariables` |
-| `HardMediumSoftScore`                                       | `struct Score` (lexicographic compare)          |
-| `HaversineDrivingTimeCalculator`                            | `haversine.{hpp,cpp}` (identical formula)       |
-| `VehicleRoutingConstraintProvider` (4 constraints)          | `ScoreCalculator` (reference) + `VehicleRoutingIncrementalScoreCalculator` (live) |
-| Java engine: Construction Heuristic + Local Search          | `optimaru/cpp/optimaru/`'s `optimaru::Solver`, wrapped by `Solver` |
-| `termination.spent-limit=30s`                               | `Solver::Config::time_limit`                    |
-| test `best-score-limit=0hard/0medium/*soft`                 | `Solver::Config::target_score = {0,0,min}`    |
+| Type                                             | What it holds / does                             |
+| ------------------------------------------------ | ------------------------------------------------ |
+| `struct VehicleRoutePlan` (`domain.hpp`)         | the whole problem and its solution: `locations`, `vehicles`, `visits`, the unassigned pool `unassignedVisitIndices`, the `drivingSeconds` matrix and the `score` |
+| `struct Vehicle`                                 | capacity, home location, departure time, the optional route policies, and the decision: `std::vector<int> visitIndices`, the ordered visits it serves |
+| `struct Visit`                                   | location, demand, time window, service duration, unassigned penalty (+ derived `vehicleIndex`, `arrivalTime`) |
+| `ScoreCalculator::updateShadowVariables`         | recomputes every visit's derived `vehicleIndex` / `arrivalTime` from the routes |
+| `struct Score`                                   | the hard / medium / soft levels (lexicographic compare) |
+| `HaversineDrivingTimeCalculator` (`haversine.{hpp,cpp}`) | driving time from the haversine distance at 50 km/h; fills `drivingSeconds` |
+| `ScoreCalculator` (reference) + `VehicleRoutingIncrementalScoreCalculator` (live) | the four default constraints: a full recompute, and the incremental calculator the search calls |
+| `Solver` (`solver.hpp`)                          | wraps `optimaru/cpp/optimaru/`'s `optimaru::Solver`: construction heuristic + local search |
+| `Solver::Config::time_limit`                     | wall-clock budget (default 30 s)                 |
+| `Solver::Config::target_score`                   | stop early once the best score reaches it; `{0,0,min}` stops at the first feasible, fully assigned solution |
 
 ### The four constraints
 
-The four rules of the Java `VehicleRoutingConstraintProvider`, under their
+The four default constraints, under their
 component names (`include/vrp/constraints/<subject>_cost.hpp`; the
 registry name is the struct name with a lower-case first letter):
 
@@ -47,7 +48,7 @@ registry name is the struct name with a lower-case first letter):
   minutes.
 - **Medium** `UnassignedVisitsCost` (`unassignedVisitsCost`) — penalize each
   unassigned visit by `Visit::unassignedPenalty()`, which defaults to its
-  service duration in minutes (the Java rule) but can be set per visit — see
+  service duration in minutes but can be set per visit — see
   below. Weight 1 in medium units; the domain folds medium into the engine's
   soft level as `medium * 10^9` (`kMediumFold` in `domain.hpp`).
 - **Soft** `TravelTimeCost` (`travelTimeCost`) — penalize each vehicle's total
@@ -63,8 +64,8 @@ the opt-in weight-0 objectives (`EnclosingCircleRadiusCost`,
 
 ## How it runs on the generic engine
 
-`Solver` (`solver.hpp`) is a thin wrapper that translates the quickstart's
-config into an `optimaru::Settings`. The engine then does:
+`Solver` (`solver.hpp`) is a thin wrapper that translates its
+`Solver::Config` into an `optimaru::Settings`. The engine then does:
 
 1. **Construction heuristic** — cheapest insertion, in First-Fit-Decreasing
    order (tightest time window and largest demand first).
@@ -111,7 +112,7 @@ alongside random / related / worst. Everything is on `Solver::Config`;
 
 ### Two design points worth knowing
 
-**The unassigned pool.** The quickstart sets `allowsUnassignedValues = true`,
+**The unassigned pool.** A visit may be left unassigned,
 but the engine's sequence-shape requires every element to live in exactly one list.
 So `VehicleRoutePlan` carries one extra virtual list at index
 `vehicles.size()` holding the unassigned visits. That is what makes assigning
@@ -119,11 +120,11 @@ and unassigning ordinary relocate moves — with genuinely list-less elements th
 solver could never drop an unprofitable visit nor recover a dropped one, and
 the medium-level constraint would be unreachable.
 
-**`Visit::unassignedPenaltyMinutes`.** The Java rule — penalize an unassigned
+**`Visit::unassignedPenaltyMinutes`.** The default rule — penalize an unassigned
 visit by its service duration — is degenerate when service durations are 0 or a
 few seconds: the penalty rounds to zero and "route nothing" becomes the
 optimum. This field states what dropping a visit actually costs, defaulting to
-`kUnassignedPenaltyAuto`, which reproduces the Java rule exactly. Real
+`kUnassignedPenaltyAuto`, which applies the default rule. Real
 instances (see the benchmark) set it explicitly.
 
 ## Scoring: two implementations, checked against each other

@@ -11,8 +11,8 @@ namespace cs
 {
 
 // The conference-scheduling implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective: one hand-written incremental calculator for all
+// constraints.
 //
 // Every constraint is either
 //   - unary (the tag/availability/compatibility family): its contribution is

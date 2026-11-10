@@ -143,7 +143,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("flight", &FlightAssignment::flight)
         .def_readwrite("index_in_flight", &FlightAssignment::indexInFlight)
         .def_readwrite("required_skill", &FlightAssignment::requiredSkill)
-        // The planning variable: index into employees; -1 == unassigned.
+        // The decision variable: index into employees; -1 == unassigned.
         .def_readwrite("employee", &FlightAssignment::employee)
         .def_readwrite("pinned", &FlightAssignment::pinned);
 
@@ -184,7 +184,7 @@ PYBIND11_MODULE(_core, m)
                      a.push_back(assignment.employee);
                  return a;
              })
-        // Bulk write of the planning variable (assignment access via
+        // Bulk write of the decision variable (assignment access via
         // .flight_assignments returns copies, so per-item writes would be
         // lost).
         .def(

@@ -29,8 +29,7 @@ double ScoreCalculator::unfairnessFromAggregates(std::int64_t sumOfLoads,
     const double root = std::sqrt(ssd);
     if (root == 0.0)
         return 0.0;
-    // Round to 6 significant figures, HALF_EVEN — the BigDecimal.sqrt
-    // MathContext of the reference load-balance implementation. Avoid log10()/pow() in the
+    // Round to 6 significant figures, HALF_EVEN. Avoid log10()/pow() in the
     // per-move hot path: the loop finds ceil(log10(root)) with comparisons.
     int digitsBeforePoint = 0;
     double magnitude = 1.0;
@@ -118,7 +117,7 @@ Score ScoreCalculator::score(TournamentSchedule &schedule)
     }
 
     // medium 3: assignmentCountImbalanceCost — unfairness of the loads of the
-    // teams with >= 1 assignment (Java has no complement here).
+    // teams with >= 1 assignment (unloaded teams are left out).
     std::int64_t balSum = 0, balSumSq = 0;
     int balN = 0;
     for (int t = 0; t < teamCount; ++t)

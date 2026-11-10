@@ -18,7 +18,7 @@ add_executable(fcs_test ${OPTIMARU_TESTS_DIR}/flight_crew_scheduling/cpp/fcs_tes
 target_link_libraries(fcs_test PRIVATE fcs_core)
 target_compile_options(fcs_test PRIVATE -Wall -Wextra)
 
-# Plugin-assembly path (fcs/constraints.hpp): the same provider decomposed
+# Plugin-assembly path (fcs/constraints.hpp): the same constraints decomposed
 # into one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(fcs_plugin_test ${OPTIMARU_TESTS_DIR}/flight_crew_scheduling/cpp/fcs_plugin_test.cpp)

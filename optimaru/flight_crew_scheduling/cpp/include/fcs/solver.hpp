@@ -24,8 +24,7 @@ class Solver
 public:
     struct Config
     {
-        // Wall-clock budget, mirroring termination.spent-limit (30s in the
-        // quickstart's application.properties).
+        // Wall-clock budget.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above every
@@ -82,7 +81,7 @@ public:
 
     // Solves with a caller-assembled plugin calculator (see
     // fcs/constraints.hpp): pick components and weights, then pass the
-    // assembly here. Weights come from the assembly, NOT from the quickstart
+    // assembly here. Weights come from the assembly, NOT from the component
     // defaults. The final schedule.score is computed by THIS calculator and
     // the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score. Single-start: the

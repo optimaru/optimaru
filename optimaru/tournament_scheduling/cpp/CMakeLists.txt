@@ -18,8 +18,8 @@ add_executable(ts_test ${OPTIMARU_TESTS_DIR}/tournament_scheduling/cpp/ts_test.c
 target_link_libraries(ts_test PRIVATE ts_core)
 target_compile_options(ts_test PRIVATE -Wall -Wextra)
 
-# Plugin-assembly path (ts/constraints.hpp): the same provider decomposed into
-# one component each on the engine's DecomposedObjective, checked
+# Plugin-assembly path (ts/constraints.hpp): the same constraints decomposed
+# into one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(ts_plugin_test ${OPTIMARU_TESTS_DIR}/tournament_scheduling/cpp/ts_plugin_test.cpp)
 target_link_libraries(ts_plugin_test PRIVATE ts_core)

@@ -1,9 +1,9 @@
-# task_assigning — task assigning (C++ port)
+# task_assigning — task assigning
 
-The `task-assigning` example model (Apache-2.0; see the repository NOTICE)
-(skill-based task assignment): the pybind11 package of the `optimaru/task_assigning/cpp` implementation ported onto
+Skill-based task assignment, derived from the Timefold Quickstarts `task-assigning` example
+(Apache-2.0; see the repository NOTICE): the pybind11 package of the `optimaru/task_assigning/cpp` implementation on
 the generic C++ engine in `optimaru/cpp/optimaru/`. A **sequence-shaped** domain that fills an
-ordered task list per employee (Employee) (Java's `@PlanningListVariable(allowsUnassignedValues = true)`).
+ordered task list per employee (`Employee.tasks`); a task in no list is unassigned.
 
 ## Install / test
 
@@ -32,23 +32,23 @@ For JSON serialization use `optimaru.task_assigning.models.TaskAssigningSolution
 
 The decision variable is each `Employee.tasks` — the **ordered list** of task indices
 (ids in the model) the employee performs back to back. A task in no list is unassigned.
-Shadow values are derived by the same rules as the Java original's shadow variables:
+Derived values:
 
-| shadow | rule |
+| derived value | rule |
 |---|---|
-| `task.employee` | the employee owning the list (`@InverseRelationShadowVariable`) |
-| `task.start_time` | the first task gets `min_start_time`, later ones `max(end of the previous task, min_start_time)` (`startTimeSupplier`) |
+| `task.employee` | the employee owning the list |
+| `task.start_time` | the first task gets `min_start_time`, later ones `max(end of the previous task, min_start_time)` |
 | duration | `base_duration x affinity multiplier` — HIGH 1 / MEDIUM 2 / LOW 3 / NONE 4 |
 | employee endTime | end of the last task (0 for an empty list) |
 
 The engine's construction heuristic assigns every task, and local search relocates them
 while keeping them assigned — so unassigned (soft0) is always 0 in the final solution
-(a task no skill matches still gets assigned with a hard penalty; the Java original can
-leave such a task unassigned — see the caveat below).
+(a task no skill matches still gets assigned with a hard penalty — see the caveat below).
 
-## Score mapping (BendableScore [1]hard/[3]soft -> engine Score)
+## Score mapping (four levels, [1]hard/[3]soft -> engine Score)
 
-The original score type is `BendableScore(hardLevels=1, softLevels=3)`; the engine only
+This use case scores four levels, one hard and three soft (`hard[0]`, `soft[0]`, `soft[1]`,
+`soft[2]` — the "Bendable" levels below); the engine only
 has `Score(int64 hard, double soft)`, and its constraints score on three levels
 (hard, medium, soft). The mapping rule (`optimaru/task_assigning/cpp/include/ta/domain.hpp`):
 
@@ -66,8 +66,7 @@ Both are exact: the hard level in int64, the soft level within a double (exact u
 Level priority holds while `|soft0| < 10^9` (task count), `|soft2| < 10^7`
 (weighted endTime sum), `|soft1| < 9x10^8` (sum of endTime^2). At the default
 weights and exponent 1 it stays exact up to horizons of tens of thousands of
-minutes — the same practical range in which Java's int-based BendableScore does not
-overflow. The Python `Score` exposes all four levels (`hard`/`soft0`/`soft1`/`soft2`)
+minutes. The Python `Score` exposes all four levels (`hard`/`soft0`/`soft1`/`soft2`)
 as-is; `soft1` / `soft2` are the soft level split by 10^7, so they are the two terms
 only at the default weights.
 
@@ -82,7 +81,7 @@ Outside that range:
   `RequiredSkillCost` at weight 1 (the 10^9 between the levels is the fold), and give a soft term made hard a small weight
   (`SquaredMakespanCost(level="hard", weight=1)`).
 
-## Constraints (same semantics as Java `TaskAssigningConstraintProvider`, 6 of them)
+## Constraints (6)
 
 | Bendable level | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|---|
@@ -113,10 +112,10 @@ convert a model with `to_core()`) keys the k-th pick
 
 - **Engine feasibility**: the engine's internal `isFeasible` (engine.hard >= 0) requires
   `soft0 == 0` (every task assigned) on top of `hard == 0`. The final solution always
-  assigns every task, so in practice it matches Java's hard-level feasibility.
-- **Keeping tasks unassigned**: the Java original can leave a task no employee's skills
-  satisfy unassigned to keep hard 0 (hard dominates soft0). This port's local search keeps
-  assignments, so such a task gets assigned with a hard penalty. When every task type has
+  assigns every task, so in practice feasible means `hard == 0`.
+- **Keeping tasks unassigned**: hard dominates soft0, so leaving a task no employee's skills
+  satisfy unassigned would score better than assigning it. Local search keeps
+  assignments, though, so such a task gets assigned with a hard penalty. When every task type has
   a qualified employee, as in the demo data, there is no difference.
-- The `TaskType`/`Customer` object references of the Java demo's REST layer are expressed
+- `TaskType`/`Customer` references are expressed
   as indices (`_core`) or code/id strings (`models`).

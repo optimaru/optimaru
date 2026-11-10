@@ -93,7 +93,7 @@ PYBIND11_MODULE(_core, m)
         .def("unassigned_penalty",
              &Visit::unassignedPenalty,
              "The medium-level cost charged when this visit is left unrouted.")
-        // Shadow variables, recomputed by calculate_score / solve.
+        // Derived fields, recomputed by calculate_score / solve.
         .def_readonly("vehicle_index", &Visit::vehicleIndex)
         .def_readonly("arrival_time", &Visit::arrivalTime);
 
@@ -155,7 +155,7 @@ PYBIND11_MODULE(_core, m)
             "return_to_depot",
             &Vehicle::returnToDepot,
             "Whether the route ends back home (default: open route).")
-        // The planning list variable: the ordered visit indices of the route.
+        // The decision: the ordered visit indices of the route.
         .def_readwrite("visit_indices", &Vehicle::visitIndices);
 
     py::class_<VehicleRoutePlan>(m, "VehicleRoutePlan", py::module_local())
@@ -196,8 +196,7 @@ PYBIND11_MODULE(_core, m)
                      }
                      else
                      {
-                         // The haversine driving-time matrix, precomputed once
-                         // (the Java Location map analog).
+                         // The haversine driving-time matrix, precomputed once.
                          HaversineDrivingTimeCalculator::initDrivingTimeMatrix(
                              plan);
                      }
@@ -254,8 +253,8 @@ PYBIND11_MODULE(_core, m)
         [](VehicleRoutePlan &plan)
         { return ScoreCalculator::score(plan); },
         py::arg("plan"),
-        "Recompute shadow variables (vehicle_index, arrival_time) and the "
-        "HardMediumSoft score (also stores plan.score).");
+        "Recompute the derived fields (vehicle_index, arrival_time) and the "
+        "hard / medium / soft score (also stores plan.score).");
 
     // The acceptance criteria the engine offers.
     py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())
@@ -414,8 +413,8 @@ PYBIND11_MODULE(_core, m)
     py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
-        // Solves in place: fills vehicle.visit_indices, the visits' shadow
-        // variables and plan.score.
+        // Solves in place: fills vehicle.visit_indices, the visits' derived
+        // fields and plan.score.
         .def(
             "solve",
             [](Solver &solver, VehicleRoutePlan &plan)

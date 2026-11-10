@@ -17,7 +17,7 @@ namespace st::canon
 // the same closed forms as CanonicalIncrementalScoreCalculator's
 // insert()/retract(), so the deltas are bit-for-bit the per-constraint
 // delta_cost() values. The count maps are maintained here (join/leave is
-// inferred from the already-written planning variable) and rebuilt from the
+// inferred from the already-written decision variable) and rebuilt from the
 // solution at every on_reset.
 struct SlotDeltaGroup final : optimaru::UnitConstraintDeltaGroup<Timetable>
 {
@@ -186,7 +186,7 @@ struct SlotDeltaGroup final : optimaru::UnitConstraintDeltaGroup<Timetable>
                   int entity,
                   double *deltas) override
     {
-        // The planning variable is already written when the calculator
+        // The decision variable is already written when the calculator
         // notifies a member change (after_assign), so it tells join
         // from leave: a join is notified on the NEW slot (variable == unit),
         // a leave on the OLD one (variable != unit). Rolled-back moves arrive

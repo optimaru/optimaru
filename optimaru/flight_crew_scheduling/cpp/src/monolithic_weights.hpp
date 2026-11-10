@@ -7,8 +7,8 @@
 // The monolithic score is the default assembly (fcs/constraints.hpp), so both
 // calculators read the same constants the components carry, from here, and
 // the checks below hold for every translation unit that uses them. The hard
-// weights are integral, so the hard level is computed in int64 exactly like
-// the Java int arithmetic; the soft weights stay doubles.
+// weights are integral, so the hard level is computed exactly, in
+// int64; the soft weights stay doubles.
 
 #include <cstdint>
 

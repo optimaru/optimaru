@@ -8,11 +8,11 @@ import pytest
 import optimaru.food_packaging as fp
 
 BIG = 1_000_000_000
-PA_S, PA_L, PB = 0, 1, 2  # the three products of the Java test (A large keeps the matrix shape)
+PA_S, PA_L, PB = 0, 1, 2  # the three products of the test matrix (A large keeps the matrix shape)
 
 
 def make_schedule(operator_count, lines, loose_jobs=(), pooled_jobs=()):
-    """Build a schedule with the product/cleaning matrix of Java ConstraintProviderTest.
+    """Build a schedule with a fixed three-product cleaning matrix.
 
     lines: [(operator_index, [(product, duration, ideal_end, max_end), ...])]
     """
@@ -100,10 +100,10 @@ def test_squared_makespan_cost():
     assert fp.calculate_score(schedule) == fp.Score(0, -6000, -(100 * 100 + 1240 * 1240))
 
 
-def test_missing_cleanup_raises_like_java():
+def test_missing_cleanup_raises():
     schedule = make_schedule(1, [(0, [(PB, 100, BIG, BIG), (PA_S, 100, BIG, BIG)])])
     cleanup = schedule.cleanup_minutes
-    cleanup[PB * 3 + PA_S] = -1  # remove the entry (Java: key missing from the map)
+    cleanup[PB * 3 + PA_S] = -1  # remove the entry for the pair
     schedule.cleanup_minutes = cleanup
     with pytest.raises(ValueError, match="Cleanup duration"):
         fp.calculate_score(schedule)

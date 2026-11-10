@@ -17,7 +17,7 @@ namespace fp
 // minute, soft() 1 soft per minute (outside the fold), and an explicit weight
 // is in units of the level in effect (medium by default).
 //
-// Global rather than a unit constraint on the pool list, even though this port
+// Global rather than a unit constraint on the pool list, even though this domain
 // models the unassigned pool as one extra LIST: a job can also be in NO list
 // at all (that is the state a solution starts in, before the construction
 // heuristic runs), and the monolithic calculator counts it exactly the same

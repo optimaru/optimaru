@@ -121,7 +121,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("id", &Meeting::id)
         .def_readwrite("topic", &Meeting::topic)
         .def_readwrite("duration_in_grains", &Meeting::durationInGrains)
-        // Person indices; one entry == one attendance fact.
+        // Person indices; one entry == one attendance.
         .def_readwrite("required_attendees", &Meeting::requiredAttendees)
         .def_readwrite("preferred_attendees", &Meeting::preferredAttendees)
         .def_readwrite("entire_group_meeting", &Meeting::entireGroupMeeting)
@@ -144,7 +144,7 @@ PYBIND11_MODULE(_core, m)
              py::arg("pinned") = false)
         .def_readwrite("id", &MeetingAssignment::id)
         .def_readwrite("meeting", &MeetingAssignment::meeting)
-        // Composite planning variable: time_grain_pos * room_count +
+        // Composite decision variable: time_grain_pos * room_count +
         // room_index; -1 == unassigned.
         .def_readwrite("grain_room", &MeetingAssignment::grainRoom)
         .def_readwrite("pinned", &MeetingAssignment::pinned);
@@ -175,7 +175,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("rooms", &MeetingSchedule::rooms)
         .def_readwrite("meetings", &MeetingSchedule::meetings)
         // NOTE: element access returns copies; use set_assignment for bulk
-        // planning-variable writes.
+        // grain_room writes.
         .def_readwrite("meeting_assignments",
                        &MeetingSchedule::meetingAssignments)
         .def_readonly("score", &MeetingSchedule::score)
@@ -205,7 +205,7 @@ PYBIND11_MODULE(_core, m)
                      a.push_back(assignment.grainRoom);
                  return a;
              })
-        // Bulk write of the planning variable (assignment access via
+        // Bulk write of the decision variable (assignment access via
         // .meeting_assignments returns copies, so per-element writes would
         // be lost).
         .def(

@@ -37,7 +37,7 @@ class TeamModel(BaseModel):
 
 
 class RoundModel(BaseModel):
-    """Problem fact and planning value: a round. index is the round number the
+    """A round, the value a match is assigned. index is the round number the
     constraints use (same day / next day / first / last checks), weekend_or_holiday feeds
     workday_classic_matches_cost."""
 
@@ -48,7 +48,7 @@ class RoundModel(BaseModel):
 
 
 class MatchModel(BaseModel):
-    """Planning entity. round is a position in the rounds list (-1 = unassigned)."""
+    """One match. round is a position in the rounds list (-1 = unassigned)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -60,7 +60,7 @@ class MatchModel(BaseModel):
 
 
 class LeagueScheduleModel(BaseModel):
-    """Planning solution mirror. score is a read-only result, kept as a separate field."""
+    """Pydantic mirror of the schedule. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 

@@ -2,13 +2,10 @@
 
 `Customer`/`TaskType`/`Task`/`Employee`/`TaskAssigningSolution`/`Score`/
 `Solver`/`SolverConfig` and `calculate_score` come from the compiled C++ core (`_core`).
-The planning variable is each `Employee.tasks` — the ordered list of task indices the
-employee performs back to back (the Java original's
-`@PlanningListVariable(allowsUnassignedValues = true)`). A task in no list is
-unassigned.
+The decision variable is each `Employee.tasks` — the ordered list of task indices the
+employee performs back to back. A task in no list is unassigned.
 
-Shadow variables are derived by the same rules as the Java original
-(recomputed by `calculate_score`/`Solver.solve`):
+Derived values (recomputed by `calculate_score`/`Solver.solve`):
 
     task.employee    == index of the employee owning the list (-1 == unassigned)
     task.start_time  == the first task gets its own min_start_time,
@@ -16,7 +13,7 @@ Shadow variables are derived by the same rules as the Java original
     duration         == base_duration x affinity multiplier (HIGH 1 / MEDIUM 2 /
                         LOW 3 / NONE 4)
 
-Score convention (BendableScore [1]hard/[3]soft, as in the Java quickstart; all penalties),
+Score convention (four Bendable levels, [1]hard/[3]soft; all penalties),
 at the default weights:
   hard[0]  required_skill_cost          required skills the employee lacks
   soft[0]  unassigned_tasks_cost        1 per unassigned task (the medium level)

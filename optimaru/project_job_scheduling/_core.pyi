@@ -3,22 +3,20 @@
 The compiled module wraps the C++ domain in `optimaru/project_job_scheduling/cpp`,
 which imports the generic engine in `optimaru/cpp/optimaru`.
 
-The only planning variable is `Allocation.mode_delay` (assignment-shape int) — a composite
-encoding of the Java quickstart's two variables (executionMode, delay∈[0, delay_range_size))::
+The only decision variable is `Allocation.mode_delay` (assignment-shape int) — a composite
+encoding of the two decisions per allocation (execution mode, delay∈[0, delay_range_size))::
 
     -1                                  uninitialized (no resource use;
                                         dates pass through with delay 0/duration 0)
     delay * max_mode_count + mode_slot  real mode index = mode_slot %
                                         the job's mode count — every value of
                                         the global range is valid for every
-                                        job (preserving Java's per-entity
-                                        value range semantics)
+                                        job
 
-Java's shadow variable chain (predecessorsDoneDate → startDate → endDate) is
-derived state: `calculate_score` / `Solver.solve` recompute and fill it in
-topological order.
+The dates (predecessors_done_date → start_date → end_date) are derived state:
+`calculate_score` / `Solver.solve` recompute and fill them in topological order.
 
-Score convention (HardMediumSoftScore, as in the Java quickstart; all penalties), at
+Score convention (hard / medium / soft levels; all penalties), at
 the default weights (the C++ components' kDefaultWeight, see constraint_info()):
   hard   1. non_renewable_resource_capacity_cost  total use per non-renewable resource
                                                   above capacity: -(excess) (global)
@@ -41,7 +39,7 @@ from enum import Enum
 from typing import Any, Literal, NamedTuple
 
 class Score:
-    """HardMediumSoft score. hard 0 == feasible. Lexicographic comparison (hard first)."""
+    """Hard / medium / soft score. hard 0 == feasible. Lexicographic comparison (hard first)."""
     @property
     def hard(self) -> int: ...
     @property
@@ -58,8 +56,7 @@ class JobType(Enum):
 
 class Project:
     """Problem fact: a project. release_date is only the reference of the
-    project_delay_cost constraint (it does not force the start — as in the Java
-    quickstart)."""
+    project_delay_cost constraint (it does not force the start)."""
     def __init__(self, id: str, release_date: int = 0, critical_path_duration: int = 0) -> None: ...
     id: str
     release_date: int
@@ -93,7 +90,7 @@ class ExecutionMode:
 
 class Job:
     """Problem fact: a job. `project` is an index; every job needs at least one
-    execution mode (SOURCE/SINK have one zero-duration mode — the Java quickstart convention)."""
+    execution mode (SOURCE/SINK have one zero-duration mode by convention)."""
     def __init__(
         self, id: str, project: int, job_type: JobType = ..., execution_modes: list[ExecutionMode] = ...
     ) -> None: ...
@@ -103,8 +100,8 @@ class Job:
     execution_modes: list[ExecutionMode]
 
 class Allocation:
-    """Planning entity: the allocation of one job (1:1 with jobs). `mode_delay` is the
-    planning variable (see the encoding in the module docstring), written by the solver.
+    """The allocation of one job (1:1 with jobs). `mode_delay` is the
+    decision variable (see the encoding in the module docstring), written by the solver.
     `predecessor_allocations` are predecessor allocation indices (must be acyclic).
     SOURCE/SINK allocations are always pinned; `pinned` also fixes a STANDARD one."""
     def __init__(
@@ -128,7 +125,7 @@ class Allocation:
     def end_date(self) -> int: ...
 
 class ProjectJobSchedule:
-    """Planning solution. The constructor validates the instance (index ranges, jobs
+    """The problem and its solution. The constructor validates the instance (index ranges, jobs
     without modes, predecessor graph cycles -> ValueError). solve changes the allocations'
     `mode_delay`, the derived dates and `score` in place.
 
@@ -169,11 +166,11 @@ class ProjectJobSchedule:
     def assignment(self) -> list[int]:
         """Current mode_delay value per allocation (the solution)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """Bulk-write the planning variable (`allocations` returns copies, so writing
+        """Bulk-write the decision variable (`allocations` returns copies, so writing
         individual elements has no effect)."""
 
 def calculate_score(schedule: ProjectJobSchedule) -> Score:
-    """Full recompute of the HardMediumSoft score; also refreshes the derived dates
+    """Full recompute of the hard / medium / soft score; also refreshes the derived dates
     (predecessors_done_date/start_date/end_date) (also stored in schedule.score)."""
 
 class SolverConfig:

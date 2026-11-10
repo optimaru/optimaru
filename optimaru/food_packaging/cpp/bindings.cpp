@@ -6,8 +6,8 @@
 // Times cross the boundary as int64 MINUTES from a common reference (the
 // demo instance uses its Monday 00:00 as minute 0; the pydantic mirrors in
 // food_packaging/models.py use epoch minutes and convert to/from
-// datetime.datetime). The shadow times are exposed as Optional[int]
-// (None <-> fp::kNoTime, Java's null LocalDateTime).
+// datetime.datetime). The derived times are exposed as Optional[int]
+// (None <-> fp::kNoTime, "no time").
 #include <pybind11/functional.h>  // std::function <-> Python callable
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::string / std::optional
@@ -119,14 +119,13 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("name", &Job::name)
         .def_readwrite("product_index", &Job::productIndex)
         .def_readwrite("duration_minutes", &Job::durationMinutes)
-        // Data only, like Java: no constraint reads min_start_minute or
-        // priority.
+        // Data only: no constraint reads min_start_minute or priority.
         .def_readwrite("min_start_minute", &Job::minStartTime)
         .def_readwrite("ideal_end_minute", &Job::idealEndTime)
         .def_readwrite("max_end_minute", &Job::maxEndTime)
         .def_readwrite("priority", &Job::priority)
         .def_readwrite("pinned", &Job::pinned)
-        // Shadow variables (results; refreshed by update_shadow_variables /
+        // Derived fields (results; refreshed by update_shadow_variables /
         // calculate_score / Solver.solve).
         .def_readonly("line_index", &Job::lineIndex)
         .def_property_readonly("start_cleaning_minute",
@@ -163,7 +162,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("name", &Line::name)
         .def_readwrite("start_minute", &Line::startDateTime)
         .def_readwrite("operator_index", &Line::operator_index)
-        // The @PlanningListVariable: ordered job indices.
+        // The decision variable: ordered job indices.
         .def_readwrite("jobs", &Line::jobs);
 
     py::class_<PackagingSchedule>(m, "PackagingSchedule", py::module_local())
@@ -200,12 +199,12 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("to_minute", &PackagingSchedule::toMinute)
         .def_readwrite("products", &PackagingSchedule::products)
         // Flat products x products matrix indexed [previous * count +
-        // current]; -1 == missing entry (throws on first use, like Java).
+        // current]; -1 == missing entry (throws on first use).
         .def_readwrite("cleanup_minutes", &PackagingSchedule::cleanupMinutes)
         .def_readwrite("operators", &PackagingSchedule::operators)
         .def_readwrite("lines", &PackagingSchedule::lines)
         .def_readwrite("jobs", &PackagingSchedule::jobs)
-        // The unassigned pool (the allowsUnassignedValues stand-in). Jobs in
+        // The unassigned pool (jobs deliberately left on no line). Jobs in
         // no list at all are placed by the construction heuristic.
         .def_readwrite("unassigned_jobs", &PackagingSchedule::unassignedJobs)
         .def_readonly("score", &PackagingSchedule::score)
@@ -220,20 +219,20 @@ PYBIND11_MODULE(_core, m)
             "== missing entry.")
         .def("update_shadow_variables",
              &ScoreCalculator::updateShadowVariables,
-             "Recompute every job's shadow variables (line_index, "
+             "Recompute every job's derived fields (line_index, "
              "start_cleaning/start_production/end) from the current lists.");
 
     m.def("calculate_score",
           &ScoreCalculator::score,
           py::arg("schedule"),
-          "Full recompute of the HardMediumSoft score (also refreshes the "
-          "shadow variables and stores schedule.score).");
+          "Full recompute of the hard/medium/soft score (also refreshes the "
+          "derived job fields and stores schedule.score).");
 
     m.def("assign_missing_operators",
           &assignMissingOperators,
           py::arg("schedule"),
           "Give every operator-less line the least-used operator (the "
-          "construction stand-in for the Java Line.operator variable).");
+          "construction step for Line.operator_index).");
 
     m.def("improve_operator_assignment",
           &improveOperatorAssignment,
@@ -359,7 +358,7 @@ PYBIND11_MODULE(_core, m)
                 c.target_score = optimaru::Score{hs.first, hs.second};
             })
         // Callback fired on every new best solution: on_new_best(step,
-        // score) with the HardMediumSoft score in the same levels as the
+        // score) with the hard/medium/soft score in the same levels as the
         // final schedule.score (solve_with_constraints reads them off the
         // calculator before the medium fold). The pybind11 wrapper
         // re-acquires the GIL, so it is safe from the engine's multi-start
@@ -371,7 +370,7 @@ PYBIND11_MODULE(_core, m)
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: mutates lines[*].jobs / unassigned_jobs (and
         // lines[*].operator_index when sharing forces alternation), then
-        // refreshes the shadows and schedule.score. The GIL is released so
+        // refreshes the derived job fields and schedule.score. The GIL is released so
         // parallel multi-start workers can fire on_new_best.
         .def("solve",
              py::overload_cast<PackagingSchedule &>(&Solver::solve),

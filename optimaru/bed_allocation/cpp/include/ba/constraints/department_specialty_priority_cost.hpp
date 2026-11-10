@@ -12,8 +12,7 @@ namespace ba
 // (priority - 1) * nights, so 0 = every stay is in a department that offers
 // its specialty at priority 1 (or not at all). Silent when the department
 // does not offer the specialty: departmentSpecialtyCost already prices that
-// case (and the Java provider would throw there). The Java quickstart calls
-// it departmentSpecialtyNotFirstPriority.
+// case.
 struct DepartmentSpecialtyPriorityCost final : PerStayRoomConstraint
 {
     static constexpr double kDefaultWeight = 10.0;

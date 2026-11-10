@@ -471,7 +471,7 @@ def test_constraint_info_matches_the_raw_cost_metadata():
 
 
 def _engine(score_):
-    """The engine-level (hard, soft) of a HardMediumSoft plan score (medium folded into soft)."""
+    """The engine-level (hard, soft) of a hard / medium / soft plan score (medium folded into soft)."""
     return score_.hard, score_.medium * MEDIUM_UNIT + score_.soft
 
 

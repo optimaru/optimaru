@@ -1,7 +1,7 @@
 #ifndef MS_DEMO_DATA_HPP
 #define MS_DEMO_DATA_HPP
 
-// The demo instance, modelled on the quickstart's demo data and shared by the
+// The demo instance, shared by the
 // C++ demo executable and the Python bindings. Durations and attendees are
 // drawn from a seeded std::mt19937_64, and the four days are fixed to
 // dayOfYear 200..203, so the instance is the same on every run and platform.

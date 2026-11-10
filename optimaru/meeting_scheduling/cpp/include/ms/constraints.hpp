@@ -33,7 +33,7 @@ namespace ms
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the quickstart's level weights — each component at its
+// All twelve constraints at their default weights — each component at its
 // own kDefaultLevel / kDefaultWeight (the medium pair at weight 1 in medium
 // units; the domain's kMediumFold puts them on the engine's soft level). This
 // assembly scores bit-for-bit like ScoreCalculator::score and the

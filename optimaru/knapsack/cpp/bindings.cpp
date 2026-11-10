@@ -75,7 +75,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("resource_usage", &Item::resourceUsage)
         // Item indices (the model's `requires`, by id).
         .def_readwrite("required_items", &Item::requiredItems)
-        // The planning variable: 1 = selected, 0 = not, -1 = undecided.
+        // The decision variable: 1 = selected, 0 = not, -1 = undecided.
         .def_readwrite("selected", &Item::selected)
         .def("is_selected", &Item::isSelected);
 

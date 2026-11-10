@@ -29,9 +29,9 @@ namespace bp
 using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
-// Item  (@PlanningEntity)
+// Item  (entity)
 // ---------------------------------------------------------------------------
-// `bin` is the single BASIC planning variable: a 0-based bin index into the
+// `bin` is the single BASIC decision variable: a 0-based bin index into the
 // value range 0..itemCount()-1 (n identical bins always suffice), -1 ==
 // unassigned. Every solve returns every item assigned; -1 appears only in an
 // unsolved input and inside the engine's ruin-and-recreate.
@@ -39,7 +39,7 @@ struct Item
 {
     std::string id;
     std::int64_t weight = 0;  // > 0 (one-dimensional size)
-    int bin = -1;             // planning variable; -1 == unassigned
+    int bin = -1;             // decision variable; -1 == unassigned
     // nullopt = no colour. Two items of the same colour should not share a
     // bin (colorConflictCost).
     std::optional<std::string> color;
@@ -48,7 +48,7 @@ struct Item
 };
 
 // ---------------------------------------------------------------------------
-// BinPackingProblem  (@PlanningSolution)
+// BinPackingProblem  (solution)
 // ---------------------------------------------------------------------------
 struct BinPackingProblem
 {
@@ -132,7 +132,7 @@ struct BinPackingProblem
         return out;
     }
 
-    // Bulk write of the planning variable. Range-checked at the next
+    // Bulk write of the decision variable. Range-checked at the next
     // ScoreCalculator::prepare (every scoring / solving entry point).
     void setAssignment(const std::vector<int> &bins)
     {
@@ -149,7 +149,7 @@ struct BinPackingProblem
 }  // namespace bp
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization: entities are items, the planning
+// SolutionTraits specialization: entities are items, the decision
 // variable is Item::bin, the value range is the n bins 0..n-1.
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<bp::BinPackingProblem>

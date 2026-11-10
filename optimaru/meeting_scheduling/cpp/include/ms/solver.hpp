@@ -45,8 +45,7 @@ public:
     //     (1500, 20000): all worse than the defaults below.
     struct Config
     {
-        // Wall-clock budget, mirroring termination.spent-limit (30s in the
-        // quickstart's application.properties).
+        // Wall-clock budget.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above every
@@ -132,7 +131,7 @@ public:
     // Solves with a caller-assembled plugin calculator (see
     // ms/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies, day-fit value selection
-    // included. Weights come from the assembly, NOT from the quickstart level
+    // included. Weights come from the assembly, NOT from the level
     // defaults. The final schedule.score is computed by THIS calculator and
     // the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score. Single-start: the

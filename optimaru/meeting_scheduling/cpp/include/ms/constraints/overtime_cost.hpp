@@ -7,9 +7,9 @@ namespace ms
 {
 
 // Hard, weight 1: overtimeCost — a meeting that runs past the end of the
-// calendar, i.e. no TimeGrain fact exists at its last grain index. Raw cost
-// per meeting = that last grain index (NOT the overrun: the Java provider's
-// weigher, kept as it is), so overrunning further costs more; 0 = every
+// calendar, i.e. no TimeGrain exists at its last grain index. Raw cost
+// per meeting = that last grain index (NOT the overrun), so overrunning
+// further costs more; 0 = every
 // meeting ends on an existing grain.
 struct OvertimeCost final : PerAssignmentConstraint
 {

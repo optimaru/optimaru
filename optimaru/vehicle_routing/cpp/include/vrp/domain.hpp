@@ -18,37 +18,36 @@ namespace vrp
 // ---------------------------------------------------------------------------
 // Time
 // ---------------------------------------------------------------------------
-// The Java quickstart uses java.time.LocalDateTime. Because every timestamp in
-// a single problem falls on the same day ("tomorrow at HH:MM"), we represent
-// time as an int64 number of seconds from a common reference (start of that
-// day). All arithmetic (arrival = departure + drivingSeconds, etc.) is then
-// plain integer math, matching the Java semantics exactly.
+// Every timestamp in a single problem falls on the same day ("tomorrow at
+// HH:MM"), so time is an int64 number of seconds from a common reference
+// (start of that day). All arithmetic (arrival = departure + drivingSeconds,
+// etc.) is then plain integer math.
 using Seconds = std::int64_t;
 
-constexpr Seconds NULL_TIME = -1;  // stands in for a null LocalDateTime
+constexpr Seconds NULL_TIME = -1;  // no time (e.g. an unassigned visit)
 
 // ---------------------------------------------------------------------------
-// HardMediumSoftScore
+// Score
 // ---------------------------------------------------------------------------
-// A three-level HardMediumSoft score.
+// A three-level hard / medium / soft score.
 // Constraints *penalize*, so scores are <= 0; higher (closer to zero) is
 // better. Comparison is lexicographic: hard dominates medium dominates soft.
 //
 // The generic engine (optimaru/cpp/optimaru/) only knows Score(int64 hard, double
 // soft), so the two lower levels are packed into one (the food-packaging
-// port's convention):
+// use case's convention):
 //
 //   engine.hard = hard
 //   engine.soft = medium * kMediumUnit + soft      (kMediumUnit = 10^9)
 //
 // Every constraint penalizes whole seconds or whole minutes, so medium and
 // soft are integers and the combined int64 converts to double exactly while
-// |medium * kMediumUnit + soft| < 2^53. That preserves the HardMediumSoft
+// |medium * kMediumUnit + soft| < 2^53. That preserves the hard / medium / soft
 // lexicographic order as long as
 //   |soft|   < 10^9   (total driving seconds == ~31 years of driving), and
 //   |medium| < 9*10^6 (service minutes of the unassigned visits == ~17 years),
 // which holds with an enormous margin at any instance size this solver is
-// used on. Feasibility stays hard-only, exactly like Java.
+// used on. Feasibility stays hard-only.
 //
 // The fold is declared ONCE, here: toEngineScore below packs the monolithic
 // Score with it, and the MediumFoldOf<VehicleRoutePlan> specialization at the
@@ -129,8 +128,8 @@ inline Score fromEngineScore(const optimaru::Score &e)
 // Location
 // ---------------------------------------------------------------------------
 // Every distinct point (vehicle home + each visit) is registered once and
-// referenced by index into VehicleRoutePlan::drivingSeconds, which plays the
-// role of the precomputed driving-time map in the Java Location class.
+// referenced by index into VehicleRoutePlan::drivingSeconds, the precomputed
+// driving-time matrix.
 struct Location
 {
     double latitude = 0.0;
@@ -139,12 +138,10 @@ struct Location
 };
 
 // ---------------------------------------------------------------------------
-// Visit  (@PlanningEntity)
+// Visit  (the LIST element)
 // ---------------------------------------------------------------------------
-// Problem facts are the immutable fields; the shadow fields (vehicleIndex,
-// arrivalTime) are derived from the vehicle routes, exactly like the shadow
-// variables in the Java Visit (@InverseRelationShadowVariable /
-// @PreviousElementShadowVariable / arrivalTimeSupplier).
+// The input fields are immutable; the derived fields (vehicleIndex,
+// arrivalTime) are recomputed from the vehicle routes.
 struct Visit
 {
     std::string id;
@@ -157,9 +154,8 @@ struct Visit
 
     // Medium-level cost of leaving this visit unrouted.
     //
-    // The Java quickstart penalizes an unassigned visit on its medium level
-    // by its service duration in minutes, which kUnassignedPenaltyAuto
-    // (the default) reproduces exactly. That rule is degenerate whenever
+    // By default (kUnassignedPenaltyAuto) an unassigned visit is penalized
+    // on the medium level by its service duration in minutes. That rule is degenerate whenever
     // service durations are small or zero — the penalty rounds to 0, "route
     // nothing" scores 0hard/0medium/0soft, and dropping every visit becomes
     // the optimum. Real instances (which typically carry an
@@ -176,17 +172,17 @@ struct Visit
                    : unassignedPenaltyMinutes;
     }
 
-    // --- shadow (recomputed by ScoreCalculator::updateShadowVariables) ---
-    int vehicleIndex = -1;  // -1 == unassigned (vehicle == null)
+    // --- derived (recomputed by ScoreCalculator::updateShadowVariables) ---
+    int vehicleIndex = -1;  // -1 == unassigned
     Seconds arrivalTime = NULL_TIME;
 };
 
 // ---------------------------------------------------------------------------
-// Vehicle  (@PlanningEntity)
+// Vehicle  (the LIST owner)
 // ---------------------------------------------------------------------------
-// visitIndices is the @PlanningListVariable: the ordered list of visits this
-// vehicle services. allowsUnassignedValues == true, so a visit may appear in
-// no vehicle's list at all (see VehicleRoutePlan::unassignedVisitIndices).
+// visitIndices is the decision: the ordered list of visits this vehicle
+// services. A visit may appear in no vehicle's list at all (see
+// VehicleRoutePlan::unassignedVisitIndices).
 struct Vehicle
 {
     std::string id;
@@ -204,7 +200,7 @@ struct Vehicle
     // Does the route end back at home? Off by default: the route is open and
     // ends at its last visit, so the last-visit -> home leg counts toward
     // neither driving time nor the route end time. On, the leg is charged
-    // like the Java quickstart's round trip.
+    // (a round trip).
     bool returnToDepot = false;
     std::vector<int> visitIndices;  // ordered route
 
@@ -221,7 +217,7 @@ struct Vehicle
 };
 
 // ---------------------------------------------------------------------------
-// VehicleRoutePlan  (@PlanningSolution)
+// VehicleRoutePlan  (the solution)
 // ---------------------------------------------------------------------------
 struct VehicleRoutePlan
 {
@@ -230,8 +226,8 @@ struct VehicleRoutePlan
     std::vector<Vehicle> vehicles;
     std::vector<Visit> visits;
 
-    // The unassigned pool. The reference model allows unassigned values by
-    // letting a value belong to no list; the engine's LIST kind instead requires every
+    // The unassigned pool. A visit may be left unassigned, but the engine's
+    // LIST kind requires every
     // element to live in exactly one list, so the pool is materialized as one
     // extra virtual list at index vehicles.size() (see the SolutionTraits
     // below). Everything in it is unassigned: it has no route, no arrival
@@ -275,8 +271,7 @@ struct VehicleRoutePlan
 }  // namespace vrp
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the C++ analog of the @PlanningEntity /
-// @PlanningListVariable annotations)
+// SolutionTraits specialization
 // ---------------------------------------------------------------------------
 // The vehicles are the list owners and the visits are the elements — plus ONE
 // extra list at index vehicles.size() holding the unassigned visits.

@@ -23,16 +23,16 @@ struct ConstraintBreakdown
     std::int64_t unassignedJobsCost = 0;  // medium, unassigned minutes
     std::int64_t squaredMakespanCost = 0;  // soft, sum of makespan^2
 
-    // The HardMediumSoft score at the components' kDefaultWeight (all
-    // integral, so the levels are exact int64 like the Java long arithmetic).
+    // The hard/medium/soft score at the components' kDefaultWeight (all
+    // integral, so the levels are exact int64).
     Score toScore() const;
 };
 
-// Port of org.acme.foodpackaging.solver.FoodPackagingConstraintProvider as a
-// straightforward full recompute over the job lists — the reference the
-// incremental calculator is verified against.
+// The food-packaging constraints as a straightforward full recompute over
+// the job lists — the reference the incremental calculator is verified
+// against.
 //
-// Constraints (HardMediumSoftScore, all penalize), the default assembly of
+// Constraints (hard / medium / soft, all penalize), the default assembly of
 // fp/constraints.hpp at the components' kDefaultWeight (all 1):
 //   hard   1. maxEndTimeCost               assigned job ending after
 //                                          maxEndTime: -minutes(end -
@@ -52,8 +52,7 @@ struct ConstraintBreakdown
 //   medium 4. unassignedJobsCost           unassigned job: -duration minutes
 //   soft   5. squaredMakespanCost          last job of each line:
 //                                          -minutes(end - line start)^2
-// minStartTime and priority exist in the Java domain but are read by no
-// constraint (kept as data for fidelity).
+// minStartTime and priority are data fields that no constraint reads.
 class ScoreCalculator
 {
 public:
@@ -61,15 +60,14 @@ public:
     // instance. Throws std::invalid_argument on: a job in two lists, a
     // pinned job after an unpinned one on the same line, negative durations,
     // a bad product index, or a wrong-sized cleanup matrix. Pinned jobs in
-    // no list are moved into the unassigned pool (they must stay unassigned,
-    // like Java's pinned Job with line == null). Idempotent per solution.
+    // no list are moved into the unassigned pool (they must stay
+    // unassigned). Idempotent per solution.
     static void prepare(PackagingSchedule &schedule);
 
-    // Recomputes every job's shadow variables (lineIndex,
+    // Recomputes every job's derived fields (lineIndex,
     // startCleaningDateTime, startProductionDateTime, endDateTime) from the
-    // current lists — the Java shadow chain. Throws std::invalid_argument
-    // when a needed cleanup entry is missing (Java's
-    // Product.getCleanupDuration IllegalArgumentException).
+    // current lists. Throws std::invalid_argument when a needed cleanup
+    // entry is missing.
     static void updateShadowVariables(PackagingSchedule &schedule);
 
     // updateShadowVariables + the five constraints; stores the score in

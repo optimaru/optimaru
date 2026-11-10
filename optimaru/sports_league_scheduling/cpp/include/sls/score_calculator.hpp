@@ -10,8 +10,7 @@ namespace sls
 {
 
 // Per-constraint raw totals of one full recompute (all counted positive; the
-// score applies the signs). Mirrors the ten constraints of the quickstart's
-// SportsLeagueSchedulingConstraintProvider one to one; each member is named
+// score applies the signs). One member per constraint; each member is named
 // after its constraint's registry name (sls/constraints/<subject>_cost.hpp).
 // The weights are applied only in hardTotal() / softTotal(), which read each
 // component's kDefaultWeight (score_calculator.cpp).
@@ -36,8 +35,7 @@ struct Breakdown
     std::int64_t softTotal() const;
 };
 
-// Port of the reference sports-league-scheduling
-// SportsLeagueSchedulingConstraintProvider.
+// The ten sports-league-scheduling constraints.
 //
 // score does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under ScoreChecks::Full).
@@ -50,13 +48,11 @@ struct Breakdown
 //   hard 2. consecutiveHomeMatchesCost  -n per team whose home matches cover a
 //                                        consecutive round-index run of n >= 4
 //                                        distinct indices (several matches on
-//                                        one index count once: the quickstart's
-//                                        toConsecutiveSequences collects the
-//                                        Round values into a set)
+//                                        one index count once)
 //   hard 3. consecutiveAwayMatchesCost  same for away matches
 //   hard 4. repeatMatchOnNextDayCost  -1 per match followed on round index + 1
-//                                        by the reversed fixture (ifExists:
-//                                        at most once per match)
+//                                        by the reversed fixture (at most
+//                                        once per match)
 //   soft 5. startToAwayHopCost        -dist(away, home) per match in a round
 //                                        with no previous round index
 //   soft 6. homeToAwayHopCost         -dist(m1.home, m2.home) per match pair
@@ -76,7 +72,7 @@ class ScoreCalculator
 {
 public:
     // A run of >= MAX_CONSECUTIVE consecutive home (or away) round indices
-    // is penalized by its length (the quickstart's MAX_CONSECUTIVE_MATCHES).
+    // is penalized by its length.
     static constexpr int MAX_CONSECUTIVE = 4;
 
     static Score score(LeagueSchedule &schedule);
@@ -87,10 +83,9 @@ public:
     // Penalty of one team side (home or away): the summed length of every
     // maximal consecutive round-index run covering >= MAX_CONSECUTIVE
     // distinct indices. `cnt` is the per-round-index match count of that
-    // (team, side); only presence matters — the reference
-    // model collects the Round values into a set before finding
-    // consecutive sequences, so several matches on one round index count
-    // once, exactly like a duplicated Round fact would.
+    // (team, side); only presence matters — a run is formed by
+    // the set of round indices, so several matches on one round index count
+    // once.
     static std::int64_t runPenalty(const std::vector<int> &cnt);
 
     // Interns the ordered (home, away) team pairs into dense ids, resolves

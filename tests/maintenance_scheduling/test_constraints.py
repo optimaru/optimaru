@@ -1,10 +1,9 @@
 """Constraint spot checks: calculate_score against hand-computed cases (representative
-cases of Java MaintenanceSchedulingConstraintProviderTest; the full port is in
-cpp/mnt_test.cpp)."""
+cases; the full set is in cpp/mnt_test.cpp)."""
 
 import optimaru.maintenance_scheduling as mnt
 
-# 2021-02-01 (Monday) == epoch day 18659, DAY_1 of the Java test.
+# 2021-02-01 (Monday) == epoch day 18659.
 DAY_1 = 18659
 DAY_2 = DAY_1 + 1
 DAY_3 = DAY_1 + 2

@@ -17,9 +17,9 @@ namespace ba
 {
 
 // ---------------------------------------------------------------------------
-// Score  (HardMediumSoftScore mirror)
+// Score  (hard / medium / soft)
 // ---------------------------------------------------------------------------
-// The Java quickstart scores with HardMediumSoftScore; the generic engine
+// The domain scores on hard / medium / soft levels; the generic engine
 // (optimaru/cpp/optimaru/) only knows Score(int64 hard, double soft). Mapping rule:
 //
 //   engine.hard = hard
@@ -28,7 +28,7 @@ namespace ba
 // All bed-allocation constraints penalize whole stay-nights, so medium and
 // soft are integers; with |soft| < 10^9 the medium level strictly dominates
 // the soft level inside the engine's double (exact up to 2^53), preserving
-// the HardMediumSoft lexicographic order. |soft| is bounded by
+// the hard / medium / soft lexicographic order. |soft| is bounded by
 // ~228 * totalStayNights at the default weights (the components'
 // kDefaultWeight, ba/constraints/*.hpp), so the mapping is exact for any
 // instance with fewer than ~4.3 million stay-nights.
@@ -108,7 +108,7 @@ inline Score fromEngineScore(const optimaru::Score &e)
 }
 
 // ---------------------------------------------------------------------------
-// Enums  (org.acme.bedallocation.domain.Gender / GenderLimitation)
+// Enums  (Gender / GenderLimitation)
 // ---------------------------------------------------------------------------
 enum class Gender
 {
@@ -127,7 +127,7 @@ enum class GenderLimitation
 // ---------------------------------------------------------------------------
 // Department  (problem fact)
 // ---------------------------------------------------------------------------
-// minimumAge / maximumAge nullopt == no age restriction (Java null).
+// minimumAge / maximumAge nullopt == no age restriction.
 struct Department
 {
     std::string id;
@@ -151,7 +151,7 @@ struct Room
 };
 
 // ---------------------------------------------------------------------------
-// Bed  (problem fact; the planning value)
+// Bed  (problem fact; the value a stay is assigned)
 // ---------------------------------------------------------------------------
 struct Bed
 {
@@ -161,21 +161,21 @@ struct Bed
 };
 
 // ---------------------------------------------------------------------------
-// Stay  (@PlanningEntity)
+// Stay  (the entity the solver assigns)
 // ---------------------------------------------------------------------------
-// `bed` is the basic @PlanningVariable(allowsUnassigned = true). Encoding:
+// `bed` is the decision variable; a stay may be left unassigned. Encoding:
 //   -1                    uninitialized (construction heuristic input;
 //                         contributes nothing to the score)
 //   [0, bedCount)         index into BedPlan::beds
-//   bedCount (sentinel)   "no bed" — the quickstart's null bed after solving,
+//   bedCount (sentinel)   "no bed" — the stay is left unassigned,
 //                         penalized per night on the medium level
 //                         (unassignedStaysCost)
-// The sentinel keeps allowsUnassigned semantics inside the engine's BASIC
+// The sentinel keeps "may be unassigned" inside the engine's BASIC
 // value range [0, value_count): local search can move a stay to "no bed" when
 // every real bed causes a hard conflict.
 //
-// Dates are integer day indices (e.g. LocalDate::toEpochDay); only
-// differences matter. nightCount keeps the quickstart's "+ 1".
+// Dates are integer day indices (e.g. days since the epoch); only
+// differences matter. nightCount is departureDay - arrivalDay + 1.
 struct Stay
 {
     std::string id;
@@ -189,7 +189,7 @@ struct Stay
     int departureDay = 0;
     std::string specialty;
 
-    int bed = -1;  // planning variable (see the encoding above)
+    int bed = -1;  // decision variable (see the encoding above)
 
     // Precomputed by ScoreCalculator::prepare (interned equipment ids and the
     // per-department priority of `specialty`; kept at the end so the
@@ -215,7 +215,7 @@ struct Stay
 };
 
 // ---------------------------------------------------------------------------
-// BedPlan  (@PlanningSolution)
+// BedPlan  (the whole problem and its solution)
 // ---------------------------------------------------------------------------
 struct BedPlan
 {
@@ -237,7 +237,7 @@ struct BedPlan
     std::vector<char> roomEquipmentFlat;
 
     int bedCount() const { return static_cast<int>(beds.size()); }
-    // The "no bed" sentinel planning value (the quickstart's null bed).
+    // The "no bed" sentinel value (a stay on it is unassigned).
     int noBedValue() const { return bedCount(); }
 
     bool roomHasEquipment(int roomIndex, int equipmentId) const
@@ -252,11 +252,10 @@ struct BedPlan
 }  // namespace ba
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
-// annotations of the C++ engine): entities are stays, the planning variable
-// is Stay::bed, the value range is the bed list plus the "no bed" sentinel
-// (allowsUnassigned = true). The Java quickstart has no @PlanningPin, so no
-// is_pinned hook is declared.
+// SolutionTraits specialization  (how the engine sees the domain): entities
+// are stays, the decision variable is Stay::bed, the value range is the bed
+// list plus the "no bed" sentinel. Nothing is pinned, so no is_pinned hook
+// is declared.
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<ba::BedPlan>
 {

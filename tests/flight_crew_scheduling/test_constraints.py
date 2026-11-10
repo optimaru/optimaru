@@ -1,4 +1,4 @@
-"""Constraint spot checks: calculate_score matches the Java ConstraintProvider semantics."""
+"""Constraint spot checks: calculate_score on small hand-built schedules."""
 
 import optimaru.flight_crew_scheduling as fc
 
@@ -21,7 +21,7 @@ def _with(schedule: fc.FlightCrewSchedule, flights, assignments) -> fc.FlightCre
 
 
 def test_required_skill_cost():
-    # required_skill_cost (the Java provider test case): skill mismatch -100
+    # required_skill_cost: skill mismatch -100
     # (+ last assignment not arriving home -1000).
     s = _base()
     s = _with(s, [(0, 0, 1, 60)], [(0, 0, "1")])
@@ -32,7 +32,7 @@ def test_required_skill_cost():
 
 
 def test_flight_conflict_cost():
-    # flight_conflict_cost (the Java provider test case): [0,10) x [1,11) overlap -> -10 (a home round trip, so soft 0).
+    # flight_conflict_cost: [0,10) x [1,11) overlap -> -10 (a home round trip, so soft 0).
     s = _base()
     s = _with(s, [(0, 0, 0, 10), (0, 1, 0, 11)], [(0, 0, "Pilot"), (1, 0, "Pilot")])
     score = fc.calculate_score(s)
@@ -44,7 +44,7 @@ def test_flight_conflict_cost():
 
 
 def test_transfer_between_two_flights_cost():
-    # transfer_between_two_flights_cost (the Java provider test case): three 0->1 flights departing 0, 11, 13
+    # transfer_between_two_flights_cost: three 0->1 flights departing 0, 11, 13
     # -> consecutive pairs (1,2), (2,3) both disconnected: -2
     # (+ last assignment not arriving home -1000).
     s = _base()
@@ -63,7 +63,7 @@ def test_transfer_between_two_flights_cost():
 
 
 def test_employee_unavailability_cost():
-    # employee_unavailability_cost (the Java provider test case): unavailable on the departure
+    # employee_unavailability_cost: unavailable on the departure
     # day/in flight -10, a day later 0.
     day = 5
     for dep_day, expected in ((5, -10), (4, -10), (6, 0)):
@@ -78,7 +78,7 @@ def test_employee_unavailability_cost():
 
 def test_first_last_not_home():
     # last_assignment_not_arriving_at_home_cost and first_assignment_not_departing_from_home_cost
-    # (the Java provider test case): employee 0 (home 0) 1->2, 2->3 (first assignment not
+    # employee 0 (home 0) 1->2, 2->3 (first assignment not
     # departing home -1000, last not arriving home -1000); employee 1 (home 1) 1->2, 2->1 has
     # no penalty.
     airports = [fc.Airport(f"A{i}") for i in range(4)]

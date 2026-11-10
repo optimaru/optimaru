@@ -35,7 +35,7 @@ namespace pdp
 // in no route at all, so those four are GlobalConstraints
 // (RequestCouplingConstraint below).
 //
-// A component never reads the Node shadow variables (vehicleIndex,
+// A component never reads the Node derived fields (vehicleIndex,
 // arrivalTime): walkRoute below re-derives the arrival chain from the unit's
 // own member order, which is what makes each cost a pure function of
 // (solution, unit, members) as the engine's contract requires. The LIST path
@@ -56,7 +56,7 @@ namespace pdp
 // (ConstraintAssembly::add_instances): each instance has its own knobs and the
 // instances add up.
 //
-// Score levels: HardMediumSoft. The medium level (unassignedRequestsCost) is
+// Score levels: hard, medium, soft. The medium level (unassignedRequestsCost) is
 // folded into the engine's Score by the calculator as
 // `soft = medium * kMediumUnit + soft` (kMediumFold in domain.hpp), so a
 // medium weight is in medium units: weight 1 = one medium unit per minute.
@@ -216,7 +216,7 @@ inline double haversineMeters(const Location &a, const Location &b)
 // ---------------------------------------------------------------------------
 // Shared base of the three rules that judge a request's pickup against its
 // dropoff. It tracks where each node currently sits and at which position —
-// the solution's own shadow fields cannot be used, because on a leave
+// the solution's own derived fields cannot be used, because on a leave
 // notification they are already stale — and re-scores whole routes on every
 // change, which keeps positions exact without a delta argument.
 struct RequestCouplingConstraint : PdpGlobalConstraint

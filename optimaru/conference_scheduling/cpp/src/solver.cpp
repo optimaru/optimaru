@@ -63,8 +63,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config &config,
     lns.as_move_max_ruin = config.ruinRecreateAsMoveMaxRuin;
     engineConfig.search.descent_weight = config.descent_weight;
 
-    // Per-talk type-compatible (timeslot, room) cells: the stand-in for the
-    // quickstart's per-TalkType value ranges. Change moves draw from this
+    // Per-talk type-compatible (timeslot, room) cells. Change moves draw from this
     // list with compatibleValueProbability; the construction heuristic
     // additionally initializes the most constrained talks first.
     const int slotCount = schedule.timeslotCount();

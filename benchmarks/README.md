@@ -17,19 +17,19 @@ taken as the result.
 | [quadratic-assignment](quadratic-assignment) | OR-Tools CP-SAT | QAPLIB |
 | [assembly-line-balancing](assembly-line-balancing) | OR-Tools CP-SAT | SALBP-1 |
 | [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated |
-| [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | quickstart demo |
+| [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | demo instance |
 | [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated) |
 | [facility-location](facility-location) | OR-Tools CP-SAT | generated |
 | [flight-crew-scheduling](flight-crew-scheduling) | OR-Tools CP-SAT | generated |
-| [food-packaging](food-packaging) | OR-Tools CP-SAT | quickstart demo |
+| [food-packaging](food-packaging) | OR-Tools CP-SAT | demo instance |
 | [knapsack](knapsack) | OR-Tools CP-SAT | generated |
-| [maintenance-scheduling](maintenance-scheduling) | OR-Tools CP-SAT | quickstart demo (small, large) |
+| [maintenance-scheduling](maintenance-scheduling) | OR-Tools CP-SAT | demo instances (small, large) |
 | [max-cut](max-cut) | OR-Tools CP-SAT | generated |
-| [meeting-scheduling](meeting-scheduling) | OR-Tools CP-SAT | quickstart demo |
+| [meeting-scheduling](meeting-scheduling) | OR-Tools CP-SAT | demo instance |
 | [order-picking](order-picking) | OR-Tools CP-SAT | generated |
 | [semiconductor-scheduling](semiconductor-scheduling) | OR-Tools CP-SAT | generated |
-| [sports-league-scheduling](sports-league-scheduling) | OR-Tools CP-SAT | quickstart demo |
-| [task-assigning](task-assigning) | OR-Tools CP-SAT | quickstart demo |
+| [sports-league-scheduling](sports-league-scheduling) | OR-Tools CP-SAT | demo instance |
+| [task-assigning](task-assigning) | OR-Tools CP-SAT | demo instance |
 | [tournament-scheduling](tournament-scheduling) | OR-Tools CP-SAT | generated |
 
 The CP-SAT models come from

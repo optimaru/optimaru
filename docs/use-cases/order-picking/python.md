@@ -1,31 +1,31 @@
 # order_picking (Python)
 
-The Python package wrapping, with pybind11, the C++ port of the example model
-**order-picking** (`optimaru/order_picking/cpp`, on the generic engine `optimaru/cpp/optimaru/`).
+The Python package wrapping, with pybind11, the C++ implementation of the
+**order-picking** use case (`optimaru/order_picking/cpp`, on the generic engine `optimaru/cpp/optimaru/`).
+Derived from the Timefold Quickstarts `order-picking` example (Apache-2.0; see the repository NOTICE).
 
 ## Problem
 
 Pick order items onto trolleys in a warehouse (5 shelf columns A-E x 3 rows, left/right sides x rows 0-10).
 
-- **planning entity**: `Trolley` — `pick_task_indices` is the `@PlanningListVariable`
-  (the list of `PickTask` indices the trolley picks, in visiting order).
+- **decision**: `Trolley.pick_task_indices` — the list of `PickTask` indices the
+  trolley picks, in visiting order.
 - **derived values**: `PickTask.trolley_index / previous_pick_task / next_pick_task`
-  (Java's `@InverseRelationShadowVariable` / `@PreviousElementShadowVariable` /
-  `@NextElementShadowVariable`) — derived from the lists and kept current by
-  `calculate_score` / `solve`.
+  (the trolley carrying the pick and its neighbours in that trolley's list) — derived
+  from the lists and kept current by `calculate_score` / `solve`.
 
-## Constraints (full port of the Java `OrderPickingConstraintProvider`)
+## Constraints
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per trolley (0 = no violation) |
 | --- | --- | --- | --- | --- |
 | `trolley_capacity_cost` | `TrolleyCapacityCost` | hard | 1 | buckets short: the sum of required buckets per order (`ceil(order volume / bucket capacity)`, orders never share a bucket) beyond the trolley's buckets |
 | `distance_from_previous_pick_task_cost` | `DistanceFromPreviousPickTaskCost` | soft | 1 | warehouse distance from the previous pick (the trolley's start for the first pick) |
 | `distance_from_last_pick_task_to_path_origin_cost` | `DistanceFromLastPickTaskToPathOriginCost` | soft | 1 | distance from the last pick back to the start |
-| `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders on the trolley (summed: the trolleys an order spans, countDistinct); an unsplit order still counts 1 |
+| `order_split_by_trolley_cost` | `OrderSplitByTrolleyCost` | soft | 1000 | distinct orders on the trolley (summed: the trolleys an order spans); an unsplit order still counts 1 |
 
-Score mapping: Java `Score`(int) → engine `Score(int64 hard, double soft)`
-1:1 (hard = -bucket shortfall, soft = -(travel distance + 1000 x (order, trolley) pairs)). No level folding:
-the domain has no medium level, so `level="medium"` raises `ValueError` (`level="hard"` / `"soft"`
+Score: the engine's `Score(int64 hard, double soft)`, at the default weights
+hard = -bucket shortfall, soft = -(travel distance + 1000 x (order, trolley) pairs).
+The domain has no medium level, so `level="medium"` raises `ValueError` (`level="hard"` / `"soft"`
 flip any constraint).
 `order_picking.constraint_info()` lists the table's defaults (read off the C++ components),
 `order_picking.constraint_costs(solution)` the raw per-trolley costs — the only per-constraint

@@ -1,9 +1,9 @@
 // pybind11 bindings for the task-assigning C++ domain wrappers.
 // The Python extension links the existing ta::* implementations and imports
 // the generic optimaru engine from ../../../include; the engine itself
-// is not modified here. One domain is exposed: the quickstart port
-// (ta::TaskAssigningSolution, LIST variable — every employee holds an
-// ordered task list, allowsUnassignedValues), as the module
+// is not modified here. One domain is exposed: ta::TaskAssigningSolution
+// (sequence shape — every employee holds an ordered task list; a task in
+// no list is unassigned), as the module
 // optimaru.task_assigning._core.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
@@ -172,9 +172,9 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("customer", &Task::customer)
         .def_readwrite("min_start_time", &Task::minStartTime)
         .def_readwrite("priority", &Task::priority)
-        // Shadow variables, derived from the employee task lists by
+        // Derived fields, computed from the employee task lists by
         // calculate_score / Solver.solve: employee -1 == unassigned,
-        // start_time -1 == null.
+        // start_time -1 == unassigned.
         .def_readonly("employee", &Task::employee)
         .def_readonly("start_time", &Task::startTime);
 
@@ -204,7 +204,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("skills", &Employee::skills)
         // Affinity per customer index; missing entries mean Affinity.NONE.
         .def_readwrite("affinity_by_customer", &Employee::affinityByCustomer)
-        // The planning list variable: ordered task indices. NOTE: employees
+        // The decision variable: ordered task indices. NOTE: employees
         // read from a solution are copies; use
         // TaskAssigningSolution.set_task_lists for bulk writes.
         .def_readwrite("tasks", &Employee::tasks);
@@ -231,13 +231,13 @@ PYBIND11_MODULE(_core, m)
              py::arg("employees"))
         .def_readonly("task_types", &TaskAssigningSolution::taskTypes)
         .def_readonly("customers", &TaskAssigningSolution::customers)
-        // NOTE: element access returns copies; the planning state lives in
+        // NOTE: element access returns copies; the assignment lives in
         // the employees' task lists (use task_lists / set_task_lists).
         .def_readonly("tasks", &TaskAssigningSolution::tasks)
         .def_readonly("employees", &TaskAssigningSolution::employees)
         .def_readonly("score", &TaskAssigningSolution::score)
         // Convenience: the ordered task-index list per employee (the
-        // planning variable of each employee).
+        // decision variable of each employee).
         .def("task_lists",
              [](const TaskAssigningSolution &solution)
              {
@@ -247,7 +247,7 @@ PYBIND11_MODULE(_core, m)
                      lists.push_back(employee.tasks);
                  return lists;
              })
-        // Bulk write of the planning variable (employee access via
+        // Bulk write of the task lists (employee access via
         // .employees returns copies, so per-employee writes would be lost).
         .def(
             "set_task_lists",
@@ -270,7 +270,7 @@ PYBIND11_MODULE(_core, m)
           &ScoreCalculator::score,
           py::arg("solution"),
           "Full recompute of the Bendable score at the default weights "
-          "(re-derives the task shadow variables and stores solution.score).");
+          "(recomputes the derived task fields and stores solution.score).");
 
     optimaru::python::bind_config_copy(py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
         .def(py::init<>())
@@ -389,8 +389,8 @@ PYBIND11_MODULE(_core, m)
     py::class_<Solver>(m, "Solver", py::module_local())
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
-        // Solves in place: reorders employees[*].tasks, re-derives the task
-        // shadow variables and sets solution.score. The GIL is released so
+        // Solves in place: reorders employees[*].tasks, recomputes the derived
+        // task fields and sets solution.score. The GIL is released so
         // parallel multi-start workers can fire on_new_best.
         .def("solve",
              py::overload_cast<TaskAssigningSolution &>(&Solver::solve),

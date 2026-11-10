@@ -17,15 +17,14 @@ namespace pjs
 // ---------------------------------------------------------------------------
 // Plugin-style constraint components (the school-timetabling pattern)
 // ---------------------------------------------------------------------------
-// The four constraints of the reference project-job-scheduling
-// ProjectJobSchedulingConstraintProvider, split into one small component each
+// The four project-job-scheduling constraints, one small component each
 // on the engine's DecomposedObjective — an optional assembly path NEXT
 // TO the monolithic ProjectJobSchedulingIncrementalScoreCalculator, which
 // stays the tuned default fast path.
 //
-// Unit choice: none of the four rules decomposes per planning value, and that
+// Unit choice: none of the four rules decomposes per assigned value, and that
 // is the domain's defining property rather than an oversight. Every cost here
-// reads the shadow chain predecessorsDoneDate -> startDate -> endDate, so
+// reads the derived dates predecessorsDoneDate -> startDate -> endDate, so
 // changing ONE allocation's (execution mode, delay) shifts the dates of its
 // whole successor subgraph — and with them the renewable resource profile,
 // the project delays and the makespan. A cost that spans the precedence graph
@@ -40,8 +39,8 @@ namespace pjs
 // exact by construction rather than by a propagation argument. That is the
 // trade this assembly path is for: composability, not peak throughput.
 //
-// Score levels: the quickstart scores with HardMediumSoftScore, which this
-// domain folds into the engine's Score as
+// Score levels: the domain scores on hard / medium / soft levels, which it
+// folds into the engine's Score as
 // `soft = medium * kMediumUnit + soft` (kMediumUnit = 10^9; kMediumFold and
 // the MediumFoldOf<ProjectJobSchedule> specialization in domain.hpp). The
 // medium component (projectDelayCost) declares Level::Medium at weight 1, in
@@ -106,9 +105,9 @@ inline void requirePrepared(const ProjectJobSchedule &schedule)
 }
 
 // ScoreCalculator::updateDates written into caller-owned vectors instead of
-// into the solution's shadow fields, so a component can derive the chain from
-// the planning values alone (the engine hands components a const solution,
-// and on this path nothing else refreshes the shadow fields).
+// into the solution's derived fields, so a component can derive the chain from
+// the assigned values alone (the engine hands components a const solution,
+// and on this path nothing else refreshes the derived fields).
 inline void computeDates(const ProjectJobSchedule &schedule,
                          std::vector<int> &startDate,
                          std::vector<int> &endDate)

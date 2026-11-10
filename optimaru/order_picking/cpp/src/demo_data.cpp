@@ -18,10 +18,10 @@ namespace
 using DemoRandom = optimaru::PortableRandom;
 
 // ---------------------------------------------------------------------------
-// The DemoDataGenerator catalog: PRODUCTS with their ProductFamily, in
+// The demo catalog: the products with their ProductFamily, in
 // declaration order (product ids "0".."36" follow that order), and the
-// family -> candidate shelvings map (column 0..4 = A..E, row 0..2 = 1..3, in
-// the Java list order — the order matters, buildProducts draws an index).
+// family -> candidate shelvings map (column 0..4 = A..E, row 0..2 = 1..3;
+// the list order matters, buildProducts draws an index).
 // ---------------------------------------------------------------------------
 enum class ProductFamily
 {
@@ -97,7 +97,7 @@ struct Shelf
     int row;
 };
 
-// SHELVINGS_PER_FAMILY, in the Java list order per family.
+// The candidate shelvings of each family, in draw order.
 const std::vector<Shelf> &shelvingsFor(ProductFamily family)
 {
     static const std::vector<Shelf> FRUITS = {{0, 0}, {0, 1}};  // (A,1) (A,2)
@@ -142,7 +142,7 @@ struct PlacedProduct
     WarehouseLocation location;
 };
 
-// DemoDataGenerator.buildProducts: place each catalog product on a random
+// Place each catalog product on a random
 // shelving of its family, random side, random row 1..ROWS_SIZE.
 std::vector<PlacedProduct> buildProducts(DemoRandom &random)
 {
@@ -183,7 +183,7 @@ OrderPickingSolution buildDemoData(int trolleysCount,
                                    int ordersCount,
                                    std::int64_t seed)
 {
-    // DemoDataGenerator.validateBucketCapacity.
+    // Every product must fit in one bucket.
     if (bucketCapacity < demoMaxProductSize())
     {
         throw std::invalid_argument(
@@ -225,9 +225,9 @@ OrderPickingSolution buildDemoData(int trolleysCount,
         const int orderIndex = static_cast<int>(solution.orders.size());
         solution.orders.push_back({std::to_string(orderNumber)});
 
-        // Draw orderItemsSize products, skipping repeats (Java dedupes by
-        // product id but keeps drawing) — then one PickTask per kept item
-        // (buildPickTasks: ids "<order>-0", "<order>-1", ...).
+        // Draw orderItemsSize products, skipping repeats (a repeat still
+        // uses up a draw) — then one PickTask per kept item
+        // (ids "<order>-0", "<order>-1", ...).
         std::vector<char> taken(productCount, 0);
         int pickIdx = 0;
         for (int i = 0; i < orderItemsSize; ++i)

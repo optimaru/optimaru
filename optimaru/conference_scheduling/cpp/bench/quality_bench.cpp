@@ -1,8 +1,8 @@
-// Quality-benchmark driver for the C++ conference-scheduling port.
+// Quality-benchmark driver for the C++ conference-scheduling solver.
 //
 // Solves either (a) the demo instance (an exact copy of src/main.cpp's
 // generator, random draws included) or (b) a deterministic scaled
-// instance in the demo's shape (single-typed slots/rooms, so the synthetic
+// instance in the demo's shape (single-typed slots/rooms, so the
 // talkTypeIncompatibilityCost hard constraint dominates exactly like in the
 // demo) for a fixed wall-clock budget, then prints the best-score trajectory,
 // the per-constraint breakdown and an st_quality_bench-style moves/s estimate.

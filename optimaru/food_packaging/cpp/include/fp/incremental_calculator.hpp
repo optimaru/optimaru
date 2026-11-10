@@ -11,9 +11,9 @@
 namespace fp
 {
 
-// Incremental port of FoodPackagingConstraintProvider for the engine's LIST
-// hook protocol (before_list_edit / after_list_edit). Every constraint of
-// this quickstart decomposes per line once the shadow chain is known:
+// Incremental score calculator of the food-packaging constraints for the
+// engine's LIST hook protocol (before_list_edit / after_list_edit). Every
+// constraint decomposes per line once the job times of the line are known:
 //
 //   - per line l: lateness sums (hard maxEndTimeCost / medium
 //     afterIdealEndTimeCost), the makespan^2 term (squaredMakespanCost), the
@@ -27,7 +27,7 @@ namespace fp
 //
 // A move touches at most a few lists; each hook retracts / re-derives ONE
 // line in O(list length + same-operator overlap work) instead of rescoring
-// the whole solution. The shadow chain is recomputed inside after_list_edit
+// the whole solution. The job times are recomputed inside after_list_edit
 // (list-position based, exactly ScoreCalculator::updateShadowVariables'
 // semantics) rather than through a DerivedState, so the calculator stays
 // self-contained and multi-start safe (the engine's solve_multistart does not
@@ -42,7 +42,7 @@ public:
     void after_list_edit(int listIndex) override;
     optimaru::Score score() override;
 
-    // The maintained score as the HardMediumSoft triple (for tests), at the
+    // The maintained score as the hard/medium/soft triple (for tests), at the
     // components' kDefaultWeight (see incremental_calculator.cpp).
     Score current_score() const;
 
@@ -58,12 +58,12 @@ private:
         std::vector<std::pair<Minutes, Minutes>> windows;
     };
 
-    // Re-derives the shadow chain of line l and its per-line sums, in place:
+    // Re-derives the job times of line l and its per-line sums, in place:
     // the caller's windows buffer is cleared and refilled so its capacity is
     // reused across moves (after_list_edit runs millions of times per
     // second; a fresh vector per call showed up as allocator time).
     void deriveLine(int l, LineState &state) const;
-    // Java's overlapMinutes summed over every overlapping window pair of two
+    // The overlapping minutes summed over every overlapping window pair of two
     // lines (two-pointer over the sorted windows).
     static std::int64_t
     pairOverlap(const std::vector<std::pair<Minutes, Minutes>> &a,

@@ -71,7 +71,7 @@ def test_to_core_and_back():
     job = back.jobs[0]
     assert job.crew_id == "1"
     assert job.start_date == date(2021, 2, 2)
-    # end_date shadow: Tue + 3 business days = Fri (exclusive).
+    # derived end_date: Tue + 3 business days = Fri (exclusive).
     assert job.end_date == date(2021, 2, 5)
     assert back.jobs[1].crew_id is None
     assert back.jobs[1].pinned

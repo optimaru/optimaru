@@ -57,12 +57,11 @@ ScoreCalculator::calculateTotals(OrderPickingSolution &solution)
     const int orderCount = static_cast<int>(solution.orders.size());
     ConstraintTotals totals;
 
-    // --- soft: distance constraints, reading the shadow variables like the
-    // Java constraint lambdas do -------------------------------------------
+    // --- soft: distance constraints, reading the derived fields -----------
     for (const PickTask &task : solution.pickTasks)
     {
         if (task.trolleyIndex == -1)
-            continue;  // unassigned: forEach(PickTask) skips it
+            continue;  // unassigned: contributes nothing
         const Trolley &trolley = solution.trolleys[task.trolleyIndex];
 
         // distanceFromPreviousPickTaskCost
@@ -85,7 +84,7 @@ ScoreCalculator::calculateTotals(OrderPickingSolution &solution)
 
     // --- hard: trolleyCapacityCost, soft: orderSplitByTrolleyCost ---------
     // volume[trolley][order] = raw total volume of the order's picks on the
-    // trolley (the Java groupBy(trolley, order, sum(volume)) table).
+    // trolley.
     std::vector<std::int64_t> volume(
         static_cast<std::size_t>(trolleyCount) * orderCount, 0);
     std::vector<char> orderOnTrolley(

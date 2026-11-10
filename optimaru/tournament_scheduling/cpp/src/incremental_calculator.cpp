@@ -86,8 +86,8 @@ void TournamentSchedulingIncrementalScoreCalculator::insert(int assignmentIndex,
         unavailHit_ += penaltyCnt_[cell];
 
     // soft 4 (confrontationCountImbalanceCost): one new confrontation with
-    // every other team's assignment on this day (same-team pairs are excluded
-    // by the Java lessThan(teamId)).
+    // every other team's assignment on this day (same-team pairs are
+    // excluded).
     for (int u = 0; u < teamCount_; ++u)
     {
         if (u == team)

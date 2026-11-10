@@ -7,11 +7,9 @@ namespace cs
 {
 
 // Hard, weight 100000: talkTypeIncompatibilityCost — a talk in a timeslot or
-// room that does not admit its talk type. Synthetic: the Java quickstart makes
-// such assignments impossible through per-talkType value ranges, which the
-// engine's single global value range cannot express, so the port forbids them
-// by penalty instead. It never fires on a solution the Java model could have
-// produced.
+// room that does not admit its talk type. The engine's
+// single global value range cannot restrict a talk to its type-compatible
+// cells, so such assignments are forbidden by penalty instead.
 // Raw cost (one global total) = the sum of max(duration, 1) minutes for each
 // talk whose timeslot does not admit its talk type, and again when its room
 // does not; 0 = no violation (every talk sits in a timeslot and a room that

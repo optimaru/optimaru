@@ -8,7 +8,7 @@ namespace ms
 
 // Soft, weight 100: consecutiveMeetingsCost — two meetings scheduled back to
 // back with no grain in between, whatever their rooms and attendees. The most
-// expensive soft term of the provider: a day of meetings with no gaps is the
+// expensive soft term: a day of meetings with no gaps is the
 // thing attendees complain about. Raw cost (global) = the number of meeting
 // pairs where one ends at the grain the other starts; 0 = every meeting is
 // followed by a break.

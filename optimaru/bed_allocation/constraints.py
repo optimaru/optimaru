@@ -1,7 +1,7 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
 The default path (`ba.solve(plan)`) enables all twelve constraints at their default
-weights (the quickstart's). This module is the alternative path next to it: pick
+weights. This module is the alternative path next to it: pick
 constraints, change weights, change levels, shape the cost, and pass the list to
 `solve(plan, constraints=...)`.
 
@@ -212,8 +212,8 @@ class RequiredPatientEquipmentCost(Constraint):
     """Room assignments missing required equipment. Default: hard, weight 50.
 
     If the room lacks any required equipment, it is valued by the number of required
-    equipment items the room **has** — exactly the semantics pinned by the quickstart's
-    unit test (so a room with none of the required equipment costs 0)."""
+    equipment items the room **has** (so a room with none of the required equipment
+    costs 0); the tests pin these semantics."""
 
     name = "required_patient_equipment_cost"
     label_en = "Required equipment"

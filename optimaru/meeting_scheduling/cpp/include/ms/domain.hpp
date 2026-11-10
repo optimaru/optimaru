@@ -16,11 +16,11 @@ namespace ms
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart scores with HardMediumSoftScore; the engine provides
+// The use case has hard, medium and soft levels; the engine provides
 // Score(int64 hard, double soft). Mapping rule (also in the README):
 //
-//   hard = Java hard, unchanged (violation counts / grains; 0 == feasible)
-//   soft = -(javaMediumPenalty * kMediumScale + javaSoftPenalty)
+//   hard = the hard level, unchanged (violation counts / grains; 0 == feasible)
+//   soft = -(mediumPenalty * kMediumScale + softPenalty)
 //
 // i.e. the medium level (required+preferred / preferred attendance conflicts)
 // is folded into the engine's soft as an offset of kMediumScale = 1e6 per
@@ -42,11 +42,11 @@ constexpr double kMediumScale = 1e6;
 constexpr optimaru::MediumFold kMediumFold
     = optimaru::MediumFold::into_soft(kMediumScale);
 
-// Java TimeGrain.GRAIN_LENGTH_IN_MINUTES.
+// Length of one TimeGrain.
 constexpr int kGrainLengthInMinutes = 15;
 
 // ---------------------------------------------------------------------------
-// Person  (problem fact)
+// Person  (fixed input)
 // ---------------------------------------------------------------------------
 // Attendances reference people by index into MeetingSchedule::people.
 struct Person
@@ -56,9 +56,9 @@ struct Person
 };
 
 // ---------------------------------------------------------------------------
-// TimeGrain  (problem fact, value range half of the composite variable)
+// TimeGrain  (fixed input, value range half of the composite variable)
 // ---------------------------------------------------------------------------
-// A 15-minute slot. grainIndex is the Java grainIndex: the unit in which
+// A 15-minute slot. grainIndex is the unit in which
 // durations, overlaps and meeting end-time penalties are measured (the
 // demo data numbers grains 1..160). dayOfYear + startingMinuteOfDay define
 // the calendar position (dayCrossingCost, the roomChangeCost order).
@@ -71,7 +71,7 @@ struct TimeGrain
 };
 
 // ---------------------------------------------------------------------------
-// Room  (problem fact, the other half of the composite variable)
+// Room  (fixed input, the other half of the composite variable)
 // ---------------------------------------------------------------------------
 struct Room
 {
@@ -81,12 +81,11 @@ struct Room
 };
 
 // ---------------------------------------------------------------------------
-// Meeting  (problem fact)
+// Meeting  (fixed input)
 // ---------------------------------------------------------------------------
-// requiredAttendees/preferredAttendees are the Java RequiredAttendance /
-// PreferredAttendance facts, stored as person indices (one entry == one
-// attendance fact). requiredCapacity == required + preferred count, exactly
-// like Java's Meeting::getRequiredCapacity.
+// requiredAttendees/preferredAttendees are the required / preferred
+// attendances, stored as person indices (one entry == one attendance).
+// requiredCapacity == required + preferred count.
 struct Meeting
 {
     std::string id;
@@ -94,7 +93,7 @@ struct Meeting
     int durationInGrains = 1;
     std::vector<int> requiredAttendees;
     std::vector<int> preferredAttendees;
-    bool entireGroupMeeting = false;  // informational, like the Java field
+    bool entireGroupMeeting = false;  // informational
 
     int requiredCapacity() const
     {
@@ -104,14 +103,14 @@ struct Meeting
 };
 
 // ---------------------------------------------------------------------------
-// MeetingAssignment  (@PlanningEntity)
+// MeetingAssignment  (the decision)
 // ---------------------------------------------------------------------------
-// The Java entity has two planning variables (startingTimeGrain, room). The
-// engine supports one BASIC int variable per entity, so they are composed
+// A meeting is assigned a starting time grain and a room. The
+// engine supports one BASIC int variable per entity, so the two are composed
 // into a single value (the school-timetabling slotRoom pattern):
 //   grainRoom = timeGrainPos * roomCount + roomIndex
 // where timeGrainPos indexes MeetingSchedule::timeGrains. -1 means unassigned
-// (both Java variables null). A meeting occupies durationInGrains consecutive
+// (neither grain nor room). A meeting occupies durationInGrains consecutive
 // grain indices starting at its grain's grainIndex; every overlap constraint
 // measures that full interval, not just the starting grain.
 struct MeetingAssignment
@@ -119,9 +118,9 @@ struct MeetingAssignment
     std::string id;
     int meeting = 0;  // index into MeetingSchedule::meetings (1:1, see below)
 
-    int grainRoom = -1;  // planning variable; -1 == unassigned
+    int grainRoom = -1;  // decision variable; -1 == unassigned
 
-    // Pinned assignments keep their grainRoom fixed (@PlanningPin): scored
+    // Pinned assignments keep their grainRoom fixed: scored
     // like any assignment but never selected for a move.
     bool pinned = false;
 };
@@ -144,11 +143,11 @@ struct ConflictArc
 };
 
 // ---------------------------------------------------------------------------
-// MeetingSchedule  (@PlanningSolution)
+// MeetingSchedule  (the solution)
 // ---------------------------------------------------------------------------
-// Model note: meetings and meeting assignments are 1:1, like the quickstart's
-// demo data model (every Meeting has exactly one MeetingAssignment); prepare()
-// rejects duplicates. Attendances are problem facts derived from the meetings.
+// Model note: meetings and meeting assignments are 1:1 (every Meeting has
+// exactly one MeetingAssignment); prepare() rejects duplicates. Attendances
+// are fixed input derived from the meetings.
 struct MeetingSchedule
 {
     std::vector<Person> people;
@@ -171,7 +170,7 @@ struct MeetingSchedule
     // occupied offset of any assignment fits even when it runs past the last
     // existing grain (overtime).
     int occupancySpan = 0;
-    // dayOfYear of every TimeGrain fact at a grain-index offset (normally one
+    // dayOfYear of every TimeGrain at a grain-index offset (normally one
     // entry; empty == no grain exists at that index -> overtime when a
     // meeting ends there).
     std::vector<std::vector<int>> grainDaysAtOffset;
@@ -187,7 +186,7 @@ struct MeetingSchedule
     // roomChangeCost delta: per meeting, (other meeting, weight).
     std::vector<std::vector<std::pair<int, std::int64_t>>> roomChangeNeighbors;
     // Same-meeting attendance-pair weights (nonzero only when one person
-    // holds several attendance facts of one meeting; Java joins them too).
+    // holds several attendances of one meeting; those pairs count too).
     std::vector<std::int64_t> selfRequiredPairs;      // per meeting
     std::vector<std::int64_t> selfPreferredPairs;     // per meeting
     std::vector<std::int64_t> selfRequiredPreferred;  // per meeting
@@ -223,11 +222,9 @@ struct MeetingSchedule
 }  // namespace ms
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the @PlanningEntity/@PlanningVariable
-// annotations of the C++ engine): entities are the meeting assignments, the
-// planning variable is MeetingAssignment::grainRoom, the value range is the
-// (timeGrain x room) grid — the composite of the Java entity's two
-// @PlanningVariable value ranges.
+// SolutionTraits specialization: entities are the meeting assignments, the
+// decision variable is MeetingAssignment::grainRoom, the value range is the
+// (timeGrain x room) grid.
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<ms::MeetingSchedule>
 {

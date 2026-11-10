@@ -32,7 +32,7 @@ def _build(
     total_demand: int,
     seed: int,
 ) -> Any:
-    """Mirrors DemoDataBuilder.build(): uniform locations in the box, equal
+    """Builds a demo-style instance: uniform locations in the box, equal
     capacity/demand shares, Gaussian setup costs.
 
     Python's RNG stream differs from the C++ demo's mt19937_64, so an instance
@@ -78,7 +78,7 @@ def _build(
 
 def instances() -> dict[str, Callable[[], Any]]:
     return {
-        # The quickstart demo's scale.
+        # The demo's scale.
         "demo": lambda: _build(30, 60, 4500, 900, seed=0),
         "medium": lambda: _build(50, 200, 15_000, 3_000, seed=1),
         "large": lambda: _build(80, 600, 45_000, 9_000, seed=2),

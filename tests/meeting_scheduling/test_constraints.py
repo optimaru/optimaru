@@ -1,5 +1,5 @@
-"""Constraint spot checks: reproduces representative cases of Java
-MeetingSchedulingConstraintProviderTest through the Python bindings.
+"""Constraint spot checks: representative hand-computed cases through the
+Python bindings.
 
 The raw costs come from `constraint_costs()` (summed over the units of each
 constraint), the per-constraint surface.
@@ -58,7 +58,7 @@ def make_schedule(days, grains_per_day, capacities, meetings_spec):
 
 
 def test_room_conflict_cost():
-    # Java roomConflictPenalized: dur 4 @0 and dur 4 @2, same room -> 2.
+    # Room conflict: dur 4 @0 and dur 4 @2, same room -> 2.
     s = make_schedule(1, 12, [5, 5], [(4, [], [], 0, 0), (4, [], [], 2, 0)])
     raw = raw_totals(s)
     assert raw["room_conflict_cost"] == 2
@@ -79,31 +79,31 @@ def test_overtime_cost():
 
 
 def test_attendance_conflicts():
-    # Java requiredAttendanceConflictPenalized: overlap 2.
+    # Shared required attendee: overlap 2.
     s = make_schedule(1, 12, [5, 5], [(4, [0], [], 0, 0), (4, [0], [], 2, 1)])
     assert raw_totals(s)["required_attendance_conflict_cost"] == 2
-    # Java requiredAndPreferredAttendanceConflictPenalized: full overlap 4.
+    # Required in one meeting, preferred in the other: full overlap 4.
     s = make_schedule(1, 12, [5, 5], [(4, [0], [], 0, 0), (4, [], [0], 0, 1)])
     assert raw_totals(s)["required_and_preferred_attendance_conflict_cost"] == 4
-    # Java preferredAttendanceConflictPenalized: full overlap 4.
+    # Shared preferred attendee: full overlap 4.
     s = make_schedule(1, 12, [5, 5], [(4, [], [0], 0, 0), (4, [], [0], 0, 1)])
     assert raw_totals(s)["preferred_attendance_conflict_cost"] == 4
 
 
 def test_room_capacity_and_larger_rooms():
-    # Java requiredRoomCapacityPenalized: 1 required + 1 preferred > capacity 1 -> 1.
+    # Room too small: 1 required + 1 preferred > capacity 1 -> 1.
     s = make_schedule(1, 12, [1], [(4, [0], [1], 0, 0)])
     assert raw_totals(s)["room_capacity_cost"] == 1
-    # Java assignLargerRoomsFirstPenalized: uses a capacity-1 room while a 2-seat room exists -> 1.
+    # Larger room left unused: uses a capacity-1 room while a 2-seat room exists -> 1.
     s = make_schedule(1, 12, [1, 2], [(4, [], [], 0, 0)])
     assert raw_totals(s)["larger_room_capacity_cost"] == 1
 
 
 def test_room_change_cost():
-    # Java roomStabilityPenalized: same attendee, different room, gap of 0 grains -> 1.
+    # Room change: same attendee, different room, gap of 0 grains -> 1.
     s = make_schedule(1, 16, [5, 5], [(4, [0], [], 0, 0), (4, [0], [], 4, 1)])
     assert raw_totals(s)["room_change_cost"] == 1
-    # Java roomStabilityUnpenalized: gap of 4 grains -> 0.
+    # No room change counted: gap of 4 grains -> 0.
     s = make_schedule(1, 16, [5, 5], [(4, [0], [], 0, 0), (4, [0], [], 8, 1)])
     assert raw_totals(s)["room_change_cost"] == 0
 

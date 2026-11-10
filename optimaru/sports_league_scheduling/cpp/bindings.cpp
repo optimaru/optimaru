@@ -129,7 +129,7 @@ PYBIND11_MODULE(_core, m)
                      a.push_back(match.round);
                  return a;
              })
-        // Bulk write of the planning variable (match access via .matches
+        // Bulk write of the decision variable (match access via .matches
         // returns copies, so per-match writes would be lost).
         .def(
             "set_assignment",

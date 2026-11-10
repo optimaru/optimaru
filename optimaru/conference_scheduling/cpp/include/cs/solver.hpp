@@ -22,17 +22,16 @@ namespace cs
 // optimaru::Solver<ConferenceSchedule>. On top of the built-in change/swap
 // moves and the engine's adaptive ruin-and-recreate (ALNS) it biases value
 // selection toward the talk's type-compatible (timeslot, room) cells — the
-// engine's global value range stands in for the quickstart's per-TalkType
-// value ranges, with the synthetic talkTypeIncompatibilityCost hard
-// constraint penalizing the stragglers (see cs/domain.hpp) — and it spends the
+// engine's value range is the whole grid for every talk, with the
+// talkTypeIncompatibilityCost hard constraint penalizing the stragglers
+// (see cs/domain.hpp) — and it spends the
 // budget as a sequence of restarted local-search runs (see restartSegments).
 class Solver
 {
 public:
     struct Config
     {
-        // Wall-clock budget, mirroring termination.spent-limit (30s in the
-        // quickstart's application.properties).
+        // Wall-clock budget.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
         // Stop early once bestScore >= target_score. Default is above every
@@ -117,7 +116,7 @@ public:
         // Probability that a change move's target value is drawn from the
         // talk's type-compatible (timeslot, room) cells instead of the whole
         // grid. 1.0 never proposes incompatible cells by change move (swaps
-        // between talks of different types still can — the synthetic hard
+        // between talks of different types still can — the hard
         // constraint cleans those up). 0 disables the bias.
         double compatibleValueProbability = 0.9;
 
@@ -138,8 +137,8 @@ public:
 
     // Solves with a caller-assembled plugin calculator (see
     // cs/constraints.hpp): pick components and weights, then pass the
-    // assembly here. Weights come from the assembly, NOT from the Java
-    // provider defaults. The final schedule.score is computed by THIS
+    // assembly here. Weights come from the assembly, NOT from the
+    // component defaults. The final schedule.score is computed by THIS
     // calculator and the calculator is left primed on the final solution, so
     // constraint_totals() explains exactly that score.
     //

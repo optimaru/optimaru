@@ -1,7 +1,7 @@
 """Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
-Mirrors `_core`'s TaskType/Customer/Task/Employee/TaskAssigningSolution 1:1, but like
-the REST shape of the Java quickstart, references are id/code strings
+Mirrors `_core`'s TaskType/Customer/Task/Employee/TaskAssigningSolution 1:1, but
+references are id/code strings
 (`task_type_code`/`customer_id`; an employee's `tasks` is a list of task ids).
 The engine conversion (`to_core`) turns references into indices::
 
@@ -12,7 +12,7 @@ The engine conversion (`to_core`) turns references into indices::
     ...solve...
     solved = TaskAssigningSolutionModel.from_core(solution)  # engine -> pydantic
 
-As in Java's JSON shape, the assignment lives on the employee side: `employees[i].tasks` is
+The assignment lives on the employee side: `employees[i].tasks` is
 the ordered list of task ids that employee performs. The task side carries the computed
 `start_time` (None when unassigned).
 `pydantic` is an optional dependency (`pip install task_assigning[models]`).
@@ -59,9 +59,9 @@ class CustomerModel(_Model):
 
 
 class TaskModel(_Model):
-    """Planning entity: one task to perform. Which employee does it is decided by
+    """One task to perform. Which employee does it is decided by
     `EmployeeModel.tasks` (an ordered list of task ids).
-    `start_time` is the computed shadow value (minutes; None when unassigned)."""
+    `start_time` is the computed start (minutes; None when unassigned)."""
 
     id: str
     task_type_code: str
@@ -79,7 +79,7 @@ class TaskModel(_Model):
 
 
 class EmployeeModel(_Model):
-    """Planning entity: an employee. `tasks` is the planning list variable — the ordered
+    """An employee. `tasks` is the decision variable — the ordered
     list of task ids this employee performs back to back. Customers missing from
     `customer_to_affinity` count as NONE (multiplier 4)."""
 
@@ -98,8 +98,8 @@ class EmployeeModel(_Model):
 
 
 class TaskAssigningSolutionModel(_Model):
-    """Planning solution mirror. score_* are read-only results, kept as separate fields
-    (the four levels of BendableScore [1]hard/[3]soft)."""
+    """Pydantic mirror of the solution. score_* are read-only results, kept as separate fields
+    (the four Bendable levels, [1]hard/[3]soft)."""
 
     task_types: list[TaskTypeModel]
     customers: list[CustomerModel]
@@ -177,7 +177,7 @@ class TaskAssigningSolutionModel(_Model):
     @classmethod
     def from_core(cls, solution: "_core.TaskAssigningSolution") -> "TaskAssigningSolutionModel":
         """engine object -> pydantic (including the current assignment and score). Affinity
-        omits NONE entries, like Java's customerToAffinity map."""
+        omits NONE entries."""
         return cls(
             task_types=[
                 TaskTypeModel(

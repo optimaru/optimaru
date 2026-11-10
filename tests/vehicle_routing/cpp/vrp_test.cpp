@@ -1,4 +1,4 @@
-// Vehicle-routing tests: the Java ConstraintProviderTest fixtures, the
+// Vehicle-routing tests: hand-computed scoring fixtures, the
 // incremental calculator against the full recompute, and the engine
 // integration (element conservation, unassigned pool, ALNS).
 #include <chrono>
@@ -48,16 +48,16 @@ void checkEqual(const std::string &label, long actual, long expected)
 }
 
 // -------------------------------------------------------------------------
-// The exact fixtures from the Java VehicleRoutingConstraintProviderTest.
+// Scoring on the three-location fixture plan.
 // -------------------------------------------------------------------------
-void testJavaFixtures()
+void testFixtures()
 {
-    std::printf("== Scoring against the Java ConstraintProviderTest ==\n");
+    std::printf("== Scoring against the fixtures ==\n");
 
-    VehicleRoutePlan plan = buildJavaFixturePlan();
+    VehicleRoutePlan plan = buildFixturePlan();
     const int home = 0, loc2 = 1, loc3 = 2;
 
-    // Driving times documented in the Java test's comments.
+    // The fixture's known driving times.
     checkEqual("drivingTime L1->L2", plan.drivingTime(home, loc2), 843);
     checkEqual("drivingTime L2->L3", plan.drivingTime(loc2, loc3), 639);
     checkEqual("drivingTime L1->L3", plan.drivingTime(home, loc3), 941);
@@ -76,7 +76,7 @@ void testJavaFixtures()
     // travelTimeCost: the route is open by default, so only
     // home->L2->L3 = 843 + 639 = 1482 is driven.
     checkEqual("travelTimeCost soft penalty (open route)", -s.soft, 1482);
-    // With returnToDepot the Java round trip home->L2->L3->home is charged:
+    // With returnToDepot the round trip home->L2->L3->home is charged:
     // 843 + 639 + 941 = 2423.
     plan.vehicles[0].returnToDepot = true;
     s = ScoreCalculator::score(plan);
@@ -99,11 +99,11 @@ void testJavaFixtures()
 }
 
 // -------------------------------------------------------------------------
-// The HardMediumSoft <-> engine HardSoft packing must round-trip exactly.
+// The hard / medium / soft <-> engine hard / soft packing must round-trip exactly.
 // -------------------------------------------------------------------------
 void testScorePacking()
 {
-    std::printf("== HardMediumSoft <-> engine score packing ==\n");
+    std::printf("== hard / medium / soft <-> engine score packing ==\n");
     const std::vector<Score> cases = {
         {0, 0, 0},        {-5, 0, 0},        {0, -30, 0},
         {0, 0, -2423},    {-20, -30, -2423}, {-1, -899999, -999999999},
@@ -668,7 +668,7 @@ void verifyStopAtFirstFeasibleLimit()
 int main()
 {
     verifyStopAtFirstFeasibleLimit();
-    testJavaFixtures();
+    testFixtures();
     testScorePacking();
     testIncrementalMatchesFullRecompute();
     testPreviewsMatchAppliedScore(/*nonMetric=*/false);

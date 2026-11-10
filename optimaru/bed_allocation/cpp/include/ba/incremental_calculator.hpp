@@ -11,8 +11,7 @@ namespace ba
 {
 
 // The bed-allocation implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective.
 //
 // A stay's contribution decomposes into
 //   - a per-stay part (hard 2/3/5/6/7, medium 8, soft 9~12): a pure function
@@ -48,7 +47,7 @@ public:
 
 private:
     BedPlan *plan_ = nullptr;
-    std::vector<int> assign_;  // planning value per stay (-1 uninitialized)
+    std::vector<int> assign_;  // assigned value per stay (-1 uninitialized)
 
     // Per-(stay, room) single-stay impact table, rebuilt by
     // rebuild. ScoreCalculator::singleStayImpact is a pure

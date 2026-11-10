@@ -271,7 +271,7 @@ def test_constraint_costs_is_the_only_per_constraint_surface():
 
 
 def _engine(score_):
-    """The engine-level (hard, soft) of a HardMediumSoft score (medium folded into soft)."""
+    """The engine-level (hard, soft) of a hard/medium/soft score (medium folded into soft)."""
     return score_.hard, score_.medium * MEDIUM_UNIT + score_.soft
 
 

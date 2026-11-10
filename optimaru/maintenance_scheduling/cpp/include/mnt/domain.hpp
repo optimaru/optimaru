@@ -15,10 +15,10 @@ namespace mnt
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The Java quickstart already uses Score, so the engine's
+// This use case scores hard and soft only, so the engine's
 // Score (int64 hard, double soft) maps 1:1 — no level remapping is
 // needed (no medium level, so no optimaru::MediumFoldOf specialization). The
-// soft weights are kept verbatim from the Java ConstraintProvider:
+// soft weights are:
 // beforeIdealEndDateCost x1, tagConflictCost x1'000, afterIdealEndDateCost
 // x1'000'000 per day — the components' kDefaultWeight
 // (mnt/constraints/*_cost.hpp). All contributions are integral, so the
@@ -28,9 +28,9 @@ using Score = optimaru::Score;
 // ---------------------------------------------------------------------------
 // Dates
 // ---------------------------------------------------------------------------
-// Java's LocalDate becomes an epoch day: days since 1970-01-01 (a Thursday),
-// exactly LocalDate::toEpochDay / Python date.toordinal() - 719163. kNoDate
-// stands in for Java null on the optional min/max/ideal date fields.
+// A date is an epoch day: days since 1970-01-01 (a Thursday), i.e.
+// Python date.toordinal() - 719163. kNoDate
+// means "not set" on the optional min/max/ideal date fields.
 constexpr std::int64_t kNoDate = std::numeric_limits<std::int64_t>::min();
 
 // 0 = Monday .. 6 = Sunday (1970-01-01 is a Thursday, weekday 3).
@@ -44,10 +44,10 @@ inline bool isWeekend(std::int64_t epochDay)
     return weekdayOf(epochDay) >= 5;
 }
 
-// Port of Job.calculateEndDate / plusBusinessDays: walk forward from
+// plusBusinessDays: walk forward from
 // startDate counting only non-weekend days; the result is the EXCLUSIVE end
 // date after `businessDays` working days (it may land on a Saturday).
-// Matches the Java loop exactly, including businessDays == 0 -> startDate.
+// businessDays == 0 -> startDate.
 inline std::int64_t plusBusinessDays(std::int64_t startDate, int businessDays)
 {
     std::int64_t result = startDate;
@@ -62,7 +62,7 @@ inline std::int64_t plusBusinessDays(std::int64_t startDate, int businessDays)
 }
 
 // ---------------------------------------------------------------------------
-// Crew  (problem fact, @ValueRangeProvider half #1)
+// Crew  (problem fact, the crew half of the value range)
 // ---------------------------------------------------------------------------
 struct Crew
 {
@@ -71,18 +71,18 @@ struct Crew
 };
 
 // ---------------------------------------------------------------------------
-// Job  (@PlanningEntity)
+// Job  (the entity the solver assigns)
 // ---------------------------------------------------------------------------
-// The Java entity has TWO planning variables (crew, startDate — the TimeGrain
-// pattern) plus a shadow endDate. The engine supports one BASIC int variable
+// A job has TWO decisions (crew, startDate) plus a derived endDate.
+// The engine supports one BASIC int variable
 // per entity, so both are composed into a single value (the school-
 // timetabling slotRoom pattern):
 //   crewDate = startDateIndex * crewCount + crewIndex
 // where startDateIndex indexes MaintenanceSchedule::startDates (the business
-// days of the work calendar — Java's createStartDateList()). -1 means
-// unassigned (both Java variables null). The shadow endDate is a pure
+// days of the work calendar). -1 means
+// unassigned. The derived endDate is a pure
 // function of (startDate, durationInDays) and is precomputed per (duration,
-// startDateIndex) by ScoreCalculator::prepare, so it needs no listener.
+// startDateIndex) by ScoreCalculator::prepare.
 struct Job
 {
     std::string id;
@@ -93,11 +93,11 @@ struct Job
     std::int64_t maxEndDate = kNoDate;    // exclusive; kNoDate = none
     std::int64_t idealEndDate = kNoDate;  // exclusive; kNoDate = none
 
-    std::vector<std::string> tags;  // Java SequencedSet<String>
+    std::vector<std::string> tags;  // a set; duplicates are ignored
 
-    int crewDate = -1;  // planning variable; -1 == unassigned
+    int crewDate = -1;  // decision variable; -1 == unassigned
 
-    // Extension over the quickstart (engine feature): pinned jobs keep their
+    // Engine feature: pinned jobs keep their
     // crewDate fixed — scored like any job but never moved by the solver.
     bool pinned = false;
 
@@ -106,9 +106,9 @@ struct Job
 };
 
 // ---------------------------------------------------------------------------
-// MaintenanceSchedule  (@PlanningSolution)
+// MaintenanceSchedule  (the problem and its solution)
 // ---------------------------------------------------------------------------
-// WorkCalendar is inlined as fromDate/toDate (its only fields besides id).
+// The work calendar is the [fromDate, toDate) pair.
 struct MaintenanceSchedule
 {
     std::int64_t fromDate = 0;  // inclusive
@@ -126,11 +126,11 @@ struct MaintenanceSchedule
     // Filled by ScoreCalculator::prepare:
     int tagCount = 0;
     // Value range of the date half: every non-weekend day in
-    // [fromDate, toDate) — Java's createStartDateList().
+    // [fromDate, toDate).
     std::vector<std::int64_t> startDates;
     int maxDuration = 0;
     // endDateByDur[dur * dateCount() + i] = plusBusinessDays(startDates[i],
-    // dur): the shadow endDate for any (duration, startDateIndex) pair.
+    // dur): the endDate for any (duration, startDateIndex) pair.
     std::vector<std::int64_t> endDateByDur;
     // Day horizon covered by any possible assignment; occupancy counters are
     // indexed by (epochDay - dayBase) in [0, dayCount).
@@ -148,7 +148,7 @@ struct MaintenanceSchedule
     int dateIndexOf(int crewDate) const { return crewDate / crewCount(); }
     int crewIndexOf(int crewDate) const { return crewDate % crewCount(); }
 
-    // Shadow endDate lookup (valid after prepare).
+    // endDate lookup (valid after prepare).
     std::int64_t endDateFor(int durationInDays, int startDateIndex) const
     {
         return endDateByDur[static_cast<std::size_t>(durationInDays)
@@ -160,8 +160,8 @@ struct MaintenanceSchedule
 }  // namespace mnt
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization (the @PlanningEntity/@PlanningVariable
-// annotations of the C++ engine): entities are jobs, the planning variable is
+// SolutionTraits specialization (describes the solution's shape to the
+// engine): entities are jobs, the decision variable is
 // Job::crewDate, the value range is the (startDate x crew) grid.
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<mnt::MaintenanceSchedule>

@@ -5,11 +5,11 @@ pickup first, without ever exceeding its capacity in between. That coupling is
 the whole difference from `optimaru.vehicle_routing`: a plain visit can be moved anywhere,
 a PDP stop drags its partner along.
 
-The planning solution is `PdpRoutePlan`: each vehicle's ordered `node_indices`
-is the planning list variable, and a stop in no route is unassigned (it lands
+The solution is `PdpRoutePlan`: each vehicle's ordered `node_indices` (its
+route) is the decision, and a stop in no route is unassigned (it lands
 in `plan.unassigned_node_indices`).
 
-Score (HardMediumSoft, lexicographic), at the default weights:
+Score (hard / medium / soft, lexicographic), at the default weights:
 
 * **hard** — capacity peak along the route (`vehicle_capacity_cost`), time-window
   lateness (`max_end_time_cost`), and the coupling rules (`paired_request_cost`,

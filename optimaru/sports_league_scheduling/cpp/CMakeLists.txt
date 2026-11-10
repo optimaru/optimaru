@@ -18,7 +18,7 @@ add_executable(sls_test ${OPTIMARU_TESTS_DIR}/sports_league_scheduling/cpp/sls_t
 target_link_libraries(sls_test PRIVATE sls_core)
 target_compile_options(sls_test PRIVATE -Wall -Wextra)
 
-# Plugin-assembly path (sls/constraints.hpp): the same provider decomposed
+# Plugin-assembly path (sls/constraints.hpp): the same constraints decomposed
 # into one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(sls_plugin_test ${OPTIMARU_TESTS_DIR}/sports_league_scheduling/cpp/sls_plugin_test.cpp)

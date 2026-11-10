@@ -1,7 +1,6 @@
 // Tournament-scheduling unit tests (engine test/ style: check() + non-zero exit
 // on any failure):
-//   (a) every constraint verified against hand-computed scores (the Java
-//       TournamentScheduleConstraintProviderTest scenarios and more)
+//   (a) every constraint verified against hand-computed scores
 //   (b) incremental score == full recompute across a long random walk driven
 //       through the engine's Editor protocol (before/set/after)
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
@@ -97,7 +96,7 @@ void verifyConstraints()
               < 1e-12,
           "unfairness({11,11,10,10,10,10,10}) == 1.19523");
 
-    // hard 1: teamConflictCost — the Java test scenario: T0 three times on
+    // hard 1: teamConflictCost — T0 three times on
     // D0 (3 pairs), T1 on D1 and D2 (0 pairs). Medium: loads {3, 2} ->
     // 0.707107; no confrontations (same-team pairs are excluded).
     {
@@ -107,12 +106,12 @@ void verifyConstraints()
         addAssignment(s, 0, 0);
         addAssignment(s, 1, 1);
         addAssignment(s, 2, 1);
-        checkScore("teamConflictCost (Java test)",
+        checkScore("teamConflictCost (basic)",
                    ScoreCalculator::score(s),
                    -3,
                    -707107.0);
     }
-    // hard 2: teamUnavailabilityCost — the Java test scenario: penalties
+    // hard 2: teamUnavailabilityCost — penalties
     // (T0, D0) and (T1, D1) both hit (+ T1 twice on D1 = 1 hard pair).
     // Medium: loads {1, 3} -> sqrt(2) = 1.41421.
     {
@@ -123,7 +122,7 @@ void verifyConstraints()
         addAssignment(s, 2, 1);
         s.unavailabilityPenalties.push_back({0, 0});
         s.unavailabilityPenalties.push_back({1, 1});
-        checkScore("teamUnavailabilityCost (Java test)",
+        checkScore("teamUnavailabilityCost (basic)",
                    ScoreCalculator::score(s),
                    -3,
                    -1414210.0);
@@ -138,7 +137,7 @@ void verifyConstraints()
                    0,
                    0.0);
     }
-    // hard 2: duplicate penalty facts each count (Java forEach + ifExists).
+    // hard 2: duplicate penalty facts each count.
     {
         TournamentSchedule s = makeBase(3, 3);
         addAssignment(s, 0, 0);
@@ -149,7 +148,7 @@ void verifyConstraints()
                    -2,
                    0.0);
     }
-    // medium 3: assignmentCountImbalanceCost — the Java test scenario: one
+    // medium 3: assignmentCountImbalanceCost — one
     // assignment each -> perfectly fair, everything 0.
     {
         TournamentSchedule s = makeBase(3, 3);
@@ -168,7 +167,7 @@ void verifyConstraints()
                    0,
                    -816497.0);
     }
-    // soft 4: confrontationCountImbalanceCost — the Java test scenario: three
+    // soft 4: confrontationCountImbalanceCost — three
     // teams meet pairwise once on D0 -> perfectly even, everything 0.
     {
         TournamentSchedule s = makeBase(3, 3);

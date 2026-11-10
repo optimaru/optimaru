@@ -3,13 +3,12 @@
 The compiled module wraps the C++ domain in `optimaru/task_assigning/cpp`,
 which imports the generic engine in `optimaru/cpp/optimaru`.
 
-The planning variable is each `Employee.tasks` (sequence shape): the ordered list of task
-indices the employee performs back to back. A task in no list is unassigned
-(the Java original's `@PlanningListVariable(allowsUnassignedValues = true)`).
-The shadow values `Task.employee` (-1 == unassigned) / `Task.start_time` (-1 == null)
-are re-derived from the lists by `calculate_score` / `Solver.solve`.
+The decision variable is each `Employee.tasks` (sequence shape): the ordered list of task
+indices the employee performs back to back. A task in no list is unassigned.
+The derived values `Task.employee` (-1 == unassigned) / `Task.start_time` (-1 == unassigned)
+are recomputed from the lists by `calculate_score` / `Solver.solve`.
 
-Score convention (BendableScore [1]hard/[3]soft, as in the Java quickstart; all penalties),
+Score convention (four Bendable levels, [1]hard/[3]soft; all penalties),
 at the default weights (constraint_info()):
   hard[0]  required_skill_cost                   required skills the employee lacks (hard, 1)
   soft[0]  unassigned_tasks_cost                 1 per unassigned task (medium, 1)
@@ -80,7 +79,7 @@ class TaskType:
     required_skills: list[str]
 
 class Task:
-    """Planning entity (sequence element): one task. task_type/customer are
+    """One task (the sequence element). task_type/customer are
     indices into the solution lists."""
     def __init__(
         self,
@@ -99,14 +98,14 @@ class Task:
     priority: Priority
     @property
     def employee(self) -> int:
-        """Shadow: index of the assigned employee (-1 == unassigned)."""
+        """Derived: index of the assigned employee (-1 == unassigned)."""
     @property
     def start_time(self) -> int:
-        """Shadow: start time (minutes; -1 == null). The first task gets min_start_time,
+        """Derived: start time (minutes; -1 == unassigned). The first task gets min_start_time,
         later ones max(previous end, min_start_time)."""
 
 class Employee:
-    """Planning entity: an employee. `tasks` is the planning list variable (ordered
+    """An employee. `tasks` is the decision variable (ordered
     task indices). Reading it from the solution returns a copy — bulk-write with
     TaskAssigningSolution.set_task_lists."""
     def __init__(
@@ -124,7 +123,7 @@ class Employee:
     tasks: list[int]
 
 class TaskAssigningSolution:
-    """Planning solution. The constructor validates index references and the integrity
+    """The problem and its solution. The constructor validates index references and the integrity
     of the task lists (ranges, duplicate assignment)."""
     def __init__(
         self,
@@ -144,12 +143,12 @@ class TaskAssigningSolution:
     @property
     def score(self) -> Score: ...
     def task_lists(self) -> list[list[int]]:
-        """Task index list per employee (snapshot of the planning variable)."""
+        """Task index list per employee (snapshot of the decision variable)."""
     def set_task_lists(self, task_lists: list[list[int]]) -> None:
         """Bulk-write the task lists per employee (validates length/range/duplicates)."""
 
 def calculate_score(solution: TaskAssigningSolution) -> Score:
-    """Full recompute of the Bendable score at the default weights (re-derives shadows +
+    """Full recompute of the Bendable score at the default weights (recomputes the derived task fields +
     stores solution.score)."""
 
 class SolverConfig:
@@ -185,7 +184,7 @@ class SolverConfig:
 class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, solution: TaskAssigningSolution) -> None:
-        """Solves in place: relocates employees[*].tasks and refreshes the shadows and
+        """Solves in place: relocates employees[*].tasks and refreshes the derived task fields and
         solution.score."""
 
     def solve_with_constraints(self, solution: TaskAssigningSolution, constraints: Iterable[Any] | None = ...) -> None:

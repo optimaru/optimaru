@@ -1,20 +1,19 @@
 # Facility Location
 
-The Timefold Quickstarts `facility-location` example model
-(Apache-2.0; see the repository [NOTICE](../../../NOTICE))
-(Java/Quarkus) ported, with modifications, onto this repository's C++ engine (`optimaru/cpp/optimaru/`).
+Derived from the Timefold Quickstarts `facility-location` example
+(Apache-2.0; see the repository [NOTICE](../../../NOTICE)),
+built on this repository's C++ engine (`optimaru/cpp/optimaru/`).
 The classic FLP: pick one facility for every consumer.
 
 ## Domain (assignment shape)
 
 - `Consumer.facility` — the only decision variable. An index into `facilities`,
-  `-1` = unassigned (Java's `@PlanningVariable Facility facility` null).
-- `Facility` — a shadow entity with `@InverseRelationShadowVariable(consumers)` in Java,
-  but here the score calculator maintains the aggregates (assigned demand, consumer
-  count), so it is a plain problem fact.
-- Distance = `ceil(Euclidean degree distance x 111 km)` (Java `Location.getDistanceTo`).
+  `-1` = unassigned.
+- `Facility` — a plain problem fact; the score calculator maintains its aggregates
+  (assigned demand, consumer count).
+- Distance = `ceil(Euclidean degree distance x 111 km)` (`Location.distance_to`).
 
-## Constraints (Score — the engine score type as-is, no mapping)
+## Constraints
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per facility (0 = no violation) |
 |---|---|---|---|---|
@@ -25,13 +24,11 @@ The classic FLP: pick one facility for every consumer.
 Every constraint is flippable (`level="hard"` / `level="soft"`), none is a reward and all
 three are scored by default (`default_enabled`);
 `facility_location.constraint_info()` reports exactly this table from the C++
-components (`kDefaultLevel` / `kDefaultWeight`). The distance weight **6** is the
-`ConstraintWeightOverrides` demo value of the Java solution (the provider declares
-`ofSoft(5)`; the solution overrides it with `ofSoft(6)`).
+components (`kDefaultLevel` / `kDefaultWeight`).
 
 The problem carries no weights: they come only from constraint selections, e.g.
 `constraints=[FacilityCapacityCost(), FacilitySetupCost(), DistanceFromFacilityCost(weight=5)]`
-for the un-overridden Java provider.
+to weigh distance 5 instead of 6.
 
 Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
 (keyword-only), and may be picked several times. Each facility's raw cost `x` is shaped as
@@ -62,7 +59,7 @@ fl.solve(problem, constraints=[
 - `score_calculator` — full recompute (the reference)
 - `incremental_calculator` — before/after hooks, O(1) per move
 - `solver` — engine wrapper (CH + Late Acceptance + adaptive ruin & recreate)
-- `optimaru/facility_location/cpp/src/main.cpp` — demo reproducing the Java `DemoDataGenerator` scale
+- `optimaru/facility_location/cpp/src/main.cpp` — demo instance
   (30 facilities x capacity 150, 60 consumers x demand 15, London box, setup cost N(50000, 10000²))
 
 ```bash

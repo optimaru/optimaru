@@ -308,7 +308,7 @@ version neither builds nor publishes on `main`; PRs always build.
 The engine began as a C++ port of parts of
 [Timefold Solver](https://github.com/TimefoldAI/timefold-solver) and has since
 been restructured with its own layout, names and API; portions still derive
-from it. Several use cases translate examples from
+from it. Several use cases derive from examples in
 [Timefold Quickstarts](https://github.com/TimefoldAI/timefold-quickstarts).
 Both are Apache-2.0; [NOTICE](NOTICE) lists exactly which parts derive from
 which. When you redistribute optimaru or a derivative of it, include both

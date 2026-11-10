@@ -18,9 +18,8 @@ namespace
 {
 
 // The monolithic score is the default assembly, so it reads the same
-// constants the components carry. Integral, so every level is computed in
-// int64 exactly like the Java long arithmetic. The medium weight is in
-// medium units; toEngineScore folds the medium level (kMediumFold).
+// constants the components carry. Integral, so every level is computed
+// exactly in int64. The medium weight is in medium units; toEngineScore folds the medium level (kMediumFold).
 constexpr auto kNonRenewableWeight = static_cast<std::int64_t>(
     NonRenewableResourceCapacityCost::kDefaultWeight);
 constexpr auto kRenewableWeight
@@ -73,7 +72,7 @@ void ScoreCalculator::prepare(ProjectJobSchedule &schedule)
             throw std::invalid_argument(
                 "job " + job.id
                 + ": every job needs at least one execution "
-                  "mode (Java SOURCE/SINK carry a "
+                  "mode (SOURCE/SINK carry a "
                   "zero-duration mode)");
         }
         maxModeCount = std::max(maxModeCount,

@@ -7,21 +7,20 @@
 namespace ta
 {
 
-// Port of org.acme.taskassigning.solver.TaskAssigningConstraintProvider as a
-// full-recompute reference: walks every employee's task list, re-derives the
-// shadow variables and sums the four Bendable levels. It is the correctness
+// Full-recompute reference for the six constraints: walks every employee's
+// task list, recomputes the derived task fields and sums the four Bendable
+// levels. It is the correctness
 // oracle for the incremental calculator (checked in the tests and under
 // ScoreChecks::ScoreChecks::Full) and the authoritative final scoring.
 class ScoreCalculator
 {
 public:
-    // Recomputes every task's shadow variables (employee, startTime) from
-    // the current employee task lists, mirroring the Java shadow variables
-    // (@InverseRelationShadowVariable + startTimeSupplier). Must be called
+    // Recomputes every task's derived fields (employee, startTime) from
+    // the current employee task lists. Must be called
     // before reading Task::employee / Task::startTime whenever lists change.
     static void updateShadowVariables(TaskAssigningSolution &solution);
 
-    // Recomputes shadow variables, then the Bendable score, storing it in
+    // Recomputes the derived fields, then the Bendable score, storing it in
     // solution.score and returning it. Constraints (all penalties, at the
     // components' default weights):
     //   hard[0]  requiredSkillCost        missing skill count per task

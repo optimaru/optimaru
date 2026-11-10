@@ -65,7 +65,7 @@ namespace alb
 // Reading the solution: a component may read another task's `station` from
 // the solution. For BASIC solutions the calculator updates its member lists
 // on every single variable change (also inside a batch), so the solution's
-// planning variables and the member lists agree at every call.
+// decision variables and the member lists agree at every call.
 
 using DecomposedCalculator
     = optimaru::DecomposedObjective<AssemblyLineBalancingProblem>;

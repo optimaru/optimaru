@@ -1,12 +1,11 @@
 """Meeting scheduling — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the Java quickstart "meeting-scheduling": assigns meetings a starting time
-grain (15-minute units) and a room. The Java entity's two planning variables
-(startingTimeGrain, room) become one assignment-shape variable via the composite encoding
+Assigns meetings a starting time grain (15-minute units) and a room. The two are
+one decision variable per meeting, the composite encoding
 ``grain_room = time_grain_pos * room_count + room_index`` (-1 == unassigned).
-Constraints have the same semantics as the Java ConstraintProvider (5 hard + 2 medium +
-5 soft; HardMediumSoftScore is folded as ``soft = -(medium * MEDIUM_SCALE + raw soft)``,
-MEDIUM_SCALE == 1e6). ``constraint_info()`` lists each constraint's default level and
+There are 5 hard + 2 medium + 5 soft constraints; the medium level is folded into
+the engine's soft level as ``soft = -(medium * MEDIUM_SCALE + raw soft)``,
+MEDIUM_SCALE == 1e6. ``constraint_info()`` lists each constraint's default level and
 weight (the medium pair at weight 1, in medium units); ``constraint_costs(schedule)`` gives
 the raw per-constraint costs::
 

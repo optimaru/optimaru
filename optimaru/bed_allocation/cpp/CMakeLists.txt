@@ -18,7 +18,7 @@ add_executable(ba_test ${OPTIMARU_TESTS_DIR}/bed_allocation/cpp/ba_test.cpp)
 target_link_libraries(ba_test PRIVATE ba_core)
 target_compile_options(ba_test PRIVATE -Wall -Wextra)
 
-# Plugin-assembly path (ba/constraints.hpp): the same provider decomposed into
+# Plugin-assembly path (ba/constraints.hpp): the same constraints decomposed into
 # one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(ba_plugin_test ${OPTIMARU_TESTS_DIR}/bed_allocation/cpp/ba_plugin_test.cpp)

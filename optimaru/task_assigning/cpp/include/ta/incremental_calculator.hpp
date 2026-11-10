@@ -11,8 +11,7 @@ namespace ta
 {
 
 // The task-assigning implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective.
 //
 // Every constraint decomposes per employee list: the chained start times,
 // the missing-skill count, the priority-weighted end times and the

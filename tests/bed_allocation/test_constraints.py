@@ -1,7 +1,6 @@
 """Constraint spot checks: the C++ full recompute (calculate_score) against hand-computed values.
 
-The expected values are the 6-night (penalizesBy 6) cases of Java
-BedAllocationConstraintProviderTest times the constraint weights. Full per-constraint
+The expected values are 6-night cases: 6 nights times the constraint weights. Full per-constraint
 verification lives in the C++ tests (cpp/ba_test.cpp).
 """
 
@@ -21,7 +20,7 @@ def make_stay(index, bed, *, gender=ba.Gender.MALE, specialty="default", **kwarg
         gender,
         30,
         0,
-        5,  # 6 nights: ZERO_NIGHT..FIVE_NIGHT of the Java test
+        5,  # 6 nights: days 0..5
         specialty,
         bed=bed,
         **kwargs,
@@ -67,7 +66,7 @@ def test_uninitialized_contributes_nothing():
 
 
 def test_required_equipment_counts_present_ones():
-    """Semantics pinned by the Java original's unit test: weighted by the required
+    """The intended semantics, pinned here: weighted by the required
     equipment the room HAS — partial coverage is penalized, none at all is 0."""
     room_partial = ba.Room("r0", "r0", equipment=["telemetry"])
     room_none = ba.Room("r1", "r1")

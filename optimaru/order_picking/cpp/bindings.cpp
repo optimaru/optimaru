@@ -67,7 +67,7 @@ PYBIND11_MODULE(_core, m)
         .def_readonly("shelving_row", &WarehouseLocation::shelvingRow)
         .def_readonly("side", &WarehouseLocation::side)
         .def_readonly("row", &WarehouseLocation::row)
-        // The Java shelving id, e.g. "(A,1)".
+        // The shelving id, e.g. "(A,1)".
         .def_property_readonly("shelving_id", &WarehouseLocation::shelvingId)
         .def("__repr__",
              [](const WarehouseLocation &l)
@@ -110,7 +110,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("product_name", &PickTask::productName)
         .def_readwrite("volume", &PickTask::volume)
         .def_readwrite("location", &PickTask::location)
-        // Shadow variables (indices, -1 == null), refreshed by
+        // Derived fields (indices, -1 == none), refreshed by
         // calculate_score / update_shadow_variables / solve.
         .def_readonly("trolley_index", &PickTask::trolleyIndex)
         .def_readonly("previous_pick_task", &PickTask::previousPickTask)
@@ -145,7 +145,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("bucket_count", &Trolley::bucketCount)
         .def_readwrite("bucket_capacity", &Trolley::bucketCapacity)
         .def_readwrite("location", &Trolley::location)
-        // The planning list variable: the ordered pick-task indices.
+        // The decision: the ordered pick-task indices.
         .def_readwrite("pick_task_indices", &Trolley::pickTaskIndices);
 
     py::class_<OrderPickingSolution>(m, "OrderPickingSolution", py::module_local())
@@ -195,8 +195,7 @@ PYBIND11_MODULE(_core, m)
           &calculateDistance,
           py::arg("start"),
           py::arg("end"),
-          "Distance in meters between two warehouse locations "
-          "(Warehouse.calculateDistance).");
+          "Distance in meters between two warehouse locations.");
 
     m.def(
         "distance_to_travel",
@@ -210,8 +209,7 @@ PYBIND11_MODULE(_core, m)
         },
         py::arg("solution"),
         py::arg("trolley_index"),
-        "Round-trip distance of one trolley's current pick list "
-        "(Warehouse.calculateDistanceToTravel).");
+        "Round-trip distance of one trolley's current pick list.");
 
     m.def(
         "update_shadow_variables",
@@ -226,7 +224,7 @@ PYBIND11_MODULE(_core, m)
         [](OrderPickingSolution &solution)
         { return ScoreCalculator::score(solution); },
         py::arg("solution"),
-        "Refresh the shadow variables and recompute the HardSoft score "
+        "Refresh the derived fields and recompute the hard / soft score "
         "(also stores solution.score).");
 
     // constraint_costs() is the only per-constraint surface.
@@ -344,7 +342,7 @@ PYBIND11_MODULE(_core, m)
         .def(py::init<>())
         .def(py::init<Solver::Config>(), py::arg("config"))
         // Solves in place: mutates trolleys[*].pick_task_indices, refreshes
-        // the shadow variables and stores the best score found in
+        // the derived fields and stores the best score found in
         // solution.score. The GIL is released so on_new_best can be fired
         // from the engine's worker threads.
         .def("solve",

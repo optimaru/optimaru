@@ -8,9 +8,8 @@ namespace fl
 
 // Hard, weight 1: facilityCapacityCost — the demand a facility carries beyond
 // its capacity. Raw cost per facility = max(0, assigned demand - capacity),
-// so 0 = within capacity. Java groups consumers by facility before summing
-// their demand, so a facility nobody uses is never penalized; here that gate
-// is `members.empty()`.
+// so 0 = within capacity. A facility nobody uses is never penalized; that
+// gate is `members.empty()`.
 //
 // No delta contract: max(0, demand - capacity) is not a sum of per-member
 // terms (the clamp is what makes it non-additive), so the marginal cost of one

@@ -1,23 +1,22 @@
-# Conference Scheduling (C++ port)
+# Conference Scheduling
 
-The Timefold Quickstarts `conference-scheduling` example model
-(Apache-2.0; see the repository [NOTICE](../../../NOTICE))
-ported, with modifications,
-onto the C++ engine in `optimaru/cpp/optimaru/`. Every talk (`Talk`) gets a timeslot
-and a room at once — Java's two `@PlanningVariable`s (timeslot, room) are encoded as
+Derived from the Timefold Quickstarts `conference-scheduling` example
+(Apache-2.0; see the repository [NOTICE](../../../NOTICE)),
+built on the C++ engine in `optimaru/cpp/optimaru/`. Every talk (`Talk`) gets a timeslot
+and a room at once — the two decisions per talk (timeslot and room) are encoded as
 one composite assignment variable `slotRoom = timeslotIndex * roomCount + roomIndex`
 (the same pattern as school-timetabling).
 
 - `optimaru/conference_scheduling/cpp/` — domain (`cs::ConferenceSchedule`), full-recompute
   `ScoreCalculator` (+ the C++ per-constraint `Breakdown`, one member per registry name),
-  O(delta) incremental calculator, ALNS solver wrapper, a demo modelled on the
-  quickstart's demo data (`cs_demo`), tests (`cs_test`, `cs_plugin_test`).
+  O(delta) incremental calculator, ALNS solver wrapper, a demo
+  (`cs_demo`), tests (`cs_test`, `cs_plugin_test`).
   `optimaru/conference_scheduling/cpp/include/cs/constraints/` holds one component per constraint (`<subject>_cost.hpp`, plus
   `common.hpp`); `optimaru/conference_scheduling/cpp/include/cs/constraints.hpp` assembles the default set
   (`defaultConstraints()`).
 - `optimaru/conference_scheduling/` — pybind11 package `conference_scheduling`
-  (`_core` extension + pydantic mirror + demo + pytest). For the score mapping and the
-  value-range replacement (the synthetic `talk_type_incompatibility_cost` hard
+  (`_core` extension + pydantic mirror + demo + pytest). For the score and the
+  talk-type compatibility rule (the `talk_type_incompatibility_cost` hard
   constraint) see [python.md](python.md).
 
 ```sh
@@ -27,10 +26,9 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=conference_schedu
 ./build/conference_scheduling/cs_demo 10
 ```
 
-## Constraints (Score — the engine score type as-is)
+## Constraints
 
-All 36 constraints of the Java `ConferenceSchedulingConstraintProvider` plus the port's
-synthetic `talk_type_incompatibility_cost`: 17 hard and 20 soft. Every one is global (one
+37 constraints: 17 hard and 20 soft. Every one is global (one
 total per schedule), scored by default and weighed in minutes.
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (one global total; 0 = no violation; a reward is <= 0) |

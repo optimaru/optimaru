@@ -1,11 +1,11 @@
 """Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
 Mirrors `_core`'s Person/TimeGrain/Room/Meeting/MeetingAssignment/MeetingSchedule
-1:1. People/meetings/time grains/rooms are referenced by list index (instead of
-Java's object references). Meetings and assignments are 1:1 (the quickstart demo model).
+1:1. People/meetings/time grains/rooms are referenced by list index. Meetings and
+assignments are 1:1.
 
-Score mapping (Java HardMediumSoftScore -> engine Score):
-``score_hard`` is the Java hard as-is, ``score_soft`` is
+Score mapping (hard / medium / soft -> engine Score):
+``score_hard`` is the hard level as-is, ``score_soft`` is
 ``-(medium penalty * 1e6 + soft penalty)`` — folded with a 1e6 offset so medium
 (required+preferred / preferred attendance conflicts) always dominates soft::
 
@@ -50,7 +50,7 @@ class PersonModel(BaseModel):
 
 class TimeGrainModel(BaseModel):
     """A 15-minute time grain. grain_index is the unit duration/overlap is computed in
-    (Java grainIndex; consecutive and 1-based in the demo)."""
+    (consecutive and 1-based in the demo)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -71,8 +71,8 @@ class RoomModel(BaseModel):
 
 
 class MeetingModel(BaseModel):
-    """A meeting (problem fact). required/preferred_attendees are lists of people
-    indices — one element is one Java Attendance fact."""
+    """A meeting (fixed input). required/preferred_attendees are lists of people
+    indices — one element is one attendance."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -85,7 +85,7 @@ class MeetingModel(BaseModel):
 
 
 class MeetingAssignmentModel(BaseModel):
-    """Planning entity. grain_room is the composite variable time_grain_pos * room_count +
+    """One meeting's assignment. grain_room is the composite variable time_grain_pos * room_count +
     room_index (None == unassigned); meeting is a meetings index."""
 
     model_config = ConfigDict(extra="forbid")
@@ -97,7 +97,7 @@ class MeetingAssignmentModel(BaseModel):
 
 
 class MeetingScheduleModel(BaseModel):
-    """Planning solution mirror. score is a read-only result, kept as a separate field."""
+    """Mirror of the whole schedule. score is a read-only result, kept as a separate field."""
 
     model_config = ConfigDict(extra="forbid")
 

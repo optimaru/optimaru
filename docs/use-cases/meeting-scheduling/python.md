@@ -1,16 +1,17 @@
 # meeting_scheduling
 
-The `meeting-scheduling` example model (Apache-2.0; see the repository NOTICE)
-C++ port (`optimaru/meeting_scheduling/cpp`, generic engine in `optimaru/cpp/optimaru`) with pybind11
-bindings on top.
+The C++ implementation of the meeting-scheduling use case
+(`optimaru/meeting_scheduling/cpp`, generic engine in `optimaru/cpp/optimaru`) with pybind11
+bindings on top. Derived from the Timefold Quickstarts `meeting-scheduling` example
+(Apache-2.0; see the repository NOTICE).
 
-Assigns each meeting a starting time grain (15-minute units) and a room. The Java
-entity's two planning variables (`startingTimeGrain`, `room`) become one assignment variable
-via the composite encoding `grain_room = time_grain_pos * room_count + room_index`
+Assigns each meeting a starting time grain (15-minute units) and a room. The two
+are one decision variable per meeting,
+the composite encoding `grain_room = time_grain_pos * room_count + room_index`
 (-1 == unassigned), and a meeting occupies `duration_in_grains` consecutive grains from
 its start — every overlap constraint is computed over that whole span.
 
-## Constraints (same semantics as the Java ConstraintProvider)
+## Constraints
 
 | # | Level | Constraint (Python name) | C++ component | Default weight | Raw cost per unit (0 = no violation) |
 |---|------|------|------|------|------------|
@@ -37,13 +38,13 @@ constraint is flippable, none is a reward, all twelve are on by default. Note th
 The medium pair defaults to weight 1 in medium units: `level="hard"` gives one hard unit per
 person-grain, `level="soft"` one soft unit (outside the fold).
 
-### Score mapping (HardMediumSoftScore → Score)
+### Score mapping (hard / medium / soft → Score)
 
-The engine score is `Score(hard int64, soft double)`, so Java's medium level
+The engine score is `Score(hard int64, soft double)`, so the medium level
 is folded into soft:
 
 ```
-hard = Java hard as-is (0 == feasible)
+hard = the hard level as-is (0 == feasible)
 soft = -(medium penalty × 1e6 + raw soft penalty)     # MEDIUM_SCALE == 1e6
 ```
 
@@ -70,7 +71,7 @@ for a, v in zip(result.meeting_assignments, result.assignment()):
 ```
 
 The pydantic mirror (serialization) is `optimaru.meeting_scheduling.models`; per-constraint
-raw costs come from `constraint_costs` (the Java ConstraintVerifier tests are ported onto
+raw costs come from `constraint_costs` (the per-constraint tests assert on
 these costs, in `tests/meeting_scheduling/test_constraints.py` and the C++ tests).
 
 Picking the cost function (see `optimaru.meeting_scheduling.constraints`):
@@ -107,14 +108,11 @@ OPTIMARU_USE_CASES=meeting_scheduling uv sync      # builds only this use case's
 uv run pytest -q tests/meeting_scheduling
 ```
 
-## Differences from the original (caveats)
+## Caveats
 
-- Meetings and `MeetingAssignment`s must be 1:1 (the quickstart demo model;
-  `ValueError` otherwise).
-- The composite encoding has no partial state like "time grain assigned, room null".
-  Java constraints built on `forEachIncludingUnassigned` (e.g. the room capacity rule,
-  `room_capacity_cost`, with room == null) score differently only in that state; on fully assigned solutions the
-  semantics match exactly. In this port an unassigned (-1) entity contributes no score
+- Meetings and `MeetingAssignment`s must be 1:1 (`ValueError` otherwise).
+- The composite encoding has no partial state like "time grain assigned, room unassigned":
+  an assignment has both or neither, and an unassigned (-1) assignment contributes no score
   (engine contract).
 - `demo_data()` is deterministic: its draws come from a seeded `std::mt19937_64` and the
   calendar dates are pinned to dayOfYear 200..203.

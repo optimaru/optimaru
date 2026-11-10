@@ -111,7 +111,7 @@ class TeamUnavailabilityCost(Constraint):
     """(team, day) unavailability facts with at least one assignment on them. Default: hard, weight 1.
 
     Counted **per fact**, not per assignment — two facts in one cell give 2, three
-    assignments on one fact still give 1 (Java's ifExists semantics)."""
+    assignments on one fact still give 1."""
 
     name = "team_unavailability_cost"
     label_en = "Team plays on an unavailable day"
@@ -130,8 +130,8 @@ class TeamUnavailabilityCost(Constraint):
 class AssignmentCountImbalanceCost(Constraint):
     """LoadBalance unfairness of assignment counts per team. Default: medium, weight 1.
 
-    Only teams that actually have assignments enter the balance (the Java rule has no
-    complement). The statistic crosses units, so this is a global constraint. The weight
+    Only teams that actually have assignments enter the balance (a team without
+    assignments is not counted as load 0). The statistic crosses units, so this is a global constraint. The weight
     is in medium units; the domain folds the medium level into the engine soft level
     as `medium * 1e6`."""
 

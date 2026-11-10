@@ -49,7 +49,7 @@ PackagingSchedule generateDemoData(int lineCount, int jobCount)
     const int cleaningMinutesMaximum = 60;
     const int jobDurationMinutesMinimum = 120;
     const int jobDurationMinutesMaximum = 300;
-    // Java int arithmetic: (2*10 + 30 + 60) / 4 + (120 + 300) / 2 == 237.
+    // Integer arithmetic: (2*10 + 30 + 60) / 4 + (120 + 300) / 2 == 237.
     const int averageCleaningAndJobDurationMinutes
         = (2 * noCleaningMinutes + cleaningMinutesMinimum
            + cleaningMinutesMaximum)
@@ -90,9 +90,8 @@ PackagingSchedule generateDemoData(int lineCount, int jobCount)
              ingredient + ", " + a + " and " + c + " " + kVariations[1],
              {ingredient, a, c}});
     }
-    // Java sorts by the STRING id ("0" < "1" < "10" < ... < "9") before
-    // drawing the cleaning durations, so the random stream must follow that
-    // exact order.
+    // Sorted by the STRING id ("0" < "1" < "10" < ... < "9") before drawing
+    // the cleaning durations, so the random stream follows that order.
     std::sort(demoProducts.begin(),
               demoProducts.end(),
               [](const DemoProduct &x, const DemoProduct &y)
@@ -115,8 +114,7 @@ PackagingSchedule generateDemoData(int lineCount, int jobCount)
                                 ingredients.end(),
                                 demoProducts[previous].ingredients.begin(),
                                 demoProducts[previous].ingredients.end());
-            // The random draw happens ONLY on the full-cleaning branch,
-            // exactly like the Java ternary.
+            // The random draw happens ONLY on the full-cleaning branch.
             const Minutes cleaning
                 = p == previous
                       ? 0
@@ -169,7 +167,7 @@ PackagingSchedule generateDemoData(int lineCount, int jobCount)
         job.pinned = false;
         solution.jobs.push_back(std::move(job));
     }
-    // Java: jobs.sort(comparing(Job::getName)) — a stable sort.
+    // Jobs are sorted by name — a stable sort.
     std::stable_sort(solution.jobs.begin(),
                      solution.jobs.end(),
                      [](const Job &x, const Job &y)

@@ -1,6 +1,6 @@
 """Typed stubs for the pybind11 extension optimaru.food_packaging._core.
 
-Score convention (HardMediumSoftScore, as in the Java quickstart; all penalties), at
+Score convention (three levels, hard / medium / soft; all penalties), at
 the default weights (the C++ components' kDefaultWeight, see constraint_info()):
   hard   1. max_end_time_cost                minutes past Job.max_end_time, x -1
   hard   2. operator_cleaning_conflict_cost  overlapping cleaning minutes on lines of one

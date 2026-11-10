@@ -96,7 +96,7 @@ PYBIND11_MODULE(_core, m)
         .def_readwrite("id", &Facility::id)
         // facility_demands[id]; None = not listed (scored as demand 0).
         .def_readwrite("demand", &Facility::demand)
-        // The planning variable: index into problem.locations; -1 == unassigned.
+        // The decision variable: index into problem.locations; -1 == unassigned.
         .def_readwrite("location", &Facility::location)
         .def("is_assigned", &Facility::isAssigned);
 

@@ -925,7 +925,7 @@ void testNearbyAndLnsOnRandomTsp() {
 }  // namespace
 
 // ===========================================================================
-// Shadow variables (DerivedState): arrival times derived from route order
+// Derived state (DerivedState): arrival times derived from route order
 // ===========================================================================
 namespace {
 

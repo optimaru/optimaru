@@ -287,14 +287,14 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) Single-component assemblies on the Java provider test's data.
+// (c) Single-component assemblies on hand-computed data.
 // -------------------------------------------------------------------------
 void verifyPartialAssemblies()
 {
     std::printf("== (c) Single-component assemblies ==\n");
     const WarehouseLocation origin = loc('A', 1, Side::LEFT, 0);
 
-    {  // trolleyCapacityCost, the Java test's exact data: trolley1
+    {  // trolleyCapacityCost: trolley1
         // (2 buckets, capacity 5) needs 3, trolley2 (2 buckets, capacity 10)
         // needs 6 -> 1 + 4 short.
         OrderPickingSolution s = makeBase(2);
@@ -581,7 +581,7 @@ void verifyRawCostsByHand()
     const WarehouseLocation row2 = loc('A', 1, Side::LEFT, 2);
     const WarehouseLocation row5 = loc('A', 1, Side::LEFT, 5);
     {
-        // The Java case: trolley1 (2 buckets of 5) carries order1 9 -> 2
+        // trolley1 (2 buckets of 5) carries order1 9 -> 2
         // buckets and order2 5 -> 1, so 3 - 2 = 1 short; trolley2 (2 of 10)
         // carries order1 17 -> 2 and order2 33 -> 4, so 6 - 2 = 4 short.
         OrderPickingSolution s = makeBase(2);
@@ -671,7 +671,7 @@ void verifyRawCostsByHand()
     }
     {
         // No assigned pick: no (order, trolley) pair. (An unsplit order
-        // still costs 1 — the quickstart's definition, kept.)
+        // still costs 1.)
         OrderPickingSolution s = makeBase(1);
         addTrolley(s, 1, 100, origin);
         addTrolley(s, 1, 100, origin);

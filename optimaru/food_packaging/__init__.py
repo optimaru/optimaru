@@ -1,26 +1,26 @@
 """Food packaging — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the `food-packaging` example model: assigns packaging jobs (Job) to
-production lines (Line) in order. The Java domain's Line.jobs
-(@PlanningListVariable, allowsUnassignedValues=true) maps 1:1 onto the engine's sequence
-shape, and "unassigned" is an extra unassigned pool list exposed to the engine.
-Java's shadow variable chain is derived from list positions::
+Assigns packaging jobs (Job) to production lines (Line) in order. The decision is
+Line.jobs, an ordered list of jobs per line (the engine's sequence shape); jobs in no
+line's list are unassigned, an extra unassigned pool list exposed to the engine.
+Each job's times are derived from list positions::
 
     startCleaning(first job)  = line.start          # zero-length cleaning window
     startCleaning(otherwise)  = end of the previous job
     startProduction           = startCleaning + cleanup(previous product -> product)
     end                     = startProduction + duration
 
-Java's second planning variable, Line.operator, is optimized by alternation: the solver
-wrapper reassigns it by hill climbing between engine legs (the engine supports one
-variable model per solution). With operators >= lines the assignment is injective and
-the conflict constraint is always 0, so it is exactly equivalent to one engine run.
+The second decision, each line's operator (Line.operator_index), is optimized by
+alternation: the solver wrapper reassigns it by hill climbing between engine legs (the
+engine supports one variable model per solution). With operators >= lines the assignment
+is injective and the conflict constraint is always 0, so it is exactly equivalent to one
+engine run.
 
 Times are exchanged as "minutes" (int64) from a shared origin (the demo instance has
 Monday 00:00 == minute 0; the pydantic mirror `optimaru.food_packaging.models` converts between
 epoch minutes and `datetime.datetime`).
 
-Constraints (Java uses HardMediumSoftScore; the mapping onto engine Score is
+Constraints (three score levels, hard / medium / soft; the mapping onto engine Score is
 the domain's medium fold engine.soft = medium * 10^10 + soft, and the order is
 preserved exactly while |soft| < 10^10 and |medium| < 9*10^5):
   hard   1. max_end_time_cost                -1 per minute past max_end_time
@@ -32,8 +32,7 @@ preserved exactly while |soft| < 10^10 and |medium| < 9*10^5):
   medium 4. unassigned_jobs_cost             -duration minutes per unassigned job
   soft   5. squared_makespan_cost            -(end - line start)^2 per last job
                                              of a line
-(minStartTime and priority are data fields no constraint reads, the same as in
-Java.)
+(min_start_minute and priority are data fields no constraint reads.)
 
 The constraints and their defaults (level, weight in units of that level) live in the C++
 components; `constraint_info()` reports them, `list_constraints()` lists the names and

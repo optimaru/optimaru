@@ -1,6 +1,6 @@
 """Constraint assembly specs — an API for picking the cost function declaratively.
 
-The default path (`Solver(cfg).solve(plan)`) enables the four quickstart constraints;
+The default path (`Solver(cfg).solve(plan)`) enables the four core constraints;
 the per-vehicle route-policy constraints cost 0 while their parameter is 0. The
 enclosing-circle radius, route duration and latency are opt-in objectives with
 default weight 0.
@@ -131,8 +131,7 @@ class VehicleCapacityCost(Constraint):
 class MaxEndTimeCost(Constraint):
     """Minutes (rounded up) by which a visit's service ends after its time window. Default: hard, weight 1.
 
-    Measured from **arrival** + service duration, not service start — exactly as
-    the Java quickstart. The vehicle's own end time is `VehicleMaxEndTimeCost`."""
+    Measured from **arrival** + service duration, not service start. The vehicle's own end time is `VehicleMaxEndTimeCost`."""
 
     name = "max_end_time_cost"
     label_en = "Time window end"

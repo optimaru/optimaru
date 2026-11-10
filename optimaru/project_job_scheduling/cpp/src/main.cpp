@@ -1,8 +1,10 @@
-// Project-job-scheduling demo: rebuilds the Java quickstart's
-// DemoDataGenerator instance (2 projects, 7 resources — 1 global renewable +
-// per project 1 renewable / 2 non-renewable locals —, 24 jobs of which 20
-// STANDARD with 3 execution modes each, delays 0..499), solves for N seconds
-// and asserts the result is feasible (hard == 0).
+// Project-job-scheduling demo: builds the demo instance (2 projects, 7
+// resources — 1 global renewable + per project 1 renewable / 2 non-renewable
+// locals —, 24 jobs of which 20 STANDARD with 3 execution modes each, delays
+// 0..499), solves for N seconds and asserts the result is feasible
+// (hard == 0). The instance is derived from the Timefold Quickstarts
+// `project-job-scheduling` example's demo data (Apache-2.0; see the
+// repository NOTICE).
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -30,7 +32,7 @@ double unitDraw(std::mt19937_64 &rng)
     return unit(rng);
 }
 
-// The Java generator's Pair<Float, T> tables: the index of the first
+// Draws from a cumulative distribution table: the index of the first
 // cumulative threshold >= a unit draw.
 int drawIndex(std::mt19937_64 &rng, const std::vector<double> &cumulative)
 {
@@ -48,7 +50,7 @@ ProjectJobSchedule generateDemoData()
     std::mt19937_64 rng(0);
     ProjectJobSchedule schedule;
 
-    // Projects (the Java FIRST_PROJECT / SECOND_PROJECT).
+    // The two projects.
     schedule.projects.push_back({"0", 0, 10});
     schedule.projects.push_back({"1", 4, 19});
 
@@ -83,7 +85,7 @@ ProjectJobSchedule generateDemoData()
                                                          : JobType::STANDARD;
             schedule.jobs.push_back(job);
         }
-        // Execution modes, in job order (like the Java forEach).
+        // Execution modes, in job order.
         for (int i = 0; i < jobsCountPerProject; ++i)
         {
             Job &job = schedule.jobs[base + i];

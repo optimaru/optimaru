@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 // Canonical full-parity school-timetabling domain (st::canon)
 // ---------------------------------------------------------------------------
-// A second, independent domain next to the quickstart port (st::Timetable):
+// A second, independent domain next to the quickstart model (st::Timetable):
 // it mirrors the CP-SAT reference package (benchmarks/school-timetabling/cpsat/
 // teacher_scheduling) constraint-for-constraint — the same hard and soft
 // constraints under the same names (unassigned_lessons_cost ...
@@ -22,7 +22,7 @@
 // components' kDefaultWeight by default).
 //
 // Modeling decisions (fixed by design, do not change casually):
-//   - The single planning variable is the timeslot index (BASIC, -1 =
+//   - The single decision variable is the timeslot index (BASIC, -1 =
 //     unassigned). Rooms are NOT a variable: same-typed special rooms are
 //     interchangeable, so roomCapacityCost only compares per-(roomType, slot)
 //     demand against the owned count (like the CP-SAT model; concrete rooms
@@ -57,10 +57,10 @@ namespace st::canon
 using Score = optimaru::Score;
 
 // ---------------------------------------------------------------------------
-// Lesson  (@PlanningEntity)
+// Lesson  (entity)
 // ---------------------------------------------------------------------------
 // One weekly period of one (possibly merged) course. `slot` is the only
-// planning variable: the timeslot index into Timetable::dayOfSlot /
+// decision variable: the timeslot index into Timetable::dayOfSlot /
 // periodOfSlot; -1 = unassigned.
 struct Lesson
 {
@@ -102,11 +102,11 @@ struct Lesson
     // fixedSlotsCost is 0); the engine scores them but never moves them.
     bool pinned = false;
 
-    int slot = -1;  // planning variable; -1 == unassigned
+    int slot = -1;  // decision variable; -1 == unassigned
 };
 
 // ---------------------------------------------------------------------------
-// Timetable  (@PlanningSolution)
+// Timetable  (solution)
 // ---------------------------------------------------------------------------
 // Slots are enumerated (day, period) pairs: dayOfSlot[s] is the 0-based day,
 // periodOfSlot[s] the 1-based period of the day. Days may differ in length
@@ -178,7 +178,7 @@ struct Timetable
 }  // namespace st::canon
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization: entities are lessons, the planning
+// SolutionTraits specialization: entities are lessons, the decision
 // variable is Lesson::slot, the value range is the timeslot list. Pinned
 // lessons (fixed slots) are excluded from every move.
 // ---------------------------------------------------------------------------

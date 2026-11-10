@@ -6,8 +6,7 @@
 namespace fp
 {
 
-// The demo plant, modelled on the quickstart's demo data (5 lines, 100
-// jobs). Products, durations and time windows are drawn from a seeded
+// The demo plant (5 lines, 100 jobs). Products, durations and time windows are drawn from a seeded
 // std::mt19937_64 (seed 37), so the instance is the same on every platform.
 //
 // Only relative times matter (nothing reads absolute dates), so the

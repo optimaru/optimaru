@@ -34,9 +34,9 @@ using Seconds = std::int64_t;
 constexpr Seconds NULL_TIME = -1;
 
 // ---------------------------------------------------------------------------
-// HardMediumSoftScore
+// Score
 // ---------------------------------------------------------------------------
-// Same convention and packing as the vehicle-routing port: the engine speaks
+// Same convention and packing as the vehicle-routing use case: the engine speaks
 // Score(int64 hard, double soft), so medium and soft share the soft
 // level with a 10^9 multiplier. See vrp/domain.hpp for the magnitude analysis;
 // the bounds are identical here (|soft| = driving seconds, |medium| = service
@@ -123,7 +123,7 @@ struct Location
 // ---------------------------------------------------------------------------
 // Node — one stop (a pickup or a dropoff)
 // ---------------------------------------------------------------------------
-// The planning *elements* are nodes, not requests: the engine's list variable
+// The list *elements* are nodes, not requests: the engine's list variable
 // holds a sequence of stops. `deliveryIndex` links a node back to the request
 // it belongs to, and `pickup` says which half it is.
 struct Node
@@ -136,7 +136,7 @@ struct Node
     int deliveryIndex = -1;  // which Delivery this node belongs to
     bool pickup = false;     // true = pickup, false = dropoff
 
-    // --- shadow (recomputed by ScoreCalculator::updateShadowVariables) ---
+    // --- derived (recomputed by ScoreCalculator::updateShadowVariables) ---
     int vehicleIndex = -1;
     Seconds arrivalTime = NULL_TIME;
 };
@@ -203,7 +203,7 @@ struct Vehicle
 };
 
 // ---------------------------------------------------------------------------
-// PdpRoutePlan  (@PlanningSolution)
+// PdpRoutePlan  (the solution)
 // ---------------------------------------------------------------------------
 struct PdpRoutePlan
 {

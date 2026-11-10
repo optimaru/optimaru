@@ -4,7 +4,7 @@ The compiled module wraps the C++ domain in
 `optimaru/school_timetabling/cpp`, which imports the generic engine in
 `optimaru/cpp/optimaru`. Two domains are exposed:
 
-- module top level: the quickstart port (`Timetable`, slotRoom composite
+- module top level: the quickstart model (`Timetable`, slotRoom composite
   encoding, the 7 terms below) and the package's constraint catalog
   (`constraint_info`, `ConstraintInfo`, `list_constraints` — the canonical
   domain's; the quickstart model has no registry)
@@ -29,7 +29,7 @@ Quickstart terms (hard/soft, not selectable):
   hard 3. class_conflict_cost          -1 per pair of same-group lessons in a
                                        timeslot
   hard 4. teacher_unavailability_cost  -1 per lesson in a timeslot its teacher
-                                       cannot take (extension)
+                                       cannot take
   soft 5. teacher_room_change_cost     -1 per pair of same-teacher lessons in
                                        different rooms
   soft 6. teacher_time_efficiency_cost +1 per pair of same-teacher lessons in
@@ -85,8 +85,8 @@ class Room:
     type: str
 
 class Lesson:
-    """Planning entity: one lesson to place in the timetable. `slot_room` is
-    the planning variable (-1 == unassigned); the solver writes it."""
+    """One lesson to place in the timetable. `slot_room` is
+    the decision variable (-1 == unassigned); the solver writes it."""
     def __init__(
         self,
         id: str,
@@ -104,7 +104,7 @@ class Lesson:
     """True pins slot_room (it is scored but never moved)."""
 
 class Timetable:
-    """Planning solution: the timeslots x rooms grid (value range) + lessons
+    """The solution: the timeslots x rooms grid (value range) + lessons
     (entities). solve changes the lessons' `slot_room` and `score` in place.
 
     Note: list attributes such as `lessons` return copies, so change the
@@ -264,8 +264,8 @@ class canon:
         non_preferred_period_cost: float
 
     class Lesson:
-        """Planning entity: one weekly hour of a (possibly merged) course. `slot`
-        is the planning variable (timeslot index, -1 == unassigned)."""
+        """One weekly hour of a (possibly merged) course. `slot`
+        is the decision variable (timeslot index, -1 == unassigned)."""
         def __init__(
             self,
             id: str,
@@ -298,7 +298,7 @@ class canon:
         slot: int
 
     class Timetable:
-        """Planning solution. Slots are enumerated as (day_of_slot[s],
+        """Problem and solution in one object. Slots are enumerated as (day_of_slot[s],
         period_of_slot[s]) — days may have different period counts; list only
         the cells that exist."""
         def __init__(

@@ -1,4 +1,4 @@
-// Quality-benchmark driver for the C++ meeting-scheduling port.
+// Quality-benchmark driver for the C++ meeting-scheduling use case.
 //
 // Solves either (a) the demo instance (ms/demo_data.hpp, unchanged) or (b) a
 // deterministic scaled instance in the demo's shape (same duration mix, same

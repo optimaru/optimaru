@@ -167,8 +167,8 @@ class Employee:
     """(day, location) location-specific work preferences (see the desired_shift_cost rule)."""
 
 class Shift:
-    """Planning entity: one shift to be assigned to one employee.
-    `employee_index` is the planning variable (-1 == unassigned); the solver
+    """One shift to be assigned to one employee.
+    `employee_index` is the decision variable (-1 == unassigned); the solver
     writes it."""
     def __init__(
         self,
@@ -196,7 +196,7 @@ class Shift:
     Solving and scoring raise ValueError if it has none."""
 
 class EmployeeSchedule:
-    """Planning solution: employees (value range) + shifts (entities).
+    """The solution: employees (value range) + shifts (entities).
     Solving mutates the shifts' `employee_index` and sets `score` in place."""
     def __init__(self, employees: list[Employee], shifts: list[Shift]) -> None: ...
     employees: list[Employee]

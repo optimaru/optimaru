@@ -34,7 +34,7 @@ from optimaru.maintenance_scheduling.constraints import (
 
 MONDAY = 18659  # fixed Monday epoch day — a reproducible demo instance
 
-# 2021-02-01 (Monday) == epoch day 18659, DAY_1 of the Java test.
+# 2021-02-01 (Monday) == epoch day 18659.
 DAY_1 = MONDAY
 DAY_2 = DAY_1 + 1
 DAY_3 = DAY_1 + 2

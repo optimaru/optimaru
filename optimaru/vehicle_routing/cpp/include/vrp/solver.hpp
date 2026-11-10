@@ -25,8 +25,7 @@ namespace vrp
 // ---------------------------------------------------------------------------
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/.
 //
-// This replaces the hand-written Late Acceptance loop the port shipped with.
-// The engine gives it, in the usual phase structure:
+// The engine runs, in the usual phase structure:
 //
 //   1. Construction heuristic — cheapest insertion of every visit.
 //   2. Local search — one candidate move per step (relocate / swap / 2-opt /
@@ -40,7 +39,7 @@ namespace vrp
 // operators that matter on routing problems — SISR substring removal and
 // whole-route removal alongside random / related / worst.
 //
-// Unassigned visits: the quickstart's allowsUnassignedValues is modelled with
+// Unassigned visits: leaving a visit out of every route is modelled with
 // the plan's virtual unassigned pool (see VehicleRoutePlan). solve() fills the
 // pool for you, so a plan built with visits simply left out of every route is
 // accepted as-is.
@@ -50,12 +49,10 @@ public:
     struct Config
     {
         // --- termination -------------------------------------------------
-        // Wall-clock budget, mirroring termination.spent-limit (30s in the
-        // Java application.properties).
+        // Wall-clock budget.
         std::chrono::milliseconds time_limit{std::chrono::seconds(30)};
 
-        // Stop early once bestScore >= target_score, mirroring the test
-        // profile's best-score-limit=0hard/0medium/*soft. The default is set
+        // Stop early once bestScore >= target_score. The default is set
         // above every achievable score (the optimum is 0/0/0), so it never
         // fires — termination is by time_limit. To stop as soon as a feasible,
         // fully-assigned solution is found, set {0, 0, min}.
@@ -254,7 +251,7 @@ public:
     // Solves with a caller-assembled plugin calculator (see
     // vrp/constraints.hpp): pick components and weights, then pass the
     // assembly here. The same search applies, driving-time nearby selection
-    // included. Weights come from the assembly, NOT from the quickstart level
+    // included. Weights come from the assembly, NOT from the level
     // defaults. The final plan.score and every on_new_best score are computed
     // by THIS calculator (its three levels read off level_scores(), before the
     // medium fold) and the calculator is left primed on the final solution,

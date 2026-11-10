@@ -320,7 +320,7 @@ void verifyIncremental()
 }
 
 // -------------------------------------------------------------------------
-// (c) Single-component assemblies on the Java provider test's shapes.
+// (c) Single-component assemblies.
 // -------------------------------------------------------------------------
 void verifyPartialAssemblies()
 {

@@ -1,8 +1,8 @@
 """Type stubs for `optimaru.assembly_line_balancing._core` — the assembly-line-balancing
 C++ solver.
 
-The problem is the planning solution: each task's `station` (a station index,
--1 == unassigned) is the single assignment-shape planning variable. Stations are not
+The problem object holds the solution: each task's `station` (a station index,
+-1 == unassigned) is the single assignment-shape decision variable. Stations are not
 bounded above by the facts; a solve freezes the value range at
 max(task count, 1 + max station) after its construction (`station_count`).
 
@@ -24,7 +24,7 @@ class Score:
         """True iff hard >= 0."""
 
 class Task:
-    """Planning entity: one task with its processing time and station domain."""
+    """One task with its processing time and station domain."""
 
     def __init__(
         self,
@@ -43,7 +43,7 @@ class Task:
     fixed_station: int | None
     forbidden_stations: list[int]
     station: int
-    """The planning variable: a station index; -1 == unassigned."""
+    """The decision variable: a station index; -1 == unassigned."""
     def is_assigned(self) -> bool: ...
 
 class Precedence:
@@ -68,7 +68,7 @@ class TaskPair:
     second: int
 
 class AssemblyLineBalancingProblem:
-    """Planning solution. NOTE: `tasks` element access returns copies; use
+    """Problem and solution in one object. NOTE: `tasks` element access returns copies; use
     set_assignment for bulk station writes."""
 
     def __init__(
@@ -104,7 +104,7 @@ class AssemblyLineBalancingProblem:
     def assignment(self) -> list[int]:
         """The current station per task (-1 == unassigned)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """Bulk write of the planning variable (every station >= -1)."""
+        """Bulk write of the decision variable (every station >= -1)."""
 
 def calculate_score(problem: AssemblyLineBalancingProblem) -> Score:
     """Full recompute of the score at the default constraints (also stores

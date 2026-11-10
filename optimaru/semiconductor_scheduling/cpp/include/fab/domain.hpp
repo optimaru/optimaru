@@ -192,9 +192,9 @@ struct Assignment
 };
 
 // ---------------------------------------------------------------------------
-// OperationRow  (@PlanningEntity)
+// OperationRow  (entity)
 // ---------------------------------------------------------------------------
-// One row per (lot, operation), lot order then route order. The planning
+// One row per (lot, operation), lot order then route order. The decision
 // variable folds the two decisions of the search state into one int:
 //
 //   value = rank * K + slot     (K = maxOptionCount, the most eligible
@@ -219,13 +219,13 @@ struct OperationRow
 };
 
 // ---------------------------------------------------------------------------
-// SemiconductorSchedule  (@PlanningSolution)
+// SemiconductorSchedule  (solution)
 // ---------------------------------------------------------------------------
 // Two modes, one flag:
 //   data mode (searching == false, the default): the score is that of
 //     `assignments` exactly as given (calculate_score / constraint_costs);
 //   search mode (searching == true, only inside Solver::solve and the tests
-//     that drive a Editor): the score is that of the decoded planning
+//     that drive a Editor): the score is that of the decoded decision
 //     values — or of `seedAssignments` as supplied while every row holds its
 //     seedValues and the seed was complete.
 struct SemiconductorSchedule
@@ -325,7 +325,7 @@ struct SemiconductorSchedule
 }  // namespace fab
 
 // ---------------------------------------------------------------------------
-// SolutionTraits: entities are the operation rows, the planning variable
+// SolutionTraits: entities are the operation rows, the decision variable
 // is OperationRow::value, the value range is the (rank x slot) grid. No
 // engine pinning (see OperationRow). value_count reads maxOptionCount, so
 // ScoreCalculator::prepare must have run (Solver::solve and every calculator

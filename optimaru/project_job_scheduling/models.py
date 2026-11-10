@@ -1,11 +1,10 @@
 """Pydantic v2 mirror of the engine domain — for JSON serialization/deserialization.
 
 Mirrors `_core`'s Project/Resource/Job(ExecutionMode)/Allocation/ProjectJobSchedule
-1:1, but like the REST shape of the Java quickstart, references are id strings
-(`project_id`/`resource_id`/`job_id`/`execution_mode_id`), and like Java's
-Job.successorJobs, precedence lives in each job's `successor_job_ids`. The engine
-conversion (`to_core`) turns ids into indices, successor lists into the allocations'
-predecessor lists, and (execution_mode_id, delay) into the composite planning
+1:1, but references are id strings
+(`project_id`/`resource_id`/`job_id`/`execution_mode_id`), and precedence lives in each
+job's `successor_job_ids`. The engine conversion (`to_core`) turns ids into indices, successor lists into the allocations'
+predecessor lists, and (execution_mode_id, delay) into the composite decision
 value::
 
     from optimaru.project_job_scheduling.models import ProjectJobScheduleModel
@@ -15,7 +14,7 @@ value::
     ...solve...
     solved = ProjectJobScheduleModel.from_core(schedule)  # engine -> pydantic
 
-Allocations must be 1:1 with jobs (the Java DemoDataGenerator convention).
+Allocations must be 1:1 with jobs.
 `allocations[i].execution_mode_id` None means uninitialized (delay must be None
 too); the solver decides (mode, delay). SOURCE/SINK allocations are always
 pinned, and when passed uninitialized the solver fixes them to (first mode, delay 0).
@@ -47,8 +46,8 @@ class _Model(BaseModel):
 
 class ProjectModel(_Model):
     """A project. release_date is only the reference of the project_delay_cost
-    constraint (critical_path_end = release_date + critical_path_duration) and, as in
-    the Java quickstart, does not force the start."""
+    constraint (critical_path_end = release_date + critical_path_duration) and does
+    not force the start."""
 
     id: str
     release_date: int = 0
@@ -57,7 +56,7 @@ class ProjectModel(_Model):
 
 class ResourceModel(_Model):
     """A resource. Renewable capacity is 'per day', otherwise 'summed over the whole horizon'.
-    project_id None == global resource (Java's GlobalResource; always renewable)."""
+    project_id None == global resource (always renewable)."""
 
     id: str
     capacity: int = Field(ge=0)
@@ -67,7 +66,7 @@ class ResourceModel(_Model):
     @model_validator(mode="after")
     def _global_is_renewable(self):
         if self.project_id is None and not self.renewable:
-            raise ValueError("a global resource (project_id None) must be renewable (Java GlobalResource)")
+            raise ValueError("a global resource (project_id None) must be renewable")
         return self
 
 
@@ -88,7 +87,7 @@ class ExecutionModeModel(_Model):
 
 class JobModel(_Model):
     """A job. SOURCE/SINK are the project's start/end milestones, by convention with one
-    execution mode (duration 0) (Java quickstart). `successor_job_ids` defines
+    execution mode (duration 0). `successor_job_ids` defines
     precedence (successor jobs can start once this job ends)."""
 
     id: str
@@ -112,9 +111,9 @@ class JobModel(_Model):
 
 
 class AllocationModel(_Model):
-    """Planning entity: the allocation of one job (1:1 with jobs).
-    (execution_mode_id, delay) is the planning variable pair (both None ==
-    uninitialized). start_date/end_date are read-only results (Java shadow variables)."""
+    """The allocation of one job (1:1 with jobs).
+    (execution_mode_id, delay) is the decision pair (both None ==
+    uninitialized). start_date/end_date are read-only derived results."""
 
     id: str
     job_id: str
@@ -132,7 +131,7 @@ class AllocationModel(_Model):
 
 
 class ProjectJobScheduleModel(_Model):
-    """Planning solution mirror. score_* are read-only results, kept as separate fields."""
+    """The problem and its solution. score_* are read-only results, kept as separate fields."""
 
     projects: list[ProjectModel]
     resources: list[ResourceModel]
@@ -169,7 +168,7 @@ class ProjectJobScheduleModel(_Model):
                 for req in mode.resource_requirements:
                     if req.resource_id not in resource_ids:
                         raise ValueError(f"mode {mode.id!r} has unknown resource_id {req.resource_id!r}")
-        # Allocations are 1:1 with jobs (the Java DemoDataGenerator convention).
+        # Allocations are 1:1 with jobs.
         allocated_jobs = [a.job_id for a in self.allocations]
         if sorted(allocated_jobs) != sorted(job_ids):
             raise ValueError("allocations must be exactly 1:1 with jobs")
@@ -188,7 +187,7 @@ class ProjectJobScheduleModel(_Model):
 
     def to_core(self) -> "_core.ProjectJobSchedule":
         """pydantic -> engine object: id references to indices, job successor lists to
-        allocation predecessor lists, (execution_mode_id, delay) to the composite planning
+        allocation predecessor lists, (execution_mode_id, delay) to the composite decision
         value (ValueError if the predecessor graph has a cycle). score/start/end fields
         are ignored since the engine recomputes them."""
         project_index = {p.id: i for i, p in enumerate(self.projects)}
@@ -372,7 +371,7 @@ def with_initial_solution(problem, solution):
     Raises ValueError naming the allocation for an unknown or repeated id, for an
     execution mode that is not one of the job's, for a delay without a mode and for a
     delay outside 0..delay_range_size - 1 (the engine does not range-check). The
-    start_date/end_date shadows are cleared here and the solve fills them in again.
+    derived start_date/end_date are cleared here and the solve fills them in again.
     """
     if not isinstance(problem, ProjectJobScheduleModel):
         raise TypeError(f"problem must be a ProjectJobScheduleModel: {type(problem)!r}")

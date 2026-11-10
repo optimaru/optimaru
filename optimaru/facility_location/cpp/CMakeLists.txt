@@ -18,7 +18,7 @@ add_executable(fl_test ${OPTIMARU_TESTS_DIR}/facility_location/cpp/fl_test.cpp)
 target_link_libraries(fl_test PRIVATE fl_core)
 target_compile_options(fl_test PRIVATE -Wall -Wextra)
 
-# Plugin-assembly path (fl/constraints.hpp): the same provider decomposed into
+# Plugin-assembly path (fl/constraints.hpp): the same constraints decomposed into
 # one component each on the engine's DecomposedObjective, checked
 # bit-for-bit against the monolithic calculators.
 add_executable(fl_plugin_test ${OPTIMARU_TESTS_DIR}/facility_location/cpp/fl_plugin_test.cpp)

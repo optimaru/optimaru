@@ -1,6 +1,6 @@
 """Type stubs for `optimaru.semiconductor_scheduling._core` — the semiconductor fab C++ solver.
 
-The schedule is the planning solution. Its search state is one assignment-shape planning value per
+The schedule object holds the solution. Its search state is one assignment-shape decision value per
 operation row (``rank * K + slot``: a decode priority and a machine option), which the
 serial schedule-generation decoder turns into ``assignments``. Facts are indices into the
 schedule's lists (machines, auxiliary resources, lots, a lot's operations).
@@ -170,7 +170,7 @@ class Assignment:
     def batch_id(self) -> str | None: ...
 
 class SemiconductorSchedule:
-    """Planning solution. The constructor validates (ValueError) like the Pydantic model.
+    """Problem and solution in one object. The constructor validates (ValueError) like the Pydantic model.
     Facts are read-only copies; `assignments` may be replaced (validated; clears the score)."""
 
     def __init__(

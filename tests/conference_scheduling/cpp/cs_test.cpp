@@ -137,7 +137,7 @@ void verifyConstraints()
 {
     std::printf("== (a) Verifying each constraint in isolation ==\n");
 
-    // h0: talkTypeIncompatibilityCost (synthetic value-range replacement). A
+    // h0: talkTypeIncompatibilityCost. A
     // "L" talk in a "B"-only slot and room violates both halves: 2 x 60.
     {
         ConferenceSchedule c = makeBase();

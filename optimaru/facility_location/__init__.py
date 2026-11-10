@@ -1,6 +1,6 @@
 """Facility location — Python wrapper of the C++ solver on the optimaru engine.
 
-A port of the facility-location example model: one assignment-shape planning variable
+The facility-location use case: one assignment-shape decision variable
 (`Consumer.facility`, a facility index, -1 = unassigned) picks one facility
 per consumer.
 
@@ -8,8 +8,7 @@ Score, at the default weights:
   hard = -(sum over used facilities of max(0, assigned demand - capacity))  # facility_capacity_cost
   soft = -(2 x setup cost of used facilities                                 # facility_setup_cost
            + 6 x consumer-facility distance)                                 # distance_from_facility_cost
-The distance weight 6 is the ConstraintWeightOverrides value of the Java solution (the
-provider default is 5). The problem carries no weights: change one through a constraint
+The problem carries no weights: change one through a constraint
 selection, e.g. ``solve(problem, constraints=get_constraints([..., DistanceFromFacilityCost(weight=5)]))``
 (see `optimaru.facility_location.constraints`). `constraint_info()` lists every constraint with its
 default level and weight.

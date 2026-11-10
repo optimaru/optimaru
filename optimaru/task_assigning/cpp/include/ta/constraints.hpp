@@ -28,7 +28,7 @@ namespace ta
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the components' default weights and levels (each
+// The full set at the components' default weights and levels (each
 // component's kDefaultWeight / kDefaultLevel; constraint_info() reads them off
 // this assembly). It scores bit-for-bit like ScoreCalculator::score
 // and the monolithic incremental calculator. The calculator scores the unit

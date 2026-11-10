@@ -283,7 +283,7 @@ void Solver::solve(VehicleRoutePlan &plan)
     engine.solve(plan, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
-    // Also refreshes the shadow variables (vehicleIndex / arrivalTime).
+    // Also refreshes the derived fields (vehicleIndex / arrivalTime).
     plan.score = ScoreCalculator::score(plan);
 }
 
@@ -317,7 +317,7 @@ void Solver::solve(
         engine.solve(plan, calculator);
     }
 
-    // Refresh the shadow variables (vehicleIndex / arrivalTime) on the best
+    // Refresh the derived fields (vehicleIndex / arrivalTime) on the best
     // solution — the plugin components derive their own chain and never write
     // these — then score it with the caller's constraint assembly, leaving the
     // calculator primed on it so constraint_totals() explains exactly this

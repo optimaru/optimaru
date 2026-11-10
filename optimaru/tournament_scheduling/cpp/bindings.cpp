@@ -140,7 +140,7 @@ PYBIND11_MODULE(_core, m)
                      a.push_back(assignment.team);
                  return a;
              })
-        // Bulk write of the planning variable (team_assignments access
+        // Bulk write of the decision variable (team_assignments access
         // returns copies, so per-assignment writes would be lost).
         .def(
             "set_assignment",

@@ -38,14 +38,13 @@ std::int64_t ScoreCalculator::ceilToMinutes(Seconds seconds) {
 }
 
 void ScoreCalculator::updateShadowVariables(VehicleRoutePlan& plan) {
-    // Reset all visits to unassigned (vehicle == null, arrivalTime == null).
+    // Reset all visits to unassigned (no vehicle, no arrival time).
     for (Visit& visit : plan.visits) {
         visit.vehicleIndex = -1;
         visit.arrivalTime = NULL_TIME;
     }
 
-    // Walk each route, propagating arrival times exactly like the Java
-    // arrivalTimeSupplier / getDepartureTime chain:
+    // Walk each route, propagating arrival times along the chain:
     //   arrival        = previousDeparture + drivingTime(prevLoc -> loc)
     //   startService   = max(arrival, minStartTime)
     //   departure      = startService + serviceDuration
@@ -89,8 +88,8 @@ Score ScoreCalculator::score(VehicleRoutePlan& plan) {
 
     // --- Hard: maxEndTimeCost ---
     // A visit is late when arrivalTime + serviceDuration is after maxEndTime;
-    // penalize by the overshoot rounded up to whole minutes. (Faithful to the
-    // Java quickstart, which measures from arrivalTime, not startServiceTime.)
+    // penalize by the overshoot rounded up to whole minutes. (Measured
+    // from arrivalTime, not the start of service.)
     for (const Visit& visit : plan.visits) {
         if (visit.vehicleIndex < 0) continue;  // unassigned: no arrival time
         Seconds serviceFinished = visit.arrivalTime + visit.serviceDuration;

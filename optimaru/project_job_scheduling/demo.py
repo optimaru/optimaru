@@ -1,4 +1,5 @@
-"""The demo instance, modelled on the quickstart's demo data.
+"""The demo instance, derived from the Timefold Quickstarts `project-job-scheduling`
+example's demo data (Apache-2.0; see the repository NOTICE).
 
 Builds a demo instance of the same scale and distributions: 2 projects (release 0/4,
 critical path 10/19), 7 resources (global renewable with capacity 16 + per project one
@@ -25,7 +26,7 @@ JOBS_PER_PROJECT = 12
 
 
 def _draw_index(rng: random.Random, cumulative: list[float]) -> int:
-    """Pick an index from a cumulative distribution table with one unit random draw (Java's Pair table)."""
+    """Pick an index from a cumulative distribution table with one unit random draw."""
     draw = rng.random()
     for i, threshold in enumerate(cumulative):
         if draw <= threshold:
@@ -63,7 +64,7 @@ def generate_demo_data(seed: int = 0) -> ProjectJobScheduleModel:
         for i in range(JOBS_PER_PROJECT):
             job_type = "SOURCE" if i == 0 else "SINK" if i == JOBS_PER_PROJECT - 1 else "STANDARD"
             if job_type == "STANDARD":
-                # The number of required resources is drawn once per job (as in Java).
+                # The number of required resources is drawn once per job, not per mode.
                 requirements_size = rng.randint(1, 3)
                 modes = []
                 for _ in range(3):
@@ -88,7 +89,7 @@ def generate_demo_data(seed: int = 0) -> ProjectJobScheduleModel:
                 JobModel(id=str(base + i), project_id=project.id, job_type=job_type, execution_modes=modes)
             )
         # Successors: SOURCE gets the first 3 STANDARD jobs, others get 1 (54%) / 2 (27%) / 3 (19%)
-        # later jobs, the last STANDARD gets SINK, SINK gets none (as in Java).
+        # later jobs, the last STANDARD gets SINK, SINK gets none.
         project_jobs[0].successor_job_ids = [str(base + 1), str(base + 2), str(base + 3)]
         for i in range(1, JOBS_PER_PROJECT):
             count = min(_draw_index(rng, [0.54, 0.81, 1.0]) + 1, JOBS_PER_PROJECT - i - 1)
@@ -106,7 +107,7 @@ def generate_demo_data(seed: int = 0) -> ProjectJobScheduleModel:
         AllocationModel(
             id=job.id,
             job_id=job.id,
-            # SOURCE/SINK are fixed to (zero-duration mode, delay 0) — as in the Java demo.
+            # SOURCE/SINK are fixed to (zero-duration mode, delay 0).
             execution_mode_id=None if job.job_type == "STANDARD" else job.execution_modes[0].id,
             delay=None if job.job_type == "STANDARD" else 0,
         )

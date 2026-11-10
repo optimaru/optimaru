@@ -1,10 +1,8 @@
 // Order-picking unit tests (engine test/ style: check() + non-zero exit on any
 // failure):
-//   (a) Warehouse.calculateDistance against every case of the Java
-//       WarehouseTest (both directions)
-//   (b) every constraint verified in isolation against the Java
-//       OrderPickingConstraintProviderTest hand-computed cases
-//   (c) shadow variables (trolley / previous / next) re-derived from lists
+//   (a) calculateDistance against hand-computed cases (both directions)
+//   (b) every constraint verified in isolation against hand-computed cases
+//   (c) derived fields (trolley / previous / next) re-derived from lists
 //   (d) incremental score == full recompute across a long random walk driven
 //       through the engine's Editor protocol (before/mutate/after)
 //   (e) demo-data reproduction invariants (catalog, family shelvings,
@@ -50,11 +48,11 @@ WarehouseLocation loc(char column, int shelvingRow1Based, Side side, int row)
 }
 
 // -------------------------------------------------------------------------
-// (a) Warehouse distances: the Java WarehouseTest parameterized cases.
+// (a) Warehouse distances: hand-computed cases.
 // -------------------------------------------------------------------------
 void verifyWarehouseDistances()
 {
-    std::printf("== (a) Warehouse.calculateDistance (Java WarehouseTest) ==\n");
+    std::printf("== (a) Warehouse calculateDistance ==\n");
     struct Case
     {
         WarehouseLocation start;
@@ -128,11 +126,11 @@ void verifyWarehouseDistances()
     }
     check(allOk,
           "all " + std::to_string(cases.size())
-              + " WarehouseTest distances match (both directions)");
+              + " warehouse distances match (both directions)");
 }
 
 // -------------------------------------------------------------------------
-// (b) Constraints in isolation (Java OrderPickingConstraintProviderTest).
+// (b) Constraints in isolation.
 // -------------------------------------------------------------------------
 
 // Appends a pick task of `order` with `volume` at `location`; returns its
@@ -170,7 +168,7 @@ void verifyConstraints()
     std::printf("== (b) Verifying each constraint in isolation ==\n");
     const WarehouseLocation origin = loc('A', 1, Side::LEFT, 0);
 
-    // trolleyCapacityCost, the Java test's exact data:
+    // trolleyCapacityCost:
     // order1 volumes 4,5 / 9,8; order2 volumes 4,1 / 8,6,10,9.
     // Trolley1 (2 buckets, capacity 5): order1 9 -> 2, order2 5 -> 1; 3-2=1.
     // Trolley2 (2 buckets, capacity 10): order1 17 -> 2, order2 33 -> 4; 6-2=4.
@@ -200,7 +198,7 @@ void verifyConstraints()
     }
 
     // distanceFromPreviousPickTaskCost: previous at (E,1) RIGHT 3,
-    // current at (C,3) RIGHT 1 -> 34 (the Java case). The trolley parks at
+    // current at (C,3) RIGHT 1 -> 34. The trolley parks at
     // the previous pick's location so the first leg is 0.
     {
         OrderPickingSolution s;
@@ -218,7 +216,7 @@ void verifyConstraints()
     }
 
     // distanceFromLastPickTaskToPathOriginCost: last pick at (D,2) LEFT
-    // 0, path origin (A,1) LEFT 0 -> 28 (the Java case). All three picks sit
+    // 0, path origin (A,1) LEFT 0 -> 28. All three picks sit
     // on the last pick's spot, so only the return leg is 28.
     {
         OrderPickingSolution s;
@@ -240,7 +238,7 @@ void verifyConstraints()
               "previous-pick legs sum to 28 (origin -> first)");
     }
 
-    // orderSplitByTrolleyCost, the Java test's exact data: order1 spread
+    // orderSplitByTrolleyCost: order1 spread
     // over 3 trolleys, order2 on 1 trolley -> (3 + 1) * 1000 (the totals
     // carry the default weight 1000).
     {
@@ -262,7 +260,7 @@ void verifyConstraints()
                   + std::to_string(totals.orderSplitByTrolleyCost) + ")");
     }
 
-    // Unassigned pick tasks contribute nothing (forEach skips them).
+    // Unassigned pick tasks contribute nothing.
     {
         OrderPickingSolution s;
         s.orders = {{"order1"}};
@@ -275,11 +273,11 @@ void verifyConstraints()
 }
 
 // -------------------------------------------------------------------------
-// (c) Shadow variables re-derived from the lists.
+// (c) Derived fields re-derived from the lists.
 // -------------------------------------------------------------------------
 void verifyShadowVariables()
 {
-    std::printf("== (c) Shadow variables (trolley / previous / next) ==\n");
+    std::printf("== (c) Derived fields (trolley / previous / next) ==\n");
     const WarehouseLocation origin = loc('A', 1, Side::LEFT, 0);
     OrderPickingSolution s;
     s.orders = {{"order1"}};
@@ -293,20 +291,20 @@ void verifyShadowVariables()
     ScoreCalculator::updateShadowVariables(s);
     check(s.pickTasks[a].trolleyIndex == t1 && s.pickTasks[b].trolleyIndex == t1
               && s.pickTasks[c].trolleyIndex == t1,
-          "inverse-relation shadow: trolley index set for assigned picks");
+          "trolley index set for assigned picks");
     check(s.pickTasks[a].previousPickTask == -1
               && s.pickTasks[b].previousPickTask == a
               && s.pickTasks[c].previousPickTask == b,
-          "previous-element shadow follows the list order");
+          "previous pick follows the list order");
     check(s.pickTasks[a].nextPickTask == b && s.pickTasks[b].nextPickTask == c
               && s.pickTasks[c].nextPickTask == -1,
-          "next-element shadow follows the list order (last has null)");
+          "next pick follows the list order (last has none)");
     check(s.pickTasks[c].isLast() && !s.pickTasks[b].isLast(),
-          "isLast() == (nextPickTask == null)");
+          "isLast() == (nextPickTask == -1)");
     check(s.pickTasks[d].trolleyIndex == -1
               && s.pickTasks[d].previousPickTask == -1
               && s.pickTasks[d].nextPickTask == -1,
-          "unassigned pick keeps null shadows");
+          "unassigned pick keeps -1 in every derived field");
     // Moving the chain to the other trolley re-derives everything.
     s.trolleys[t1].pickTaskIndices.clear();
     s.trolleys[t2].pickTaskIndices = {c, a};
@@ -314,7 +312,7 @@ void verifyShadowVariables()
     check(s.pickTasks[c].trolleyIndex == t2 && s.pickTasks[a].trolleyIndex == t2
               && s.pickTasks[a].previousPickTask == c
               && s.pickTasks[b].trolleyIndex == -1,
-          "shadows re-derived after the lists changed");
+          "derived fields re-derived after the lists changed");
 }
 
 // -------------------------------------------------------------------------
@@ -419,7 +417,7 @@ void verifyIncrementalAgainstFull()
 // -------------------------------------------------------------------------
 void verifyDemoData()
 {
-    std::printf("== (e) Demo data (DemoDataGenerator reproduction) ==\n");
+    std::printf("== (e) Demo data ==\n");
     OrderPickingSolution s = buildDemoData();
     check(s.trolleys.size() == 5, "5 trolleys");
     check(s.orders.size() == 8, "8 orders");
@@ -536,7 +534,7 @@ void verifySolve()
                   && std::fabs(s.score.soft - recomputed.soft) < 1e-9,
               "returned score matches a from-scratch recompute");
 
-        // The final shadows describe the final routes.
+        // The final derived fields describe the final routes.
         bool shadowsOk = true;
         for (int t = 0; t < static_cast<int>(s.trolleys.size()); ++t)
         {
@@ -553,7 +551,7 @@ void verifySolve()
                                      : -1);
             }
         }
-        check(shadowsOk, "shadow variables consistent on the final solution");
+        check(shadowsOk, "derived fields consistent on the final solution");
     }
 }
 

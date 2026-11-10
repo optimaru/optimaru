@@ -6,12 +6,12 @@
 namespace pjs
 {
 
-// Port of the reference ProjectJobSchedulingConstraintProvider.
+// The project-job-scheduling constraints as one monolithic calculator.
 //
 // score does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under ScoreChecks::Full).
 //
-// Constraints (HardMediumSoftScore, all penalties), at the components'
+// Constraints (hard / medium / soft, all penalties), at the components'
 // kDefaultWeight (1 each; the medium weight is in medium units):
 //   hard 1. nonRenewableResourceCapacityCost  per non-renewable resource
 //                                             whose total requirement over
@@ -31,18 +31,15 @@ namespace pjs
 //                                             -(endDate - criticalPathEndDate)
 //   soft 4. makespanCost                      -(max SINK endDate) — one
 //                                             penalty for the whole schedule
-//                                             (Java's groupBy(max))
 //
-// The Java shadow chain is reproduced as derived dates computed in
-// topological order:
+// The dates are derived, computed in topological order:
 //   predecessorsDoneDate = max(0, max over predecessors of endDate)
 //   startDate            = predecessorsDoneDate + delay      (unassigned: 0)
 //   endDate              = startDate + executionMode.duration (unassigned: 0)
 // An allocation is busy on the days [startDate, endDate). Unassigned
 // allocations (modeDelay == -1) pass dates through with delay 0 / duration 0
-// and contribute no resource usage — exactly the Java suppliers'
-// null-handling, so the construction heuristic scores partially initialized
-// solutions consistently.
+// and contribute no resource usage, so the construction heuristic scores
+// partially initialized solutions consistently.
 class ScoreCalculator
 {
 public:
@@ -66,7 +63,7 @@ public:
     static void prepare(ProjectJobSchedule &schedule);
 
     // Recomputes predecessorsDoneDate/startDate/endDate for every allocation
-    // in topological order (the Java shadow chain). Requires prepare().
+    // in topological order. Requires prepare().
     static void updateDates(ProjectJobSchedule &schedule);
 };
 

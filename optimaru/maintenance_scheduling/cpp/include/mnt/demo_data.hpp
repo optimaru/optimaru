@@ -9,7 +9,7 @@
 namespace mnt
 {
 
-// The demo instances, modelled on the quickstart's demo data. Durations,
+// The demo instances. Durations,
 // windows and tags are drawn from a seeded std::mt19937_64 (seed 17), so a
 // size gives the same instance on every platform.
 //   SMALL: 3 crews, 8 weeks, 14 jobs   LARGE: 5 crews, 16 weeks, 48 jobs

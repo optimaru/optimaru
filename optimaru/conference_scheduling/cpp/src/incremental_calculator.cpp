@@ -241,7 +241,7 @@ void ConferenceSchedulingIncrementalScoreCalculator::rebuild(
                 if (ScoreCalculator::speakerUnavailableAt(s, k, slot))
                     ++unavailable;
             }
-            // The Java speaker tag counts iterate the raw speaker list.
+            // The speaker tag counts iterate the raw speaker list.
             for (int k : talk.speakers)
             {
                 const PreferenceTagIds &sp = s.speakerPrefIds[k];
@@ -671,7 +671,7 @@ bool ConferenceSchedulingIncrementalScoreCalculator::isHotTalk(
     const std::size_t roomAt
         = static_cast<std::size_t>(talkIndex) * roomCount_ + room;
     if (!slotCompat_[slotAt] || !roomCompat_[roomAt])
-        return true;  // synthetic talkTypeIncompatibilityCost
+        return true;  // talkTypeIncompatibilityCost
     if (hardSlotCnt_[slotAt] > 0 || hardRoomCnt_[roomAt] > 0)
         return true;  // required/prohibited timeslot/room tags
     if (unavailSpkCnt_[slotAt] > 0)

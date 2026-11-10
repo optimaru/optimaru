@@ -30,7 +30,7 @@ namespace sls
 // ---------------------------------------------------------------------------
 // Standard assembly
 // ---------------------------------------------------------------------------
-// The full provider at the quickstart's weights, each component at its own
+// The full set at the default weights, each component at its own
 // kDefaultWeight / kDefaultLevel: four hard rules at weight 1, the five
 // travel hops in plain kilometres and workdayClassicMatchesCost at x 1'000.
 // This assembly scores bit-for-bit like ScoreCalculator::score and

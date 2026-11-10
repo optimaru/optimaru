@@ -29,7 +29,7 @@ using Calculator = TournamentSchedulingIncrementalScoreCalculator;
 // ---------------------------------------------------------------------------
 // Why a macro move: medium 3 (assignmentCountImbalanceCost) is
 // LoadBalance::unfairness over the teams that currently hold at least one
-// assignment — Java's constraint has no complement, so an unloaded team
+// assignment — an unloaded team
 // simply drops out of the balance. With A assignments over n loaded teams the
 // best reachable unfairness is sqrt(r * (n - r) / n), r = A mod n: ZERO
 // whenever n divides A. On the demo (72 assignments, 7 teams) the 7-team

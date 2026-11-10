@@ -13,8 +13,7 @@ namespace sls
 {
 
 // The sports-league-scheduling implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing
-// Java's Objective instead of a ConstraintProvider.
+// optimaru::Objective.
 //
 // Every constraint couples a match only to matches on the same or an
 // adjacent round index, so a single variable change is O(delta):

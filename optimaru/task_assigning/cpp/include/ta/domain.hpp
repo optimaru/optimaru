@@ -18,16 +18,16 @@ namespace ta
 // ---------------------------------------------------------------------------
 // Time
 // ---------------------------------------------------------------------------
-// The Java quickstart counts minutes as plain longs (Task.startTime /
-// TaskType.baseDuration are "in minutes"); so do we.
+// Times are minutes counted as plain 64-bit integers (Task::startTime /
+// TaskType::baseDuration).
 using Minutes = std::int64_t;
 
-constexpr Minutes kNullTime = -1;  // stands in for a null startTime (Long)
+constexpr Minutes kNullTime = -1;  // startTime of an unassigned task
 
 // ---------------------------------------------------------------------------
-// Score  (BendableScore [1]hard/[3]soft mirror)
+// Score  (four Bendable levels: [1]hard/[3]soft)
 // ---------------------------------------------------------------------------
-// The Java quickstart scores with BendableScore(hardLevels=1, softLevels=3):
+// This use case scores four levels, 1 hard and 3 soft:
 //   hard[0]  requiredSkillCost          (missing skill count)
 //   soft[0]  unassignedTasksCost        (1 per unassigned task)
 //   soft[1]  squaredMakespanCost        (employee endTime^2 each)
@@ -59,13 +59,11 @@ constexpr Minutes kNullTime = -1;  // stands in for a null startTime (Long)
 //  - engine.soft is exact inside the double's 2^53 integer range as long as
 //    |soft1| < 9 * 10^8 (sum of squared employee end-minutes) and soft1
 //    dominates soft2 as long as |soft2| < 10^7 (weighted end-minute sum).
-//    That covers instances whose horizon is tens of thousands of minutes —
-//    the same practical range where the Java int-based BendableScore does
-//    not overflow either.
+//    That covers instances whose horizon is tens of thousands of minutes.
 // One semantic wrinkle: the engine's feasible() (engine.hard >= 0) now
 // also requires soft0 == 0. Because the engine's LIST local search keeps
 // every task assigned once construction finished, final solutions always
-// have soft0 == 0, so feasibility coincides with the Java hard level.
+// have soft0 == 0, so feasibility coincides with hard == 0.
 constexpr std::int64_t kMissingSkillUnit = 1000000000LL;
 constexpr std::int64_t kMakespanUnit = 10000000LL;
 constexpr optimaru::MediumFold kMediumFold
@@ -148,7 +146,7 @@ inline Score fromEngineScore(const optimaru::Score &e)
 }
 
 // ---------------------------------------------------------------------------
-// Enums  (org.acme.taskassigning.domain.Affinity / Priority)
+// Enums  (Affinity / Priority)
 // ---------------------------------------------------------------------------
 // Affinity of an employee for a customer: better affinity means the task
 // takes fewer minutes (baseDuration x multiplier).
@@ -204,13 +202,11 @@ struct TaskType
 };
 
 // ---------------------------------------------------------------------------
-// Task  (@PlanningEntity; the LIST element)
+// Task  (the LIST element)
 // ---------------------------------------------------------------------------
-// Problem facts are the immutable fields; the shadow fields (employee,
-// startTime) are derived from the employees' task lists, exactly like the
-// shadow variables in the Java Task (@InverseRelationShadowVariable /
-// @PreviousElementShadowVariable / startTimeSupplier):
-//   startTime = null                          if unassigned
+// The input fields are immutable; the derived fields (employee, startTime)
+// are computed from the employees' task lists:
+//   startTime = kNullTime                     if unassigned
 //             = minStartTime                  if first in the list
 //             = max(previous.endTime, minStartTime) otherwise
 //   endTime   = startTime + baseDuration * affinityMultiplier
@@ -223,25 +219,24 @@ struct Task
     Minutes minStartTime = 0;
     Priority priority = Priority::MINOR;
 
-    // --- shadow (recomputed by ScoreCalculator::updateShadowVariables) ---
-    int employee = -1;  // -1 == unassigned (employee == null)
+    // --- derived (recomputed by ScoreCalculator::updateShadowVariables) ---
+    int employee = -1;  // -1 == unassigned
     Minutes startTime = kNullTime;
 };
 
 // ---------------------------------------------------------------------------
-// Employee  (@PlanningEntity holding the @PlanningListVariable)
+// Employee  (holds the decision variable)
 // ---------------------------------------------------------------------------
-// tasks is the @PlanningListVariable(allowsUnassignedValues = true): the
-// ordered task indices this employee performs back to back.
+// tasks is the decision variable: the ordered task indices this employee
+// performs back to back. A task in no list is unassigned.
 struct Employee
 {
     std::string id;
     std::string fullName;
     std::vector<std::string> skills;
-    // Affinity per customer index; missing entries mean Affinity::NONE
-    // (Employee.getAffinity's getOrDefault).
+    // Affinity per customer index; missing entries mean Affinity::NONE.
     std::vector<Affinity> affinityByCustomer;
-    std::vector<int> tasks;  // ordered task indices — the planning variable
+    std::vector<int> tasks;  // ordered task indices — the decision variable
 
     Affinity affinity(int customerIndex) const
     {
@@ -253,7 +248,7 @@ struct Employee
 };
 
 // ---------------------------------------------------------------------------
-// TaskAssigningSolution  (@PlanningSolution)
+// TaskAssigningSolution  (the problem and its solution)
 // ---------------------------------------------------------------------------
 struct TaskAssigningSolution
 {
@@ -264,7 +259,7 @@ struct TaskAssigningSolution
 
     Score score;
 
-    // Duration of `task` when done by `employeeIndex` (Task.getDuration):
+    // Duration of `task` when done by `employeeIndex`:
     // baseDuration x the affinity multiplier; unassigned uses NONE (x 4).
     Minutes taskDuration(const Task &task, int employeeIndex) const
     {
@@ -276,7 +271,7 @@ struct TaskAssigningSolution
                * durationMultiplier(affinity);
     }
 
-    // Task.getMissingSkillCount: required skills of the task's type that the
+    // Missing skill count: required skills of the task's type that the
     // employee does not have.
     int missingSkillCount(const Task &task, int employeeIndex) const
     {
@@ -305,12 +300,11 @@ struct TaskAssigningSolution
 }  // namespace ta
 
 // ---------------------------------------------------------------------------
-// SolutionTraits specialization  (the @PlanningEntity/@PlanningListVariable
-// annotations of the C++ engine): the lists are the employees' ordered task
-// index sequences, the elements are the tasks. A task missing from every list
-// is unassigned (allowsUnassignedValues = true); the engine's construction
-// heuristic assigns every task and local search keeps them assigned. The Java
-// quickstart has no @PlanningPin, so no is_pinned hook is declared.
+// SolutionTraits specialization  (describes the solution's shape to the
+// engine): the lists are the employees' ordered task index sequences, the
+// elements are the tasks. A task missing from every list is unassigned; the
+// engine's construction heuristic assigns every task and local search keeps
+// them assigned. No task is pinned, so no is_pinned hook is declared.
 // ---------------------------------------------------------------------------
 template <> struct optimaru::SolutionTraits<ta::TaskAssigningSolution>
 {

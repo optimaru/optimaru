@@ -1,7 +1,7 @@
 """Type stubs for `optimaru.max_cut._core` — the max-cut C++ solver.
 
-The problem is the planning solution: each vertex's side (0 or 1; -1 =
-unassigned, in no side) is the single assignment-shape planning variable, read and
+The problem object holds the solution: each vertex's side (0 or 1; -1 =
+unassigned, in no side) is the single assignment-shape decision variable, read and
 written with `assignment()` / `set_assignment()`. A vertex with a fixed side
 is pinned: the search never moves it.
 
@@ -41,7 +41,7 @@ class VertexPair:
     second: int
 
 class MaxCutProblem:
-    """Planning solution. NOTE: list attributes return copies; assign whole lists
+    """Problem and solution in one object. NOTE: list attributes return copies; assign whole lists
     and use set_assignment for the partition. Every entry point re-validates the
     facts (ValueError on an invalid one)."""
 
@@ -87,9 +87,9 @@ class MaxCutProblem:
     def is_complete(self) -> bool:
         """Every vertex on side 0 or 1."""
     def assignment(self) -> list[int]:
-        """The planning variable per vertex (0 / 1 / -1)."""
+        """The decision variable per vertex (0 / 1 / -1)."""
     def set_assignment(self, assignment: list[int]) -> None:
-        """Bulk write of the planning variable (one entry per vertex, each -1, 0 or 1)."""
+        """Bulk write of the decision variable (one entry per vertex, each -1, 0 or 1)."""
 
 def calculate_score(problem: MaxCutProblem) -> Score:
     """Full recompute of the score at the default constraints (also stores

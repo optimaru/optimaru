@@ -15,10 +15,9 @@ namespace vrp
 // VehicleRoutingIncrementalScoreCalculator
 // ---------------------------------------------------------------------------
 // The vehicle-routing implementation of the engine's
-// optimaru::Objective — the C++ analog of implementing Java's
-// Objective instead of a ConstraintProvider.
+// optimaru::Objective.
 //
-// Every constraint in VehicleRoutingConstraintProvider decomposes per route,
+// Every one of the four core constraints decomposes per route,
 // which is what makes this cheap: a move touches at most two lists, so a step
 // costs O(route length) instead of O(instance).
 //
@@ -36,9 +35,9 @@ namespace vrp
 //
 // before_list_edit retracts the list's contribution while it still holds the
 // OLD contents; after_list_edit inserts the NEW contents. The calculator
-// reads the route lists directly and never the shadow fields (vehicleIndex /
+// reads the route lists directly and never the derived fields (vehicleIndex /
 // arrivalTime), so it stays correct while the engine mutates lists mid-move;
-// the shadows are refreshed by ScoreCalculator afterwards. The full-recompute
+// those are refreshed by ScoreCalculator afterwards. The full-recompute
 // reference is ScoreCalculator::score, checked in the tests and under
 // ScoreChecks::ScoreChecks::Full.
 //
@@ -72,7 +71,7 @@ public:
     // O(route length), still one walk against the several the
     // apply/score/undo cycle costs. Every preview is served.
     //
-    // Scope: this calculator and its previews cover the quickstart's four
+    // Scope: this calculator and its previews cover the four core
     // terms (capacity, visit deadlines, unassigned visits, driving time).
     // The optional vehicle route policies (maxTravelTime, maxRouteDuration,
     // Vehicle::maxEndTime, maxStops, minLoadRatio, fixedCost,
@@ -95,7 +94,7 @@ public:
     // Every kind above is served once the working solution is set.
     bool has_previews() const override { return previewsEnabled(); }
 
-    // The HardMediumSoft view of the current state, for callers that want the
+    // The hard / medium / soft view of the current state, for callers that want the
     // three levels without decoding the packed engine score.
     Score current_score() const;
 

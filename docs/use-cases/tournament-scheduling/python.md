@@ -1,11 +1,11 @@
 # tournament_scheduling
 
-The `tournament-scheduling` example model (Apache-2.0; see the repository NOTICE)
-(Java/Quarkus) ported onto the C++ engine in `optimaru/cpp/optimaru/`. Assigns teams to the daily
-match slots (TeamAssignment) — the C++ domain/calculators are in `optimaru/tournament_scheduling/cpp`; this package
+Tournament scheduling, derived from the Timefold Quickstarts `tournament-scheduling` example
+(Apache-2.0; see the repository NOTICE), on the C++ engine in `optimaru/cpp/optimaru/`. Assigns teams to the daily
+match slots (`TeamAssignment`) — the C++ domain/calculators are in `optimaru/tournament_scheduling/cpp`; this package
 holds their pybind11 bindings (`optimaru.tournament_scheduling._core`) and the pydantic mirror.
 
-## Constraints (same semantics as the Java ConstraintProvider)
+## Constraints
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
@@ -36,18 +36,18 @@ several times; each pick is its own instance with its own knobs, its level
 included, the instances add up, and
 `constraint_costs(schedule, picks)` keys the k-th pick `<name>#<k>`.
 
-"Unfairness" is the load-balance unfairness of the reference model:
+"Unfairness" is the load-balance unfairness:
 `sqrt(sum(load^2) - sum(load)^2 / n)` rounded to 6 significant digits (HALF_EVEN).
-`n` is the number of items with load ≥ 1 (the Java original has no complement, so teams
+`n` is the number of items with load ≥ 1 (teams
 without assignments / pairs without head-to-heads are not counted).
 
-## Score mapping (HardMediumSoftBigDecimalScore → Score)
+## Score mapping (hard / medium / soft → Score)
 
-The engine score is `Score(hard int64, soft double)`, so Java's three levels are
+The engine score is `Score(hard int64, soft double)`, so the three score levels are
 folded into two (the same as the `optimaru/tournament_scheduling/cpp/include/ts/domain.hpp` comments):
 
 ```
-hard = Java hard as-is                         (0 == feasible)
+hard = the hard level as-is                    (0 == feasible)
 soft = -(medium unfairness * 1e6 + soft unfairness)   # MEDIUM_SCALE = 1e6
 ```
 
@@ -56,8 +56,8 @@ by the calculators, not carried by the medium constraint's weight.
 
 medium/soft unfairness are 6-significant-digit decimals, so at this domain's instance
 scale medium always dominates soft (level priority preserved).
-E.g. the best demo solution using all 7 teams is `0hard/-1195232.56soft` == at Java
-levels `0hard/-1.19523medium/-2.56soft`.
+E.g. the best demo solution using all 7 teams is `0hard/-1195232.56soft` == by
+level `0hard/-1.19523medium/-2.56soft`.
 
 ### Note: the objective's global optimum uses fewer teams
 
@@ -65,8 +65,8 @@ Because `n` counts only teams with load ≥ 1, emptying a team entirely improves
 In the demo (72 assignments / 7 teams), using all 7 teams gives a minimum medium of
 `sqrt(10/7)=1.19523`, but 6 teams x 12 assignments give medium **0**. The solver finds this
 global optimum, so the demo result is `0hard/-1.54919soft` (medium 0, soft 1.54919) and one
-team is left with 0 matches. This is not a calculator bug but the optimum of the ported Java
-objective as-is. If "every team plays" is a domain requirement, fix the constraints, not
+team is left with 0 matches. This is not a calculator bug but the optimum of the
+objective as defined. If "every team plays" is a domain requirement, fix the constraints, not
 the solver (add a complement term or a hard minimum-assignments-per-team constraint).
 
 ## Usage
@@ -86,8 +86,8 @@ print(result.score_hard, result.score_soft)  # 0, -1.54919 (feasible, 6 teams x 
 ```
 
 `solve` accepts both the pydantic model (`models.TournamentScheduleModel`) and `_core`
-objects. Pin an assignment with `TeamAssignmentModel.pinned=True`
-(Java `@PlanningPin`); to stop at the first feasible use
+objects. Pin an assignment with `TeamAssignmentModel.pinned=True`;
+to stop at the first feasible use
 `stop_at_first_feasible=True`.
 
 ## C++ demo/tests

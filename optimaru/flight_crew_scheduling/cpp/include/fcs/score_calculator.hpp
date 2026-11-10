@@ -20,13 +20,13 @@ struct ItineraryStats
     std::int64_t lastNotHome = 0;   // lastAssignmentNotArrivingAtHomeCost
 };
 
-// Port of the reference FlightCrewSchedulingConstraintProvider.
+// The flight-crew-scheduling score as one monolithic function.
 //
 // score does a full recompute — the reference the incremental
 // calculator is checked against (in the tests and under ScoreChecks::Full).
 //
 // Constraints (Score), the default assembly of fcs/constraints.hpp at
-// the components' kDefaultWeight (the Java weights verbatim):
+// the components' kDefaultWeight:
 //   hard 1. requiredSkillCost   -100 per assignment whose employee lacks the
 //                                    required skill
 //   hard 2. flightConflictCost   -10 per same-employee pair of assignments
@@ -36,8 +36,7 @@ struct ItineraryStats
 //                                 -1 per same-employee departure-consecutive
 //                                    pair whose first arrival airport differs
 //                                    from the second departure airport.
-//                                    "Consecutive" follows the Java stream
-//                                    exactly: pair (a, b) with dep(a) <
+//                                    "Consecutive" means: pair (a, b) with dep(a) <
 //                                    dep(b) and no third assignment c of the
 //                                    employee with dep(a) <= dep(c) < dep(b)
 //                                    — so an `a` sharing its departure time

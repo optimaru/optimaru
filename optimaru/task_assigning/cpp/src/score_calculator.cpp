@@ -42,7 +42,7 @@ void ScoreCalculator::updateShadowVariables(TaskAssigningSolution &solution)
         {
             Task &task = solution.tasks[taskIndex];
             task.employee = static_cast<int>(e);
-            // Task.startTimeSupplier: the first task starts at its own
+            // Start time: the first task starts at its own
             // minStartTime; later tasks wait for the previous end.
             task.startTime = first
                                  ? task.minStartTime
@@ -66,7 +66,7 @@ Score ScoreCalculator::score(TaskAssigningSolution &solution)
 
     for (const Employee &employee : solution.employees)
     {
-        Minutes employeeEndTime = 0;  // Employee.getEndTime: 0 when empty
+        Minutes employeeEndTime = 0;  // 0 when empty
         for (int taskIndex : employee.tasks)
         {
             const Task &task = solution.tasks[taskIndex];

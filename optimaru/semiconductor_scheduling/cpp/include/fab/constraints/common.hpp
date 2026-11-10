@@ -23,10 +23,10 @@ namespace fab
 // calculators (fab/score_calculator.hpp, fab/incremental_calculator.hpp),
 // which stay the default fast path.
 //
-// Unit choice: none. The planning value of a row is a (rank, machine option)
+// Unit choice: none. The decision value of a row is a (rank, machine option)
 // pair and the schedule is DERIVED from all of them by the serial decoder:
 // changing one row's rank can move every later operation on every machine.
-// No cost decomposes per planning value, so all 20 components are
+// No cost decomposes per decision value, so all 20 components are
 // GlobalConstraints over one shared ScheduleView (the engine's
 // shared-context contract, the conference-scheduling BreakdownProjection
 // precedent): the view keeps the decoded schedule and the per-unit raw costs
@@ -82,7 +82,7 @@ inline void requirePrepared(const SemiconductorSchedule &schedule)
 }  // namespace detail
 
 // The shared per-calculator view: one ScheduleEvaluator, reset once per
-// calculator reset, told about every planning-value change, asked for the
+// calculator reset, told about every decision-value change, asked for the
 // raw totals at most once per score (it caches them until the next change).
 struct ScheduleView final : optimaru::SharedConstraintContext
 {

@@ -24,7 +24,7 @@ namespace ba
 namespace
 {
 
-// The monolithic path keeps the quickstart's integer arithmetic, with the
+// The monolithic path uses integer arithmetic, with the
 // weights read off the components (their kDefaultWeight is the only place a
 // default lives). The medium weight is in medium units: toEngineScore folds
 // the medium level into soft with kMediumFold.
@@ -214,7 +214,7 @@ ScoreCalculator::singleStayImpact(const BedPlan &plan, int stayIndex, int value)
 
     // hard 7: requiredPatientEquipmentCost — when the room misses at least one
     // required equipment, weigh by the count of required equipment the room
-    // DOES have (the quickstart's exact, test-pinned semantics).
+    // DOES have (the intended, test-pinned semantics).
     const int roomIndex = plan.beds[value].room;
     std::int64_t requiredPresent = 0;
     for (const int equipmentId : stay.requiredEquipmentIds)

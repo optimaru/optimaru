@@ -36,7 +36,7 @@ def test_demo_solve_feasible():
     recomputed = cs.calculate_score(schedule)
     assert recomputed.hard == schedule.score.hard
     assert recomputed.soft == schedule.score.soft
-    # Type compatibility: Lab talks sit only in Lab slots/rooms (what synthetic hard 0 means).
+    # Type compatibility: Lab talks sit only in Lab slots/rooms (what talk_type_incompatibility_cost 0 means).
     raw = cs.constraint_costs(schedule)
     assert raw["talk_type_incompatibility_cost"]["costs"] == [0]
     assert raw["room_conflict_cost"]["costs"] == [0]

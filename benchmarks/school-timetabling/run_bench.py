@@ -1,6 +1,6 @@
 """Orchestrates the school-timetabling benchmark.
 
-Track 1 (the quickstart's six constraints, default): the same instances are solved by
+Track 1 (the quickstart model's six constraints, default): the same instances are solved by
   (1) this repository's C++ engine (`st_quality_bench`),
   (2) OR-Tools CP-SAT (`cpsat_quickstart.py`),
 and compared in a Markdown table (hard/soft, first-feasible time, moves/s).
