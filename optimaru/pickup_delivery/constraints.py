@@ -75,7 +75,7 @@ mechanically, so there is no hand-maintained alias table — check them with
 so they match the strings `list_constraints()` prints.
 
 `parallel_solver_count` does not apply on the plugin path (a caller-owned
-calculator cannot be cloned into workers). The pair-aware move/ruin operators read
+calculator cannot be cloned into workers). The request-level move/ruin operators read
 the plan, not the calculator, so they still run.
 """
 

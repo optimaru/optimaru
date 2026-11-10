@@ -82,8 +82,8 @@ public:
         double cross_exchange_weight = 0.0;
         int cross_exchange_max_run = 3;
 
-        // Whether to register the pair-aware move operator (on by default;
-        // turn it off to measure what it is worth).
+        // Whether to register the pair move operator (on by default; turn it
+        // off to measure what it is worth).
         bool pair_moves = true;
         bool pair_exchange_moves = true;
         // Exchange is valuable on large route sets but steals too many steps
@@ -112,7 +112,8 @@ public:
         bool pair_ruin = true;
         // Search-strategy parity with vehicle-routing. These
         // remain opt-in for PDP because the generic variants manipulate
-        // individual nodes; pair-aware move/ruin operators are the defaults.
+        // individual nodes; the request-level move/ruin operators are the
+        // defaults.
         double ruin_recreate_as_move_weight = 0.0;
         int ruin_recreate_as_move_max_ruin = 12;
         double descent_weight = 0.0;
@@ -145,7 +146,7 @@ public:
 
     // Solves with a caller-assembled plugin calculator (see
     // pdp/constraints.hpp): pick components and weights, then pass the
-    // assembly here. The same search applies, the pair-aware move and ruin
+    // assembly here. The same search applies, the request-level move and ruin
     // operators included (they read the plan, not the calculator). Weights
     // come from the assembly, NOT from the defaults. The final plan.score is
     // computed by THIS calculator, its three levels read before the medium

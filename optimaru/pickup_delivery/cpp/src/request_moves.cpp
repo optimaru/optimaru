@@ -178,11 +178,15 @@ public:
         return best;
     }
 
-    void candidateVehicles(int deliveryIndex, std::vector<int>& out) {
+    // The vehicles a detached request is offered to. On a large fleet the
+    // offer is narrowed to the idle vehicles and the routes that hold one of
+    // the request's nearby stops; returns whether it was.
+    bool candidateVehicles(int deliveryIndex, std::vector<int>& out) {
         refreshTimelines();
         const Delivery& delivery = plan_->deliveries[static_cast<std::size_t>(deliveryIndex)];
         timelines_.candidateVehicles(*plan_, delivery, out);
-        if (out.size() <= kOfferEveryVehicleUpTo || !ctx_->nearby.enabled()) return;
+        if (out.size() <= kOfferEveryVehicleUpTo || !ctx_->nearby.enabled()) return false;
+        const std::size_t offered = out.size();
         ++nearEpoch_;
         for (int nodeIndex : {delivery.pickupNodeIndex, delivery.dropoffNodeIndex}) {
             for (int neighbor : ctx_->nearby.of(nodeIndex)) {
@@ -196,13 +200,31 @@ public:
                                             nearStamp_[static_cast<std::size_t>(v)] != nearEpoch_;
                                  }),
                   out.end());
+        return out.size() < offered;
     }
 
+    // The cheapest slot among the vehicles the request is offered to. When
+    // the narrowed offer has no room, the rest of the fleet is asked before
+    // the request is given up: a request left out for want of looking would
+    // cost the whole move.
     RequestInsertion bestAnywhere(int deliveryIndex, Blinker& blinker) {
-        candidateVehicles(deliveryIndex, candidateScratch_);
+        const bool narrowed = candidateVehicles(deliveryIndex, candidateScratch_);
         RequestInsertion best;
         const Delivery& delivery = plan_->deliveries[static_cast<std::size_t>(deliveryIndex)];
         for (int v : candidateScratch_) timelines_.of(v).improve(*plan_, delivery, blinker, best);
+        if (!best.found() && narrowed) best = bestInFleet(deliveryIndex);
+        return best;
+    }
+
+    // The cheapest slot over every vehicle that may take the request, with no
+    // blinking.
+    RequestInsertion bestInFleet(int deliveryIndex) {
+        refreshTimelines();
+        const Delivery& delivery = plan_->deliveries[static_cast<std::size_t>(deliveryIndex)];
+        timelines_.candidateVehicles(*plan_, delivery, candidateScratch_);
+        Blinker every;
+        RequestInsertion best;
+        for (int v : candidateScratch_) timelines_.of(v).improve(*plan_, delivery, every, best);
         return best;
     }
 
@@ -432,6 +454,7 @@ public:
         options_.assign(count * vehicles, RequestInsertion{});
         offered_.assign(count * vehicles, 0);
         placed_.assign(count, 0);
+        narrowed_.assign(count, 0);
         for (std::size_t i = 0; i < count; ++i) offer(i, blinker);
 
         for (std::size_t round = 0; round < count; ++round) {
@@ -462,10 +485,22 @@ public:
                     }
                 }
                 if (bestVehicle < 0) {
-                    // Routes only fill up during a repair: it will not fit later.
-                    leaveOut(pending_[i]);
-                    placed_[i] = 1;
-                    continue;
+                    // No offered route has room. A narrowed offer asks the rest
+                    // of the fleet; what it finds is the request's one option.
+                    const RequestInsertion last =
+                            narrowed_[i] ? bestInFleet(pending_[i]) : RequestInsertion{};
+                    if (!last.found()) {
+                        // Routes only fill up during a repair: it will not fit
+                        // later either.
+                        leaveOut(pending_[i]);
+                        placed_[i] = 1;
+                        continue;
+                    }
+                    const std::size_t cell = i * vehicles + static_cast<std::size_t>(last.vehicle);
+                    options_[cell] = last;
+                    offered_[cell] = 1;
+                    bestVehicle = last.vehicle;
+                    cheapest_.assign(1, last.addedTravel);
                 }
                 const int routes = static_cast<int>(cheapest_.size());
                 Seconds regret = 0;
@@ -555,6 +590,8 @@ public:
             }
             ctx.editor.end_list_edit(pool);
         }
+        // One entity per moved request (its pickup) for the acceptor's tabu
+        // memory: the two stops of a request never move apart here.
         for (int deliveryIndex : moved_) {
             entities.push_back(
                     plan.deliveries[static_cast<std::size_t>(deliveryIndex)].pickupNodeIndex);
@@ -618,7 +655,7 @@ private:
     // (Re)computes request i's option on every vehicle it is offered to.
     void offer(std::size_t i, Blinker& blinker) {
         const auto vehicles = static_cast<std::size_t>(vehicleCount_);
-        candidateVehicles(pending_[i], candidateScratch_);
+        narrowed_[i] = candidateVehicles(pending_[i], candidateScratch_) ? 1 : 0;
         for (int v : candidateScratch_) {
             const std::size_t cell = i * vehicles + static_cast<std::size_t>(v);
             if (offered_[cell]) continue;
@@ -654,6 +691,7 @@ private:
     std::vector<RequestInsertion> options_;
     std::vector<char> offered_;
     std::vector<char> placed_;
+    std::vector<char> narrowed_;  // request's offer left part of the fleet out
     std::vector<Seconds> cheapest_;
 };
 

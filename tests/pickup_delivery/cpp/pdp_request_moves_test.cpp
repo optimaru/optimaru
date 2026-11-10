@@ -13,6 +13,7 @@
 #include "pdp/constraints.hpp"
 #include "pdp/demo_data.hpp"
 #include "pdp/domain.hpp"
+#include "pdp/haversine.hpp"
 #include "pdp/request_insertion.hpp"
 #include "pdp/score_calculator.hpp"
 #include "pdp/solver.hpp"
@@ -280,6 +281,29 @@ void testCandidateVehicles() {
     mixedTimelines.candidateVehicles(mixed, mixed.deliveries[0], offered);
     check(offered == std::vector<int>({0, 1}),
           "idle vehicles with different limits are both offered");
+
+    // Two vehicles of one depot with a location entry each: the same place and
+    // the same driving times make them one class, a different driving time two.
+    PdpRoutePlan depot = buildRandomInstance(4, 1, /*seed=*/3);
+    depot.vehicles.push_back(depot.vehicles[0]);
+    const Location home =
+            depot.locations[static_cast<std::size_t>(depot.vehicles[0].homeLocationIndex)];
+    depot.vehicles[1].homeLocationIndex = addLocation(depot, home.latitude, home.longitude);
+    HaversineDrivingTimeCalculator::initDrivingTimeMatrix(depot);
+    PlanTimelines depotTimelines;
+    depotTimelines.rebuild(depot);
+    depotTimelines.candidateVehicles(depot, depot.deliveries[0], offered);
+    check(offered == std::vector<int>({0}),
+          "two location entries of one depot are one vehicle class");
+
+    const auto secondHome = static_cast<std::size_t>(depot.vehicles[1].homeLocationIndex);
+    const auto stop = static_cast<std::size_t>(depot.nodes[0].locationIndex);
+    depot.drivingSeconds[secondHome][stop] += 60;
+    PlanTimelines slowerTimelines;
+    slowerTimelines.rebuild(depot);
+    slowerTimelines.candidateVehicles(depot, depot.deliveries[0], offered);
+    check(offered == std::vector<int>({0, 1}),
+          "a different driving time from home makes two classes");
     std::printf("\n");
 }
 
@@ -407,6 +431,126 @@ void testSplitRequestIsMended() {
     std::printf("\n");
 }
 
+// On a large fleet a request is first offered to the routes of its nearby
+// stops. Here those are all full and the one route with room is far away: the
+// request has to be offered to the rest of the fleet before it is given up.
+void testFarRouteIsOfferedWhenNearOnesAreFull() {
+    std::printf("== A large fleet: room only on a far route ==\n");
+    // Enough vehicles that the offer stays narrowed whatever a move takes out:
+    // emptied routes are idle vehicles, which are offered once between them.
+    constexpr int kVehicles = 60;
+    PdpRoutePlan plan;
+    plan.name = "far-route";
+    const int home = addLocation(plan, 43.77, 11.25);
+    std::mt19937_64 rng(17);
+    const auto near = [&](double center) {
+        return center + (static_cast<double>(rng() % 2001) - 1000.0) * 1e-5;  // within ~1 km
+    };
+    for (int v = 0; v < kVehicles; ++v) {
+        Vehicle vehicle;
+        vehicle.id = std::to_string(v + 1);
+        vehicle.capacity = 10;
+        vehicle.homeLocationIndex = home;
+        vehicle.departureTime = hourMinute(7, 0);
+        vehicle.maxStops = 4;  // two requests
+        plan.vehicles.push_back(vehicle);
+    }
+    const auto addRequest = [&](double latitude, double longitude) {
+        const int deliveryIndex = static_cast<int>(plan.deliveries.size());
+        const int pickupNode = static_cast<int>(plan.nodes.size());
+        const std::string number = std::to_string(deliveryIndex + 1);
+        plan.nodes.push_back(Node{"p" + number, addLocation(plan, near(latitude), near(longitude)),
+                                  hourMinute(7, 0), hourMinute(23, 0), 300, deliveryIndex, true, -1,
+                                  NULL_TIME});
+        plan.nodes.push_back(Node{"d" + number, addLocation(plan, near(latitude), near(longitude)),
+                                  hourMinute(7, 0), hourMinute(23, 0), 300, deliveryIndex, false,
+                                  -1, NULL_TIME});
+        plan.deliveries.push_back(Delivery{"r" + number, pickupNode, pickupNode + 1, 1});
+        return deliveryIndex;
+    };
+    const auto route = [&](int vehicle, int deliveryIndex) {
+        // By value: addRequest grows the vectors these would point into.
+        const Delivery delivery = plan.deliveries[static_cast<std::size_t>(deliveryIndex)];
+        std::vector<int>& stops = plan.vehicles[static_cast<std::size_t>(vehicle)].nodeIndices;
+        stops.push_back(delivery.pickupNodeIndex);
+        stops.push_back(delivery.dropoffNodeIndex);
+    };
+    // Every vehicle but the last is full with two requests in town.
+    for (int v = 0; v + 1 < kVehicles; ++v) {
+        route(v, addRequest(43.77, 11.25));
+        route(v, addRequest(43.77, 11.25));
+    }
+    // The last one serves a single request an hour's drive away, so none of its
+    // stops is near anything in town. Its pickup is pinned: the request stays,
+    // so that vehicle is never idle (an idle vehicle is offered to everyone).
+    route(kVehicles - 1, addRequest(44.20, 11.90));
+    plan.vehicles.back().pinnedNodeIndices = {plan.vehicles.back().nodeIndices.front()};
+    // One more request in town, waiting in the pool. Construction would ask
+    // every vehicle, so it is off: the search has to route the request.
+    addRequest(43.77, 11.25);
+    plan.rebuildUnassignedPool();
+    HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan);
+
+    Solver::Config config = requestMovesOnly(/*ruinRecreate=*/true, /*bundles=*/false);
+    config.pair_construction_heuristic = false;
+    // The engine's own segment moves can carry both stops out of the pool in
+    // one step; without them only the request move can route the request.
+    config.or_opt_weight = 0.0;
+    config.tail_swap_weight = 0.0;
+    config.step_limit = 3000;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    Solver(config).solve(plan, calculator);
+    check(plan.score.feasible() && everyStopOnce(plan), "the plan stays feasible");
+    check(plan.unassignedNodeIndices.empty(),
+          "the last request is routed although no nearby route has room");
+    std::printf("\n");
+}
+
+// A start that breaks time windows. Routes that are late take no request in
+// front of the late stop, but requests can be taken off them.
+void testInfeasibleStartIsMended() {
+    std::printf("== An infeasible start ==\n");
+    PdpRoutePlan plan = buildRandomInstance(12, 4, /*seed=*/8);
+    // Every request on the first vehicle, in input order: the morning requests
+    // it reaches in the afternoon are late.
+    for (const Delivery& delivery : plan.deliveries) {
+        plan.vehicles[0].nodeIndices.push_back(delivery.pickupNodeIndex);
+        plan.vehicles[0].nodeIndices.push_back(delivery.dropoffNodeIndex);
+    }
+    const Score start = ScoreCalculator::score(plan);
+    check(start.hard < 0, "the starting plan is late (" + start.str() + ")");
+
+    Solver::Config config = requestMovesOnly(/*ruinRecreate=*/true, /*bundles=*/true);
+    config.step_limit = 3000;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    bool threw = false;
+    try {
+        Solver(config).solve(plan);
+    } catch (const optimaru::ScoreMismatchError&) {
+        threw = true;
+    }
+    check(!threw && everyStopOnce(plan), "the moves keep the score exact from an infeasible plan");
+    check(plan.score.feasible(),
+          "taking requests off the late route makes the plan feasible (" + plan.score.str() + ")");
+
+    // No stop can be reached in time at all: the request moves have nothing to
+    // offer, and the solve still ends with every stop in place and no worse.
+    PdpRoutePlan hopeless = buildRandomInstance(6, 2, /*seed=*/8);
+    for (Node& node : hopeless.nodes) node.maxEndTime = hourMinute(7, 0);  // before any departure
+    for (const Delivery& delivery : hopeless.deliveries) {
+        hopeless.vehicles[0].nodeIndices.push_back(delivery.pickupNodeIndex);
+        hopeless.vehicles[0].nodeIndices.push_back(delivery.dropoffNodeIndex);
+    }
+    const Score hopelessStart = ScoreCalculator::score(hopeless);
+    Solver(config).solve(hopeless);
+    check(everyStopOnce(hopeless) && hopeless.score >= hopelessStart,
+          "a plan with no feasible answer is not made worse (" + hopelessStart.str() + " -> " +
+                  hopeless.score.str() + ")");
+    std::printf("\n");
+}
+
 // A request with a pinned stop is not the request moves' to take: its route has
 // to keep starting with that stop.
 void testPinnedRequestsStay() {
@@ -478,6 +622,8 @@ int main() {
     testBlinker();
     testMovesKeepTheScoreExact();
     testSplitRequestIsMended();
+    testFarRouteIsOfferedWhenNearOnesAreFull();
+    testInfeasibleStartIsMended();
     testPinnedRequestsStay();
     testRequestMovesMatter();
     std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures,

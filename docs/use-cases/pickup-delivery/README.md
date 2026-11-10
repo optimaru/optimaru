@@ -198,6 +198,12 @@ score. A constraint selection that prices other things (a fixed cost, the route
 duration) is therefore followed, only less directly, and one that turns a limit
 soft still gets insertions that respect it.
 
+A route that already breaks a limit takes less: no request in front of a stop
+that is late, and none at all while it is over its travel budget or its stop
+cap. Requests can still be taken off such a route, which is how the request
+moves mend one; a plan that cannot be made feasible is left to the engine's
+stop moves, which trade one violation against another.
+
 Construction (`constructPairs`) places every request with the same scan, so the
 first plan already keeps the vehicle limits.
 
@@ -214,9 +220,10 @@ the whole move is laid out, so a candidate never holds half a request.
 | `bundleExchange` | Swaps a bundle of one route with a bundle of a nearby route, the two sized independently. |
 
 A request with a pinned stop is left where it is, and a request bound to a
-vehicle is only offered that vehicle. On a large fleet a request is offered to
-the idle vehicles and to the routes that hold one of its nearby stops; idle
-vehicles that would serve it identically are offered once.
+vehicle is only offered that vehicle. On a large fleet (more than 32 vehicles
+to offer) a request is offered to the idle vehicles and to the routes that hold
+one of its nearby stops, and to the rest of the fleet only when none of those
+has room; idle vehicles that would serve it identically are offered once.
 
 The removal and reinsertion rules follow Shaw (1998), Ropke & Pisinger (2006,
 "An Adaptive Large Neighborhood Search Heuristic for the Pickup and Delivery
@@ -301,7 +308,7 @@ through mid-move.
 cmake -B build -DOPTIMARU_USE_CASES=pickup_delivery && cmake --build build -j
 ./build/pickup_delivery/pdp_demo                       # 30 requests, 5 vehicles, 5s
 ./build/pickup_delivery/pdp_demo 60 6 10               # 60 requests, 6 vehicles, 10s
-./build/pickup_delivery/pdp_demo 60 6 10 --no-pair-moves   # control: built-in moves only
+./build/pickup_delivery/pdp_demo 60 6 10 --stop-moves-only   # control: the engine's stop moves only
 ./build/pickup_delivery/pdp_test
 ./build/pickup_delivery/pdp_plugin_test    # assembly == monolith, raw costs by hand, catalog, medium level
 ./build/pickup_delivery/pdp_request_moves_test   # insertion scan == brute force, the request moves in a solve

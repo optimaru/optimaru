@@ -327,6 +327,8 @@ def test_package_solve_with_constraints_equals_solve_with_constraints():
         ("parallel_solver_count", 0, "must be positive"),
         ("late_acceptance_size", -1, "must be >= 0"),
         ("ruin_recreate_rewards", [1.0, 2.0], "exactly 4 values"),
+        ("request_ruin_max_requests", 0, "must be positive"),
+        ("bundle_max_requests", 0, "must be positive"),
     ],
 )
 def test_config_rejects_out_of_range_values(field, value, message):

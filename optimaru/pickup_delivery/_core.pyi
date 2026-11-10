@@ -214,7 +214,7 @@ class SolverConfig:
     inter_exchange_move_weight: float
     inter_exchange_max_segment: int
 
-    # --- pair-aware operators (the PDP-specific extensions) ---
+    # --- pair operators ---
     pair_moves: bool
     pair_exchange_moves: bool
     pair_exchange_min_nodes: int
@@ -279,7 +279,7 @@ class SolverConfig:
 
 class Solver:
     """Construction heuristic + local search + adaptive ruin & recreate, with
-    pair-aware move and ruin operators. Solves IN PLACE: fills
+    request-level move and ruin operators. Solves IN PLACE: fills
     vehicle.node_indices, the unassigned pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: PdpRoutePlan) -> None: ...

@@ -25,7 +25,7 @@ namespace pdp {
 // rules. A VRP visit is independent — it can go anywhere. A PDP node cannot:
 // it drags its partner along. That is why this is a separate use case rather
 // than a constraint bolted onto vehicle-routing, and why the solver registers
-// pair-aware move and ruin operators (see solver.hpp) instead of relying on
+// request-level move and ruin operators (see solver.hpp) instead of relying on
 // the engine's element-granular built-ins alone.
 
 using Seconds = std::int64_t;

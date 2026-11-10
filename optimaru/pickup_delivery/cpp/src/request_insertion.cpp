@@ -167,7 +167,8 @@ void RouteTimeline::improve(const PdpRoutePlan& plan, const Delivery& delivery, 
         Seconds departure = std::max(pickupArrival, pickup.minStartTime) + pickup.serviceDuration;
         Seconds pickupDetour = 0;  // known once a stop is carried
         for (int j = i;; ++j) {
-            if (!blinker.skip()) {
+            // A slot is only skipped in favour of one already in hand.
+            if (!(best.found() && blinker.skip())) {
                 const Seconds toDropoff =
                         drive[static_cast<std::size_t>(location)][dropoffLocation];
                 const Seconds dropoffArrival = departure + toDropoff;
@@ -249,7 +250,8 @@ void PlanTimelines::rebuild(const PdpRoutePlan& plan) {
                 plan, v, plan.vehicles[static_cast<std::size_t>(v)].nodeIndices);
     }
 
-    // The vehicles do not change during a solve: classify them once.
+    // The vehicles do not change during a solve: classify them once (the
+    // class contract: one object, one plan).
     if (vehicleClass_.size() == plan.vehicles.size()) return;
     vehicleClass_.assign(plan.vehicles.size(), -1);
     std::vector<int> representatives;

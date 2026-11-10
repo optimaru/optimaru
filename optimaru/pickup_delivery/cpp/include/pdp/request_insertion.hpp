@@ -46,7 +46,9 @@ struct RequestInsertion {
 // Blinking (Christiaens & Vanden Berghe, "Slack Induction by String Removals",
 // 2020): a repair skips each candidate slot with a small probability, so the
 // same hole is not rebuilt the same way every time. The gap to the next skip is
-// drawn once, so a candidate costs one decrement, not one random number.
+// drawn once, so a candidate costs one decrement, not one random number. The
+// scan only blinks once it holds a feasible slot, so blinking never leaves a
+// request without one.
 class Blinker {
 public:
     // Never skips.
@@ -77,6 +79,7 @@ public:
 
     // Offers every feasible slot pair of `delivery` in this route and keeps the
     // cheapest in `best` (a slot pair must be strictly cheaper to replace it).
+    // While `best` is empty no slot is blinked.
     void improve(const PdpRoutePlan& plan, const Delivery& delivery, Blinker& blinker,
                  RequestInsertion& best) const;
 
@@ -110,6 +113,10 @@ private:
 };
 
 // The timelines of every route of a plan, and the search over them.
+//
+// One object serves one plan: which vehicles serve a request identically is
+// worked out on the first rebuild() and kept, since a solve does not change
+// its vehicles. Use a new object for another plan.
 class PlanTimelines {
 public:
     // Timelines of the plan's own routes.

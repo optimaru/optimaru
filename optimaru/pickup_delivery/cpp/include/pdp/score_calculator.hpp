@@ -32,7 +32,7 @@ namespace pdp {
 //
 // The first three are what make this a PDP rather than a VRP, and they are
 // where a naive element-granular local search burns its budget — hence the
-// pair-aware operators in solver.hpp.
+// request-level operators in solver.hpp.
 class ScoreCalculator {
 public:
     // Penalty weight (in the same whole-minute units as lateness) for each

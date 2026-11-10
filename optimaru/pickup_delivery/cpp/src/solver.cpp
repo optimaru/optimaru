@@ -637,7 +637,7 @@ void Solver::solve(PdpRoutePlan& plan) {
     }
     optimaru::check_config(config_);
 
-    // Parallel starts of this solver's own search: the pair-aware operators
+    // Parallel starts of this solver's own search: the request-level operators
     // are registered per engine, so the engine's multi-start would run without
     // them. Each start is this whole solve again, on its copy, with one start
     // (so it takes the single-start path below).
@@ -677,9 +677,10 @@ void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePla
                 callback(step, levelScoreOf(calculator));
             };
         }
-        // The pair-aware operators only read the plan (which request a node
-        // belongs to, where its partner sits), never the calculator, so the
-        // plugin path keeps them — they are what makes a PDP search work.
+        // The request-level operators only read the plan (which request a
+        // node belongs to, the windows, the vehicle limits), never the
+        // calculator, so the plugin path keeps them — they are what makes a
+        // PDP search work.
         optimaru::Solver<PdpRoutePlan> engine(std::move(engineConfig));
         if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
         addRequestOperators(engine, config_, plan);

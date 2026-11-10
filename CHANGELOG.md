@@ -16,8 +16,10 @@
   `max_route_duration`, `max_travel_time`, `max_stops`, pinned stops, a required vehicle).
   Construction uses the same scan, so the first plan keeps those vehicle limits too (it
   checked capacity and time windows only). `SolverConfig` gains `request_ruin_recreate`,
-  `request_ruin_max_requests`, `bundle_moves` and `bundle_max_requests`; all are on by
-  default, so a seeded solve no longer walks the path it did.
+  `request_ruin_max_requests` (20), `bundle_moves` and `bundle_max_requests` (3); the two
+  switches are on by default, so a seeded solve no longer walks the path it did, and the
+  two counts refuse a value below 1. `pdp_demo`'s control flag is `--stop-moves-only` now
+  (it was `--no-pair-moves`) and turns every request-level operator off.
 - **Engine (C++): features no use case used are removed.** Gone from the engine headers: the
   chain solution shape (`Shape::Chain`, `ChainObjective`, the chain overload of
   `Solver::solve()`, the `chain::` link helpers), `WeightedObjective`, `explain_score()`,
