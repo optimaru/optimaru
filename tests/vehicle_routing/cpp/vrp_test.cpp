@@ -1,14 +1,15 @@
 // Vehicle-routing tests: hand-computed scoring fixtures, the
 // incremental calculator against the full recompute, and the engine
 // integration (element conservation, unassigned pool, ALNS).
-#include <chrono>
 #include <algorithm>
-#include <random>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "optimaru/model/editor.hpp"
@@ -42,6 +43,17 @@ void checkEqual(const std::string& label, long actual, long expected) {
     if (!ok) ++failures;
 }
 
+// A vehicle with the four fields these tests set; every other field keeps its
+// default (no route policy, an empty route).
+Vehicle vehicleAt(std::string id, int capacity, int home, Seconds departure) {
+    Vehicle vehicle;
+    vehicle.id = std::move(id);
+    vehicle.capacity = capacity;
+    vehicle.homeLocationIndex = home;
+    vehicle.departureTime = departure;
+    return vehicle;
+}
+
 // -------------------------------------------------------------------------
 // Scoring on the three-location fixture plan.
 // -------------------------------------------------------------------------
@@ -57,7 +69,7 @@ void testFixtures() {
     checkEqual("drivingTime L1->L3", plan.drivingTime(home, loc3), 941);
 
     // vehicleCapacityCost: capacity 100, demands 80 + 40 -> 20 over.
-    plan.vehicles = {Vehicle{"1", 100, home, hourMinute(7, 0), {}}};
+    plan.vehicles = {vehicleAt("1", 100, home, hourMinute(7, 0))};
     plan.visits = {
             Visit{"2", "John", loc2, 80, hourMinute(8, 0), hourMinute(10, 0), 30 * 60, -1,
                   NULL_TIME},
@@ -83,7 +95,7 @@ void testFixtures() {
     addLocation(plan2, 49.288087, 16.562172);
     addLocation(plan2, 49.190922, 16.624466);
     HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan2);
-    plan2.vehicles = {Vehicle{"1", 100, 0, hourMinute(7, 0), {}}};
+    plan2.vehicles = {vehicleAt("1", 100, 0, hourMinute(7, 0))};
     plan2.visits = {
             Visit{"2", "John", 1, 80, hourMinute(8, 0), hourMinute(10, 0), 30 * 60, -1, NULL_TIME}};
     // Left out of every route == unassigned.
@@ -475,8 +487,7 @@ void testEjectionChainFillsTightPool() {
         plan.visits.push_back(visit);
     }
     HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan);
-    for (int v = 0; v < 3; ++v)
-        plan.vehicles.push_back(Vehicle{std::to_string(v), 10, home, 0, {}});
+    for (int v = 0; v < 3; ++v) plan.vehicles.push_back(vehicleAt(std::to_string(v), 10, home, 0));
     plan.vehicles[0].visitIndices = {0, 1};
     plan.vehicles[1].visitIndices = {2, 3};
     plan.vehicles[2].visitIndices = {4, 5};

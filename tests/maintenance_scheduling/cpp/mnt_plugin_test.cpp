@@ -699,7 +699,7 @@ ConstraintAssembly repeatedAssembly() {
     assembly.add_instances(std::move(copyOf("beforeIdealEndDateCost")
                                              .weight("beforeIdealEndDateCost", 0.5)
                                              .offset("beforeIdealEndDateCost", -2.0)));
-    assembly.add_instances(std::move(copyOf("crewConflictCost")));
+    assembly.add_instances(copyOf("crewConflictCost"));
     assembly.add_instances(std::move(copyOf("maxEndDateCost")
                                              .soft("maxEndDateCost")
                                              .weight("maxEndDateCost", 1.5)

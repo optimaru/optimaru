@@ -19,7 +19,7 @@ using namespace ms;
 namespace {
 
 std::string minuteToString(int minuteOfDay) {
-    char buf[8];
+    char buf[24];  // room for any two ints, so no output is ever cut short
     std::snprintf(buf, sizeof(buf), "%02d:%02d", minuteOfDay / 60, minuteOfDay % 60);
     return buf;
 }

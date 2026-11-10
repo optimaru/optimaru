@@ -512,7 +512,7 @@ ConstraintAssembly repeatedAssembly() {
                                              .weight("workloadImbalanceCost", 0.5)
                                              .offset("workloadImbalanceCost", 3.0)
                                              .clip("workloadImbalanceCost", false)));
-    assembly.add_instances(std::move(copyOf("taskStationBoundsCost")));
+    assembly.add_instances(copyOf("taskStationBoundsCost"));
     assembly.add_instances(std::move(copyOf("taskStationBoundsCost")
                                              .soft("taskStationBoundsCost")
                                              .weight("taskStationBoundsCost", 1.5)
