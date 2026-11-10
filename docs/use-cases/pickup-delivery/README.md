@@ -14,47 +14,37 @@ constraints, the moves, the ruin operators — follows from that one fact.
 
 Uses adaptive large-neighborhood search, running on the generic
 engine in [`optimaru/cpp/optimaru/`](../../../optimaru/cpp/optimaru).
+The Python API is in [`python.md`](python.md).
 
 ```
-cpp/     the solver: domain, constraints, engine wiring, demo, tests
-python/  pybind11 bindings (optimaru.pickup_delivery)
+optimaru/pickup_delivery/        the Python API: solve, models, constraint specs, stubs
+optimaru/pickup_delivery/cpp/    the solver (domain, constraints, engine wiring, demo) and the pybind11 bindings
+tests/pickup_delivery/           pytest suite; cpp/ holds the C++ tests
 ```
 
-## Build & run
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=pickup_delivery uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/pickup_delivery
+```
+
+```python
+from optimaru import pickup_delivery as pdp
+
+plan = pdp.build_random_instance(request_count=20, vehicle_count=3, seed=7)
+solved = pdp.solve(plan, time_limit_seconds=5.0, random_seed=42)   # solves in place and returns the plan
+print(solved.score.hard, solved.score.medium, solved.score.soft)
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`pdp.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out use `optimaru.pickup_delivery.models.solve_request(...)`, which also takes `constraints=`. The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=pickup_delivery && cmake --build build -j
-./build/pickup_delivery/pdp_demo                       # 30 requests, 5 vehicles, 5s
-./build/pickup_delivery/pdp_demo 60 6 10               # 60 requests, 6 vehicles, 10s
-./build/pickup_delivery/pdp_demo 60 6 10 --no-pair-moves   # control: built-in moves only
-./build/pickup_delivery/pdp_test
-./build/pickup_delivery/pdp_plugin_test    # assembly == monolith, raw costs by hand, catalog, medium level
+ctest --test-dir build
 ```
 
-```sh
-OPTIMARU_USE_CASES=pickup_delivery uv sync && uv run pytest -q tests/pickup_delivery
-```
-
-## Starting from existing routes
-
-A solve keeps any route already on a vehicle as its starting point and places only
-the requests no route holds. In the JSON contract that is `initial_route`, a list
-of stop ids; both stops of a request must be in it, pickup first.
-
-`pinned_stops` fixes that many leading stops, even in a hard-infeasible result.
-Everything after them can be reordered, moved to another vehicle or have stops
-inserted between. Pinning a
-pickup keeps its request on the vehicle, through `same_vehicle_cost`. Goods already on
-board have no pickup left, so give them a pickup at the vehicle's position with no
-service time and pin it.
-
-`required_vehicle` keeps a request on a vehicle without fixing its place on the
-route, for work that is promised but still free to be reordered. A request with no
-feasible slot on that vehicle stays in `unassigned` rather than moving to another
-one, and the result is hard-infeasible. Search may still put it on its own vehicle
-late, when that costs less than waiting.
-
-## The constraints
+## Constraints
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 | --- | --- | --- | --- | --- |
@@ -129,7 +119,7 @@ instances add up:
 ```python
 from optimaru.pickup_delivery.constraints import TravelTimeCost, get_constraints
 
-pdp.Solver(config).solve_with_constraints(plan, [
+pdp.solve(plan, time_limit_seconds=5.0, random_seed=42, constraints=[
     *get_constraints(),                                        # the defaults
     TravelTimeCost(weight=0.001, exponent=2, offset=7200),     # + 0.001 x (seconds beyond 2 h)^2
 ])
@@ -248,32 +238,39 @@ coupling penalty; `ScoreChecks::Full` caught it, and `pdp_test` now covers it
 directly, including the transient half-assigned states the engine passes
 through mid-move.
 
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=pickup_delivery uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/pickup_delivery
-```
-
-```python
-from optimaru import pickup_delivery as pdp
-
-plan = pdp.build_random_instance(request_count=20, vehicle_count=3, seed=7)
-config = pdp.SolverConfig()
-config.spent_limit_seconds = 5.0
-config.random_seed = 42
-pdp.Solver(config).solve(plan)                     # solves in place
-print(plan.score.hard, plan.score.medium, plan.score.soft)
-```
-
-`Solver(config).solve(plan)` works on the engine objects; for JSON in/out use `optimaru.pickup_delivery.models.solve_request(...)`, which also takes `constraints=` (see below). The C++ side builds and tests with:
+## Build & run
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=pickup_delivery && cmake --build build -j
-ctest --test-dir build
+./build/pickup_delivery/pdp_demo                       # 30 requests, 5 vehicles, 5s
+./build/pickup_delivery/pdp_demo 60 6 10               # 60 requests, 6 vehicles, 10s
+./build/pickup_delivery/pdp_demo 60 6 10 --no-pair-moves   # control: built-in moves only
+./build/pickup_delivery/pdp_test
+./build/pickup_delivery/pdp_plugin_test    # assembly == monolith, raw costs by hand, catalog, medium level
+```
+
+```sh
+OPTIMARU_USE_CASES=pickup_delivery uv sync && uv run pytest -q tests/pickup_delivery
 ```
 
 ## Starting from an existing solution
+
+A solve keeps any route already on a vehicle as its starting point and places only
+the requests no route holds. In the JSON contract that is `initial_route`, a list
+of stop ids; both stops of a request must be in it, pickup first.
+
+`pinned_stops` fixes that many leading stops, even in a hard-infeasible result.
+Everything after them can be reordered, moved to another vehicle or have stops
+inserted between. Pinning a
+pickup keeps its request on the vehicle, through `same_vehicle_cost`. Goods already on
+board have no pickup left, so give them a pickup at the vehicle's position with no
+service time and pin it.
+
+`required_vehicle` keeps a request on a vehicle without fixing its place on the
+route, for work that is promised but still free to be reordered. A request with no
+feasible slot on that vehicle stays in `unassigned` rather than moving to another
+one, and the result is hard-infeasible. Search may still put it on its own vehicle
+late, when that costs less than waiting.
 
 ```python
 from optimaru.pickup_delivery.models import solve_request, with_initial_solution
@@ -283,7 +280,7 @@ next_request = with_initial_solution(request, solution)  # or solution.model_dum
 better = solve_request(next_request)
 ```
 
-`with_initial_solution` turns a solution into the `initial_route` of each vehicle (see [Starting from existing routes](#starting-from-existing-routes)), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `timelimit=0` a complete solution comes back as it went in.
+`with_initial_solution` turns a solution into the `initial_route` of each vehicle (above), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `timelimit=0` a complete solution comes back as it went in.
 
 A vehicle's `pinned_stops` stay as the request has them: its route in the solution must start with them, or `ValueError` is raised. The same goes for an unknown id, a stop routed twice, or a request whose pickup and dropoff are apart, so a hard-infeasible result with a broken pair cannot be used as a start.
 

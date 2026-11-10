@@ -38,6 +38,37 @@ and semiconductor-scheduling) also carry a pure-Python reference scorer as
 `tests/<use case>/reference_<use case>.py`, an independent oracle the C++ costs are
 tested against.
 
+## One way to solve
+
+Every use case has the same entry point, `optimaru.<use case>.solve`:
+
+```python
+solved = uc.solve(
+    problem,
+    time_limit_seconds=5.0,        # every argument below is optional
+    random_seed=42,
+    parallel_solver_count=1,
+    stop_at_first_feasible=False,  # stop as soon as hard 0 is reached
+    full_assert=False,             # check every incremental score (slow; for debugging)
+    on_new_best=None,              # called with (step, score) on every new best
+    config=None,                   # a SolverConfig; the keywords above override a copy of it
+    constraints=None,              # constraint picks; None = the default set
+)
+```
+
+It returns the solved problem, and the score is on it. A problem built from the
+compiled classes (`optimaru.<use case>.<Problem>`) is solved in place and
+returned, with its score in `solved.score`. A pydantic model from
+`optimaru.<use case>.models` comes back as a solved model with its score fields
+(`score_hard`, `score_soft`, and one per further level the use case has). Always
+use the return value: some use cases write the result into the model they were
+given and others return a new one.
+
+School timetabling takes and returns dicts (a `TimetableProblem` in, a
+`Timetable` out) and has two more keywords, `mode` and `initial_solution`.
+`Solver(config).solve(problem)` and `solve_with_constraints(problem, picks)`
+are the same solves one level down, without the keyword conveniences.
+
 ## Constraints: names and knobs
 
 Every constraint is one named component, `<Subject>Cost` in C++ and Python and

@@ -31,7 +31,7 @@ def test_web_sample_reaches_the_eight_bin_lower_bound():
     config.spent_limit_seconds = 10
     config.best_score_limit = (0, -8.0)
     config.random_seed = 7
-    assert bp.solve(problem, config=config) == bp.Score(0, -8.0)
+    assert bp.solve(problem, config=config).score == bp.Score(0, -8.0)
     assert problem.bins_used() == 8
     assert all(load > 0 for load in problem.bin_loads())  # compacted, no gaps
 
@@ -42,7 +42,7 @@ def test_web_sample_with_constraints_reaches_the_same_optimum():
     config.spent_limit_seconds = 10
     config.best_score_limit = (0, -8.0)
     config.random_seed = 7
-    assert bp.solve(problem, config=config, constraints=get_constraints()) == bp.Score(0, -8.0)
+    assert bp.solve(problem, config=config, constraints=get_constraints()).score == bp.Score(0, -8.0)
 
 
 def test_on_new_best_reports_step_and_score():
@@ -79,14 +79,14 @@ def test_constraints_path_scores_with_the_picks():
     config = bp.SolverConfig()
     config.step_count_limit = 2000
     config.random_seed = 2
-    score = bp.solve(problem, config=config, constraints=picks)
+    score = bp.solve(problem, config=config, constraints=picks).score
     assert score == bp.calculate_score(problem, picks)
     assert score.soft == -5 * problem.bins_used()
 
 
 def test_empty_problem_scores_zero_and_clears_the_seed():
     problem = bp.BinPackingProblem(10, [], warm_start=True)
-    assert bp.solve(problem, time_limit_seconds=0.0) == bp.Score()
+    assert bp.solve(problem, time_limit_seconds=0.0).score == bp.Score()
     assert problem.warm_start is False
 
 
@@ -176,7 +176,7 @@ def test_repack_moves_close_the_bins_colours_and_conflicts_keep_open():
         config.step_count_limit = 50_000
         config.random_seed = 1
         config.repack_moves = repack
-        score = bp.solve(problem, config=config)
+        score = bp.solve(problem, config=config).score
         assert score.hard == 0
         bins[repack] = problem.bins_used()
     assert bins[True] <= 44
@@ -197,7 +197,7 @@ def test_full_assert_solve_with_the_macro_moves(shaped):
     config.full_assert = True
     config.step_count_limit = 3000
     config.random_seed = 3
-    score = bp.solve(problem, config=config, constraints=picks)
+    score = bp.solve(problem, config=config, constraints=picks).score
     assert score == bp.calculate_score(problem, picks)
     assert all(item.bin >= 0 for item in problem.items)
 

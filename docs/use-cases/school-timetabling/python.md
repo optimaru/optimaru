@@ -50,7 +50,7 @@ seven terms are named `room_conflict_cost`, `teacher_conflict_cost`,
 `class_subject_repeat_cost` (soft) in its docs and in the benchmark's
 `evaluate.py`.
 
-## Install / test
+## Install and test
 
 ```bash
 OPTIMARU_USE_CASES=school_timetabling uv sync   # builds only this use case's C++ extension; pytest + pydantic

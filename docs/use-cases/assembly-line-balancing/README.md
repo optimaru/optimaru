@@ -9,6 +9,44 @@ The exact CP-SAT reference is `external_solver.assembly_line_balancing`
 ([external-solver](https://github.com/optimaru/external-solver)), run against this engine by
 [`benchmarks/assembly-line-balancing/cpsat`](../../../benchmarks/assembly-line-balancing/cpsat).
 
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=assembly_line_balancing uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/assembly_line_balancing
+```
+
+```python
+from optimaru import assembly_line_balancing as alb
+from optimaru.assembly_line_balancing.models import AssemblyLineBalancingProblemModel, PrecedenceModel, TaskModel
+
+problem = AssemblyLineBalancingProblemModel(
+    cycle_time=5,
+    tasks=[TaskModel(id="A", duration=3), TaskModel(id="B", duration=3), TaskModel(id="C", duration=2)],
+    precedences=[PrecedenceModel(before="A", after="B")],
+)
+alb.solve(problem, time_limit_seconds=1.0, random_seed=42)          # the model, in place
+print({task.id: task.station for task in problem.tasks}, problem.stations_used)
+
+core = problem.to_core()                                            # or the engine object
+alb.solve(core, time_limit_seconds=1.0, random_seed=42)
+print(AssemblyLineBalancingProblemModel.from_core(core).station_loads)
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
+`stop_at_first_feasible`, `on_new_best`, a full `config` (`alb.SolverConfig`) and
+`constraints`:
+
+```python
+from optimaru.assembly_line_balancing.constraints import UsedStationsCost, WorkloadImbalanceCost, get_constraints, score
+
+alb.constraint_info()          # [ConstraintInfo(name='station_capacity_cost', default_level='hard', ...), ...]
+alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+raw = alb.constraint_costs(problem)                 # raw costs, re-priced in pure Python:
+score(raw), score(raw, [*get_constraints()[:-1], WorkloadImbalanceCost(weight=2)])
+score(raw, [UsedStationsCost(), UsedStationsCost(weight=10, offset=4)])   # a repeat, shifted
+```
+
 ## Domain (assignment shape)
 
 - `Task.station` — the only decision variable: a station index (0-based), `-1` =
@@ -25,7 +63,9 @@ The exact CP-SAT reference is `external_solver.assembly_line_balancing`
 - `warm_start` — start from the stations on the tasks (tasks at `-1` go through the
   construction); a plain solve ignores input stations. Every solve resets it.
 
-## Constraints (Score — the engine score type as-is, no mapping)
+## Constraints
+
+The score is the engine's `Score` type as it is, with no mapping.
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) | Unit |
 |---|---|---|---|---|---|
@@ -101,8 +141,9 @@ integral offsets.
   `close_station_moves`, `best_score_limit`, `on_new_best(step, score)`. Zero budget =
   `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded search
   = `step_count_limit = N`.
-- `solve()` returns the engine `Score` (`.hard`, `.soft`) and takes the engine object
-  or the model (written back in place). `calculate_score(problem, constraints)` returns
+- `solve()` takes the engine object or the model and returns it, solved in place. The
+  score is on the result: `.score` (`.hard`, `.soft`) of the engine object, `score_hard` /
+  `score_soft` of the model. `calculate_score(problem, constraints)` returns
   the engine `Score` for the defaults and a `constraints.Score(hard, soft)` named tuple
   for a selection (see `constraints.get_constraints()` / `constraints.score()`). With
   `constraints=...` a solve is single-start (`parallel_solver_count` is ignored), as in
@@ -139,44 +180,6 @@ incremental == full recompute over random change / swap / unassign / batch moves
 ScoreChecks::Full solves, determinism and multi-start. `alb_plugin_test`: default assembly ==
 monolith (score and every raw total), plugin incremental == reset, partial assemblies,
 overrides, raw costs by hand per station, the catalog.
-
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=assembly_line_balancing uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/assembly_line_balancing
-```
-
-```python
-from optimaru import assembly_line_balancing as alb
-from optimaru.assembly_line_balancing.models import AssemblyLineBalancingProblemModel, PrecedenceModel, TaskModel
-
-problem = AssemblyLineBalancingProblemModel(
-    cycle_time=5,
-    tasks=[TaskModel(id="A", duration=3), TaskModel(id="B", duration=3), TaskModel(id="C", duration=2)],
-    precedences=[PrecedenceModel(before="A", after="B")],
-)
-alb.solve(problem, time_limit_seconds=1.0, random_seed=42)          # the model, in place
-print({task.id: task.station for task in problem.tasks}, problem.stations_used)
-
-core = problem.to_core()                                            # or the engine object
-alb.solve(core, time_limit_seconds=1.0, random_seed=42)
-print(AssemblyLineBalancingProblemModel.from_core(core).station_loads)
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `on_new_best`, a full `config` (`alb.SolverConfig`) and
-`constraints`:
-
-```python
-from optimaru.assembly_line_balancing.constraints import UsedStationsCost, WorkloadImbalanceCost, get_constraints, score
-
-alb.constraint_info()          # [ConstraintInfo(name='station_capacity_cost', default_level='hard', ...), ...]
-alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
-raw = alb.constraint_costs(problem)                 # raw costs, re-priced in pure Python:
-score(raw), score(raw, [*get_constraints()[:-1], WorkloadImbalanceCost(weight=2)])
-score(raw, [UsedStationsCost(), UsedStationsCost(weight=10, offset=4)])   # a repeat, shifted
-```
 
 ## Starting from an existing solution
 

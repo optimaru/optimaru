@@ -14,6 +14,28 @@ lines run by the same operator must not overlap.
   assembles the default set (`defaultConstraints()`).
 - `optimaru/food_packaging/` — pybind11 bindings (`optimaru.food_packaging._core`) and the pydantic v2 mirror.
 
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=food_packaging uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/food_packaging
+```
+
+```python
+from optimaru import food_packaging as fp
+
+solution = fp.generate_demo_data()
+result = fp.solve(solution, time_limit_seconds=5.0, random_seed=42)
+print(result.score)
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`food_packaging.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+
+```sh
+cmake -B build -DOPTIMARU_USE_CASES=food_packaging && cmake --build build -j
+ctest --test-dir build
+```
+
 ## Model summary
 
 Python names are those of the pydantic mirror, `optimaru.food_packaging.models`.
@@ -26,7 +48,9 @@ Python names are those of the pydantic mirror, `optimaru.food_packaging.models`.
 | Pinning: `JobModel.pinned` | a pinned job keeps its line and position; the pinned jobs of a line must be its prefix, which is hidden from the engine view |
 | Score: `score_hard` / `score_medium` / `score_soft` | three levels, hard / medium / soft; internally `engine.soft = medium * 10^10 + soft`, the domain's medium fold (see the domain header comments) |
 
-## Constraints (hard / medium / soft, folded into the engine's Score)
+## Constraints
+
+The score has three levels, hard / medium / soft, folded into the engine's `Score`.
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
@@ -98,28 +122,6 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=food_packaging &&
 ./build/food_packaging/fp_demo [sec]    # the demo plant (5 lines, 100 jobs), default 10 s
 
 OPTIMARU_USE_CASES=food_packaging uv sync && uv run pytest -q tests/food_packaging
-```
-
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=food_packaging uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/food_packaging
-```
-
-```python
-from optimaru import food_packaging as fp
-
-solution = fp.generate_demo_data()
-result = fp.solve(solution, time_limit_seconds=5.0, random_seed=42)
-print(result.score)
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`food_packaging.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
-
-```sh
-cmake -B build -DOPTIMARU_USE_CASES=food_packaging && cmake --build build -j
-ctest --test-dir build
 ```
 
 ## Starting from an existing solution

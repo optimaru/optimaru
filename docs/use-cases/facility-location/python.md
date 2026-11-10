@@ -31,7 +31,7 @@ score(raw), score(raw, [DistanceFromFacilityCost(exponent=2.0)])
 score(raw, [DistanceFromFacilityCost(), DistanceFromFacilityCost(weight=0.01, exponent=2, offset=500)])
 ```
 
-## Install / test
+## Install and test
 
 ```bash
 OPTIMARU_USE_CASES=facility_location uv sync      # builds only this use case's C++ extension

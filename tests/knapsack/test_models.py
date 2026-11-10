@@ -88,7 +88,8 @@ def test_the_web_demo_validates_and_converts():
 def test_solving_the_model_writes_the_result_back_in_place():
     model = rich()
     model.warm_start = True
-    result = knapsack.solve(model, time_limit_seconds=0.2, random_seed=3)
+    assert knapsack.solve(model, time_limit_seconds=0.2, random_seed=3) is model
+    result = knapsack.calculate_score(model.model_copy(deep=True))
     assert (model.score_hard, model.score_soft) == (result.hard, result.soft)
     assert model.warm_start is False
     assert model.total_weight == sum(item.weight for item in model.items if item.selected)

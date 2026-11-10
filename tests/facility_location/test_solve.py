@@ -36,7 +36,7 @@ def demo_problem(facility_count=15, consumer_count=30, seed=0):
 
 def test_solve_assigns_everything_feasibly():
     problem = demo_problem()
-    score = fl.solve(problem, time_limit_seconds=2.0, random_seed=7)
+    score = fl.solve(problem, time_limit_seconds=2.0, random_seed=7).score
     assert score.is_feasible()
     assert score.hard == 0
     assignment = problem.assignment()
@@ -51,7 +51,7 @@ def test_solve_assigns_everything_feasibly():
 
 def test_solver_score_matches_recompute():
     problem = demo_problem()
-    score = fl.solve(problem, time_limit_seconds=1.0, random_seed=7)
+    score = fl.solve(problem, time_limit_seconds=1.0, random_seed=7).score
     recomputed = fl.calculate_score(problem)
     assert (score.hard, score.soft) == (recomputed.hard, recomputed.soft)
     # Summary getters agree with the score's soft breakdown.
@@ -69,7 +69,7 @@ def test_seeded_runs_are_reproducible():
 
 def test_stop_at_first_feasible():
     problem = demo_problem()
-    score = fl.solve(problem, time_limit_seconds=10.0, random_seed=1, stop_at_first_feasible=True)
+    score = fl.solve(problem, time_limit_seconds=10.0, random_seed=1, stop_at_first_feasible=True).score
     assert score.hard == 0
 
 

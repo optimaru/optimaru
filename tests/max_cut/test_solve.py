@@ -67,10 +67,10 @@ def test_unknown_config_knobs_are_refused():
 def test_solve_on_the_engine_object_and_on_the_model_agree():
     core = demo().to_core()
     model = demo()
-    by_core = max_cut.solve(core, config=steps(3000, seed=7))
-    by_model = max_cut.solve(model, config=steps(3000, seed=7))
-    assert isinstance(by_core, max_cut.Score)
-    assert (by_core.hard, by_core.soft) == (by_model.hard, by_model.soft)
+    assert max_cut.solve(core, config=steps(3000, seed=7)) is core
+    assert max_cut.solve(model, config=steps(3000, seed=7)) is model
+    assert isinstance(core.score, max_cut.Score)
+    assert (core.score.hard, core.score.soft) == (model.score_hard, model.score_soft)
     assert model.partition == dict(zip(model.vertices, core.assignment(), strict=True))
     assert model.cut_weight == core.cut_weight()
 
@@ -78,8 +78,8 @@ def test_solve_on_the_engine_object_and_on_the_model_agree():
 def test_the_web_demo_solves_to_a_feasible_partition():
     """The sample has min = max = 4: the exact-size swap-only path."""
     model = demo()
-    result = max_cut.solve(model, time_limit_seconds=1.0, random_seed=1)
-    assert result.is_feasible()
+    assert max_cut.solve(model, time_limit_seconds=1.0, random_seed=1) is model
+    assert model.score_hard >= 0  # feasible
     sides = model.partition
     assert sum(sides.values()) == 4
     assert sides["A"] == 0
@@ -190,7 +190,9 @@ def test_the_server_flow_round_trips_with_a_reweighted_selection():
     """engine._solve_metaheuristics: to_core -> solve(core, constraints=[replace(spec, ...)]) -> from_core."""
     core = demo().to_core()
     selection = [*get_constraints()[:3], replace(partition_size_bounds_cost, weight=2.0), *get_constraints()[4:]]
-    result = max_cut.solve(core, time_limit_seconds=0.3, random_seed=42, parallel_solver_count=1, constraints=selection)
+    result = max_cut.solve(
+        core, time_limit_seconds=0.3, random_seed=42, parallel_solver_count=1, constraints=selection
+    ).score
     back = MaxCutProblemModel.from_core(core)
     assert (back.score_hard, back.score_soft) == (result.hard, result.soft)
     assert back.cut_weight == core.cut_weight() and set(back.partition) == set(back.vertices)
@@ -217,7 +219,7 @@ def test_calculate_score_fills_the_model():
 
 def test_an_empty_problem_solves():
     core = max_cut.MaxCutProblem([])
-    score = max_cut.solve(core, time_limit_seconds=1)
+    score = max_cut.solve(core, time_limit_seconds=1).score
     assert (score.hard, score.soft) == (0, 0.0)
     model = MaxCutProblemModel(vertices=[], edges=[])
     max_cut.solve(model, time_limit_seconds=1)

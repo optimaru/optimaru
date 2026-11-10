@@ -192,6 +192,9 @@ class SolverConfig:
     random_seed: int
     parallel_solver_count: int
     """Independent parallel starts; the best final score wins."""
+    full_assert: bool
+    """Re-verify every incremental score against a full recompute after every
+    move (a debugging aid; much slower)."""
     first_fit_decreasing: bool
     """Construction order: tightest window / largest demand first."""
     pair_construction_heuristic: bool

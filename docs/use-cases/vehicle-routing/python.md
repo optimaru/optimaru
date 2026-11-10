@@ -13,7 +13,7 @@ load, driving / waiting / service seconds and the route end time; these are
 post-processed from the finished routes (`vehicle_metrics()`) and never
 scored.
 
-## Build & run
+## Install and test
 
 ```sh
 OPTIMARU_USE_CASES=vehicle_routing uv sync      # builds only this use case's C++ extension
@@ -32,14 +32,17 @@ visits = [vrp.Visit("C1", "Customer 1", location_index=1, demand=3,
                     service_duration=600)]
 plan = vrp.VehicleRoutePlan("demo", locations, vehicles, visits)
 
-cfg = vrp.SolverConfig()
-cfg.spent_limit_seconds = 2.0
-cfg.random_seed = 42
-vrp.Solver(cfg).solve(plan)            # in place
+vrp.solve(plan, time_limit_seconds=2.0, random_seed=42)   # in place; returns the plan
 
-print(plan.score)                      # e.g. 0hard/0medium/-1234soft
-print(plan.routes())                   # {"V1": ["C1"]}
+print(plan.score)                      # 0hard/0medium/-38soft
+print(plan.routes())                   # {'V1': ['C1']}
 ```
+
+`vrp.solve` also takes `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert` (re-verifies every incremental score against a full recompute; a
+debugging aid, much slower), `on_new_best`, `constraints` and a full `config`: a
+`vrp.SolverConfig`, whose fields the keywords override on a copy.
+`vrp.Solver(config).solve(plan)` is the same solve one level down.
 
 - Times are integer **seconds from a common day start** (`8 * 3600` = 08:00).
 - The driving-time matrix is precomputed from the haversine distance when the

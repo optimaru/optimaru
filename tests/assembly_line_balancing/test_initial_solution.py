@@ -83,7 +83,7 @@ def test_search_from_a_seed_never_scores_below_it():
     )
     seed_score = calculate_score(seeded.model_copy(deep=True))
     result = solve(seeded, config=_steps(500, seed=1))
-    assert (result.hard, result.soft) >= (seed_score.hard, seed_score.soft)
+    assert (result.score_hard, result.score_soft) >= (seed_score.hard, seed_score.soft)
 
 
 def test_partial_seed_keeps_its_part_and_constructs_the_rest():

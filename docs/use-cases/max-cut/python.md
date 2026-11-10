@@ -55,7 +55,7 @@ contributions are rounded per side, the reward refuses `level="hard"`, and `Solv
 carries the engine's knobs (`spent_limit_seconds`, `step_count_limit`, ...); see the
 [use-case README](README.md#python-api).
 
-## Install / test
+## Install and test
 
 ```bash
 OPTIMARU_USE_CASES=max_cut uv sync   # builds only this use case's C++ extension

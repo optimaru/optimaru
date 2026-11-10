@@ -18,18 +18,29 @@ every match (`Match`) of the league (one assignment variable: `Match::round`).
 - `optimaru/sports_league_scheduling/` — pybind11 package `optimaru.sports_league_scheduling` (with the pydantic mirror, demo generator
   and type stubs). Details in [`python.md`](python.md).
 
-## Build / verify
+## Usage
 
 ```sh
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=sports_league_scheduling && cmake --build build -j4
-./build/sports_league_scheduling/sls_test         # constraint hand checks + incremental==full over 3000 moves + ScoreChecks::Full solve
-./build/sports_league_scheduling/sls_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
-./build/sports_league_scheduling/sls_demo 10      # the demo league (14 teams/32 rounds/182 matches), 10 s solve, checks 0hard
-
-OPTIMARU_USE_CASES=sports_league_scheduling uv sync && uv run pytest -q tests/sports_league_scheduling
+OPTIMARU_USE_CASES=sports_league_scheduling uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/sports_league_scheduling
 ```
 
-## Score mapping
+```python
+from optimaru import sports_league_scheduling as sl
+
+schedule = sl.demo_schedule()
+sl.solve(schedule, time_limit_seconds=5.0, random_seed=42)
+print(schedule.score)
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`optimaru.sports_league_scheduling.SolverConfig` or `models.SolveConfig`) and `constraints` (see below). The C++ side builds and tests with:
+
+```sh
+cmake -B build -DOPTIMARU_USE_CASES=sports_league_scheduling && cmake --build build -j
+ctest --test-dir build
+```
+
+## Constraints
 
 This use case scores hard and soft only, so it maps identically onto the engine's
 `Score(int64 hard, double soft)` (soft stored as an integer value in the double).
@@ -85,26 +96,15 @@ sl.solve(schedule, constraints=[
 `sl.constraint_costs(schedule, picks)` keys the second pick `away_to_away_hop_cost#2`. The
 CP-SAT reference takes integral offsets.
 
-## Usage
+## Build / verify
 
 ```sh
-OPTIMARU_USE_CASES=sports_league_scheduling uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/sports_league_scheduling
-```
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=sports_league_scheduling && cmake --build build -j4
+./build/sports_league_scheduling/sls_test         # constraint hand checks + incremental==full over 3000 moves + ScoreChecks::Full solve
+./build/sports_league_scheduling/sls_plugin_test  # plugin assembly == monolith, raw costs by hand, catalog, overrides
+./build/sports_league_scheduling/sls_demo 10      # the demo league (14 teams/32 rounds/182 matches), 10 s solve, checks 0hard
 
-```python
-from optimaru import sports_league_scheduling as sl
-
-schedule = sl.demo_schedule()
-sl.solve(schedule, time_limit_seconds=5.0, random_seed=42)
-print(schedule.score)
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`optimaru.sports_league_scheduling.SolverConfig` or `models.SolveConfig`) and `constraints` (see below). The C++ side builds and tests with:
-
-```sh
-cmake -B build -DOPTIMARU_USE_CASES=sports_league_scheduling && cmake --build build -j
-ctest --test-dir build
+OPTIMARU_USE_CASES=sports_league_scheduling uv sync && uv run pytest -q tests/sports_league_scheduling
 ```
 
 ## Starting from an existing solution

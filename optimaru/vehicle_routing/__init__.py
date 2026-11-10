@@ -42,6 +42,8 @@ Compared lexicographically: hard dominates medium dominates soft.
 `optimaru.vehicle_routing.constraints` picks and re-weights them.
 """
 
+import copy
+
 from ._core import (
     AcceptorType,
     ConstraintInfo,
@@ -71,12 +73,65 @@ __all__ = [
     "Solver",
     "SolverConfig",
     "calculate_score",
+    "solve",
     "list_constraints",
     "constraint_costs",
     "constraint_info",
     "solve_request",
     "with_initial_solution",
 ]
+
+
+def solve(
+    plan: VehicleRoutePlan,
+    *,
+    time_limit_seconds: float | None = None,
+    random_seed: int | None = None,
+    parallel_solver_count: int | None = None,
+    stop_at_first_feasible: bool = False,
+    full_assert: bool = False,
+    on_new_best=None,
+    config: SolverConfig | None = None,
+    constraints=None,
+) -> VehicleRoutePlan:
+    """High-level API that solves `plan` in place and returns it.
+
+    ``config`` becomes the base settings (`SolverConfig`; None = engine defaults,
+    a 30 s budget). Explicit keyword arguments override config.
+    ``stop_at_first_feasible`` stops as soon as hard 0 is reached, ``full_assert``
+    re-verifies every incremental score against a full recompute (a debugging aid,
+    much slower), and ``on_new_best(step, score)`` is called on every new best.
+
+    ``constraints`` picks the cost function directly (see
+    `optimaru.vehicle_routing.constraints`). Only the listed constraints are scored;
+    None uses the default constraints at their default weights::
+
+        from optimaru.vehicle_routing.constraints import get_constraints
+        vrp.solve(plan, constraints=get_constraints())
+
+    The score is on the result: ``plan.score``. `solve_request` is the same solve for
+    a `models` request (JSON in, JSON out).
+    """
+    # A copy: the keyword overrides below must not leak into the caller's config.
+    cfg = copy.copy(config) if config is not None else SolverConfig()
+    if time_limit_seconds is not None:
+        cfg.spent_limit_seconds = time_limit_seconds
+    if random_seed is not None:
+        cfg.random_seed = random_seed
+    if parallel_solver_count is not None:
+        cfg.parallel_solver_count = parallel_solver_count
+    if stop_at_first_feasible:
+        # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
+        cfg.best_score_limit = (0, -(2**63), -(2**63))
+    if full_assert:
+        cfg.full_assert = True
+    if on_new_best is not None:
+        cfg.on_new_best = on_new_best
+    if constraints is None:
+        Solver(cfg).solve(plan)
+    else:
+        Solver(cfg).solve_with_constraints(plan, constraints)
+    return plan
 
 
 def solve_request(request, *, constraints=None):

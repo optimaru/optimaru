@@ -94,6 +94,7 @@ def solve(
     random_seed: int | None = None,
     parallel_solver_count: int | None = None,
     stop_at_first_feasible: bool = False,
+    full_assert: bool = False,
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
@@ -104,6 +105,9 @@ def solve(
     keyword arguments override it. ``stop_at_first_feasible`` terminates as
     soon as hard 0 is reached (best_score_limit=(0, -inf)). The default time
     budget is the engine's 30s.
+
+    ``full_assert`` re-verifies every incremental score against a full recompute
+    (a debugging aid; much slower).
 
     ``constraints`` picks the cost function (see `optimaru.order_picking.constraints`).
     Only the constraints in the list are scored, a name picked several times
@@ -122,6 +126,8 @@ def solve(
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
         cfg.best_score_limit = (0, float("-inf"))
+    if full_assert:
+        cfg.full_assert = True
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
     if constraints is None:

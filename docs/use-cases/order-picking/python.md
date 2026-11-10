@@ -46,7 +46,7 @@ raw = op.constraint_costs(solution)
 score(raw, [DistanceFromPreviousPickTaskCost(), DistanceFromPreviousPickTaskCost(weight=0.1, exponent=2, offset=100)])
 ```
 
-## Install / test
+## Install and test
 
 ```bash
 OPTIMARU_USE_CASES=order_picking uv sync      # builds only this use case's C++ extension

@@ -16,6 +16,8 @@ pydantic dependency); `optimaru.employee_scheduling.demo.generate_demo_data` bui
 request and `with_initial_solution` restarts a solve from an earlier result.
 """
 
+import copy
+
 from ._core import (
     CONSTRAINT_NAMES,
     MAX_DAY,
@@ -115,6 +117,7 @@ __all__ = [
     "LocationImbalanceCost",
     "WorkerPairingCost",
     "calculate_score",
+    "solve",
     "minutes",
     "MAX_DAY",
     "MINUTES_PER_DAY",
@@ -123,6 +126,59 @@ __all__ = [
     "to_dataframe",
     "with_initial_solution",
 ]
+
+
+def solve(
+    schedule: EmployeeSchedule,
+    *,
+    time_limit_seconds: float | None = None,
+    random_seed: int | None = None,
+    parallel_solver_count: int | None = None,
+    stop_at_first_feasible: bool = False,
+    full_assert: bool = False,
+    on_new_best=None,
+    config: SolverConfig | None = None,
+    constraints=None,
+) -> EmployeeSchedule:
+    """High-level API that solves `schedule` in place and returns it.
+
+    ``config`` becomes the base settings (`SolverConfig`; None = engine defaults,
+    a 30 s budget). Explicit keyword arguments override config.
+    ``stop_at_first_feasible`` stops as soon as hard 0 is reached, ``full_assert``
+    re-verifies every incremental score against a full recompute (a debugging aid,
+    much slower), and ``on_new_best(step, score)`` is called on every new best.
+
+    ``constraints`` picks the cost function directly: a list of constraint specs
+    (see `optimaru.employee_scheduling.constraints`) or a `DecomposedCalculator`.
+    Only the listed constraints are scored, by a single search
+    (``parallel_solver_count`` is ignored there); None uses the eight default
+    constraints at their default weights::
+
+        from optimaru.employee_scheduling.constraints import get_constraints
+        es.solve(schedule, constraints=get_constraints())
+
+    The score is on the result: ``schedule.score``.
+    """
+    # A copy: the keyword overrides below must not leak into the caller's config.
+    cfg = copy.copy(config) if config is not None else SolverConfig()
+    if time_limit_seconds is not None:
+        cfg.spent_limit_seconds = time_limit_seconds
+    if random_seed is not None:
+        cfg.random_seed = random_seed
+    if parallel_solver_count is not None:
+        cfg.parallel_solver_count = parallel_solver_count
+    if stop_at_first_feasible:
+        cfg.best_score_limit = (0, float("-inf"))
+    if full_assert:
+        cfg.full_assert = True
+    if on_new_best is not None:
+        cfg.on_new_best = on_new_best
+    if constraints is None:
+        Solver(cfg).solve(schedule)
+    else:
+        calculator = constraints if isinstance(constraints, DecomposedCalculator) else DecomposedCalculator(constraints)
+        Solver(cfg).solve(schedule, calculator)
+    return schedule
 
 
 def __getattr__(name):

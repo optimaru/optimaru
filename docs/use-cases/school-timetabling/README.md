@@ -29,6 +29,11 @@ cmake -B build -DOPTIMARU_USE_CASES=school_timetabling && cmake --build build -j
 ctest --test-dir build
 ```
 
+## Constraints
+
+The constraint table (names, default levels and weights) is in
+[`python.md`](python.md#constraints); it is not repeated here.
+
 In a `constraints=` list a constraint may be picked several times (each pick its own
 instance with its own knobs; the instances add up), and besides `weight`, `level` and
 `exponent` every constraint takes the keyword knobs `offset` and `clip`: `TeacherGapCost(exponent=2, offset=3)` charges

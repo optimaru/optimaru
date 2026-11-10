@@ -84,6 +84,7 @@ def solve(
     random_seed: int | None = None,
     parallel_solver_count: int | None = None,
     stop_at_first_feasible: bool = False,
+    full_assert: bool = False,
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
@@ -94,6 +95,9 @@ def solve(
     on). Explicit keyword arguments override config.
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached
     (best_score_limit=(0, -inf)).
+
+    ``full_assert`` re-verifies every incremental score against a full recompute
+    (a debugging aid; much slower).
 
     ``constraints`` picks the cost function directly
     (see `optimaru.maintenance_scheduling.constraints`). Only the listed constraints are scored,
@@ -113,6 +117,8 @@ def solve(
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
         cfg.best_score_limit = (0, float("-inf"))
+    if full_assert:
+        cfg.full_assert = True
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
     if constraints is None:

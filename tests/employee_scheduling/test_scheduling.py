@@ -945,3 +945,37 @@ def test_add_refuses_a_hard_keyword():
         assert str(raised.value) == HARD_KEYWORD
     with pytest.raises(TypeError, match="unexpected keyword argument 'hard'"):
         es.constraints.RequiredSkillCost(hard=True)
+
+
+def _steps(steps):
+    config = es.SolverConfig()
+    config.step_count_limit = steps
+    return config
+
+
+def test_package_solve_solves_in_place_and_returns_the_schedule():
+    schedule = es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=3)
+    config = _steps(2000)
+    assert es.solve(schedule, config=config, random_seed=5, full_assert=True) is schedule
+    assert schedule.score is not None
+    assert config.full_assert is False  # the keyword overrides go to a copy
+
+
+def test_package_solve_with_constraints_equals_a_calculator_solve():
+    from optimaru.employee_scheduling.constraints import get_constraints
+
+    by_package = es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=3)
+    by_solver = es.make_random_roster(days=6, shifts_per_day=5, employees=8, seed=3)
+    es.solve(by_package, config=_steps(2000), random_seed=5, constraints=get_constraints())
+    config = _steps(2000)
+    config.random_seed = 5
+    es.Solver(config).solve(by_solver, es.DecomposedCalculator(get_constraints()))
+    assert str(by_package.score) == str(by_solver.score)
+
+
+def test_parallel_solver_count_is_a_checked_config_field():
+    config = es.SolverConfig()
+    config.parallel_solver_count = 2
+    assert config.parallel_solver_count == 2
+    with pytest.raises(ValueError, match="must be positive"):
+        config.parallel_solver_count = 0

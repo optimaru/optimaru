@@ -65,11 +65,14 @@ def solve(
     random_seed: int | None = None,
     parallel_solver_count: int | None = None,
     stop_at_first_feasible: bool = False,
+    full_assert: bool = False,
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> Score:
-    """High-level API that solves `problem` in place and returns the final `Score`.
+):
+    """High-level API that solves `problem` in place and returns it.
+
+    The score is on the result: ``solve(problem).score`` (``.hard``, ``.soft``).
 
     ``config`` becomes the base settings (None = engine defaults: 30 s budget, ALNS
     on). Explicit keyword arguments override config. ``spent_limit_seconds = 0`` on
@@ -77,6 +80,9 @@ def solve(
     completed where an item is still -1) comes back as it is.
     ``stop_at_first_feasible`` stops as soon as hard 0 is reached;
     ``on_new_best(step, score)`` is called on every new best solution.
+
+    ``full_assert`` re-verifies every incremental score against a full recompute
+    (a debugging aid; much slower).
 
     ``constraints`` picks the cost function directly (see `optimaru.bin_packing.constraints`).
     Only the listed constraints are scored, a name picked several times once per pick;
@@ -97,6 +103,8 @@ def solve(
         cfg.parallel_solver_count = parallel_solver_count
     if stop_at_first_feasible:
         cfg.best_score_limit = (0, float("-inf"))
+    if full_assert:
+        cfg.full_assert = True
     if on_new_best is not None:
         cfg.on_new_best = on_new_best
 
@@ -104,4 +112,4 @@ def solve(
         Solver(cfg).solve(problem)
     else:
         Solver(cfg).solve_with_constraints(problem, constraints)
-    return problem.score
+    return problem

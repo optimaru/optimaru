@@ -5,6 +5,35 @@ Derived from the Timefold Quickstarts `facility-location` example
 built on this repository's C++ engine (`optimaru/cpp/optimaru/`).
 The classic FLP: pick one facility for every consumer.
 
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=facility_location uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/facility_location
+```
+
+```python
+from optimaru import facility_location as fl
+
+facilities = [
+    fl.Facility("F1", fl.Location(51.50, -0.12), 50_000, 300),   # id, location, setup cost, capacity
+    fl.Facility("F2", fl.Location(51.52, -0.08), 40_000, 300),
+]
+consumers = [fl.Consumer(f"C{i}", fl.Location(51.49 + i * 0.005, -0.10), 30) for i in range(10)]
+problem = fl.FacilityLocationProblem(
+    facilities, consumers, fl.Location(51.44, -0.16), fl.Location(51.56, -0.01)
+)
+fl.solve(problem, time_limit_seconds=5.0, random_seed=42)          # solves in place
+print(problem.score, problem.total_cost())
+```
+
+`solve` returns the problem it was given, solved in place; the score is its `score` (`.hard`, `.soft`). It takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`facility_location.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+
+```sh
+cmake -B build -DOPTIMARU_USE_CASES=facility_location && cmake --build build -j
+ctest --test-dir build
+```
+
 ## Domain (assignment shape)
 
 - `Consumer.facility` — the only decision variable. An index into `facilities`,
@@ -89,35 +118,6 @@ print(problem.score, problem.used_facility_count(), problem.total_cost())
 
 The pydantic v2 serialization mirror is `optimaru.facility_location.models`
 (`FacilityLocationProblemModel.from_core / to_core`).
-
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=facility_location uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/facility_location
-```
-
-```python
-from optimaru import facility_location as fl
-
-facilities = [
-    fl.Facility("F1", fl.Location(51.50, -0.12), 50_000, 300),   # id, location, setup cost, capacity
-    fl.Facility("F2", fl.Location(51.52, -0.08), 40_000, 300),
-]
-consumers = [fl.Consumer(f"C{i}", fl.Location(51.49 + i * 0.005, -0.10), 30) for i in range(10)]
-problem = fl.FacilityLocationProblem(
-    facilities, consumers, fl.Location(51.44, -0.16), fl.Location(51.56, -0.01)
-)
-fl.solve(problem, time_limit_seconds=5.0, random_seed=42)          # solves in place
-print(problem.score, problem.total_cost())
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`facility_location.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
-
-```sh
-cmake -B build -DOPTIMARU_USE_CASES=facility_location && cmake --build build -j
-ctest --test-dir build
-```
 
 ## Starting from an existing solution
 

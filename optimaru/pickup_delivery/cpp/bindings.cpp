@@ -346,16 +346,40 @@ PYBIND11_MODULE(_core, m)
             },
             [](Solver::Config &c, double s)
             { c.stall_time_limit = optimaru::python::seconds_to_millis(s, "unimproved_spent_limit_seconds"); })
-        .def_readwrite("parallel_solver_count",
-                       &Solver::Config::parallelSolverCount)
+        .def_property(
+            "parallel_solver_count",
+            [](const Solver::Config &c) { return c.parallelSolverCount; },
+            [](Solver::Config &c, int count)
+            {
+                if (count <= 0)
+                    throw py::value_error("parallel_solver_count must be positive");
+                c.parallelSolverCount = count;
+            })
+        // ScoreChecks::Full re-verifies the incremental score against a full
+        // recompute after every move (debugging aid; much slower).
+        .def_property(
+            "full_assert",
+            [](const Solver::Config &c) { return c.score_checks == optimaru::ScoreChecks::Full; },
+            [](Solver::Config &c, bool on)
+            {
+                c.score_checks
+                    = on ? optimaru::ScoreChecks::Full : optimaru::ScoreChecks::Off;
+            })
         .def_readwrite("first_fit_decreasing",
                        &Solver::Config::firstFitDecreasing)
         .def_readwrite("pair_construction_heuristic",
                        &Solver::Config::pairConstructionHeuristic)
         // --- acceptance ---
         .def_readwrite("acceptor_type", &Solver::Config::rule)
-        .def_readwrite("late_acceptance_size",
-                       &Solver::Config::history_length)
+        .def_property(
+            "late_acceptance_size",
+            [](const Solver::Config &c) { return c.history_length; },
+            [](Solver::Config &c, std::int64_t size)
+            {
+                if (size < 0)
+                    throw py::value_error("late_acceptance_size must be >= 0 (0 = auto)");
+                c.history_length = static_cast<std::size_t>(size);
+            })
         .def_readwrite("record_to_record_start_gap",
                        &Solver::Config::recordToRecordStartGap)
         .def_readwrite("record_to_record_end_gap",
@@ -410,8 +434,15 @@ PYBIND11_MODULE(_core, m)
                        &Solver::Config::ruinRecreateSelectionType)
         .def_readwrite("ruin_recreate_operator_decay",
                        &Solver::Config::ruinRecreateOperatorDecay)
-        .def_readwrite("ruin_recreate_rewards",
-                       &Solver::Config::ruinRecreateRewards)
+        .def_property(
+            "ruin_recreate_rewards",
+            [](const Solver::Config &c) { return c.ruinRecreateRewards; },
+            [](Solver::Config &c, std::vector<double> rewards)
+            {
+                if (rewards.size() != 4)
+                    throw py::value_error("ruin_recreate_rewards must contain exactly 4 values");
+                c.ruinRecreateRewards = std::move(rewards);
+            })
         .def_readwrite("ruin_recreate_selection_segment_length",
                        &Solver::Config::ruinRecreateSelectionSegmentLength)
         .def_readwrite("ruin_recreate_selection_alpha",

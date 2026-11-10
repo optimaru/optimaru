@@ -5,7 +5,50 @@ Derived from the Timefold Quickstarts `flight-crew-scheduling` example
 built on this repository's C++ engine (`optimaru/cpp/optimaru/`). An **assignment-shaped** problem
 that picks a crew member (`employee`) for every crew seat of a flight (`FlightAssignment`).
 
-## Score
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=flight_crew_scheduling uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/flight_crew_scheduling
+```
+
+```python
+from datetime import datetime, timedelta
+
+from optimaru import flight_crew_scheduling as fc
+from optimaru.flight_crew_scheduling.models import (
+    AirportModel, EmployeeModel, FlightAssignmentModel, FlightCrewScheduleModel, FlightModel,
+)
+
+out = datetime(2026, 1, 5, 8)
+flights = [
+    FlightModel(flight_number="OUT", departure_airport="ICN", departure_utc_date_time=out,
+                arrival_airport="NRT", arrival_utc_date_time=out + timedelta(hours=2)),
+    FlightModel(flight_number="BACK", departure_airport="NRT",
+                departure_utc_date_time=out + timedelta(hours=5),
+                arrival_airport="ICN", arrival_utc_date_time=out + timedelta(hours=7)),
+]
+problem = FlightCrewScheduleModel(
+    airports=[AirportModel(code="ICN"), AirportModel(code="NRT")],
+    employees=[EmployeeModel(id="P1", name="Pilot 1", home_airport="ICN", skills=["Pilot"])],
+    flights=flights,
+    flight_assignments=[
+        FlightAssignmentModel(id=f"A{i}", flight=f.flight_number, index_in_flight=1, required_skill="Pilot")
+        for i, f in enumerate(flights)
+    ],
+)
+result = fc.solve(problem, time_limit_seconds=5.0, random_seed=42)   # also accepts a dict
+print(result.score_hard, result.score_soft)
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`optimaru.flight_crew_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+
+```sh
+cmake -B build -DOPTIMARU_USE_CASES=flight_crew_scheduling && cmake --build build -j
+ctest --test-dir build
+```
+
+## Constraints
 
 The score has two levels, the engine's `Score(int64 hard, double soft)`; there is no
 medium level. The constraints and their defaults:
@@ -97,49 +140,6 @@ seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 - The demo data is drawn from a seeded `std::mt19937_64`.
 - A seat with `pinned` set keeps its crew member: it is scored like any other seat but
   never moved (the same pattern as employee scheduling and school timetabling).
-
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=flight_crew_scheduling uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/flight_crew_scheduling
-```
-
-```python
-from datetime import datetime, timedelta
-
-from optimaru import flight_crew_scheduling as fc
-from optimaru.flight_crew_scheduling.models import (
-    AirportModel, EmployeeModel, FlightAssignmentModel, FlightCrewScheduleModel, FlightModel,
-)
-
-out = datetime(2026, 1, 5, 8)
-flights = [
-    FlightModel(flight_number="OUT", departure_airport="ICN", departure_utc_date_time=out,
-                arrival_airport="NRT", arrival_utc_date_time=out + timedelta(hours=2)),
-    FlightModel(flight_number="BACK", departure_airport="NRT",
-                departure_utc_date_time=out + timedelta(hours=5),
-                arrival_airport="ICN", arrival_utc_date_time=out + timedelta(hours=7)),
-]
-problem = FlightCrewScheduleModel(
-    airports=[AirportModel(code="ICN"), AirportModel(code="NRT")],
-    employees=[EmployeeModel(id="P1", name="Pilot 1", home_airport="ICN", skills=["Pilot"])],
-    flights=flights,
-    flight_assignments=[
-        FlightAssignmentModel(id=f"A{i}", flight=f.flight_number, index_in_flight=1, required_skill="Pilot")
-        for i, f in enumerate(flights)
-    ],
-)
-result = fc.solve(problem, time_limit_seconds=5.0, random_seed=42)   # also accepts a dict
-print(result.score_hard, result.score_soft)
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, a full `config` (`optimaru.flight_crew_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
-
-```sh
-cmake -B build -DOPTIMARU_USE_CASES=flight_crew_scheduling && cmake --build build -j
-ctest --test-dir build
-```
 
 ## Starting from an existing solution
 

@@ -43,7 +43,7 @@ second pick of a name keyed
 `Level.SOFT`); the domain has no medium level, so "medium" raises `ValueError`, and a
 repeat carries its own level.
 
-## Install / test
+## Install and test
 
 ```bash
 OPTIMARU_USE_CASES=semiconductor_scheduling uv sync --python 3.14   # builds only this use case's C++ extension
@@ -62,12 +62,13 @@ from optimaru import semiconductor_scheduling as fab
 from optimaru.semiconductor_scheduling.models import SemiconductorScheduleModel
 
 problem = SemiconductorScheduleModel.model_validate_json(open("fab.json").read())
-score = fab.solve(problem, time_limit_seconds=5.0, random_seed=42)   # written back into `problem`
-hard, soft = score                                                   # a Score is also a (hard, soft) pair
+fab.solve(problem, time_limit_seconds=5.0, random_seed=42)   # written back into `problem`, which is returned
+hard, soft = problem.score_hard, problem.score_soft
 print(problem.makespan, problem.total_weighted_tardiness, problem.assignments[0])
 
 core = problem.to_core()                     # the engine object (what the server solves)
 fab.solve(core, time_limit_seconds=5.0)      # in place
+hard, soft = core.score                      # a Score is also a (hard, soft) pair
 solved = SemiconductorScheduleModel.from_core(core)
 ```
 

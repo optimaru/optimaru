@@ -8,6 +8,51 @@ rule holds. The base formulation is the standard weighted Max-Cut problem.
 [`benchmarks/max-cut/cpsat`](../../../benchmarks/max-cut/cpsat) holds the exact
 CP-SAT reference.
 
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=max_cut uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/max_cut
+```
+
+```python
+from optimaru import max_cut
+from optimaru.max_cut.models import EdgeModel, MaxCutProblemModel
+
+problem = MaxCutProblemModel(
+    vertices=["A", "B", "C"],
+    edges=[EdgeModel(source="A", target="B", weight=2), EdgeModel(source="B", target="C", weight=3),
+           EdgeModel(source="A", target="C", weight=4)],
+)
+max_cut.solve(problem, time_limit_seconds=1.0, random_seed=42)          # the model, in place (and returned)
+print(problem.score_hard, problem.score_soft)                           # 0 7.0
+print(problem.partition, problem.cut_weight)
+
+core = problem.to_core()                                                # or the engine object
+print(max_cut.solve(core, time_limit_seconds=1.0, random_seed=42).score)   # 0hard/7soft
+print(MaxCutProblemModel.from_core(core).cut_weight)
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
+`stop_at_first_feasible`, `on_new_best`, a full `config` (`max_cut.SolverConfig`)
+and `constraints`:
+
+```python
+from optimaru.max_cut.constraints import CutWeightCost, PartitionImbalanceCost, PartitionSizeBoundsCost, get_constraints, score
+
+max_cut.constraint_info()     # [ConstraintInfo(name='fixed_partition_cost', default_level='hard', ...), ...]
+max_cut.solve(
+    problem,
+    time_limit_seconds=1.0,
+    constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()],
+)
+raw = max_cut.constraint_costs(problem)             # raw costs, re-priced in pure Python:
+score(raw), score(raw, [PartitionSizeBoundsCost(level="soft"), CutWeightCost()])
+# A constraint may be picked several times, each pick with its own knobs; offset / clip
+# shift the shaping (clip=True: only the cut beyond 5 earns the second pick's bonus).
+score(raw, [CutWeightCost(), CutWeightCost(weight=0.5, offset=5)])
+```
+
 ## Domain (assignment shape)
 
 - The **side** of each vertex — the only decision variable: `0` or `1` (the value
@@ -43,7 +88,9 @@ CP-SAT reference.
   not. `calculate_score` / `constraint_costs` refuse a partial partition
   (`ValueError`); `solve` fills it in.
 
-## Constraints (Score — the engine score type as-is, no mapping)
+## Constraints
+
+The score is the engine's `Score` type as it is, with no mapping.
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
@@ -111,8 +158,9 @@ offsets; it rejects an exponent other than 1).
   means "no limit"); a bounded search = `step_count_limit = N`. Without a time limit a
   solve runs the 30 s budget. `on_new_best(step, score)`. Multi-start runs independent
   engine searches from the same start.
-- `solve()` returns the engine `Score` (`.hard`, `.soft`, `is_feasible()`) and takes the
-  engine object or the model (written back in place). `calculate_score(problem,
+- `solve()` returns the problem it was given, solved: the engine object (its `score` is the
+  engine `Score`: `.hard`, `.soft`, `is_feasible()`) or the model (written back in place,
+  with `score_hard` / `score_soft`). `calculate_score(problem,
   constraints)` returns the engine `Score` for the defaults and a
   `constraints.Score(hard, soft)` named tuple for a selection; `constraints.score()`
   re-prices raw costs. With `constraints=...` a solve is single-start
@@ -164,50 +212,6 @@ by hand, the catalog and the reward guards, and repeated / shifted components (a
 hand-calculated repeat, threshold and literal offsets by hand per side and on the
 totals, the literal formula refused on hard at reset and kept on soft, incremental == a
 fresh recompute over a random walk, a ScoreChecks::Full solve).
-
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=max_cut uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/max_cut
-```
-
-```python
-from optimaru import max_cut
-from optimaru.max_cut.models import EdgeModel, MaxCutProblemModel
-
-problem = MaxCutProblemModel(
-    vertices=["A", "B", "C"],
-    edges=[EdgeModel(source="A", target="B", weight=2), EdgeModel(source="B", target="C", weight=3),
-           EdgeModel(source="A", target="C", weight=4)],
-)
-print(max_cut.solve(problem, time_limit_seconds=1.0, random_seed=42))   # 0hard/7soft; the model, in place
-print(problem.partition, problem.cut_weight)
-
-core = problem.to_core()                                                # or the engine object
-max_cut.solve(core, time_limit_seconds=1.0, random_seed=42)
-print(MaxCutProblemModel.from_core(core).cut_weight)
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`,
-`stop_at_first_feasible`, `on_new_best`, a full `config` (`max_cut.SolverConfig`)
-and `constraints`:
-
-```python
-from optimaru.max_cut.constraints import CutWeightCost, PartitionImbalanceCost, PartitionSizeBoundsCost, get_constraints, score
-
-max_cut.constraint_info()     # [ConstraintInfo(name='fixed_partition_cost', default_level='hard', ...), ...]
-max_cut.solve(
-    problem,
-    time_limit_seconds=1.0,
-    constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()],
-)
-raw = max_cut.constraint_costs(problem)             # raw costs, re-priced in pure Python:
-score(raw), score(raw, [PartitionSizeBoundsCost(level="soft"), CutWeightCost()])
-# A constraint may be picked several times, each pick with its own knobs; offset / clip
-# shift the shaping (clip=True: only the cut beyond 5 earns the second pick's bonus).
-score(raw, [CutWeightCost(), CutWeightCost(weight=0.5, offset=5)])
-```
 
 ## Starting from an existing solution
 

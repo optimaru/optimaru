@@ -33,7 +33,9 @@ full recompute and a ScoreChecks::Full solve; `pjs_plugin_test` checks the defau
 the monolith, the raw costs by hand (one positive and one zero case per constraint), the
 catalog and the medium knobs.
 
-## Constraints (hard / medium / soft, folded into the engine's Score)
+## Constraints
+
+The score has three levels, hard / medium / soft, folded into the engine's `Score`.
 
 `optimaru/project_job_scheduling/cpp/include/pjs/constraints/` holds one component per constraint
 (`non_renewable_resource_capacity_cost.hpp`, `renewable_resource_capacity_cost.hpp`,

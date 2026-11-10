@@ -5,7 +5,31 @@ and modified; see the repository [NOTICE](../../../NOTICE).
 
 Domain model, constraints and API details: [`python.md`](python.md) and [`optimaru/order_picking/cpp/`](cpp.md).
 
-## Constraints (Score — the engine score type as-is, no mapping)
+## Usage
+
+```sh
+OPTIMARU_USE_CASES=order_picking uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/order_picking
+```
+
+```python
+from optimaru import order_picking as op
+
+solution = op.build_demo_data()
+solution = op.solve(solution, time_limit_seconds=5.0, random_seed=0)
+print(solution.score)
+```
+
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`order_picking.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+
+```sh
+cmake -B build -DOPTIMARU_USE_CASES=order_picking && cmake --build build -j
+ctest --test-dir build
+```
+
+## Constraints
+
+The score is the engine's `Score` type as it is, with no mapping.
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per trolley (0 = no violation) |
 |---|---|---|---|---|
@@ -52,28 +76,6 @@ op.solve(solution, constraints=[
 
 `op.constraint_costs(solution, picks)` keys the second pick
 `distance_from_previous_pick_task_cost#2`. The CP-SAT reference takes integral offsets.
-
-## Usage
-
-```sh
-OPTIMARU_USE_CASES=order_picking uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/order_picking
-```
-
-```python
-from optimaru import order_picking as op
-
-solution = op.build_demo_data()
-solution = op.solve(solution, time_limit_seconds=5.0, random_seed=0)
-print(solution.score)
-```
-
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `on_new_best`, a full `config` (`order_picking.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
-
-```sh
-cmake -B build -DOPTIMARU_USE_CASES=order_picking && cmake --build build -j
-ctest --test-dir build
-```
 
 ## Starting from an existing solution
 

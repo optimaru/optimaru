@@ -102,7 +102,8 @@ def test_the_web_demo_validates_and_converts():
 def test_solving_the_model_writes_the_result_back_in_place():
     model = rich()
     model.warm_start = True
-    result = max_cut.solve(model, time_limit_seconds=0.2, random_seed=3)
+    assert max_cut.solve(model, time_limit_seconds=0.2, random_seed=3) is model
+    result = max_cut.calculate_score(model.model_copy(deep=True))
     assert (model.score_hard, model.score_soft) == (result.hard, result.soft)
     assert model.warm_start is False
     assert model.cut_weight == result.soft  # the default score's soft level is the cut weight

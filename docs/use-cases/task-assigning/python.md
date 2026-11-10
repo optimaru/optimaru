@@ -5,7 +5,7 @@ Skill-based task assignment, derived from the Timefold Quickstarts `task-assigni
 the generic C++ engine in `optimaru/cpp/optimaru/`. A **sequence-shaped** domain that fills an
 ordered task list per employee (`Employee.tasks`); a task in no list is unassigned.
 
-## Install / test
+## Install and test
 
 ```bash
 OPTIMARU_USE_CASES=task_assigning uv sync      # builds only this use case's C++ extension

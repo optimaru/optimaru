@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **One `solve()` for every use case (breaking for seven).**
+  `optimaru.<use case>.solve(problem, ...)` now exists in all 22, takes the same
+  keywords (`time_limit_seconds`, `random_seed`, `parallel_solver_count`,
+  `stop_at_first_feasible`, `full_assert`, `on_new_best`, `config`,
+  `constraints`) and returns the solved problem, with the score on it.
+  - *Breaking:* in `assembly_line_balancing`, `bin_packing`,
+    `facility_location`, `knapsack`, `max_cut`, `quadratic_assignment` and
+    `semiconductor_scheduling`, `solve()` returned the `Score`. It now returns
+    the problem it was given: write `uc.solve(problem).score` for a compiled
+    problem, or read `score_hard` / `score_soft` from a pydantic model.
+  - *New:* `solve()` in `employee_scheduling`, `pickup_delivery` and
+    `vehicle_routing`; the `full_assert` keyword in the 15 use cases whose
+    `solve()` lacked it; `SolverConfig.full_assert` in those three and
+    `SolverConfig.parallel_solver_count` in `employee_scheduling`.
+  - *Stricter:* `SolverConfig` in `pickup_delivery` and `vehicle_routing`
+    rejects `parallel_solver_count <= 0` and `late_acceptance_size < 0`, and in
+    those two and `order_picking` a `ruin_recreate_rewards` list that does not
+    hold exactly 4 values, with the `ValueError` the other use cases raise.
+- **Review language.** The review workflows answer in English, like everything
+  else in the repository.
 - **Engine: repeated instances in `ConstraintAssembly`.** A by-name edit or
   lookup (`weight()`, `level()`, `hard()`, `soft()`, `exponent()`, `offset()`,
   `clip()`, `find()`, `drop()`, and `add()`'s replacement) of a name the

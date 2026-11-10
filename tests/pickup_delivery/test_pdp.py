@@ -252,3 +252,42 @@ def test_routes_are_open_unless_the_vehicle_returns_to_depot():
     assert vehicle.return_to_depot is False
     vehicle.return_to_depot = True
     assert vehicle.return_to_depot is True
+
+
+def _steps(steps):
+    config = pdp.SolverConfig()
+    config.step_count_limit = steps
+    return config
+
+
+def test_package_solve_solves_in_place_and_returns_the_plan():
+    plan = pdp.build_random_instance(request_count=8, vehicle_count=3, seed=7)
+    config = _steps(1500)
+    assert pdp.solve(plan, config=config, random_seed=7, full_assert=True) is plan
+    assert plan.score is not None
+    assert config.full_assert is False  # the keyword overrides go to a copy
+
+
+def test_package_solve_with_constraints_equals_solve_with_constraints():
+    from optimaru.pickup_delivery.constraints import get_constraints
+
+    by_package = pdp.build_random_instance(request_count=8, vehicle_count=3, seed=7)
+    by_solver = pdp.build_random_instance(request_count=8, vehicle_count=3, seed=7)
+    pdp.solve(by_package, config=_steps(1500), random_seed=7, constraints=get_constraints())
+    config = _steps(1500)
+    config.random_seed = 7
+    pdp.Solver(config).solve_with_constraints(by_solver, get_constraints())
+    assert str(by_package.score) == str(by_solver.score)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("parallel_solver_count", 0, "must be positive"),
+        ("late_acceptance_size", -1, "must be >= 0"),
+        ("ruin_recreate_rewards", [1.0, 2.0], "exactly 4 values"),
+    ],
+)
+def test_config_rejects_out_of_range_values(field, value, message):
+    with pytest.raises(ValueError, match=message):
+        setattr(pdp.SolverConfig(), field, value)
