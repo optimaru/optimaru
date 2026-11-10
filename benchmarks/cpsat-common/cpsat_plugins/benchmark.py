@@ -209,6 +209,7 @@ def run_instance(
     it would have in a comparison; that lets the single-threaded engine runs and
     the CP-SAT runs of a long list be measured side by side on separate cores.
     """
+    # Built for a CP-SAT-only run too: the size of the result is described from it.
     engine_problem = factory()
     runs = []
     if "engine" in solvers:
@@ -396,6 +397,8 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
                     "case": case.NAME,
                     "instance": name,
                     "error": traceback.format_exc(limit=6),
+                    "seed": args.seed,
+                    "workers": args.workers,
                 }
             )
 

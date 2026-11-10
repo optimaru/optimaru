@@ -39,7 +39,7 @@ PRIORITIES = ["MINOR"] * 5 + ["MAJOR"] * 3 + ["CRITICAL"] * 2
 
 
 def _generate(task_count: int, employee_count: int, customer_count: int, seed: int) -> Any:
-    """A seeded instance in the shape of the demo data: employees with two or three of six
+    """A seeded instance in the shape of the demo data: employees with one to three of six
     skills and an affinity to every customer, task types that need one or two skills some
     employee has together, and tasks of mixed priority."""
     from optimaru.task_assigning.models import (
@@ -56,14 +56,13 @@ def _generate(task_count: int, employee_count: int, customer_count: int, seed: i
         EmployeeModel(
             id=str(index + 1),
             full_name=f"Employee {index + 1}",
-            # Every skill is somebody's first skill, so no skill goes uncovered.
-            skills=[SKILLS[index % len(SKILLS)], *rng.sample(SKILLS, rng.randint(1, 2))],
+            # Every skill is somebody's first skill, so no skill goes uncovered; a draw of
+            # the first skill again is dropped.
+            skills=list(dict.fromkeys([SKILLS[index % len(SKILLS)], *rng.sample(SKILLS, rng.randint(1, 2))])),
             customer_to_affinity={customer.id: rng.choice(AFFINITIES) for customer in customers},
         )
         for index in range(employee_count)
     ]
-    for employee in employees:
-        employee.skills = list(dict.fromkeys(employee.skills))
     task_types = []
     for index in range(4 + task_count // 60):
         # The skills of a task type are skills one employee has, so somebody can do it.

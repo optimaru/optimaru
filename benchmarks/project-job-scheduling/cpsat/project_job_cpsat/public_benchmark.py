@@ -17,6 +17,7 @@ from pathlib import Path
 from external_solver.project_job_scheduling import solve as solve_cpsat
 
 import optimaru.project_job_scheduling as pjs
+from cpsat_plugins.results import write_results
 from optimaru.project_job_scheduling.models import (
     AllocationModel,
     ExecutionModeModel,
@@ -353,14 +354,6 @@ def run_case(
     }
 
 
-def _write(path: Path, results: list[dict]) -> None:
-    """Rewrite `--out` with what has finished, so an interrupted sweep keeps its results."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_name(path.name + ".part")
-    partial.write_text(json.dumps(results, indent=2))
-    partial.replace(path)
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -416,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         if args.out is not None:
-            _write(args.out, results)
+            write_results(args.out, results)
     if args.as_json:
         print(json.dumps(results, indent=2))
     return 0

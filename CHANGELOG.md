@@ -15,10 +15,12 @@
     `benchmark.py` has a seeded generator in the shape of that data, and the
     demo instance stays as one rung. Food packaging runs its demo generator at
     five sizes.
-  - The comparison runner takes `--solver engine` or `--solver cp-sat`. The JSON
-    of the two runs adds up to the comparison, so the single-threaded engine
-    runs and the CP-SAT runs can be measured side by side. Every result records
-    its seed and workers.
+  - The comparison runner takes `--solver engine` or `--solver cp-sat`, so the
+    single-threaded engine runs and the CP-SAT runs can be measured side by
+    side. The publisher joins the two files (`compare/<slug>.engine.json`,
+    `compare/<slug>.cp-sat.json`) after checking that they belong together,
+    and refuses a comparison that lacks a run of either solver. Every result
+    records its seed and workers.
   - `pickup-delivery-public-bench` and `project-job-public-bench` take `--out
     FILE` and rewrite it after every instance, so an interrupted sweep keeps
     what it measured.

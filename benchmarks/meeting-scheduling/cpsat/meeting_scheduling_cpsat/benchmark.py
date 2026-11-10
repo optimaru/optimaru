@@ -35,6 +35,9 @@ def _generate(meeting_count: int, people_count: int, room_count: int, day_count:
     """A seeded instance in the shape of the demo data: quarter-hour time grains over working
     days, rooms of 30, 20 and 16 seats, and meetings of 2 to 4 hours of which about half have
     required attendees and about half preferred ones."""
+    if people_count < 4:
+        # A meeting draws at least two required attendees out of at most half the people.
+        raise ValueError(f"the generator needs at least 4 people, got {people_count}")
     from optimaru.meeting_scheduling.models import (
         MeetingAssignmentModel,
         MeetingModel,

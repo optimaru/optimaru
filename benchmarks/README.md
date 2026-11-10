@@ -48,7 +48,8 @@ scores with the same `optimaru.<subpackage>` modules. Importing the project's
 package calls `cpsat_plugins.checkout.use_checkout_engine`, which fails fast if
 `optimaru.<subpackage>` comes from anywhere else. `OPTIMARU_USE_CASES=<subpackage>`
 before `uv sync` builds only that extension. [`cpsat-common`](cpsat-common) holds
-that check and the comparison runner (`run_cli`). To pick up a new external-solver release,
+that check, the comparison runner (`run_cli`) and the results file of the
+public-instance runners (`write_results`). To pick up a new external-solver release,
 bump the `tag` in each project's `[tool.uv.sources]` and run `uv lock`.
 
 A CP-SAT constraint is a plugin that subclasses the use case's own constraint
@@ -74,9 +75,12 @@ ones both solvers finish; on the largest the exact model often returns nothing
 within the budget, which the results show as "no solution in time". Where a
 use case ships a demo instance it is one rung, and the others come from a
 seeded generator in its `benchmark.py`. `--instance NAME` (repeatable) picks rungs,
-and `--solver engine` or `--solver cp-sat` runs one solver only: the JSON of
-the two runs adds up to the comparison, which lets the single-threaded engine
-runs and the CP-SAT runs be measured side by side.
+and `--solver engine` or `--solver cp-sat` runs one solver only, which lets
+the single-threaded engine runs and the CP-SAT runs be measured side by side.
+The publisher joins the JSON of the two runs (`compare/<slug>.engine.json` and
+`compare/<slug>.cp-sat.json`) into the comparison after checking that they are
+of the same instances, budget, seed and workers; it refuses a comparison that
+lacks a run of either solver.
 
 A CP-SAT run gets the budget as its time limit, which CP-SAT counts from the
 start of the search, so building the model comes on top. The comparison runner

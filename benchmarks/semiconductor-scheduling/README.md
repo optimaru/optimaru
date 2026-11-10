@@ -20,8 +20,9 @@ its time includes model construction.
 
 The engine's result on the larger instances varies between runs of the same
 build: four 30 s runs of the 18-lot instance gave soft -839, -842, -881 and
--894 (the 6- and 12-lot instances repeat to the digit). Read a margin of a few
-percent in the table below as noise.
+-894 (the 6- and 12-lot instances repeat to the digit). The table below has the
+measured run, which is the best of the four, and CP-SAT's -857 lies inside that
+range: read that row, and any margin of a few percent here, as noise.
 
 <!-- results:start -->
 ## Results

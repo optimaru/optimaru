@@ -9,7 +9,9 @@ Usage::
 RESULTS_DIR holds what the harnesses wrote. Every file is optional: a data set
 whose file is missing keeps its README text and its homepage entry.
 
-- ``compare/<slug>.json``: ``python -m <package>.benchmark --json`` of a use case;
+- ``compare/<slug>.json``: ``python -m <package>.benchmark --json`` of a use case, or
+  ``compare/<slug>.engine.json`` and ``compare/<slug>.cp-sat.json``, its two ``--solver``
+  runs, which are joined instance by instance;
 - ``vrp-x.json``, ``vrp-a.json``: ``python -m vrp_benchmark --series x|a --out FILE``;
 - ``pdp-li-lim.json``, ``pdp-synthetic.json``: ``pickup-delivery-public-bench --json``
   (the lists of several runs concatenated);
@@ -1072,6 +1074,69 @@ def _load(results: Path, name: str):
     return json.loads(path.read_text()) if path.exists() else None
 
 
+#: What a result says about its instance and its run, apart from the runs themselves.
+_SAME_IN_BOTH_RUNS = ("instance", "size", "budget", "seed", "workers", "exact", "caveat")
+
+
+def join_solver_runs(slug: str, engine: list[dict], cpsat: list[dict]) -> list[dict]:
+    """The comparison that an engine-only and a CP-SAT-only run of the same instances add up to.
+
+    Refused: a failed instance, instances that differ in name, order, size, budget, seed or
+    workers, and a result that is not of the one solver its file is for.
+    """
+    if [result.get("instance") for result in engine] != [result.get("instance") for result in cpsat]:
+        raise SystemExit(f"{slug}: the engine and the cp-sat file hold different instances")
+    joined = []
+    for left, right in zip(engine, cpsat, strict=True):
+        name = left["instance"]
+        for result in (left, right):
+            if "error" in result:
+                raise SystemExit(f"{slug}: {name} failed in one of the two runs; run it again before joining")
+        for key in _SAME_IN_BOTH_RUNS:
+            if left.get(key) != right.get(key):
+                raise SystemExit(f"{slug}: {name} differs in {key} between the engine and the cp-sat file")
+        for result, solver in ((left, "engine"), (right, "cp-sat")):
+            if [run["solver"] for run in result["runs"]] != [solver]:
+                raise SystemExit(f"{slug}: {name} in the {solver} file is not a run of {solver} alone")
+        joined.append({**left, "runs": [*left["runs"], *right["runs"]]})
+    return joined
+
+
+def load_compared(directory: Path) -> dict[str, list[dict]]:
+    """The comparison results in `directory`, by use case.
+
+    ``<slug>.json`` is a run of both solvers. ``<slug>.engine.json`` and
+    ``<slug>.cp-sat.json`` are the two ``--solver`` runs and are joined. Refused: one of
+    the two without the other, both forms for one use case, and an instance without a run
+    of each solver, which would otherwise be published as a solver that found nothing.
+    """
+    whole: dict[str, list[dict]] = {}
+    halves: dict[str, dict[str, list[dict]]] = {}
+    for path in sorted(directory.glob("*.json")):
+        slug, _, solver = path.stem.partition(".")
+        if not solver:
+            whole[slug] = json.loads(path.read_text())
+        elif solver in SOLVERS:
+            halves.setdefault(slug, {})[solver] = json.loads(path.read_text())
+        else:
+            raise SystemExit(f"{path.name}: expected <slug>.json, <slug>.engine.json or <slug>.cp-sat.json")
+    for slug, files in halves.items():
+        if slug in whole:
+            raise SystemExit(f"{slug}: both {slug}.json and per-solver files are here; keep one form")
+        missing = [solver for solver in SOLVERS if solver not in files]
+        if missing:
+            raise SystemExit(f"{slug}: {slug}.{missing[0]}.json is missing; a comparison needs both solvers")
+        whole[slug] = join_solver_runs(slug, files["engine"], files["cp-sat"])
+    for slug, results in whole.items():
+        for result in results:
+            if "error" not in result and sorted(_runs(result)) != sorted(SOLVERS):
+                raise SystemExit(
+                    f"{slug}: {result['instance']} has runs of {sorted(_runs(result)) or 'no solver'}, not of both; "
+                    f"a --solver run is published as {slug}.engine.json beside {slug}.cp-sat.json"
+                )
+    return whole
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("results", type=Path)
@@ -1090,7 +1155,7 @@ def main() -> None:
 
     datasets: dict[str, dict] = {}
 
-    compare = {path.stem: json.loads(path.read_text()) for path in sorted((args.results / "compare").glob("*.json"))}
+    compare = load_compared(args.results / "compare")
 
     def compare_footer(results: list[dict]) -> str:
         return (

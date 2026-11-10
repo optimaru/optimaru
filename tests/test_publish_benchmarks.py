@@ -5,6 +5,7 @@ The script is pure Python and reads only JSON, so these tests need no extension.
 
 import argparse
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -336,3 +337,70 @@ def test_a_pickup_delivery_file_of_one_backend_publishes_the_other_as_not_run() 
     assert "| lc101 | first 10 of 53 requests | not run | 2 / 155.4 |" in block
     row = publish.pdp_li_lim_dataset(cases, 30)["sections"][0]["rows"][0]
     assert row["cells"]["engine"] == {"value": None, "status": "not run"} and row["best"] == []
+
+
+def _half(solver, instance="demo", **changes):
+    """One instance of a `--solver` run, as the comparison runner writes it."""
+    whole = _compared((0, -3), (0, -5))
+    run = next(run for run in whole["runs"] if run["solver"] == solver)
+    return {**whole, "instance": instance, "budget": 30.0, "seed": 1, "workers": 8, "runs": [run], **changes}
+
+
+def _files(directory, **files):
+    directory.mkdir(exist_ok=True)
+    for name, results in files.items():
+        (directory / f"{name.replace('__', '.').replace('_', '-')}.json").write_text(json.dumps(results))
+    return directory
+
+
+def test_the_two_solver_runs_of_a_use_case_are_joined_into_its_comparison(tmp_path) -> None:
+    engine, cpsat = [_half("engine", "a"), _half("engine", "b")], [_half("cp-sat", "a"), _half("cp-sat", "b")]
+    compared = publish.load_compared(_files(tmp_path / "compare", knapsack__engine=engine, knapsack__cp_sat=cpsat))
+
+    assert list(compared) == ["knapsack"]
+    assert [result["instance"] for result in compared["knapsack"]] == ["a", "b"]
+    assert [[run["solver"] for run in result["runs"]] for result in compared["knapsack"]] == [["engine", "cp-sat"]] * 2
+    # The joined result is the one a run of both solvers writes (read back from JSON, like it).
+    both = {**_half("engine", "a"), "runs": _compared((0, -3), (0, -5))["runs"]}
+    assert compared["knapsack"][0] == json.loads(json.dumps(both))
+    assert "| a | 3 jobs | **0hard/-3soft** | 0hard/-5soft |" in publish.compare_block(compared["knapsack"], "footer")
+
+
+@pytest.mark.parametrize(
+    ("cpsat", "message"),
+    [
+        ([_half("cp-sat", "a")], "different instances"),
+        ([_half("cp-sat", "b"), _half("cp-sat", "a")], "different instances"),
+        ([_half("cp-sat", "a", seed=2), _half("cp-sat", "b")], "a differs in seed"),
+        ([_half("cp-sat", "a"), _half("cp-sat", "b", size="4 jobs")], "b differs in size"),
+        ([_half("cp-sat", "a"), _half("cp-sat", "b", budget=10.0)], "b differs in budget"),
+        ([_half("engine", "a"), _half("cp-sat", "b")], "a in the cp-sat file is not a run of cp-sat alone"),
+        ([_half("cp-sat", "a"), {"instance": "b", "error": "Traceback"}], "b failed in one of the two runs"),
+    ],
+)
+def test_solver_runs_that_do_not_belong_together_are_not_joined(cpsat, message) -> None:
+    engine = [_half("engine", "a"), _half("engine", "b")]
+    with pytest.raises(SystemExit, match=message):
+        publish.join_solver_runs("knapsack", engine, cpsat)
+
+
+def test_a_comparison_without_a_run_of_each_solver_is_refused(tmp_path) -> None:
+    # Published as it is, the missing solver would read as one that found no solution.
+    with pytest.raises(SystemExit, match=r"demo has runs of \['engine'\], not of both"):
+        publish.load_compared(_files(tmp_path / "whole", knapsack=[_half("engine")]))
+    with pytest.raises(SystemExit, match=r"knapsack\.cp-sat\.json is missing"):
+        publish.load_compared(_files(tmp_path / "half", knapsack__engine=[_half("engine")]))
+    with pytest.raises(SystemExit, match="keep one form"):
+        publish.load_compared(
+            _files(
+                tmp_path / "both",
+                knapsack=[_compared((0, -3), (0, -5))],
+                knapsack__engine=[_half("engine")],
+                knapsack__cp_sat=[_half("cp-sat")],
+            )
+        )
+    with pytest.raises(SystemExit, match="expected <slug>.json"):
+        publish.load_compared(_files(tmp_path / "other", knapsack__gurobi=[_half("engine")]))
+    # A failed instance has no runs to count; it is reported as failed, as before.
+    failed = [{"case": "knapsack", "instance": "demo", "error": "Traceback"}]
+    assert publish.load_compared(_files(tmp_path / "failed", knapsack=failed)) == {"knapsack": failed}
