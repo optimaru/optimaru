@@ -135,8 +135,7 @@ The contract:
 - **Write only through `ctx.editor`.** Use `assign(entity, value)` for the
   assignment shape, and `remove(list, position)`, `insert(list, position,
   element)` and `reverse(list, first, last)` for the sequence shape. The editor
-  keeps the incremental score and any derived state right. A direct write
-  leaves the score stale.
+  keeps the incremental score right. A direct write leaves the score stale.
 - **Group a multi-write move.** Wrap it in `ctx.editor.begin_batch()` …
   `end_batch()`, as `EmptyBinMove` does, so the objective scores it as one change.
 - **Undo exactly.** `undo_last()` is called at most once per `apply()`, before

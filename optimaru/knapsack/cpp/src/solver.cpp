@@ -64,8 +64,8 @@ void Solver::solve(KnapsackProblem& problem) {
     construct(problem);
     if (!problem.items.empty()) {
         // Independent parallel starts through the engine's own multi-start:
-        // no custom operator or variable listener is registered, so the
-        // worker threads run exactly the same search (seed + i each).
+        // no custom operator is registered, so the worker threads run exactly
+        // the same search (seed + i each).
         const int starts = std::max(1, config_.parallel_solver_count);
         optimaru::Solver<KnapsackProblem> engine(engineConfigOf(config_, problem, starts));
         engine.solve_multistart(

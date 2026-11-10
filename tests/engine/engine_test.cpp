@@ -768,7 +768,7 @@ void testPinnedEntities() {
           "a pinned entity with no value is refused");
 
     // Off the calling thread an escaping exception would end the process, so
-    // these two must refuse before they start one.
+    // a multi-start must refuse before it starts one.
     PinnedTasks multiStart{6, pinnedUnassigned, allButOne};
     optimaru::Settings threaded;
     threaded.parallel_starts = 2;
@@ -778,12 +778,6 @@ void testPinnedEntities() {
                       multiStart, [] { return std::make_unique<PinnedTasksCalculator>(); });
           }),
           "multi-start refuses it on the calling thread");
-
-    PinnedTasks managed{6, pinnedUnassigned, allButOne};
-    PinnedTasksCalculator managedCalculator;
-    check(refusesPinnedWithoutValue(
-                  [&] { optimaru::solve_in_background({}, managed, managedCalculator); }),
-          "solve_in_background refuses it on the calling thread");
 
     PinnedTasks noValues{0, pinnedUnassigned, allButOne};
     PinnedTasksCalculator noValuesCalculator;
@@ -968,386 +962,9 @@ void testNearbyAndLnsOnRandomTsp() {
 }  // namespace
 
 // ===========================================================================
-// Derived state (DerivedState): arrival times derived from route order
+// Engine breadth: expanded moves, limits
 // ===========================================================================
 namespace {
-
-struct ShadowTsp {
-    std::vector<std::pair<double, double>> city;
-    std::vector<double> dueTime;           // problem fact per city
-    std::vector<std::vector<int>> routes;  // genuine list variables
-    std::vector<double> arrival;           // SHADOW: distance from route start
-};
-
-}  // namespace
-
-template <>
-struct optimaru::SolutionTraits<ShadowTsp> {
-    static constexpr optimaru::Shape shape = optimaru::Shape::Sequence;
-    static int list_count(const ShadowTsp& s) { return (int)s.routes.size(); }
-    static int element_count(const ShadowTsp& s) { return (int)s.city.size(); }
-    static int list_size(const ShadowTsp& s, int l) { return (int)s.routes[l].size(); }
-    static int element_at(const ShadowTsp& s, int l, int p) { return s.routes[l][p]; }
-    static void insert_element(ShadowTsp& s, int l, int p, int e) {
-        s.routes[l].insert(s.routes[l].begin() + p, e);
-    }
-    static int remove_element(ShadowTsp& s, int l, int p) {
-        int e = s.routes[l][p];
-        s.routes[l].erase(s.routes[l].begin() + p);
-        return e;
-    }
-    static void reverse_segment(ShadowTsp& s, int l, int a, int b) {
-        std::reverse(s.routes[l].begin() + a, s.routes[l].begin() + b + 1);
-    }
-};
-
-namespace {
-
-double sDist(const ShadowTsp& s, int a, int b) {
-    double dx = s.city[a].first - s.city[b].first, dy = s.city[a].second - s.city[b].second;
-    return std::sqrt(dx * dx + dy * dy);
-}
-
-// The shadow supplier: arrival[e] = cumulative distance from the route start.
-class ArrivalTimeListener final : public optimaru::DerivedState<ShadowTsp> {
-public:
-    void rebuild(ShadowTsp& s) override {
-        for (int l = 0; l < (int)s.routes.size(); ++l) after_list_edit(s, l);
-    }
-    void after_list_edit(ShadowTsp& s, int l) override {
-        double t = 0;
-        for (std::size_t p = 0; p < s.routes[l].size(); ++p) {
-            if (p > 0) t += sDist(s, s.routes[l][p - 1], s.routes[l][p]);
-            s.arrival[s.routes[l][p]] = t;
-        }
-    }
-};
-
-// Reads ONLY the shadow: soft = -(total distance) - 10 * total lateness.
-class LatenessCalculator final : public optimaru::Objective<ShadowTsp> {
-public:
-    void rebuild(ShadowTsp& s) override {
-        sched_ = &s;
-        perList_.assign(s.routes.size(), 0.0);
-        total_ = 0;
-        for (int l = 0; l < (int)s.routes.size(); ++l) {
-            perList_[l] = listCost(l);
-            total_ += perList_[l];
-        }
-    }
-    void before_list_edit(int l) override { total_ -= perList_[l]; }
-    void after_list_edit(int l) override {  // shadows already updated
-        perList_[l] = listCost(l);
-        total_ += perList_[l];
-    }
-    Score score() override { return {0, -total_}; }
-
-private:
-    double listCost(int l) const {
-        const auto& r = sched_->routes[l];
-        double cost = 0;
-        for (std::size_t p = 0; p < r.size(); ++p) {
-            if (p > 0) cost += sDist(*sched_, r[p - 1], r[p]);
-            double late = sched_->arrival[r[p]] - sched_->dueTime[r[p]];
-            if (late > 0) cost += 10.0 * late;
-        }
-        return cost;
-    }
-    ShadowTsp* sched_ = nullptr;
-    std::vector<double> perList_;
-    double total_ = 0;
-};
-
-// Deliberately broken: never updates the shadow. ScoreChecks::Full must catch it.
-class StaleArrivalListener final : public optimaru::DerivedState<ShadowTsp> {
-public:
-    void rebuild(ShadowTsp& s) override {
-        ArrivalTimeListener fresh;
-        fresh.rebuild(s);
-    }
-    void after_list_edit(ShadowTsp&, int) override {}  // "forgets" to update
-};
-
-ShadowTsp buildShadowTsp() {
-    ShadowTsp s;
-    std::mt19937_64 g(7);
-    std::uniform_real_distribution<double> u(0.0, 100.0);
-    for (int i = 0; i < 12; ++i) {
-        s.city.emplace_back(u(g), u(g));
-        s.dueTime.push_back(60.0 + u(g));
-    }
-    s.arrival.assign(12, 0.0);
-    s.routes.assign(2, {});
-    return s;
-}
-
-void testShadowVariables() {
-    std::printf("== Shadow variables (VariableListener) ==\n");
-    {  // Full solve (moves + LNS + best-restore) under ScoreChecks::Full: shadows
-        // must stay consistent through every mutation path.
-        ShadowTsp s = buildShadowTsp();
-        optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.limits.step_limit = 3000;
-        config.search.ruin_recreate.enabled = true;
-        config.search.ruin_recreate.unimproved_step_trigger = 100;
-        config.search.ruin_recreate.polish_steps = 50;
-        config.search.moves.or_opt_weight = 0.15;
-        config.search.moves.tail_swap_weight = 0.15;
-        config.search.moves.cross_exchange_weight = 0.15;
-        config.score_checks = optimaru::ScoreChecks::Full;
-        config.seed = 4;
-        optimaru::Solver<ShadowTsp> solver(config);
-        solver.add_derived_state(std::make_unique<ArrivalTimeListener>());
-        LatenessCalculator calculator;
-        bool threw = false;
-        Score result{0, 0};
-        try {
-            result = solver.solve(s, calculator);
-        } catch (const optimaru::ScoreMismatchError&) {
-            threw = true;
-        }
-        check(!threw, "shadow-reading solve passes ScoreChecks::Full (all mutation paths)");
-
-        // The returned solution's shadows equal a from-scratch recompute.
-        std::vector<double> returned = s.arrival;
-        ArrivalTimeListener fresh;
-        fresh.rebuild(s);
-        bool same = true;
-        std::vector<int> all;
-        for (const auto& r : s.routes) all.insert(all.end(), r.begin(), r.end());
-        for (int e : all) same = same && std::fabs(returned[e] - s.arrival[e]) < 1e-9;
-        LatenessCalculator verify;
-        verify.rebuild(s);
-        Score recomputed = verify.score();
-        check(same && recomputed.hard == result.hard &&
-                      std::fabs(recomputed.soft - result.soft) < 1e-6,
-              "returned shadows and score match a from-scratch recompute");
-    }
-    {  // A listener that forgets to update the shadow is caught as corruption.
-        ShadowTsp s = buildShadowTsp();
-        optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.limits.step_limit = 2000;
-        config.score_checks = optimaru::ScoreChecks::Full;
-        optimaru::Solver<ShadowTsp> solver(config);
-        solver.add_derived_state(std::make_unique<StaleArrivalListener>());
-        LatenessCalculator calculator;
-        bool threw = false;
-        try {
-            solver.solve(s, calculator);
-        } catch (const optimaru::ScoreMismatchError&) {
-            threw = true;
-        }
-        check(threw, "stale shadow listener throws ScoreMismatchError");
-    }
-}
-
-}  // namespace
-
-// ===========================================================================
-// Chained variables: linked-chain VRP over previous pointers
-// ===========================================================================
-namespace {
-
-struct ChainedVrp {
-    std::vector<std::pair<double, double>> depot;  // anchor coordinates
-    std::vector<std::pair<double, double>> visit;  // entity coordinates
-    std::vector<int> previous;                     // chained decision variable
-};
-
-}  // namespace
-
-template <>
-struct optimaru::SolutionTraits<ChainedVrp> {
-    static constexpr optimaru::Shape shape = optimaru::Shape::Chain;
-    static int anchor_count(const ChainedVrp& s) { return (int)s.depot.size(); }
-    static int entity_count(const ChainedVrp& s) { return (int)s.visit.size(); }
-    static int previous_of(const ChainedVrp& s, int e) { return s.previous[e]; }
-    static void link(ChainedVrp& s, int e, int p) { s.previous[e] = p; }
-};
-
-namespace {
-
-double cDist(std::pair<double, double> a, std::pair<double, double> b) {
-    double dx = a.first - b.first, dy = a.second - b.second;
-    return std::sqrt(dx * dx + dy * dy);
-}
-
-double chainCost(const ChainedVrp& s, int anchor, const std::vector<int>& chain) {
-    double cost = 0;
-    std::pair<double, double> at = s.depot[anchor];
-    for (int e : chain) {
-        cost += cDist(at, s.visit[e]);
-        at = s.visit[e];
-    }
-    return cost;
-}
-
-class ChainDistanceCalculator final : public optimaru::ChainObjective<ChainedVrp> {
-public:
-    void rebuild(ChainedVrp& s, const std::vector<std::vector<int>>& chains) override {
-        perChain_.assign(chains.size(), 0.0);
-        total_ = 0;
-        for (std::size_t a = 0; a < chains.size(); ++a) {
-            perChain_[a] = chainCost(s, (int)a, chains[a]);
-            total_ += perChain_[a];
-        }
-    }
-    void before_chain_edit(ChainedVrp&, int a, const std::vector<int>&) override {
-        total_ -= perChain_[a];
-    }
-    void after_chain_edit(ChainedVrp& s, int a, const std::vector<int>& chain) override {
-        perChain_[a] = chainCost(s, a, chain);
-        total_ += perChain_[a];
-    }
-    Score score() override { return {0, -total_}; }
-
-private:
-    std::vector<double> perChain_;
-    double total_ = 0;
-};
-
-// Independent decode of the chains from the previous pointers (does not use
-// the engine's internal list view — verifies the pointers themselves).
-std::vector<std::vector<int>> decodeChains(const ChainedVrp& s) {
-    int n = (int)s.visit.size(), anchors = (int)s.depot.size();
-    std::vector<int> successor(n, -1), head(anchors, -1);
-    for (int e = 0; e < n; ++e) {
-        int p = s.previous[e];
-        if (p == optimaru::chain::kUnlinked) continue;
-        if (optimaru::chain::is_anchor(p)) {
-            head[optimaru::chain::anchor_index(p)] = e;
-        } else {
-            successor[p] = e;
-        }
-    }
-    std::vector<std::vector<int>> chains(anchors);
-    for (int a = 0; a < anchors; ++a) {
-        for (int e = head[a]; e != -1; e = successor[e]) chains[a].push_back(e);
-    }
-    return chains;
-}
-
-void testChainedVariables() {
-    std::printf("== Chained variables (previous-pointer VRP) ==\n");
-    ChainedVrp s;
-    s.depot = {{0, 0}, {100, 100}};
-    std::mt19937_64 g(21);
-    std::uniform_real_distribution<double> u(0.0, 100.0);
-    for (int i = 0; i < 10; ++i) s.visit.emplace_back(u(g), u(g));
-    s.previous.assign(10, optimaru::chain::kUnlinked);
-
-    optimaru::Settings config;
-    config.limits.time_limit = std::chrono::seconds(30);
-    config.limits.step_limit = 3000;
-    config.seed = 9;
-    config.search.moves.or_opt_weight = 0.15;
-    config.search.moves.tail_swap_weight = 0.15;
-    config.search.moves.cross_exchange_weight = 0.15;
-    config.search.ruin_recreate.enabled = true;
-    config.search.ruin_recreate.unimproved_step_trigger = 100;
-    config.search.ruin_recreate.polish_steps = 50;
-    ChainedVrp ref = s;
-    config.search.nearby.distance = [ref](int a, int b) {
-        return cDist(ref.visit[a], ref.visit[b]);
-    };
-    config.score_checks = optimaru::ScoreChecks::Full;
-
-    optimaru::Solver<ChainedVrp> solver(config);
-    ChainDistanceCalculator calculator;
-    bool threw = false;
-    Score result{0, 0};
-    try {
-        result = solver.solve(s, calculator);
-    } catch (const optimaru::ScoreMismatchError&) {
-        threw = true;
-    }
-    check(!threw, "chained solve passes ScoreChecks::Full (all moves + LNS)");
-
-    // Validity of the returned previous pointers, decoded independently.
-    std::vector<std::vector<int>> chains = decodeChains(s);
-    std::vector<int> all;
-    for (const auto& c : chains) all.insert(all.end(), c.begin(), c.end());
-    std::sort(all.begin(), all.end());
-    bool valid = all.size() == s.visit.size();
-    for (std::size_t i = 0; valid && i < all.size(); ++i) valid = (all[i] == (int)i);
-    check(valid, "every visit appears exactly once in the decoded chains");
-
-    // The pointers encode the same solution the solver scored.
-    double recomputed = 0;
-    for (std::size_t a = 0; a < chains.size(); ++a) {
-        recomputed += chainCost(s, (int)a, chains[a]);
-    }
-    check(std::fabs(-result.soft - recomputed) < 1e-6,
-          "pointer-decoded chains reproduce the returned score");
-}
-
-}  // namespace
-
-// ===========================================================================
-// Engine breadth: expanded moves, score explanation, background solve, limits
-// ===========================================================================
-namespace {
-
-// Cost components for the composite/analysis tests: the task-assignment score
-// split into two independently-maintained constraints.
-class TaskCostComponent final : public optimaru::Objective<TaskAssignment> {
-public:
-    void rebuild(TaskAssignment& solution) override {
-        sched_ = &solution;
-        cost_ = 0;
-        for (std::size_t t = 0; t < solution.assignment.size(); ++t) {
-            if (solution.assignment[t] >= 0) cost_ += solution.cost[t][solution.assignment[t]];
-        }
-    }
-    void before_assign(int t) override {
-        if (sched_->assignment[t] >= 0) cost_ -= sched_->cost[t][sched_->assignment[t]];
-    }
-    void after_assign(int t) override {
-        if (sched_->assignment[t] >= 0) cost_ += sched_->cost[t][sched_->assignment[t]];
-    }
-    Score score() override { return {0, -static_cast<double>(cost_)}; }
-
-private:
-    TaskAssignment* sched_ = nullptr;
-    long cost_ = 0;
-};
-
-class TaskConflictComponent final : public optimaru::Objective<TaskAssignment> {
-public:
-    void rebuild(TaskAssignment& solution) override {
-        sched_ = &solution;
-        conflictsOf_.assign(solution.assignment.size(), {});
-        for (auto [a, b] : solution.conflicts) {
-            conflictsOf_[a].push_back(b);
-            conflictsOf_[b].push_back(a);
-        }
-        conflicts_ = 0;
-        for (int t = 0; t < static_cast<int>(solution.assignment.size()); ++t) {
-            int w = solution.assignment[t];
-            if (w < 0) continue;
-            for (int u : conflictsOf_[t]) {
-                if (u < t && solution.assignment[u] == w) ++conflicts_;
-            }
-        }
-    }
-    void before_assign(int t) override { applyDelta(t, -1); }
-    void after_assign(int t) override { applyDelta(t, +1); }
-    Score score() override { return {-conflicts_, 0.0}; }
-
-private:
-    void applyDelta(int t, int sign) {
-        int w = sched_->assignment[t];
-        if (w < 0) return;
-        for (int u : conflictsOf_[t]) {
-            if (u != t && sched_->assignment[u] == w) conflicts_ += sign;
-        }
-    }
-    TaskAssignment* sched_ = nullptr;
-    std::vector<std::vector<int>> conflictsOf_;
-    std::int64_t conflicts_ = 0;
-};
 
 void testExpandedMoves() {
     std::printf("== Moves: Or-opt + tail swap (2-opt*) ==\n");
@@ -1394,40 +1011,6 @@ void testExpandedMoves() {
         check(std::fabs(-result.soft - optimum) < 1e-9,
               "expanded move mix still reaches the TSP optimum");
     }
-}
-
-void testScoreAnalysis(const Score& optimum) {
-    std::printf("== Score analysis (SolutionManager + named composite) ==\n");
-    TaskAssignment s = buildTaskInstance();
-    for (int t = 0; t < 6; ++t) s.assignment[t] = t % 4;
-
-    optimaru::WeightedObjective<TaskAssignment> composite;
-    composite.add(std::make_unique<TaskConflictComponent>(), "task conflict");
-    composite.add(std::make_unique<TaskCostComponent>(), "task cost");
-
-    optimaru::ScoreBreakdown analysis = optimaru::explain_score(s, composite);
-    Score expected = fullScore(s);
-    check(analysis.score == expected, "analysis total matches the full recompute");
-    check(analysis.constraints.size() == 2 && analysis.constraints[0].name == "task conflict" &&
-                  analysis.constraints[0].score == Score{expected.hard, 0.0} &&
-                  analysis.constraints[1].name == "task cost" &&
-                  analysis.constraints[1].score == Score{0, expected.soft},
-          "per-constraint breakdown is named and correct");
-
-    // The composite is a first-class calculator: solving with it reaches the
-    // same optimum as the monolithic calculator.
-    TaskAssignment s2 = buildTaskInstance();
-    optimaru::Settings config;
-    config.limits.time_limit = std::chrono::seconds(10);
-    config.limits.step_limit = 200000;
-    config.search.acceptance.rule = optimaru::AcceptanceRule::SimulatedAnnealing;
-    config.search.acceptance.start_temperature = {2, 50.0};
-    config.seed = 7;
-    optimaru::WeightedObjective<TaskAssignment> composite2;
-    composite2.add(std::make_unique<TaskConflictComponent>(), "task conflict");
-    composite2.add(std::make_unique<TaskCostComponent>(), "task cost");
-    Score result = optimaru::Solver<TaskAssignment>(config).solve(s2, composite2);
-    check(result == optimum, "solving through the composite reaches the optimum");
 }
 
 // ---------------------------------------------------------------------------
@@ -2358,8 +1941,8 @@ void testSolverConfig() {
     std::printf("\n");
 }
 
-void testBackgroundSolveAndLimits() {
-    std::printf("== background solve + stall_step_limit ==\n");
+void testStallStepLimitAndRequestStop() {
+    std::printf("== stall_step_limit, request_stop ==\n");
     using Clock = std::chrono::steady_clock;
     {  // stall_step_limit fires long before the 30s time_limit.
         TaskAssignment s = buildTaskInstance();
@@ -2372,57 +1955,25 @@ void testBackgroundSolveAndLimits() {
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
         check(sec < 5.0, "stall_step_limit terminates early (" + std::to_string(sec) + "s)");
     }
-    {  // solve_in_background: request_stop stops a 30s solve quickly.
+    {  // request_stop() from another thread ends a running solve, which
+        // hands back its best so far (the way to run a solve in the
+        // background: a thread of the caller's own).
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);
+        optimaru::Solver<TaskAssignment> solver(config);
         TaskAssignmentCalculator calculator;
+        Score result;
         auto t0 = Clock::now();
-        auto job = optimaru::solve_in_background(config, s, calculator);
-        bool wasActive = job.status() == optimaru::SolveStatus::Running;
-        job.request_stop();
-        Score final = job.wait();
+        std::thread worker([&] { result = solver.solve(s, calculator); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        solver.request_stop();
+        worker.join();
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
-        bool done = job.status() == optimaru::SolveStatus::Idle;
-        check(wasActive && done && sec < 5.0,
-              "BackgroundSolve reports status and request_stop stops in " + std::to_string(sec) +
-                      "s");
-        check(final == fullScore(s), "job's final best score matches the returned solution");
-    }
-    {  // Assigning a new job over a running one stops and joins the old one
-        // first, so the Solver its thread is running is never freed under it.
-        TaskAssignment s1 = buildTaskInstance();
-        TaskAssignment s2 = buildTaskInstance();
-        optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        TaskAssignmentCalculator c1, c2;
-        auto t0 = Clock::now();
-        auto job = optimaru::solve_in_background(config, s1, c1);
-        job = optimaru::solve_in_background(config, s2, c2);
-        job.request_stop();
-        job.wait();
-        double sec = std::chrono::duration<double>(Clock::now() - t0).count();
-        check(sec < 5.0, "assigning over a running BackgroundSolve stops the old solve (" +
-                                 std::to_string(sec) + "s)");
-    }
-    {  // An exception inside the background solve reaches wait() instead of
-        // terminating the process.
-        TaskAssignment s = buildTaskInstance();
-        optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.on_new_best = [](std::int64_t, const Score&) {
-            throw std::runtime_error("on_new_best failed");
-        };
-        TaskAssignmentCalculator calculator;
-        auto job = optimaru::solve_in_background(config, s, calculator);
-        bool rethrown = false;
-        try {
-            job.wait();
-        } catch (const std::runtime_error& e) {
-            rethrown = std::string(e.what()) == "on_new_best failed";
-        }
-        check(rethrown && job.status() == optimaru::SolveStatus::Idle,
-              "a failing background solve rethrows from wait()");
+        check(sec < 5.0 && solver.stop_requested(),
+              "request_stop() from another thread ends a running solve (" + std::to_string(sec) +
+                      "s)");
+        check(result == fullScore(s), "a stopped solve returns the score of the solution it left");
     }
 }
 
@@ -2442,15 +1993,12 @@ int main() {
     testLnsEscapesLocalOptimum(optimum);
     testNearbyAndLnsOnRandomTsp();
     testExpandedMoves();
-    testScoreAnalysis(optimum);
     testDecomposedDeltaCalculator();
     testDecomposedListPreviews();
     testDecomposedPiecewisePreviews();
     testConstraintAssembly();
     testSolverConfig();
-    testBackgroundSolveAndLimits();
-    testShadowVariables();
-    testChainedVariables();
+    testStallStepLimitAndRequestStop();
 
     if (failures == 0) {
         std::printf("\nAll engine tests PASSED.\n");

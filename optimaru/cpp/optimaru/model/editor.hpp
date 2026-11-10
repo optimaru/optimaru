@@ -5,13 +5,11 @@
 #define OPTIMARU_MODEL_EDITOR_HPP
 
 #include <cmath>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "optimaru/model/solution_traits.hpp"
-#include "optimaru/model/derived_state.hpp"
 #include "optimaru/score/score.hpp"
 #include "optimaru/score/objective.hpp"
 
@@ -21,48 +19,32 @@ namespace optimaru {
 // Editor
 // ---------------------------------------------------------------------------
 // The one way the engine (and tests) change a solution. It pairs the solution
-// with its Objective and any DerivedState, and brackets every write as
+// with its Objective and brackets every write as
 //
-//   objective.before_*  ->  write  ->  derived state updated  ->  objective.after_*
+//   objective.before_*  ->  write  ->  objective.after_*
 //
-// so the objective retracts a contribution while the OLD derived values are
-// still in place and adds it back once the NEW ones are. Nothing else ever
-// writes a decision variable directly.
+// so the objective retracts a contribution while the OLD value is still in
+// place and adds it back once the NEW one is. Nothing else ever writes a
+// decision variable directly.
 template <typename Solution>
 class Editor {
     using Traits = SolutionTraits<Solution>;
-    using DerivedStates = std::vector<std::unique_ptr<DerivedState<Solution>>>;
 
 public:
     Editor(Solution& solution, Objective<Solution>& objective,
-           ScoreChecks score_checks = ScoreChecks::Off,
-           const DerivedStates* derived_states = nullptr)
-        : solution_(solution),
-          objective_(objective),
-          mode_(score_checks),
-          derived_(derived_states) {
+           ScoreChecks score_checks = ScoreChecks::Off)
+        : solution_(solution), objective_(objective), mode_(score_checks) {
         rebuild();
     }
 
-    // Rebuild everything computed from the decision variables: the derived
-    // state first, then the objective (which may read it).
-    void rebuild() {
-        if (derived_) {
-            for (const auto& derived : *derived_) derived->rebuild(solution_);
-        }
-        objective_.rebuild(solution_);
-    }
+    // Rebuild everything the objective computes from the decision variables.
+    void rebuild() { objective_.rebuild(solution_); }
 
     // --- assignment shape ---
 
     void assign(int entity_index, int value) {
         objective_.before_assign(entity_index);
         Traits::assign(solution_, entity_index, value);
-        if (derived_) {
-            for (const auto& derived : *derived_) {
-                derived->after_assign(solution_, entity_index);
-            }
-        }
         objective_.after_assign(entity_index);
     }
 
@@ -94,15 +76,10 @@ public:
     }
 
     // Composite list mutations (e.g. a tail swap rebuilt in place) may bracket
-    // their own Traits writes with this pair, so derived state and the objective
-    // still see one coherent change per list.
+    // their own Traits writes with this pair, so the objective still sees one
+    // coherent change per list.
     void begin_list_edit(int list_index) { objective_.before_list_edit(list_index); }
     void end_list_edit(int list_index) {
-        if (derived_) {
-            for (const auto& derived : *derived_) {
-                derived->after_list_edit(solution_, list_index);
-            }
-        }
         objective_.after_list_edit(list_index);
         record_touched(list_index);
     }
@@ -123,7 +100,7 @@ public:
     Score score() {
         Score incremental = objective_.score();
         if (mode_ == ScoreChecks::Full) {
-            rebuild();  // re-derives the derived state too: catches its bugs
+            rebuild();
             Score full = objective_.score();
             if (!scores_agree(incremental, full)) throw ScoreMismatchError(incremental, full);
         }
@@ -142,7 +119,6 @@ private:
     Solution& solution_;
     Objective<Solution>& objective_;
     ScoreChecks mode_;
-    const DerivedStates* derived_;
     bool track_touched_ = false;
     std::vector<int> touched_lists_;
 };

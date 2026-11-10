@@ -28,10 +28,10 @@ namespace fp {
 // line in O(list length + same-operator overlap work) instead of rescoring
 // the whole solution. The job times are recomputed inside after_list_edit
 // (list-position based, exactly ScoreCalculator::updateShadowVariables'
-// semantics) rather than through a DerivedState, so the calculator stays
-// self-contained and multi-start safe (the engine's solve_multistart does not
-// carry listeners into worker threads). The pool list (index lineCount) and
-// engine-unassigned jobs contribute only the medium unassigned penalty.
+// semantics), so the calculator is self-contained and each start of the
+// engine's solve_multistart scores with one of its own. The pool list (index
+// lineCount) and engine-unassigned jobs contribute only the medium unassigned
+// penalty.
 class FoodPackagingIncrementalScoreCalculator final
     : public optimaru::Objective<PackagingSchedule> {
 public:

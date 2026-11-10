@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Engine (C++): features no use case used are removed.** Gone from the engine headers: the
+  chain solution shape (`Shape::Chain`, `ChainObjective`, the chain overload of
+  `Solver::solve()`, the `chain::` link helpers), `WeightedObjective`, `explain_score()`,
+  `rescore()` and `ScoreBreakdown`, background solves (`solve_in_background()`,
+  `BackgroundSolve`) and derived state (`DerivedState`, `Solver::add_derived_state()`, the
+  fourth argument of `Editor`). None of the 22 use cases used any of them, so the Python
+  package does not change, and a seeded, step-limited solve gives the same result as before.
+  What a C++ caller uses instead: `DecomposedObjective::constraint_totals()` for the score
+  per constraint, and `Solver::solve()` on a thread of its own, stopped with
+  `request_stop()`, for a solve in the background.
 - **School timetabling benchmark: the CP-SAT package keeps only what the benchmark runs.**
   `benchmarks/school-timetabling/cpsat` still carried parts of the application it came from
   that no benchmark and no test of the model used: a workbook importer, timetable and
