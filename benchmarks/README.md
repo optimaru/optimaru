@@ -16,21 +16,21 @@ taken as the result.
 | [bin-packing](bin-packing) | OR-Tools CP-SAT | Falkenauer u/t (OR-Library), three per class |
 | [quadratic-assignment](quadratic-assignment) | OR-Tools CP-SAT | QAPLIB, 30–50 facilities (33, engine only) + generated |
 | [assembly-line-balancing](assembly-line-balancing) | OR-Tools CP-SAT | SALBP-1 (Otto et al.), five per data set |
-| [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated |
-| [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | demo instance |
-| [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated) |
-| [facility-location](facility-location) | OR-Tools CP-SAT | generated |
-| [flight-crew-scheduling](flight-crew-scheduling) | OR-Tools CP-SAT | generated |
-| [food-packaging](food-packaging) | OR-Tools CP-SAT | demo instance |
-| [knapsack](knapsack) | OR-Tools CP-SAT | generated |
-| [maintenance-scheduling](maintenance-scheduling) | OR-Tools CP-SAT | demo instances (small, large) |
-| [max-cut](max-cut) | OR-Tools CP-SAT | generated |
-| [meeting-scheduling](meeting-scheduling) | OR-Tools CP-SAT | demo instance |
-| [order-picking](order-picking) | OR-Tools CP-SAT | generated |
-| [semiconductor-scheduling](semiconductor-scheduling) | OR-Tools CP-SAT | generated |
-| [sports-league-scheduling](sports-league-scheduling) | OR-Tools CP-SAT | demo instance |
-| [task-assigning](task-assigning) | OR-Tools CP-SAT | demo instance |
-| [tournament-scheduling](tournament-scheduling) | OR-Tools CP-SAT | generated |
+| [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated, 6 sizes |
+| [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | the demo conference + generated, 2 to 5 days |
+| [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated), 6 sizes |
+| [facility-location](facility-location) | OR-Tools CP-SAT | generated, 6 sizes |
+| [flight-crew-scheduling](flight-crew-scheduling) | OR-Tools CP-SAT | generated, 6 sizes |
+| [food-packaging](food-packaging) | OR-Tools CP-SAT | the demo plant at 5 sizes |
+| [knapsack](knapsack) | OR-Tools CP-SAT | generated, 50 to 5000 items |
+| [maintenance-scheduling](maintenance-scheduling) | OR-Tools CP-SAT | the two demo instances + generated |
+| [max-cut](max-cut) | OR-Tools CP-SAT | generated, 30 to 800 vertices |
+| [meeting-scheduling](meeting-scheduling) | OR-Tools CP-SAT | the demo instance + generated |
+| [order-picking](order-picking) | OR-Tools CP-SAT | generated, 5 sizes |
+| [semiconductor-scheduling](semiconductor-scheduling) | OR-Tools CP-SAT | generated, 6 to 48 lots |
+| [sports-league-scheduling](sports-league-scheduling) | OR-Tools CP-SAT | the demo league + generated, 6 to 18 teams |
+| [task-assigning](task-assigning) | OR-Tools CP-SAT | the demo instance + generated |
+| [tournament-scheduling](tournament-scheduling) | OR-Tools CP-SAT | generated, 6 sizes |
 
 The CP-SAT models come from
 [external-solver](https://github.com/optimaru/external-solver), installed from
@@ -48,7 +48,8 @@ scores with the same `optimaru.<subpackage>` modules. Importing the project's
 package calls `cpsat_plugins.checkout.use_checkout_engine`, which fails fast if
 `optimaru.<subpackage>` comes from anywhere else. `OPTIMARU_USE_CASES=<subpackage>`
 before `uv sync` builds only that extension. [`cpsat-common`](cpsat-common) holds
-that check and the comparison runner (`run_cli`). To pick up a new external-solver release,
+that check, the comparison runner (`run_cli`) and the results file of the
+public-instance runners (`write_results`). To pick up a new external-solver release,
 bump the `tag` in each project's `[tool.uv.sources]` and run `uv lock`.
 
 A CP-SAT constraint is a plugin that subclasses the use case's own constraint
@@ -69,6 +70,42 @@ with the engine's message, when the objective is built: hard 0 must mean no
 violation. Each benchmark's README (or `cpsat/README.md`) lists its own
 limits, including the plugins that refuse an offset.
 
+## Instances of the generated comparisons
+
+Every comparison runs a ladder of instances of growing size. The smallest are
+ones both solvers finish; on the largest the exact model often returns nothing
+within the budget, which the results show as "no solution in time". Where a
+use case ships a demo instance it is one rung, and the others come from a
+seeded generator in its `benchmark.py`. `--instance NAME` (repeatable) picks rungs,
+and `--solver engine` or `--solver cp-sat` runs one solver only, which lets
+the single-threaded engine runs and the CP-SAT runs be measured side by side.
+The publisher joins the JSON of the two runs (`compare/<slug>.engine.json` and
+`compare/<slug>.cp-sat.json`) into the comparison after checking that they are
+of the same instances, budget and seed; it refuses a comparison that lacks a
+run of either solver.
+
+## How a CP-SAT run is timed
+
+A CP-SAT run gets the budget as its time limit, which CP-SAT counts from the
+start of the search, so building the model comes on top. The comparison runner
+stops the run as a whole, model construction included, 60 s past the budget
+(`--cpsat-grace`; 90 s of wall clock at a 30 s budget). A run stopped there,
+and a run whose search ends without a solution, is reported as "no solution
+in time". The public-instance runners have no such stop.
+
+Where the score levels of an instance do not fit one 64-bit objective, the
+reference model minimises them one after another, hard first, and gives each
+level an equal share of the time that is left (`ObjectiveBuilder.solve` in
+external-solver); a first level that finds no solution in its share ends the
+run without one. Food packaging and tournament scheduling are solved this way
+on every instance of their ladders, conference scheduling, meeting scheduling
+and task assigning on every instance but the smallest. A row where that early
+end is the whole result is not published: a rung is left out of the ladder
+when the first level finds a solution once it has the whole budget (task
+assigning above 120 tasks, the 4-line plant of food packaging; see their
+`benchmark.py`), and stays when it does not (the demo plant of food packaging,
+the 16-meeting instance of meeting scheduling).
+
 The `<slug>-compare` commands in the READMEs use `--seconds 10` for a quick
 check, and the public-instance runners show their own budgets. Every results
 block and `RESULTS.md` states the budget it was measured with (30 s per solver
@@ -81,11 +118,22 @@ results blocks of these READMEs (between `<!-- results:start -->` and
 `<!-- results:end -->`) and the homepage's benchmark data from the JSON the
 harnesses print; its docstring lists the file each harness's output goes in.
 A refresh may cover some data sets only: the others keep their text and their
-date.
+date. Two guides quote their table by hand and are updated with it (the
+"Latest run" line of `docs/use-cases/knapsack/README.md` and of
+`docs/use-cases/max-cut/README.md`).
 
 The published numbers are single runs on one machine. The harnesses were run
 side by side, each on its own performance cores: one CP-SAT job at a time
 (8 workers) beside two single-threaded jobs, at most ten solver threads on
 twelve performance cores, with builds and other work kept to the efficiency
-cores (`taskpolicy -b` on macOS).
+cores (`taskpolicy -b` on macOS). In the generated comparisons that means the
+engine's runs and CP-SAT's were made at the same time, not one after the other.
+
+How far a number repeats differs by use case. The 38 instances of the earlier
+generated ladders were measured on two days: the engine's score was the same
+both times on all of them, and CP-SAT's differed on 8 (eight workers under a
+time limit). The engine's own result does move elsewhere: on the 400-request
+synthetic pickup-delivery instance (54 vehicles one day, 55 the other) and by
+a few percent on the larger semiconductor instances (see that README). Read a
+small margin in any table as noise.
 

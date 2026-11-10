@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import math
+import os
 import re
 import urllib.request
 from dataclasses import dataclass
@@ -176,7 +177,8 @@ def load_augerat_instance(name: str, cache_dir: Path) -> CvrpInstance:
         # Nothing is cached: a transient error page must not stick.
         raise ValueError(f"{name}.vrp checksum mismatch for {url}: {digest}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_suffix(".vrp.part")
+    # A name of this process: lanes that start on an empty cache download the same file at once.
+    partial = path.with_name(f"{path.name}.{os.getpid()}.part")
     partial.write_bytes(payload)
     partial.replace(path)
     return parse_instance(payload.decode())

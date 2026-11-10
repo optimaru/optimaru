@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from cpsat_plugins import benchmark
 
 
@@ -44,13 +46,44 @@ def test_local_runner_compares_one_case(monkeypatch, capsys) -> None:
     assert payload[0]["runs"][1]["score"] == [0, 2.0]
 
 
+def test_one_solver_alone_gives_its_run_of_the_comparison(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        benchmark,
+        "score_solution",
+        lambda package, problem: benchmark.Score((0, float(problem.value)), ("hard", "soft")),
+    )
+
+    runs = {}
+    for solver in ("engine", "cp-sat", "both"):
+        argv = ["--json", "--seconds", "0.01", "--seed", "3", "--workers", "2", "--solver", solver]
+        assert benchmark.run_cli(FakeCase, argv) == 0
+        (result,) = json.loads(capsys.readouterr().out)
+        # Every result says what it was given, whichever solvers ran.
+        assert (result["size"], result["budget"], result["seed"], result["workers"]) == ("one item", 0.01, 3, 2)
+        runs[solver] = [(run["solver"], run["score"]) for run in result["runs"]]
+
+    assert runs["engine"] == [("engine", [0, 1.0])]
+    assert runs["cp-sat"] == [("cp-sat", [0, 2.0])]
+    assert runs["both"] == runs["engine"] + runs["cp-sat"]
+
+
 def test_a_failed_instance_fails_the_run(capsys) -> None:
     class Broken(FakeCase):
         @staticmethod
         def solve_engine(problem, seconds: float, seed: int) -> None:
             raise ValueError("boom")
 
-    assert benchmark.run_cli(Broken, ["--json", "--seconds", "0.01"]) == 1
+    assert benchmark.run_cli(Broken, ["--json", "--seconds", "0.01", "--seed", "5", "--workers", "3"]) == 1
+    (result,) = json.loads(capsys.readouterr().out)
+    # A failed result says what it was given, like the others.
+    assert "boom" in result["error"] and (result["seed"], result["workers"]) == (5, 3)
+
+
+@pytest.mark.parametrize("solvers", ["engine", (), ("cpsat",), ("engine", "ortools")])
+def test_a_solver_the_runner_does_not_know_is_refused(solvers) -> None:
+    # A bare string would pass a substring test and give a result with no runs.
+    with pytest.raises(ValueError, match="solvers is a sequence of engine and/or cp-sat"):
+        benchmark.run_instance(FakeCase, "small", FakeCase.instances()["small"], 0.01, 1, 1, solvers=solvers)
 
 
 def test_a_stalled_cpsat_run_is_stopped_at_the_deadline() -> None:

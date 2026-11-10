@@ -115,9 +115,13 @@ def _build(project_count: int, jobs_per_project: int, seed: int) -> Any:
 
 def instances() -> dict[str, Callable[[], Any]]:
     return {
+        "small": lambda: _build(1, 10, seed=3),
         "demo": lambda: _build(2, 12, seed=0),
         "medium": lambda: _build(4, 18, seed=1),
+        # The medium scale again from another seed.
+        "medium-2": lambda: _build(4, 18, seed=4),
         "large": lambda: _build(6, 26, seed=2),
+        "xlarge": lambda: _build(10, 30, seed=5),
     }
 
 

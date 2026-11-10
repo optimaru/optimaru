@@ -37,8 +37,12 @@ def _build(item_count: int, seed: int) -> Any:
 def instances() -> dict[str, Callable[[], Any]]:
     return {
         "n50": lambda: _build(50, seed=0),
+        "n100": lambda: _build(100, seed=3),
         "n200": lambda: _build(200, seed=1),
+        "n500": lambda: _build(500, seed=4),
         "n1000": lambda: _build(1000, seed=2),
+        "n2000": lambda: _build(2000, seed=5),
+        "n5000": lambda: _build(5000, seed=6),
     }
 
 

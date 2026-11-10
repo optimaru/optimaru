@@ -118,11 +118,16 @@ def parse_xlsx_best_known(payload: bytes) -> dict[str, int]:
     # permutation column before the file name. The `<No of stations in optimum>`
     # column can contain an interval when optimality is still unknown.
     header = rows[1] if len(rows) > 1 else {}
-    name_column = next((column for column, text in header.items() if text.lower() == "<filename>"), 1)
-    best_column = next(
-        (column for column, text in header.items() if text.lower().startswith("<upper bound on the number")),
-        8,
-    )
+
+    def column(title: str) -> int:
+        # No fallback to a fixed column: that is how the medium workbook was misread.
+        for index, text in header.items():
+            if text.lower().startswith(title):
+                return index
+        raise ValueError(f"the SALBP details workbook has no {title!r} column in its header row")
+
+    name_column = column("<filename>")
+    best_column = column("<upper bound on the number")
     result = {}
     for row in rows[2:]:
         name, best_known = row.get(name_column), row.get(best_column)

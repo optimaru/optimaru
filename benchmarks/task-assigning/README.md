@@ -18,6 +18,12 @@ CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 The engine runs single-threaded; CP-SAT gets `--workers` search
 workers and its time includes model construction.
 
+The ladder stops at 120 tasks. The CP-SAT model of this use case is solved one
+score level at a time, and at 240 tasks a 30 s run ends without a solution
+after the first level's 10 s, although that level succeeds with the whole 30 s.
+Such a row would show the time split and not the solver, so it is left out
+([how a CP-SAT run is timed](../README.md#how-a-cp-sat-run-is-timed)).
+
 <!-- results:start -->
 ## Results
 
@@ -25,7 +31,10 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
-| demo | demo instance | **0hard/0medium/-10179610011485soft** | **0hard/0medium/-10179610011485soft** |
+| small | 12 tasks / 4 employees / 3 customers | **0hard/0medium/-5871880005292soft** | **0hard/0medium/-5871880005292soft** |
+| demo | 28 tasks / 8 employees / 4 customers | **0hard/0medium/-10179610011485soft** | **0hard/0medium/-10179610011485soft** |
+| medium | 60 tasks / 12 employees / 6 customers | **0hard/0medium/-31599610023799soft** | 0hard/0medium/-31716730023950soft |
+| large | 120 tasks / 20 employees / 8 customers | **0hard/0medium/-118983210094159soft** | 0hard/0medium/-119384290095569soft |
 
-Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

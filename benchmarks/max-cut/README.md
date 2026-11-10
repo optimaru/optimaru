@@ -48,8 +48,12 @@ Every cell is the score of that solver's final solution under the use case's own
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
 | g30 | 30 vertices / 125 edges | **0hard/479soft** | **0hard/479soft** |
+| g50 | 50 vertices / 257 edges | **0hard/1060soft** | **0hard/1060soft** |
 | g80 | 80 vertices / 313 edges | 0hard/1322soft | **0hard/1327soft** |
-| g200 | 200 vertices / 1067 edges | 0hard/4358soft | **0hard/4368soft** |
+| g120 | 120 vertices / 567 edges | 0hard/2335soft | **0hard/2341soft** |
+| g200 | 200 vertices / 1067 edges | **0hard/4358soft** | 0hard/4353soft |
+| g400 | 400 vertices / 2392 edges | **0hard/9611soft** | 0hard/9381soft |
+| g800 | 800 vertices / 4691 edges | **0hard/19089soft** | 0hard/18613soft |
 
-Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

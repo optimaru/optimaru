@@ -28,9 +28,12 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
+| small | 32 seats / 32 crew / 8 flights | **0hard/-20000soft** | **0hard/-20000soft** |
 | demo | 62 seats / 50 crew / 14 flights | **0hard/-23000soft** | **0hard/-23000soft** |
-| medium | 120 seats / 50 crew / 28 flights | **-2hard/-25000soft** | -26hard/-57000soft |
+| medium | 120 seats / 50 crew / 28 flights | **-2hard/-25000soft** | -66hard/-58000soft |
+| medium-2 | 122 seats / 50 crew / 28 flights | 0hard/-23000soft | **0hard/-22000soft** |
 | large | 236 seats / 50 crew / 56 flights | **-21hard/-35000soft** | -41360hard/-7000soft |
+| xlarge | 480 seats / 50 crew / 112 flights | **-113hard/-36000soft** | — (no solution in time) |
 
-Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

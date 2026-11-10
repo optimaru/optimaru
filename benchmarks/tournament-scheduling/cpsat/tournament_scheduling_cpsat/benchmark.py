@@ -75,12 +75,15 @@ XLARGE_TEAM_NAMES = TEAM_NAMES + [
 
 def instances() -> dict[str, Callable[[], Any]]:
     return {
+        "small": lambda: _build(12, 4, 8, TEAM_NAMES),
         "demo": lambda: _build(18, 4, 12, TEAM_NAMES),
+        "medium": lambda: _build(24, 4, 20, XLARGE_TEAM_NAMES[:8]),
         "large": lambda: _build(36, 5, 30, TEAM_NAMES + ["Anna", "Bram", "Cara"]),
-        # demo and large saturate: the engine reaches their provable optima
-        # (demo -1.54919, large 0.0) on every seed well inside a 10s budget,
-        # so they cannot rank solver changes. xlarge (800 slots / 20 teams /
-        # 100 days) still has headroom at 10s and separates seeds — it is the
+        "larger": lambda: _build(60, 6, 90, XLARGE_TEAM_NAMES[:14]),
+        # About xlarge, against demo and large above: those two saturate (the engine
+        # reaches their provable optima, demo -1.54919 and large 0.0, on every seed well
+        # inside a 10s budget), so they cannot rank solver changes. xlarge (800 slots /
+        # 20 teams / 100 days) still has headroom at 10s and separates seeds — it is the
         # instance quality tuning is measured on.
         "xlarge": lambda: _build(100, 8, 200, XLARGE_TEAM_NAMES),
     }

@@ -15,8 +15,9 @@ uv run project-job-public-bench --instance Pat1 --seconds 10 --workers 8
 uv run project-job-public-bench --all --seconds 30 --workers 8     # Pat1-Pat5
 ```
 
-`--instance` repeats, `--all` runs the five instances, and `--json` prints the
-results as JSON (progress goes to stderr). The engine always runs
+`--instance` repeats, `--all` runs the five instances, `--json` prints the
+results as JSON (progress goes to stderr), and `--out FILE` rewrites FILE with
+the results after every instance. The engine always runs
 single-threaded; `--workers` is CP-SAT's.
 
 <!-- results:start -->

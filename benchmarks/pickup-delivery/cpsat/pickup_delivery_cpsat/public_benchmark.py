@@ -17,6 +17,7 @@ from pathlib import Path
 
 from external_solver.pickup_delivery import solve_request as solve_cpsat_request
 
+from cpsat_plugins.results import write_results, write_whole
 from optimaru.pickup_delivery.constraints import (
     max_end_time_cost,
     paired_request_cost,
@@ -162,10 +163,7 @@ def _download(cache_dir: Path) -> bytes:
     if digest != ARCHIVE_SHA256:
         # Nothing is cached: a transient error page must not stick.
         raise ValueError(f"{archive.name} checksum mismatch: {digest}")
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    partial = archive.with_suffix(".zip.part")
-    partial.write_bytes(payload)
-    partial.replace(archive)
+    write_whole(archive, payload)
     return payload
 
 
@@ -516,6 +514,12 @@ def main(argv: list[str] | None = None) -> int:
         dest="as_json",
         help="print the results as JSON (progress goes to stderr)",
     )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="write the results as JSON here after every instance, so an interrupted run keeps them",
+    )
     args = parser.parse_args(argv)
     if sum(bool(choice) for choice in (args.all, args.instance, args.synthetic)) > 1:
         parser.error("--all, --instance and --synthetic are mutually exclusive")
@@ -539,18 +543,21 @@ def main(argv: list[str] | None = None) -> int:
         print(line, file=sys.stderr if args.as_json else sys.stdout, flush=True)
 
     log(f"objective: assign every request, then minimize distance (rounded to 1/{DISTANCE_SCALE} of a unit)")
-    results = [
-        run_case(
-            instance,
-            limit,
-            seconds=args.seconds,
-            seed=args.seed,
-            workers=args.workers,
-            backends=backends,
-            log=log,
+    results = []
+    for instance, limit in cases:
+        results.append(
+            run_case(
+                instance,
+                limit,
+                seconds=args.seconds,
+                seed=args.seed,
+                workers=args.workers,
+                backends=backends,
+                log=log,
+            )
         )
-        for instance, limit in cases
-    ]
+        if args.out is not None:
+            write_results(args.out, results)
     if args.as_json:
         print(json.dumps(results, indent=2))
     return 0

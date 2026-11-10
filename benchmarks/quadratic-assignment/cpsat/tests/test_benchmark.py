@@ -3,7 +3,15 @@ from quadratic_assignment_cpsat import benchmark
 
 
 def test_comparison_runner_owns_its_instances() -> None:
-    assert set(benchmark.instances()) == {"plant6", "random8", "random10"}
+    assert list(benchmark.instances()) == [
+        "plant6",
+        "random8",
+        "random10",
+        "random12",
+        "random14",
+        "random16",
+        "random20",
+    ]
     assert callable(benchmark.solve_engine)
     assert callable(benchmark.solve_cpsat)
 
@@ -20,3 +28,10 @@ def test_the_cpsat_answer_rescores_like_the_engine() -> None:
     solved = benchmark.solve_cpsat(problem, 5.0, 1, 2)
     rescored = score_solution(benchmark.PACKAGE, solved)
     assert rescored.levels == (solved.score_hard, solved.score_soft)
+
+
+def test_every_instance_builds() -> None:
+    built = {name: build() for name, build in benchmark.instances().items()}
+    assert built and all(problem is not None for problem in built.values())
+    # Every rung has a size to show beside its name.
+    assert all(benchmark.describe(problem) for problem in built.values())

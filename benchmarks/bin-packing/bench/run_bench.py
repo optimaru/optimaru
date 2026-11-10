@@ -105,6 +105,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if sum(bool(choice) for choice in (args.all, args.sample_per_class, args.instance)) > 1:
         parser.error("--all, --sample-per-class and --instance are mutually exclusive")
+    if args.sample_per_class < 0:
+        parser.error("--sample-per-class takes a non-negative number of instances to pick from each class")
 
     suite = load_suite(args.cache_dir)
     if args.all:

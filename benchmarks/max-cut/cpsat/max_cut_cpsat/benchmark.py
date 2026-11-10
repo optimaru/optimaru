@@ -43,8 +43,12 @@ def _build(vertex_count: int, density: float, seed: int) -> Any:
 def instances() -> dict[str, Callable[[], Any]]:
     return {
         "g30": lambda: _build(30, 0.3, seed=0),
+        "g50": lambda: _build(50, 0.2, seed=3),
         "g80": lambda: _build(80, 0.1, seed=1),
+        "g120": lambda: _build(120, 0.08, seed=4),
         "g200": lambda: _build(200, 0.05, seed=2),
+        "g400": lambda: _build(400, 0.03, seed=5),
+        "g800": lambda: _build(800, 0.015, seed=6),
     }
 
 

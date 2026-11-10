@@ -52,10 +52,12 @@ uv run pytest -q                                       # benchmark harness tests
 uv run quadratic-assignment-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
 
-The comparison instances stay small (6, 8 and 10 facilities) because of the O(n^4) pair variables.
+The comparison instances stop at 20 facilities (6, 8, 10, 12, 14, 16 and 20) because of the O(n^4)
+pair variables; the QAPLIB instances below start at 30 and are above the exact-model cap.
 With the 1 s CI smoke budget CP-SAT returns an 8-facility answer (not always the optimum) and is still
 presolving the 10-facility model (reported as UNKNOWN); with 2 workers it proves the 8-facility optimum
-in about 1.5 s, and at 10 s it matches the engine on all three instances (table below).
+in about 1.5 s. At 30 s the two solvers tie up to 12 facilities and are within a few percent of each
+other, either way, above that (table below).
 The engine runs single-threaded; CP-SAT gets `--workers` search workers and its time includes model
 construction.
 
@@ -84,8 +86,12 @@ Every cell is the score of that solver's final solution under the use case's own
 | plant6 | 6 facilities | **0hard/-368soft** | **0hard/-368soft** |
 | random8 | 8 facilities | **0hard/-1130soft** | **0hard/-1130soft** |
 | random10 | 10 facilities | **0hard/-1766soft** | **0hard/-1766soft** |
+| random12 | 12 facilities | **0hard/-2292soft** | **0hard/-2292soft** |
+| random14 | 14 facilities | 0hard/-3784soft | **0hard/-3666soft** |
+| random16 | 16 facilities | 0hard/-4112soft | **0hard/-4020soft** |
+| random20 | 20 facilities | **0hard/-7816soft** | 0hard/-7918soft |
 
-Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->
 
 <!-- qaplib:start -->

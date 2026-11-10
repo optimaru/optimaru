@@ -42,10 +42,16 @@ def _build(seed: int, workers: int, days: int) -> Roster:
 
 def instances() -> dict[str, Callable[[], Roster]]:
     return {
+        "small": lambda: _build(seed=3, workers=6, days=7),
         # `generate_demo_data()` with its own defaults.
         "demo": lambda: _build(seed=7, workers=12, days=14),
         "medium": lambda: _build(seed=1, workers=24, days=28),
+        # The medium scale again from another seed.
+        "medium-2": lambda: _build(seed=4, workers=24, days=28),
         "large": lambda: _build(seed=2, workers=48, days=28),
+        # 80 workers: at 96 the CP-SAT reference model is no longer valid (its squared-load
+        # objective leaves int64), which would be a model limit, not a search result.
+        "xlarge": lambda: _build(seed=5, workers=80, days=28),
     }
 
 

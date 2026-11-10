@@ -9,7 +9,10 @@ Usage::
 RESULTS_DIR holds what the harnesses wrote. Every file is optional: a data set
 whose file is missing keeps its README text and its homepage entry.
 
-- ``compare/<slug>.json``: ``python -m <package>.benchmark --json`` of a use case;
+- ``compare/<slug>.json``: ``python -m <package>.benchmark --json`` of a use case, or
+  ``compare/<slug>.engine.json`` and ``compare/<slug>.cp-sat.json``, its two ``--solver``
+  runs, which are joined instance by instance (any other ``*.json`` in ``compare/`` is
+  refused, so keep scratch files elsewhere);
 - ``vrp-x.json``, ``vrp-a.json``: ``python -m vrp_benchmark --series x|a --out FILE``;
 - ``pdp-li-lim.json``, ``pdp-synthetic.json``: ``pickup-delivery-public-bench --json``
   (the lists of several runs concatenated);
@@ -182,6 +185,10 @@ def _check_vrp(what: str, data: dict, args: argparse.Namespace) -> None:
     seconds = data["protocol"]["seconds"]
     if seconds != args.seconds:
         raise SystemExit(f"{what}: run with {seconds:g} s, not --seconds {args.seconds:g}")
+    only = data["protocol"].get("only")
+    if only:
+        # The tables and the bucket means read as the whole series.
+        raise SystemExit(f"{what}: a run of chosen instances ({', '.join(only)}) is not published as the series")
 
 
 def _footer(args: argparse.Namespace, seed: int, *, workers: bool = True) -> str:
@@ -314,7 +321,8 @@ def vrp_block(set_x: dict | None, set_a: dict | None, args: argparse.Namespace) 
         "",
         (
             "Gap to the best-known solution; every route is re-verified by the harness. Lower is better; "
-            "the best value is bold. A mean gap counts the complete runs only (complete runs / runs)."
+            "the best complete run is bold (a run that leaves a customer out has no gap). A mean gap counts "
+            "the complete runs only (complete runs / runs)."
         ),
     ]
     for title, data in (("CVRPLIB Set X", set_x), ("CVRPLIB Set A (Augerat)", set_a)):
@@ -343,6 +351,9 @@ def vrp_block(set_x: dict | None, set_a: dict | None, args: argparse.Namespace) 
             )
         lines += ["", *_vrp_table(by_instance)]
     protocol = (set_x or set_a)["protocol"]
+    seeds = {data["protocol"]["seed"] for data in (set_x, set_a) if data is not None}
+    if len(seeds) > 1:
+        raise SystemExit(f"vehicle-routing: Set X and Set A were run with different seeds {sorted(seeds)}")
     lines += [
         "",
         f"Measured {args.date} on {args.machine}, {protocol['seconds']:g} s per run, seed "
@@ -379,7 +390,8 @@ def _pdp_cell(run: dict | None) -> tuple[dict, str]:
 
 def _pdp_cells(case: dict) -> tuple[dict[str, dict], dict[str, str]]:
     runs = _runs(case)
-    pairs = {key: _pdp_cell(runs[solver]) for solver, key in SOLVERS.items() if solver in runs}
+    # A backend the case was not run with is "not run", as in the other tables.
+    pairs = {key: _pdp_cell(runs.get(solver)) for solver, key in SOLVERS.items()}
     return {key: cell for key, (cell, _) in pairs.items()}, {key: text for key, (_, text) in pairs.items()}
 
 
@@ -464,8 +476,8 @@ def pdp_synthetic_block(cases: list[dict]) -> str:
     for case in cases:
         cells, texts = _pdp_cells(case)
         texts = _bold(cells, texts)
-        lines.append(f"| {case['requests']} | {texts['engine']} | {texts.get('ortools', 'not run')} |")
-        if "ortools" not in cells:
+        lines.append(f"| {case['requests']} | {texts['engine']} | {texts['ortools']} |")
+        if cells["ortools"].get("status") == "not run":
             engine_only.append(str(case["requests"]))
     if engine_only:
         measured = " (at 400 requests it was still being built after 10 minutes at 11 GB, 2026-10-29)"
@@ -489,7 +501,8 @@ def _count_cells(result: dict, field: str) -> tuple[dict[str, dict], dict[str, s
             cells[key], texts[key] = {"value": None, "status": "not run"}, "not run (size cap)"
         elif run.get(field) is None or run.get("feasible") is False:
             kind = "no solution" if run.get(field) is None else "infeasible"
-            cells[key], texts[key] = {"value": None, "status": kind}, f"{kind} in time"
+            text = "no solution in time" if kind == "no solution" else kind
+            cells[key], texts[key] = {"value": None, "status": kind}, text
         else:
             cells[key], texts[key] = {"value": run[field]}, _number(run[field])
     return cells, texts
@@ -622,12 +635,12 @@ def _penalty(value: float) -> float:
     return round(-float(value), 2) + 0.0  # + 0.0 turns -0.0 into 0.0
 
 
-def planning_row(result: dict) -> dict:
-    runs = _runs(result)
-    scored = {solver: run for solver, run in runs.items() if run.get("score") is not None}
+def _deciding_level(result: dict) -> tuple[int, list[str]]:
+    """The level a row is decided on, and the names of the levels: the first level the solvers
+    differ on; on a full tie, the objective (last) level; with one solution only, its first
+    non-zero level."""
+    scored = {solver: run for solver, run in _runs(result).items() if run.get("score") is not None}
     names = next(iter(scored.values()))["score_names"] if scored else ["soft"]
-    # The deciding level: the first one the solvers differ on; on a full tie, the objective
-    # (last) level; with one solution only, its first non-zero level.
     if len(scored) == 2:
         engine, ortools = (scored[name]["score"] for name in SOLVERS)
         level = next(
@@ -639,6 +652,12 @@ def planning_row(result: dict) -> dict:
         level = next((i for i, value in enumerate(score) if value != 0), len(names) - 1)
     else:
         level = len(names) - 1
+    return level, names
+
+
+def planning_row(result: dict) -> dict:
+    runs = _runs(result)
+    level, names = _deciding_level(result)
     cells = {}
     for solver, key in SOLVERS.items():
         run = runs.get(solver)
@@ -671,22 +690,36 @@ def _section(section_id: str, metric: str, rows: list[dict], *, solvers=("engine
     return {"id": section_id, "metric": metric, "solvers": list(solvers), **extra, "rows": rows}
 
 
-def _as_rewards(rows: list[dict]) -> bool:
-    """Whether a use case scores a reward (a knapsack's value, a cut's weight): then the
-    deciding level of every row is positive, and the table shows scores, higher being better."""
-    values = [cell["value"] for row in rows for cell in row["cells"].values() if cell["value"] is not None]
+def _as_rewards(rows: list[dict], on_objective: list[bool]) -> bool:
+    """Whether a use case scores a reward (a knapsack's value, a cut's weight): then its
+    objective level is positive on every row decided there, and the table shows scores,
+    higher being better.
+
+    A row of such a use case that is decided on an earlier level (one solver breaks a hard
+    rule) shows the score on that level, zero or negative: its violations are no reward,
+    and they do not turn the table into penalties.
+    """
+    values = [
+        cell["value"]
+        for row, objective in zip(rows, on_objective, strict=True)
+        if objective
+        for cell in row["cells"].values()
+        if cell["value"] is not None
+    ]
     if not values or max(values) > 0 or min(values) == 0:
         return False
     for row in rows:
         for cell in row["cells"].values():
             if cell["value"] is not None:
-                cell["value"] = -cell["value"]
+                cell["value"] = -cell["value"] + 0.0  # + 0.0 turns -0.0 into 0.0
     return True
 
 
 def compare_dataset(slug: str, results: list[dict], seconds: float) -> dict:
-    rows = [planning_row(result) for result in results if "error" not in result]
-    metric = "reward" if _as_rewards(rows) else "penalty"
+    measured = [result for result in results if "error" not in result]
+    rows = [planning_row(result) for result in measured]
+    on_objective = [level == len(names) - 1 for level, names in map(_deciding_level, measured)]
+    metric = "reward" if _as_rewards(rows, on_objective) else "penalty"
     caveats = list(dict.fromkeys(result["caveat"] for result in results if result.get("caveat")))
     dataset = _dataset(
         slug,
@@ -766,8 +799,6 @@ def vrp_dataset(slug: str, data: dict) -> dict:
     command = "uv run python -m vrp_benchmark --series {} --seconds {:g}".format(series, data["protocol"]["seconds"])
     if series == "x":
         command += " --catalog-source mirror"
-    # A run of chosen instances reproduces with the same choice, not as the whole series.
-    command += "".join(f" --only {name}" for name in data["protocol"].get("only") or [])
     return _dataset(slug, "vehicle-routing", "public", "routing", "vehicle-routing", command, [section])
 
 
@@ -1064,6 +1095,76 @@ def _load(results: Path, name: str):
     return json.loads(path.read_text()) if path.exists() else None
 
 
+#: What a result says about its instance and its run, apart from the runs themselves and
+#: from `workers`, which is CP-SAT's alone (the engine runs single-threaded). `size` is the
+#: harness's description of the instance each run built for itself, so a generator has to
+#: build the same instance every time for two files to join.
+_SAME_IN_BOTH_RUNS = ("case", "instance", "size", "budget", "seed", "exact", "caveat")
+
+
+def join_solver_runs(slug: str, engine: list[dict], cpsat: list[dict]) -> list[dict]:
+    """The comparison that an engine-only and a CP-SAT-only run of the same instances add up to.
+
+    Refused: a failed instance (a run of both solvers reports one as failed; here one half
+    would be missing, so it is run again first), instances that differ in name, order, size,
+    budget or seed, and a result that is not of the one solver its file is for. The joined
+    result states the workers of the CP-SAT run.
+    """
+    if [result.get("instance") for result in engine] != [result.get("instance") for result in cpsat]:
+        raise SystemExit(f"{slug}: the engine and the cp-sat file hold different instances")
+    joined = []
+    for left, right in zip(engine, cpsat, strict=True):
+        name = left["instance"]
+        for result in (left, right):
+            if "error" in result:
+                raise SystemExit(f"{slug}: {name} failed in one of the two runs; run it again before joining")
+        for key in _SAME_IN_BOTH_RUNS:
+            if left.get(key) != right.get(key):
+                raise SystemExit(f"{slug}: {name} differs in {key} between the engine and the cp-sat file")
+        for result, solver in ((left, "engine"), (right, "cp-sat")):
+            if [run["solver"] for run in result["runs"]] != [solver]:
+                raise SystemExit(f"{slug}: {name} in the {solver} file is not a run of {solver} alone")
+        joined.append({**left, "workers": right.get("workers"), "runs": [*left["runs"], *right["runs"]]})
+    return joined
+
+
+def load_compared(directory: Path) -> dict[str, list[dict]]:
+    """The comparison results in `directory`, by use case.
+
+    ``<slug>.json`` is a run of both solvers. ``<slug>.engine.json`` and
+    ``<slug>.cp-sat.json`` are the two ``--solver`` runs and are joined. Refused: one of
+    the two without the other, both forms for one use case, and an instance without a run
+    of each solver, which would otherwise be published as a solver that found nothing.
+    A failed instance of a ``<slug>.json`` passes and is published as failed; the per-solver
+    files are stricter (`join_solver_runs`), and that difference is meant.
+    """
+    whole: dict[str, list[dict]] = {}
+    halves: dict[str, dict[str, list[dict]]] = {}
+    for path in sorted(directory.glob("*.json")):
+        slug, _, solver = path.stem.partition(".")
+        if not solver:
+            whole[slug] = json.loads(path.read_text())
+        elif solver in SOLVERS:
+            halves.setdefault(slug, {})[solver] = json.loads(path.read_text())
+        else:
+            raise SystemExit(f"{path.name}: expected <slug>.json, <slug>.engine.json or <slug>.cp-sat.json")
+    for slug, files in halves.items():
+        if slug in whole:
+            raise SystemExit(f"{slug}: both {slug}.json and per-solver files are here; keep one form")
+        missing = [solver for solver in SOLVERS if solver not in files]
+        if missing:
+            raise SystemExit(f"{slug}: {slug}.{missing[0]}.json is missing; a comparison needs both solvers")
+        whole[slug] = join_solver_runs(slug, files["engine"], files["cp-sat"])
+    for slug, results in whole.items():
+        for result in results:
+            if "error" not in result and sorted(_runs(result)) != sorted(SOLVERS):
+                raise SystemExit(
+                    f"{slug}: {result['instance']} has runs of {sorted(_runs(result)) or 'no solver'}, not of both; "
+                    f"a --solver run is published as {slug}.engine.json beside {slug}.cp-sat.json"
+                )
+    return whole
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("results", type=Path)
@@ -1082,13 +1183,14 @@ def main() -> None:
 
     datasets: dict[str, dict] = {}
 
-    compare = {path.stem: json.loads(path.read_text()) for path in sorted((args.results / "compare").glob("*.json"))}
+    compare = load_compared(args.results / "compare")
 
     def compare_footer(results: list[dict]) -> str:
         return (
             f"Measured {args.date} on {args.machine}, {args.seconds:g} s per solver and instance, "
             f"seed {_seed(results, 1)}. The engine runs single-threaded; CP-SAT uses {args.workers} workers "
-            "and its budget starts once its model is built. Single runs — treat small differences as noise."
+            "and its budget starts once its model is built. Single runs — treat small differences as noise. "
+            "How the runs were made: [benchmarks/README.md](../README.md#publishing-results)."
         )
 
     for slug in COMPARED:

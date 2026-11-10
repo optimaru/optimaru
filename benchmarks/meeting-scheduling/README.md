@@ -25,7 +25,11 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
-| demo | demo (24 meetings) | **0hard/0medium/-3049soft** | — (no solution in time) |
+| small | 8 meetings / 2 meeting rooms / 2 days / 10 people | **0hard/0medium/-336soft** | 0hard/0medium/-344soft |
+| medium | 16 meetings / 3 meeting rooms / 3 days / 16 people | **0hard/0medium/-1564soft** | — (no solution in time) |
+| demo | 24 meetings / 3 meeting rooms / 4 days / 20 people | **0hard/0medium/-3049soft** | — (no solution in time) |
+| large | 48 meetings / 5 meeting rooms / 5 days / 40 people | **0hard/-36medium/-15283soft** | — (no solution in time) |
+| xlarge | 96 meetings / 8 meeting rooms / 6 days / 60 people | **0hard/-71medium/-40183soft** | — (no solution in time) |
 
-Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise.
+Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->
