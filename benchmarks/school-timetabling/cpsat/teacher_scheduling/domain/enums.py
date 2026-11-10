@@ -33,4 +33,3 @@ class RoomType(StrEnum):
     MUSIC_ROOM = "music room"
     ART_ROOM = "art room"
     GYM = "gym"
-    TECH_LAB = "tech room"
