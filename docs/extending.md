@@ -1,8 +1,9 @@
 # Extending a use case
 
 How to add a move or a cost to one of the use cases under `optimaru/`. The
-steps are the same for all 22. The examples use real code you can open next to
-this guide: bin packing's `EmptyBinMove` for a move and vehicle routing's
+steps are the same for all 22, with the few differences in file names listed
+under the table below. The examples use real code you can open next to this
+guide: bin packing's `EmptyBinMove` for a move and vehicle routing's
 `LatencyCost` for a cost.
 
 ## Where things are
@@ -23,6 +24,18 @@ C++ namespace `<ns>` (such as `vrp`):
 | C++ tests | `tests/<uc>/cpp/<ns>_test.cpp`, `tests/<uc>/cpp/<ns>_plugin_test.cpp` |
 | Python tests | `tests/<uc>/test_*.py` |
 | The use case's guide | `docs/use-cases/<slug>/README.md` and `python.md` |
+
+Where a use case differs from the table:
+
+- School timetabling keeps `defaultConstraints()` in
+  `st/canonical_constraints.hpp`, its constraints in subdirectories of
+  `st/constraints/`, and its plugin tests in `canonical_plugin_test.cpp`.
+- Employee scheduling has `es_plugin_test.cpp` only, and a second catalog of
+  opt-in rules (see [step 3](#3-add-it-to-the-assembly) of adding a cost).
+- Employee scheduling and school timetabling solve picked constraints through
+  `Solver.solve(x, calculator)` instead of `solve_with_constraints`.
+- `SolverConfig.full_assert` is not bound for employee scheduling, pickup &
+  delivery and vehicle routing: use `config.score_checks` in their C++ tests.
 
 The engine is header-only, in `optimaru/cpp/optimaru/`. You never edit it to add a
 move or a cost: both plug in from the use case.
@@ -131,7 +144,8 @@ The contract:
   anything unassigned.
 - **Check `ctx.stop_requested` in long moves.** A move that runs many
   evaluations (a descent, a repair chain) should check it every few hundred
-  evaluations and return early when it is true.
+  evaluations and return early when it answers true. It is a pointer to a
+  function and may be null: `if (ctx.stop_requested && (*ctx.stop_requested)())`.
 - **Optional: `outcome(MoveOutcome)`.** It tells the move how it fared, if the
   move adapts something of its own.
 
@@ -174,7 +188,8 @@ binding.
 ### 4. Test it
 
 - **Score consistency.** Solve once with `ScoreChecks::Full`
-  (`config.score_checks` in C++, `SolverConfig.full_assert = True` in Python).
+  (`config.score_checks` in C++; `SolverConfig.full_assert = True` in Python,
+  where the use case binds it).
   Every incremental score is then compared with a full recompute, and the solve
   throws `ScoreMismatchError` if the move leaves the score stale. Add such a
   solve to `tests/<uc>/cpp/<ns>_test.cpp`.

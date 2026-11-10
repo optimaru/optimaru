@@ -1,6 +1,6 @@
 // pybind11 bindings for the maintenance-scheduling C++ domain wrappers.
 // The Python extension links the existing mnt::* implementations and imports
-// the generic optimaru engine from ../../../include; the engine itself
+// the generic optimaru engine from optimaru/cpp/optimaru; the engine itself
 // is not modified here.
 //
 // Dates cross the boundary as epoch days (days since 1970-01-01);

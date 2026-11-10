@@ -1,6 +1,6 @@
 // pybind11 bindings for the bin-packing C++ domain.
 // The Python extension links the bp::* implementations and imports the
-// generic optimaru engine from ../../../include; the engine itself is not
+// generic optimaru engine from optimaru/cpp/optimaru; the engine itself is not
 // modified here.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/operators.h>

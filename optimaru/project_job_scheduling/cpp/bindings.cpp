@@ -1,6 +1,6 @@
 // pybind11 bindings for the project-job-scheduling C++ domain wrappers.
 // The Python extension links the existing pjs::* implementations and imports
-// the generic optimaru engine from ../../../include; the engine itself
+// the generic optimaru engine from optimaru/cpp/optimaru; the engine itself
 // is not modified here. One domain is exposed
 // (pjs::ProjectJobSchedule, BASIC composite (executionMode, delay) variable),
 // as the module optimaru.project_job_scheduling._core.

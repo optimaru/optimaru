@@ -9,16 +9,19 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # The engine: header-only, in optimaru/cpp/optimaru/ (#include "optimaru/...").
+# Multi-start and background solves run on std::thread, so consumers link the
+# platform's thread library through the target.
+find_package(Threads REQUIRED)
 add_library(optimaru INTERFACE)
 add_library(optimaru::optimaru ALIAS optimaru)
 target_include_directories(optimaru INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/optimaru/cpp)
 target_compile_features(optimaru INTERFACE cxx_std_17)
+target_link_libraries(optimaru INTERFACE Threads::Threads)
 
 # Tests, demos and benches only when built standalone, not when pulled in via
 # add_subdirectory.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     enable_testing()
-    find_package(Threads REQUIRED)
     set(OPTIMARU_TESTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 
     # Engine tests.

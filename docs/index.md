@@ -1,7 +1,7 @@
 # optimaru
 
-A metaheuristic optimization engine for real-world scheduling, routing and
-assignment, with 22 ready-to-use models you call from Python. The solver core is
+A metaheuristic optimization engine for real-world routing, scheduling,
+timetabling and allocation, with 22 ready-to-use models you call from Python. The solver core is
 header-only C++17 and ships compiled in the wheel.
 
 ## Quick start
@@ -57,7 +57,9 @@ their defaults. More in the [use-case guides](use-cases/README.md) and the
   `clip` knobs), and one guide per use case.
 - **[API reference](reference/vehicle-routing.md)**: generated from the package
   sources and the stubs of the compiled extensions, one page per use case.
-- **[Extending a use case](extending.md)**: adding a move or a cost, step by step.
+- **[Extending a use case](extending.md)**: adding a constraint (a hard, medium
+  or soft cost) or a move, step by step. Contributors start with
+  [CONTRIBUTING.md](https://github.com/optimaru/optimaru/blob/main/CONTRIBUTING.md).
 - **[Changelog](changelog.md)**.
 
 The source, the benchmarks against OR-Tools and the notebooks are on

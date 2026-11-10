@@ -70,6 +70,6 @@ schedule2 = model.to_core()  # pydantic -> engine
 json_text = model.model_dump_json()
 ```
 
-Type stubs are in `maintenance_scheduling/_core.pyi`; the high-level entry point is
+Type stubs are in `optimaru/maintenance_scheduling/_core.pyi`; the high-level entry point is
 `maintenance_scheduling.solve()` (config/time_limit/seed/
 stop_at_first_feasible/on_new_best).

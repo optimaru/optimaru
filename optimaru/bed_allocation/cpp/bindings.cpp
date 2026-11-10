@@ -1,6 +1,6 @@
 // pybind11 bindings for the bed-allocation C++ domain wrappers.
 // The Python extension links the existing ba::* implementations and imports
-// the generic optimaru engine from ../../../include; the engine itself
+// the generic optimaru engine from optimaru/cpp/optimaru; the engine itself
 // is not modified here. One domain is exposed
 // (ba::BedPlan, BASIC bed variable with a "no bed" sentinel for stays left
 // unassigned), as the module optimaru.bed_allocation._core.

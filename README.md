@@ -1,7 +1,7 @@
 # optimaru
 
-A metaheuristic optimization engine for real-world scheduling, routing and
-assignment, with 22 ready-to-use models you call from Python.
+A metaheuristic optimization engine for real-world routing, scheduling,
+timetabling and allocation, with 22 ready-to-use models you call from Python.
 
 optimaru comes in a free edition and a paid edition; this repository is the
 free, open-source edition.
@@ -55,21 +55,33 @@ several times. `constraint_info()` on a use case lists its constraints and
 their defaults. More in [`docs/pypi.md`](docs/pypi.md) and the
 [notebooks](examples).
 
+## Contributing: add a constraint or a move
+
+Both plug into a use case without touching the engine.
+
+| To add | You write | Guide |
+| --- | --- | --- |
+| A constraint (hard, medium or soft cost) | one `<Subject>Cost` component in `optimaru/<use case>/cpp/include/<ns>/constraints/`, a line in `defaultConstraints()`, a spec class in `constraints.py` | [Adding a cost](docs/extending.md#adding-a-cost) |
+| A move | one `MoveOperator` with `apply()` and `undo_last()`, registered with `add_move_operator()` in the use case's `solver.cpp` | [Adding a move](docs/extending.md#adding-a-move) |
+| A ruin operator or a construction heuristic | a `RuinOperator`, or a difficulty order / domain constructor | [A ruin instead of a move](docs/extending.md#a-ruin-instead-of-a-move), [Construction instead of search](docs/extending.md#construction-instead-of-search) |
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md) has the setup, the short version of both
+recipes and the rules for a pull request;
+[`docs/extending.md`](docs/extending.md) is the full step-by-step guide.
+
 ## Use cases
 
 [`docs/use-cases/README.md`](docs/use-cases/README.md) lists all 22 use cases
-and the constraint contract they share, and
-[`docs/extending.md`](docs/extending.md) walks through extending one: adding a
-move, changing the construction heuristic, adding a hard or soft cost. Each use
-case's guide in `docs/use-cases/<slug>/` has a short usage example and the same
-steps with its own file names.
+and the constraint contract they share. Each use case's guide in
+`docs/use-cases/<slug>/` has a short usage example and the extending steps with
+its own file names.
 
-Scheduling: bed allocation, conference, employee shifts, flight crew, food
-packaging, maintenance, meeting, project-job (RCPSP), school timetabling,
-semiconductor fab, sports league, task assigning, tournament. Routing:
-vehicle routing (CVRPTW), pickup & delivery (PDPTW), order picking. Assignment and packing:
-facility location, bin packing, knapsack, quadratic assignment, max-cut,
-assembly-line balancing.
+Routing and logistics: vehicle routing (CVRPTW), pickup & delivery (PDPTW),
+order picking, facility location. Scheduling: employee shifts, flight crew,
+maintenance, project-job (RCPSP), semiconductor fab, food packaging, task
+assigning, meeting. Timetabling: school timetabling, conference, sports league,
+tournament. Allocation and packing: bed allocation, bin packing, knapsack,
+assembly-line balancing, quadratic assignment, max-cut.
 
 ```sh
 uv sync                                    # editable install; builds all 22 extensions in place
@@ -137,8 +149,9 @@ instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
 - **Solving**: `Solver<Solution>(settings).solve(solution, objective)`;
   `solve_in_background()` → `BackgroundSolve` (`status()`, `request_stop()`,
   `wait()`); `solve_multistart()` (N independent starts, best wins).
-- **Custom operators** (`search/operators.hpp`): `add_move_operator` /
-  `add_ruin_operator` / `set_acceptor_factory`.
+- **Custom operators**: implement `MoveOperator` / `RuinOperator`
+  (`search/operators.hpp`) and register them with `Solver::add_move_operator` /
+  `add_ruin_operator`; `set_acceptor_factory` swaps the acceptor.
 
 Multithreaded *move* evaluation is deliberately excluded: it only pays when a
 single score calculation is expensive (ms-scale); at this engine's ~200ns
@@ -185,6 +198,7 @@ tests/                             mirrors the package
 docs/                              the documentation site (mkdocs.yml): the
                                    extending guide, one guide per use case
                                    (docs/use-cases/<slug>/), the PyPI page
+CONTRIBUTING.md                    setup, adding a constraint or a move, PR rules
 examples/                          one Jupyter notebook per use case
 benchmarks/<slug>/                 the same problems against OR-Tools (CP-SAT,
                                    or the Routing solver for VRP); competing
@@ -204,7 +218,8 @@ optimaru/cpp/optimaru/
 ├── explain.hpp                   explain_score / rescore
 ├── settings.hpp                  Settings, Limits, AcceptanceSettings, MoveMix,
 │                                 NeighborSettings, RuinRecreateSettings, ...
-├── portable_random.hpp           seeded draws that match on every standard library
+├── portable_random.hpp           random_index, and seeded draws that match on
+│                                 every standard library
 ├── worker_threads.hpp            thread start-up / shutdown for parallel pools
 ├── model/                        the solution as the engine sees it
 │   ├── solution_traits.hpp       SolutionTraits, Shape (Assignment | Sequence |
@@ -283,8 +298,8 @@ out-of-range contributions).
 cmake -B build -DOPTIMARU_USE_CASES=none && cmake --build build && ctest --test-dir build
 ```
 
-`OPTIMARU_USE_CASES` takes `all` (the default), `none` or a `;`-separated list
-such as `knapsack;vehicle_routing`; each use case adds its core library, demo
+`OPTIMARU_USE_CASES` takes `all` (the default), `none` or a list such as
+`knapsack,vehicle_routing` (commas, spaces or `;` between the names); each use case adds its core library, demo
 and the C++ tests in `tests/<use case>/cpp/`, built under `build/<use case>/`.
 
 ## Building and releasing

@@ -1,6 +1,6 @@
 // pybind11 bindings for the school-timetabling C++ domain wrappers.
 // The Python extension links the existing st::* implementations and imports
-// the generic optimaru engine from ../../../include; the engine itself
+// the generic optimaru engine from optimaru/cpp/optimaru; the engine itself
 // is not modified here. Two domains are exposed:
 //   - the quickstart model (st::Timetable, slotRoom composite encoding) at the
 //     module top level;

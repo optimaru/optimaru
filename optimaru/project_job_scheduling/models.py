@@ -342,11 +342,13 @@ def _solution_dict(solution) -> dict:
 
 
 def _entities_by_id(solved: dict, name: str, ids: list, key: str = "id") -> dict:
-    """`solved[name]` by id. Rejects an id repeated in `solved` and an id outside `ids`."""
+    """`solved[name]` by id. Rejects an id repeated on either side and an id outside `ids`."""
     entities = solved.get(name)
     if not isinstance(entities, list):
         raise ValueError(f"solution has no {name!r} list")
     known = set(ids)
+    if len(known) != len(ids):
+        raise ValueError(f"problem repeats an id in {name!r}: {next(i for i in ids if ids.count(i) > 1)!r}")
     by_id: dict = {}
     for entity in entities:
         entity_id = entity.get(key) if isinstance(entity, dict) else None

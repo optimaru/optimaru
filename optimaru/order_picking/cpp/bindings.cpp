@@ -1,7 +1,7 @@
 // pybind11 bindings for the order-picking C++ core.
 // Wraps the existing op::* use case (include/ and src/ beside this file) without modifying it: one
 // solver, one module (optimaru.order_picking._core). The generic optimaru engine is
-// imported header-only from ../../../include.
+// imported header-only from optimaru/cpp/optimaru.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::string conversions
