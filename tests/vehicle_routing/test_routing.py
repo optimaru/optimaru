@@ -29,6 +29,7 @@ def test_granular_descent_parameters_are_public():
     assert config.granular_descent_candidate_routes == 6
 
 
+# Also the small problem of tests/_problems.py.
 def small_plan():
     """2 vehicles / 6 visits around Seoul; capacities force a split."""
     locations = [

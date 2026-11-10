@@ -14,6 +14,7 @@ from optimaru.quadratic_assignment.models import QuadraticAssignmentProblemModel
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+# Also the small problem of tests/_problems.py.
 def demo() -> QuadraticAssignmentProblemModel:
     return QuadraticAssignmentProblemModel.model_validate(json.loads((FIXTURES / "web_demo.json").read_text()))
 

@@ -1,7 +1,9 @@
 """One small problem per use case, for the contract tests that solve (tests/test_solve_contract.py).
 
 Each entry is a problem the use case's own tests already solve: its demo generator, or the
-builder in its test module. A new use case adds its line here.
+builder in its test module (those builders carry a comment that this file uses them). A test
+module, conftest.py included, imports as a plain module here because tests/ is a package and
+pytest registers it under the same dotted name. A new use case adds its line here.
 """
 
 import importlib
@@ -57,11 +59,19 @@ def small_problem(use_case: str):
     return SMALL_PROBLEMS[use_case]()
 
 
+def levels_of(score) -> tuple:
+    """A score's levels, most important first: a tuple that orders as the score does.
+
+    Every score in the package names its levels from _LEVELS, in that order of importance.
+    """
+    return tuple(getattr(score, level) for level in _LEVELS if hasattr(score, level))
+
+
 def score_of(solved) -> tuple:
-    """The score of what solve() returned, as a tuple that orders as the score does."""
+    """The levels of the score on what solve() returned: a compiled problem or its model."""
     score = getattr(solved, "score", None)
     if score is not None and hasattr(score, "hard"):
-        return tuple(getattr(score, level) for level in _LEVELS if hasattr(score, level))
+        return levels_of(score)
     levels = tuple(getattr(solved, f"score_{level}") for level in _LEVELS if hasattr(solved, f"score_{level}"))
     if not levels:
         raise TypeError(f"{type(solved).__name__} carries no score")

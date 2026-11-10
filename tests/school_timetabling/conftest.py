@@ -9,6 +9,7 @@ period 3 (fixed_slots); Kim (T_KOR) is unavailable Monday period 1.
 import pytest
 
 
+# Also the small problem of tests/_problems.py.
 def demo_problem() -> dict:
     """Canonical TimetableProblem JSON (as a dict; keys are strings as in JSON)."""
     subjects = [

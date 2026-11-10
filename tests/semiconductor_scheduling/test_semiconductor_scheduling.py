@@ -15,6 +15,7 @@ from optimaru.semiconductor_scheduling.models import (
 )
 
 
+# Also the small problem of tests/_problems.py.
 def _fab_problem(*, with_assignments: bool) -> SemiconductorScheduleModel:
     lots = [
         LotModel(

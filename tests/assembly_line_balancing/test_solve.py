@@ -10,6 +10,7 @@ from optimaru.assembly_line_balancing.models import AssemblyLineBalancingProblem
 WEB_DEMO = Path(__file__).parent / "fixtures" / "web_demo.json"
 
 
+# Also the small problem of tests/_problems.py.
 def salbp(task_count=60, seed=0, cycle_time=30):
     """A SALBP-1-like instance: a random acyclic precedence graph, durations 1..15."""
     rng = random.Random(seed)
