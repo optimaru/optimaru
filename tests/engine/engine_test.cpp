@@ -217,7 +217,7 @@ void testTerminations(const Score& optimum) {
     std::printf("== assignment: terminations ==\n");
     using Clock = std::chrono::steady_clock;
 
-    {  // stepLimit fires long before the 30s time_limit.
+    {  // step_limit fires long before the 30s time_limit.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
         config.limits.time_limit = std::chrono::seconds(30);
@@ -226,7 +226,7 @@ void testTerminations(const Score& optimum) {
         TaskAssignmentCalculator calculator;
         optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
-        check(sec < 5.0, "stepLimit terminates early (" + std::to_string(sec) + "s)");
+        check(sec < 5.0, "step_limit terminates early (" + std::to_string(sec) + "s)");
     }
     {  // target_score = optimum stops as soon as it is reached (SA is used
         // because it reliably reaches the conflicted instance's optimum).
@@ -241,7 +241,7 @@ void testTerminations(const Score& optimum) {
         Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
         double sec = std::chrono::duration<double>(Clock::now() - t0).count();
         check(result == optimum && sec < 5.0,
-              "bestScoreLimit terminates early (" + std::to_string(sec) + "s)");
+              "target_score terminates early (" + std::to_string(sec) + "s)");
     }
     {  // stall_time_limit: the toy optimum is found almost instantly, so
         // 200ms without improvement ends the solve well before 30s.
@@ -415,7 +415,7 @@ void testMultiStartAndFfd(const Score& optimum) {
         optimaru::run_worker_threads(5, stop,
                                      [&seen](int i) { seen[static_cast<std::size_t>(i)] = i + 1; });
         check(seen == std::vector<int>({1, 2, 3, 4, 5}) && !stop.load(),
-              "runWorkerThreads runs work(i) once per index and joins them all");
+              "run_worker_threads runs work(i) once per index and joins them all");
     }
     {  // request_stop() reaches every start.
         TaskAssignment s = buildTaskInstance();

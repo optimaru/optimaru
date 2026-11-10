@@ -486,7 +486,7 @@ inline void fail_worker_thread_start(int index) {
 }
 
 // `<pkg>._core._fail_worker_thread_start(index)`: a private test seam over
-// optimaru::worker_thread_start_hook (impl/solver/worker_threads.hpp). From the
+// optimaru::worker_thread_start_hook (optimaru/worker_threads.hpp). From the
 // next parallel solve on, creating worker thread `index` of every pool in this
 // module fails with std::system_error ("injected worker thread creation
 // failure", a RuntimeError in Python), as std::thread does when the system
