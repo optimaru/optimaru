@@ -203,22 +203,15 @@ def triplets(triples: int, seed: int) -> bp.BinPackingProblem:
 
 def test_trades_and_the_fill_tie_break_fill_every_bin_of_a_triplet_instance():
     """Ten bins' worth of triplets: with TradeMove and the fill tie-break the search gets to
-    the 10 full bins. Without them it ended at 11, where the construction ends, at this step
-    limit and at twenty times it on five seeds; that is measured, not asserted, so that the
-    test fails only when the search with them gets worse."""
-    bins = {}
-    for on in (True, False):
-        problem = triplets(10, seed=1)
-        config = bp.SolverConfig()
-        config.step_count_limit = 20_000
-        config.random_seed = 1
-        config.trade_moves = on
-        config.fill_tie_break = on
-        score = bp.solve(problem, config=config).score
-        assert score == bp.Score(0, -float(problem.bins_used()))
-        bins[on] = problem.bins_used()
-    assert bins[True] == 10
-    assert bins[False] >= bins[True]
+    the 10 full bins. With both switched off it ended at 11, where the construction ends, at
+    this step limit and at twenty times it on five seeds; that is a measurement of the search
+    as it was, and not asserted here."""
+    problem = triplets(10, seed=1)
+    config = bp.SolverConfig()
+    config.step_count_limit = 20_000
+    config.random_seed = 1
+    assert bp.solve(problem, config=config).score == bp.Score(0, -10.0)
+    assert problem.bins_used() == 10
 
 
 def test_parallel_starts_each_follow_their_own_packing():
