@@ -360,8 +360,11 @@ struct MediumFoldOf {
 
 // The soft level of an engine score of `Solution`, without the medium level
 // an into_soft fold packed into it: the remainder of the fold unit. Exact for
-// what such a fold is for, whole-number levels of the same sign. With no
-// fold, or a below_hard one, the engine's soft is the soft level already.
+// what such a fold is for: whole-number levels of the same sign (penalties),
+// the soft one smaller than the unit. One packed number holds no more than
+// that: a soft level of a unit or more comes back without its whole units,
+// and a positive soft under a negative medium as a unit less. With no fold,
+// or a below_hard one, the engine's soft is the soft level already.
 template <typename Solution>
 double unfolded_soft(const Score& score) {
     constexpr MediumFold fold = MediumFoldOf<Solution>::value;

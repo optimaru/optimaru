@@ -201,9 +201,11 @@ void check_config(const Config& config) {
         if (config.recount_interval <= 0) {
             throw std::invalid_argument("step_counting_hill_climbing_size must be positive");
         }
-        if (!finite_from(config.record_to_record_start_gap, 0.0, true) ||
-            !finite_from(config.record_to_record_end_gap, 0.0, true)) {
-            throw std::invalid_argument("the record-to-record gaps must be finite and >= 0");
+        if (!finite_from(config.record_to_record_start_gap, 0.0, true)) {
+            throw std::invalid_argument("record_to_record_start_gap must be finite and >= 0");
+        }
+        if (!finite_from(config.record_to_record_end_gap, 0.0, true)) {
+            throw std::invalid_argument("record_to_record_end_gap must be finite and >= 0");
         }
     }
 }

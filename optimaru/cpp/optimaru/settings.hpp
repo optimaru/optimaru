@@ -117,7 +117,9 @@ struct AcceptanceSettings {
     // hard 0 (a hard-worse move is never taken) and soft = the fraction of
     // the magnitude of the start's soft level, at least 1 (the soft level
     // alone: a medium level the domain folds into the engine's soft does not
-    // count). (0, 0) with a fraction of 0 accepts no worsening move at all.
+    // count; see unfolded_soft in score/levels.hpp for what that reading
+    // is exact for). (0, 0) with a fraction of 0 accepts no worsening move
+    // at all.
     Score start_temperature{0, 0.0};
     double start_temperature_fraction = 0.0;
     // GreatDeluge: how much the water level rises per step.

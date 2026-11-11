@@ -83,32 +83,33 @@ delivery and vehicle routing. Their `solve()` takes the compiled problem only,
 and `solve_request(request)` in `optimaru.<use case>.models` is the pydantic
 path (JSON in, JSON out).
 
+School timetabling takes and returns dicts (a `TimetableProblem` in, a
+`Timetable` out) and has two more keywords, `mode` and `initial_solution`.
+`Solver(config).solve(problem)` and `solve_with_constraints(problem, picks)`
+are the same solves one level down, without the keyword conveniences.
+
 ### Choosing the acceptance rule
 
 Quadratic assignment, semiconductor scheduling and vehicle routing let you
-choose the rule local search accepts a move by, on `SolverConfig`; pickup and
-delivery does too, with the rule and the record-to-record gaps only. The
-attributes and their defaults are the same in each:
+choose the rule local search accepts a move by, on `SolverConfig`. The
+attributes and their defaults are the same in the three (pickup and delivery
+chooses the rule too, with `acceptor_type` and the two record-to-record gaps
+only):
 
 | `acceptor_type` | Its parameters | Default |
 |---|---|---|
 | `LATE_ACCEPTANCE` | `late_acceptance_size` | 0 = the use case's automatic size |
 | `HILL_CLIMBING` | none | |
 | `ENTITY_TABU` | `entity_tabu_size`: steps a moved entity stays tabu | 7 |
-| `SIMULATED_ANNEALING` | `simulated_annealing_starting_temperature` (hard, soft), cooling to 0 over the solve; `simulated_annealing_temperature_fraction` | (0, 0) = automatic: hard 0, soft = the fraction (0.01) of the start's soft level, at least 1. The soft level alone: the medium level (unassigned visits in vehicle routing) does not count |
+| `SIMULATED_ANNEALING` | `simulated_annealing_starting_temperature` (hard, soft), cooling to 0 over the solve; `simulated_annealing_temperature_fraction` | (0, 0) = automatic: hard 0, soft = the fraction (0.01) of the start's soft level, at least 1. The soft level alone: the medium level (unassigned visits in vehicle routing) does not count. Give the temperature yourself when your picks can make the soft level positive (a reward, or an offset without `clip`) or larger than the medium level's unit |
 | `GREAT_DELUGE` | `great_deluge_water_level_step` (hard, soft): how much the water level, which starts at the start's score, rises per step | (0, 0): the level stays at the start's score |
 | `STEP_COUNTING_HILL_CLIMBING` | `step_counting_hill_climbing_size`: the bar is reset to the current score every this many steps | 400 |
-| `RECORD_TO_RECORD_TRAVEL` | `record_to_record_start_gap`, `record_to_record_end_gap`: the gap below the best score that is still accepted, as a fraction of the start's soft score | 0.02, shrinking to 0.0 |
+| `RECORD_TO_RECORD_TRAVEL` | `record_to_record_start_gap`, `record_to_record_end_gap`: the gap below the best score that is still accepted, as a fraction of the start's soft score | 0.02, shrinking to 0.0 over the solve (an end gap above the start gap is the gap throughout) |
 
 The default rule is late acceptance, and simulated annealing in semiconductor
 scheduling. A great deluge needs a step chosen for the instance: at (0, 0) it
 takes every move that keeps the score at or above the start's and never
 tightens.
-
-School timetabling takes and returns dicts (a `TimetableProblem` in, a
-`Timetable` out) and has two more keywords, `mode` and `initial_solution`.
-`Solver(config).solve(problem)` and `solve_with_constraints(problem, picks)`
-are the same solves one level down, without the keyword conveniences.
 
 ## Constraints: names and knobs
 

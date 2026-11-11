@@ -189,9 +189,10 @@ early: score after the engine returns, whatever made it return.
 Add a field to the use case's `Solver::Config` (`my_moves = true`), bind it in
 `optimaru/<uc>/cpp/bindings.cpp` (`.def_readwrite("my_moves", &Solver::Config::my_moves)`)
 and declare it in `optimaru/<uc>/_core.pyi`. A Config holds only the use case's own
-knobs: the limits, the seed, the parallel starts, the callback and the ruin &
-recreate knobs come from the bases in `optimaru/solver_config.hpp`, and
-`bind_solver_config` binds those. This lets you turn the move off for an
+knobs: the limits, the seed, the parallel starts, the callback, the ruin &
+recreate knobs and, where the caller chooses it, the acceptance rule with its
+parameters (`AcceptanceConfig`) come from the bases in
+`optimaru/solver_config.hpp`, and `bind_solver_config` binds those. This lets you turn the move off for an
 A/B comparison and keeps Python users in control. Bin packing's `empty_bin_moves` /
 `empty_bin_candidates` are a complete example, including value checks in the
 binding.

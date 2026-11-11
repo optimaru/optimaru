@@ -2073,22 +2073,38 @@ void testAcceptanceConfig() {
                       from.rrt_start_gap == 0.3 && from.rrt_end_gap == 0.1,
               "settings_from: the rule and the parameters of every rule");
     }
-    {  // check_config refuses what no rule can run with.
-        auto refused = [](AcceptingConfig config) {
+    {  // check_config refuses what no rule can run with, in the Python setters' words.
+        auto refusal = [](AcceptingConfig config) -> std::string {
             try {
                 optimaru::check_config(config);
-            } catch (const std::invalid_argument&) {
-                return true;
+            } catch (const std::invalid_argument& error) {
+                return error.what();
             }
-            return false;
+            return "";
         };
-        AcceptingConfig tabu, fraction, interval;
+        AcceptingConfig tabu, zero, interval, temperature, fraction, step, start, end;
         tabu.tabu_tenure = -1;
-        fraction.simulated_annealing_temperature_fraction = 0.0;
+        zero.simulated_annealing_temperature_fraction = 0.0;
         interval.recount_interval = 0;
-        check(!refused(AcceptingConfig{}) && refused(tabu) && refused(fraction) &&
-                      refused(interval),
-              "check_config: a negative tabu tenure, a zero fraction, a zero recount interval");
+        temperature.start_temperature = {0, std::numeric_limits<double>::quiet_NaN()};
+        fraction.simulated_annealing_temperature_fraction = std::numeric_limits<double>::infinity();
+        step.water_level_step = {-1, 0.0};
+        start.record_to_record_start_gap = std::numeric_limits<double>::infinity();
+        end.record_to_record_end_gap = -0.1;
+        const std::string fractionWords =
+                "simulated_annealing_temperature_fraction must be finite and > 0";
+        check(refusal(AcceptingConfig{}).empty(), "check_config accepts the defaults");
+        check(refusal(tabu) == "entity_tabu_size must be >= 0" &&
+                      refusal(interval) == "step_counting_hill_climbing_size must be positive",
+              "check_config: a negative tabu tenure, a zero recount interval");
+        check(refusal(zero) == fractionWords && refusal(fraction) == fractionWords &&
+                      refusal(temperature) ==
+                              "simulated_annealing_starting_temperature must be finite and >= 0" &&
+                      refusal(step) == "great_deluge_water_level_step must be finite and >= 0",
+              "check_config: a fraction, a temperature or a step that is not finite or too low");
+        check(refusal(start) == "record_to_record_start_gap must be finite and >= 0" &&
+                      refusal(end) == "record_to_record_end_gap must be finite and >= 0",
+              "check_config: each record-to-record gap, by its name");
     }
     // The automatic starting temperature: hard 0, the fraction of the start's
     // soft magnitude, at least 1.
@@ -2102,23 +2118,10 @@ void testAcceptanceConfig() {
                   optimaru::unfolded_soft<FoldedToy>(Score{0, -250.0}) == -250.0 &&
                   optimaru::unfolded_soft<TaskAssignment>(Score{0, -3e9 - 250.0}) == -3e9 - 250.0,
           "unfolded_soft drops a medium level folded into the soft, and nothing else");
-    {
-        auto refused = [](AcceptingConfig config) {
-            try {
-                optimaru::check_config(config);
-            } catch (const std::invalid_argument&) {
-                return true;
-            }
-            return false;
-        };
-        AcceptingConfig temperature, fraction, step, gap;
-        temperature.start_temperature = {0, std::numeric_limits<double>::quiet_NaN()};
-        fraction.simulated_annealing_temperature_fraction = std::numeric_limits<double>::infinity();
-        step.water_level_step = {-1, 0.0};
-        gap.record_to_record_end_gap = -0.1;
-        check(refused(temperature) && refused(fraction) && refused(step) && refused(gap),
-              "check_config: what the Python setters refuse (not finite, negative)");
-    }
+    // What one packed number cannot give back: a soft level of a whole unit
+    // or more loses its units (a lower temperature, never none).
+    check(optimaru::unfolded_soft<FoldedToy>(Score{0, -3e9 - 2e9 - 250.0}) == -250.0,
+          "... a soft level beyond the unit comes back without its whole units");
 }
 
 void testStallStepLimitAndRequestStop() {
