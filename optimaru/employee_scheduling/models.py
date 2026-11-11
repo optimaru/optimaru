@@ -547,7 +547,10 @@ class ScheduleRequest(SolveRequest):
     fields set, so there the top level is the one to change.
 
     ``solver_parameters`` are applied after ``settings``, so a field named in both takes the
-    value in ``solver_parameters``.
+    value in ``solver_parameters``. Two things come later still and win over it: the stop
+    target (``settings.best_score_limit``, or ``stop_at_first_feasible``) and the per-start
+    ``settings.portfolio`` overrides. The request keeps a synced copy of the ``settings`` it
+    was built with, so change ``request.settings``, not the object that was passed in.
     """
 
     model_input: SchedulingInput

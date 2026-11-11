@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **Vehicle routing and pickup and delivery: parallel starts on a solve with constraints.**
-  `parallel_solver_count` (`num_workers` in a request) had no effect when a plan was scored
+  `parallel_solver_count` (also a request's field; `num_workers` is its earlier name) had no effect when a plan was scored
   with constraint plugins: a list passed as `constraints`, a request with a vehicle limit, a
   pinned stop or a required vehicle, or a plan with groups. Those solves now run that many
   starts, start *i* on `random_seed + i` and on its own copy of the constraints, and return
@@ -54,7 +54,7 @@
   `CONSTRAINT_MODELS`, `rule_model()` is `constraint_model()`, and `RuleTotal` /
   `ScheduleSolution.rule_totals` are `ConstraintTotal` / `constraint_totals`. The earlier
   names are kept as aliases: `rules` and `rule_totals` are read from JSON and as
-  attributes, and the old functions and classes are the new ones under a second name.
+  attributes (`rule_totals` read-only), and the old functions and classes are the new ones under a second name.
   *Breaking for JSON consumers:* a dump writes the new names only, so code that reads
   `rules` from a dumped input or `rule_totals` from a dumped solution must read
   `constraints` and `constraint_totals`. The same holds for `timelimit` and `num_workers`
