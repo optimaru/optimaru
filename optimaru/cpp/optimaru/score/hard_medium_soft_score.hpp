@@ -4,8 +4,10 @@
 #ifndef OPTIMARU_SCORE_HARD_MEDIUM_SOFT_SCORE_HPP
 #define OPTIMARU_SCORE_HARD_MEDIUM_SOFT_SCORE_HPP
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <string>
 
 #include "optimaru/score/levels.hpp"
@@ -82,9 +84,15 @@ inline Score to_engine_score_limit(const MediumFold& fold, const HardMediumSoftS
 }
 
 // The inverse of to_engine_score, for an into_soft fold with a whole-number
-// unit. Penalties are whole numbers at or below zero, so the truncating
-// division, which rounds toward zero, decodes both levels exactly.
+// unit (any other fold is a std::logic_error: the soft level would not hold
+// the medium one, or not exactly). Penalties are whole numbers at or below
+// zero, so the truncating division, which rounds toward zero, decodes both
+// levels exactly.
 inline HardMediumSoftScore from_engine_score(const MediumFold& fold, const Score& engine) {
+    if (fold.kind != MediumFold::Kind::IntoSoft || fold.unit != std::floor(fold.unit)) {
+        throw std::logic_error(
+                "from_engine_score needs an into_soft fold with a whole-number unit");
+    }
     const auto unit = static_cast<std::int64_t>(fold.unit);
     const std::int64_t combined = round_score_level(engine.soft, "soft");
     return {engine.hard, combined / unit, combined % unit};

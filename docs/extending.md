@@ -13,7 +13,7 @@ C++ namespace `<ns>` (such as `vrp`):
 
 | What | Where |
 | --- | --- |
-| Problem facts, decision variable, `SolutionTraits` | `optimaru/<uc>/cpp/include/<ns>/domain.hpp` |
+| Problem facts, decision variable, `SolutionTraits`, and the `Score` it reports: the engine's `optimaru::Score`, or `optimaru::HardMediumSoftScore` with a `MediumFold` where there is a medium level (`score/hard_medium_soft_score.hpp`) | `optimaru/<uc>/cpp/include/<ns>/domain.hpp` |
 | Engine wiring: settings, registered moves, construction | `optimaru/<uc>/cpp/include/<ns>/solver.hpp`, `optimaru/<uc>/cpp/src/solver.cpp` |
 | One file per constraint | `optimaru/<uc>/cpp/include/<ns>/constraints/<subject>_cost.hpp` |
 | The default constraint set | `optimaru/<uc>/cpp/include/<ns>/constraints.hpp` (`defaultConstraints()`) |

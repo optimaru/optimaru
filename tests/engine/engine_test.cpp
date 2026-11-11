@@ -2010,6 +2010,19 @@ void testHardMediumSoftScore() {
           "no floor on either lower level lifts the whole soft side");
     check(optimaru::to_engine_score_limit(fold, score) == engine,
           "any other limit folds like a score");
+
+    auto refused = [&engine](const optimaru::MediumFold& other) {
+        try {
+            optimaru::from_engine_score(other, engine);
+        } catch (const std::logic_error&) {
+            return true;
+        }
+        return false;
+    };
+    check(refused(optimaru::MediumFold::none()) &&
+                  refused(optimaru::MediumFold::below_hard(1000)) &&
+                  refused(optimaru::MediumFold::into_soft(1.5)),
+          "from_engine_score refuses a fold that is not into_soft with a whole-number unit");
 }
 
 }  // namespace
