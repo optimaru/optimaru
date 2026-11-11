@@ -24,20 +24,12 @@ namespace sls {
 //     reverse is that pair.
 // Both are evaluated against the pre-state on a join and the post-state on a
 // leave, so the aggregate is exactly reversible.
-struct RepeatMatchOnNextDayCost final : SlsGlobalConstraint {
+struct RepeatMatchOnNextDayCost final : optimaru::MemberChangeGlobalConstraint<LeagueSchedule> {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Hard;
 
     explicit RepeatMatchOnNextDayCost(double weight = kDefaultWeight)
-        : SlsGlobalConstraint("repeatMatchOnNextDayCost", weight, kDefaultLevel) {}
-
-    bool supports_member_change() const override { return true; }
-    void on_unit_changed(const LeagueSchedule& /*schedule*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) override {
-        throw std::logic_error(name +
-                               ": onUnitChanged is unreachable "
-                               "(member-change fast path)");
-    }
+        : MemberChangeGlobalConstraint("repeatMatchOnNextDayCost", weight, kDefaultLevel) {}
 
     void reset(const LeagueSchedule& schedule,
                const std::vector<std::vector<int>>& members_per_unit) override {

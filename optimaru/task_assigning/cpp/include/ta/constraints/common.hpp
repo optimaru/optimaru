@@ -49,32 +49,12 @@ namespace ta {
 // soft[1] lexicographically above soft[2] (the Score adapter decodes that
 // packing).
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                                    // the whole default set
-//       .weight("criticalPriorityTaskEndTimeCost", 2)       // ... then only what differs
-//       .soft("requiredSkillCost")
-//       .drop("majorPriorityTaskEndTimeCost")
-//       .into(calc);
-//   solver.solve(solution, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from
-// scratch than start from the defaults.
-//
-// Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
-// assembly-time metadata, not part of the cost. Override them per instance
-// with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent`, or by name through ConstraintAssembly. The monolithic
-// calculators read the same kDefaultWeight constants, which is why the
-// default assembly scores bit-for-bit like them.
-//
-// Registry names are the struct names with a lower-case first letter
-// ("requiredSkillCost"); Python sees them through python_name()
-// ("required_skill_cost").
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; the calculator negates into the score.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The monolithic calculators read the same
+// kDefaultWeight constants, so the default assembly scores bit-for-bit like
+// ScoreCalculator::score.
 
 using DecomposedCalculator = optimaru::DecomposedObjective<TaskAssigningSolution>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<TaskAssigningSolution>;

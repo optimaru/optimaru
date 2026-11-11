@@ -18,7 +18,7 @@ C++ namespace `<ns>` (such as `vrp`):
 | One file per constraint | `optimaru/<uc>/cpp/include/<ns>/constraints/<subject>_cost.hpp` |
 | The default constraint set | `optimaru/<uc>/cpp/include/<ns>/constraints.hpp` (`defaultConstraints()`) |
 | The fast default-path calculators | `optimaru/<uc>/cpp/src/score_calculator.cpp`, `incremental_calculator.cpp` |
-| The Python module `optimaru.<uc>._core` | `optimaru/<uc>/cpp/bindings.cpp`, stubs in `optimaru/<uc>/_core.pyi` |
+| The Python module `optimaru.<uc>._core` | `optimaru/<uc>/cpp/bindings.cpp`, stubs in `optimaru/<uc>/_core.pyi`. The parts every use case binds come from the engine's helpers: `opy::bind_score<Score>(m)`, `opy::bind_solver_config(...)` and `opy::bind_constraints<Solution>(...)` for `constraint_costs()`, `list_constraints()` and `constraint_info()` |
 | Constraint specs for Python | `optimaru/<uc>/constraints.py` |
 | Python models (`to_core()` / `from_core()`) | `optimaru/<uc>/models.py` |
 | What the use cases' Python shares | `optimaru/_constraint.py` (the constraint-spec base), `optimaru/_solve.py` (the steps of `solve()`), `optimaru/_models.py` (the model base and helpers) |
@@ -311,8 +311,10 @@ struct MyRuleCost final : detail::PerVehicleConstraint {
 - **Global constraints.** A cost that belongs to no single unit (an
   unassigned count, a balance across units) is an
   `optimaru::GlobalConstraint<Solution>`. It keeps its own aggregates in
-  `reset()` / `on_unit_changed()` (or the O(1) `on_member_changed()` when
-  `supports_member_change()` is true), and `cost()` returns the total. All of
+  `reset()` / `on_unit_changed()`, and `cost()` returns the total. On the
+  assignment shape, one that can keep them from joins and leaves alone derives
+  from `optimaru::MemberChangeGlobalConstraint<Solution>` and writes the O(1)
+  `on_member_changed()` instead. All of
   knapsack's constraints are globals, for example
   [`ks/constraints/mandatory_items_cost.hpp`](../optimaru/knapsack/cpp/include/ks/constraints/mandatory_items_cost.hpp).
 - **Rewards and structural constraints.** A reward sets `reward = true;` in its

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Engine: `MemberChangeGlobalConstraint`.** A global constraint that keeps its aggregates
+  from joins and leaves alone derives from `optimaru::MemberChangeGlobalConstraint<Solution>`
+  (`optimaru/score/decomposed_objective.hpp`) and writes `on_member_changed()` only; ten use
+  cases declared that base themselves. The comment that opens each use case's
+  `constraints/common.hpp` now holds what is particular to the use case and points to the
+  engine header and `docs/extending.md` for the rest. No score changes.
 - **Bindings: the part every use case repeated is two engine helpers.**
   `optimaru::python::bind_constraints()` binds `constraint_costs()`, `list_constraints()` and
   `constraint_info()` off a default assembly, and `bind_score()`

@@ -1090,6 +1090,84 @@ struct TaBalance final : optimaru::GlobalConstraint<TaskAssignment> {
     }
 };
 
+// The sum of squared worker loads, kept from joins and leaves alone.
+struct TaJoinBalance final : optimaru::MemberChangeGlobalConstraint<TaskAssignment> {
+    TaJoinBalance() : MemberChangeGlobalConstraint("joinBalance", 1.0, optimaru::Level::Soft) {}
+    std::vector<long> counts;
+    long squares = 0;
+    void reset(const TaskAssignment&,
+               const std::vector<std::vector<int>>& members_per_unit) override {
+        counts.clear();
+        squares = 0;
+        for (const auto& m : members_per_unit) {
+            counts.push_back(static_cast<long>(m.size()));
+            squares += counts.back() * counts.back();
+        }
+    }
+    void on_member_changed(const TaskAssignment&, int unit, const std::vector<int>&, int,
+                           bool joined) override {
+        const long before = counts[unit];
+        counts[unit] += joined ? 1 : -1;
+        squares += counts[unit] * counts[unit] - before * before;
+    }
+    double cost() const override { return static_cast<double>(squares); }
+};
+
+void testMemberChangeGlobalConstraint() {
+    std::printf("== MemberChangeGlobalConstraint ==\n");
+    TaskAssignment s = buildTaskInstance();
+    for (int t = 0; t < 6; ++t) s.assignment[t] = t % 4;
+    auto build = [&s] {
+        auto calc = std::make_unique<optimaru::DecomposedObjective<TaskAssignment>>();
+        calc->emplace<TaJoinBalance>();
+        calc->rebuild(s);
+        return calc;
+    };
+    auto calc = build();
+    auto change = [&](int entity, int value) {
+        calc->before_assign(entity);
+        s.assignment[entity] = value;
+        calc->after_assign(entity);
+    };
+
+    std::mt19937_64 rng(7);
+    bool agrees = true;
+    for (int step = 0; step < 2000; ++step) {
+        change(static_cast<int>(rng() % 6), (rng() % 8 == 0) ? -1 : static_cast<int>(rng() % 4));
+        if (!(calc->score() == build()->score())) agrees = false;
+    }
+    check(agrees, "joins and leaves keep the aggregate equal to a fresh reset, 2000 moves");
+
+    // A batched composite move, rejected: the inverse writes restore the aggregate.
+    const Score before = calc->score();
+    const int old0 = s.assignment[0];
+    const int old1 = s.assignment[1];
+    calc->begin_trial();
+    calc->begin_batch();
+    change(0, (old0 + 1) % 4);
+    change(1, (old1 + 2) % 4);
+    calc->end_batch();
+    check(calc->score() == build()->score() && !(calc->score() == before),
+          "... inside a batch too, for a move that changes it");
+    calc->begin_rollback();
+    calc->begin_batch();
+    change(1, old1);
+    change(0, old0);
+    calc->end_batch();
+    calc->end_trial(false);
+    check(calc->score() == before, "... and a rolled-back move restores it");
+
+    TaJoinBalance direct;
+    check(direct.supports_member_change(), "supports_member_change() is true");
+    bool thrown = false;
+    try {
+        direct.on_unit_changed(s, 0, {});
+    } catch (const std::logic_error&) {
+        thrown = true;
+    }
+    check(thrown, "on_unit_changed, which the objective never calls for it, throws");
+}
+
 void testDecomposedDeltaCalculator() {
     std::printf("== DecomposedObjective (delta path vs fallback vs recompute) ==\n");
     TaskAssignment s = buildTaskInstance();
@@ -2046,6 +2124,7 @@ int main() {
     testNearbyAndLnsOnRandomTsp();
     testExpandedMoves();
     testDecomposedDeltaCalculator();
+    testMemberChangeGlobalConstraint();
     testDecomposedListPreviews();
     testDecomposedPiecewisePreviews();
     testConstraintAssembly();

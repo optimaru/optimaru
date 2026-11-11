@@ -36,37 +36,17 @@ namespace qap {
 // Both globals take the engine's member-change fast path (one notification
 // per facility joining / leaving a location, no unit diff).
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                         // the whole default set
-//       .weight("flowDistanceCost", 4)           // ... then only what differs
-//       .soft("pinnedAssignmentsCost")
-//       .drop("assignmentCost")
-//       .into(calc);
-//   solver.solve(problem, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from scratch.
-//
-// Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
-// assembly-time metadata, not part of the cost. Override them per instance
-// with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent`, or by name through ConstraintAssembly. The canonical problem
-// carries no weights: the monolithic calculators read the same kDefaultWeight
-// constants, which is why the default assembly scores bit-for-bit like them.
-//
-// Registry names are the struct names with a lower-case first letter
-// ("pinnedAssignmentsCost"); Python sees them through python_name()
-// ("pinned_assignments_cost").
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; the calculator negates into the score. The
-// objectives are not validated >= 0 (flows, distances and direct costs are
-// plain integers), so they may be negative: a negative total is scored as a
-// bonus, exactly like the Python reference scorer. On data with a negative
-// entry such an objective cannot move to hard (raw_cost_can_be_negative; the
-// calculator refuses it at reset), since a negative hard total would cancel
-// a violation of the side constraints.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The monolithic calculators read the same
+// kDefaultWeight constants, so the default assembly scores bit-for-bit like
+// ScoreCalculator::score. The objectives are not validated >= 0 (flows,
+// distances and direct costs are plain integers), so they may be negative: a
+// negative total is scored as a bonus, exactly like the Python reference
+// scorer. On data with a negative entry such an objective cannot move to hard
+// (raw_cost_can_be_negative; the calculator refuses it at reset), since a
+// negative hard total would cancel a violation of the side constraints.
 //
 // Unassigned facilities (location == -1, only in a partial state a caller
 // wrote) contribute nothing, except that a fixed location whose facility is
@@ -78,7 +58,6 @@ namespace qap {
 using DecomposedCalculator = optimaru::DecomposedObjective<QuadraticAssignmentProblem>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<QuadraticAssignmentProblem>;
 using QapUnitConstraint = optimaru::UnitConstraint<QuadraticAssignmentProblem>;
-using QapGlobalConstraint = optimaru::GlobalConstraint<QuadraticAssignmentProblem>;
 
 namespace detail {
 
@@ -106,18 +85,9 @@ inline bool hasNegative(const std::optional<std::vector<std::vector<std::int64_t
 
 }  // namespace detail
 
-// A GlobalConstraint maintained purely from member joins / leaves (the
-// engine's assignment fast path): the calculator never diffs a unit for it, so
-// on_unit_changed is unreachable.
-struct QapMemberChangeGlobalConstraint : QapGlobalConstraint {
-    using QapGlobalConstraint::QapGlobalConstraint;
-
-    bool supports_member_change() const override { return true; }
-    void on_unit_changed(const QuadraticAssignmentProblem& /*problem*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) override {
-        throw std::logic_error("constraint '" + name + "' is maintained by member changes only");
-    }
-};
+// A global constraint kept from member joins and leaves alone.
+using QapMemberChangeGlobalConstraint =
+        optimaru::MemberChangeGlobalConstraint<QuadraticAssignmentProblem>;
 
 }  // namespace qap
 

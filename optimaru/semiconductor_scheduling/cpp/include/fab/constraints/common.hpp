@@ -37,30 +37,14 @@ namespace fab {
 // of its struct, which the view and the monolithic calculators call. A
 // formula is therefore written once, in the component's header.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                         // the whole default set
-//       .weight("weightedTardinessCost", 4)      // ... then only what differs
-//       .soft("maxQueueTimeCost")
-//       .drop("makespanCost")
-//       .into(calc);
-//   solver.solve(schedule, calc);
-//
-// Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
-// assembly-time metadata, not part of the cost. Override them per instance
-// with the constructor's weight argument or the validated setters, or by name
-// through ConstraintAssembly. The schedule carries no weights.
-//
-// Registry names are the struct names with a lower-case first letter
-// ("machineCapacityCost"); Python sees them through python_name()
-// ("machine_capacity_cost").
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The schedule carries no weights. Every
+// component requires ScoreCalculator::prepare(schedule) to have run.
 //
 // Global constraints shape their TOTAL: exponent e scores weight * total^e
 // (not each item). Hard totals are rounded per constraint.
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; the calculator negates into the score. Every
-// component requires ScoreCalculator::prepare(schedule) to have run.
 
 using DecomposedCalculator = optimaru::DecomposedObjective<SemiconductorSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<SemiconductorSchedule>;
