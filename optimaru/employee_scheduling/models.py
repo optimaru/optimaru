@@ -543,7 +543,11 @@ class ScheduleRequest(SolveRequest):
     request's own fields under another name. When the request is built, one given at the
     top level wins and one given only in ``settings`` is taken up, so both say the same.
     After that, a value set at the top level is the one used; until one is set there,
-    a change to ``settings`` is.
+    a change to ``settings`` is. A request read back from its own JSON has the top-level
+    fields set, so there the top level is the one to change.
+
+    ``solver_parameters`` are applied after ``settings``, so a field named in both takes the
+    value in ``solver_parameters``.
     """
 
     model_input: SchedulingInput
@@ -909,8 +913,12 @@ def solve_request(
     if constraints is not None:
         if isinstance(constraints, _core.DecomposedCalculator):
             raise TypeError("solve_request takes constraints as a list of specs, not a DecomposedCalculator")
-        replaced = {**request.model_input.model_dump(), "constraints": list(constraints)}
-        request = request.model_copy(update={"model_input": SchedulingInput.model_validate(replaced)})
+        if any(isinstance(constraint, str) for constraint in constraints):
+            raise TypeError("solve_request takes constraints as specs (or their JSON dicts), not as names")
+        # A copy with the one field replaced: assignment validates the new list only.
+        model_input = request.model_input.model_copy()
+        model_input.constraints = list(constraints)
+        request = request.model_copy(update={"model_input": model_input})
     n = max(request.parallel_solver_count, request.settings.multi_start)
     if n <= 1:
         return _build_and_solve(request, request._effective("random_seed"))

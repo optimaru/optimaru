@@ -684,3 +684,51 @@ def test_the_allowed_literal_and_threshold_rules_solve(constraint):
     (total,) = solution.constraint_totals
     assert total.name == constraint["name"]
     assert total.level == constraint.get("level", "soft" if constraint["name"] == "undesired_day_cost" else "hard")
+
+
+def test_the_earlier_rule_names_are_aliases():
+    """rules / rule_totals in JSON and as attributes, and the old functions and classes, are
+    the constraint names under a second name; a dump uses the new ones."""
+    from optimaru.employee_scheduling import models
+
+    request = generate_demo_data(workers=6, days=4)
+    data = request.model_input.model_dump()
+    data["rules"] = data.pop("constraints")[:3]
+    model_input = models.SchedulingInput.model_validate(data)
+    assert len(model_input.constraints) == 3 and model_input.rules is model_input.constraints
+    model_input.rules = models.default_rules()[:2]
+    assert len(model_input.constraints) == 2
+    with pytest.raises(ValueError):
+        model_input.rules = []  # the setter validates, as assignment to constraints does
+    assert "constraints" in model_input.model_dump() and "rules" not in model_input.model_dump()
+
+    solved = solve_request(request.model_copy(update={"time_limit_seconds": 0.0}))
+    as_before = solved.model_dump()
+    as_before["rule_totals"] = as_before.pop("constraint_totals")
+    read = models.ScheduleSolution.model_validate(as_before)
+    assert read.constraint_totals == solved.constraint_totals and read.rule_totals is read.constraint_totals
+
+    assert models.Rule is models.ConstraintModel
+    assert models.RuleBase is models.ConstraintModelBase
+    assert models.RuleTotal is models.ConstraintTotal
+    assert models.RULE_MODELS is models.CONSTRAINT_MODELS
+    assert models.rule_model is models.constraint_model
+    assert models.default_rules is models.default_constraints
+
+
+def test_solve_request_takes_constraints_in_place_of_the_request_s_own():
+    """constraints= replaces model_input.constraints for the solve and leaves the request as it
+    was; a calculator or a name is refused."""
+    from optimaru.employee_scheduling import DecomposedCalculator
+    from optimaru.employee_scheduling.constraints import RequiredSkillCost, get_constraints
+
+    request = generate_demo_data(workers=6, days=4).model_copy(update={"time_limit_seconds": 0.0})
+    before = request.model_dump()
+    solved = solve_request(request, constraints=[RequiredSkillCost()])
+    assert [total.name for total in solved.constraint_totals] == ["required_skill_cost"]
+    assert request.model_dump() == before
+    assert len(solve_request(request).constraint_totals) == len(request.model_input.constraints)
+    with pytest.raises(TypeError, match="DecomposedCalculator"):
+        solve_request(request, constraints=DecomposedCalculator(get_constraints()))
+    with pytest.raises(TypeError, match="names"):
+        solve_request(request, constraints=["required_skill_cost"])
