@@ -204,14 +204,20 @@ tied to one vehicle pull every route across town, so these plans drive 44% to
 102% more than the same visits left free. Groups whose visits lie near each
 other cost far less. A grouped plan also settles early: on two of these instances
 a 60 s solve ends within 2% of a 4 s one, while nine seeds end 3% and 6% apart
-(10 s), so another seed buys more than a longer run.
+(10 s), so another seed buys more than a longer run. `num_workers` /
+`parallel_solver_count` run such seeds side by side: with four starts the same
+4 s end 0.8% to 2.4% shorter on the four classes above (5 seeds each: shorter in
+17 of the 20 pairs and longer in none; under a step limit the first start is the
+single-start solve, so more starts cannot do worse, while under a time limit the
+starts share the machine's cores).
 
 Every entry point scores a grouped plan with the default constraints, since the
 four core rules include neither of these two: `solve_request`, `vrp.solve(plan)`,
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two visits or more (a visit alone in its group changes nothing). That is a solve on the
 constraint assembly, as when a vehicle limit is set: the whole default set is
-scored, and `num_workers` / `parallel_solver_count` have no effect.
+scored. `num_workers` / `parallel_solver_count` run that many starts there as
+on the core rules, each start on a set of its own.
 `calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same way,
 so it returns the score the solve stored and prices a split or reversed group
 on a plan built by hand. Both
