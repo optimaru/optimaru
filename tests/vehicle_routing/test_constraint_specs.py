@@ -71,7 +71,7 @@ def solve(constraints=None, seconds=0.4, seed=7):
 
 def test_list_constraints_matches_the_spec_names():
     """Names carried by specs must be names the core actually knows."""
-    # Unit constraints first, the global constraint (unassigned_visits_cost) after.
+    # Unit constraints first, the two global constraints (visit_group_cost, unassigned_visits_cost) after.
     available = vrp.list_constraints()
     assert available == [
         "vehicle_capacity_cost",
@@ -87,6 +87,8 @@ def test_list_constraints_matches_the_spec_names():
         "route_duration_cost",
         "latency_cost",
         "vehicle_fixed_cost",
+        "visit_order_cost",
+        "visit_group_cost",
         "unassigned_visits_cost",
     ]
     for spec in get_constraints():
@@ -252,6 +254,8 @@ EXPECTED_INFO = [
     ("route_duration_cost", "soft", 0.0, False),
     ("latency_cost", "soft", 0.0, False),
     ("vehicle_fixed_cost", "soft", 1.0, True),
+    ("visit_order_cost", "hard", 1000.0, True),
+    ("visit_group_cost", "hard", 1000.0, True),
     ("unassigned_visits_cost", "medium", 1.0, True),
 ]
 
@@ -280,7 +284,7 @@ def test_constraint_info_matches_the_raw_cost_metadata():
         assert (entry["level_flippable"], entry["reward"], entry["global"]) == (
             True,
             False,
-            row.name == "unassigned_visits_cost",
+            row.name in ("visit_group_cost", "unassigned_visits_cost"),
         )
         assert (entry["name"], entry["label"]) == (row.name, "")
         assert entry["medium_fold"] == {"kind": "into_soft", "unit": float(MEDIUM_UNIT)}

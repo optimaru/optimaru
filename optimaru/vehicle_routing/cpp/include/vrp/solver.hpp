@@ -32,6 +32,15 @@ namespace vrp {
 // operators that matter on routing problems — SISR substring removal and
 // whole-route removal alongside random / related / worst.
 //
+// Visit groups: the visits of one group (Visit::groupIndex) ride one vehicle
+// together or all wait, in an order that respects Visit::afterVisitIndices.
+// When a plan has groups, they are placed whole before the engine's
+// construction runs and a group operator joins the move mix
+// (vrp/group_moves.hpp), which carries a group between vehicles as one unit.
+// The two rules are scored by visitGroupCost and visitOrderCost, which belong
+// to the constraint assembly, so solve(plan) hands a plan with groups to the
+// default assembly instead of scoring it on the four core rules.
+//
 // Unassigned visits: leaving a visit out of every route is modelled with
 // the plan's virtual unassigned pool (see VehicleRoutePlan). solve() fills the
 // pool for you, so a plan built with visits simply left out of every route is
@@ -161,6 +170,19 @@ public:
         int iterated_local_search_max_segment = 1;
         std::int64_t iterated_local_search_max_evaluations = 5000000;
 
+        // --- visit groups (vrp/group_moves.hpp) -----------------------------
+        // groupRuinRecreate: take a group out, alone or with up to
+        // group_ruin_max_visits more visits (the groups and single visits of
+        // nearby stops, or other groups), and put each unit back whole at its
+        // cheapest feasible place. Registered only for a plan with groups.
+        //
+        // 30 measured on generated instances of 90 and 250 visits with half or
+        // all of the visits in groups of three (10-20 s, two instances, four
+        // seeds each): against 12 it drives 2-3% less on three of four
+        // classes and the same on the fourth; 60 and 100 are no better.
+        bool group_ruin_recreate = true;
+        int group_ruin_max_visits = 30;
+
         // Which adaptive scheme weights the ruin operators.
         optimaru::SelectionScheme ruin_recreate_selection_type =
                 optimaru::SelectionScheme::RouletteWheel;
@@ -199,7 +221,9 @@ public:
 
     // Solves in place: mutates plan.vehicles[*].visitIndices and
     // plan.unassignedVisitIndices, and stores the best score found in
-    // plan.score.
+    // plan.score. Scored on the four core rules, unless the plan has visit
+    // groups: then on the default constraint assembly (vrp/constraints.hpp),
+    // as the overload below would with addDefaultConstraints(), single-start.
     void solve(VehicleRoutePlan& plan);
 
     // Solves with a caller-assembled plugin calculator (see
@@ -217,6 +241,21 @@ public:
 private:
     Config config_;
 };
+
+// What a plan may say about groups and order: no group index below -1, a
+// visit comes after visits of its own group only (each a visit of the plan,
+// named once, never itself), and the order has no cycle. Throws
+// std::invalid_argument otherwise. Every solve runs it, and so does whatever
+// scores a plan handed in from outside (calculateScore, the bindings'
+// constraint_costs), since visitOrderCost reads those indices.
+void checkVisitGroups(const VehicleRoutePlan& plan);
+
+// The score of a plan as it stands, the way solve(plan) scores it: on the
+// four core rules (ScoreCalculator::score), unless the plan has visit groups,
+// which those rules do not price: then on the default constraint assembly.
+// Refreshes the derived fields and stores the score in plan.score. Throws
+// std::invalid_argument for the groups and orders solve() refuses.
+Score calculateScore(VehicleRoutePlan& plan);
 
 }  // namespace vrp
 

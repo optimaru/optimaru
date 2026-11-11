@@ -26,7 +26,7 @@ cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
 | ------------------------------------------------ | ------------------------------------------------ |
 | `struct VehicleRoutePlan` (`domain.hpp`)         | the whole problem and its solution: `locations`, `vehicles`, `visits`, the unassigned pool `unassignedVisitIndices`, the `drivingSeconds` matrix and the `score` |
 | `struct Vehicle`                                 | capacity, home location, departure time, the optional route policies, and the decision: `std::vector<int> visitIndices`, the ordered visits it serves |
-| `struct Visit`                                   | location, demand, time window, service duration, unassigned penalty (+ derived `vehicleIndex`, `arrivalTime`) |
+| `struct Visit`                                   | location, demand, time window, service duration, unassigned penalty, group and the visits it comes after (+ derived `vehicleIndex`, `arrivalTime`) |
 | `ScoreCalculator::updateShadowVariables`         | recomputes every visit's derived `vehicleIndex` / `arrivalTime` from the routes |
 | `Score`                                          | the hard / medium / soft levels (lexicographic compare): the engine's `optimaru::HardMediumSoftScore` |
 | `HaversineDrivingTimeCalculator` (`haversine.{hpp,cpp}`) | driving time from the haversine distance at 50 km/h; fills `drivingSeconds` |
@@ -60,7 +60,10 @@ The plugin path adds the optional route policies (`MaxTravelTimeCost`,
 `MaxRouteDurationCost`, `VehicleMaxEndTimeCost`, `MaxStopsCost`,
 `MaxRouteRadiusCost`, `MinCapacityUtilizationCost`, `VehicleFixedCost`) and
 the opt-in weight-0 objectives (`EnclosingCircleRadiusCost`,
-`RouteDurationCost`, `LatencyCost`); see the package README for the table.
+`RouteDurationCost`, `LatencyCost`), and the two rules of visit groups
+(`VisitGroupCost`, `VisitOrderCost`: `Visit::groupIndex` and
+`Visit::afterVisitIndices`); see the package README for the table and for how
+groups are placed and moved (`visit_insertion.hpp`, `group_moves.hpp`).
 
 ## How it runs on the generic engine
 
@@ -131,6 +134,9 @@ instances (see the benchmark) set it explicitly.
 
 - `ScoreCalculator::score` — the full recompute, and the readable
   statement of the constraints. Authoritative: `Solver::solve` finishes with it.
+  `calculateScore(plan)` (`vrp/solver.hpp`) is this call for a plan without
+  visit groups and the default constraint assembly for a plan with them, which
+  is how `Solver::solve(plan)` scores each.
 - `VehicleRoutingIncrementalScoreCalculator` — what the engine actually calls
   during search, maintaining per-route aggregates so a move costs
   O(route length) instead of O(instance).

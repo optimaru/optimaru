@@ -318,6 +318,12 @@ struct MyRuleCost final : detail::PerVehicleConstraint {
   `on_member_changed()` instead. All of
   knapsack's constraints are globals, for example
   [`ks/constraints/mandatory_items_cost.hpp`](../optimaru/knapsack/cpp/include/ks/constraints/mandatory_items_cost.hpp).
+  On the sequence shape, a rule that keeps the elements of a group in one list
+  (the visits or requests of one job on one vehicle) forwards to
+  `optimaru::GroupPlacement`
+  ([`score/group_placement.hpp`](../optimaru/cpp/optimaru/score/group_placement.hpp)),
+  which also answers the move previews; see
+  [`vrp/constraints/visit_group_cost.hpp`](../optimaru/vehicle_routing/cpp/include/vrp/constraints/visit_group_cost.hpp).
 - **Rewards and structural constraints.** A reward sets `reward = true;` in its
   constructor (its raw cost must be `<= 0`, and it can never be hard). A
   structural constraint that must keep its level sets `level_flippable = false;`.

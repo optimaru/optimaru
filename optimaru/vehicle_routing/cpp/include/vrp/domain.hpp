@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "optimaru/model/solution_traits.hpp"
@@ -122,6 +123,15 @@ struct Visit {
                                                                   : unassignedPenaltyMinutes;
     }
 
+    // The group this visit travels in, or -1 for none. The visits of one
+    // group ride one vehicle together, or all wait (visitGroupCost): several
+    // orders the input has merged into one job.
+    int groupIndex = -1;
+    // The visits of its group this one comes after on the route
+    // (visitOrderCost). Together they are a partial order on the group: a
+    // visit named by none and naming none may go anywhere among the others.
+    std::vector<int> afterVisitIndices = {};
+
     // --- derived (recomputed by ScoreCalculator::updateShadowVariables) ---
     int vehicleIndex = -1;  // -1 == unassigned
     Seconds arrivalTime = NULL_TIME;
@@ -192,6 +202,18 @@ struct VehicleRoutePlan {
 
     Seconds drivingTime(int fromLocation, int toLocation) const {
         return drivingSeconds[fromLocation][toLocation];
+    }
+
+    // Whether some group (Visit::groupIndex) holds two visits or more. Such a
+    // plan is scored with the constraint assembly, which holds the two group
+    // rules; a visit alone in its group has nobody to be kept with, so groups
+    // of one change nothing.
+    bool hasVisitGroups() const {
+        std::unordered_set<int> seen;
+        for (const Visit& visit : visits) {
+            if (visit.groupIndex >= 0 && !seen.insert(visit.groupIndex).second) return true;
+        }
+        return false;
     }
 
     // Puts every visit that no vehicle services into the unassigned pool, so

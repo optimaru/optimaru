@@ -29,6 +29,8 @@
 #include "vrp/constraints/vehicle_capacity_cost.hpp"
 #include "vrp/constraints/vehicle_fixed_cost.hpp"
 #include "vrp/constraints/vehicle_max_end_time_cost.hpp"
+#include "vrp/constraints/visit_group_cost.hpp"
+#include "vrp/constraints/visit_order_cost.hpp"
 
 namespace vrp {
 
@@ -37,10 +39,11 @@ namespace vrp {
 // ---------------------------------------------------------------------------
 // The full provider plus the route policies, each at its component's
 // kDefaultWeight / kDefaultLevel. This assembly scores bit-for-bit like
-// ScoreCalculator::score on a plan without route policies (the
-// policy components cost 0 there, the opt-in objectives weigh 0). Units come
-// before the global in list_constraints() / constraint_info(), so
-// unassignedVisitsCost is listed last.
+// ScoreCalculator::score on a plan without route policies and without
+// visit groups (the policy and group components cost 0 there, the opt-in
+// objectives weigh 0). Units come before the globals in list_constraints() /
+// constraint_info(), so visitGroupCost and unassignedVisitsCost are listed
+// last.
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly,
 // so a caller states only what differs from it:
@@ -57,6 +60,7 @@ inline ConstraintAssembly defaultConstraints() {
     ConstraintAssembly assembly;
     assembly.emplace<VehicleCapacityCost>();
     assembly.emplace<MaxEndTimeCost>();
+    assembly.emplace<VisitGroupCost>();
     assembly.emplace<UnassignedVisitsCost>();
     assembly.emplace<TravelTimeCost>();
     assembly.emplace<MaxTravelTimeCost>();
@@ -69,6 +73,7 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<RouteDurationCost>();
     assembly.emplace<LatencyCost>();
     assembly.emplace<VehicleFixedCost>();
+    assembly.emplace<VisitOrderCost>();
     return assembly;
 }
 

@@ -93,6 +93,8 @@ __all__ = [
     "VehicleCapacityCost",
     "VehicleFixedCost",
     "VehicleMaxEndTimeCost",
+    "VisitGroupCost",
+    "VisitOrderCost",
     "enclosing_circle_radius_cost",
     "get_constraints",
     "latency_cost",
@@ -109,6 +111,8 @@ __all__ = [
     "vehicle_capacity_cost",
     "vehicle_fixed_cost",
     "vehicle_max_end_time_cost",
+    "visit_group_cost",
+    "visit_order_cost",
 ]
 
 
@@ -347,6 +351,48 @@ class VehicleFixedCost(Constraint):
     )
 
 
+class VisitOrderCost(Constraint):
+    """Visits served before one they have to come after. Default: hard, weight 1000.
+
+    `after` on a visit names visits of its group that are served earlier on the route:
+    a partial order on the group. Engine-only (no CP-SAT plugin)."""
+
+    name = "visit_order_cost"
+    label_en = "Visit order"
+    label_ko = "방문 순서"
+    description_en = (
+        "Pairs of visits on one route that are served the wrong way round: a visit before one that "
+        "its `after` says it follows. One unit of cost is one such pair; 0 means every route keeps "
+        "the order. A pair whose visits ride different vehicles is priced by `visit_group_cost`."
+    )
+    description_ko = (
+        "한 경로에서 순서가 뒤바뀐 방문지 쌍을 셉니다. `after`에 적힌 방문지보다 먼저 방문한 경우입니다. "
+        "뒤바뀐 쌍 하나가 비용 1이며, 0이면 모든 경로가 순서를 지킵니다. 두 방문지가 서로 다른 차량에 "
+        "있는 경우는 `visit_group_cost`가 셉니다."
+    )
+
+
+class VisitGroupCost(Constraint):
+    """Grouped visits that are apart from the rest of their group. Default: hard, weight 1000.
+
+    The visits of a `group` are one job: they ride one vehicle together, or all wait.
+    A global constraint, since a group spans routes. Engine-only (no CP-SAT plugin)."""
+
+    name = "visit_group_cost"
+    label_en = "Visit group"
+    label_ko = "방문지 묶음"
+    description_en = (
+        "Visits that are not where most of their `group` is: on another vehicle, or left unassigned "
+        "while the others ride (or riding while the others wait). One unit of cost is one such visit; "
+        "0 means every group rides one vehicle together or waits together."
+    )
+    description_ko = (
+        "같은 묶음(`group`)의 방문지 가운데 묶음의 다수와 떨어져 있는 방문지를 셉니다. 다른 차량에 "
+        "배정됐거나, 나머지는 배정됐는데 혼자 미배정이거나 그 반대인 방문지 하나가 비용 1이며, 0이면 모든 "
+        "묶음이 한 차량에 함께 배정되거나 함께 미배정으로 남습니다."
+    )
+
+
 class UnassignedVisitsCost(Constraint):
     """Penalty minutes of visits left off every route. Default: medium, weight 1.
 
@@ -385,9 +431,11 @@ min_capacity_utilization_cost = MinCapacityUtilizationCost()
 route_duration_cost = RouteDurationCost()
 latency_cost = LatencyCost()
 vehicle_fixed_cost = VehicleFixedCost()
+visit_order_cost = VisitOrderCost()
+visit_group_cost = VisitGroupCost()
 unassigned_visits_cost = UnassignedVisitsCost()
 
-# The default set, in list_constraints() order (unit constraints, then the global).
+# The default set, in list_constraints() order (unit constraints, then the two globals).
 _DEFAULTS = (
     vehicle_capacity_cost,
     max_end_time_cost,
@@ -402,6 +450,8 @@ _DEFAULTS = (
     route_duration_cost,
     latency_cost,
     vehicle_fixed_cost,
+    visit_order_cost,
+    visit_group_cost,
     unassigned_visits_cost,
 )
 

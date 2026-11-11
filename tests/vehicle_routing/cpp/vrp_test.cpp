@@ -68,10 +68,8 @@ void testFixtures() {
     // vehicleCapacityCost: capacity 100, demands 80 + 40 -> 20 over.
     plan.vehicles = {vehicleAt("1", 100, home, hourMinute(7, 0))};
     plan.visits = {
-            Visit{"2", "John", loc2, 80, hourMinute(8, 0), hourMinute(10, 0), 30 * 60, -1,
-                  NULL_TIME},
-            Visit{"3", "Paul", loc3, 40, hourMinute(8, 0), hourMinute(10, 0), 30 * 60, -1,
-                  NULL_TIME},
+            Visit{"2", "John", loc2, 80, hourMinute(8, 0), hourMinute(10, 0), 30 * 60},
+            Visit{"3", "Paul", loc3, 40, hourMinute(8, 0), hourMinute(10, 0), 30 * 60},
     };
     plan.vehicles[0].visitIndices = {0, 1};
     Score s = ScoreCalculator::score(plan);
@@ -93,8 +91,7 @@ void testFixtures() {
     addLocation(plan2, 49.190922, 16.624466);
     HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan2);
     plan2.vehicles = {vehicleAt("1", 100, 0, hourMinute(7, 0))};
-    plan2.visits = {
-            Visit{"2", "John", 1, 80, hourMinute(8, 0), hourMinute(10, 0), 30 * 60, -1, NULL_TIME}};
+    plan2.visits = {Visit{"2", "John", 1, 80, hourMinute(8, 0), hourMinute(10, 0), 30 * 60}};
     // Left out of every route == unassigned.
     Score s2 = ScoreCalculator::score(plan2);
     checkEqual("unassignedVisitsCost medium penalty", -s2.medium, 30);
