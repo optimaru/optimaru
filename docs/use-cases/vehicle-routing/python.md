@@ -20,6 +20,8 @@ OPTIMARU_USE_CASES=vehicle_routing uv sync      # builds only this use case's C+
 uv run pytest -q tests/vehicle_routing
 ```
 
+## Usage
+
 ```python
 from optimaru import vehicle_routing as vrp
 

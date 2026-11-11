@@ -14,11 +14,6 @@ uv run pytest -q tests/tournament_scheduling
 
 ## Usage
 
-```bash
-OPTIMARU_USE_CASES=tournament_scheduling uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/tournament_scheduling
-```
-
 ```python
 from optimaru import tournament_scheduling as ts
 from optimaru.tournament_scheduling.models import demo_data
