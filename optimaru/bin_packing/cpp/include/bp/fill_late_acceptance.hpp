@@ -39,10 +39,15 @@ namespace bp {
 //   1 in 4   0
 //   1 in 8   0
 //   1 in 16  1, 1 in 32  2, 1 in 128  8 (60 and 120 items)
+// The odds are a constant and not a setting: 4 and 8 do the same, and the
+// range that works is too narrow to ask a caller to find.
 //
 // The acceptor keeps its own copy of the assignment and the loads. accepts()
 // is called with the move in place and the items it moved: it brings the
-// copy to the candidate, and takes that back when it refuses. Every n steps
+// copy to the candidate, and takes that back when it refuses. That relies on
+// the assignment shape, where the engine applies every candidate before it
+// asks; on a sequence solution a move can be scored from a preview without
+// being made, and this acceptor would see no change. Every n steps
 // the copy is rebuilt from the solution, so a move that reports fewer items
 // than it moved costs some misjudged ties and nothing else. The engine asks
 // for a new acceptor after every kick, which starts from the solution as it

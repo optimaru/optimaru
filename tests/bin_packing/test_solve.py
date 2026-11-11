@@ -202,9 +202,10 @@ def triplets(triples: int, seed: int) -> bp.BinPackingProblem:
 
 
 def test_trades_and_the_fill_tie_break_fill_every_bin_of_a_triplet_instance():
-    """Ten bins' worth of triplets. The construction ends at 11 bins, and so does the search
-    without TradeMove and the fill tie-break, at this step limit and at twenty times it (five
-    seeds each); with both it gets to the 10 full bins."""
+    """Ten bins' worth of triplets: with TradeMove and the fill tie-break the search gets to
+    the 10 full bins. Without them it ended at 11, where the construction ends, at this step
+    limit and at twenty times it on five seeds; that is measured, not asserted, so that the
+    test fails only when the search with them gets worse."""
     bins = {}
     for on in (True, False):
         problem = triplets(10, seed=1)
@@ -217,7 +218,19 @@ def test_trades_and_the_fill_tie_break_fill_every_bin_of_a_triplet_instance():
         assert score == bp.Score(0, -float(problem.bins_used()))
         bins[on] = problem.bins_used()
     assert bins[True] == 10
-    assert bins[False] == 11
+    assert bins[False] >= bins[True]
+
+
+def test_parallel_starts_each_follow_their_own_packing():
+    """The fill tie-break reads the packing its start searches: with two starts each has its
+    own, and the solve ends feasible at the 10 bins."""
+    problem = triplets(10, seed=1)
+    config = bp.SolverConfig()
+    config.step_count_limit = 20_000
+    config.random_seed = 1
+    config.parallel_solver_count = 2
+    assert bp.solve(problem, config=config).score == bp.Score(0, -10.0)
+    assert sorted(problem.bin_loads()) == [1000] * 10
 
 
 def test_the_fill_tie_break_keeps_on_new_best_to_the_score():

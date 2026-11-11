@@ -385,6 +385,9 @@ private:
 //
 // Cost per move: an O(n) census, and per partner at most 37 x 37 trades
 // (kMaxItems items of a bin are looked at; a bin of three items has 7 x 7).
+// The census is the larger part from a few thousand items up; the three
+// macro moves each take their own, and the selector that draws them counts
+// outcomes, not time.
 class TradeMove final : public optimaru::MoveOperator<BinPackingProblem> {
 public:
     static constexpr std::size_t kMaxItems = 8;

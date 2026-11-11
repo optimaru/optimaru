@@ -196,9 +196,9 @@ leaves, which no single change can show the acceptor.
   every item fits the capacity on its own and some bin is free.
 - **`TradeMove`** (`trade_moves`) trades none, one or two items of one bin for none,
   one or two of another. Of the trades with up to 16 other bins that keep both bins
-  within the capacity it makes the one after which the fuller of the two bins is
-  fullest; when no trade makes a bin fuller, one after which both hold what they held,
-  in other items. That second kind is how an item gets out of a full bin and to the bin
+  within the capacity and leave the fuller of the two no less full, it makes the one
+  that raises the two bins' sum of squared loads most; when no trade raises it, one
+  after which both hold what they held, in other items. That second kind is how an item gets out of a full bin and to the bin
   that needs it. It checks the capacity only.
 
 **A step that keeps the score** (`fill_tie_break`). Every packing with the same number

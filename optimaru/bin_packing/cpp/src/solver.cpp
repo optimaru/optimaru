@@ -85,6 +85,10 @@ void runEngine(const Solver::Config& config, BinPackingProblem& problem,
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
     // Late acceptance that compares equal scores by how full the bins are.
     // The engine solves in place, so the acceptor reads the working solution.
+    // A caller's acceptor takes the place of the configured rule and of
+    // history_growth: bin packing lets the caller choose neither, and one
+    // that ever does has to leave this factory out for any rule but plain
+    // late acceptance.
     if (config.fill_tie_break) {
         const BinPackingProblem& live = problem;
         engine.set_acceptor_factory([&live, historyLength](const Score& initial) {
