@@ -199,18 +199,30 @@ private:
     bool any_ = false;
 };
 
+// One request's place in a unit's plan. The slot pair reads the route with the
+// plan's earlier steps in.
+struct UnitStep {
+    int delivery = -1;
+    RequestInsertion slot;
+};
+
 // Finds room for several requests on one route: they go in one after another,
-// each at the cheapest slot pair the route has once the ones before it are in.
+// in the order given, each at the cheapest slot pair the route has once the
+// ones before it are in. No other order is tried: on tight generated routes a
+// second order found room for about one unit in a hundred of those the first
+// order had no room for.
+//
+// One plan costs a route scan per request, so this is for groups of a handful
+// of requests.
 class UnitPlanner {
 public:
     // Plans `requests` onto `route`, whose timeline is `timeline`. Appends one
-    // insertion per request to `steps` (each reads the route with the earlier
-    // ones in) and returns the driving seconds they add together in
-    // `addedTravel`. Returns false, with `steps` as it was, when one of them
-    // has no slot.
+    // step per request to `steps`, in the order to apply them, and returns the
+    // driving seconds they add together in `addedTravel`. Returns false, with
+    // `steps` as it was, when one of them has no slot.
     bool plan(const PdpRoutePlan& plan, const RouteTimeline& timeline,
               const std::vector<int>& route, const std::vector<int>& requests, Blinker& blinker,
-              std::vector<RequestInsertion>& steps, Seconds& addedTravel);
+              std::vector<UnitStep>& steps, Seconds& addedTravel);
 
 private:
     std::vector<int> route_;

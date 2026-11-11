@@ -275,6 +275,16 @@ def test_the_engine_refuses_a_group_pinned_on_two_vehicles():
         pdp.solve(clash, time_limit_seconds=0.1, constraints=get_constraints())
 
 
+def test_an_empty_group_name_is_no_group():
+    # Like an empty required_vehicle: input built from a table often carries "" for "none".
+    deliveries = [request("a", group=""), request("b", group=""), request("c")]
+    model_input = two_ends(deliveries)
+
+    assert [delivery.group_index for delivery in to_plan(model_input).deliveries] == [-1, -1, -1]
+    solution = solve_request(PdpRequest(model_input=model_input, timelimit=0.3))
+    assert vehicle_of(solution) == {"a": "v", "b": "w", "c": "w"}
+
+
 def test_to_plan_numbers_the_groups_in_input_order():
     deliveries = [request("a", group="late"), request("b"), request("c", group="early"), request("d", group="late")]
     places = TWO_ENDS | {"dp": 30, "dd": 40}

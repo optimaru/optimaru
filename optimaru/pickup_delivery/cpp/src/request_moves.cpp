@@ -41,8 +41,8 @@ double unitDraw(std::mt19937_64& rng) { return static_cast<double>(rng() >> 11) 
 struct UnitOption {
     int vehicle = -1;
     Seconds addedTravel = std::numeric_limits<Seconds>::max();
-    // The unit's insertions in the workspace's step list, one per request in
-    // unit order, each reading the route with the earlier ones in.
+    // The unit's steps in the workspace's step list, one per request, in the
+    // order to apply them.
     std::size_t steps = 0;
 
     bool found() const { return vehicle >= 0; }
@@ -68,7 +68,9 @@ struct UnitOption {
 // own moves, a kick, a rejected move's undo) is picked up there.
 class RequestWorkspace {
 public:
-    explicit RequestWorkspace(const RequestMoveSettings& settings) : settings_(settings) {}
+    RequestWorkspace(const RequestMoveSettings& settings,
+                     std::shared_ptr<const RequestGroups> groups)
+        : settings_(settings), groups_(std::move(groups)) {}
 
     const RequestMoveSettings& settings() const { return settings_; }
     const PdpRoutePlan& plan() const { return *plan_; }
@@ -91,7 +93,6 @@ public:
             stale_.assign(vehicles, 0);
             nearStamp_.assign(vehicles, 0);
             taken_.assign(plan.deliveries.size(), 0);
-            groups_.build(plan);
             dirtyList_.clear();
             staleList_.clear();
         } else {
@@ -141,13 +142,13 @@ public:
     bool onVehicle(int list) const { return list >= 0 && list < vehicleCount_; }
     // A request with a pinned stop stays where it is: its vehicle's route must
     // start with that stop, so the request cannot be taken out and put back.
-    bool movable(int deliveryIndex) const { return !groups_.pinned(deliveryIndex); }
+    bool movable(int deliveryIndex) const { return !groups_->pinned(deliveryIndex); }
 
     // The vehicle the request's unit rides when every request of it is whole
     // on that one vehicle, or -1.
     int wholeOn(int deliveryIndex) const {
         int vehicle = -1;
-        for (int d = groups_.leaderOf(deliveryIndex); d >= 0; d = groups_.nextOf(d)) {
+        for (int d = groups_->leaderOf(deliveryIndex); d >= 0; d = groups_->nextOf(d)) {
             if (where(d) != Where::Routed) return -1;
             const int list = listOf(plan_->deliveries[static_cast<std::size_t>(d)].pickupNodeIndex);
             if (vehicle >= 0 && list != vehicle) return -1;
@@ -159,17 +160,19 @@ public:
     // --- changing the working routes -----------------------------------------
 
     void detachUnit(int unit) {
-        for (int d = unit; d >= 0; d = groups_.nextOf(d)) detach(d);
+        for (int d = unit; d >= 0; d = groups_->nextOf(d)) detach(d);
     }
 
     void place(int unit, const UnitOption& option) {
-        std::size_t step = option.steps;
-        for (int d = unit; d >= 0; d = groups_.nextOf(d)) placeRequest(d, steps_[step++]);
+        const std::size_t end = option.steps + static_cast<std::size_t>(groups_->sizeOf(unit));
+        for (std::size_t step = option.steps; step < end; ++step) {
+            placeRequest(steps_[step].delivery, steps_[step].slot);
+        }
     }
 
     // No route takes the unit: it ends the move in the unassigned pool.
     void leaveOut(int unit) {
-        for (int d = unit; d >= 0; d = groups_.nextOf(d)) {
+        for (int d = unit; d >= 0; d = groups_->nextOf(d)) {
             const Delivery& delivery = plan_->deliveries[static_cast<std::size_t>(d)];
             routeOf_[static_cast<std::size_t>(delivery.pickupNodeIndex)] = vehicleCount_;
             routeOf_[static_cast<std::size_t>(delivery.dropoffNodeIndex)] = vehicleCount_;
@@ -181,13 +184,13 @@ public:
     UnitOption unitOn(int unit, int vehicle, Blinker& blinker) {
         refreshTimelines();
         UnitOption option;
-        const int required = groups_.vehicleOf(unit);
+        const int required = groups_->vehicleOf(unit);
         if (required >= 0 && required != vehicle) return option;
-        if (groups_.sizeOf(unit) == 1) {
+        if (groups_->sizeOf(unit) == 1) {
             RequestInsertion slot;
             timelines_.of(vehicle).improve(
                     *plan_, plan_->deliveries[static_cast<std::size_t>(unit)], blinker, slot);
-            return keep(slot);
+            return keep(unit, slot);
         }
         improveUnit(unit, vehicle, blinker, option);
         return option;
@@ -198,11 +201,11 @@ public:
     // one of the unit's; returns whether it was.
     bool candidateVehicles(int unit, std::vector<int>& out) {
         refreshTimelines();
-        timelines_.candidateVehicles(*plan_, groups_.vehicleOf(unit), out);
+        timelines_.candidateVehicles(*plan_, groups_->vehicleOf(unit), out);
         if (out.size() <= kOfferEveryVehicleUpTo || !ctx_->nearby.enabled()) return false;
         const std::size_t offered = out.size();
         ++nearEpoch_;
-        for (int d = unit; d >= 0; d = groups_.nextOf(d)) {
+        for (int d = unit; d >= 0; d = groups_->nextOf(d)) {
             const Delivery& delivery = plan_->deliveries[static_cast<std::size_t>(d)];
             for (int nodeIndex : {delivery.pickupNodeIndex, delivery.dropoffNodeIndex}) {
                 for (int neighbor : ctx_->nearby.of(nodeIndex)) {
@@ -227,13 +230,13 @@ public:
     UnitOption bestAnywhere(int unit, Blinker& blinker) {
         const bool narrowed = candidateVehicles(unit, candidateScratch_);
         UnitOption best;
-        if (groups_.sizeOf(unit) == 1) {
+        if (groups_->sizeOf(unit) == 1) {
             RequestInsertion slot;
             const Delivery& delivery = plan_->deliveries[static_cast<std::size_t>(unit)];
             for (int v : candidateScratch_) {
                 timelines_.of(v).improve(*plan_, delivery, blinker, slot);
             }
-            best = keep(slot);
+            best = keep(unit, slot);
         } else {
             for (int v : candidateScratch_) improveUnit(unit, v, blinker, best);
         }
@@ -245,14 +248,14 @@ public:
     // blinking.
     UnitOption bestInFleet(int unit) {
         refreshTimelines();
-        timelines_.candidateVehicles(*plan_, groups_.vehicleOf(unit), candidateScratch_);
+        timelines_.candidateVehicles(*plan_, groups_->vehicleOf(unit), candidateScratch_);
         Blinker every;
         UnitOption best;
-        if (groups_.sizeOf(unit) == 1) {
+        if (groups_->sizeOf(unit) == 1) {
             RequestInsertion slot;
             const Delivery& delivery = plan_->deliveries[static_cast<std::size_t>(unit)];
             for (int v : candidateScratch_) timelines_.of(v).improve(*plan_, delivery, every, slot);
-            return keep(slot);
+            return keep(unit, slot);
         }
         for (int v : candidateScratch_) improveUnit(unit, v, every, best);
         return best;
@@ -266,14 +269,14 @@ public:
     const std::vector<int>& pending() const { return pending_; }
 
     bool take(int deliveryIndex) {
-        const int unit = groups_.leaderOf(deliveryIndex);
+        const int unit = groups_->leaderOf(deliveryIndex);
         char& taken = taken_[static_cast<std::size_t>(unit)];
         if (taken || !movable(deliveryIndex) || where(deliveryIndex) == Where::Pooled) {
             return false;
         }
         taken = 1;
         pending_.push_back(unit);
-        pendingRequests_ += groups_.sizeOf(unit);
+        pendingRequests_ += groups_->sizeOf(unit);
         return true;
     }
 
@@ -411,12 +414,12 @@ public:
                     random_index(rng, static_cast<int>(pool.size())))];
             const int deliveryIndex =
                     plan_->nodes[static_cast<std::size_t>(nodeIndex)].deliveryIndex;
-            const int unit = groups_.leaderOf(deliveryIndex);
+            const int unit = groups_->leaderOf(deliveryIndex);
             char& taken = taken_[static_cast<std::size_t>(unit)];
             if (taken || where(deliveryIndex) != Where::Pooled) continue;
             taken = 1;
             pending_.push_back(unit);
-            pendingRequests_ += groups_.sizeOf(unit);
+            pendingRequests_ += groups_->sizeOf(unit);
             --limit;
         }
     }
@@ -437,8 +440,8 @@ public:
                 where(node.deliveryIndex) != Where::Routed) {
                 continue;
             }
-            const int unit = groups_.leaderOf(node.deliveryIndex);
-            if (groups_.sizeOf(unit) > 1 &&
+            const int unit = groups_->leaderOf(node.deliveryIndex);
+            if (groups_->sizeOf(unit) > 1 &&
                 (std::find(bundle.begin(), bundle.end(), unit) != bundle.end() ||
                  wholeOn(unit) != vehicle)) {
                 continue;
@@ -683,13 +686,13 @@ private:
     }
 
     // One request's slot pair as the option of its unit of one.
-    UnitOption keep(const RequestInsertion& slot) {
+    UnitOption keep(int unit, const RequestInsertion& slot) {
         UnitOption option;
         if (!slot.found()) return option;
         option.vehicle = slot.vehicle;
         option.addedTravel = slot.addedTravel;
         option.steps = steps_.size();
-        steps_.push_back(slot);
+        steps_.push_back({unit, slot});
         return option;
     }
 
@@ -697,7 +700,7 @@ private:
     // of them fit there for less than what `best` holds.
     void improveUnit(int unit, int vehicle, Blinker& blinker, UnitOption& best) {
         unitScratch_.clear();
-        for (int d = unit; d >= 0; d = groups_.nextOf(d)) unitScratch_.push_back(d);
+        for (int d = unit; d >= 0; d = groups_->nextOf(d)) unitScratch_.push_back(d);
         const std::size_t mark = steps_.size();
         Seconds added = 0;
         if (!planner_.plan(*plan_, timelines_.of(vehicle),
@@ -780,15 +783,15 @@ private:
     std::vector<char> dirty_;   // working route changed by this move
     std::vector<int> dirtyList_;
 
-    RequestGroups groups_;      // which requests travel as one unit
+    std::shared_ptr<const RequestGroups> groups_;  // which requests travel as one unit
     std::vector<int> pending_;  // units (by leader) this move takes out and reinserts
     int pendingRequests_ = 0;   // requests in those units
     std::vector<char> taken_;   // unit is in pending_
     std::vector<int> moved_;    // requests detached by this move
-    // The slot pairs UnitOption::steps points into; cleared when a move begins.
+    // The steps UnitOption::steps points into; cleared when a move begins.
     // Within a move it only grows: improveUnit() drops no more than what it
     // has just added, so the steps of an option handed out earlier stay.
-    std::vector<RequestInsertion> steps_;
+    std::vector<UnitStep> steps_;
     UnitPlanner planner_;
     std::vector<std::pair<int, std::vector<int>>> saved_;  // lists as they were, for undo
 
@@ -968,10 +971,10 @@ private:
 }  // namespace
 
 std::vector<std::unique_ptr<optimaru::MoveOperator<PdpRoutePlan>>> makeRequestMoves(
-        const RequestMoveSettings& settings) {
+        const RequestMoveSettings& settings, std::shared_ptr<const RequestGroups> groups) {
     std::vector<std::unique_ptr<optimaru::MoveOperator<PdpRoutePlan>>> moves;
     if (!settings.ruinRecreate && !settings.bundleMoves) return moves;
-    auto workspace = std::make_shared<RequestWorkspace>(settings);
+    auto workspace = std::make_shared<RequestWorkspace>(settings, std::move(groups));
     if (settings.ruinRecreate) {
         moves.push_back(std::make_unique<RequestRuinRecreateMove>(workspace));
     }

@@ -387,26 +387,25 @@ void RequestGroups::build(const PdpRoutePlan& plan) {
 
 bool UnitPlanner::plan(const PdpRoutePlan& plan, const RouteTimeline& timeline,
                        const std::vector<int>& route, const std::vector<int>& requests,
-                       Blinker& blinker, std::vector<RequestInsertion>& steps,
-                       Seconds& addedTravel) {
+                       Blinker& blinker, std::vector<UnitStep>& steps, Seconds& addedTravel) {
     const std::size_t mark = steps.size();
     const RouteTimeline* current = &timeline;
     Seconds total = 0;
     for (std::size_t r = 0; r < requests.size(); ++r) {
         const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(requests[r])];
-        RequestInsertion insertion;
-        current->improve(plan, delivery, blinker, insertion);
-        if (!insertion.found()) {
+        RequestInsertion slot;
+        current->improve(plan, delivery, blinker, slot);
+        if (!slot.found()) {
             steps.resize(mark);
             return false;
         }
-        steps.push_back(insertion);
-        total += insertion.addedTravel;
+        steps.push_back({requests[r], slot});
+        total += slot.addedTravel;
         if (r + 1 == requests.size()) break;
         // The next request sees the route with this one in.
         if (r == 0) route_ = route;
-        route_.insert(route_.begin() + insertion.pickupPosition, delivery.pickupNodeIndex);
-        route_.insert(route_.begin() + insertion.dropoffPosition, delivery.dropoffNodeIndex);
+        route_.insert(route_.begin() + slot.pickupPosition, delivery.pickupNodeIndex);
+        route_.insert(route_.begin() + slot.dropoffPosition, delivery.dropoffNodeIndex);
         timeline_.rebuild(plan, timeline.vehicle(), route_);
         current = &timeline_;
     }

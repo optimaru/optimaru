@@ -730,15 +730,19 @@ void testGroupsAreRead() {
     std::printf("\n");
 }
 
-// The planner's slots, applied one after another, give a route that keeps
-// every limit and drives exactly what the planner said.
+// The planner's steps, applied one after another, give a route that keeps
+// every limit and drives exactly what the planner said: the same plan as
+// placing each request at its cheapest slot pair the slow way.
 void testUnitPlanner() {
     std::printf("== Request groups: room for several requests on one route ==\n");
     int planned = 0;
-    for (std::uint64_t seed = 0; seed < 40; ++seed) {
-        PdpRoutePlan plan = buildRandomInstance(9, 1, seed);
+    int refused = 0;
+    for (std::uint64_t seed = 0; seed < 120; ++seed) {
+        // Tight enough that some units have no room.
+        PdpRoutePlan plan = tighten(buildRandomInstance(9, 1, seed), /*capacity=*/5,
+                                    /*windowMinutes=*/static_cast<Seconds>(120 + 30 * (seed % 5)));
         plan.vehicles[0].returnToDepot = seed % 2 == 0;
-        if (seed % 5 == 0) plan.vehicles[0].maxStops = 10;  // room for five requests
+        if (seed % 7 == 0) plan.vehicles[0].maxStops = 10;  // room for five requests
         std::vector<int> route;
         for (int d = 0; d < 3; ++d) {
             const RequestInsertion slot = bruteForce(plan, 0, route, plan.deliveries[d]);
@@ -749,13 +753,12 @@ void testUnitPlanner() {
         RouteTimeline timeline;
         timeline.rebuild(plan, 0, route);
         const std::vector<int> requests = {3, 4, 5};
-        std::vector<RequestInsertion> steps = {RequestInsertion{}};  // one already there
+        std::vector<UnitStep> steps = {UnitStep{}};  // one already there
         Seconds added = 0;
         Blinker every;
         UnitPlanner planner;
         const bool found = planner.plan(plan, timeline, route, requests, every, steps, added);
 
-        // The same thing the slow way: each request at its cheapest slot.
         std::vector<int> expected = route;
         bool fits = true;
         for (int d : requests) {
@@ -767,32 +770,36 @@ void testUnitPlanner() {
             expected = withRequest(expected, plan.deliveries[d], slot.pickupPosition,
                                    slot.dropoffPosition);
         }
+
+        const std::string label = "seed " + std::to_string(seed);
         if (found != fits) {
-            check(false, "seed " + std::to_string(seed) +
-                                 ": the planner and the slow way agree on "
-                                 "whether the requests fit");
+            check(false,
+                  label + ": the planner and the slow way agree on whether the requests fit");
             continue;
         }
         if (!found) {
-            check(steps.size() == 1, "seed " + std::to_string(seed) +
-                                             ": a unit that does not fit leaves the steps alone");
+            ++refused;
+            check(steps.size() == 1, label + ": a unit that does not fit leaves the steps alone");
             continue;
         }
         ++planned;
         std::vector<int> built = route;
-        for (std::size_t i = 0; i < requests.size(); ++i) {
-            built = withRequest(built, plan.deliveries[requests[i]], steps[i + 1].pickupPosition,
-                                steps[i + 1].dropoffPosition);
+        std::vector<int> order;
+        for (std::size_t i = 1; i < steps.size(); ++i) {
+            order.push_back(steps[i].delivery);
+            built = withRequest(built, plan.deliveries[static_cast<std::size_t>(steps[i].delivery)],
+                                steps[i].slot.pickupPosition, steps[i].slot.dropoffPosition);
         }
         const Walk before = walk(plan, 0, route);
         const Walk after = walk(plan, 0, built);
-        check(steps.size() == 4 && after.feasible && after.travel - before.travel == added &&
-                      after.travel == walk(plan, 0, expected).travel,
-              "seed " + std::to_string(seed) +
-                      ": the planned slots keep every limit and add what the planner said");
+        if (!(order == requests && after.feasible && after.travel - before.travel == added &&
+              after.travel == walk(plan, 0, expected).travel)) {
+            check(false,
+                  label + ": the planned steps keep every limit and add what the planner said");
+        }
     }
-    check(planned >= 10,
-          "enough of the cases had room for the three requests (" + std::to_string(planned) + ")");
+    std::printf("    %d planned, %d refused\n", planned, refused);
+    check(planned >= 20 && refused >= 5, "the cases cover units that fit and units that do not");
     std::printf("\n");
 }
 
@@ -939,6 +946,50 @@ void testGroupsFollowTheirVehicle() {
     std::printf("\n");
 }
 
+// One request of a group rides while the rest of the group cannot: the pair
+// move may drop it, so the group waits whole. (The request moves do this as a
+// unit; here they are off.)
+void testStrayRequestRejoinsItsWaitingGroup() {
+    std::printf("== Request groups: one request riding, the rest waiting ==\n");
+    PdpRoutePlan plan = buildRandomInstance(4, 2, /*seed=*/3);
+    plan.deliveries[0].groupIndex = plan.deliveries[1].groupIndex = 0;
+    // Request 2 of the group can ride nowhere: its pickup closes before any vehicle leaves.
+    plan.nodes[static_cast<std::size_t>(plan.deliveries[1].pickupNodeIndex)].maxEndTime =
+            hourMinute(7, 0);
+    const auto routed = [&plan](int vehicle, int deliveryIndex) {
+        const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(deliveryIndex)];
+        std::vector<int>& route = plan.vehicles[static_cast<std::size_t>(vehicle)].nodeIndices;
+        route.push_back(delivery.pickupNodeIndex);
+        route.push_back(delivery.dropoffNodeIndex);
+    };
+    routed(0, 0);
+    routed(0, 2);
+    routed(1, 3);
+    plan.rebuildUnassignedPool();
+    check(requestsApart(plan) == 1, "the start has one request of the group riding alone");
+
+    Solver::Config config;
+    config.time_limit = std::chrono::minutes(1);  // safety net: the step limit ends the solve
+    config.step_limit = 4000;
+    config.pair_construction_heuristic = false;
+    config.request_ruin_recreate = false;
+    config.bundle_moves = false;
+    config.pair_exchange_moves = false;
+    config.pair_ruin = false;
+    config.ruin_recreate = false;
+    // Only the pair move can take both stops of a request to the pool at once.
+    config.or_opt_weight = 0.0;
+    config.tail_swap_weight = 0.0;
+    config.pair_assignment_probability = 0.5;
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    Solver(config).solve(plan, calculator);
+    const std::vector<int> on = vehicleOfRequests(plan);
+    check(requestsApart(plan) == 0 && on[0] < 0 && on[1] < 0 && everyStopOnce(plan),
+          "the pair move drops it, and the group waits whole (" + plan.score.str() + ")");
+    std::printf("\n");
+}
+
 // A group no vehicle can take whole waits whole: its requests are not routed
 // one by one.
 void testGroupWithNoRoomWaits() {
@@ -1013,6 +1064,7 @@ int main() {
     testGroupsRideTogether();
     testScatteredGroupIsMended();
     testGroupsFollowTheirVehicle();
+    testStrayRequestRejoinsItsWaitingGroup();
     testGroupWithNoRoomWaits();
     testRequestMovesMatter();
     std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures,

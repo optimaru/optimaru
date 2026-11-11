@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "pdp/domain.hpp"
+#include "pdp/request_insertion.hpp"
 #include "optimaru/search/operators.hpp"
 
 namespace pdp {
@@ -70,9 +71,9 @@ struct RequestMoveSettings {
 
 // The operators the settings turn on, to register with
 // optimaru::Solver::add_move_operator. They share their working state, so they
-// belong to one engine and one solve.
+// belong to one engine and one solve; `groups` is built from that solve's plan.
 std::vector<std::unique_ptr<optimaru::MoveOperator<PdpRoutePlan>>> makeRequestMoves(
-        const RequestMoveSettings& settings);
+        const RequestMoveSettings& settings, std::shared_ptr<const RequestGroups> groups);
 
 }  // namespace pdp
 

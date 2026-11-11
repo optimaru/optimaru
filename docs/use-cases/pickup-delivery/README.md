@@ -334,8 +334,9 @@ OPTIMARU_USE_CASES=pickup_delivery uv sync && uv run pytest -q tests/pickup_deli
 ## Request groups
 
 Orders the input has already merged into one job get the same `group`: a name on
-`DeliveryModel`, `Delivery.group_index` on a plan (-1 for none). The requests of
-a group ride **one vehicle together, or all stay unassigned**. A group holds any
+`DeliveryModel` (`None` or an empty name is no group), `Delivery.group_index` on
+a plan (-1 for none). The requests of a group ride **one vehicle together, or all
+stay unassigned**. A group holds any
 number of requests and a request belongs to at most one. Their stops stay
 ordinary stops: the vehicle visits them in any order that keeps each pickup
 before its dropoff, with other requests' stops in between.
@@ -358,7 +359,10 @@ take a group out of its route together and put it back on one vehicle, each
 request at its cheapest slot pair once the earlier ones are in. When no vehicle
 has room for the whole group (too many stops for `max_stops`, windows one route
 cannot keep) all of it stays in `unassigned`, and the result is still feasible:
-the group is not routed in parts. As with the vehicle limits, the request moves
+the group is not routed in parts. The requests of a group go onto a vehicle in
+input order, each at its cheapest slot pair behind the earlier ones, and no other
+order is tried. One such offer costs a scan of the route per request, so groups
+are meant to be a handful of requests, not dozens. As with the vehicle limits, the request moves
 keep groups whole whatever level the constraint is scored on; with it soft or
 left out, only the engine's stop moves try plans that split one.
 
