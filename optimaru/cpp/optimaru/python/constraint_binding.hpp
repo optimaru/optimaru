@@ -564,11 +564,15 @@ void bind_constraint_info(py::module_& m, DefaultFactory default_assembly,
 //       the raw per-unit costs (constraint_costs above) of the default
 //       assembly on a solution, or of the picks: what
 //       <pkg>.constraints.score() turns into a score. Scoring once is enough,
-//       re-pricing an assembly is Python arithmetic on these.
+//       re-pricing an assembly is Python arithmetic on these. In a use case
+//       with a medium level every entry carries its "medium_fold".
 //   list_constraints()
 //       constraint_names() of the default assembly: the keys of the above.
 //   constraint_info()
 //       bind_constraint_info().
+//
+// The docstrings are the same in every use case; what is particular to one
+// (its units, its levels) is in its `_core.pyi`, which the API reference shows.
 //
 // `defaults` is a callable returning the default ConstraintAssembly<Solution>
 // and `argument` the keyword Python passes the solution by. `prepare(solution)`

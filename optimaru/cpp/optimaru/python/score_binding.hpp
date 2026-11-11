@@ -25,9 +25,14 @@ namespace python {
 // or comparisons:
 //
 //   opy::bind_score<Score>(m);
-//   opy::bind_score<Score>(m).def(pybind11::self == pybind11::self);
+//   opy::bind_score<Score>(m).def(pybind11::self == pybind11::self);  // <pybind11/operators.h>
+//
+// A use case with a Score of its own (other levels, or more of them) binds it
+// itself.
 template <typename ScoreT>
 pybind11::class_<ScoreT> bind_score(pybind11::module_& m) {
+    static_assert(std::is_same_v<ScoreT, Score> || std::is_same_v<ScoreT, HardMediumSoftScore>,
+                  "bind_score binds the engine's Score or HardMediumSoftScore only");
     pybind11::class_<ScoreT> score(m, "Score", pybind11::module_local());
     score.def_readonly("hard", &ScoreT::hard);
     if constexpr (std::is_same_v<ScoreT, HardMediumSoftScore>) {
