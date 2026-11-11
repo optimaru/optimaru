@@ -40,7 +40,7 @@ classifiers = [
 ]
 # Every use case's models.py (the JSON request and response models) is pydantic, and importing a
 # use case imports its models (all but school_timetabling, whose solve() takes dicts).
-dependencies = ["pydantic>=2.5"]
+dependencies = ["pydantic>=2.11"]
 
 [project.urls]
 Homepage = "https://optimaru.com"

@@ -197,6 +197,11 @@ class SolveRequest(StrictModel):
     `apply_solver_parameters`). The names of earlier versions are accepted as aliases:
     ``timelimit`` for ``time_limit_seconds`` and ``num_workers`` for
     ``parallel_solver_count``, in JSON, as keywords and as attributes.
+
+    ``name`` is a label for the caller's own use; no solve reads it. Where a request has
+    both ``stop_at_first_feasible`` and a ``best_score_limit`` (in ``solver_parameters``
+    or, for employee scheduling, in ``settings``), the solve stops at the first feasible
+    solution; employee scheduling is the exception and keeps the explicit limit.
     """
 
     model_config = ConfigDict(extra="forbid", validate_by_name=True, validate_by_alias=True)

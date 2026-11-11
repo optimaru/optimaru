@@ -540,8 +540,10 @@ class ScheduleRequest(SolveRequest):
     same thing, independent starts in parallel processes: the larger of the two applies,
     and each start gets the full ``time_limit_seconds``. ``settings`` holds the search
     options of this use case. Its ``random_seed`` and ``stop_at_first_feasible`` are the
-    request's own fields under another name: one given at the top level wins, one given
-    only in ``settings`` is taken up, and afterwards both say the same.
+    request's own fields under another name. When the request is built, one given at the
+    top level wins and one given only in ``settings`` is taken up, so both say the same.
+    After that, a value set at the top level is the one used; until one is set there,
+    a change to ``settings`` is.
     """
 
     model_input: SchedulingInput

@@ -204,7 +204,8 @@ def test_every_use_case_solves_a_pydantic_request_with_solve_request(use_case):
 def test_the_earlier_request_field_names_are_aliases():
     """timelimit and num_workers are read as time_limit_seconds and parallel_solver_count, in JSON,
     as keywords and as attributes; a model dumps the new names."""
-    from optimaru.vehicle_routing.models import RoutePlanRequest, RoutingInput
+    models = use_case_module("vehicle_routing").models
+    RoutePlanRequest, RoutingInput = models.RoutePlanRequest, models.RoutingInput
 
     data = {"model_input": RoutingInput(vehicles=[], visits=[]).model_dump(), "timelimit": 2, "num_workers": 3}
     request = RoutePlanRequest.model_validate(data)
@@ -219,7 +220,7 @@ def test_the_earlier_request_field_names_are_aliases():
 def test_an_employee_scheduling_seed_in_settings_still_counts():
     """settings.random_seed and settings.stop_at_first_feasible are the request's fields under
     another name: the top-level one wins once it is given."""
-    from optimaru.employee_scheduling.models import ScheduleRequest
+    ScheduleRequest = use_case_module("employee_scheduling").models.ScheduleRequest
 
     model_input = small_request_input("employee_scheduling")
     request = ScheduleRequest(model_input=model_input, settings={"random_seed": 7})
@@ -228,6 +229,36 @@ def test_an_employee_scheduling_seed_in_settings_still_counts():
     assert request._effective("random_seed") == 9
     request.random_seed = 3
     assert request._effective("random_seed") == 3
+
+
+@pytest.mark.parametrize("mode", ["canonical", "quickstart"])
+def test_a_school_timetabling_request_is_the_dict_solve(mode):
+    """TimetableRequest -> solve(dict, ...) -> TimetableResultModel, in both modes: the model's
+    JSON is a problem the converters read, and the result dict has no key the model refuses."""
+    module = use_case_module("school_timetabling")
+    problem = small_problem("school_timetabling")
+    request = module.models.TimetableRequest(
+        model_input=problem,
+        mode=mode,
+        time_limit_seconds=60.0,
+        random_seed=3,
+        solver_parameters={"step_count_limit": 300},
+    )
+    before = request.model_dump()
+    solved = module.solve_request(request)
+    config = (module.canon.SolverConfig if mode == "canonical" else module.SolverConfig)()
+    config.step_count_limit = 300
+    direct = module.solve(problem, mode=mode, time_limit_seconds=60.0, random_seed=3, config=config)
+    assert isinstance(solved, module.models.TimetableResultModel)
+    assert (solved.status, solved.penalties, solved.objective_value) == (
+        direct["status"],
+        direct["penalties"],
+        direct["objective_value"],
+    )
+    assert len(solved.lessons) == len(direct["lessons"])
+    assert request.model_dump() == before
+    resumed = module.solve_request(request.model_copy(update={"initial_solution": solved, "time_limit_seconds": 0.0}))
+    assert resumed.status == solved.status
 
 
 def small_request_input(use_case):

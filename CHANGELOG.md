@@ -26,6 +26,8 @@
     value wins once it is given). Its `solve_request` takes `constraints=`, a list of specs
     that replaces `model_input.constraints` for the solve, and it reads `solver_parameters`
     and `full_assert` too.
+- **pydantic 2.11 or newer.** The request models read their earlier field names through
+  `validate_by_name` / `validate_by_alias`, which pydantic has from 2.11 (the floor was 2.5).
 - **Constraints, not rules.** Employee scheduling called its constraints rules in its API and
   guides; every use case now says constraints. `SchedulingInput.rules` is
   `SchedulingInput.constraints`, `default_rules()` is `default_constraints()`, `Rule`,
