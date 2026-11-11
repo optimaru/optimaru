@@ -4,9 +4,7 @@
 picks are covered here.
 """
 
-import pickle
 import random
-import re
 from types import SimpleNamespace
 
 import pytest
@@ -16,7 +14,6 @@ from optimaru._constraint import instance_keys
 from optimaru.bin_packing.constraints import (
     BinCapacityCost,
     ColorConflictCost,
-    Constraint,
     ItemConflictCost,
     Level,
     UsedBinsCost,
@@ -121,28 +118,6 @@ def test_calculate_score_with_constraints_stores_the_score():
     assert bp.calculate_score(problem) == bp.Score(0, -5.0)
 
 
-def test_unknown_constraint_name_raises():
-    """A typo must not silently leave the cost function unchanged."""
-    typo = SimpleNamespace(name="used_bin_cost", weight=None, level=None, exponent=1.0)
-    with pytest.raises(ValueError, match="unknown constraint"):
-        solve([typo])
-
-
-def test_empty_constraint_list_is_rejected():
-    """An empty list means 'score nothing', which is most likely a mistake."""
-    with pytest.raises(ValueError, match="must not be empty"):
-        bp.solve(build_problem(), config=_config(0.1), constraints=[])
-    with pytest.raises(ValueError, match="must not be empty"):
-        get_constraints([])
-
-
-def test_spec_subclass_must_name_a_constraint():
-    with pytest.raises(TypeError, match="registry `name`"):
-
-        class Nameless(Constraint):
-            pass
-
-
 def test_module_level_instances_keep_every_default():
     """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     for spec in (bin_capacity_cost, color_conflict_cost, item_conflict_cost, used_bins_cost):
@@ -156,13 +131,6 @@ def test_every_default_instance_is_exported():
     for name in NAMES:
         assert name in module.__all__
         assert getattr(module, name).name == name
-
-
-def test_every_spec_has_labels_and_descriptions_in_both_languages():
-    for spec in get_constraints():
-        cls = type(spec)
-        for attr in ("label_en", "label_ko", "description_en", "description_ko"):
-            assert getattr(cls, attr), f"{cls.__name__}.{attr} is empty"
 
 
 # --- The catalog (constraint_info) -------------------------------------------
@@ -180,22 +148,6 @@ def test_constraint_info_reports_the_cpp_defaults():
         ("hard", 1.0, True, False, True),
         ("soft", 1.0, True, False, True),
     ]
-
-
-def test_constraint_info_rows_are_plain_values():
-    row = bp.constraint_info()[0]
-    assert isinstance(row, bp.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "bin_capacity_cost",
-        "default_level": "hard",
-        "default_weight": 1.0,
-        "level_flippable": True,
-        "reward": False,
-        "default_enabled": True,
-    }
-    assert repr(row).startswith("ConstraintInfo(name='bin_capacity_cost'")
-    assert pickle.loads(pickle.dumps(bp.constraint_info())) == bp.constraint_info()
-    assert bp.ConstraintInfo.__module__ == bp._core.__name__
 
 
 def test_constraint_info_matches_the_raw_cost_metadata():
@@ -242,66 +194,6 @@ def test_weight_none_means_the_component_default():
     raw = bp.constraint_costs(problem)
     assert score(raw) == score(raw, explicit)
     assert score(raw) == (problem.score.hard, problem.score.soft)
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "error"),
-    [
-        ({"weight": -1}, ValueError),
-        ({"weight": float("nan")}, ValueError),
-        ({"weight": float("inf")}, ValueError),
-        ({"weight": "2"}, TypeError),
-        ({"exponent": 0}, ValueError),
-        ({"exponent": -1.0}, ValueError),
-        ({"hard": 1}, TypeError),
-        ({"offset": float("nan")}, ValueError),
-        ({"offset": "1"}, TypeError),
-        ({"clip": 0}, TypeError),
-    ],
-)
-def test_specs_validate_their_knobs(kwargs, error):
-    with pytest.raises(error):
-        UsedBinsCost(**kwargs)
-
-
-def test_core_refuses_invalid_knobs_from_duck_typed_picks():
-    """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="used_bins_cost", weight=-2.0, level=None, exponent=1.0)
-    flat = SimpleNamespace(name="used_bins_cost", weight=None, level=None, exponent=0.0)
-    unbounded = SimpleNamespace(name="used_bins_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
-    for pick, message in (
-        (negative, "weight must be finite and >= 0"),
-        (flat, "exponent must be finite and > 0"),
-        (unbounded, "offset must be finite, not inf"),
-    ):
-        with pytest.raises(ValueError, match=message):
-            bp.solve(build_problem(), config=_config(0.1), constraints=[pick])
-        with pytest.raises(ValueError, match=message):
-            bp.calculate_score(build_problem(), [pick])
-
-
-@pytest.mark.parametrize(
-    ("knobs", "message"),
-    [
-        ({"weight": True}, "weight must be a number or None, not True"),
-        ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"level": 1}, "level must be a Level, its name or None, not 1"),
-        ({"exponent": True}, "exponent must be a number, not True"),
-        ({"offset": "5"}, "offset must be a number, not '5'"),
-        ({"offset": False}, "offset must be a number, not False"),
-        ({"clip": 1}, "clip must be True or False, not 1"),
-        ({"clip": "no"}, "clip must be True or False, not 'no'"),
-    ],
-)
-def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="used_bins_cost", weight=None, level=None, exponent=1.0)
-    for key, value in knobs.items():
-        setattr(pick, key, value)
-    with pytest.raises(TypeError, match=f"constraint 'used_bins_cost': {re.escape(message)}"):
-        bp.solve(build_problem(), config=_config(0.1), constraints=[pick])
-    with pytest.raises(TypeError, match=re.escape(message)):
-        UsedBinsCost(**knobs)
 
 
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
@@ -389,16 +281,6 @@ def test_score_is_additive_over_the_picked_constraints():
     parts = [score(raw, [spec]) for spec in specs]
     assert full.hard == sum(part.hard for part in parts)
     assert full.soft == pytest.approx(sum(part.soft for part in parts))
-
-
-def test_score_rejects_an_unknown_constraint_name():
-    raw = bp.constraint_costs(_solved())
-
-    class Misnamed(Constraint):
-        name = "definitely_not_a_constraint"
-
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Misnamed()])
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
@@ -730,16 +612,6 @@ def test_medium_is_refused_without_a_medium_level(level):
             bp.constraint_costs(_hand(), picks)
         with pytest.raises(ValueError, match=message):
             score(bp.constraint_costs(_hand()), picks)
-
-
-def test_a_level_must_be_a_level():
-    with pytest.raises(TypeError, match="level must be a Level"):
-        UsedBinsCost(level=True)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        UsedBinsCost(level="firm")
-    pick = SimpleNamespace(name="used_bins_cost", weight=None, level="firm", exponent=1.0)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        _engine([UsedBinsCost(), pick])
 
 
 # --- clip=False with an offset stays off the hard score -------------------------------

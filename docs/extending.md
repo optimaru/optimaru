@@ -386,7 +386,10 @@ declares no defaults: they come from `constraint_info()`. Callers can now write
   `list_constraints()` list and the `constraint_info()` rows. Add a case
   that picks, reweights and flips the level of the new constraint, and check
   that `constraints.score(constraint_costs(...), picks)` equals the solver's
-  score.
+  score. What the specs and picks of every use case share (the knob checks,
+  unknown names, an empty pick list, the catalog rows) is checked for all of
+  them in `tests/test_constraints_contract.py`, so a use case's file holds only
+  what is its own.
 - **Python reference scorer.** Six use cases carry an independent Python oracle
   (`tests/<uc>/reference_<uc>.py`). Add the cost there too, so the parity test
   covers it.

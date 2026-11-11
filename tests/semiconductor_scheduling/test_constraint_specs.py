@@ -5,9 +5,7 @@ picks are covered here.
 """
 
 import math
-import pickle
 import random
-import re
 from types import SimpleNamespace
 
 import pytest
@@ -112,22 +110,6 @@ def test_constraint_info_reports_the_cpp_defaults():
     assert all(row.level_flippable and not row.reward and row.default_enabled for row in rows)
 
 
-def test_constraint_info_rows_are_plain_values():
-    row = fab.constraint_info()[17]
-    assert isinstance(row, fab.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "weighted_tardiness_cost",
-        "default_level": "soft",
-        "default_weight": 10.0,
-        "level_flippable": True,
-        "reward": False,
-        "default_enabled": True,
-    }
-    assert repr(row).startswith("ConstraintInfo(name='weighted_tardiness_cost'")
-    assert pickle.loads(pickle.dumps(fab.constraint_info())) == fab.constraint_info()
-    assert fab.ConstraintInfo.__module__ == fab._core.__name__
-
-
 def test_constraint_info_matches_the_raw_cost_metadata():
     raw = fab.constraint_costs(_problem())
     assert list(raw) == NAMES
@@ -211,63 +193,6 @@ def test_levels_flip_both_ways():
     picked = [MachineCapacityCost(level="soft"), specs.MakespanCost(level="hard")]
     result = fab.calculate_score(problem, picked)
     assert (result.hard, result.soft) == (-makespan, -capacity if capacity else 0.0)
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "error"),
-    [
-        ({"weight": -1}, ValueError),
-        ({"weight": float("nan")}, ValueError),
-        ({"weight": "2"}, TypeError),
-        ({"exponent": 0}, ValueError),
-        ({"level": 1}, TypeError),
-        ({"level": "firm"}, ValueError),
-        ({"hard": True}, TypeError),  # an unknown keyword
-    ],
-)
-def test_specs_validate_their_knobs(kwargs, error):
-    with pytest.raises(error):
-        WeightedTardinessCost(**kwargs)
-
-
-def test_core_refuses_invalid_knobs_from_duck_typed_picks():
-    negative = SimpleNamespace(name="makespan_cost", weight=-2.0, level=None, exponent=1.0)
-    flat = SimpleNamespace(name="makespan_cost", weight=None, level=None, exponent=0.0)
-    unbounded = SimpleNamespace(name="makespan_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
-    for pick, message in (
-        (negative, "weight must be finite and >= 0"),
-        (flat, "exponent must be finite and > 0"),
-        (unbounded, "offset must be finite, not inf"),
-    ):
-        with pytest.raises(ValueError, match=message):
-            fab.solve(_problem(), time_limit_seconds=0, constraints=[pick])
-        with pytest.raises(ValueError, match=message):
-            fab.calculate_score(_problem(), [pick])
-        with pytest.raises(ValueError, match=message):
-            fab.constraint_costs(_problem(), [pick])
-    with pytest.raises(ValueError, match="offset must be finite, not nan"):
-        specs.MakespanCost(offset=float("nan"))
-
-
-@pytest.mark.parametrize(
-    ("knobs", "message"),
-    [
-        ({"weight": True}, "weight must be a number or None, not True"),
-        ({"level": 1}, "level must be a Level, its name or None, not 1"),
-        ({"offset": "5"}, "offset must be a number, not '5'"),
-        ({"offset": False}, "offset must be a number, not False"),
-        ({"clip": 1}, "clip must be True or False, not 1"),
-        ({"clip": "no"}, "clip must be True or False, not 'no'"),
-    ],
-)
-def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    pick = SimpleNamespace(name="makespan_cost", weight=None, level=None, exponent=1.0)
-    for key, value in knobs.items():
-        setattr(pick, key, value)
-    with pytest.raises(TypeError, match=f"constraint 'makespan_cost': {re.escape(message)}"):
-        fab.solve(_problem(), time_limit_seconds=0, constraints=[pick])
-    with pytest.raises(TypeError, match=re.escape(message)):
-        specs.MakespanCost(**knobs)
 
 
 # --- Solving with picks ---------------------------------------------------------
@@ -587,16 +512,6 @@ def test_medium_is_refused_without_a_medium_level(level):
                 fab.constraint_costs(_problem(), picks)
             with pytest.raises(ValueError, match=message):
                 score(fab.constraint_costs(_problem()), picks)
-
-
-def test_a_level_must_be_a_level():
-    with pytest.raises(TypeError, match="level must be a Level"):
-        specs.MakespanCost(level=True)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        specs.MakespanCost(level="firm")
-    pick = SimpleNamespace(name="makespan_cost", weight=None, level="firm", exponent=1.0)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        _engine(_problem(), [specs.MakespanCost(), pick])
 
 
 # --- clip=False with an offset stays off the hard score ---------------------------

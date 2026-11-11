@@ -7,7 +7,6 @@ every use case shares; the rule factory (`DecomposedCalculator`,
 `constraint_costs`) may hold one constraint several times.
 """
 
-import pickle
 import re
 from types import SimpleNamespace
 
@@ -225,22 +224,6 @@ def test_the_documented_levels_match_the_engine():
     rows = {row.name: row for row in es.constraint_info()}
     assert rows["worker_location_count_cost"].default_level == "soft"
     assert rows["worker_day_count_in_range_cost"].default_level == "soft"
-
-
-def test_constraint_info_rows_are_plain_values():
-    row = es.constraint_info()[0]
-    assert isinstance(row, es.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "required_skill_cost",
-        "default_level": "hard",
-        "default_weight": 1.0,
-        "level_flippable": True,
-        "reward": False,
-        "default_enabled": True,
-    }
-    assert repr(row).startswith("ConstraintInfo(name='required_skill_cost'")
-    assert pickle.loads(pickle.dumps(es.constraint_info())) == es.constraint_info()
-    assert es.ConstraintInfo.__module__ == es._core.__name__
 
 
 def test_the_factory_specs_rules_and_catalog_name_the_same_constraints():
