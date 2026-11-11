@@ -27,6 +27,21 @@ def test_every_subpackage_is_a_use_case():
     assert all((ROOT / "tests" / name).is_dir() for name in USE_CASES)
 
 
+def test_a_use_case_keeps_only_its_sources_under_cpp():
+    """What the extension and the core library build from. The C++ tests are in
+    tests/<use case>/cpp/ and a C++ bench is in benchmarks/<slug>/cpp/."""
+    tracked = subprocess.run(["git", "ls-files", "optimaru"], cwd=ROOT, capture_output=True, text=True)
+    if tracked.returncode != 0:
+        pytest.skip("not a git checkout")
+    entries = {name: set() for name in USE_CASES}
+    for path in tracked.stdout.splitlines():
+        parts = path.split("/")
+        if len(parts) > 3 and parts[1] in USE_CASES and parts[2] == "cpp":
+            entries[parts[1]].add(parts[3])
+    for name in sorted(USE_CASES):
+        assert entries[name] == {"CMakeLists.txt", "bindings.cpp", "include", "src"}, name
+
+
 def test_the_package_lists_every_use_case():
     assert set(optimaru.__all__) == USE_CASES
 

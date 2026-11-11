@@ -27,7 +27,7 @@ target_compile_options(ba_plugin_test PRIVATE -Wall -Wextra)
 
 # Engine-only quality bench over the dumped comparison instances
 # (benchmarks/bed-allocation/dump_instances.py); used for interleaved A/B tuning runs.
-add_executable(ba_quality_bench bench/ba_quality_bench.cpp)
+add_executable(ba_quality_bench ${OPTIMARU_BENCHMARKS_DIR}/bed-allocation/cpp/ba_quality_bench.cpp)
 target_link_libraries(ba_quality_bench PRIVATE ba_core)
 target_compile_options(ba_quality_bench PRIVATE -Wall -Wextra)
 

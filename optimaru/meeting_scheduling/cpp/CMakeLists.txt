@@ -20,7 +20,7 @@ target_compile_options(ms_test PRIVATE -Wall -Wextra)
 
 # Quality-benchmark driver (demo + deterministic scaled instances, knob
 # overrides for A/B sweeps). Not part of the demo or the test gate.
-add_executable(ms_quality_bench bench/ms_quality_bench.cpp)
+add_executable(ms_quality_bench ${OPTIMARU_BENCHMARKS_DIR}/meeting-scheduling/cpp/ms_quality_bench.cpp)
 target_link_libraries(ms_quality_bench PRIVATE ms_core)
 target_compile_options(ms_quality_bench PRIVATE -Wall -Wextra)
 

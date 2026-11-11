@@ -19,7 +19,7 @@ uv run bed-allocation-compare --seconds 10 --workers 8   # engine vs CP-SAT (--m
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 
 `dump_instances.py` writes the comparison instances for the engine-only
-C++ bench (`optimaru/bed_allocation/cpp/bench/ba_quality_bench.cpp`).
+C++ bench ([`cpp/ba_quality_bench.cpp`](cpp/ba_quality_bench.cpp)).
 
 The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports

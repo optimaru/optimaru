@@ -21,7 +21,7 @@ all three tables; the tables below cover tracks 1 and 2.
   teacher_time_efficiency_cost / class_subject_repeat_cost (soft). The
   model's seventh term, teacher_unavailability_cost, gets empty
   data in these instances, so it contributes 0 (fairness).
-- **Instances**: `optimaru/school_timetabling/cpp/bench/st_quality_bench.cpp`
+- **Instances**: `benchmarks/school-timetabling/cpp/st_quality_bench.cpp`
   generates them deterministically and dumps JSON; both solvers read the
   same file. 5 days × 8 periods = 40 slots, a 34-period weekly curriculum per
   class. Presets (classes / teachers / rooms): `S: 6/12/7 (204 lessons)`,

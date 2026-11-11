@@ -17,7 +17,7 @@ from . import reference_semiconductor_scheduling as ref
 from .fab_random import instance, search_state
 
 # A copy of the web demo sample (web: src/lib/demo-data/semiconductor-scheduling.json).
-WEB_DEMO = Path(__file__).parent / "data" / "web-demo.json"
+WEB_DEMO = Path(__file__).parent / "fixtures" / "web_demo.json"
 RANDOM_INSTANCES = 200
 
 

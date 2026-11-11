@@ -23,6 +23,7 @@ target_link_libraries(optimaru INTERFACE Threads::Threads)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     enable_testing()
     set(OPTIMARU_TESTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    set(OPTIMARU_BENCHMARKS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
 
     # Engine tests.
     option(OPTIMARU_ENGINE_TESTS "Build the engine tests in tests/engine" ON)
@@ -46,8 +47,9 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         add_test(NAME group_placement_test COMMAND group_placement_test)
     endif()
 
-    # Use cases: each optimaru/<use case>/cpp/ builds its core library, demo,
-    # benches and the C++ tests in tests/<use case>/cpp/.
+    # Use cases: each optimaru/<use case>/cpp/ builds its core library, its demo,
+    # the C++ tests in tests/<use case>/cpp/ and, where there is one, the quality
+    # bench in benchmarks/<slug>/cpp/.
     set(OPTIMARU_ALL_USE_CASES
         assembly_line_balancing bed_allocation bin_packing conference_scheduling
         employee_scheduling facility_location flight_crew_scheduling food_packaging

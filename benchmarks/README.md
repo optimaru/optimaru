@@ -52,6 +52,12 @@ that check, the comparison runner (`run_cli`) and the results file of the
 public-instance runners (`write_results`). To pick up a new external-solver release,
 bump the `tag` in each project's `[tool.uv.sources]` and run `uv lock`.
 
+Four use cases (bed allocation, conference scheduling, meeting scheduling, school
+timetabling) also have an engine-only C++ bench for tuning runs,
+`benchmarks/<slug>/cpp/<ns>_quality_bench.cpp`. The use case's `CMakeLists.txt` builds it
+(`cmake --build build --target <ns>_quality_bench`, binary in `build/<use case>/`); its
+arguments are in the comment at the top of the file.
+
 A CP-SAT constraint is a plugin that subclasses the use case's own constraint
 spec (`<Subject>Cost`), so both solvers take the same selection: the same
 names and the same five knobs, `weight` / `level` / `exponent` / `offset` /

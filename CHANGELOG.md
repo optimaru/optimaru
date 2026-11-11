@@ -57,6 +57,16 @@
   a plain `uv sync` installs it. `tests/test_layout.py` holds every benchmark project to a
   `[build-system]` table and to one external-solver tag, and the links into external-solver
   to that tag.
+- **Layout: the C++ quality benches are under `benchmarks/`.** Four use cases kept a bench
+  inside the package tree (`optimaru/<use case>/cpp/bench/`). They are now
+  `benchmarks/<slug>/cpp/<ns>_quality_bench.cpp` (bed allocation, conference scheduling,
+  meeting scheduling, school timetabling; conference scheduling's file was `quality_bench.cpp`),
+  next to the comparison they belong to, as the C++ tests are under `tests/<use case>/cpp/`.
+  The targets and the binaries' paths under `build/` are the same. A use case's `cpp/` now
+  holds only `CMakeLists.txt`, `bindings.cpp`, `include/` and `src/`, and
+  `tests/test_layout.py` keeps it so. Semiconductor scheduling's tests use the names the
+  other use cases' tests use: `fixtures/web_demo.json` (was `data/web-demo.json`) and
+  `cpp/fab_fixtures.hpp` (was `fab_test_support.hpp`).
 
 ## 0.4.2
 
