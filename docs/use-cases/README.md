@@ -128,8 +128,9 @@ again, as long as the next stage still fits in the time limit (or the step
 limit; a stage is taken to last twice as long as the one before). The best
 solution is kept throughout, so a solve is never worse for a later stage, and
 a small instance uses a budget that one short history would leave idle. With a
-time limit, which stage a solve reaches depends on the clock; with a step
-limit alone it repeats for a seed.
+time limit, which stage a solve reaches depends on the clock. A seeded,
+step-limited solve repeats as long as the step limit, not the clock, is the
+limit it is closer to, so give it a time limit generous enough for the steps.
 
 ## Constraints: names and knobs
 

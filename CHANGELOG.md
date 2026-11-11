@@ -39,12 +39,17 @@
   packaging, knapsack, max-cut, quadratic assignment and sports league scheduling**, where
   `late_acceptance_size` is now the first stage's length. Measured on every instance of
   their five benchmark ladders at 30 s over three seeds: 62 runs better, 33 equal, 1 worse
-  (a knapsack by 1 in 17,470); sports league scheduling 5 to 15% less travel, quadratic
-  assignment at 14, 16 and 20 facilities the same value on every seed, 2 to 3% below the
-  old one. Every other use case searches exactly as before. With a time limit, the stage a
-  solve reaches depends on the clock; a step-limited solve repeats for a seed.
-- **Benchmarks: three more rungs.** `random25` (quadratic assignment), `g1600` (max-cut)
-  and `teams12` (sports league scheduling) join their comparison ladders.
+  (a knapsack by 1 in 17,470). In the published tables sports league scheduling has 5 to
+  13% less travel, quadratic assignment ties CP-SAT up to 16 facilities (it was behind at
+  14 and 16), and the mean gap to the best known values of the 28 QAPLIB instances with a
+  reference goes from 2.22% to 0.22%, 18 of them at the best known value. Every other use
+  case searches exactly as before. With a time limit, the stage a solve reaches depends on
+  the clock; a solve whose step limit ends it before the clock matters repeats for a seed.
+- **Benchmarks: three more rungs, five tables and QAPLIB measured again.** `random25`
+  (quadratic assignment), `g1600` (max-cut) and `teams12` (sports league scheduling) join
+  their comparison ladders. Rows where CP-SAT still has the better score: three knapsacks
+  (by 1 to 3 in 17,000 to 170,000), the 120-vertex max-cut (2340 against 2341) and the
+  6-team league.
 
 ## 0.4.3
 
