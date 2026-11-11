@@ -26,9 +26,9 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
-| small | 14 jobs / 3 crews / 40 dates | 0hard/-3155soft | **0hard/-3133soft** |
-| medium | 28 jobs / 4 crews / 60 dates | **0hard/-12246soft** | — (no solution in time) |
-| medium-2 | 28 jobs / 4 crews / 60 dates | **0hard/-10298soft** | — (no solution in time) |
+| small | 14 jobs / 3 crews / 40 dates | 0hard/-3145soft | **0hard/-3133soft** |
+| medium | 28 jobs / 4 crews / 60 dates | **0hard/-12237soft** | — (no solution in time) |
+| medium-2 | 28 jobs / 4 crews / 60 dates | **0hard/-10280soft** | — (no solution in time) |
 | large | 48 jobs / 5 crews / 80 dates | **0hard/-261soft** | — (no solution in time) |
 | xlarge | 96 jobs / 8 crews / 120 dates | **0hard/-8374soft** | — (no solution in time) |
 

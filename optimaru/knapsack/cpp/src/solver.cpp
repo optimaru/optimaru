@@ -40,7 +40,8 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackPr
     engineConfig.search.descent_weight = config.descent_weight;
     // CoreRepackMove costs a pass over the items and a table per draw, so a
     // step may draw it only this often; inside the gate the adaptive selector
-    // chooses between it and the move mix.
+    // chooses between it and the move mix. (With the move off no operator is
+    // registered and the gate has nothing to gate.)
     engineConfig.search.custom_move_probability = 0.001;
 
     // Nearby swap partners: items of similar weight. The meter owns a copy of

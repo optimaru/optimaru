@@ -125,7 +125,7 @@ def test_stop_at_first_feasible_leaves_the_callers_config_alone():
     assert config.best_score_limit == before  # the score limit went to a copy
 
 
-def test_the_core_repack_move_can_be_turned_off():
+def test_core_repack_moves_round_trips_and_solves():
     config = steps(20_000)
     config.core_repack_moves = False
     assert config.core_repack_moves is False

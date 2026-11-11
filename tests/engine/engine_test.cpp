@@ -272,6 +272,75 @@ void testHistoryGrowth(const Score& separableOptimum) {
     check(!threw, "history growth passes ScoreChecks::Full");
 }
 
+// HistoryStages on its own: the lengths, when a stage is due, and the cap.
+// Times are fractions of the solve.
+void testHistoryStages() {
+    std::printf("== late acceptance: the stages ==\n");
+    const auto stagesOf = [](std::size_t history, double growth,
+                             optimaru::AcceptanceRule rule =
+                                     optimaru::AcceptanceRule::LateAcceptance,
+                             bool customAcceptor = false) {
+        optimaru::Settings config;
+        config.search.acceptance.rule = rule;
+        config.search.acceptance.history_length = history;
+        config.search.acceptance.history_growth = growth;
+        return optimaru::HistoryStages(config, customAcceptor, Score{0, -100.0}, 0.0);
+    };
+    check(stagesOf(400, 2.0).enabled(), "late acceptance with a factor above 1: on");
+    check(!stagesOf(400, 1.0).enabled() && !stagesOf(400, 0.0).enabled(),
+          "a factor of 1 or less: off");
+    check(!stagesOf(400, 2.0, optimaru::AcceptanceRule::HillClimbing).enabled() &&
+                  !stagesOf(400, 2.0, optimaru::AcceptanceRule::LateAcceptance, true).enabled(),
+          "another rule or a custom acceptor: off");
+    {
+        // Without kicks a stage starts as soon as the search has converged
+        // and the next one fits. The first stage (the configured history)
+        // took 0.1, the second took 0.2, the third 0.4, and a fourth, taken
+        // to cost 0.8, no longer fits after 0.7.
+        optimaru::HistoryStages stages = stagesOf(400, 2.0);
+        check(stages.on_converged(0.1, true), "no kicks: the second stage is due at convergence");
+        stages.start_next(0.1);
+        check(stages.history() == 800 && stages.min_patience() == 1600, "the history doubles");
+        check(stages.take_restart() && !stages.take_restart(), "a restart is reported once");
+        check(stages.on_converged(0.3, true), "a third stage fits (0.3 + 0.4 <= 1)");
+        stages.start_next(0.3);
+        check(!stages.on_converged(0.7, true), "a fourth does not (0.7 + 0.8 > 1)");
+        check(stages.history() == 1600, "a stage that is not started leaves the history");
+    }
+    {
+        // With kicks a stage waits until no new best has come for half as
+        // long as it would take.
+        optimaru::HistoryStages stages = stagesOf(400, 2.0);
+        stages.on_new_best(0.1);
+        check(!stages.on_converged(0.1, false), "kicks on: not due right after a new best");
+        check(!stages.on_converged(0.19, false) && stages.on_converged(0.25, false),
+              "due once the stall is half the next stage's cost (0.1 of 0.2)");
+    }
+    {
+        // A factor close to 1 still lengthens a short history, and the cap
+        // holds: at it a stage restarts with the same length, at the same
+        // cost.
+        optimaru::HistoryStages slow = stagesOf(1, 1.2);
+        slow.on_converged(0.01, true);
+        slow.start_next(0.01);
+        check(slow.history() == 2, "a factor of 1.2 takes a one-entry history to two");
+
+        const std::size_t cap = optimaru::HistoryStages::kMaxHistory;
+        optimaru::HistoryStages capped = stagesOf(cap - 1, 2.0);
+        capped.on_converged(0.1, true);
+        capped.start_next(0.1);  // (the acceptor it returns, 16 MB at the cap, is not needed here)
+        check(capped.history() == cap, "the history stops at the cap");
+        // That stage took 0.4. One of the same cost fits after 0.5; a doubled
+        // one (0.8) would not.
+        check(capped.on_converged(0.5, true),
+              "at the cap the next stage costs what the last did (0.5 + 0.4 <= 1)");
+        capped.start_next(0.5);
+        check(capped.history() == cap, "and has the same length");
+        check(!capped.on_converged(0.9, true), "which no longer fits after 0.9");
+        check(stagesOf(cap * 4, 2.0).history() == cap, "a configured history above the cap is cut");
+    }
+}
+
 void testTerminations(const Score& optimum) {
     std::printf("== assignment: terminations ==\n");
     using Clock = std::chrono::steady_clock;
@@ -1043,6 +1112,10 @@ void testHistoryGrowthOnRandomTsp() {
     std::printf("    history 1: tour = %.3f, growth 2: %.3f, growth 1.2: %.3f\n", fixed, doubled,
                 slow);
     check(doubled < fixed - 1e-9, "a doubled history per stage finds a shorter tour");
+    // By a margin, too. A search that waits out the gap across every restart
+    // (ema_best_gap fed with it) reaches fewer stages in these steps: it was
+    // 2.4% shorter than the fixed history here, and is 4.7% without that wait.
+    check(doubled < 0.97 * fixed, "and more than 3% shorter: a restart does not delay the next");
     check(slow < fixed - 1e-9, "a factor of 1.2 still lengthens a one-entry history");
     check(solveWith(1.0) == fixed, "a factor of 1 is off: the same tour as without");
 
@@ -2319,6 +2392,7 @@ int main() {
     testRouletteWheelSelector();
     testCustomMoveProbability();
     testLnsEscapesLocalOptimum(optimum);
+    testHistoryStages();
     testHistoryGrowth(separableOptimum);
     testNearbyAndLnsOnRandomTsp();
     testHistoryGrowthOnRandomTsp();

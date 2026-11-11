@@ -56,7 +56,7 @@ The comparison instances stop at 25 facilities (6, 8, 10, 12, 14, 16, 20 and 25)
 pair variables; the QAPLIB instances below start at 30 and are above the exact-model cap.
 With the 1 s CI smoke budget CP-SAT returns an 8-facility answer (not always the optimum) and is still
 presolving the 10-facility model (reported as UNKNOWN); with 2 workers it proves the 8-facility optimum
-in about 1.5 s. At 30 s the two solvers tie up to 16 facilities, and at 20 and 25 the engine has the
+in about 1.5 s. At 30 s the two solvers tie up to 14 facilities, and from 16 up the engine has the
 lower cost (table below).
 The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports
@@ -89,11 +89,11 @@ Every cell is the score of that solver's final solution under the use case's own
 | random10 | 10 facilities | **0hard/-1766soft** | **0hard/-1766soft** |
 | random12 | 12 facilities | **0hard/-2292soft** | **0hard/-2292soft** |
 | random14 | 14 facilities | **0hard/-3666soft** | **0hard/-3666soft** |
-| random16 | 16 facilities | **0hard/-4020soft** | **0hard/-4020soft** |
-| random20 | 20 facilities | **0hard/-7632soft** | 0hard/-7672soft |
-| random25 | 25 facilities | **0hard/-10644soft** | 0hard/-11098soft |
+| random16 | 16 facilities | **0hard/-4020soft** | 0hard/-4070soft |
+| random20 | 20 facilities | **0hard/-7632soft** | 0hard/-7978soft |
+| random25 | 25 facilities | **0hard/-10644soft** | 0hard/-10806soft |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
+Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->
 
 <!-- qaplib:start -->
@@ -123,23 +123,23 @@ The archive has no solution file for esc32a, esc32b, esc32c, esc32d, esc32h, so 
 | lipa40b | 40 | 476,581 | 476,581 | 0.00% |
 | lipa50a | 50 | 62,093 | 62,093 | 0.00% |
 | lipa50b | 50 | 1,210,244 | 1,210,244 | 0.00% |
-| nug30 | 30 | 6,124 | 6,124 | 0.00% |
-| sko42 | 42 | 15,812 | 15,816 | 0.03% |
-| sko49 | 49 | 23,386 | 23,412 | 0.11% |
-| ste36a | 36 | 9,526 | 9,526 | 0.00% |
+| nug30 | 30 | 6,124 | 6,128 | 0.07% |
+| sko42 | 42 | 15,812 | 15,812 | 0.00% |
+| sko49 | 49 | 23,386 | 23,394 | 0.03% |
+| ste36a | 36 | 9,526 | 9,550 | 0.25% |
 | ste36b | 36 | 15,852 | 15,852 | 0.00% |
 | ste36c | 36 | 8,239,110 | 8,239,110 | 0.00% |
-| tai30a | 30 | 1,818,146 | 1,831,494 | 0.73% |
-| tai30b | 30 | 637,117,113 | 637,117,113 | 0.00% |
-| tai35a | 35 | 2,422,002 | 2,458,204 | 1.49% |
-| tai35b | 35 | 283,315,445 | 283,360,944 | 0.02% |
-| tai40a | 40 | 3,139,370 | 3,186,052 | 1.49% |
+| tai30a | 30 | 1,818,146 | 1,836,384 | 1.00% |
+| tai30b | 30 | 637,117,113 | 646,036,371 | 1.40% |
+| tai35a | 35 | 2,422,002 | 2,453,950 | 1.32% |
+| tai35b | 35 | 283,315,445 | 283,315,445 | 0.00% |
+| tai40a | 40 | 3,139,370 | 3,190,584 | 1.63% |
 | tai40b | 40 | 637,250,948 | 637,250,948 | 0.00% |
-| tai50a | 50 | 4,938,796 | 5,042,698 | 2.10% |
+| tai50a | 50 | 4,938,796 | 5,003,296 | 1.31% |
 | tai50b | 50 | 458,821,517 | 458,993,732 | 0.04% |
 | tho30 | 30 | 149,936 | 149,936 | 0.00% |
-| tho40 | 40 | 240,516 | 240,712 | 0.08% |
-| wil50 | 50 | 48,816 | 48,878 | 0.13% |
+| tho40 | 40 | 240,516 | 240,632 | 0.05% |
+| wil50 | 50 | 48,816 | 48,842 | 0.05% |
 
-Mean gap 0.22%, median 0.00%, worst 2.10%. Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. Single runs — a snapshot, not a statistical study.
+Mean gap 0.26%, median 0.00%, worst 1.63%. Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. Single runs — a snapshot, not a statistical study.
 <!-- qaplib:end -->

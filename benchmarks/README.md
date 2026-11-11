@@ -162,9 +162,14 @@ allocation, food packaging, knapsack, maintenance scheduling, max-cut,
 quadratic assignment and sports league scheduling search in stages of growing
 late acceptance history, and which stage a solve reaches under a time limit
 depends on the clock: of the 35 instances of five of them, measured twice on
-2026-11-11, the engine's score was the same on 32
+2026-11-11 with an earlier build, the engine's score was the same on 32
 (the 10-line plant of food packaging moved by 0.01%, the 400-vertex max-cut by
 0.1%, the 18-team league by 5%), and all 33 QAPLIB results were the same.
-Their tables are of the second run, the CP-SAT lane beside the engine's as
-before. Read a small margin in any table as noise.
+The tables of the seven and of QAPLIB are of one run on 2026-11-12, the CP-SAT
+lane beside the engine's as before. One seed says little about a change of
+the search: the 8-team and the 14-team league of that run are 2% and 4% behind
+the run of the day before, on a build whose mean over three seeds is 2% ahead,
+and QAPLIB's `tai30b` is 1.4% above its best known value where the run before
+reached it.
+Read a small margin in any table as noise.
 
