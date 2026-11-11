@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Benchmarks: the lock files record optimaru 0.4.3.** The benchmark projects install
+  optimaru from this checkout, and their locks name its version: they still said 0.4.2 after
+  the release, so the first `uv sync` rewrote them. Nothing else moves; the projects stay on
+  external-solver `v0.2.3`, which needs no change for 0.4.3.
+
 ## 0.4.3
 
 - **Vehicle routing: visit groups with a partial order.** Visits that share a `group`
