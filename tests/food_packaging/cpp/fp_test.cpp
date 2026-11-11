@@ -12,7 +12,8 @@
 //       (including the LNS ruin/recreate path)
 //   (d) pinned jobs keep their exact position / stay unassigned through a
 //       solve; the unassigned pool holds the jobs left
-//       on no line
+//       on no line; a schedule with only pinned jobs in its lists has
+//       nothing placed (what the solver asks before it sets the stages)
 //   (e) operator-assignment helpers (the Line::operator_index variable,
 //       handled by the wrapper's alternating loop)
 //   (f) the demo instance (seed 37) has the expected shape
@@ -33,6 +34,7 @@
 #include "fp/incremental_calculator.hpp"
 #include "fp/score_calculator.hpp"
 #include "fp/solver.hpp"
+#include "optimaru/construct/construction.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"
 
@@ -377,6 +379,34 @@ void verifyFullAssertSolve() {
 // -------------------------------------------------------------------------
 void verifyPinnedSolve() {
     std::printf("== (d) Pinned jobs and the unassigned pool ==\n");
+    {
+        // What the solver asks before it sets the late acceptance stages
+        // (optimaru::nothing_placed): the pinned jobs are not the engine's to
+        // move, so a schedule with only them in its lines and its pool is one
+        // the construction starts.
+        const auto pinnedOnly = [] {
+            PackagingSchedule fresh = buildRandomInstance(/*jobCount*/ 20, /*seed*/ 21);
+            for (Line& line : fresh.lines) line.jobs.clear();
+            fresh.unassignedJobs.clear();
+            fresh.lines[0].jobs.push_back(0);  // job 0 is pinned first on line 0
+            return fresh;
+        };
+        PackagingSchedule fresh = pinnedOnly();
+        ScoreCalculator::prepare(fresh);  // parks job 1, pinned to no line, in the pool
+        const bool parkedPinned = fresh.unassignedJobs == std::vector<int>{1};
+        check(parkedPinned && optimaru::nothing_placed(fresh),
+              "only the pinned jobs, one on a line and one in the pool: nothing is placed");
+        PackagingSchedule started = pinnedOnly();
+        started.lines[1].jobs.push_back(2);
+        ScoreCalculator::prepare(started);
+        check(!optimaru::nothing_placed(started),
+              "one job that is not pinned on a line: something is placed");
+        PackagingSchedule parked = pinnedOnly();
+        parked.unassignedJobs.push_back(3);
+        ScoreCalculator::prepare(parked);
+        check(!optimaru::nothing_placed(parked),
+              "one job that is not pinned in the pool: something is placed");
+    }
     PackagingSchedule s = buildRandomInstance(/*jobCount*/ 20, /*seed*/ 21);
 
     Solver::Config config;

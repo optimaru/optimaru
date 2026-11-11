@@ -21,12 +21,32 @@
   rounds and rush-order replan, maintenance scheduling's short runs, restart rounds and
   urgent-job replan. Maintenance scheduling's comparison of ruin and recreate on and off is
   gone: over 8 and 12 seeds it makes no clear difference there on 0.5.0.
-- **Known in 0.5.0, found by those re-runs and not fixed here:** in the use cases that search
-  in stages, a solve that starts from an existing plan (`with_initial_solution`) can return
-  that plan unchanged where 0.4.3 improved it, and more often with a larger budget. A food
-  packaging restart that 0.4.3 improves on four seeds of four at every budget tried is
-  improved on none of the four at 200,000 steps or more, or at 1 and 5 seconds. The
-  comparisons in `benchmarks/` are of solves from scratch and do not show it.
+- **Fixed: a solve from a given solution in the seven use cases with stages (#110).** In
+  0.5.0 bed allocation, food packaging, knapsack, maintenance scheduling, max-cut, quadratic
+  assignment and sports league scheduling ran late acceptance in stages on every solve, also
+  one that starts from a solution the caller gave (`with_initial_solution`, a request's
+  `initial_solution`). A stage starts over from the start's score, which on such a solve is
+  where the search already stands: it loosened nothing and was taken at each stall in the
+  place of the ruin-and-recreate kick. A solve whose improvements come from the kicks then
+  returned its start once the budget had room for stages.
+  - Now only a solve that the construction starts has stages (`optimaru::nothing_placed`, or
+    the use case's own seed flag). A solution that places only a part counts as given.
+  - The engine also ends the stages by itself when a search stalls before it has found
+    anything better than its start, whatever started it: a construction that no move improves
+    has none either, which matters to a caller who sets `AcceptanceSettings::history_growth`
+    directly.
+  - Measured, a food packaging week with one new job, four seeds: improved on 4 of 4 at every
+    step limit in 0.4.3 and again now, on 0 of 4 from 200,000 steps up in 0.5.0.
+  - Measured, a bed allocation plan with five new stays, 12 seeds: a mean medium score of
+    -10.33 after 10 million steps in 0.4.3 and now (the same table, seed by seed), -10.58 in
+    0.5.0, where 2 of the 12 seeds ended worse under a larger step limit than under a smaller
+    one.
+  - On 36 instances of the seven benchmark ladders a solve from a given plan finds exactly
+    what a build without stages finds, new best by new best. The 46 instances solved from
+    the construction end on the same score as in 0.5.0 at 300,000 and at 3 million steps, so
+    the benchmark tables stand.
+  - The notebooks' restart experiments were moved to step budgets for 0.5.0 (the entry
+    above) and have not been run again on this.
 - **Bin packing: `TradeMove` and a fill tie-break.** `used_bins_cost` counts bins, so every
   packing with the same number of bins has the same score, and the search wandered from one
   to the next: on Falkenauer's triplets it ended one bin above the best known count. Two

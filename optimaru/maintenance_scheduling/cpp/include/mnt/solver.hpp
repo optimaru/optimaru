@@ -23,7 +23,8 @@ public:
     //                     small (dozens of jobs), so this normally resolves to
     //                     400. It is the first stage's length: the search
     //                     restarts with a doubled history when it stalls (the
-    //                     engine's history_growth)
+    //                     engine's history_growth); a solve that starts from a
+    //                     given schedule keeps this one length
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Ruin fractions and cap retuned for this domain (measured): the
         // guided value selection narrows the neighborhood, so the search

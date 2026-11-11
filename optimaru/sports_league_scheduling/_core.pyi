@@ -126,7 +126,8 @@ class SolverConfig:
     """Number of independent multistarts (seed+i); the best wins."""
     late_acceptance_size: int
     """LA history length. 0 = automatic (clamp(32 * matches, 400, 3200)). The first stage's length: the search restarts with
-    a doubled history when it stalls and the next stage fits in the budget."""
+    a doubled history when it stalls and the next stage fits in the budget. A solve that starts
+    from a given solution keeps this one length."""
     full_assert: bool
     """Re-checks incremental == full recompute on every move (for debugging, slow)."""
     ruin_recreate: bool

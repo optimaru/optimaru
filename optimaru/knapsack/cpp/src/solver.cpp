@@ -24,7 +24,8 @@ namespace {
 // start: late-acceptance local search over the built-in assignment moves, plus
 // the ALNS kicks. The engine's construction heuristic finds nothing left to
 // place: the domain construction decided every item.
-optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackProblem& problem) {
+optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackProblem& problem,
+                                  bool seeded) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.search.acceptance.history_length =
             config.history_length != 0
@@ -33,8 +34,10 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackPr
     // Restart late acceptance with a doubled history when the search stalls
     // (see AcceptanceSettings::history_growth): measured on every instance of
     // benchmarks/knapsack at 30 s on three seeds, before CoreRepackMove: one run of 21
-    // worse (by 1 in 17,470).
-    engineConfig.search.acceptance.history_growth = 2.0;
+    // worse (by 1 in 17,470). A solve that starts from a selection the caller
+    // gave has no stages: the start's score is then no lower than where the
+    // search stands, and a stage would take the place of the kicks.
+    if (!seeded) engineConfig.search.acceptance.history_growth = 2.0;
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
     engineConfig.search.descent_weight = config.descent_weight;
@@ -59,19 +62,21 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackPr
     return engineConfig;
 }
 
-// Validates, constructs and consumes the seed.
-void construct(KnapsackProblem& problem) {
+// Validates, constructs and consumes the seed. Returns whether there was one.
+bool construct(KnapsackProblem& problem) {
     ScoreCalculator::prepare(problem);  // validates the facts and the selection
+    const bool seeded = problem.warmStart;
     constructSelection(problem);
     problem.warmStart = false;  // a seed is used once
+    return seeded;
 }
 
 // One single-start search of a constructed problem, with the domain's macro
 // move (ks/moves.hpp) registered, driven by whichever calculator the caller
 // brought. Returns the engine's best score.
 Score runEngine(const Solver::Config& config, KnapsackProblem& problem,
-                optimaru::Objective<KnapsackProblem>& calculator) {
-    optimaru::Solver<KnapsackProblem> engine(engineConfigOf(config, problem));
+                optimaru::Objective<KnapsackProblem>& calculator, bool seeded) {
+    optimaru::Solver<KnapsackProblem> engine(engineConfigOf(config, problem, seeded));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
     if (config.core_repack_moves && problem.itemCount() >= 2) {
         engine.add_move_operator(std::make_unique<CoreRepackMove>(problem));
@@ -83,7 +88,7 @@ Score runEngine(const Solver::Config& config, KnapsackProblem& problem,
 
 void Solver::solve(KnapsackProblem& problem) {
     optimaru::check_config(config_);
-    construct(problem);
+    const bool seeded = construct(problem);
     if (!problem.items.empty()) {
         // Independent parallel starts of this solver's own search: start i
         // searches its own copy of the constructed selection with seed + i.
@@ -92,9 +97,9 @@ void Solver::solve(KnapsackProblem& problem) {
         // its worker threads. Each start leaves the engine's best score in
         // its copy, which is what the starts are compared by.
         optimaru::solve_parallel_starts(
-                config_, problem, [](const Config& config, KnapsackProblem& candidate, int) {
+                config_, problem, [seeded](const Config& config, KnapsackProblem& candidate, int) {
                     KnapsackIncrementalScoreCalculator calculator;
-                    candidate.score = runEngine(config, candidate, calculator);
+                    candidate.score = runEngine(config, candidate, calculator, seeded);
                 });
     }
     // The authoritative final score: a full recompute on the best solution.
@@ -104,10 +109,10 @@ void Solver::solve(KnapsackProblem& problem) {
 void Solver::solve(KnapsackProblem& problem,
                    optimaru::DecomposedObjective<KnapsackProblem>& calculator) {
     optimaru::check_config(config_);
-    construct(problem);
+    const bool seeded = construct(problem);
     if (!problem.items.empty()) {
         // Single-start: the caller-owned calculator cannot be cloned.
-        runEngine(config_, problem, calculator);
+        runEngine(config_, problem, calculator, seeded);
     }
     // Score the final solution with the caller's constraint assembly (custom
     // weights included) and leave the calculator primed on it, so
