@@ -51,6 +51,8 @@ def test_ci_reads_the_use_cases_off_the_repository():
     assert "for stub in optimaru/*/_core.pyi" in text
     assert text.count("fromJSON(needs.use-cases.outputs.names)") == 2
     assert text.count("fromJSON(needs.use-cases.outputs.benchmarks)") == 1
+    # The one use case the CP-SAT matrix leaves out, as test_every_cpsat_benchmark_is_a_project does.
+    assert 'select(. != "vehicle-routing")' in text
     assert not any(re.search(rf"^\s+- {name}$", text, re.M) for name in USE_CASES)
 
 

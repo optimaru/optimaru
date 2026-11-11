@@ -20,9 +20,15 @@ jobs:
       benchmarks: ${{ steps.list.outputs.benchmarks }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Only the stubs: every matrix job waits for this one.
+          sparse-checkout: optimaru/*/_core.pyi
+          sparse-checkout-cone-mode: false
       - id: list
         run: |
+          shopt -s nullglob
           names=$(for stub in optimaru/*/_core.pyi; do basename "$(dirname "$stub")"; done | jq -R . | jq -sc .)
+          [ "$(jq length <<<"$names")" -gt 0 ] || { echo "no use case found: optimaru/*/_core.pyi matched nothing"; exit 1; }
           echo "names=$names" >> "$GITHUB_OUTPUT"
           # The CP-SAT comparisons: the shared runner, then every use case but vehicle
           # routing, whose comparison (OR-Tools Routing) is the vehicle-routing-benchmark job.
