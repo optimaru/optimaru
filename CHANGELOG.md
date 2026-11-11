@@ -17,6 +17,10 @@
   0.4.3. Both solvers refuse a bad `SolverConfig` before the plan is touched: the check ran
   after the unassigned pool was cleared, and in pickup and delivery after the pair
   construction.
+- **Benchmarks: the lock files record optimaru 0.4.3.** The benchmark projects install
+  optimaru from this checkout, and their locks name its version: they still said 0.4.2 after
+  the release, so the first `uv sync` rewrote them. Nothing else moves; the projects stay on
+  external-solver `v0.2.3`, which needs no change for 0.4.3.
 
 ## 0.4.3
 
