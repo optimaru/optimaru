@@ -703,6 +703,8 @@ def test_the_earlier_rule_names_are_aliases():
     assert "constraints" in model_input.model_dump() and "rules" not in model_input.model_dump()
     copied = model_input.model_copy(update={"rules": models.default_rules()[:1]})
     assert len(copied.constraints) == 1 and len(model_input.constraints) == 2
+    with pytest.raises(ValueError, match="same field"):
+        model_input.model_copy(update={"rules": [], "constraints": []})
 
     solved = solve_request(request.model_copy(update={"time_limit_seconds": 0.0}))
     as_before = solved.model_dump()

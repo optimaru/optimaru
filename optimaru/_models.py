@@ -232,10 +232,14 @@ class SolveRequest(StrictModel):
         """`BaseModel.model_copy`, with the earlier field names in ``update`` read as the new ones.
 
         pydantic does not read aliases in ``update``: without this, ``{"timelimit": 5}`` would
-        be stored beside the fields and the copy would keep its old time limit.
+        be stored beside the fields and the copy would keep its old time limit. A name given
+        together with its earlier name is refused, as it is when a request is built.
         """
         if update:
             aliases = {"timelimit": "time_limit_seconds", "num_workers": "parallel_solver_count"}
+            for old, new in aliases.items():
+                if old in update and new in update:
+                    raise ValueError(f"{new} and {old} are the same field: give one")
             update = {aliases.get(name, name): value for name, value in update.items()}
         return super().model_copy(update=update, deep=deep)
 

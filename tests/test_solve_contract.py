@@ -218,6 +218,8 @@ def test_the_earlier_request_field_names_are_aliases():
     copied = request.model_copy(update={"timelimit": 7, "num_workers": 2})
     assert (copied.time_limit_seconds, copied.parallel_solver_count) == (7, 2)
     assert "timelimit" not in copied.model_dump() and request.time_limit_seconds == 5
+    with pytest.raises(ValueError, match="same field"):
+        request.model_copy(update={"timelimit": 7, "time_limit_seconds": 8})
 
 
 def test_an_employee_scheduling_seed_in_settings_still_counts():

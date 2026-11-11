@@ -194,8 +194,8 @@ class SolveConfig(SolveConfigBase):
 # The canonical problem: what `solve()` takes by default (mode="canonical")
 # ---------------------------------------------------------------------------
 # The pydantic form of the `TimetableProblem` dict that `convert_problem` reads, and of the
-# `Timetable` dict `solve()` returns for it. They add no rule of their own: references and
-# slots are checked by `convert_problem`, as for a dict.
+# `Timetable` dict `solve()` returns for it. They check field bounds only: references and
+# the calendar limits are checked by `convert_problem`, as for a dict.
 
 
 class SlotModel(StrictModel):

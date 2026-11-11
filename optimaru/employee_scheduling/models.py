@@ -495,8 +495,11 @@ class SchedulingInput(BaseModel):
     )
 
     def model_copy(self, *, update=None, deep: bool = False):
-        """`BaseModel.model_copy`, with ``rules`` in ``update`` read as ``constraints``."""
+        """`BaseModel.model_copy`, with ``rules`` in ``update`` read as ``constraints``; both
+        together are refused."""
         if update and "rules" in update:
+            if "constraints" in update:
+                raise ValueError("constraints and rules are the same field: give one")
             update = {("constraints" if name == "rules" else name): value for name, value in update.items()}
         return super().model_copy(update=update, deep=deep)
 
