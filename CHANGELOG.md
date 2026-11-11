@@ -71,11 +71,25 @@
   20-stay instance on CP-SAT's value on every seed, and within 0.3% either way on the three
   larger instances, where few stages fit. Facility location was measured too and stays as
   it was: its 60-consumer instance got worse on all three seeds.
+- **Stages: a restart no longer delays the next one.** The patience before a kick or a
+  stage is read from the average gap between new bests, and the gap from the last best of
+  one stage to the first of the next spans the whole restart, so after a stage that found
+  something the search waited about twice that stage's length before it moved on. That gap
+  is now left out of the average. Measured on the six ladders with stages and kicks or
+  restarts to gain from, at 30 s over three seeds: sports league scheduling 2.0% less
+  travel on average (11 runs better, 4 worse), max-cut 5 better and none worse, bed
+  allocation and food packaging level (+0.4%, +0.1%), maintenance scheduling level (6
+  better, 5 worse), quadratic assignment the same on every run. The stages are their own
+  engine header now, `accept/history_stages.hpp` (`optimaru::HistoryStages`), with unit
+  tests of the lengths, the cap and when a stage is due.
+- **Benchmarks: the seven tables with stages and QAPLIB measured on this build**
+  (2026-11-12). Of their 46 instances the engine has the best score on 45 (18 of them ties)
+  and CP-SAT on one: the 14-job maintenance schedule, -3145 against -3133. Before this
+  series CP-SAT had the better score on 14 of the 43 instances those tables had then.
+  QAPLIB: mean gap 0.26% (2.22% before), 17 of 28 at the best known value.
 - **Benchmarks: three more rungs, five tables and QAPLIB measured again.** `random25`
   (quadratic assignment), `g1600` (max-cut) and `teams12` (sports league scheduling) join
-  their comparison ladders. Rows where CP-SAT still has the better score: three knapsacks
-  (by 1 to 3 in 17,000 to 170,000), the 120-vertex max-cut (2340 against 2341) and the
-  6-team league.
+  their comparison ladders.
 - **Docs: adding a constraint, step by step, in every use case.** Each use case has
   `docs/use-cases/<slug>/extending.md` ("Adding a constraint" under its name on the docs
   site). It takes one new constraint through that use case's own files in six steps: change
