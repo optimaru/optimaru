@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Bindings: the part every use case repeated is two engine helpers.**
+  `optimaru::python::bind_constraints()` binds `constraint_costs()`, `list_constraints()` and
+  `constraint_info()` off a default assembly, and `bind_score()`
+  (`optimaru/python/score_binding.hpp`) binds the `Score` class of the engine's two score
+  types. The Python functions, their arguments and their results are the same; the
+  docstrings of `_core.constraint_costs` and `_core.list_constraints` are now the same text
+  in every use case.
 - **Engine: the three-level score is one type.** `optimaru::HardMediumSoftScore`
   (`optimaru/score/hard_medium_soft_score.hpp`) replaces the identical `Score` structs that
   bed allocation, food packaging, project job scheduling and vehicle routing each declared,

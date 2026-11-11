@@ -20,6 +20,7 @@
 #include "pjs/score_calculator.hpp"
 #include "pjs/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
+#include "optimaru/python/score_binding.hpp"
 
 namespace py = pybind11;
 using namespace pjs;
@@ -30,13 +31,7 @@ PYBIND11_MODULE(_core, m) {
             "Project job scheduling (multi-project RCPSP with execution "
             "modes) — optimaru engine-backed C++ wrapper exposed to Python";
 
-    py::class_<Score>(m, "Score", py::module_local())
-            .def_readonly("hard", &Score::hard)
-            .def_readonly("medium", &Score::medium)
-            .def_readonly("soft", &Score::soft)
-            .def("is_feasible", &Score::feasible)
-            .def("__str__", &Score::str)
-            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
+    opy::bind_score<Score>(m);
 
     py::enum_<JobType>(m, "JobType", py::module_local())
             .value("SOURCE", JobType::SOURCE)
@@ -272,33 +267,9 @@ PYBIND11_MODULE(_core, m) {
                     },
                     py::arg("schedule"), py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of an assembly on `schedule` — the input
-    // optimaru.project_job_scheduling.constraints.score() turns into a score. Scoring once is
-    // enough: re-pricing any assembly is pure Python arithmetic on these.
-    // All four constraints are global (one total each, which the exponent /
-    // offset / clip shape once). Every entry carries the domain's medium fold
-    // (into_soft, 10^9), which score() applies. None = the default assembly;
-    // a pick list scores exactly those picks (apply_constraints), each entry
-    // carrying its pick's knobs, the k-th pick of a name keyed "<name>#<k>".
-    m.def(
-            "constraint_costs",
-            [](ProjectJobSchedule& schedule, const py::object& constraints) {
-                ScoreCalculator::prepare(schedule);
-                DecomposedCalculator calculator;
-                opy::apply_constraints([] { return defaultConstraints(); }, constraints)
-                        .into(calculator);
-                return opy::constraint_costs(calculator, schedule);
-            },
-            py::arg("schedule"), py::arg("constraints") = py::none(),
-            "Raw per-unit cost of every constraint, before weight/exponent/offset/level.");
-
-    // The constraint names this domain scores, in default-assembly order —
-    // the same strings constraint_costs() reports.
-    m.def(
-            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
-            "Constraint names available to optimaru.project_job_scheduling.constraints.");
-
-    // The constraint catalog, read off the default assembly: the components'
-    // kDefaultWeight / kDefaultLevel are the only place a default lives.
-    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    // constraint_costs(), list_constraints() and constraint_info(), off the
+    // default assembly. All four constraints are global, so constraint_costs()
+    // reports one total each.
+    opy::bind_constraints<ProjectJobSchedule>(
+            m, "schedule", [] { return defaultConstraints(); }, &ScoreCalculator::prepare);
 }

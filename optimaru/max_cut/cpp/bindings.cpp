@@ -18,6 +18,7 @@
 #include "mc/score_calculator.hpp"
 #include "mc/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
+#include "optimaru/python/score_binding.hpp"
 
 namespace py = pybind11;
 using namespace mc;
@@ -47,12 +48,7 @@ PYBIND11_MODULE(_core, m) {
 
     // Every class is module_local: the server's isolated runtime loads several
     // domains whose classes share names (Score, Settings, Solver).
-    py::class_<Score>(m, "Score", py::module_local())
-            .def_readonly("hard", &Score::hard)
-            .def_readonly("soft", &Score::soft)
-            .def("is_feasible", &Score::feasible)
-            .def("__str__", &Score::str)
-            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
+    opy::bind_score<Score>(m);
 
     py::class_<Edge>(m, "Edge", py::module_local())
             .def(py::init([](int source, int target, std::int64_t weight) {
@@ -191,34 +187,9 @@ PYBIND11_MODULE(_core, m) {
                     },
                     py::arg("problem"), py::arg("constraints") = py::none());
 
-    // The raw costs of an assembly on `problem` — the input
-    // optimaru.max_cut.constraints.score() turns into a score: the four unit
-    // constraints per side ([side 0, side 1]), the two globals as one total.
-    // None = the default assembly in list_constraints() order; a pick list
-    // scores exactly those picks (apply_constraints), each entry carrying its
-    // pick's knobs, the k-th pick of a name keyed "<name>#<k>".
-    m.def(
-            "constraint_costs",
-            [](MaxCutProblem& problem, const py::object& constraints) {
-                ScoreCalculator::prepare(problem);
-                DecomposedCalculator calculator;
-                opy::apply_constraints([] { return defaultConstraints(); }, constraints)
-                        .into(calculator);
-                return opy::constraint_costs(calculator, problem);
-            },
-            py::arg("problem"), py::arg("constraints") = py::none(),
-            "Raw cost of every constraint (per side, or one total for the globals), before "
-            "weight/exponent/offset/level.");
-
-    // The constraint names this domain scores, in catalog order — the same
-    // strings a score breakdown reports.
-    m.def(
-            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
-            "Constraint names available to optimaru.max_cut.constraints.");
-
-    // The constraint catalog, read off the same default assembly:
-    // constraint_info() -> [ConstraintInfo(name, default_level,
-    // default_weight, level_flippable, reward, default_enabled), ...] in
-    // list_constraints() order. The defaults live in the C++ components only.
-    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    // constraint_costs(), list_constraints() and constraint_info(), off the
+    // default assembly. constraint_costs() reports the four unit constraints per
+    // side ([side 0, side 1]) and the two globals as one total each.
+    opy::bind_constraints<MaxCutProblem>(
+            m, "problem", [] { return defaultConstraints(); }, &ScoreCalculator::prepare);
 }

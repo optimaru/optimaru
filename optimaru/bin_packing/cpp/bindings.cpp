@@ -20,6 +20,7 @@
 #include "bp/score_calculator.hpp"
 #include "bp/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
+#include "optimaru/python/score_binding.hpp"
 
 namespace py = pybind11;
 using namespace bp;
@@ -39,17 +40,9 @@ std::string itemRepr(const Item& item) {
 PYBIND11_MODULE(_core, m) {
     m.doc() = "Bin packing — optimaru engine-backed C++ wrapper exposed to Python";
 
-    py::class_<Score>(m, "Score", py::module_local())
-            .def(py::init([](std::int64_t hard, double soft) {
-                     Score score;
-                     score.hard = hard;
-                     score.soft = soft;
-                     return score;
-                 }),
+    opy::bind_score<Score>(m)
+            .def(py::init([](std::int64_t hard, double soft) { return Score{hard, soft}; }),
                  py::arg("hard") = 0, py::arg("soft") = 0.0)
-            .def_readonly("hard", &Score::hard)
-            .def_readonly("soft", &Score::soft)
-            .def("is_feasible", &Score::feasible)
             // Lexicographic (hard first), the engine's own ordering.
             .def(py::self == py::self)
             .def("__ne__", [](const Score& a, const Score& b) { return !(a == b); })
@@ -58,9 +51,7 @@ PYBIND11_MODULE(_core, m) {
             .def(py::self > py::self)
             .def(py::self >= py::self)
             .def("__hash__",
-                 [](const Score& s) { return py::hash(py::make_tuple(s.hard, s.soft)); })
-            .def("__str__", &Score::str)
-            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
+                 [](const Score& s) { return py::hash(py::make_tuple(s.hard, s.soft)); });
 
     py::class_<Item>(m, "Item", py::module_local())
             .def(py::init([](std::string id, std::int64_t weight, int bin,
@@ -217,32 +208,8 @@ PYBIND11_MODULE(_core, m) {
                     },
                     py::arg("problem"), py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of an assembly on `problem` — the input
-    // optimaru.bin_packing.constraints.score() turns into a score. Scoring once is
-    // enough: re-pricing any assembly is pure Python arithmetic on these.
-    // None = the default assembly; a pick list scores exactly those picks
-    // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
-    // of a name keyed "<name>#<k>".
-    m.def(
-            "constraint_costs",
-            [](BinPackingProblem& problem, const py::object& constraints) {
-                ScoreCalculator::prepare(problem);
-                DecomposedCalculator calculator;
-                opy::apply_constraints([] { return defaultConstraints(); }, constraints)
-                        .into(calculator);
-                return opy::constraint_costs(calculator, problem);
-            },
-            py::arg("problem"), py::arg("constraints") = py::none(),
-            "Raw per-bin cost of every constraint, before weight/exponent/offset/level.");
-
-    // The constraint names this domain scores, in default-assembly order.
-    m.def(
-            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
-            "Constraint names available to optimaru.bin_packing.constraints.");
-
-    // The constraint catalog, read off the same default assembly:
-    // constraint_info() -> [ConstraintInfo(name, default_level,
-    // default_weight, level_flippable, reward, default_enabled), ...] in
-    // list_constraints() order. The defaults live in the C++ components only.
-    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    // constraint_costs(), list_constraints() and constraint_info(), off the
+    // default assembly. The units of constraint_costs() are the bins.
+    opy::bind_constraints<BinPackingProblem>(
+            m, "problem", [] { return defaultConstraints(); }, &ScoreCalculator::prepare);
 }

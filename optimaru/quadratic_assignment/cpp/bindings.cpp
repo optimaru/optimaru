@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "optimaru/python/constraint_binding.hpp"
+#include "optimaru/python/score_binding.hpp"
 #include "qap/constraints.hpp"
 #include "qap/domain.hpp"
 #include "qap/score_calculator.hpp"
@@ -71,12 +72,7 @@ PYBIND11_MODULE(_core, m) {
 
     // Every class is module_local: the server's isolated runtime loads several
     // domains whose classes share names (Score, Settings, Solver).
-    py::class_<Score>(m, "Score", py::module_local())
-            .def_readonly("hard", &Score::hard)
-            .def_readonly("soft", &Score::soft)
-            .def("is_feasible", &Score::feasible)
-            .def("__str__", &Score::str)
-            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
+    opy::bind_score<Score>(m);
 
     py::class_<Facility>(m, "Facility", py::module_local())
             .def(py::init([](std::string id, std::optional<std::int64_t> demand, int location) {
@@ -269,34 +265,10 @@ PYBIND11_MODULE(_core, m) {
                     },
                     py::arg("problem"), py::arg("constraints") = py::none());
 
-    // The raw costs of an assembly on `problem` — the input
-    // optimaru.quadratic_assignment.constraints.score() turns into a score: the three
-    // side constraints per location (in location order; each also reports the
-    // locations it evaluates as "units"), the two objectives as one total
-    // each. None = the default assembly in list_constraints() order; a pick
-    // list scores exactly those picks (apply_constraints), each entry carrying
-    // its pick's knobs, the k-th pick of a name keyed "<name>#<k>".
-    m.def(
-            "constraint_costs",
-            [](QuadraticAssignmentProblem& problem, const py::object& constraints) {
-                ScoreCalculator::prepare(problem);
-                DecomposedCalculator calculator;
-                opy::apply_constraints([] { return defaultConstraints(); }, constraints)
-                        .into(calculator);
-                return opy::constraint_costs(calculator, problem);
-            },
-            py::arg("problem"), py::arg("constraints") = py::none(),
-            "Raw cost of every constraint, before weight/exponent/offset/level.");
-
-    // The constraint names this domain scores, in catalog order — the same
-    // strings a score breakdown reports.
-    m.def(
-            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
-            "Constraint names available to optimaru.quadratic_assignment.constraints.");
-
-    // The constraint catalog, read off the same default assembly:
-    // constraint_info() -> [ConstraintInfo(name, default_level,
-    // default_weight, level_flippable, reward, default_enabled), ...] in
-    // list_constraints() order. The defaults live in the C++ components only.
-    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    // constraint_costs(), list_constraints() and constraint_info(), off the
+    // default assembly. constraint_costs() reports the three side constraints per
+    // location (each also lists the locations it evaluates as "units") and the two
+    // objectives as one total each.
+    opy::bind_constraints<QuadraticAssignmentProblem>(
+            m, "problem", [] { return defaultConstraints(); }, &ScoreCalculator::prepare);
 }

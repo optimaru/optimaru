@@ -25,6 +25,7 @@
 #include "fp/score_calculator.hpp"
 #include "fp/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
+#include "optimaru/python/score_binding.hpp"
 
 namespace py = pybind11;
 using namespace fp;
@@ -44,18 +45,12 @@ PYBIND11_MODULE(_core, m) {
             "Food packaging — optimaru engine-backed C++ wrapper exposed "
             "to Python";
 
-    py::class_<Score>(m, "Score", py::module_local())
+    opy::bind_score<Score>(m)
             .def(py::init([](std::int64_t hard, std::int64_t medium, std::int64_t soft) {
                      return Score{hard, medium, soft};
                  }),
                  py::arg("hard") = 0, py::arg("medium") = 0, py::arg("soft") = 0)
-            .def_readonly("hard", &Score::hard)
-            .def_readonly("medium", &Score::medium)
-            .def_readonly("soft", &Score::soft)
-            .def("is_feasible", &Score::feasible)
-            .def("__eq__", [](const Score& a, const Score& b) { return a == b; })
-            .def("__str__", &Score::str)
-            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
+            .def("__eq__", [](const Score& a, const Score& b) { return a == b; });
 
     py::class_<Product>(m, "Product", py::module_local())
             .def(py::init([](std::string id, std::string name) {
@@ -256,38 +251,10 @@ PYBIND11_MODULE(_core, m) {
                     },
                     py::arg("schedule"), py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of an assembly on `schedule` — the input
-    // optimaru.food_packaging.constraints.score() turns into a score. Scoring once is
-    // enough: re-pricing any assembly is pure Python arithmetic on these.
-    // Units are the lists (the packaging lines in order, then the unassigned
-    // pool); a global constraint has one entry, and a per-line constraint
-    // lists the lines it evaluates as "units" (never the pool). Every entry
-    // carries the domain's medium fold (into_soft, 10^10), which score()
-    // applies. None = the default assembly; a pick list scores exactly those
-    // picks (apply_constraints), each entry carrying its pick's knobs, the
-    // k-th pick of a name keyed "<name>#<k>". This is the only
-    // per-constraint surface (ConstraintBreakdown is not bound).
-    m.def(
-            "constraint_costs",
-            [](PackagingSchedule& schedule, const py::object& constraints) {
-                ScoreCalculator::prepare(schedule);
-                DecomposedCalculator calculator;
-                opy::apply_constraints([] { return defaultConstraints(); }, constraints)
-                        .into(calculator);
-                return opy::constraint_costs(calculator, schedule);
-            },
-            py::arg("schedule"), py::arg("constraints") = py::none(),
-            "Raw per-unit cost of every constraint, before weight/exponent/offset/level.");
-
-    // The constraint names this domain scores, in default-assembly order
-    // (the unit constraints first, then the globals
-    // operator_cleaning_conflict_cost and unassigned_jobs_cost) — the same
-    // strings constraint_costs() reports.
-    m.def(
-            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
-            "Constraint names available to optimaru.food_packaging.constraints.");
-
-    // The constraint catalog, read off the default assembly: the components'
-    // kDefaultWeight / kDefaultLevel are the only place a default lives.
-    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    // constraint_costs(), list_constraints() and constraint_info(), off the
+    // default assembly. The units of constraint_costs() are the lists (the
+    // packaging lines in order, then the unassigned pool); a per-line constraint
+    // lists the lines it evaluates as "units" (never the pool).
+    opy::bind_constraints<PackagingSchedule>(
+            m, "schedule", [] { return defaultConstraints(); }, &ScoreCalculator::prepare);
 }
