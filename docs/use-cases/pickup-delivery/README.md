@@ -79,8 +79,8 @@ flippable onto any of the three levels (`level="hard"`, `"medium"` or `"soft"`, 
 `Level`), none is a reward, and every one at a weight above 0 is scored by default
 (`default_enabled`); the four opt-in objectives
 (weight 0) are measured but move no score until given a weight. The route-policy
-constraints cost 0 while their vehicle field is 0. The seven core rules
-(`vehicle_capacity_cost`, `max_end_time_cost`, the three coupling rules,
+constraints cost 0 while their vehicle field is 0. The seven core constraints
+(`vehicle_capacity_cost`, `max_end_time_cost`, the three coupling constraints,
 `unassigned_requests_cost`, `travel_time_cost`) are also the monolithic
 `ScoreCalculator`, which reads the same constants.
 
@@ -160,15 +160,15 @@ capacity over a day as long as it never carries too much at once. Two requests
 of 6 units each break a capacity of 10 when carried together and fit fine when
 carried in sequence — `pdp_test` asserts exactly that.
 
-The three coupling rules share one default weight,
+The three coupling constraints share one default weight,
 `ScoreCalculator::kCouplingPenalty` (1000; their `kDefaultWeight`). Any nonzero
 hard total already means infeasible, so that weight only shapes the gradient
 *within* the infeasible region; it is set well above a typical lateness so the
 search fixes broken pairs before polishing time windows. `required_vehicle_cost`
 and `request_group_cost` use the same weight. `pinned_stops_cost` uses `ScoreCalculator::kPinnedPenalty`
-(1e12), far above what the other hard rules total on real input, so no trade
+(1e12), far above what the other hard constraints total on real input, so no trade
 between them moves a pinned stop. If a result breaks a pin anyway, its `score`
-shows it in that unit. The CP-SAT reference enforces the three coupling rules
+shows it in that unit. The CP-SAT reference enforces the three coupling constraints
 structurally and refuses any level but hard (`level="medium"` or `"soft"`) or another
 weight for them; the engine keeps them flippable.
 
@@ -386,12 +386,12 @@ Two requests of a group that are bound to different vehicles, each by its
 could never be whole.
 
 Every entry point scores a grouped plan with the default constraints, since the
-seven core rules do not include this one: `solve_request`, `pdp.solve(plan)`,
+seven core constraints do not include this one: `solve_request`, `pdp.solve(plan)`,
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two requests or more (a request alone in its group changes nothing).
 That is a solve on the constraint assembly, as when a vehicle limit is set: the
-whole default set is scored. `num_workers` / `parallel_solver_count` run that
-many starts there as on the core rules, each start on a set of its own (on a
+whole default set is scored. `parallel_solver_count` runs that
+many starts there as on the core constraints, each start on a set of its own (on a
 generated instance of 100 requests, half of them in groups of three, four
 starts end 2.1% shorter than one in the same 4 s: 5 seeds, shorter in 4 and
 equal in 1).
@@ -432,7 +432,7 @@ next_request = with_initial_solution(request, solution)  # or solution.model_dum
 better = solve_request(next_request)
 ```
 
-`with_initial_solution` turns a solution into the `initial_route` of each vehicle (above), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `timelimit=0` a complete solution comes back as it went in.
+`with_initial_solution` turns a solution into the `initial_route` of each vehicle (above), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `time_limit_seconds=0` a complete solution comes back as it went in.
 
 A vehicle's `pinned_stops` stay as the request has them: its route in the solution must start with them, or `ValueError` is raised. The same goes for an unknown id, a stop routed twice, or a request whose pickup and dropoff are apart, so a hard-infeasible result with a broken pair cannot be used as a start.
 

@@ -65,7 +65,7 @@ constraint is flippable onto any of the three levels (`level="hard"`, `"medium"`
 `"soft"`, or a `Level`), none is a reward, and every one at a weight above 0 is scored
 by default (`default_enabled`); the three opt-in objectives (weight 0) are measured
 but move no score until given a weight. The route-policy constraints cost 0 while their
-vehicle field is 0. The four core rules
+vehicle field is 0. The four core constraints
 (`vehicle_capacity_cost`, `max_end_time_cost`, `unassigned_visits_cost`,
 `travel_time_cost`) are also the monolithic `ScoreCalculator` and the incremental
 calculator, which read the same constants.
@@ -204,20 +204,19 @@ tied to one vehicle pull every route across town, so these plans drive 44% to
 102% more than the same visits left free. Groups whose visits lie near each
 other cost far less. A grouped plan also settles early: on two of these instances
 a 60 s solve ends within 2% of a 4 s one, while nine seeds end 3% and 6% apart
-(10 s), so another seed buys more than a longer run. `num_workers` /
-`parallel_solver_count` run such seeds side by side: with four starts the same
+(10 s), so another seed buys more than a longer run. `parallel_solver_count` runs such seeds side by side: with four starts the same
 4 s end 0.8% to 2.4% shorter on the four classes above (5 seeds each: shorter in
 17 of the 20 pairs and longer in none; under a step limit the first start is the
 single-start solve, so more starts cannot do worse, while under a time limit the
 starts share the machine's cores).
 
 Every entry point scores a grouped plan with the default constraints, since the
-four core rules include neither of these two: `solve_request`, `vrp.solve(plan)`,
+four core constraints include neither of these two: `solve_request`, `vrp.solve(plan)`,
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two visits or more (a visit alone in its group changes nothing). That is a solve on the
 constraint assembly, as when a vehicle limit is set: the whole default set is
-scored. `num_workers` / `parallel_solver_count` run that many starts there as
-on the core rules, each start on a set of its own.
+scored. `parallel_solver_count` runs that many starts there as
+on the core constraints, each start on a set of its own.
 `calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same way,
 so it returns the score the solve stored and prices a split or reversed group
 on a plan built by hand. Both
@@ -234,7 +233,7 @@ next_request = with_initial_solution(request, solution)  # or solution.model_dum
 better = solve_request(next_request)
 ```
 
-`with_initial_solution` returns a new request whose vehicles carry `initial_route`, a list of visit ids. The solve keeps those routes as its starting point and construction places only the visits in no route, so a partial solution works and the `unassigned` visits get another try. With `timelimit=0` a complete solution comes back as it went in. An unknown id or a visit routed twice raises `ValueError`.
+`with_initial_solution` returns a new request whose vehicles carry `initial_route`, a list of visit ids. The solve keeps those routes as its starting point and construction places only the visits in no route, so a partial solution works and the `unassigned` visits get another try. With `time_limit_seconds=0` a complete solution comes back as it went in. An unknown id or a visit routed twice raises `ValueError`.
 
 ## Extending
 
