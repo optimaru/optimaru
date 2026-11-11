@@ -129,7 +129,10 @@ limit; a stage is taken to last twice as long as the one before). The best
 solution is kept throughout, so a solve is never worse for a later stage, and
 a small instance uses a budget that one short history would leave idle. A
 history stops growing at 2^20 entries (16 MB per start); from there a stage
-starts over with that length.
+starts over with that length. A stage walks below the best for a while and
+does not know the `unimproved_*` limits: one shorter than a stage ends the
+solve inside it, with the best solution so far. A warm start from a solved
+solution has no worse score to start over from, so its stages change little.
 
 Whether a stage fits is judged on how far the solve is: the larger of the time
 used over the time limit and the steps used over the step limit. So with a

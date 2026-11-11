@@ -1045,6 +1045,29 @@ void testHistoryGrowthOnRandomTsp() {
     check(doubled < fixed - 1e-9, "a doubled history per stage finds a shorter tour");
     check(slow < fixed - 1e-9, "a factor of 1.2 still lengthens a one-entry history");
     check(solveWith(1.0) == fixed, "a factor of 1 is off: the same tour as without");
+
+    // Stages are late acceptance's: another rule, or a caller's acceptor,
+    // searches the same with and without the factor.
+    auto solveOther = [&](double growth, bool factory) {
+        TspSolution s = buildRandomTsp(1, 100);
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::minutes(10);
+        config.limits.step_limit = 200000;
+        config.seed = 11;
+        config.search.acceptance.rule = optimaru::AcceptanceRule::StepCountingHillClimbing;
+        config.search.acceptance.history_growth = growth;
+        optimaru::Solver<TspSolution> solver(config);
+        if (factory) {
+            solver.set_acceptor_factory([](const Score& initial) {
+                return std::make_unique<optimaru::LateAcceptance>(50, initial);
+            });
+        }
+        TspCalculator calculator;
+        return -solver.solve(s, calculator).soft;
+    };
+    check(solveOther(2.0, false) == solveOther(0.0, false),
+          "another acceptance rule ignores the factor");
+    check(solveOther(2.0, true) == solveOther(0.0, true), "a custom acceptor ignores the factor");
 }
 
 void testExpandedMoves() {

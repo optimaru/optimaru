@@ -43,8 +43,13 @@
   13% less travel, quadratic assignment ties CP-SAT up to 16 facilities (it was behind at
   14 and 16), and the mean gap to the best known values of the 28 QAPLIB instances with a
   reference goes from 2.22% to 0.22%, 18 of them at the best known value. Every other use
-  case searches exactly as before. With a time limit, the stage a solve reaches depends on
-  the clock; a solve whose step limit ends it before the clock matters repeats for a seed.
+  case searches exactly as before. In the five, the ruin & recreate kicks fire differently
+  from the first step on: stagnation counts from the last improving move, and a kick waits
+  at least two histories. With a time limit, the stage a solve reaches depends on the
+  clock; a solve whose step limit ends it before the clock matters repeats for a seed. A
+  stage does not know the `unimproved_*` limits: one shorter than a stage ends the solve
+  inside it, with the best solution so far. A history stops growing at 2^20 entries (16 MB
+  per start).
 - **Benchmarks: three more rungs, five tables and QAPLIB measured again.** `random25`
   (quadratic assignment), `g1600` (max-cut) and `teams12` (sports league scheduling) join
   their comparison ladders. Rows where CP-SAT still has the better score: three knapsacks

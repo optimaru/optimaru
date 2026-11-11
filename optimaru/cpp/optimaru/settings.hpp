@@ -123,8 +123,16 @@ struct AcceptanceSettings {
     // still fits in the budget (a stage is taken to last the factor times the
     // one before). The search goes on from the current solution and the best
     // one is kept as always, so a stage that finds nothing costs only its
-    // time. The history stops growing at 2^20 entries (16 MB); from there a
-    // stage restarts with that length. 1 or less = off.
+    // time. The history stops growing at 2^20 entries (16 MB per start); from
+    // there a stage restarts with that length. 1 or less = off.
+    //
+    // Two things a stage does not do. It does not loosen a search that starts
+    // at a local optimum (a warm start from a solved solution): the start's
+    // score is then the best there is, and the stage is a hill climb with a
+    // longer history. And it does not know the stall limits: a stage walks
+    // below the best for a while, so a stall_time_limit or stall_step_limit
+    // shorter than a stage ends the solve inside it, with the best solution
+    // so far.
     //
     // Stages also change when a ruin & recreate kick fires: a kick's acceptor
     // has the history of the stage the search is in, stagnation counts from

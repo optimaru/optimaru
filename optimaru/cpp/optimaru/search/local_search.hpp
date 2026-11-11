@@ -231,11 +231,12 @@ public:
             // A stage has converged only when a whole history has gone by
             // without an improving move.
             if (stages.enabled()) patience = std::max(patience, stages.min_patience());
-            if (stages.enabled() && steps_since_best_or_lns >= patience &&
-                stages.converged(stop.progress(), !lns.enabled)) {
+            // Stalled: the next stage if one is due, else a kick, else wait.
+            const bool stalled = steps_since_best_or_lns >= patience;
+            if (stalled && stages.enabled() && stages.on_converged(stop.progress(), !lns.enabled)) {
                 acceptor = stages.start_next(stop.progress());
                 steps_since_best_or_lns = 0;
-            } else if (lns.enabled && steps_since_best_or_lns >= patience) {
+            } else if (stalled && lns.enabled) {
                 current_score = lns_iteration(editor, current_score, best_score, *ruin_selector,
                                               ruins, operator_context, rng);
                 force_time_check = true;
@@ -249,7 +250,7 @@ public:
                                             : make_acceptor(current_score);
                 steps_since_best_or_lns = 0;
                 lns_trigger = std::min(lns_trigger * 2, lns_trigger_cap);
-            } else if (stages.enabled() && steps_since_best_or_lns >= patience) {
+            } else if (stalled && stages.enabled()) {
                 steps_since_best_or_lns = 0;  // no kicks and no stage fits: look again later
             } else {
                 // A built-in strategy plugin if one is drawn; otherwise a
@@ -379,7 +380,7 @@ private:
         // Tells the stages that the search has converged, and returns whether
         // the next stage starts now. It records how long the stage that just
         // ended took (the first call: a stage of the configured length).
-        bool converged(double now, bool no_kicks) {
+        bool on_converged(double now, bool no_kicks) {
             if (stage_cost_ < 0.0 || in_stage_) stage_cost_ = now - stage_start_;
             in_stage_ = false;
             const double next_cost = stage_cost_ * static_cast<double>(next_history()) /

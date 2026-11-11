@@ -20,7 +20,10 @@ namespace {
 // Late acceptance of both solve() overloads: the automatic history length,
 // and a restart with a doubled history when the search stalls (see
 // AcceptanceSettings::history_growth; measured on every instance of
-// benchmarks/food-packaging, none worse at 30 s on three seeds).
+// benchmarks/food-packaging, none worse at 30 s on three seeds). The stages
+// loosen the first round, which starts from the construction: a later round
+// starts from the round before's best, so its stages only lengthen the
+// history of a hill climb.
 void setLateAcceptance(optimaru::AcceptanceSettings& acceptance, std::size_t historyLength,
                        int movableJobs) {
     acceptance.history_length =
