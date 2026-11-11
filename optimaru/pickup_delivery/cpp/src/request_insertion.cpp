@@ -285,11 +285,11 @@ void PlanTimelines::rebuildRoute(const PdpRoutePlan& plan, int vehicleIndex,
     timelines_[static_cast<std::size_t>(vehicleIndex)].rebuild(plan, vehicleIndex, route);
 }
 
-void PlanTimelines::candidateVehicles(const PdpRoutePlan& plan, const Delivery& delivery,
+void PlanTimelines::candidateVehicles(const PdpRoutePlan& plan, int requiredVehicle,
                                       std::vector<int>& out) const {
     out.clear();
-    if (delivery.requiredVehicleIndex >= 0) {
-        out.push_back(delivery.requiredVehicleIndex);
+    if (requiredVehicle >= 0) {
+        out.push_back(requiredVehicle);
         return;
     }
     idleClassSeen_.assign(static_cast<std::size_t>(classCount_), 0);
@@ -308,11 +308,112 @@ void PlanTimelines::candidateVehicles(const PdpRoutePlan& plan, const Delivery& 
 RequestInsertion PlanTimelines::best(const PdpRoutePlan& plan, const Delivery& delivery,
                                      Blinker& blinker) const {
     RequestInsertion best;
-    candidateVehicles(plan, delivery, candidateScratch_);
+    candidateVehicles(plan, delivery.requiredVehicleIndex, candidateScratch_);
     for (int v : candidateScratch_) {
         timelines_[static_cast<std::size_t>(v)].improve(plan, delivery, blinker, best);
     }
     return best;
+}
+
+// ---------------------------------------------------------------------------
+// RequestGroups
+// ---------------------------------------------------------------------------
+
+void RequestGroups::build(const PdpRoutePlan& plan) {
+    const std::size_t count = plan.deliveries.size();
+    leader_.resize(count);
+    next_.assign(count, -1);
+    size_.assign(count, 1);
+    vehicle_.resize(count);
+    pinned_.assign(count, 0);
+    any_ = false;
+    std::vector<int> pinnedOn(count, -1);
+    for (std::size_t v = 0; v < plan.vehicles.size(); ++v) {
+        for (int nodeIndex : plan.vehicles[v].pinnedNodeIndices) {
+            const auto d = static_cast<std::size_t>(
+                    plan.nodes[static_cast<std::size_t>(nodeIndex)].deliveryIndex);
+            pinned_[d] = 1;
+            pinnedOn[d] = static_cast<int>(v);
+        }
+    }
+    std::vector<int> grouped;
+    for (std::size_t d = 0; d < count; ++d) {
+        leader_[d] = static_cast<int>(d);
+        vehicle_[d] = plan.deliveries[d].requiredVehicleIndex;
+        if (plan.deliveries[d].groupIndex >= 0) grouped.push_back(static_cast<int>(d));
+    }
+    std::stable_sort(grouped.begin(), grouped.end(), [&plan](int a, int b) {
+        return plan.deliveries[static_cast<std::size_t>(a)].groupIndex <
+               plan.deliveries[static_cast<std::size_t>(b)].groupIndex;
+    });
+    for (std::size_t first = 0; first < grouped.size();) {
+        const int group = plan.deliveries[static_cast<std::size_t>(grouped[first])].groupIndex;
+        std::size_t last = first;
+        while (last < grouped.size() &&
+               plan.deliveries[static_cast<std::size_t>(grouped[last])].groupIndex == group) {
+            ++last;
+        }
+        // The vehicle the group is bound to: a required one, else the one a
+        // pinned stop of it rides.
+        int bound = -1;
+        for (std::size_t i = first; i < last && bound < 0; ++i) {
+            bound = plan.deliveries[static_cast<std::size_t>(grouped[i])].requiredVehicleIndex;
+        }
+        for (std::size_t i = first; i < last && bound < 0; ++i) {
+            bound = pinnedOn[static_cast<std::size_t>(grouped[i])];
+        }
+        int leader = -1;
+        int previous = -1;
+        for (std::size_t i = first; i < last; ++i) {
+            const auto d = static_cast<std::size_t>(grouped[i]);
+            if (vehicle_[d] < 0) vehicle_[d] = bound;
+            if (pinned_[d]) continue;  // stays where it is, a unit of its own
+            if (leader < 0) {
+                leader = grouped[i];
+                size_[d] = 0;
+            } else {
+                next_[static_cast<std::size_t>(previous)] = grouped[i];
+            }
+            leader_[d] = leader;
+            ++size_[static_cast<std::size_t>(leader)];
+            previous = grouped[i];
+        }
+        if (leader >= 0 && size_[static_cast<std::size_t>(leader)] > 1) any_ = true;
+        first = last;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// UnitPlanner
+// ---------------------------------------------------------------------------
+
+bool UnitPlanner::plan(const PdpRoutePlan& plan, const RouteTimeline& timeline,
+                       const std::vector<int>& route, const std::vector<int>& requests,
+                       Blinker& blinker, std::vector<RequestInsertion>& steps,
+                       Seconds& addedTravel) {
+    const std::size_t mark = steps.size();
+    const RouteTimeline* current = &timeline;
+    Seconds total = 0;
+    for (std::size_t r = 0; r < requests.size(); ++r) {
+        const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(requests[r])];
+        RequestInsertion insertion;
+        current->improve(plan, delivery, blinker, insertion);
+        if (!insertion.found()) {
+            steps.resize(mark);
+            return false;
+        }
+        steps.push_back(insertion);
+        total += insertion.addedTravel;
+        if (r + 1 == requests.size()) break;
+        // The next request sees the route with this one in.
+        if (r == 0) route_ = route;
+        route_.insert(route_.begin() + insertion.pickupPosition, delivery.pickupNodeIndex);
+        route_.insert(route_.begin() + insertion.dropoffPosition, delivery.dropoffNodeIndex);
+        timeline_.rebuild(plan, timeline.vehicle(), route_);
+        current = &timeline_;
+    }
+    addedTravel = total;
+    return true;
 }
 
 }  // namespace pdp

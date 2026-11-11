@@ -31,6 +31,10 @@ a bundle of requests from one route to another and swap bundles between routes
 (`pair_moves`) and a pair ruin kicks whole requests, never half of one
 (`pair_ruin`). All are on by default; the switches turn them off to measure
 what they are worth.
+
+Requests that share a `group` (`Delivery.group_index`, `DeliveryModel.group`) are
+one job: they ride one vehicle together or all stay unassigned
+(`request_group_cost`), and the request moves carry them as one unit.
 """
 
 from .._solve import solve_in_place, solver_config

@@ -7,6 +7,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -60,6 +61,11 @@ bool pairIntact(const PdpRoutePlan& plan, const optimaru::OperatorContext<PdpRou
 // A relocate takes its positions from nearby stops rather than from a scan of
 // every slot pair: placing a request at its cheapest slot is what the request
 // moves (pdp/request_moves.hpp) do. This move is here for the first two tiers.
+//
+// It moves one request, so a request of a group (Delivery::groupIndex) only
+// goes where the rest of its group rides: it is neither dropped alone nor
+// routed alone. Taking a whole group to another vehicle, or in from the pool,
+// is the request moves' work.
 class PairRelocateMove final : public optimaru::MoveOperator<PdpRoutePlan> {
 public:
     PairRelocateMove(double repairProbability, double assignmentProbability)
@@ -74,6 +80,10 @@ public:
         const int vehicleCount = static_cast<int>(plan.vehicles.size());
         if (deliveryCount == 0 || vehicleCount == 0) return false;
         const int pool = Descriptor::unassigned_list(plan);
+        if (!groupsBuilt_) {
+            groups_.build(plan);
+            groupsBuilt_ = true;
+        }
 
         std::uniform_real_distribution<double> unit(0.0, 1.0);
 
@@ -96,6 +106,10 @@ public:
         const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(deliveryIndex)];
         const int pickup = delivery.pickupNodeIndex;
         const int dropoff = delivery.dropoffNodeIndex;
+        // The one vehicle the request may ride, and whether it travels with
+        // other requests.
+        const int bound = boundVehicle(plan, ctx, deliveryIndex);
+        const bool grouped = groups_.sizeOf(groups_.leaderOf(deliveryIndex)) > 1;
 
         // Tier 2 vs 3: where does the request go?
         //
@@ -120,19 +134,27 @@ public:
             // insertion misses almost every feasible pickup/dropoff slot on
             // large PDPTW routes, so scan the pair slots and take the least
             // added travel among capacity/time-window-feasible candidates.
+            // The first request of a group to leave the pool would leave it
+            // alone: the request moves route the group whole.
+            if (grouped && bound < 0) return false;
             timelines_.rebuild(plan);
             Blinker every;
-            const RequestInsertion insertion = timelines_.best(plan, delivery, every);
+            RequestInsertion insertion;
+            if (bound >= 0) {
+                timelines_.of(bound).improve(plan, delivery, every, insertion);
+            } else {
+                insertion = timelines_.best(plan, delivery, every);
+            }
             if (!insertion.found()) return false;
             target = insertion.vehicle;
             greedyPickupPos = insertion.pickupPosition;
             greedyDropoffPos = insertion.dropoffPosition;
-        } else if (unit(rng) < assignmentProbability_) {
+        } else if (unit(rng) < assignmentProbability_ && !grouped) {
             target = pool;  // drop the request
         } else {
             // A bound request only moves along its own route, which is also
             // where a repair has to put it back.
-            const int required = delivery.requiredVehicleIndex;
+            const int required = bound;
             if (ctx.nearby.enabled()) {
                 pickupAnchor = required >= 0 ? routedNeighborIn(ctx, plan, pickup, required, rng)
                                              : routedNeighbor(ctx, plan, pickup, pool, rng);
@@ -282,18 +304,39 @@ private:
         ctx.editor.end_list_edit(listIndex);
     }
 
+    // The vehicle a request has to be on: its required vehicle (its own or
+    // its group's), else the one another request of its group rides, else -1.
+    int boundVehicle(const PdpRoutePlan& plan, const optimaru::OperatorContext<PdpRoutePlan>& ctx,
+                     int deliveryIndex) const {
+        const int required = groups_.vehicleOf(deliveryIndex);
+        if (required >= 0) return required;
+        const int pool = Descriptor::unassigned_list(plan);
+        for (int d = groups_.leaderOf(deliveryIndex); d >= 0; d = groups_.nextOf(d)) {
+            if (d == deliveryIndex) continue;
+            const int list =
+                    ctx.element_list[plan.deliveries[static_cast<std::size_t>(d)].pickupNodeIndex];
+            if (list >= 0 && list != pool) return list;
+        }
+        return -1;
+    }
+
     double repairProbability_;
     double assignmentProbability_;
     std::vector<std::pair<int, std::vector<int>>> saved_;
     PlanTimelines timelines_;  // for routing a request that waits in the pool
+    RequestGroups groups_;     // which requests travel together
+    bool groupsBuilt_ = false;
 };
 
 // Places the requests no route holds yet. Routes already in the plan are the
-// starting point of the solve and stay as they are.
+// starting point of the solve and stay as they are. The requests of a group go
+// in together, on one vehicle: the one the group is bound to or already rides,
+// else the one that takes all of them for the least driving.
 void constructPairs(PdpRoutePlan& plan, bool decreasing) {
-    std::vector<char> routed(plan.nodes.size(), 0);
-    for (const Vehicle& vehicle : plan.vehicles) {
-        for (int nodeIndex : vehicle.nodeIndices) routed[static_cast<std::size_t>(nodeIndex)] = 1;
+    std::vector<int> routedOn(plan.nodes.size(), -1);
+    for (std::size_t v = 0; v < plan.vehicles.size(); ++v) {
+        for (int nodeIndex : plan.vehicles[v].nodeIndices)
+            routedOn[static_cast<std::size_t>(nodeIndex)] = static_cast<int>(v);
     }
     plan.unassignedNodeIndices.clear();
 
@@ -301,7 +344,7 @@ void constructPairs(PdpRoutePlan& plan, bool decreasing) {
     order.reserve(plan.deliveries.size());
     for (std::size_t i = 0; i < plan.deliveries.size(); ++i) {
         const std::size_t pickup = static_cast<std::size_t>(plan.deliveries[i].pickupNodeIndex);
-        if (!routed[pickup]) order.push_back(static_cast<int>(i));
+        if (routedOn[pickup] < 0) order.push_back(static_cast<int>(i));
     }
     if (decreasing) {
         std::stable_sort(order.begin(), order.end(), [&plan](int a, int b) {
@@ -315,27 +358,76 @@ void constructPairs(PdpRoutePlan& plan, bool decreasing) {
             return left.demand > right.demand;
         });
     }
+    RequestGroups groups;
+    groups.build(plan);
     // A bound request has one vehicle to go to, so it goes first: a free
-    // request placed before it could take the only slot that fits.
-    std::stable_partition(order.begin(), order.end(), [&plan](int deliveryIndex) {
-        return plan.deliveries[deliveryIndex].requiredVehicleIndex >= 0;
-    });
+    // request placed before it could take the only slot that fits. A group
+    // needs one vehicle with room for all of its requests, so it goes before
+    // the requests that travel alone.
+    const auto rank = [&groups](int deliveryIndex) {
+        if (groups.vehicleOf(deliveryIndex) >= 0) return 0;
+        return groups.sizeOf(groups.leaderOf(deliveryIndex)) > 1 ? 1 : 2;
+    };
+    std::stable_sort(order.begin(), order.end(),
+                     [&rank](int a, int b) { return rank(a) < rank(b); });
 
     PlanTimelines timelines;
     timelines.rebuild(plan);
     Blinker every;
+    UnitPlanner planner;
+    std::vector<char> done(plan.deliveries.size(), 0);  // by unit leader
+    std::vector<int> waiting;
+    std::vector<int> candidates;
+    std::vector<RequestInsertion> steps;
+    std::vector<RequestInsertion> trial;
     for (int deliveryIndex : order) {
-        const Delivery& delivery = plan.deliveries[deliveryIndex];
-        const RequestInsertion insertion = timelines.best(plan, delivery, every);
-        if (insertion.found()) {
-            std::vector<int>& route = plan.vehicles[insertion.vehicle].nodeIndices;
-            route.insert(route.begin() + insertion.pickupPosition, delivery.pickupNodeIndex);
-            route.insert(route.begin() + insertion.dropoffPosition, delivery.dropoffNodeIndex);
-            timelines.rebuildRoute(plan, insertion.vehicle, route);
-        } else {
-            plan.unassignedNodeIndices.push_back(delivery.pickupNodeIndex);
-            plan.unassignedNodeIndices.push_back(delivery.dropoffNodeIndex);
+        const int leader = groups.leaderOf(deliveryIndex);
+        if (done[static_cast<std::size_t>(leader)]) continue;  // went in with its group
+        done[static_cast<std::size_t>(leader)] = 1;
+
+        // The requests of the unit still to place, and where the others ride.
+        waiting.clear();
+        int bound = groups.vehicleOf(leader);
+        for (int d = leader; d >= 0; d = groups.nextOf(d)) {
+            const int on = routedOn[static_cast<std::size_t>(
+                    plan.deliveries[static_cast<std::size_t>(d)].pickupNodeIndex)];
+            if (on < 0) {
+                waiting.push_back(d);
+            } else if (bound < 0) {
+                bound = on;
+            }
         }
+
+        timelines.candidateVehicles(plan, bound, candidates);
+        steps.clear();
+        Seconds least = std::numeric_limits<Seconds>::max();
+        for (int v : candidates) {
+            trial.clear();
+            Seconds added = 0;
+            if (planner.plan(plan, timelines.of(v),
+                             plan.vehicles[static_cast<std::size_t>(v)].nodeIndices, waiting, every,
+                             trial, added) &&
+                added < least) {
+                least = added;
+                steps.swap(trial);
+            }
+        }
+        if (steps.empty()) {
+            for (int d : waiting) {
+                const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(d)];
+                plan.unassignedNodeIndices.push_back(delivery.pickupNodeIndex);
+                plan.unassignedNodeIndices.push_back(delivery.dropoffNodeIndex);
+            }
+            continue;
+        }
+        const int vehicle = steps.front().vehicle;
+        std::vector<int>& route = plan.vehicles[static_cast<std::size_t>(vehicle)].nodeIndices;
+        for (std::size_t i = 0; i < waiting.size(); ++i) {
+            const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(waiting[i])];
+            route.insert(route.begin() + steps[i].pickupPosition, delivery.pickupNodeIndex);
+            route.insert(route.begin() + steps[i].dropoffPosition, delivery.dropoffNodeIndex);
+        }
+        timelines.rebuildRoute(plan, vehicle, route);
     }
 }
 
@@ -357,6 +449,8 @@ public:
             if (a == b) continue;
             const Delivery& da = plan.deliveries[static_cast<std::size_t>(a)];
             const Delivery& db = plan.deliveries[static_cast<std::size_t>(b)];
+            // A group changes vehicle as one, in the request moves.
+            if (da.groupIndex >= 0 || db.groupIndex >= 0) continue;
             const int listA = ctx.element_list[da.pickupNodeIndex];
             const int listB = ctx.element_list[db.pickupNodeIndex];
             if (listA < 0 || listB < 0 || listA == listB || listA == pool || listB == pool ||
@@ -431,7 +525,9 @@ private:
 // The seed request is random and the rest are its nearest neighbours (by the
 // configured driving-time meter), so the kick tears out a spatially coherent
 // cluster of requests rather than a scatter — the same rationale as the
-// related ruin, lifted to request granularity.
+// related ruin, lifted to request granularity. The requests of a group
+// (Delivery::groupIndex) are ruined together, so the recreate may take the
+// whole group to another vehicle.
 class PairRuin final : public optimaru::RuinOperator<PdpRoutePlan> {
 public:
     const char* name() const override { return "pairRuin"; }
@@ -441,6 +537,10 @@ public:
         const PdpRoutePlan& plan = ctx.editor.solution();
         const int nodeCount = static_cast<int>(plan.nodes.size());
         if (nodeCount == 0) return {};
+        if (!groupsBuilt_) {
+            groups_.build(plan);
+            groupsBuilt_ = true;
+        }
 
         std::vector<char> taken(plan.deliveries.size(), 0);
         std::vector<int> ruined;
@@ -465,18 +565,23 @@ public:
     }
 
 private:
-    // Adds both stops of the request owning `node`, unless already taken.
-    // Both go in together or not at all — a partial add would defeat the point.
-    static void addRequestOf(const PdpRoutePlan& plan, int node, std::vector<char>& taken,
-                             std::vector<int>& ruined, int ruinCount) {
-        const int deliveryIndex = plan.nodes[static_cast<std::size_t>(node)].deliveryIndex;
-        const auto d = static_cast<std::size_t>(deliveryIndex);
-        if (taken[d]) return;
-        if (static_cast<int>(ruined.size()) + 2 > ruinCount) return;
-        taken[d] = 1;
-        ruined.push_back(plan.deliveries[d].pickupNodeIndex);
-        ruined.push_back(plan.deliveries[d].dropoffNodeIndex);
+    // Adds both stops of the request owning `node`, and of the requests that
+    // travel with it, unless already taken. All go in together or not at all —
+    // a partial add would defeat the point.
+    void addRequestOf(const PdpRoutePlan& plan, int node, std::vector<char>& taken,
+                      std::vector<int>& ruined, int ruinCount) const {
+        const int unit = groups_.leaderOf(plan.nodes[static_cast<std::size_t>(node)].deliveryIndex);
+        if (taken[static_cast<std::size_t>(unit)]) return;
+        if (static_cast<int>(ruined.size()) + 2 * groups_.sizeOf(unit) > ruinCount) return;
+        taken[static_cast<std::size_t>(unit)] = 1;
+        for (int d = unit; d >= 0; d = groups_.nextOf(d)) {
+            ruined.push_back(plan.deliveries[static_cast<std::size_t>(d)].pickupNodeIndex);
+            ruined.push_back(plan.deliveries[static_cast<std::size_t>(d)].dropoffNodeIndex);
+        }
     }
+
+    RequestGroups groups_;  // which requests travel together
+    bool groupsBuilt_ = false;
 };
 
 }  // namespace
@@ -492,6 +597,23 @@ void checkRequiredVehicles(const PdpRoutePlan& plan) {
             throw std::invalid_argument("request " + delivery.id + ": requiredVehicleIndex " +
                                         std::to_string(delivery.requiredVehicleIndex) +
                                         " is out of range -1.." + std::to_string(vehicleCount - 1));
+        }
+    }
+}
+
+// The requests of a group ride one vehicle, so they cannot be promised to two.
+void checkRequestGroups(const PdpRoutePlan& plan) {
+    std::unordered_map<int, const Delivery*> boundBy;
+    for (const Delivery& delivery : plan.deliveries) {
+        if (delivery.groupIndex < -1) {
+            throw std::invalid_argument("request " + delivery.id + ": groupIndex " +
+                                        std::to_string(delivery.groupIndex) + " is below -1");
+        }
+        if (delivery.groupIndex < 0 || delivery.requiredVehicleIndex < 0) continue;
+        const Delivery* first = boundBy.emplace(delivery.groupIndex, &delivery).first->second;
+        if (first->requiredVehicleIndex != delivery.requiredVehicleIndex) {
+            throw std::invalid_argument("requests " + first->id + " and " + delivery.id +
+                                        " share a group but require different vehicles");
         }
     }
 }
@@ -625,6 +747,7 @@ Score levelScoreOf(const optimaru::DecomposedObjective<PdpRoutePlan>& calculator
 
 void Solver::solve(PdpRoutePlan& plan) {
     checkRequiredVehicles(plan);
+    checkRequestGroups(plan);
     // Empty pool so the construction heuristic places every stop itself.
     if (config_.pair_construction_heuristic && !plan.vehicles.empty())
         constructPairs(plan, config_.first_fit_decreasing);
@@ -661,6 +784,7 @@ void Solver::solve(PdpRoutePlan& plan) {
 
 void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePlan>& calculator) {
     checkRequiredVehicles(plan);
+    checkRequestGroups(plan);
     optimaru::check_config(config_);
     if (config_.pair_construction_heuristic && !plan.vehicles.empty())
         constructPairs(plan, config_.first_fit_decreasing);

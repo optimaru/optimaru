@@ -43,9 +43,15 @@ namespace pdp {
 //   bundleExchange       Swaps a bundle of one route with a bundle of a nearby
 //                        route, the two sized independently.
 //
+// Requests the input has put in one group (Delivery::groupIndex) are one unit
+// in all three: they are taken out together and go back on one vehicle, each at
+// its cheapest slot pair once the earlier ones are in, or stay out together
+// when no vehicle has room for all of them (RequestGroups in
+// request_insertion.hpp).
+//
 // The operators only read the plan (the stops, the windows, the vehicle
-// limits), never the objective, so they serve the default calculator and a
-// caller's constraint assembly alike.
+// limits, the groups), never the objective, so they serve the default
+// calculator and a caller's constraint assembly alike.
 struct RequestMoveSettings {
     bool ruinRecreate = true;
     // The most requests one requestRuinRecreate takes out (at least 1, and never

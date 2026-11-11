@@ -76,7 +76,7 @@ PYBIND11_MODULE(_core, m) {
 
     py::class_<Delivery>(m, "Delivery", py::module_local())
             .def(py::init([](std::string id, int pickupNode, int dropoffNode, int demand,
-                             Seconds orderTime, int requiredVehicleIndex) {
+                             Seconds orderTime, int requiredVehicleIndex, int groupIndex) {
                      Delivery d;
                      d.id = std::move(id);
                      d.pickupNodeIndex = pickupNode;
@@ -84,17 +84,19 @@ PYBIND11_MODULE(_core, m) {
                      d.demand = demand;
                      d.orderTime = orderTime;
                      d.requiredVehicleIndex = requiredVehicleIndex;
+                     d.groupIndex = groupIndex;
                      return d;
                  }),
                  py::arg("id"), py::arg("pickup_node_index"), py::arg("dropoff_node_index"),
                  py::arg("demand"), py::arg("order_time") = 0,
-                 py::arg("required_vehicle_index") = -1)
+                 py::arg("required_vehicle_index") = -1, py::arg("group_index") = -1)
             .def_readwrite("id", &Delivery::id)
             .def_readwrite("pickup_node_index", &Delivery::pickupNodeIndex)
             .def_readwrite("dropoff_node_index", &Delivery::dropoffNodeIndex)
             .def_readwrite("demand", &Delivery::demand)
             .def_readwrite("order_time", &Delivery::orderTime)
-            .def_readwrite("required_vehicle_index", &Delivery::requiredVehicleIndex);
+            .def_readwrite("required_vehicle_index", &Delivery::requiredVehicleIndex)
+            .def_readwrite("group_index", &Delivery::groupIndex);
 
     py::class_<Vehicle>(m, "Vehicle", py::module_local())
             .def(py::init([](std::string id, int capacity, int homeLocationIndex,

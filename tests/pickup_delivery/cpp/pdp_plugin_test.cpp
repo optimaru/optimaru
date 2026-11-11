@@ -582,6 +582,33 @@ void verifyRawCostsByHand() {
     byHand(
             "unassignedRequestsCost", [](PdpRoutePlan& p) { p.vehicles[0].nodeIndices.clear(); },
             {4.0}, keep, noGlobal);
+    // r1 and r2 are one group: r2 rides vehicle 1 while r1 rides vehicle 0, so
+    // one of the two is apart. Together on vehicle 0 they are whole.
+    const auto grouped = [](PdpRoutePlan& p) {
+        p.deliveries[0].groupIndex = 5;
+        p.deliveries[1].groupIndex = 5;
+    };
+    byHand(
+            "requestGroupCost",
+            [&grouped](PdpRoutePlan& p) {
+                grouped(p);
+                p.vehicles[0].nodeIndices = {0, 1};
+                p.vehicles[1].nodeIndices = {2, 3};
+            },
+            {1.0}, grouped, noGlobal);
+    // One of the group waits while the other rides: apart as well.
+    byHand(
+            "requestGroupCost",
+            [&grouped](PdpRoutePlan& p) {
+                grouped(p);
+                p.vehicles[0].nodeIndices = {0, 1};
+            },
+            {1.0},
+            [&grouped](PdpRoutePlan& p) {
+                grouped(p);
+                p.vehicles[0].nodeIndices.clear();  // both wait: whole
+            },
+            noGlobal);
     std::printf("\n");
 }
 
@@ -601,8 +628,8 @@ void verifyCatalog() {
     std::printf("== (j) Catalog == component constants ==\n");
     using optimaru::Level;
     const auto rows = defaultConstraints().info();
-    check(rows.size() == 20, "20 catalog rows");
-    if (rows.size() != 20) return;
+    check(rows.size() == 21, "21 catalog rows");
+    if (rows.size() != 21) return;
     // Unit constraints first, then the globals, in emplace order: the
     // list_constraints() order.
     check(rowIs<VehicleCapacityCost>(rows[0], "vehicleCapacityCost", Level::Hard, 1.0, false) &&
@@ -634,11 +661,14 @@ void verifyCatalog() {
                   rowIs<SameVehicleCost>(rows[17], "sameVehicleCost", Level::Hard, 1000.0, true) &&
                   rowIs<PickupBeforeDropoffCost>(rows[18], "pickupBeforeDropoffCost", Level::Hard,
                                                  1000.0, true) &&
-                  rowIs<UnassignedRequestsCost>(rows[19], "unassignedRequestsCost", Level::Medium,
+                  rowIs<RequestGroupCost>(rows[19], "requestGroupCost", Level::Hard, 1000.0,
+                                          true) &&
+                  rowIs<UnassignedRequestsCost>(rows[20], "unassignedRequestsCost", Level::Medium,
                                                 1.0, true),
           "info() == the components' kDefaultWeight / kDefaultLevel");
     check(PairedRequestCost::kDefaultWeight == ScoreCalculator::kCouplingPenalty &&
                   RequiredVehicleCost::kDefaultWeight == ScoreCalculator::kCouplingPenalty &&
+                  RequestGroupCost::kDefaultWeight == ScoreCalculator::kCouplingPenalty &&
                   PinnedStopsCost::kDefaultWeight == ScoreCalculator::kPinnedPenalty,
           "the penalty defaults are ScoreCalculator's constants");
     std::printf("\n");

@@ -67,12 +67,13 @@ ctest --test-dir build
 | `paired_request_cost` | `PairedRequestCost` | hard | 1000 | requests routed only half (one stop in a route, the other not) |
 | `same_vehicle_cost` | `SameVehicleCost` | hard | 1000 | requests whose pickup and dropoff ride different vehicles |
 | `pickup_before_dropoff_cost` | `PickupBeforeDropoffCost` | hard | 1000 | requests whose dropoff comes before the pickup in one route |
+| `request_group_cost` | `RequestGroupCost` | hard | 1000 | grouped requests that are not where most of their `group` is: on another vehicle, or unassigned while the others ride (see [Request groups](#request-groups)) |
 | `unassigned_requests_cost` | `UnassignedRequestsCost` | medium | 1 | service minutes (rounded down) of the requests left entirely unrouted |
 
 That is the `list_constraints()` order: the sixteen per-vehicle unit constraints
 (each vehicle, plus the unassigned pool as the last unit; only `required_vehicle_cost`
 and `squared_order_age_cost` price the pool, the others evaluate the vehicles alone),
-then the four request-level globals. `optimaru.pickup_delivery.constraint_info()` reports exactly this table
+then the five request-level globals. `optimaru.pickup_delivery.constraint_info()` reports exactly this table
 from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every constraint is
 flippable onto any of the three levels (`level="hard"`, `"medium"` or `"soft"`, or a
 `Level`), none is a reward, and every one at a weight above 0 is scored by default
@@ -132,7 +133,7 @@ takes integral offsets on every plugin; it refuses a non-integral one.
 `squared_order_age_cost` is the squared order age, not lateness past a due time.
 `max_end_time_cost` bounds a request's service end, `vehicle_max_end_time_cost` a
 vehicle's own end. The model fields keep plain names (`max_stops`, `pinned_stops`,
-`required_vehicle`, `max_travel_time`, `max_route_duration`, `max_end_time`,
+`required_vehicle`, `group`, `max_travel_time`, `max_route_duration`, `max_end_time`,
 `max_route_radius_meters`). `unassigned_requests_cost` defaults to weight 1 in medium
 units; `level="soft"` on it moves it to soft in the engine as in CP-SAT, and
 `level="hard"` charges 1 hard unit per minute.
@@ -164,7 +165,7 @@ The three coupling rules share one default weight,
 hard total already means infeasible, so that weight only shapes the gradient
 *within* the infeasible region; it is set well above a typical lateness so the
 search fixes broken pairs before polishing time windows. `required_vehicle_cost`
-uses the same weight. `pinned_stops_cost` uses `ScoreCalculator::kPinnedPenalty`
+and `request_group_cost` use the same weight. `pinned_stops_cost` uses `ScoreCalculator::kPinnedPenalty`
 (1e12), far above what the other hard rules total on real input, so no trade
 between them moves a pinned stop. If a result breaks a pin anyway, its `score`
 shows it in that unit. The CP-SAT reference enforces the three coupling rules
@@ -225,7 +226,9 @@ the whole move is laid out, so a candidate never holds half a request.
 | `bundleExchange` | Swaps a bundle of one route with a bundle of a nearby route, the two sized independently. |
 
 A request with a pinned stop is left where it is, and a request bound to a
-vehicle is only offered that vehicle. On a large fleet (more than 32 vehicles
+vehicle is only offered that vehicle. The requests of a group
+([Request groups](#request-groups)) are one unit in all three: they are taken
+out together and put back on one vehicle, or left out together. On a large fleet (more than 32 vehicles
 to offer) a request is offered to the idle vehicles and to the routes that hold
 one of its nearby stops, and to the rest of the fleet only when none of those
 has room; idle vehicles that would serve it identically are offered once.
@@ -257,6 +260,11 @@ deal with what it leaves behind.
 **`PairRuin`** makes the engine's kick take whole requests, seeded at a random
 one and spreading to its nearest neighbours. The built-in ruins pick individual
 stops, which strands half a request.
+
+These work one request at a time, so with [request groups](#request-groups) they
+stay inside a group: the pair move takes a grouped request only to the vehicle
+the rest of its group rides and never drops or routes it alone, the exchange
+leaves grouped requests out, and the ruin takes a group whole.
 
 ### What they are worth
 
@@ -323,6 +331,53 @@ cmake -B build -DOPTIMARU_USE_CASES=pickup_delivery && cmake --build build -j
 OPTIMARU_USE_CASES=pickup_delivery uv sync && uv run pytest -q tests/pickup_delivery
 ```
 
+## Request groups
+
+Orders the input has already merged into one job get the same `group`: a name on
+`DeliveryModel`, `Delivery.group_index` on a plan (-1 for none). The requests of
+a group ride **one vehicle together, or all stay unassigned**. A group holds any
+number of requests and a request belongs to at most one. Their stops stay
+ordinary stops: the vehicle visits them in any order that keeps each pickup
+before its dropoff, with other requests' stops in between.
+
+```python
+DeliveryModel(id="order-17", group="job-4", demand=1, pickup=..., dropoff=...)
+DeliveryModel(id="order-18", group="job-4", demand=2, pickup=..., dropoff=...)
+```
+
+`request_group_cost` (hard, weight 1000) scores it. A request is where its pickup
+is, on a vehicle or on none, and the raw cost is the number of grouped requests
+that are not where most of their group is. A group of three with one request on
+another vehicle costs 1, and so does one with a request left unassigned while two
+ride; spread over three vehicles it costs 2. Every request that joins the others
+takes 1 off, which is the slope the stop moves follow back to a whole group.
+
+The search moves a group as one unit. Construction puts its requests on the one
+vehicle that takes all of them for the least added driving, and the request moves
+take a group out of its route together and put it back on one vehicle, each
+request at its cheapest slot pair once the earlier ones are in. When no vehicle
+has room for the whole group (too many stops for `max_stops`, windows one route
+cannot keep) all of it stays in `unassigned`, and the result is still feasible:
+the group is not routed in parts. As with the vehicle limits, the request moves
+keep groups whole whatever level the constraint is scored on; with it soft or
+left out, only the engine's stop moves try plans that split one.
+
+A group is bound to a vehicle by any of these:
+
+- `required_vehicle` on one of its requests binds all of them. Two requests of a
+  group that name different vehicles are refused (`ValueError`).
+- A pinned stop. That request cannot leave its route, so the rest of the group
+  joins it there.
+- A request already on an `initial_route`. Construction adds the waiting requests
+  of the group to that vehicle; the search may then move the whole group.
+
+`solve_request` scores groups whenever a request names one: it then solves on the
+constraint assembly, as it does when a vehicle limit is set. On a hand-built
+plan pass `constraints=get_constraints()`; `pdp.solve(plan)` alone scores the
+seven core rules, which do not include this one. Like `required_vehicle_cost`
+and `pinned_stops_cost` the constraint is engine-only: the CP-SAT reference has
+no plugin for it and does not read `group`.
+
 ## Starting from an existing solution
 
 A solve keeps any route already on a vehicle as its starting point and places only
@@ -378,7 +433,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 `enclosing_circle_radius_cost`, `min_capacity_utilization_cost`, `route_duration_cost`,
 `latency_cost`, `squared_order_age_cost`, `vehicle_fixed_cost`, `pinned_stops_cost`,
 `required_vehicle_cost`, `paired_request_cost`, `same_vehicle_cost`,
-`pickup_before_dropoff_cost`, `unassigned_requests_cost`; plus `common.hpp` and the
+`pickup_before_dropoff_cost`, `request_group_cost`, `unassigned_requests_cost`; plus `common.hpp` and the
 enclosing-circle helpers in `route_geometry.hpp`):
 1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
    `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring

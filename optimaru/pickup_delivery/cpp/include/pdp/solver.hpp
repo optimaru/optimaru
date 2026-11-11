@@ -36,6 +36,12 @@ namespace pdp {
 //     requests rather than individual stops, so it never leaves a pickup
 //     stranded without its dropoff.
 //
+// Requests of one group (Delivery::groupIndex) ride one vehicle together or all
+// wait. Construction and the request moves place a group as one unit; the
+// operators that work one request at a time stay inside a group. The rule is
+// scored by requestGroupCost, which belongs to the constraint assembly: the
+// solve(plan) overload scores the seven core rules only.
+//
 // All join the engine's adaptive selection alongside the built-ins, so their
 // weight is learned rather than fixed.
 class Solver {

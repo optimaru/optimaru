@@ -94,6 +94,14 @@ class DeliveryModel(StrictModel):
         default=None,
         description="The vehicle this request must ride on. Its place on the route stays free.",
     )
+    group: str | None = Field(
+        default=None,
+        description=(
+            "A name shared by requests that are one job. The requests of a group ride one "
+            "vehicle together, or all stay unassigned; their stops may still be visited in "
+            "any order, between other stops."
+        ),
+    )
     pickup: StopModel
     dropoff: StopModel
 
@@ -124,7 +132,19 @@ class PdpInput(StrictModel):
         for delivery in self.deliveries:
             if delivery.required_vehicle and delivery.required_vehicle not in vehicle_ids:
                 raise ValueError(f"request {delivery.id}: unknown vehicle {delivery.required_vehicle!r}")
+        self._check_groups()
         return self
+
+    def _check_groups(self) -> None:
+        bound: dict[str, DeliveryModel] = {}
+        for delivery in self.deliveries:
+            if delivery.group is None or not delivery.required_vehicle:
+                continue
+            first = bound.setdefault(delivery.group, delivery)
+            if first.required_vehicle != delivery.required_vehicle:
+                raise ValueError(
+                    f"group {delivery.group!r}: requests {first.id} and {delivery.id} require different vehicles"
+                )
 
     def _check_initial_routes(self) -> None:
         requests = {stop.id: delivery for delivery in self.deliveries for stop in (delivery.pickup, delivery.dropoff)}
@@ -217,6 +237,7 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
         for i, vehicle in enumerate(model_input.vehicles)
     ]
     vehicle_index = {vehicle.id: i for i, vehicle in enumerate(model_input.vehicles)}
+    group_index: dict[str, int] = {}
     nodes = []
     deliveries = []
     for d, delivery in enumerate(model_input.deliveries):
@@ -254,6 +275,7 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
                 delivery.demand,
                 delivery.order_time,
                 vehicle_index[delivery.required_vehicle] if delivery.required_vehicle else -1,
+                -1 if delivery.group is None else group_index.setdefault(delivery.group, len(group_index)),
             )
         )
     node_index = {node.id: index for index, node in enumerate(nodes)}
@@ -338,7 +360,7 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
         or v.max_route_radius_meters
         or v.pinned_stops
         for v in request.model_input.vehicles
-    ) or any(d.required_vehicle for d in request.model_input.deliveries)
+    ) or any(d.required_vehicle or d.group is not None for d in request.model_input.deliveries)
     if constraints is None and not has_route_policy:
         solver.solve(plan)
     else:

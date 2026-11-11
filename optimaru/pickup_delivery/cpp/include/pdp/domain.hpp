@@ -152,6 +152,10 @@ struct Delivery {
     Seconds orderTime = 0;
     // The vehicle this request must ride on, or -1 for any.
     int requiredVehicleIndex = -1;
+    // The group this request travels in, or -1 for none. The requests of one
+    // group ride one vehicle together, or all wait (requestGroupCost): several
+    // orders the input has merged into one job.
+    int groupIndex = -1;
 };
 
 // ---------------------------------------------------------------------------
