@@ -46,17 +46,22 @@ def _specs(use_case):
 
 
 def _probe(use_case):
-    """(module, constraints module, a spec class to probe the knobs with): the first default
-    constraint that is a penalty whose level may change."""
+    """(module, constraints module, a spec class to probe the knobs with): the first spec of
+    get_constraints() that is a penalty whose level may change."""
     module, constraints = _specs(use_case)
-    name = next(row.name for row in module.constraint_info() if row.level_flippable and not row.reward)
-    spec = next(type(spec) for spec in constraints.get_constraints() if spec.name == name)
+    rows = {row.name: row for row in module.constraint_info()}
+    spec = next(
+        type(spec)
+        for spec in constraints.get_constraints()
+        if rows[spec.name].level_flippable and not rows[spec.name].reward
+    )
     return module, constraints, spec
 
 
 @functools.cache
 def _solved(use_case):
-    """A complete solution as the core holds it: what constraint_costs() takes."""
+    """A complete solution as the core holds it: what constraint_costs() takes. One per use
+    case for the whole run, so a test must not write to it."""
     solved = use_case_module(use_case).solve(small_problem(use_case), time_limit_seconds=0.2, random_seed=1)
     return solved.to_core() if hasattr(solved, "to_core") else solved
 
@@ -111,8 +116,9 @@ def test_every_spec_has_labels_and_descriptions_in_both_languages(use_case):
 def test_get_constraints_defaults_to_the_default_set(use_case):
     module, constraints = _specs(use_case)
     names = [spec.name for spec in constraints.get_constraints()]
-    assert names == [row.name for row in module.constraint_info() if row.default_enabled or row.name in names]
-    if use_case not in CATALOG_BEYOND_THE_DEFAULTS:
+    if use_case in CATALOG_BEYOND_THE_DEFAULTS:
+        assert names == [row.name for row in module.constraint_info() if row.default_enabled]
+    else:  # the default assembly, its opt-in constraints (default weight 0) included
         assert names == module.list_constraints()
 
 
@@ -174,14 +180,21 @@ def test_a_level_must_be_a_level(use_case):
         ({"offset": float("nan")}, ValueError),
         ({"offset": "1"}, TypeError),
         ({"clip": 0}, TypeError),
-        ({"hard": 1}, TypeError),
-        ({"hard": True}, TypeError),
     ],
 )
 def test_specs_validate_their_knobs(use_case, knobs, error):
     _, _, spec = _probe(use_case)
     with pytest.raises(error):
         spec(**knobs)
+
+
+@pytest.mark.parametrize("use_case", optimaru.__all__)
+def test_a_spec_has_no_hard_keyword(use_case):
+    """The level is the `level` knob: `hard` is an unknown keyword, not a knob that is checked."""
+    _, _, spec = _probe(use_case)
+    for value in (1, True):
+        with pytest.raises(TypeError, match="unexpected keyword argument 'hard'"):
+            spec(hard=value)
 
 
 @pytest.mark.parametrize("use_case", optimaru.__all__)
@@ -222,6 +235,7 @@ def test_the_core_refuses_invalid_knobs_from_duck_typed_picks(use_case, knobs, m
     on every path that reads picks."""
     module, _, spec = _probe(use_case)
     pick = _pick(spec.name, **knobs)
+    message = re.escape(message)
     with pytest.raises(ValueError, match=message):
         module.solve(small_problem(use_case), time_limit_seconds=0.1, constraints=[pick])
     if use_case not in COSTS_OFF_THE_CORE_ONLY:
