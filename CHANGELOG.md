@@ -12,7 +12,8 @@
   their READMEs give (`uv run <slug>-compare`, `uv run pytest -q`) did not run; they have
   the table the other fifteen have now, and declare pytest in a `dev` dependency group, so
   a plain `uv sync` installs it. `tests/test_layout.py` holds every benchmark project to a
-  `[build-system]` table and to one external-solver tag.
+  `[build-system]` table and to one external-solver tag, and the links into external-solver
+  to that tag.
 - **Vehicle routing: visit groups with a partial order.** Visits that share a `group`
   (`VisitModel.group`, a name; `Visit.group_index` on a plan) are one job: they ride one
   vehicle together, or all stay unassigned. `after` (`Visit.after_visit_indices`) lists the
