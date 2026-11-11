@@ -26,7 +26,7 @@
   the others took their problem model through `solve`, and school timetabling took dicts.
   Every use case now has both entry points, and the package exports both
   (`optimaru.<use case>.solve_request` is `models.solve_request`).
-  - *New:* a request model in the other 18: `models.<Name>Request`, the problem model as
+  - *New:* a request model in the other 17 and in school timetabling: `models.<Name>Request`, the problem model as
     `model_input` with the settings of one solve, and `models.solve_request(request, *,
     constraints=None)`, which returns what `solve` returns for that model. School
     timetabling's `TimetableRequest` holds the problem as the new `TimetableProblemModel`

@@ -355,7 +355,7 @@ class ShiftCountImbalanceCost(_EsConstraint):
 
 
 # ---------------------------------------------------------------------------
-# ConstraintModel-only constraints (not in the default set)
+# Opt-in constraints (not in the default set)
 # ---------------------------------------------------------------------------
 
 

@@ -390,7 +390,7 @@ def test_there_is_one_rule_model_per_spec_in_factory_order():
     for spec in SPEC_CLASSES:
         model = constraint_model(spec)
         assert model.spec_class is spec
-        assert model.__name__ == f"{spec.__name__}Model"  # no "ConstraintModel" suffix
+        assert model.__name__ == f"{spec.__name__}Model"  # no "RuleModel" suffix
         assert getattr(models, model.__name__) is model  # picklable by reference
         assert set(model.model_fields) == {"name", "weight", "level", "exponent", "offset", "clip", *spec().params()}
         assert model().to_spec() == spec()
@@ -487,7 +487,7 @@ def test_integral_json_knobs_stay_numbers():
 
 
 def test_no_generated_model_is_named_rule():
-    """The per-constraint JSON models end in "Model", never in "ConstraintModel"."""
+    """The per-constraint JSON models end in "Model", never in "RuleModel"."""
     assert not [name for name in dir(models) if name.endswith("CostRule")]
     with pytest.raises(ImportError):
         exec("from optimaru.employee_scheduling.models import AssignmentCostRule", {})
