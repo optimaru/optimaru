@@ -251,7 +251,10 @@ public:
                 steps_since_best_or_lns = 0;
                 lns_trigger = std::min(lns_trigger * 2, lns_trigger_cap);
             } else if (stalled && stages.enabled()) {
-                steps_since_best_or_lns = 0;  // no kicks and no stage fits: look again later
+                // No kicks, and the next stage is not due: wait and ask again.
+                // (Once a stage no longer fits in the budget none will: the
+                // search goes on with the history it has.)
+                steps_since_best_or_lns = 0;
             } else {
                 // A built-in strategy plugin if one is drawn; otherwise a
                 // caller's operator or the ordinary move mix (op == nullptr),
@@ -300,7 +303,10 @@ public:
                             classify(candidate_score, current_score, best_score, accepted);
                     if (accepted) {
                         // In stages, stagnation counts from the last improving
-                        // move: a stage starts far below the best.
+                        // move: a stage starts far below the best. (Strictly
+                        // improving, on the score as it is compared: a use case
+                        // whose soft level carries rounding noise would see
+                        // sideways moves as improving here and never stall.)
                         if (stages.enabled() && candidate_score > current_score) {
                             steps_since_best_or_lns = -1;
                         }
