@@ -38,8 +38,8 @@ namespace vrp {
 // construction runs and a group operator joins the move mix
 // (vrp/group_moves.hpp), which carries a group between vehicles as one unit.
 // The two rules are scored by visitGroupCost and visitOrderCost, which belong
-// to the constraint assembly: the solve(plan) overload scores the four core
-// rules only.
+// to the constraint assembly, so solve(plan) hands a plan with groups to the
+// default assembly instead of scoring it on the four core rules.
 //
 // Unassigned visits: leaving a visit out of every route is modelled with
 // the plan's virtual unassigned pool (see VehicleRoutePlan). solve() fills the
@@ -221,7 +221,9 @@ public:
 
     // Solves in place: mutates plan.vehicles[*].visitIndices and
     // plan.unassignedVisitIndices, and stores the best score found in
-    // plan.score.
+    // plan.score. Scored on the four core rules, unless the plan has visit
+    // groups: then on the default constraint assembly (vrp/constraints.hpp),
+    // as the overload below would with addDefaultConstraints(), single-start.
     void solve(VehicleRoutePlan& plan);
 
     // Solves with a caller-assembled plugin calculator (see

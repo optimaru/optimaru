@@ -223,6 +223,7 @@ def test_the_order_constraint_can_be_made_soft():
         ([visit("a", "g", after=["b"]), visit("b", "h")], "visit a comes after visit b, which is not in its group"),
         ([visit("a", "g", after=["b"]), visit("b")], "visit a comes after visit b, which is not in its group"),
         ([visit("a", after=["b"]), visit("b")], "visit a comes after visit b, which is not in its group"),
+        ([visit("a", "g", after=["b", "b"]), visit("b", "g")], "visit a: `after` names a visit twice"),
         (
             [visit("a", "g", after=["c"]), visit("b", "g", after=["a"]), visit("c", "g", after=["b"])],
             r"the order of the visits has a cycle through \['a', 'b', 'c'\]",
@@ -251,6 +252,12 @@ def test_the_engine_refuses_the_same_on_a_plan():
     with pytest.raises(ValueError, match="visit a comes after visit c, which is not in its group"):
         vrp.solve(stranger, time_limit_seconds=0.1)
 
+    visits = plan.visits
+    visits[0].after_visit_indices = [1, 1]
+    twice = vrp.VehicleRoutePlan(plan.name, plan.locations, plan.vehicles, visits)
+    with pytest.raises(ValueError, match="visit a names visit b twice among the visits it comes after"):
+        vrp.solve(twice, time_limit_seconds=0.1)
+
 
 def test_an_empty_group_name_is_no_group():
     model_input = two_ends([visit("a", ""), visit("b", ""), visit("c")])
@@ -268,7 +275,8 @@ def test_to_plan_numbers_the_groups_in_input_order_and_resolves_after():
     assert [v.after_visit_indices for v in plan.visits] == [[3], [], [], []]
 
 
-def test_solve_scores_groups_on_a_plan_without_being_asked():
+@pytest.mark.parametrize("entry", ["solve", "Solver.solve"])
+def test_every_entry_point_scores_groups_on_a_plan_without_being_asked(entry):
     # No vehicle takes both visits of the group (one visit each), so it has to wait whole.
     # Scored on the four core rules alone, routing the two apart would look feasible and better.
     vehicles = [vehicle("v", max_stops=1), vehicle("w", max_stops=1)]
@@ -276,11 +284,29 @@ def test_solve_scores_groups_on_a_plan_without_being_asked():
     config = vrp.SolverConfig()
     config.step_count_limit = 3000
 
-    vrp.solve(plan, config=config)
+    if entry == "solve":
+        vrp.solve(plan, config=config)
+    else:
+        vrp.Solver(config).solve(plan)
 
     assert plan.score.is_feasible()
     assert sorted(plan.unassigned_visit_ids()) == ["a", "b"]
     assert plan.score.medium == -20  # two visits of 10 service minutes each
+
+
+def test_a_constraint_list_without_the_group_rule_is_used_as_it_is():
+    # The group starts on two vehicles and neither takes both visits. With the caller's own
+    # list, which leaves `visit_group_cost` out, nothing in the score is wrong with that.
+    vehicles = [vehicle("v", ["a"], max_stops=1), vehicle("w", ["b"], max_stops=1)]
+    plan = to_plan(two_ends([visit("a", "g"), visit("b", "g")], vehicles))
+    config = vrp.SolverConfig()
+    config.step_count_limit = 500
+    others = [spec for spec in get_constraints() if spec.name != "visit_group_cost"]
+
+    vrp.solve(plan, config=config, constraints=others)
+
+    assert plan.score.is_feasible()
+    assert plan.routes() == {"v": ["a"], "w": ["b"]}
 
 
 def test_the_group_operator_can_be_turned_off_and_its_knob_is_checked():

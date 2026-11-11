@@ -434,7 +434,9 @@ void verifyPiecewiseByHand() {
               c->name + ": piecewise answer equals cost() of the written-out route");
         ++compared;
     }
-    check(compared == 3, "three summed unit components compared");
+    // The three summed components, and visitOrderCost: this plan states no
+    // order, so its answer is 0 for any candidate route.
+    check(compared == 4, "the three summed unit components and visitOrderCost compared");
     // The pool as a unit: every summed component costs it 0 from pieces too.
     for (const auto& c : constraints) {
         if (!c->supports_piecewise_preview()) continue;
@@ -442,13 +444,20 @@ void verifyPiecewiseByHand() {
         check(c->piecewise_cost(plan, pool, pieces, 5, piecewise) && piecewise == 0.0,
               c->name + ": the pool costs nothing");
     }
-    // The global: unrouted penalty with vehicle 0 holding the pieces.
+    // The globals. visitGroupCost: this plan groups nothing, so its answer is
+    // 0 whatever vehicle 0 holds. unassignedVisitsCost: the unrouted penalty
+    // with vehicle 0 holding the pieces.
     for (const auto& g : calculator.global_constraint_list()) {
         if (!g->supports_piecewise_preview()) continue;
         std::vector<int> members1 = plan.vehicles[1].visitIndices;
         const optimaru::PreviewedUnit changes[1] = {{0, &written, pieces, 5}};
         double piecewise = -1.0;
         const bool answered = g->piecewise_preview_cost(plan, changes, 1, piecewise);
+        if (g->name == "visitGroupCost") {
+            check(answered && piecewise == 0.0,
+                  g->name + ": a plan without groups answers 0 from pieces");
+            continue;
+        }
         std::int64_t expected = 0;
         for (const Visit& visit : plan.visits) expected += visit.unassignedPenalty();
         for (int v : written)

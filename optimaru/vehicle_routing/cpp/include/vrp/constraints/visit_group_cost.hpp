@@ -50,6 +50,17 @@ struct VisitGroupCost final : VrpGlobalConstraint {
                         int count) const override {
         return static_cast<double>(placement_.preview(changes, count));
     }
+    // A plan with no group costs nothing whatever the candidate routes are,
+    // so its previews need none written out. With groups the candidate
+    // members are read (preview_cost() above).
+    bool supports_piecewise_preview() const override { return true; }
+    bool piecewise_preview_cost(const VehicleRoutePlan& /*plan*/,
+                                const optimaru::PreviewedUnit* /*changes*/, int /*count*/,
+                                double& out) const override {
+        if (!placement_.empty()) return false;
+        out = 0.0;
+        return true;
+    }
 
 private:
     optimaru::GroupPlacement placement_;

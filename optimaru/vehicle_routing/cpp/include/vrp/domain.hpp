@@ -203,6 +203,15 @@ struct VehicleRoutePlan {
         return drivingSeconds[fromLocation][toLocation];
     }
 
+    // Whether some visit is in a group (Visit::groupIndex). Such a plan is
+    // scored with the constraint assembly, which holds the two group rules.
+    bool hasVisitGroups() const {
+        for (const Visit& visit : visits) {
+            if (visit.groupIndex >= 0) return true;
+        }
+        return false;
+    }
+
     // Puts every visit that no vehicle services into the unassigned pool, so
     // the plan satisfies the engine's "every element is in exactly one list"
     // invariant. Idempotent.

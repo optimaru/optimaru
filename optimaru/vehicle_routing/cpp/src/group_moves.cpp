@@ -503,13 +503,21 @@ void constructGroups(VehicleRoutePlan& plan, const VisitGroups& groups) {
     for (int visit : plan.unassignedVisitIndices) parked[static_cast<std::size_t>(visit)] = 1;
     for (int leader : order) {
         // The visits still to place, and the vehicle that carries most of the
-        // others (the first such when they start on several).
+        // others (the first such when they start on several). A visit the
+        // caller parked in the pool stays there, as it does for the engine's
+        // construction, and the rest of its group that is on no route waits
+        // with it: the group operator routes the group whole.
         waiting.clear();
         riding.clear();
+        bool parkedByCaller = false;
         for (int visit = leader; visit >= 0; visit = groups.nextOf(visit)) {
             const int on = routedOn[static_cast<std::size_t>(visit)];
             if (on < 0) {
-                waiting.push_back(visit);
+                if (parked[static_cast<std::size_t>(visit)]) {
+                    parkedByCaller = true;
+                } else {
+                    waiting.push_back(visit);
+                }
                 continue;
             }
             const auto at = std::find_if(riding.begin(), riding.end(),
@@ -529,7 +537,9 @@ void constructGroups(VehicleRoutePlan& plan, const VisitGroups& groups) {
                 bound = vehicle;
             }
         }
-        if (bound >= 0) {
+        if (parkedByCaller) {
+            candidates.clear();
+        } else if (bound >= 0) {
             candidates.assign(1, bound);
         } else {
             fleet.candidates(

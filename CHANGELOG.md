@@ -32,8 +32,9 @@
   engine's construction, and the use case's first domain move, `groupRuinRecreate`, carries
   a group between vehicles as one unit (`SolverConfig.group_ruin_recreate`,
   `group_ruin_max_visits`); it is registered only for a plan with groups, so a plan without
-  them is solved exactly as before. `solve_request` and `vrp.solve(plan)` score a grouped
-  input on the constraint assembly. Engine-only: the CP-SAT reference reads neither field.
+  them is solved exactly as before. Every entry point scores a grouped input on the
+  constraint assembly (`solve_request`, `vrp.solve(plan)`, `Solver.solve(plan)`), on a
+  single start. Engine-only: the CP-SAT reference reads neither field.
   `list_constraints()` and `constraint_info()` have two more rows.
 - **Pickup and delivery: request groups.** Requests that share a `group`
   (`DeliveryModel.group`, a name; `Delivery.group_index` on a plan) are one job: they ride

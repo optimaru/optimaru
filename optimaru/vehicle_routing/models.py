@@ -134,11 +134,13 @@ class RoutingInput(StrictModel):
                     raise ValueError(f"visit {visit.id} comes after itself")
                 if not visit.group or by_id[earlier].group != visit.group:
                     raise ValueError(f"visit {visit.id} comes after visit {earlier}, which is not in its group")
+            if len(set(visit.after)) != len(visit.after):
+                raise ValueError(f"visit {visit.id}: `after` names a visit twice")
         # Every visit can be listed behind the ones it comes after, or there is a cycle.
-        waiting = {visit.id: len(set(visit.after)) for visit in self.visits}
+        waiting = {visit.id: len(visit.after) for visit in self.visits}
         followers: dict[str, list[str]] = {}
         for visit in self.visits:
-            for earlier in set(visit.after):
+            for earlier in visit.after:
                 followers.setdefault(earlier, []).append(visit.id)
         ready = [visit_id for visit_id, count in waiting.items() if count == 0]
         while ready:

@@ -325,6 +325,9 @@ void testGroupsAreRead() {
     VehicleRoutePlan range = plan;
     range.visits[2].afterVisitIndices = {99};
     check(refuses(range), "and an index past the visits is refused");
+    VehicleRoutePlan twice = plan;
+    twice.visits[5].afterVisitIndices = {2, 2};
+    check(refuses(twice), "nor may a visit name another twice");
     check(!refuses(plan), "the plan itself is accepted");
     std::printf("\n");
 }
@@ -478,6 +481,26 @@ void testConstruction() {
                       plan.vehicles[1].visitIndices.empty(),
               "a group no vehicle takes whole is parked in the pool, whole");
     }
+    {
+        // The caller parked one visit of a group: it stays parked, as it does
+        // for the engine's construction, and the rest of the group waits with
+        // it. A group the caller did not touch is placed.
+        VehicleRoutePlan plan = buildRandomInstance(9, 2, /*seed=*/4);
+        for (int v : {0, 1, 2}) plan.visits[static_cast<std::size_t>(v)].groupIndex = 0;
+        for (int v : {3, 4, 5}) plan.visits[static_cast<std::size_t>(v)].groupIndex = 1;
+        plan.unassignedVisitIndices = {1};
+        VisitGroups groups;
+        groups.build(plan);
+        constructGroups(plan, groups);
+        std::vector<int> parked = plan.unassignedVisitIndices;
+        std::sort(parked.begin(), parked.end());
+        const Places places = placesOf(plan);
+        check(parked == std::vector<int>({0, 1, 2}),
+              "a group with a visit the caller parked waits whole in the pool");
+        check(places.vehicle[3] >= 0 && places.vehicle[3] == places.vehicle[4] &&
+                      places.vehicle[4] == places.vehicle[5],
+              "and the other group is placed");
+    }
     std::printf("\n");
 }
 
@@ -560,20 +583,33 @@ void testGroupWithNoRoomWaits() {
                   places.vehicle[2] < 0,
           "the three visits of the group stay unassigned together (" + plan.score.str() + ")");
     check(waitingCount(plan) == 3 && everyVisitOnce(plan), "and the four other visits are routed");
+
+    // The same through solve(plan), which has no calculator to be told about:
+    // a plan with groups is scored with the default assembly there too. On the
+    // four core rules the three visits would be routed apart and look fine.
+    VehicleRoutePlan core = buildRandomInstance(7, 2, /*seed=*/9);
+    for (Vehicle& vehicle : core.vehicles) vehicle.maxStops = 2;
+    for (int v : {0, 1, 2}) core.visits[static_cast<std::size_t>(v)].groupIndex = 0;
+    Solver(stepLimited(5000)).solve(core);
+    const Places corePlaces = placesOf(core);
+    check(core.score == plan.score && corePlaces.vehicle[0] < 0 && corePlaces.vehicle[1] < 0 &&
+                  corePlaces.vehicle[2] < 0,
+          "solve(plan) scores a grouped plan with the default assembly (" + core.score.str() + ")");
     std::printf("\n");
 }
 
-// Parallel starts each build their own groups and operator on their copy of
-// the plan.
-void testGroupsWithParallelStarts() {
-    std::printf("== Visit groups with parallel starts ==\n");
+// solve(plan) with parallel starts asked for: a grouped plan goes to the
+// default assembly, which is one start, and comes back whole and in order.
+void testGroupsWithParallelStartsAskedFor() {
+    std::printf("== Visit groups through solve(plan), parallel starts asked for ==\n");
     VehicleRoutePlan plan = buildRandomInstance(24, 3, /*seed=*/13);
     groupInOrder(plan, /*grouped=*/12, /*size=*/3, /*chained=*/true);
-    Solver::Config config = stepLimited(1500);
+    Solver::Config config = stepLimited(3000);
     config.parallel_solver_count = 2;
     Solver(config).solve(plan);
-    check(everyVisitOnce(plan) && plan.score.feasible() && waitingCount(plan) == 0,
-          "two starts solve a grouped plan (" + plan.score.str() + ")");
+    check(everyVisitOnce(plan) && plan.score.feasible() && waitingCount(plan) == 0 &&
+                  groupsWhole(plan) && orderKept(plan),
+          "the grouped plan is solved whole and in order (" + plan.score.str() + ")");
     std::printf("\n");
 }
 
@@ -624,7 +660,7 @@ int main() {
     testGroupsRideTogether();
     testScatteredStartIsMended();
     testGroupWithNoRoomWaits();
-    testGroupsWithParallelStarts();
+    testGroupsWithParallelStartsAskedFor();
     testGroupMovesMatter();
     std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures,
                 failures == 1 ? "" : "s");

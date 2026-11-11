@@ -12,6 +12,7 @@
 
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
+#include "vrp/constraints.hpp"
 #include "vrp/group_moves.hpp"
 #include "vrp/incremental_calculator.hpp"
 #include "vrp/score_calculator.hpp"
@@ -47,6 +48,12 @@ void checkVisitGroups(const VehicleRoutePlan& plan) {
             if (visit.groupIndex < 0 || other.groupIndex != visit.groupIndex) {
                 throw std::invalid_argument("visit " + visit.id + " comes after visit " + other.id +
                                             ", which is not in its group");
+            }
+            // Named twice, the pair would be counted twice by visitOrderCost.
+            if (std::count(visit.afterVisitIndices.begin(), visit.afterVisitIndices.end(),
+                           earlier) > 1) {
+                throw std::invalid_argument("visit " + visit.id + " names visit " + other.id +
+                                            " twice among the visits it comes after");
             }
             ++waitingFor[static_cast<std::size_t>(v)];
             followers[static_cast<std::size_t>(earlier)].push_back(v);
@@ -228,6 +235,17 @@ Score levelScore(const optimaru::DecomposedObjective<VehicleRoutePlan>& calculat
 }  // namespace
 
 void Solver::solve(VehicleRoutePlan& plan) {
+    // The four core rules do not price groups, and on them a split group
+    // would end as a feasible plan. A plan with groups is scored with the
+    // whole default assembly instead (single-start, like every solve on a
+    // caller's assembly).
+    if (plan.hasVisitGroups()) {
+        plan.unassignedVisitIndices.clear();
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        solve(plan, calculator);
+        return;
+    }
     const std::shared_ptr<const VisitGroups> groups = visitGroupsOf(plan);
     // Start with an empty pool so the construction heuristic sees every
     // unrouted visit as uninitialized and places it by cheapest insertion.

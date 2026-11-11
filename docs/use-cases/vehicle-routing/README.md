@@ -146,8 +146,8 @@ VisitModel(id="unload-b", group="job-4", after=["load"], location=...)   # a and
 VisitModel(id="sign-off", group="job-4", after=["unload-a", "unload-b"], location=...)
 ```
 
-A visit may only come after visits of its own group, and the order must have no
-cycle; anything else is refused (`ValueError`), since it could never be served.
+A visit may only come after visits of its own group, the order must have no
+cycle, and a visit is named once; anything else is refused (`ValueError`).
 
 Two hard constraints score it, both at weight 1000, well above a typical lateness
 or overload, so a broken group is mended before windows are polished:
@@ -203,13 +203,14 @@ other cost far less. A grouped plan also settles early: on two of these instance
 a 60 s solve ends within 2% of a 4 s one, while nine seeds end 3% and 6% apart
 (10 s), so another seed buys more than a longer run.
 
-`solve_request` scores groups whenever a visit names one: it then solves on the
-constraint assembly, as it does when a vehicle limit is set, where `num_workers`
-has no effect. `vrp.solve(plan)` does the same for a plan with a `group_index`
-set. One level down, `Solver(config).solve(plan)` (the C++ `Solver::solve(plan)`)
-scores the four core rules, which include neither constraint: use
-`solve_with_constraints` there. Both constraints are engine-only: the CP-SAT
-reference has no plugin for them and reads neither `group` nor `after`.
+Every entry point scores a grouped plan with the default constraints, since the
+four core rules include neither of these two: `solve_request` when a visit names
+a group, and `vrp.solve(plan)`, `Solver(config).solve(plan)` and the C++
+`Solver::solve(plan)` when a visit has a `group_index`. That is a solve on the
+constraint assembly, as when a vehicle limit is set: the whole default set is
+scored, and `num_workers` / `parallel_solver_count` have no effect. Both
+constraints are engine-only: the CP-SAT reference has no plugin for them and
+reads neither `group` nor `after`.
 
 ## Starting from an existing solution
 

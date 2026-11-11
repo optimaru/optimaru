@@ -52,7 +52,8 @@ std::vector<std::unique_ptr<optimaru::MoveOperator<VehicleRoutePlan>>> makeGroup
 // Places the groups no route holds whole yet, each on the one vehicle that
 // takes its waiting visits for the least driving: the vehicle that already
 // carries most of the group when some of it is routed, any vehicle otherwise.
-// A group no vehicle takes is parked in the unassigned pool, whole. Visits in
+// A group no vehicle takes is parked in the unassigned pool, whole, and so is
+// what is on no route of a group the caller has parked a visit of. Visits in
 // no group are left to the engine's construction.
 void constructGroups(VehicleRoutePlan& plan, const VisitGroups& groups);
 

@@ -51,6 +51,18 @@ struct VisitOrderCost final : detail::PerVehicleConstraint {
         return static_cast<double>(reversed);
     }
 
+    // A plan with no order costs nothing on any candidate route, so its
+    // previews need no route written out. With an order the candidate route
+    // is costed as it is (cost() above).
+    bool supports_piecewise_preview() const override { return !ordered_; }
+    bool piecewise_cost(const VehicleRoutePlan& /*plan*/, int /*unit*/,
+                        const optimaru::ListPiece* /*pieces*/, int /*count*/,
+                        double& out) const override {
+        if (ordered_) return false;
+        out = 0.0;
+        return true;
+    }
+
 private:
     bool ordered_ = false;  // some visit names one it comes after
     // Where each visit of the route being costed sits, valid while its stamp
