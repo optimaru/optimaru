@@ -41,6 +41,8 @@ public:
           last_best_(now) {}
 
     bool enabled() const { return enabled_; }
+    // Whether late acceptance has started over at least once.
+    bool in_later_stage() const { return enabled_ && later_stage_; }
     std::size_t history() const { return history_; }
     // A stage has converged only when two histories have gone by without an
     // improving move. Until the search has found something better than its
@@ -82,6 +84,7 @@ public:
         stage_start_ = now;
         in_stage_ = true;
         restarted_ = true;
+        later_stage_ = true;
         return acceptor(start_score_);
     }
 
@@ -126,7 +129,8 @@ private:
     double last_best_;
     bool in_stage_ = false;
     bool restarted_ = false;
-    bool found_best_ = false;  // a solution better than the start's
+    bool later_stage_ = false;  // a stage has started since the search began
+    bool found_best_ = false;   // a solution better than the start's
 };
 
 }  // namespace optimaru

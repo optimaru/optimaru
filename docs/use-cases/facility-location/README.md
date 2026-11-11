@@ -87,7 +87,8 @@ fl.solve(problem, constraints=[
   `optimaru/facility_location/cpp/include/fl/constraints.hpp` assembles the default set (`defaultConstraints()`)
 - `score_calculator` — full recompute (the reference)
 - `incremental_calculator` — before/after hooks, O(1) per move
-- `solver` — engine wrapper (CH + Late Acceptance + adaptive ruin & recreate)
+- `solver` — engine wrapper (construction, late acceptance in stages, the macro moves
+  `CloseFacilityMove` and `SwapFacilityMove`, adaptive ruin & recreate)
 - `optimaru/facility_location/cpp/src/main.cpp` — demo instance
   (30 facilities x capacity 150, 60 consumers x demand 15, London box, setup cost N(50000, 10000²))
 
@@ -119,6 +120,49 @@ print(problem.score, problem.used_facility_count(), problem.total_cost())
 The pydantic v2 serialization mirror is `optimaru.facility_location.models`
 (`FacilityLocationProblemModel.from_core / to_core`).
 
+## Search
+
+The construction gives every consumer its best facility one by one, which opens many
+facilities; late acceptance then works with the engine's change / swap moves, its
+ruin-and-recreate kicks, and two macro moves of the domain
+(`optimaru/facility_location/cpp/src/solver.cpp`). They exist because
+`facility_setup_cost` is a step function: a facility stops costing only when its last
+consumer leaves, and starts costing with its first.
+
+- **`CloseFacilityMove`** (`close_facility_moves`) empties one used facility in one move:
+  its consumers go to the nearest facilities with room, or all together to one other site.
+- **`SwapFacilityMove`** (`swap_facility_moves`) opens a closed facility and closes the one
+  that serves its surroundings. The closed one's consumers go to their nearest facility
+  with room, and then each facility with room takes the consumers that are nearer to it
+  than to where they are. Without this move the search keeps the facilities it first
+  settles on and only improves who goes where.
+
+A solve that starts from nothing runs
+[late acceptance in stages](../README.md#late-acceptance-in-stages), and from the first
+restart on it draws the two macro moves on a tenth of the steps `custom_move_probability`
+allows: a later stage takes worse solutions for a long while, and the macro moves, which
+each make a pass over every consumer, would take the steps that settle who goes where. A
+solve from a given assignment has no stages and keeps the full gate.
+
+Measured on the six instances of
+[`benchmarks/facility-location`](../../../benchmarks/facility-location) (30 s, three
+seeds, one thread), as the mean cost above OR-Tools CP-SAT's at 30 s on 8 workers:
+
+| search | mean cost above CP-SAT's |
+| --- | ---: |
+| 0.5.0: no swaps, one history | 1.91% |
+| stages | 1.71% |
+| swaps and stages, the full gate throughout | 0.51% |
+| swaps and stages, a tenth of the gate from the first restart on (the default) | 0.07% |
+
+A short solve gains too: after 50,000 steps the mean cost of a 200-consumer instance over
+8 seeds is 3.10 million, against 3.22 million in 0.5.0. From a given assignment the mean
+cost above CP-SAT's is 0.15% to 0.80% with the swaps and 2.40% to 3.00% without, on the 60-
+and the 200-consumer instance (36 seeds, 300,000 steps, from a rough assignment and from a
+solved 80% of the consumers). What the search still cannot do is open a facility without
+closing another: a solve from a plan that needs one more facility for its new consumers
+keeps the plan's facilities.
+
 ## Starting from an existing solution
 
 `with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is `FacilityLocationProblemModel.from_core(problem)` or that model as a JSON dict. `solve` takes the engine object, so convert the result with `to_core()`:
@@ -141,7 +185,7 @@ The solution has the **assignment** shape; the domain solver that configures the
 engine is `optimaru/facility_location/cpp/include/fl/solver.hpp` + `optimaru/facility_location/cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
-(weights in `Solver::Config`). `CloseFacilityMove` (empties a facility by moving all its consumers) is defined and registered in `optimaru/facility_location/cpp/src/solver.cpp` (`runEngine`) — use it as the template. A new move is a
+(weights in `Solver::Config`). `CloseFacilityMove` (empties a facility by moving all its consumers) and `SwapFacilityMove` (opens one facility and closes another) are defined and registered in `optimaru/facility_location/cpp/src/solver.cpp` (`runEngine`) — use them as the template. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `optimaru/facility_location/cpp/src/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.

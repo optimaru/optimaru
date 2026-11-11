@@ -147,15 +147,19 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("value_recommender_keep", &Solver::Config::value_recommender_keep)
             // Assignment best-improvement descent strategy weight. 0 = off.
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
-            // Gate on how often a step may draw CloseFacilityMove. 1 = engine
-            // default (unrestricted).
+            // Gate on how often a step may draw a macro move (CloseFacilityMove,
+            // SwapFacilityMove). 1 = unrestricted; a solve in stages draws them
+            // on a tenth of it from the first restart on.
             .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             // CloseFacilityMove: the domain macro move that takes one facility
             // out of service in a single step (see cpp/src/solver.cpp).
             .def_readwrite("close_facility_moves", &Solver::Config::close_facility_moves)
             .def_readwrite("close_facility_keep", &Solver::Config::close_facility_keep)
             .def_readwrite("close_facility_migrate_probability",
-                           &Solver::Config::close_facility_migrate_probability);
+                           &Solver::Config::close_facility_migrate_probability)
+            // SwapFacilityMove: open a closed facility and close the one that
+            // serves its surroundings in one step (see cpp/src/solver.cpp).
+            .def_readwrite("swap_facility_moves", &Solver::Config::swap_facility_moves);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

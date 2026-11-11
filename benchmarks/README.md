@@ -158,9 +158,10 @@ larger semiconductor instances (see that README), and on the 400-request
 synthetic pickup-delivery instance it did with the stop-granular search those
 days measured (54 vehicles one day, 55 the other; the request-level search
 that replaced it returned the same plan in two runs on 2026-11-11). Bed
-allocation, food packaging, knapsack, maintenance scheduling, max-cut,
-quadratic assignment and sports league scheduling search in stages of growing
-late acceptance history, and which stage a solve reaches under a time limit
+allocation, facility location (since its table of 2026-11-12), food packaging,
+knapsack, maintenance scheduling, max-cut, quadratic assignment and sports
+league scheduling search in stages of growing late acceptance history, and
+which stage a solve reaches under a time limit
 depends on the clock: of the 35 instances of five of them, measured twice on
 2026-11-11 with an earlier build, the engine's score was the same on 32
 (the 10-line plant of food packaging moved by 0.01%, the 400-vertex max-cut by
