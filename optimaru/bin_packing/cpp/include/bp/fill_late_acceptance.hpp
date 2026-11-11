@@ -59,6 +59,8 @@ namespace bp {
 class FillLateAcceptance final : public optimaru::Acceptor {
 public:
     static constexpr std::uint64_t kLosingTieOdds = 8;
+    static_assert((kLosingTieOdds & (kLosingTieOdds - 1)) == 0,
+                  "a power of two, so that rng() % kLosingTieOdds has no bias");
 
     // `live` is the solution the engine searches in place; it outlives the
     // acceptor.

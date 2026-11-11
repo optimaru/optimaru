@@ -88,7 +88,10 @@ void runEngine(const Solver::Config& config, BinPackingProblem& problem,
     // A caller's acceptor takes the place of the configured rule and of
     // history_growth: bin packing lets the caller choose neither, and one
     // that ever does has to leave this factory out for any rule but plain
-    // late acceptance.
+    // late acceptance. The factory reads this start's own problem, which is
+    // right as long as every start has its own engine (solve_parallel_starts
+    // above): the engine's multi-start would hand one factory to the copies
+    // it solves, and every acceptor would read the caller's packing.
     if (config.fill_tie_break) {
         const BinPackingProblem& live = problem;
         engine.set_acceptor_factory([&live, historyLength](const Score& initial) {

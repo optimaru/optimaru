@@ -381,7 +381,9 @@ private:
 // squared loads; the two are meant to run together.
 //
 // It checks the capacity only; colours and conflicts are judged by the
-// score, through the acceptor, like everything else.
+// score, through the acceptor, like everything else. A bin above the
+// capacity takes part in no trade (none leaves it both within the capacity
+// and no less full); the change and swap moves bring it back.
 //
 // Cost per move: an O(n) census, and per partner at most 37 x 37 trades
 // (kMaxItems items of a bin are looked at; a bin of three items has 7 x 7).
