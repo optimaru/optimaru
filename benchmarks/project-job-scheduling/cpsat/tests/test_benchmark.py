@@ -1,4 +1,4 @@
-from project_job_cpsat import benchmark
+from project_job_scheduling_cpsat import benchmark
 
 
 def test_comparison_runner_owns_its_instances() -> None:

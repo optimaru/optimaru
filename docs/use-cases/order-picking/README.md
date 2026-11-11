@@ -1,4 +1,4 @@
-# Order Picking
+# Order picking
 
 Derived from the Timefold Quickstarts `order-picking` example (Apache-2.0), translated
 and modified; see the repository [NOTICE](../../../NOTICE).

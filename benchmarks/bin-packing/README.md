@@ -7,7 +7,7 @@ the use case's own evaluator (the C++ `constraint_costs`).
 
 ```sh
 cd benchmarks/bin-packing
-OPTIMARU_USE_CASES=bin_packing uv sync --project cpsat --all-groups --all-extras   # also builds this checkout's optimaru (bin_packing only)
+OPTIMARU_USE_CASES=bin_packing uv sync --project cpsat   # also builds this checkout's optimaru (bin_packing only)
 uv run --project cpsat pytest -q cpsat/tests
 uv run --project cpsat python -m bench.run_bench --seconds 60
 uv run --project cpsat python -m bench.run_bench --sample-per-class 3 --seconds 30   # instances 00, 10 and 19 of each class

@@ -8,7 +8,7 @@ rescored by the engine's own score calculator; parity tests in external-solver
 
 ```sh
 cd benchmarks/employee-scheduling/cpsat
-OPTIMARU_USE_CASES=employee_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (employee_scheduling only)
+OPTIMARU_USE_CASES=employee_scheduling uv sync   # also builds this checkout's optimaru (employee_scheduling only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run employee-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

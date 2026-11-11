@@ -1,4 +1,4 @@
-# Project Job Scheduling
+# Project job scheduling
 
 Derived from the Timefold Quickstarts `project-job-scheduling` example (Apache-2.0), translated
 and modified; see the repository [NOTICE](../../../NOTICE).

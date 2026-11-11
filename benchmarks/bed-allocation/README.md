@@ -11,7 +11,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/bed-allocation/cpsat
-OPTIMARU_USE_CASES=bed_allocation uv sync --all-groups --all-extras   # also builds this checkout's optimaru (bed_allocation only)
+OPTIMARU_USE_CASES=bed_allocation uv sync   # also builds this checkout's optimaru (bed_allocation only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run bed-allocation-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```
@@ -19,7 +19,7 @@ uv run bed-allocation-compare --seconds 10 --workers 8   # engine vs CP-SAT (--m
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 
 `dump_instances.py` writes the comparison instances for the engine-only
-C++ bench (`optimaru/bed_allocation/cpp/bench/ba_quality_bench.cpp`).
+C++ bench ([`cpp/ba_quality_bench.cpp`](cpp/ba_quality_bench.cpp)).
 
 The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports

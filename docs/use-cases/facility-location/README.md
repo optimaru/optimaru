@@ -1,4 +1,4 @@
-# Facility Location
+# Facility location
 
 Derived from the Timefold Quickstarts `facility-location` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)),

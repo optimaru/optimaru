@@ -1,4 +1,4 @@
-# Flight Crew Scheduling (C++ / Python)
+# Flight crew scheduling
 
 Derived from the Timefold Quickstarts `flight-crew-scheduling` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)),

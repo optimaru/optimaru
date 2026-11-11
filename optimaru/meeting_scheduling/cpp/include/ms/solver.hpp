@@ -16,7 +16,7 @@ namespace ms {
 // ruin-and-recreate (ALNS) enabled on top of the built-in change/swap moves.
 class Solver {
 public:
-    // Tuning history (bench/ms_quality_bench.cpp, 10s single-thread,
+    // Tuning history (benchmarks/meeting-scheduling/cpp/ms_quality_bench.cpp, 10s single-thread,
     // interleaved A/B on demo + scaled:48 + scaled:96, seeds 42..47; the
     // objective is medium * 1e6 + soft, since the folded medium level
     // dominates on every non-trivial instance). Adopted: the late-acceptance
@@ -42,7 +42,8 @@ public:
     // The limits, the seed, the parallel starts, the callback and the ruin &
     // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
     //   history_length 0       clamp(128 * assignmentCount, 3200, 6400). Tuned
-    //                          on the quality bench (bench/ms_quality_bench.cpp,
+    //                          on the quality bench
+    //                          (benchmarks/meeting-scheduling/cpp/ms_quality_bench.cpp,
     //                          10s single-thread, seeds 42..47): the medium
     //                          level (attendance conflicts) dominates the
     //                          objective and only a long acceptance history

@@ -1,4 +1,4 @@
-# conference-scheduling-cpsat
+# Conference scheduling CP-SAT
 
 CP-SAT alternative exposing the conference constraints as a selectable
 catalog. Passing `constraints` replaces the default catalog. The model is

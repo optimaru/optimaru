@@ -1,4 +1,4 @@
-# Conference Scheduling
+# Conference scheduling
 
 Derived from the Timefold Quickstarts `conference-scheduling` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)),
@@ -133,7 +133,7 @@ soft beyond ten minutes. This use case has no medium level: `level="medium"` rai
 
 ## Quality benchmark and solver defaults
 
-`optimaru/conference_scheduling/cpp/bench/quality_bench.cpp` (`cs_quality_bench <demo|scaled:N> <seed> <seconds>
+`benchmarks/conference-scheduling/cpp/cs_quality_bench.cpp` (`cs_quality_bench <demo|scaled:N> <seed> <seconds>
 [knobs]`) solves demo-like scaled instances (a fixed 14 slots x 9 rooms = 126 cells,
 variable talk count) on a fixed wall-clock budget and prints the final `hard/soft`, the
 trajectory, the per-constraint breakdown and a moves/s estimate. N >= ~63 is structurally

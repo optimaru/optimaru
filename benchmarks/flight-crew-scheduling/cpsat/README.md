@@ -1,4 +1,4 @@
-# Flight crew CP-SAT
+# Flight crew scheduling CP-SAT
 
 CP-SAT backend for the canonical flight-crew model, `external_solver.flight_crew_scheduling`
 from [external-solver](https://github.com/optimaru/external-solver); this project runs it
@@ -36,6 +36,6 @@ instances, gives both backends the same solve budget, and re-scores both answers
 with the engine evaluator.
 
 ```sh
-uv run flight-crew-compare --seconds 10
-uv run flight-crew-compare --instance demo --seconds 2 --json
+uv run flight-crew-scheduling-compare --seconds 10
+uv run flight-crew-scheduling-compare --instance demo --seconds 2 --json
 ```

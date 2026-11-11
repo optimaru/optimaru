@@ -1,4 +1,4 @@
-# School Timetabling
+# School timetabling
 
 Derived from the Timefold Quickstarts `school-timetabling` example (Apache-2.0), translated
 and modified; see the repository [NOTICE](../../../NOTICE).
@@ -95,8 +95,8 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 3. for a default constraint, add the same raw cost to `canonical_score_calculator`
    (a `Breakdown` member named like the registry name) / `canonical_incremental_calculator`,
    weighted by the component's `kDefaultWeight` (a soft one also gets an `ObjectiveWeights`
-   field) — `canonical_plugin_test` checks they agree bit for bit — and a positive and a zero
-   hand-calculated case to `canonical_plugin_test` (h);
+   field) — `st_canonical_plugin_test` checks they agree bit for bit — and a positive and a zero
+   hand-calculated case to `st_canonical_plugin_test` (h);
 4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
    `description_en` / `description_ko` to `optimaru/school_timetabling/constraints.py` (plus its
    module-level default instance and its place in `_DEFAULTS`); callers then pick, reweight

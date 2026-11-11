@@ -1,11 +1,12 @@
 // Quality-benchmark driver for the C++ conference-scheduling solver.
 //
-// Solves either (a) the demo instance (an exact copy of src/main.cpp's
-// generator, random draws included) or (b) a deterministic scaled
-// instance in the demo's shape (single-typed slots/rooms, so the
-// talkTypeIncompatibilityCost hard constraint dominates exactly like in the
-// demo) for a fixed wall-clock budget, then prints the best-score trajectory,
-// the per-constraint breakdown and an st_quality_bench-style moves/s estimate.
+// Solves either (a) the demo instance (an exact copy of the generator in
+// optimaru/conference_scheduling/cpp/src/main.cpp, random draws included) or
+// (b) a deterministic scaled instance in the demo's shape (single-typed
+// slots/rooms, so the talkTypeIncompatibilityCost hard constraint dominates
+// exactly like in the demo) for a fixed wall-clock budget, then prints the
+// best-score trajectory, the per-constraint breakdown and an
+// st_quality_bench-style moves/s estimate.
 //
 // Usage: cs_quality_bench <demo|scaled:<talks>> <seed> <seconds> [key=value..]
 // Knobs (bench-only overrides of Solver::Config, for A/B sweeps):

@@ -12,8 +12,8 @@ instances, gives both backends the same solve budget, and re-scores both answers
 with the engine evaluator.
 
 ```sh
-uv run project-job-compare --seconds 10
-uv run project-job-compare --instance demo --seconds 2 --json
+uv run project-job-scheduling-compare --seconds 10
+uv run project-job-scheduling-compare --instance demo --seconds 2 --json
 ```
 
 ## Constraints

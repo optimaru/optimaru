@@ -1,5 +1,5 @@
-#ifndef FAB_TEST_SUPPORT_HPP
-#define FAB_TEST_SUPPORT_HPP
+#ifndef FAB_TEST_FIXTURES_HPP
+#define FAB_TEST_FIXTURES_HPP
 
 // Shared by fab_test.cpp and fab_plugin_test.cpp: check(), a fixture
 // builder addressing everything by id, and seeded random instances.
@@ -344,4 +344,4 @@ inline int randomValue(const SemiconductorSchedule& s, std::mt19937_64& rng, boo
 
 }  // namespace fabtest
 
-#endif  // FAB_TEST_SUPPORT_HPP
+#endif  // FAB_TEST_FIXTURES_HPP

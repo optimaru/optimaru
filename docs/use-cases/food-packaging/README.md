@@ -1,4 +1,4 @@
-# Food Packaging (C++ / Python)
+# Food packaging
 
 Derived from the Timefold Quickstarts `food-packaging` example model
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)), with modifications.

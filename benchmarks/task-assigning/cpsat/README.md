@@ -1,4 +1,4 @@
-# task-assigning-cpsat
+# Task assigning CP-SAT
 
 CP-SAT alternative for task assigning: external-solver's `external_solver.task_assigning`
 (this package holds the engine vs CP-SAT comparison and points external-solver at the engine

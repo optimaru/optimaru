@@ -1,4 +1,4 @@
-# Max-Cut
+# Max-cut
 
 Weighted Max-Cut with fixed vertex sides, same-side and different-side pairs,
 side-size bounds and an optional balance term, on this repository's C++ engine

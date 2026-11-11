@@ -624,7 +624,7 @@ dependencies = [
     { name = "ortools" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "pytest" },
 ]
@@ -633,6 +633,7 @@ dev = [
 requires-dist = [
     { name = "optimaru", editable = "../../" },
     { name = "ortools", specifier = ">=9.15,<9.16" },
-    { name = "pytest", marker = "extra == 'dev'" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest" }]

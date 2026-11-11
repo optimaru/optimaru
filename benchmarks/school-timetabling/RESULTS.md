@@ -21,7 +21,7 @@ all three tables; the tables below cover tracks 1 and 2.
   teacher_time_efficiency_cost / class_subject_repeat_cost (soft). The
   model's seventh term, teacher_unavailability_cost, gets empty
   data in these instances, so it contributes 0 (fairness).
-- **Instances**: `optimaru/school_timetabling/cpp/bench/st_quality_bench.cpp`
+- **Instances**: `benchmarks/school-timetabling/cpp/st_quality_bench.cpp`
   generates them deterministically and dumps JSON; both solvers read the
   same file. 5 days × 8 periods = 40 slots, a 34-period weekly curriculum per
   class. Presets (classes / teachers / rooms): `S: 6/12/7 (204 lessons)`,
@@ -64,7 +64,7 @@ all three tables; the tables below cover tracks 1 and 2.
   opposite direction from track 1's soft score).
 - That both implementations share the same semantics is pinned separately by
   a parity gate (`cpsat/tests/test_engine_parity.py`, and the 44 hand-computed
-  cases of the C++ `canonical_test`).
+  cases of the C++ `st_canonical_test`).
 - Engine numbers use the default **monolithic incremental calculator** (fast
   path). The plugin-assembly path with the same semantics
   (`optimaru.school_timetabling.solve(..., constraints=)`) reaches 35–55% of the
@@ -253,7 +253,7 @@ an exhaustive descent is cheap.
 # 0) C++ build + test gate
 cmake -B build/st -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_ENGINE_TESTS=OFF -DOPTIMARU_USE_CASES=school_timetabling
 cmake --build build/st -j
-./build/st/school_timetabling/st_test && ./build/st/school_timetabling/canonical_test
+./build/st/school_timetabling/st_test && ./build/st/school_timetabling/st_canonical_test
 
 # 1) Track 1: cross-check gate → C++ vs CP-SAT → rescoring → table (out/RESULTS_track1.md)
 cd benchmarks/school-timetabling
@@ -273,7 +273,7 @@ uv run run_bench.py --track3 --sizes S,M,L --seconds 10
 ### CI
 
 [`school-timetabling-bench.yml`](../../.github/workflows/school-timetabling-bench.yml)
-runs exactly that order: ccache build → `st_test`/`canonical_test` gate →
+runs exactly that order: ccache build → `st_test`/`st_canonical_test` gate →
 C++/evaluator cross-check gate → track 1 → track 2 → track 3 →
 all three tables published in the job summary (+ instance/solution JSON uploaded as
 artifacts).

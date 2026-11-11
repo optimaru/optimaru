@@ -47,7 +47,7 @@ cannot be hard`.
 
 ```sh
 cd benchmarks/quadratic-assignment/cpsat
-OPTIMARU_USE_CASES=quadratic_assignment uv sync --all-groups --all-extras   # also builds this checkout's optimaru (quadratic_assignment only)
+OPTIMARU_USE_CASES=quadratic_assignment uv sync   # also builds this checkout's optimaru (quadratic_assignment only)
 uv run pytest -q                                       # benchmark harness tests
 uv run quadratic-assignment-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
@@ -70,7 +70,7 @@ demand, checksum-verified ([`bench/data.py`](bench/data.py)), and rescores every
 
 ```sh
 cd benchmarks/quadratic-assignment
-OPTIMARU_USE_CASES=quadratic_assignment uv sync --project cpsat --all-groups --all-extras   # also builds this checkout's optimaru (quadratic_assignment only)
+OPTIMARU_USE_CASES=quadratic_assignment uv sync --project cpsat   # also builds this checkout's optimaru (quadratic_assignment only)
 uv run --project cpsat pytest -q cpsat/tests
 uv run --project cpsat python -m bench.run_bench --seconds 60
 ```

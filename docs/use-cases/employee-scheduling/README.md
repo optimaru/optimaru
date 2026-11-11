@@ -1,4 +1,4 @@
-# Employee Scheduling
+# Employee scheduling
 
 Derived from the Timefold Quickstarts `employee-scheduling` example (Apache-2.0), translated
 and modified; see the repository [NOTICE](../../../NOTICE).

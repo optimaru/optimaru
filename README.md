@@ -186,7 +186,8 @@ CONTRIBUTING.md                    setup, adding a constraint or a move, PR rule
 examples/                          one Jupyter notebook per use case
 benchmarks/<slug>/                 the same problems against OR-Tools (CP-SAT,
                                    or the Routing solver for VRP); competing
-                                   solvers live only here
+                                   solvers live only here. cpp/ holds the use
+                                   case's C++ quality bench, where it has one
 benchmarks/cpsat-common/           comparison runner; checks external-solver
                                    runs against this checkout
 setup.py, CMakeLists.txt           the wheel's extensions; the C++ build
@@ -283,7 +284,9 @@ cmake -B build -DOPTIMARU_USE_CASES=none && cmake --build build && ctest --test-
 
 `OPTIMARU_USE_CASES` takes `all` (the default), `none` or a list such as
 `knapsack,vehicle_routing` (commas, spaces or `;` between the names); each use case adds its core library, demo
-and the C++ tests in `tests/<use case>/cpp/`, built under `build/<use case>/`.
+and the C++ tests in `tests/<use case>/cpp/`, built under `build/<use case>/`. Four use cases
+(bed allocation, conference scheduling, meeting scheduling, school timetabling) also build a
+quality bench, `<ns>_quality_bench`, from `benchmarks/<slug>/cpp/`.
 
 ## Building and releasing
 

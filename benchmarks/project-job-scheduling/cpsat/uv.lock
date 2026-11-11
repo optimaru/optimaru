@@ -49,11 +49,12 @@ version = "0.1.0"
 source = { editable = "../../cpsat-common" }
 
 [package.metadata]
-requires-dist = [
-    { name = "numpy", marker = "extra == 'dev'" },
-    { name = "pytest", marker = "extra == 'dev'" },
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "numpy" },
+    { name = "pytest" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "external-solver"
@@ -385,7 +386,7 @@ wheels = [
 ]
 
 [[package]]
-name = "project-job-cpsat"
+name = "project-job-scheduling-cpsat"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -396,7 +397,7 @@ dependencies = [
     { name = "pydantic" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "pytest" },
 ]
@@ -408,9 +409,10 @@ requires-dist = [
     { name = "optimaru", editable = "../../../" },
     { name = "ortools", specifier = ">=9.10" },
     { name = "pydantic", specifier = ">=2" },
-    { name = "pytest", marker = "extra == 'dev'" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest" }]
 
 [[package]]
 name = "protobuf"

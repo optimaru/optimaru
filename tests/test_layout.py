@@ -27,6 +27,22 @@ def test_every_subpackage_is_a_use_case():
     assert all((ROOT / "tests" / name).is_dir() for name in USE_CASES)
 
 
+def test_a_use_case_keeps_only_its_sources_under_cpp():
+    """What the extension and the core library build from. The C++ tests are in
+    tests/<use case>/cpp/ and a C++ bench is in benchmarks/<slug>/cpp/. All four entries are
+    required: setup.py compiles cpp/bindings.cpp and cpp/src/*.cpp against cpp/include."""
+    tracked = subprocess.run(["git", "ls-files", "optimaru"], cwd=ROOT, capture_output=True, text=True)
+    if tracked.returncode != 0:
+        pytest.skip("not a git checkout")
+    entries = {name: set() for name in USE_CASES}
+    for path in tracked.stdout.splitlines():
+        parts = path.split("/")
+        if len(parts) > 3 and parts[1] in USE_CASES and parts[2] == "cpp":
+            entries[parts[1]].add(parts[3])
+    for name in sorted(USE_CASES):
+        assert entries[name] == {"CMakeLists.txt", "bindings.cpp", "include", "src"}, name
+
+
 def test_the_package_lists_every_use_case():
     assert set(optimaru.__all__) == USE_CASES
 
@@ -72,7 +88,8 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
     and CI does not notice, because it runs `python -m` from the project directory. The CP-SAT
     library is pinned by tag in every project that uses it (every use case but vehicle routing,
     compared with OR-Tools Routing, and school timetabling, which keeps its model here): one
-    tag, moved in all of them, and the links into the library follow it."""
+    tag, moved in all of them, and the links into the library follow it. pytest is in the `dev`
+    dependency group, which a plain `uv sync` installs (an extra or another group is not)."""
     slugs = {name.replace("_", "-") for name in USE_CASES}
     projects = {slug: ROOT / "benchmarks" / slug / "cpsat" / "pyproject.toml" for slug in slugs - {"vehicle-routing"}}
     projects["vehicle-routing"] = ROOT / "benchmarks" / "vehicle-routing" / "pyproject.toml"
@@ -81,6 +98,10 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
     for slug, project in sorted(projects.items()):
         data = tomllib.loads(project.read_text())
         assert "build-system" in data, f"{slug}: uv will not install the package or its [project.scripts]"
+        groups = data.get("dependency-groups", {})
+        assert set(groups) == {"dev"}, f"{slug}: one dependency group, dev, which a plain uv sync installs"
+        assert any(entry.startswith("pytest") for entry in groups["dev"]), f"{slug}: no pytest in the dev group"
+        assert "optional-dependencies" not in data["project"], f"{slug}: test tools go in [dependency-groups]"
         source = data.get("tool", {}).get("uv", {}).get("sources", {}).get("external-solver")
         if source is not None:
             assert set(source) == {"git", "tag"}, f"{slug}: external-solver is pinned by tag, not {source}"

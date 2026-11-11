@@ -14,7 +14,7 @@ from optimaru.semiconductor_scheduling.models import AssignmentModel, Semiconduc
 from .fab_random import instance
 
 # A copy of the web demo sample (web: src/lib/demo-data/semiconductor-scheduling.json).
-WEB_DEMO = Path(__file__).parent / "data" / "web-demo.json"
+WEB_DEMO = Path(__file__).parent / "fixtures" / "web_demo.json"
 
 
 def _web_demo() -> dict:

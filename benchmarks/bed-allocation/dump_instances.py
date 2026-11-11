@@ -3,7 +3,7 @@
 The three deterministic instances the ``bed-allocation-compare`` harness
 builds in Python (``bed_allocation_cpsat.benchmark.instances``) are written to
 ``<outdir>/<name>.batxt`` so the C++ engine-only bench
-(``optimaru/bed_allocation/cpp/bench/ba_quality_bench.cpp``) can solve EXACTLY the same problems
+(``benchmarks/bed-allocation/cpp/ba_quality_bench.cpp``) can solve EXACTLY the same problems
 without a Python round-trip per run.
 
 Run from the repo root:

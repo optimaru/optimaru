@@ -16,7 +16,7 @@ whose file is missing keeps its README text and its homepage entry.
 - ``vrp-x.json``, ``vrp-a.json``: ``python -m vrp_benchmark --series x|a --out FILE``;
 - ``pdp-li-lim.json``, ``pdp-synthetic.json``: ``pickup-delivery-public-bench --json``
   (the lists of several runs concatenated);
-- ``rcpsp.json``: ``project-job-public-bench --all --json``;
+- ``rcpsp.json``: ``project-job-scheduling-public-bench --all --json``;
 - ``bpp.json``: bin-packing ``python -m bench.run_bench --json``;
 - ``qaplib.json``: quadratic-assignment ``python -m bench.run_bench --all --json``;
 - ``salbp-<data set>.json``: assembly-line-balancing
@@ -727,20 +727,12 @@ def compare_dataset(slug: str, results: list[dict], seconds: float) -> dict:
         "generated",
         "cp-sat",
         f"{slug}/cpsat",
-        f"uv run {COMPARE_COMMANDS.get(slug, slug + '-compare')} --seconds {seconds:g} --workers 8",
+        f"uv run {slug}-compare --seconds {seconds:g} --workers 8",
         [_section("instances", metric, rows)],
     )
     if caveats:
         dataset["caveats"] = caveats
     return dataset
-
-
-#: The console script of each comparison project (its ``[project.scripts]``).
-COMPARE_COMMANDS = {
-    "flight-crew-scheduling": "flight-crew-compare",
-    "project-job-scheduling": "project-job-compare",
-    "sports-league-scheduling": "sports-league-compare",
-}
 
 
 def vrp_dataset(slug: str, data: dict) -> dict:
@@ -898,7 +890,7 @@ def rcpsp_dataset(results: list[dict], seconds: float) -> dict:
         "public",
         "cp-sat",
         "project-job-scheduling/cpsat",
-        f"uv run project-job-public-bench --all --seconds {seconds:g} --workers 8",
+        f"uv run project-job-scheduling-public-bench --all --seconds {seconds:g} --workers 8",
         [_section("instances", "makespan", rows)],
     )
 

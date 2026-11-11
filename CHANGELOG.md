@@ -72,6 +72,36 @@
   a plain `uv sync` installs it. `tests/test_layout.py` holds every benchmark project to a
   `[build-system]` table and to one external-solver tag, and the links into external-solver
   to that tag.
+- **Layout and names: one form for what every use case has.** No behavior changes.
+  - The C++ quality benches left the package tree: `optimaru/<use case>/cpp/bench/` is now
+    `benchmarks/<slug>/cpp/<ns>_quality_bench.cpp` (bed allocation, conference scheduling,
+    meeting scheduling, school timetabling; conference scheduling's file was
+    `quality_bench.cpp`), next to the comparison it belongs to, as the C++ tests are under
+    `tests/<use case>/cpp/`. The bench targets and their binaries' paths under `build/` are
+    the same.
+    A use case's `cpp/` holds only `CMakeLists.txt`, `bindings.cpp`, `include/` and `src/`.
+  - School timetabling's C++ tests carry the use case's prefix like every other target:
+    `st_canonical_test`, `st_canonical_plugin_test` (were `canonical_test`,
+    `canonical_plugin_test`; files, targets and ctest names).
+  - Semiconductor scheduling's tests use the names the other use cases' tests use:
+    `fixtures/web_demo.json` (was `data/web-demo.json`) and `cpp/fab_fixtures.hpp` (was
+    `fab_test_support.hpp`).
+  - Three benchmark projects are named after their use case like the other seventeen
+    that run an external-solver model:
+    `flight_crew_scheduling_cpsat`, `project_job_scheduling_cpsat` and
+    `sports_league_scheduling_cpsat` (were `flight_crew_cpsat`, `project_job_cpsat`,
+    `sports_league_cpsat`), with the commands `flight-crew-scheduling-compare`,
+    `project-job-scheduling-compare`, `project-job-scheduling-public-bench` and
+    `sports-league-scheduling-compare`. `scripts/publish_benchmarks.py` no longer keeps a
+    table of exceptions for them.
+  - Every benchmark project declares pytest in the `dev` dependency group. Ten declared it
+    as an extra and school timetabling's CP-SAT project in a group named `test`, so a plain
+    `uv sync` there installed no pytest and `uv run pytest -q` could not start. The READMEs
+    and CI now say `uv sync` without `--all-groups --all-extras` / `--extra dev`.
+  - Guide titles: the use case's name in sentence case, without "(C++ / Python)"; every
+    `python.md` is `# optimaru.<use case> (Python)`; six `cpsat/README.md` titles follow the
+    other nine (`<Use case> CP-SAT`).
+  - `tests/test_layout.py` holds the `cpp/` contents and the `dev` group.
 
 ## 0.4.2
 

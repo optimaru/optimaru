@@ -1,5 +1,5 @@
 [project]
-name = "project-job-cpsat"
+name = "project-job-scheduling-cpsat"
 version = "0.1.0"
 description = "OR-Tools CP-SAT backend for project job scheduling."
 requires-python = ">=3.11,<4.0"
@@ -11,12 +11,12 @@ dependencies = [
     "pydantic>=2",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["pytest"]
 
 [project.scripts]
-project-job-compare = "project_job_cpsat.benchmark:main"
-project-job-public-bench = "project_job_cpsat.public_benchmark:main"
+project-job-scheduling-compare = "project_job_scheduling_cpsat.benchmark:main"
+project-job-scheduling-public-bench = "project_job_scheduling_cpsat.public_benchmark:main"
 
 [tool.uv]
 # external-solver pins the published optimaru; the benchmarks measure the engine in
@@ -29,7 +29,7 @@ optimaru = { path = "../../..", editable = true }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
 
 [tool.setuptools]
-packages = ["project_job_cpsat"]
+packages = ["project_job_scheduling_cpsat"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

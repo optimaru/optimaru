@@ -8,7 +8,7 @@ dependencies = ["optimaru", "ortools>=9.15,<9.16"]
 [project.scripts]
 vrp-bench = "vrp_benchmark.run:main"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["pytest"]
 
 [tool.setuptools]

@@ -26,7 +26,7 @@ objective is built.
 
 ```sh
 cd benchmarks/knapsack/cpsat
-OPTIMARU_USE_CASES=knapsack uv sync --all-groups --all-extras   # also builds this checkout's optimaru (knapsack only)
+OPTIMARU_USE_CASES=knapsack uv sync   # also builds this checkout's optimaru (knapsack only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run knapsack-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```

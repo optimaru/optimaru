@@ -12,7 +12,7 @@ and compares them. It runs build → cross-check gate → quality benchmark → 
 | `evaluate.py` | Track-1 shared evaluator: recomputes the quickstart model's six-constraint score from a solution (checked against each solver's self-report); its per-term keys are the `*_cost` names below, each holding the raw cost (the reward `teacher_time_efficiency_cost` is <= 0) |
 | `cpsat_quickstart.py` | Track-1 CP-SAT solver (six constraints: hard as constraints, the three soft ones as the objective) |
 | `gen_canonical.py` | Track-2 generator of S/M/L canonical `TimetableProblem`s (blocks / parallel sections / team teaching / unavailability, with a load check) |
-| `../../optimaru/school_timetabling/cpp/bench/st_quality_bench.cpp` | Track-1 C++ side: builds instances, dumps JSON, solves, cross-check mode |
+| `cpp/st_quality_bench.cpp` | Track-1 C++ side: builds instances, dumps JSON, solves, cross-check mode |
 
 ## Track 1: the quickstart model's six constraints
 

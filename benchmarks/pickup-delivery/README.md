@@ -8,7 +8,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/pickup-delivery/cpsat
-OPTIMARU_USE_CASES=pickup_delivery uv sync --all-groups --all-extras   # also builds this checkout's optimaru (pickup_delivery only)
+OPTIMARU_USE_CASES=pickup_delivery uv sync   # also builds this checkout's optimaru (pickup_delivery only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run pickup-delivery-public-bench --help              # Li & Lim PDPTW (SINTEF TOP archive)
 uv run pickup-delivery-public-bench --synthetic 200 --seconds 30 --workers 8   # seeded synthetic instance

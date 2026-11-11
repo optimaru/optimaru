@@ -122,7 +122,7 @@ inline ConstraintAssembly defaultConstraints(std::shared_ptr<TeacherMaskHub> mas
 }
 
 // The default set's registry names in catalog order: what list_constraints()
-// and constraint_info() follow (canonical_plugin_test checks it names
+// and constraint_info() follow (st_canonical_plugin_test checks it names
 // exactly defaultConstraints()).
 inline std::vector<std::string> constraintOrder() { return detail::buildDefaultSet(nullptr).order; }
 

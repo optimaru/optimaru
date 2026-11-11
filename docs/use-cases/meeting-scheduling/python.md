@@ -119,7 +119,7 @@ below 1e6 — always the case on realistic instances. The fold is declared once 
 
 ## Solver defaults and quality bench
 
-The default search settings were tuned with `optimaru/meeting_scheduling/cpp/bench/ms_quality_bench.cpp`
+The default search settings were tuned with `benchmarks/meeting-scheduling/cpp/ms_quality_bench.cpp`
 (monolithic incremental fast path, 10 s / single thread, 6-12 seeds interleaved
 A/B; absolute values are from one Apple Silicon macOS machine and vary per machine).
 The objective is `medium penalty × 1e6 + raw soft` (given hard 0; lower is better).
