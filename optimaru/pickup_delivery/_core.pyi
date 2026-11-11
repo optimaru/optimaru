@@ -321,8 +321,8 @@ class Solver:
         """Solve on the seven core rules, or on the default constraints when two
         requests or more share a group (request_group_cost is not a core rule; that
         solve is a single start). The core rules do not include required_vehicle_cost,
-        pinned_stops_cost or the vehicle limits either: for a plan that uses any of
-        those, call solve_with_constraints."""
+        pinned_stops_cost or the vehicle limits either: for a plan without groups
+        that uses any of those, call solve_with_constraints."""
     def solve_with_constraints(self, plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see optimaru.pickup_delivery.constraints). The given list replaces the default set;

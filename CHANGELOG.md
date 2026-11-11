@@ -52,10 +52,10 @@
   where 0.4.2 switched for any `group`. With `pair_construction_heuristic` off, a grouped plan
   now starts as any other does there: the engine's construction places every stop, where
   `pdp.solve(plan)` used to leave the caller's unassigned pool for the search to route.
-  `request_group_cost` answers the move previews since
-  it counts with `optimaru::GroupPlacement`, and answers them piecewise for a plan without
-  groups; the default set still applies every move, because its three request-coupling
-  constraints do not preview.
+  `request_group_cost` answers the move previews since it counts with
+  `optimaru::GroupPlacement`, and answers them piecewise for a plan without groups; the
+  default set still applies every move, because its three request-coupling constraints do
+  not preview.
 - **Pickup and delivery notebook re-run on 0.4.2.** `examples/pickup-delivery.ipynb` is saved
   with outputs from optimaru 0.4.2: the same problem now ends at 5.2 hours of driving, where
   0.4.1 ended at 5.4. Its rounds of more search are 10,000 steps each (were 0.3 seconds),

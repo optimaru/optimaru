@@ -827,8 +827,8 @@ void Solver::solve(PdpRoutePlan& plan) {
     // whole default assembly instead (single-start, like every solve on a
     // caller's assembly).
     if (plan.hasRequestGroups()) {
-        // As below: without the pair construction, the engine's own places
-        // every stop.
+        // The same pool handling as the core path below: without the pair
+        // construction, the engine's own construction places every stop.
         if (!config_.pair_construction_heuristic || plan.vehicles.empty())
             plan.unassignedNodeIndices.clear();
         DecomposedCalculator calculator;

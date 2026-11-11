@@ -396,7 +396,8 @@ way, so it returns the score the solve stored and prices a split group on a plan
 built by hand.
 With `pair_construction_heuristic` off the engine's own construction places
 stops one at a time and may start with a group split, which the search then has
-to mend. Like `required_vehicle_cost`
+to mend; through `solve(plan)` it starts from an empty pool, while a list passed
+as `constraints` leaves the stops the caller parked in the pool where they are. Like `required_vehicle_cost`
 and `pinned_stops_cost` the constraint is engine-only: the CP-SAT reference has
 no plugin for it and does not read `group`.
 

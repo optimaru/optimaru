@@ -364,7 +364,8 @@ def test_groups_of_one_do_not_change_how_a_plan_is_scored():
     pdp.solve(plan, config=config)
 
     assert plan.unassigned_delivery_ids() == []
-    assert apart(two_ends(alone, vehicles)) == 0
+    assert plan.score.hard == 0
+    assert as_tuple(pdp.calculate_score(plan)) == as_tuple(plan.score)  # the core rules there too
 
     # With a second request in one of the groups the same call scores the default set: one
     # request per vehicle, and the group of two fits neither.
