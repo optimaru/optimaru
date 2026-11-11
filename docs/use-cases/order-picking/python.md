@@ -44,7 +44,8 @@ print(response.feasible, response.distance_by_trolley)
 
 The request carries its own `timelimit`, `random_seed`, `num_workers` and
 `stop_at_first_feasible`; a keyword of `solve` that is given replaces them, and
-`config` is the base they go on top of. `models.solve_request(request)` is the
+`config` is the base they go on top of (its `spent_limit_seconds`, `random_seed`
+and `parallel_solver_count` are replaced by the request's fields). `models.solve_request(request)` is the
 same solve under its earlier name.
 
 `SolverConfig` adjusts the engine knobs (time budget, sequence move weights, ALNS, nearby, ScoreChecks::Full,

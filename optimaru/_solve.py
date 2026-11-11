@@ -101,7 +101,8 @@ def request_with(
     A request model carries its own ``timelimit``, ``random_seed``, ``num_workers`` and
     ``stop_at_first_feasible``. A keyword left at its default keeps what the request says;
     one that is given replaces it, as it replaces the ``config`` setting of a compiled
-    problem. The values are checked where the solver configuration is: by the engine.
+    problem, and ``stop_at_first_feasible`` turns the request's flag on (it never turns it
+    off). The values are checked where the solver configuration is: by the engine.
     """
     update: dict[str, Any] = {}
     if time_limit_seconds is not None:

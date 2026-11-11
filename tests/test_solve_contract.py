@@ -75,7 +75,8 @@ def test_solve_takes_the_shared_keywords(use_case):
 
 @pytest.mark.parametrize("use_case", optimaru.__all__)
 def test_solve_refuses_what_is_no_problem(use_case):
-    with pytest.raises((TypeError, ValueError, AttributeError)):
+    # ValueError: a use case that also takes the JSON dict of its model answers with pydantic's.
+    with pytest.raises((TypeError, ValueError)):
         use_case_module(use_case).solve(object())
 
 
@@ -100,7 +101,7 @@ def test_solve_takes_the_request_model_and_returns_the_response_model(use_case):
 @pytest.mark.parametrize("use_case", REQUEST_MODEL_USE_CASES)
 def test_the_keywords_of_solve_replace_what_the_request_says(use_case):
     """A request with a 20 s budget and a zero-second keyword returns at once, and the callback
-    of a single start is called with the score of the result."""
+    of a single start is called on the way to the first feasible solution."""
     module = use_case_module(use_case)
     request = REQUEST_MODELS[use_case]().model_copy(update={"timelimit": 20.0})
     started = time.monotonic()
@@ -111,15 +112,34 @@ def test_the_keywords_of_solve_replace_what_the_request_says(use_case):
     assert request.timelimit == 20.0
 
     reported = []
-    module.solve(
+    started = time.monotonic()
+    solved = module.solve(
         request,
         time_limit_seconds=20.0,
         stop_at_first_feasible=True,
-        full_assert=True,
         on_new_best=lambda step, score: reported.append(score),
     )
-    assert time.monotonic() - started < 15.0
-    assert reported and reported[-1].hard == 0
+    assert time.monotonic() - started < 10.0
+    assert solved.feasible and reported and reported[-1].hard == 0
+    assert module.solve(request, time_limit_seconds=0.0, full_assert=True) == module.solve(
+        request, time_limit_seconds=0.0
+    )
+
+
+@pytest.mark.parametrize("use_case", ["order_picking", "pickup_delivery", "vehicle_routing"])
+def test_config_is_the_base_of_a_request(use_case):
+    """A field the request does not name comes from config, the time limit comes from the
+    request, and config is left as it was."""
+    module = use_case_module(use_case)
+    request = REQUEST_MODELS[use_case]().model_copy(update={"timelimit": 20.0})
+    config = module.SolverConfig()
+    config.spent_limit_seconds = 0.0  # replaced by the request's 20 s
+    config.step_count_limit = 1  # the field that ends the solve
+    started = time.monotonic()
+    one_step = module.solve(request, config=config)
+    assert time.monotonic() - started < 10.0
+    assert one_step == module.solve(request.model_copy(update={"solver_parameters": {"step_count_limit": 1}}))
+    assert (config.spent_limit_seconds, config.step_count_limit) == (0.0, 1)
 
 
 def _with_seed(request, seed):
@@ -143,6 +163,8 @@ def test_an_employee_scheduling_request_keeps_its_rules_and_settings():
         module.solve(request, parallel_solver_count=0)
     many = request.model_copy(update={"settings": request.settings.model_copy(update={"multi_start": 3})})
     assert module.solve(many, parallel_solver_count=1) == module.solve(request)
+    # full_assert reaches the starts of a multi-start solve, which run in processes.
+    assert module.solve(request, parallel_solver_count=2, full_assert=True).feasible is not None
 
 
 def _feasible(solved) -> bool:

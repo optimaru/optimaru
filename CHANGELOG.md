@@ -111,9 +111,11 @@
   unchanged and returns the response model, so every use case solves its pydantic model
   through `solve`. A keyword that is given replaces what the request says
   (`time_limit_seconds` its `timelimit`, `random_seed`, `parallel_solver_count` its
-  `num_workers`, `stop_at_first_feasible`); in the three routing ones `config` is the base
-  the request's own settings go on top of, and `full_assert`, `on_new_best` and
-  `constraints` apply as for a compiled problem. An employee scheduling request holds its
+  `num_workers`; `stop_at_first_feasible=True` turns its flag on). In order picking, pickup
+  & delivery and vehicle routing `config` is the base the request's own settings go on top
+  of, so its `spent_limit_seconds`, `random_seed` and `parallel_solver_count` are replaced by
+  the request's fields, and `full_assert`, `on_new_best` and `constraints` apply as for a
+  compiled problem. An employee scheduling request holds its
   settings and rules itself, so `config` and `constraints` with one raise `ValueError`, and
   `on_new_best` needs a single start there (further starts run in processes).
   `models.solve_request` is unchanged and returns what `solve(request)` does; the guides use

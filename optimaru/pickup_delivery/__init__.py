@@ -37,6 +37,8 @@ one job: they ride one vehicle together or all stay unassigned
 (`request_group_cost`), and the request moves carry them as one unit.
 """
 
+from typing import overload
+
 from .._solve import request_with, solve_in_place, solver_config
 from ._core import (
     AcceptorType,
@@ -82,6 +84,32 @@ __all__ = [
 ]
 
 
+@overload
+def solve(
+    plan: PdpRoutePlan,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> PdpRoutePlan: ...
+@overload
+def solve(
+    plan: PdpRequest,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> PdpSolution: ...
 def solve(
     plan: PdpRoutePlan | PdpRequest,
     *,
@@ -98,8 +126,11 @@ def solve(
 
     Given a `models.PdpRequest` instead, the pydantic request (JSON in, JSON out), `solve`
     leaves it unchanged and returns a `models.PdpSolution`. The request carries its own
-    ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``: they
-    apply on top of ``config``, and a keyword argument that is given replaces them.
+    ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``, and
+    they always apply: with a request, ``config.spent_limit_seconds``, ``random_seed``
+    and ``parallel_solver_count`` are replaced by the request's fields, so change those
+    three through the keywords. A keyword argument that is given replaces what the
+    request says, and ``stop_at_first_feasible`` turns the request's flag on.
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine defaults,
     a 30 s budget). Explicit keyword arguments override config.

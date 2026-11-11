@@ -30,6 +30,8 @@ pydantic request/response models (JSON in/out) live in
 and returns a `models.OrderPickingResponse`.
 """
 
+from typing import overload
+
 from .._solve import request_with, solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
@@ -77,6 +79,32 @@ __all__ = [
 ]
 
 
+@overload
+def solve(
+    solution: OrderPickingSolution,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> OrderPickingSolution: ...
+@overload
+def solve(
+    solution: OrderPickingRequest,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> OrderPickingResponse: ...
 def solve(
     solution: OrderPickingSolution | OrderPickingRequest,
     *,
@@ -93,8 +121,11 @@ def solve(
 
     Given a `models.OrderPickingRequest` instead, the pydantic request (JSON in, JSON out), `solve`
     leaves it unchanged and returns a `models.OrderPickingResponse`. The request carries its own
-    ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``: they
-    apply on top of ``config``, and a keyword argument that is given replaces them.
+    ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``, and
+    they always apply: with a request, ``config.spent_limit_seconds``, ``random_seed``
+    and ``parallel_solver_count`` are replaced by the request's fields, so change those
+    three through the keywords. A keyword argument that is given replaces what the
+    request says, and ``stop_at_first_feasible`` turns the request's flag on.
 
     ``config`` (a `SolverConfig`) is the base configuration; the explicit
     keyword arguments override it. ``stop_at_first_feasible`` terminates as

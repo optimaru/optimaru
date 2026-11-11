@@ -24,12 +24,12 @@ Times are integer seconds from a common day start; locations are
 (latitude, longitude) pairs.
 """
 
-import copy
 from typing import Any
 
 from pydantic import Field, model_validator
 
 from .._models import StrictModel, apply_solver_parameters
+from .._solve import solver_config
 from . import _core
 from .constraints import get_constraints
 
@@ -318,21 +318,23 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
 def _solve_request(
     request: RoutePlanRequest, *, constraints=None, config=None, full_assert: bool = False, on_new_best=None
 ) -> RouteSolution:
-    """`solve(request, ...)`: ``config`` is the base, the request's own settings go on top."""
+    """`solve(request, ...)`: ``config`` is the base, and the request's time limit, seed and
+    worker count replace the base's, as its ``solver_parameters`` replace the fields they name."""
     plan = to_plan(request.model_input)
 
-    cfg = _core.SolverConfig() if config is None else copy.copy(config)
-    cfg.spent_limit_seconds = request.timelimit
-    cfg.random_seed = request.random_seed
-    cfg.parallel_solver_count = request.num_workers
+    cfg = solver_config(
+        _core.SolverConfig,
+        config,
+        time_limit_seconds=request.timelimit,
+        random_seed=request.random_seed,
+        parallel_solver_count=request.num_workers,
+        full_assert=full_assert,
+        on_new_best=on_new_best,
+    )
     apply_solver_parameters(cfg, request.solver_parameters)
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
         cfg.best_score_limit = (0, -(2**63), -(2**63))
-    if full_assert:
-        cfg.full_assert = True
-    if on_new_best is not None:
-        cfg.on_new_best = on_new_best
     solver = _core.Solver(cfg)
     has_route_policy = any(
         v.max_travel_time

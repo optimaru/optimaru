@@ -853,6 +853,39 @@ def solve_request(
     return _solve_request(request, select=select)
 
 
+def _request_with(
+    request: ScheduleRequest,
+    *,
+    time_limit_seconds: float | None = None,
+    random_seed: int | None = None,
+    parallel_solver_count: int | None = None,
+    stop_at_first_feasible: bool = False,
+) -> ScheduleRequest:
+    """The request of one `solve(request, ...)` call: a copy with the keyword arguments applied.
+
+    A keyword left at its default keeps what the request says. ``time_limit_seconds`` replaces
+    ``timelimit``, ``random_seed`` the seed in ``settings``, and ``stop_at_first_feasible`` turns
+    the flag in ``settings`` on. ``parallel_solver_count`` is the number of starts: it replaces
+    ``num_workers`` and puts ``settings.multi_start`` back to 1, because the larger of the two
+    is what `_solve_request` runs."""
+    update: dict[str, Any] = {}
+    settings: dict[str, Any] = {}
+    if time_limit_seconds is not None:
+        update["timelimit"] = time_limit_seconds
+    if random_seed is not None:
+        settings["random_seed"] = random_seed
+    if stop_at_first_feasible:
+        settings["stop_at_first_feasible"] = True
+    if parallel_solver_count is not None:
+        if parallel_solver_count < 1:
+            raise ValueError(f"parallel_solver_count must be at least 1: {parallel_solver_count}")
+        update["num_workers"] = parallel_solver_count
+        settings["multi_start"] = 1
+    if settings:
+        update["settings"] = request.settings.model_copy(update=settings)
+    return request.model_copy(update=update) if update else request
+
+
 def _solve_request(
     request: ScheduleRequest,
     *,
@@ -882,7 +915,7 @@ def _solve_request(
     # n seeds of one identical config). Empty portfolio => all identical.
     port = request.settings.portfolio
     jobs = [
-        (request, request.settings.random_seed + i, {**always, **(port[i % len(port)] if port else {})})
+        (request, request.settings.random_seed + i, {**(port[i % len(port)] if port else {}), **always})
         for i in range(n)
     ]
     solutions = _solve_in_processes(jobs, min(n, os.cpu_count() or 1))

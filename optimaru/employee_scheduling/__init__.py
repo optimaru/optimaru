@@ -18,6 +18,8 @@ The JSON-friendly request/solution layer is `optimaru.employee_scheduling.models
 `with_initial_solution` restarts a solve from an earlier result.
 """
 
+from typing import overload
+
 from .._solve import solver_config
 from ._core import (
     CONSTRAINT_NAMES,
@@ -71,7 +73,7 @@ from .constraints import (
     WorkerPairingCost,
 )
 from .helpers import list_constraints, make_random_roster, summary, to_dataframe
-from .models import ScheduleRequest, ScheduleSolution, _solve_request, with_initial_solution
+from .models import ScheduleRequest, ScheduleSolution, _request_with, _solve_request, with_initial_solution
 
 __all__ = [
     "CONSTRAINT_NAMES",
@@ -130,6 +132,32 @@ __all__ = [
 ]
 
 
+@overload
+def solve(
+    schedule: EmployeeSchedule,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> EmployeeSchedule: ...
+@overload
+def solve(
+    schedule: ScheduleRequest,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> ScheduleSolution: ...
 def solve(
     schedule: EmployeeSchedule | ScheduleRequest,
     *,
@@ -147,9 +175,10 @@ def solve(
     Given a `models.ScheduleRequest` instead, the pydantic request (JSON in, JSON out),
     `solve` leaves it unchanged and returns a `models.ScheduleSolution`. The request
     carries its own settings and rules, and a keyword argument that is given replaces
-    them: ``time_limit_seconds`` its ``timelimit``, ``random_seed`` and
-    ``stop_at_first_feasible`` the fields of ``settings``, and ``parallel_solver_count``
-    the number of starts (``num_workers``, with ``settings.multi_start`` set to 1).
+    them: ``time_limit_seconds`` its ``timelimit``, ``random_seed`` the seed in
+    ``settings``, and ``parallel_solver_count`` the number of starts (``num_workers``,
+    with ``settings.multi_start`` set to 1). ``stop_at_first_feasible`` turns the flag in
+    ``settings`` on.
     Starts beyond the first run in separate processes (see `models.solve_request`), so
     ``on_new_best`` needs a single start there. ``config`` and ``constraints`` are for
     an `EmployeeSchedule`: a request says the same in ``settings`` and
@@ -178,22 +207,13 @@ def solve(
                 "config and constraints are for an EmployeeSchedule: a ScheduleRequest carries them "
                 "as settings and model_input.rules"
             )
-        update: dict = {}
-        settings: dict = {}
-        if time_limit_seconds is not None:
-            update["timelimit"] = time_limit_seconds
-        if random_seed is not None:
-            settings["random_seed"] = random_seed
-        if stop_at_first_feasible:
-            settings["stop_at_first_feasible"] = True
-        if parallel_solver_count is not None:
-            if parallel_solver_count < 1:
-                raise ValueError(f"parallel_solver_count must be at least 1: {parallel_solver_count}")
-            update["num_workers"] = parallel_solver_count
-            settings["multi_start"] = 1
-        if settings:
-            update["settings"] = schedule.settings.model_copy(update=settings)
-        request = schedule.model_copy(update=update) if update else schedule
+        request = _request_with(
+            schedule,
+            time_limit_seconds=time_limit_seconds,
+            random_seed=random_seed,
+            parallel_solver_count=parallel_solver_count,
+            stop_at_first_feasible=stop_at_first_feasible,
+        )
         return _solve_request(request, full_assert=full_assert, on_new_best=on_new_best)
     if not isinstance(schedule, EmployeeSchedule):
         raise TypeError(f"schedule must be an EmployeeSchedule or a models.ScheduleRequest: {type(schedule)!r}")

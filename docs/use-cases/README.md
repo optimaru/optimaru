@@ -84,8 +84,11 @@ others take a problem model, leaves it unchanged and returns the response model
 (`RouteSolution`, `PdpSolution`, `OrderPickingResponse`, `ScheduleSolution`).
 The request carries its own `timelimit`, `random_seed`, `num_workers` and
 `stop_at_first_feasible`; a keyword that is given replaces what the request
-says. In the three routing ones `config` is the base the request's settings go
-on top of. An employee scheduling request holds its search settings and rules
+says, and `stop_at_first_feasible=True` turns the request's flag on. In order
+picking, pickup & delivery and vehicle routing `config` is the base the
+request's settings go on top of: its `spent_limit_seconds`, `random_seed` and
+`parallel_solver_count` are always replaced by the request's fields, so change
+those three through the keywords. An employee scheduling request holds its search settings and rules
 itself (`settings`, `model_input.rules`), so `config` and `constraints` with
 one raise `ValueError`, and its starts beyond the first run in processes, so
 `on_new_best` needs a single start. `models.solve_request(request)`, the name

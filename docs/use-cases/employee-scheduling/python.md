@@ -317,8 +317,8 @@ print(solution.model_dump_json())        # ready to send over the wire
 ```
 
 A keyword of `solve` replaces what the request says: `time_limit_seconds` its
-`timelimit`, `random_seed` and `stop_at_first_feasible` the fields of
-`settings`, `parallel_solver_count` the number of starts. The search settings
+`timelimit`, `random_seed` the seed in `settings`, `parallel_solver_count` the
+number of starts; `stop_at_first_feasible=True` turns the flag in `settings` on. The search settings
 and the rules are the request's own (`settings`, `model_input.rules`), so
 `config` and `constraints` with a request raise `ValueError`, and `on_new_best`
 needs a single start, because further starts run in separate processes.

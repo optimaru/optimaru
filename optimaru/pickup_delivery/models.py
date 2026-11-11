@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import copy
 from typing import Any
 
 from pydantic import Field, model_validator
 
 from .._models import StrictModel, apply_solver_parameters
+from .._solve import solver_config
 from . import _core
 from .constraints import get_constraints
 
@@ -360,20 +360,22 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
 def _solve_request(
     request: PdpRequest, *, constraints=None, config=None, full_assert: bool = False, on_new_best=None
 ) -> PdpSolution:
-    """`solve(request, ...)`: ``config`` is the base, the request's own settings go on top."""
+    """`solve(request, ...)`: ``config`` is the base, and the request's time limit, seed and
+    worker count replace the base's, as its ``solver_parameters`` replace the fields they name."""
     plan = to_plan(request.model_input, name=request.name or "plan")
-    config = _core.SolverConfig() if config is None else copy.copy(config)
-    config.spent_limit_seconds = request.timelimit
-    config.random_seed = request.random_seed
-    config.parallel_solver_count = request.num_workers
+    config = solver_config(
+        _core.SolverConfig,
+        config,
+        time_limit_seconds=request.timelimit,
+        random_seed=request.random_seed,
+        parallel_solver_count=request.num_workers,
+        full_assert=full_assert,
+        on_new_best=on_new_best,
+    )
     apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
         config.best_score_limit = (0, -(2**63), -(2**63))
-    if full_assert:
-        config.full_assert = True
-    if on_new_best is not None:
-        config.on_new_best = on_new_best
     solver = _core.Solver(config)
     has_route_policy = any(
         v.max_travel_time

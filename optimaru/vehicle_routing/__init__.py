@@ -50,6 +50,8 @@ Compared lexicographically: hard dominates medium dominates soft.
 `optimaru.vehicle_routing.constraints` picks and re-weights them.
 """
 
+from typing import overload
+
 from .._solve import request_with, solve_in_place, solver_config
 from ._core import (
     AcceptorType,
@@ -90,6 +92,32 @@ __all__ = [
 ]
 
 
+@overload
+def solve(
+    plan: VehicleRoutePlan,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> VehicleRoutePlan: ...
+@overload
+def solve(
+    plan: RoutePlanRequest,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> RouteSolution: ...
 def solve(
     plan: VehicleRoutePlan | RoutePlanRequest,
     *,
@@ -106,8 +134,11 @@ def solve(
 
     Given a `models.RoutePlanRequest` instead, the pydantic request (JSON in, JSON out), `solve`
     leaves it unchanged and returns a `models.RouteSolution`. The request carries its own
-    ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``: they
-    apply on top of ``config``, and a keyword argument that is given replaces them.
+    ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``, and
+    they always apply: with a request, ``config.spent_limit_seconds``, ``random_seed``
+    and ``parallel_solver_count`` are replaced by the request's fields, so change those
+    three through the keywords. A keyword argument that is given replaces what the
+    request says, and ``stop_at_first_feasible`` turns the request's flag on.
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine defaults,
     a 30 s budget). Explicit keyword arguments override config.

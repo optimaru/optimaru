@@ -26,12 +26,12 @@ A shelving is addressed by column letter A..E + shelving row 1..3
 (the id "(A,1)"), a side (LEFT/RIGHT) and a row 0..10 within the shelving.
 """
 
-import copy
 from typing import Any, Literal, cast
 
 from pydantic import Field, model_validator
 
 from .._models import StrictModel, apply_solver_parameters
+from .._solve import solver_config
 from . import _core
 
 __all__ = [
@@ -191,19 +191,21 @@ def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPic
 def _solve_request(
     request: OrderPickingRequest, *, constraints=None, config=None, full_assert: bool = False, on_new_best=None
 ) -> OrderPickingResponse:
-    """`solve(request, ...)`: ``config`` is the base, the request's own settings go on top."""
+    """`solve(request, ...)`: ``config`` is the base, and the request's time limit, seed and
+    worker count replace the base's, as its ``solver_parameters`` replace the fields they name."""
     solution = to_solution(request)
-    config = _core.SolverConfig() if config is None else copy.copy(config)
-    config.spent_limit_seconds = request.timelimit
-    config.random_seed = request.random_seed
-    config.parallel_solver_count = request.num_workers
+    config = solver_config(
+        _core.SolverConfig,
+        config,
+        time_limit_seconds=request.timelimit,
+        random_seed=request.random_seed,
+        parallel_solver_count=request.num_workers,
+        full_assert=full_assert,
+        on_new_best=on_new_best,
+    )
     apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
         config.best_score_limit = (0, float("-inf"))
-    if full_assert:
-        config.full_assert = True
-    if on_new_best is not None:
-        config.on_new_best = on_new_best
     solver = _core.Solver(config)
     if constraints is None:
         solver.solve(solution)
