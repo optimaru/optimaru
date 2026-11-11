@@ -328,7 +328,7 @@ void testHistoryStages() {
         const std::size_t cap = optimaru::HistoryStages::kMaxHistory;
         optimaru::HistoryStages capped = stagesOf(cap - 1, 2.0);
         capped.on_converged(0.1, true);
-        capped.start_next(0.1);
+        capped.start_next(0.1);  // (the acceptor it returns, 16 MB at the cap, is not needed here)
         check(capped.history() == cap, "the history stops at the cap");
         // That stage took 0.4. One of the same cost fits after 0.5; a doubled
         // one (0.8) would not.
@@ -1112,6 +1112,10 @@ void testHistoryGrowthOnRandomTsp() {
     std::printf("    history 1: tour = %.3f, growth 2: %.3f, growth 1.2: %.3f\n", fixed, doubled,
                 slow);
     check(doubled < fixed - 1e-9, "a doubled history per stage finds a shorter tour");
+    // By a margin, too. A search that waits out the gap across every restart
+    // (ema_best_gap fed with it) reaches fewer stages in these steps: it was
+    // 2.4% shorter than the fixed history here, and is 4.7% without that wait.
+    check(doubled < 0.97 * fixed, "and more than 3% shorter: a restart does not delay the next");
     check(slow < fixed - 1e-9, "a factor of 1.2 still lengthens a one-entry history");
     check(solveWith(1.0) == fixed, "a factor of 1 is off: the same tour as without");
 

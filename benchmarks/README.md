@@ -168,6 +168,8 @@ depends on the clock: of the 35 instances of five of them, measured twice on
 The tables of the seven and of QAPLIB are of one run on 2026-11-12, the CP-SAT
 lane beside the engine's as before. One seed says little about a change of
 the search: the 8-team and the 14-team league of that run are 2% and 4% behind
-the run of the day before, on a build whose mean over three seeds is 2% ahead.
+the run of the day before, on a build whose mean over three seeds is 2% ahead,
+and QAPLIB's `tai30b` is 1.4% above its best known value where the run before
+reached it.
 Read a small margin in any table as noise.
 
