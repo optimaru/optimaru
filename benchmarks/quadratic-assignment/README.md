@@ -56,8 +56,8 @@ The comparison instances stop at 25 facilities (6, 8, 10, 12, 14, 16, 20 and 25)
 pair variables; the QAPLIB instances below start at 30 and are above the exact-model cap.
 With the 1 s CI smoke budget CP-SAT returns an 8-facility answer (not always the optimum) and is still
 presolving the 10-facility model (reported as UNKNOWN); with 2 workers it proves the 8-facility optimum
-in about 1.5 s. At 30 s the two solvers tie up to 16 facilities, and at 20 and 25 the engine's cost
-is 2% below CP-SAT's (table below).
+in about 1.5 s. At 30 s the two solvers tie up to 16 facilities, and at 20 and 25 the engine has the
+lower cost (table below).
 The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports
 for it includes building the model.
@@ -90,8 +90,8 @@ Every cell is the score of that solver's final solution under the use case's own
 | random12 | 12 facilities | **0hard/-2292soft** | **0hard/-2292soft** |
 | random14 | 14 facilities | **0hard/-3666soft** | **0hard/-3666soft** |
 | random16 | 16 facilities | **0hard/-4020soft** | **0hard/-4020soft** |
-| random20 | 20 facilities | **0hard/-7632soft** | 0hard/-7782soft |
-| random25 | 25 facilities | **0hard/-10644soft** | 0hard/-10858soft |
+| random20 | 20 facilities | **0hard/-7632soft** | 0hard/-7672soft |
+| random25 | 25 facilities | **0hard/-10644soft** | 0hard/-11098soft |
 
 Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

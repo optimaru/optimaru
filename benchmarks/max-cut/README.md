@@ -52,10 +52,10 @@ Every cell is the score of that solver's final solution under the use case's own
 | g50 | 50 vertices / 257 edges | **0hard/1060soft** | **0hard/1060soft** |
 | g80 | 80 vertices / 313 edges | **0hard/1327soft** | **0hard/1327soft** |
 | g120 | 120 vertices / 567 edges | 0hard/2340soft | **0hard/2341soft** |
-| g200 | 200 vertices / 1067 edges | **0hard/4412soft** | 0hard/4361soft |
-| g400 | 400 vertices / 2392 edges | **0hard/9673soft** | 0hard/9446soft |
-| g800 | 800 vertices / 4691 edges | **0hard/19124soft** | 0hard/18566soft |
-| g1600 | 1600 vertices / 9516 edges | **0hard/38936soft** | 0hard/37240soft |
+| g200 | 200 vertices / 1067 edges | **0hard/4412soft** | 0hard/4371soft |
+| g400 | 400 vertices / 2392 edges | **0hard/9686soft** | 0hard/9413soft |
+| g800 | 800 vertices / 4691 edges | **0hard/19124soft** | 0hard/18616soft |
+| g1600 | 1600 vertices / 9516 edges | **0hard/38936soft** | 0hard/37206soft |
 
 Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

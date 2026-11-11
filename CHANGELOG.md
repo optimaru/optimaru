@@ -39,7 +39,7 @@
   packaging, knapsack, max-cut, quadratic assignment and sports league scheduling**, where
   `late_acceptance_size` is now the first stage's length. Measured on every instance of
   their five benchmark ladders at 30 s over three seeds: 62 runs better, 33 equal, 1 worse
-  (a knapsack by 1 in 17,470). In the published tables sports league scheduling has 5 to
+  (a knapsack by 1 in 17,470). In the published tables sports league scheduling has 7 to
   13% less travel, quadratic assignment ties CP-SAT up to 16 facilities (it was behind at
   14 and 16), and the mean gap to the best known values of the 28 QAPLIB instances with a
   reference goes from 2.22% to 0.22%, 18 of them at the best known value. Every other use

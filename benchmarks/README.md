@@ -160,10 +160,10 @@ days measured (54 vehicles one day, 55 the other; the request-level search
 that replaced it returned the same plan in two runs on 2026-11-11). Food
 packaging, knapsack, max-cut, quadratic assignment and sports league
 scheduling search in stages of growing late acceptance history, and which
-stage a solve reaches under a time limit depends on the clock: of their 32
-instances that two runs of the same build measured on 2026-11-11, the engine's
-score was the same on 30 (the 10-line plant of food packaging moved by 0.01%,
-the 18-team league by 1.5%). Their tables and the QAPLIB one are of that day's
-later run, the CP-SAT lane beside the engine's as before. Read a small margin
-in any table as noise.
+stage a solve reaches under a time limit depends on the clock: of their 35
+instances, measured twice on 2026-11-11, the engine's score was the same on 32
+(the 10-line plant of food packaging moved by 0.01%, the 400-vertex max-cut by
+0.1%, the 18-team league by 5%), and all 33 QAPLIB results were the same.
+Their tables are of the second run, the CP-SAT lane beside the engine's as
+before. Read a small margin in any table as noise.
 

@@ -26,12 +26,12 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
-| teams6 | 6 teams / 12 rounds / 30 matches | 0hard/-45938soft | **0hard/-44755soft** |
-| teams8 | 8 teams / 17 rounds / 56 matches | **0hard/-62106soft** | 0hard/-63737soft |
-| teams10 | 10 teams / 22 rounds / 90 matches | **0hard/-99293soft** | 0hard/-107597soft |
-| teams12 | 12 teams / 27 rounds / 132 matches | **0hard/-137632soft** | 0hard/-198951soft |
-| demo | 14 teams / 32 rounds / 182 matches | **0hard/-96644soft** | -10hard/-199897soft |
-| teams18 | 18 teams / 42 rounds / 306 matches | **0hard/-272834soft** | -208hard/-401092soft |
+| teams6 | 6 teams / 12 rounds / 30 matches | 0hard/-45938soft | **0hard/-45803soft** |
+| teams8 | 8 teams / 17 rounds / 56 matches | **0hard/-62106soft** | 0hard/-67334soft |
+| teams10 | 10 teams / 22 rounds / 90 matches | **0hard/-99293soft** | 0hard/-102009soft |
+| teams12 | 12 teams / 27 rounds / 132 matches | **0hard/-137632soft** | -1hard/-209076soft |
+| demo | 14 teams / 32 rounds / 182 matches | **0hard/-96644soft** | -11hard/-204482soft |
+| teams18 | 18 teams / 42 rounds / 306 matches | **0hard/-259592soft** | -208hard/-401092soft |
 
 Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->
