@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.2
 
 - **Pickup and delivery: request groups.** Requests that share a `group`
   (`DeliveryModel.group`, a name; `Delivery.group_index` on a plan) are one job: they ride
