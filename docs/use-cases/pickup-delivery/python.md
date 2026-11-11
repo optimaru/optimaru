@@ -1,4 +1,4 @@
-# optimaru.pickup_delivery — Pickup and Delivery for Python
+# optimaru.pickup_delivery (Python)
 
 Python bindings for the C++ pickup-and-delivery solver in
 [`optimaru/pickup_delivery/cpp`](../../../optimaru/pickup_delivery/cpp) — one solver, one module.

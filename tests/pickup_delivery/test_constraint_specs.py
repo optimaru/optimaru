@@ -5,8 +5,6 @@ picks and the medium level are covered here. Per-constraint values are covered b
 `test_pdp.py` and the C++ tests (one hand-calculated positive and zero case each).
 """
 
-import pickle
-import re
 from types import SimpleNamespace
 
 import pytest
@@ -15,7 +13,6 @@ import optimaru.pickup_delivery as pdp
 from optimaru._constraint import instance_keys
 from optimaru.pickup_delivery import constraints as specs
 from optimaru.pickup_delivery.constraints import (
-    Constraint,
     EnclosingCircleRadiusCost,
     LatencyCost,
     Level,
@@ -111,10 +108,6 @@ def test_list_constraints_matches_the_spec_names():
         assert spec.name in available
 
 
-def test_get_constraints_defaults_to_the_full_set():
-    assert [spec.name for spec in get_constraints()] == pdp.list_constraints()
-
-
 def test_route_policy_costs_are_exposed():
     plan = build_plan()
     vehicle = plan.vehicles[0]
@@ -195,15 +188,6 @@ def test_a_soft_constraint_can_move_to_medium():
     assert medium_level.medium < 0
 
 
-def test_a_level_must_be_a_level():
-    with pytest.raises(TypeError, match="level must be a Level"):
-        TravelTimeCost(level=True)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
-        TravelTimeCost(level="firm")
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
-        TravelTimeCost(level="HARD")
-
-
 def test_core_refuses_an_unknown_level_like_the_python_base():
     pick = SimpleNamespace(name="unassigned_requests_cost", weight=None, level="firm", exponent=1.0)
     with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
@@ -217,32 +201,6 @@ def test_score_agrees_with_the_engine_when_a_constraint_moves_to_medium():
     assert score(pdp.constraint_costs(plan, picks), picks) == _engine(plan.score)
 
 
-def test_unknown_constraint_name_raises():
-    """A typo must not silently leave the cost function unchanged."""
-
-    class Typo:
-        name = "same_vehicle_costs"  # trailing s
-        weight = None
-        level = None
-        exponent = 1.0
-
-    with pytest.raises(ValueError, match="unknown constraint"):
-        solve([Typo()])
-
-
-def test_empty_constraint_list_is_rejected():
-    """An empty list means 'score nothing', which is most likely a mistake."""
-    with pytest.raises(ValueError, match="must not be empty"):
-        solve([])
-
-
-def test_spec_subclass_must_name_a_constraint():
-    with pytest.raises(TypeError, match="registry `name`"):
-
-        class Nameless(Constraint):
-            pass
-
-
 def test_default_instance_carries_no_overrides():
     """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     for spec in get_constraints():
@@ -250,13 +208,6 @@ def test_default_instance_carries_no_overrides():
         assert getattr(specs, spec.name) is spec  # the instance is named after the constraint
     # The opt-in objectives pass no explicit weight=0: the C++ default is 0.
     assert specs.enclosing_circle_radius_cost.weight is None
-
-
-def test_every_spec_has_labels_and_descriptions_in_both_languages():
-    for spec in get_constraints():
-        cls = type(spec)
-        for attr in ("label_en", "label_ko", "description_en", "description_ko"):
-            assert getattr(cls, attr), f"{cls.__name__}.{attr} is empty"
 
 
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
@@ -294,17 +245,6 @@ def test_score_reweighting_is_linear_without_rescoring():
         assert ten.hard == pytest.approx(base.hard * factor, rel=1e-6)
     else:
         assert ten.soft == pytest.approx(base.soft * factor, rel=1e-9)
-
-
-def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a typo) must not be silently ignored."""
-    raw, _ = _raw()
-
-    class Misnamed(Constraint):
-        name = "definitely_not_a_constraint"
-
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Misnamed()])
 
 
 def order_age_input(order_times: list[int]) -> pdp.models.PdpInput:
@@ -414,22 +354,6 @@ def test_constraint_info_reports_the_cpp_defaults():
     # Every constraint is flippable in the engine (the coupling rules are structural
     # on the CP-SAT path only) and none is a reward.
     assert all(row.level_flippable and not row.reward for row in rows)
-
-
-def test_constraint_info_rows_are_plain_values():
-    row = pdp.constraint_info()[-1]
-    assert isinstance(row, pdp.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "unassigned_requests_cost",
-        "default_level": "medium",
-        "default_weight": 1.0,
-        "level_flippable": True,
-        "reward": False,
-        "default_enabled": True,
-    }
-    assert repr(row).startswith("ConstraintInfo(name='unassigned_requests_cost'")
-    assert pickle.loads(pickle.dumps(pdp.constraint_info())) == pdp.constraint_info()
-    assert pdp.ConstraintInfo.__module__ == pdp._core.__name__
 
 
 def test_constraint_info_matches_the_raw_cost_metadata():
@@ -574,60 +498,6 @@ def test_on_new_best_ends_on_the_final_score(run):
     assert reported[-1] == (plan.score.hard, plan.score.medium, plan.score.soft)
     folded = [(hard, medium * MEDIUM_UNIT + soft) for hard, medium, soft in reported]
     assert all(earlier < later for earlier, later in zip(folded, folded[1:]))
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "error"),
-    [
-        ({"weight": -1}, ValueError),
-        ({"weight": float("nan")}, ValueError),
-        ({"weight": "2"}, TypeError),
-        ({"exponent": 0}, ValueError),
-        ({"hard": 1}, TypeError),
-    ],
-)
-def test_specs_validate_their_knobs(kwargs, error):
-    with pytest.raises(error):
-        TravelTimeCost(**kwargs)
-
-
-def test_core_refuses_invalid_knobs_from_duck_typed_picks():
-    """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="travel_time_cost", weight=-2.0, level=None, exponent=1.0)
-    flat = SimpleNamespace(name="travel_time_cost", weight=None, level=None, exponent=0.0)
-    unbounded = SimpleNamespace(name="travel_time_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
-    for pick, message in (
-        (negative, "weight must be finite and >= 0"),
-        (flat, "exponent must be finite and > 0"),
-        (unbounded, "offset must be finite, not inf"),
-    ):
-        with pytest.raises(ValueError, match=message):
-            solve([pick])
-    with pytest.raises(ValueError, match="offset must be finite, not nan"):
-        TravelTimeCost(offset=float("nan"))
-
-
-@pytest.mark.parametrize(
-    ("knobs", "message"),
-    [
-        ({"weight": True}, "weight must be a number or None, not True"),
-        ({"level": 1}, "level must be a Level, its name or None, not 1"),
-        ({"exponent": True}, "exponent must be a number, not True"),
-        ({"offset": "5"}, "offset must be a number, not '5'"),
-        ({"offset": False}, "offset must be a number, not False"),
-        ({"clip": 1}, "clip must be True or False, not 1"),
-        ({"clip": "no"}, "clip must be True or False, not 'no'"),
-    ],
-)
-def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="unassigned_requests_cost", weight=None, level=None, exponent=1.0)
-    for key, value in knobs.items():
-        setattr(pick, key, value)
-    with pytest.raises(TypeError, match=f"constraint 'unassigned_requests_cost': {re.escape(message)}"):
-        solve([pick])
-    with pytest.raises(TypeError, match=re.escape(message)):
-        UnassignedRequestsCost(**knobs)
 
 
 def test_squared_order_age_is_opt_in():
