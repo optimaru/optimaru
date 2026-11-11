@@ -2,6 +2,8 @@
 #define VRP_SOLVER_HPP
 
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <utility>
 
 #include "optimaru/model/editor.hpp"
@@ -223,7 +225,7 @@ public:
     // plan.unassignedVisitIndices, and stores the best score found in
     // plan.score. Scored on the four core rules, unless the plan has visit
     // groups: then on the default constraint assembly (vrp/constraints.hpp),
-    // as the overload below would with addDefaultConstraints(), single-start.
+    // every start on an assembly of its own (the factory overload below).
     void solve(VehicleRoutePlan& plan);
 
     // Solves with a caller-assembled plugin calculator (see
@@ -235,8 +237,22 @@ public:
     // medium fold) and the calculator is left primed on the final solution,
     // so constraint_totals() explains exactly that score. Single-start: the
     // caller-owned calculator cannot be cloned, so parallel_solver_count is
-    // ignored.
+    // ignored. The overload below runs the parallel starts.
     void solve(VehicleRoutePlan& plan, optimaru::DecomposedObjective<VehicleRoutePlan>& calculator);
+
+    // Builds the calculator of one start.
+    using CalculatorFactory =
+            std::function<std::unique_ptr<optimaru::DecomposedObjective<VehicleRoutePlan>>()>;
+
+    // The solve above on Config::parallel_solver_count independent starts
+    // (seeds seed, seed + 1, ...), each scored by a calculator of its own; the
+    // best final plan.score wins, the lowest start on ties. `makeCalculator`
+    // is called once per start, on the calling thread and before any start
+    // runs, so it may read state that is not thread-safe. on_new_best reports
+    // the first start only, and a start that reaches the target stops the
+    // others, as on the core rules. With one start this is the overload above
+    // on the one calculator the factory makes.
+    void solve(VehicleRoutePlan& plan, const CalculatorFactory& makeCalculator);
 
 private:
     Config config_;

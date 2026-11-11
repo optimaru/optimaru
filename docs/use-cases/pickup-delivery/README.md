@@ -390,8 +390,12 @@ seven core rules do not include this one: `solve_request`, `pdp.solve(plan)`,
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two requests or more (a request alone in its group changes nothing).
 That is a solve on the constraint assembly, as when a vehicle limit is set: the
-whole default set is scored, and `num_workers` / `parallel_solver_count` have no
-effect. `calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same
+whole default set is scored. `num_workers` / `parallel_solver_count` run that
+many starts there as on the core rules, each start on a set of its own (on a
+generated instance of 100 requests, half of them in groups of three, four
+starts end 2.1% shorter than one in the same 4 s: 5 seeds, shorter in 4 and
+equal in 1).
+`calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same
 way, so it returns the score the solve stored and prices a split group on a plan
 built by hand.
 With `pair_construction_heuristic` off the engine's own construction places

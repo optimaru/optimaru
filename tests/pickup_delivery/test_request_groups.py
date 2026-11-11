@@ -454,6 +454,46 @@ def groups_are_whole(plan: pdp.PdpRoutePlan) -> bool:
     return all(len(where) == 1 for where in places.values())
 
 
+@pytest.mark.parametrize("path", ["groups", "a constraint list"])
+def test_parallel_starts_return_the_best_single_start_on_the_constraint_path(path):
+    # Start i searches with random_seed + i on constraints of its own and the best score wins,
+    # so three step-limited starts return what the best of three single-start solves does.
+    def score(seed: int, starts: int) -> tuple[int, int, int]:
+        config = pdp.SolverConfig()
+        config.spent_limit_seconds = 60.0  # the step limit ends the solve
+        config.step_count_limit = 2000
+        config.random_seed = seed
+        config.parallel_solver_count = starts
+        plan = grouped_instance(18, 3, 3, seed=3)
+        pdp.solve(plan, config=config, constraints=get_constraints() if path == "a constraint list" else None)
+        return as_tuple(plan.score)
+
+    for seed in (0, 10):
+        singles = [score(seed + start, 1) for start in range(3)]
+        assert score(seed, 1) == singles[0], "a step-limited start is not reproducible"
+        assert score(seed, 3) == max(singles)
+
+
+def test_a_grouped_request_with_num_workers_solves():
+    # A smoke test of the path a request takes (solve_request, Solver.solve, the engine's own
+    # switch, three starts): a problem this small has one answer whatever the starts.
+    deliveries = [request(name, group="g" if name in "ab" else None) for name in "abc"]
+
+    def score(seed: int, workers: int) -> str:
+        return solve_request(
+            PdpRequest(
+                model_input=two_ends(deliveries),
+                timelimit=60,
+                random_seed=seed,
+                num_workers=workers,
+                solver_parameters={"step_count_limit": 500},
+            )
+        ).score
+
+    assert score(0, 3) == score(0, 1)
+    assert "0hard" in score(0, 3)
+
+
 @pytest.mark.parametrize("request_moves", [True, False])
 def test_groups_stay_whole_in_a_larger_solve(request_moves):
     plan = grouped_instance(24, 4, 3, seed=3)

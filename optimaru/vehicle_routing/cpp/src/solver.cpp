@@ -241,15 +241,17 @@ void Solver::solve(VehicleRoutePlan& plan) {
     // group index below -1, a visit that comes after one outside its group, an
     // order with a cycle.
     checkVisitGroups(plan);
+    optimaru::check_config(config_);
     // The four core rules do not price groups, and on them a split group
     // would end as a feasible plan. A plan with groups is scored with the
-    // whole default assembly instead (single-start, like every solve on a
-    // caller's assembly).
+    // whole default assembly instead, every start on one of its own.
     if (plan.hasVisitGroups()) {
         plan.unassignedVisitIndices.clear();
-        DecomposedCalculator calculator;
-        addDefaultConstraints(calculator);
-        solve(plan, calculator);
+        solve(plan, [] {
+            auto calculator = std::make_unique<DecomposedCalculator>();
+            addDefaultConstraints(*calculator);
+            return calculator;
+        });
         return;
     }
     // No group of two visits or more from here on, so nothing below places or
@@ -267,7 +269,6 @@ void Solver::solve(VehicleRoutePlan& plan) {
         ScoreCalculator::score(plan);
         return;
     }
-    optimaru::check_config(config_);
 
     // Multi-start: independent starts on copies of the plan, best final score
     // wins. The engine has its own solve_multistart(), but it runs the threads
@@ -328,6 +329,34 @@ void Solver::solve(VehicleRoutePlan& plan,
     calculator.rebuild(plan);
     calculator.score();
     plan.score = levelScore(calculator);
+}
+
+void Solver::solve(VehicleRoutePlan& plan, const CalculatorFactory& makeCalculator) {
+    // Refused before a calculator is made or a start runs.
+    checkVisitGroups(plan);
+    optimaru::check_config(config_);
+    // Nothing to search in an empty plan: one start scores it.
+    const bool empty = plan.visits.empty() || plan.vehicles.empty();
+    const int starts = empty ? 1 : std::max(1, config_.parallel_solver_count);
+    std::vector<std::unique_ptr<optimaru::DecomposedObjective<VehicleRoutePlan>>> calculators;
+    calculators.reserve(static_cast<std::size_t>(starts));
+    for (int start = 0; start < starts; ++start) {
+        calculators.push_back(makeCalculator());
+        if (!calculators.back())
+            throw std::invalid_argument("makeCalculator returned no calculator");
+    }
+    // Each start is the single-start solve on its copy of the plan and its own
+    // calculator; solve_parallel_starts keeps the copy with the best
+    // plan.score, which that solve stores from its calculator's three levels.
+    const auto solveOne = [&calculators](const Config& config, VehicleRoutePlan& candidate,
+                                         int start) {
+        Solver(config).solve(candidate, *calculators[static_cast<std::size_t>(start)]);
+    };
+    if (starts == 1) {
+        solveOne(config_, plan, 0);
+        return;
+    }
+    optimaru::solve_parallel_starts(config_, plan, solveOne);
 }
 
 Score calculateScore(VehicleRoutePlan& plan) {
