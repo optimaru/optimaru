@@ -1,4 +1,4 @@
-# maintenance_scheduling (Python)
+# optimaru.maintenance_scheduling (Python)
 
 The pybind11 package of the maintenance-scheduling use case (`optimaru/maintenance_scheduling/cpp`).
 For the detailed domain/constraint description see [`../README.md`](README.md).

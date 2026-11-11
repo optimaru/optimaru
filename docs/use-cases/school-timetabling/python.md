@@ -1,4 +1,4 @@
-# optimaru.school_timetabling
+# optimaru.school_timetabling (Python)
 
 The Python package wrapping the school-timetabling C++ core (`optimaru/school_timetabling/cpp`, built on
 the engine in `optimaru/cpp/optimaru/`) with pybind11. It moves API_SPEC.md's
@@ -14,6 +14,35 @@ plugin, the `Timetable.penalties` keys and the `weights` keys), and for the
 same solution both backends report exactly the same hard-violation count and
 weighted soft penalty — [`benchmarks/school-timetabling/cpsat/tests/test_engine_parity.py`](../../../benchmarks/school-timetabling/cpsat/tests/test_engine_parity.py) injects cpsat solutions
 into the engine and gates on that parity.
+
+## Install and test
+
+```bash
+OPTIMARU_USE_CASES=school_timetabling uv sync   # builds only this use case's C++ extension; pytest + pydantic
+uv run pytest -q tests/school_timetabling
+```
+
+## Usage
+
+```python
+from optimaru import school_timetabling as st
+
+result = st.solve(problem_dict, time_limit_seconds=10.0, random_seed=42)
+print(result["status"])  # FEASIBLE (hard 0) | INFEASIBLE (hard violations left)
+print(result["penalties"])  # raw soft counts, keyed by the soft constraint names (same keys as cpsat)
+print(result["objective_value"])  # weighted penalty sum (same unit as cpsat)
+for lesson in result["lessons"]:
+    print(lesson["course_id"], lesson["slot"], lesson["room_id"])
+```
+
+`weights={"teacher_gap_cost": 40, ...}` changes the soft weights of the
+default fast path (`canon.SolverConfig.weights`, a `canon.ObjectiveWeights`
+keyed by the soft constraint names; the model itself carries no weights) and
+`config=` (the mode's `SolverConfig` or `models.SolveConfig`) the search
+options. The low-level API is `convert_problem` /
+`canon.Solver(canon.SolverConfig)` / `convert_solution` / `inject_solution`
+(injects an external solution, for warm starts and checks); the pydantic
+serialization mirrors live in `optimaru.school_timetabling.models`.
 
 ## Constraints
 
@@ -49,35 +78,6 @@ seven terms are named `room_conflict_cost`, `teacher_conflict_cost`,
 `teacher_room_change_cost`, `teacher_time_efficiency_cost` (a reward) and
 `class_subject_repeat_cost` (soft) in its docs and in the benchmark's
 `evaluate.py`.
-
-## Install and test
-
-```bash
-OPTIMARU_USE_CASES=school_timetabling uv sync   # builds only this use case's C++ extension; pytest + pydantic
-uv run pytest -q tests/school_timetabling
-```
-
-## Usage
-
-```python
-from optimaru import school_timetabling as st
-
-result = st.solve(problem_dict, time_limit_seconds=10.0, random_seed=42)
-print(result["status"])  # FEASIBLE (hard 0) | INFEASIBLE (hard violations left)
-print(result["penalties"])  # raw soft counts, keyed by the soft constraint names (same keys as cpsat)
-print(result["objective_value"])  # weighted penalty sum (same unit as cpsat)
-for lesson in result["lessons"]:
-    print(lesson["course_id"], lesson["slot"], lesson["room_id"])
-```
-
-`weights={"teacher_gap_cost": 40, ...}` changes the soft weights of the
-default fast path (`canon.SolverConfig.weights`, a `canon.ObjectiveWeights`
-keyed by the soft constraint names; the model itself carries no weights) and
-`config=` (the mode's `SolverConfig` or `models.SolveConfig`) the search
-options. The low-level API is `convert_problem` /
-`canon.Solver(canon.SolverConfig)` / `convert_solution` / `inject_solution`
-(injects an external solution, for warm starts and checks); the pydantic
-serialization mirrors live in `optimaru.school_timetabling.models`.
 
 ## Plugin constraint assembly (`constraints=`)
 

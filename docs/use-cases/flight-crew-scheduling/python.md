@@ -1,4 +1,4 @@
-# optimaru.flight_crew_scheduling
+# optimaru.flight_crew_scheduling (Python)
 
 The Python package wrapping, with pybind11, the C++ implementation (`optimaru/flight_crew_scheduling/cpp`) of the
 flight-crew-scheduling use case. Solves the assignment-shaped problem of picking a crew member for every

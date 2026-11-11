@@ -1,4 +1,4 @@
-# quadratic_assignment (Python)
+# optimaru.quadratic_assignment (Python)
 
 The pybind11 package of the quadratic-assignment use case (`optimaru/quadratic_assignment/cpp`). Places one
 facility on every location — `Facility.location` is the only decision variable,

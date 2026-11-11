@@ -1,4 +1,4 @@
-# semiconductor_scheduling (Python)
+# optimaru.semiconductor_scheduling (Python)
 
 The pybind11 package of the semiconductor fab use case (`optimaru/semiconductor_scheduling/cpp`, namespace `fab`). The
 Pydantic models (`optimaru.semiconductor_scheduling.models`) are the primary API: the web demo and

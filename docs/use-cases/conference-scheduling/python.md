@@ -1,4 +1,4 @@
-# conference_scheduling — Conference Scheduling (C++ engine + pybind11)
+# optimaru.conference_scheduling (Python)
 
 The conference-scheduling use case (C++ in `optimaru/conference_scheduling/cpp`, namespace `cs`)
 for use from Python. Derived from the Timefold Quickstarts `conference-scheduling` example

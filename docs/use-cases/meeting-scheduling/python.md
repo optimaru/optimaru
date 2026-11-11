@@ -1,4 +1,4 @@
-# meeting_scheduling
+# optimaru.meeting_scheduling (Python)
 
 The C++ implementation of the meeting-scheduling use case
 (`optimaru/meeting_scheduling/cpp`, generic engine in `optimaru/cpp/optimaru`) with pybind11
@@ -11,48 +11,12 @@ the composite encoding `grain_room = time_grain_pos * room_count + room_index`
 (-1 == unassigned), and a meeting occupies `duration_in_grains` consecutive grains from
 its start — every overlap constraint is computed over that whole span.
 
-## Constraints
+## Install and test
 
-| # | Level | Constraint (Python name) | C++ component | Default weight | Raw cost per unit (0 = no violation) |
-|---|------|------|------|------|------------|
-| 1 | hard | `room_conflict_cost` | `RoomConflictCost` | 1 | 1 per overlapping grain in the same room |
-| 2 | hard | `overtime_cost` | `OvertimeCost` | 1 | lastTimeGrainIndex when the last grain index does not exist |
-| 3 | hard | `required_attendance_conflict_cost` | `RequiredAttendanceConflictCost` | 1 | 1 per overlapping grain of pairs sharing a required attendee |
-| 4 | hard | `room_capacity_cost` | `RoomCapacityCost` | 1 | seat shortfall (required+preferred − capacity) |
-| 5 | hard | `day_crossing_cost` | `DayCrossingCost` | 1 | 1 when start/end days differ |
-| 6 | medium | `required_and_preferred_attendance_conflict_cost` | `RequiredAndPreferredAttendanceConflictCost` | 1 (medium units) | 1 per overlapping grain of (required, preferred) pairs |
-| 7 | medium | `preferred_attendance_conflict_cost` | `PreferredAttendanceConflictCost` | 1 (medium units) | 1 per overlapping grain of pairs sharing a preferred attendee |
-| 8 | soft | `meeting_end_time_cost` | `MeetingEndTimeCost` | 1 | lastTimeGrainIndex |
-| 9 | soft | `consecutive_meetings_cost` | `ConsecutiveMeetingsCost` | 100 | 1 per adjacent meeting pair |
-| 10 | soft | `meeting_overlap_cost` | `MeetingOverlapCost` | 10 | 1 per overlapping grain of distinct meetings |
-| 11 | soft | `larger_room_capacity_cost` | `LargerRoomCapacityCost` | 1 | capacity difference per larger room |
-| 12 | soft | `room_change_cost` | `RoomChangeCost` | 1 | 1 when an attendee's consecutive (gap ≤ 2 grains) meetings change room |
-
-`list_constraints()` orders them unit constraints first (2, 4, 5, 8, 11), then the
-pair (global) ones; `constraint_info()` reports each default level and weight from the C++
-components (`kDefaultLevel` / `kDefaultWeight`), and `constraint_costs(schedule)` the raw
-per-unit costs (`optimaru.meeting_scheduling.constraints.score()` turns them into a score). Every
-constraint is flippable, none is a reward, all twelve are on by default. Note that
-`overtime_cost`'s raw cost is the last grain index, not the overrun.
-
-The medium pair defaults to weight 1 in medium units: `level="hard"` gives one hard unit per
-person-grain, `level="soft"` one soft unit (outside the fold).
-
-### Score mapping (hard / medium / soft → Score)
-
-The engine score is `Score(hard int64, soft double)`, so the medium level
-is folded into soft:
-
+```sh
+OPTIMARU_USE_CASES=meeting_scheduling uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/meeting_scheduling
 ```
-hard = the hard level as-is (0 == feasible)
-soft = -(medium penalty × 1e6 + raw soft penalty)     # MEDIUM_SCALE == 1e6
-```
-
-Level priority is preserved as long as the raw soft penalty (sum of grain indices,
-100×adjacent pairs, 10×overlapping grains, capacity differences, room changes) stays
-below 1e6 — always the case on realistic instances. The fold is declared once in C++
-(`kMediumFold = intoSoft(1e6)` in `optimaru/meeting_scheduling/cpp/include/ms/domain.hpp`); both calculators and
-`constraints.score()` (via the `medium_fold` on every `constraint_costs()` entry) apply it.
 
 ## Usage
 
@@ -101,12 +65,48 @@ allowed. Each pick is its own instance with its own knobs, the instances add up,
 `level` is `Level.HARD` / `Level.MEDIUM` / `Level.SOFT` (or the names), any constraint may move onto medium (its
 weight then in medium units, folded at 1e6), and each repeated pick carries its own level.
 
-## Install and test
+## Constraints
 
-```sh
-OPTIMARU_USE_CASES=meeting_scheduling uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/meeting_scheduling
+| # | Level | Constraint (Python name) | C++ component | Default weight | Raw cost per unit (0 = no violation) |
+|---|------|------|------|------|------------|
+| 1 | hard | `room_conflict_cost` | `RoomConflictCost` | 1 | 1 per overlapping grain in the same room |
+| 2 | hard | `overtime_cost` | `OvertimeCost` | 1 | lastTimeGrainIndex when the last grain index does not exist |
+| 3 | hard | `required_attendance_conflict_cost` | `RequiredAttendanceConflictCost` | 1 | 1 per overlapping grain of pairs sharing a required attendee |
+| 4 | hard | `room_capacity_cost` | `RoomCapacityCost` | 1 | seat shortfall (required+preferred − capacity) |
+| 5 | hard | `day_crossing_cost` | `DayCrossingCost` | 1 | 1 when start/end days differ |
+| 6 | medium | `required_and_preferred_attendance_conflict_cost` | `RequiredAndPreferredAttendanceConflictCost` | 1 (medium units) | 1 per overlapping grain of (required, preferred) pairs |
+| 7 | medium | `preferred_attendance_conflict_cost` | `PreferredAttendanceConflictCost` | 1 (medium units) | 1 per overlapping grain of pairs sharing a preferred attendee |
+| 8 | soft | `meeting_end_time_cost` | `MeetingEndTimeCost` | 1 | lastTimeGrainIndex |
+| 9 | soft | `consecutive_meetings_cost` | `ConsecutiveMeetingsCost` | 100 | 1 per adjacent meeting pair |
+| 10 | soft | `meeting_overlap_cost` | `MeetingOverlapCost` | 10 | 1 per overlapping grain of distinct meetings |
+| 11 | soft | `larger_room_capacity_cost` | `LargerRoomCapacityCost` | 1 | capacity difference per larger room |
+| 12 | soft | `room_change_cost` | `RoomChangeCost` | 1 | 1 when an attendee's consecutive (gap ≤ 2 grains) meetings change room |
+
+`list_constraints()` orders them unit constraints first (2, 4, 5, 8, 11), then the
+pair (global) ones; `constraint_info()` reports each default level and weight from the C++
+components (`kDefaultLevel` / `kDefaultWeight`), and `constraint_costs(schedule)` the raw
+per-unit costs (`optimaru.meeting_scheduling.constraints.score()` turns them into a score). Every
+constraint is flippable, none is a reward, all twelve are on by default. Note that
+`overtime_cost`'s raw cost is the last grain index, not the overrun.
+
+The medium pair defaults to weight 1 in medium units: `level="hard"` gives one hard unit per
+person-grain, `level="soft"` one soft unit (outside the fold).
+
+### Score mapping (hard / medium / soft → Score)
+
+The engine score is `Score(hard int64, soft double)`, so the medium level
+is folded into soft:
+
 ```
+hard = the hard level as-is (0 == feasible)
+soft = -(medium penalty × 1e6 + raw soft penalty)     # MEDIUM_SCALE == 1e6
+```
+
+Level priority is preserved as long as the raw soft penalty (sum of grain indices,
+100×adjacent pairs, 10×overlapping grains, capacity differences, room changes) stays
+below 1e6 — always the case on realistic instances. The fold is declared once in C++
+(`kMediumFold = intoSoft(1e6)` in `optimaru/meeting_scheduling/cpp/include/ms/domain.hpp`); both calculators and
+`constraints.score()` (via the `medium_fold` on every `constraint_costs()` entry) apply it.
 
 ## Caveats
 

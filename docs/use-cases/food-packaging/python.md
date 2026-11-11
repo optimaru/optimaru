@@ -1,4 +1,4 @@
-# food_packaging — Python bindings
+# optimaru.food_packaging (Python)
 
 The pybind11 package of the food-packaging C++ implementation (`optimaru/food_packaging/cpp`).
 Times are exchanged as **minutes** (int64) from a shared origin, and the pydantic

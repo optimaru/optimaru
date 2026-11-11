@@ -1,4 +1,4 @@
-# task_assigning — task assigning
+# optimaru.task_assigning (Python)
 
 Skill-based task assignment, derived from the Timefold Quickstarts `task-assigning` example
 (Apache-2.0; see the repository NOTICE): the pybind11 package of the `optimaru/task_assigning/cpp` implementation on

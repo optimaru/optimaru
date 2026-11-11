@@ -1,4 +1,4 @@
-# optimaru.vehicle_routing — Vehicle Routing for Python
+# optimaru.vehicle_routing (Python)
 
 Python bindings for the C++ vehicle-routing example in
 [`optimaru/vehicle_routing/cpp`](../../../optimaru/vehicle_routing/cpp) — one solver, one module.
