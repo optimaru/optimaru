@@ -42,33 +42,36 @@ Falkenauer: instances 00, 10 and 19 of each class. Bins used; lower is better an
 
 | Instance | Items | Best known | optimaru engine | CP-SAT |
 | --- | ---: | ---: | ---: | ---: |
-| u120_00 | 120 | 48 | **48** | 49 |
+| u120_00 | 120 | 48 | **48** | **48** |
 | u120_10 | 120 | 52 | **52** | 53 |
-| u120_19 | 120 | 50 | **50** | **50** |
-| u250_00 | 250 | 99 | 100 | not run (size cap) |
+| u120_19 | 120 | 50 | **49** | 50 |
+| u250_00 | 250 | 99 | 99 | not run (size cap) |
 | u250_10 | 250 | 105 | 105 | not run (size cap) |
 | u250_19 | 250 | 102 | 102 | not run (size cap) |
-| u500_00 | 500 | 198 | 200 | not run (size cap) |
+| u500_00 | 500 | 198 | 198 | not run (size cap) |
 | u500_10 | 500 | 200 | 200 | not run (size cap) |
-| u500_19 | 500 | 196 | 198 | not run (size cap) |
-| u1000_00 | 1000 | 399 | 400 | not run (size cap) |
-| u1000_10 | 1000 | 400 | 401 | not run (size cap) |
-| u1000_19 | 1000 | 400 | 401 | not run (size cap) |
-| t60_00 | 60 | 20 | 21 | **20** |
-| t60_10 | 60 | 20 | 21 | **20** |
-| t60_19 | 60 | 20 | 21 | **20** |
-| t120_00 | 120 | 40 | 41 | **40** |
-| t120_10 | 120 | 40 | 41 | **40** |
-| t120_19 | 120 | 40 | 41 | **40** |
-| t249_00 | 249 | 83 | 84 | not run (size cap) |
-| t249_10 | 249 | 83 | 85 | not run (size cap) |
-| t249_19 | 249 | 83 | 85 | not run (size cap) |
-| t501_00 | 501 | 167 | 173 | not run (size cap) |
-| t501_10 | 501 | 167 | 169 | not run (size cap) |
-| t501_19 | 501 | 167 | 173 | not run (size cap) |
+| u500_19 | 500 | 196 | 196 | not run (size cap) |
+| u1000_00 | 1000 | 399 | 399 | not run (size cap) |
+| u1000_10 | 1000 | 400 | 400 | not run (size cap) |
+| u1000_19 | 1000 | 400 | 400 | not run (size cap) |
+| t60_00 | 60 | 20 | **20** | **20** |
+| t60_10 | 60 | 20 | **20** | **20** |
+| t60_19 | 60 | 20 | **20** | **20** |
+| t120_00 | 120 | 40 | **40** | **40** |
+| t120_10 | 120 | 40 | **40** | **40** |
+| t120_19 | 120 | 40 | **40** | **40** |
+| t249_00 | 249 | 83 | 83 | not run (size cap) |
+| t249_10 | 249 | 83 | 83 | not run (size cap) |
+| t249_19 | 249 | 83 | 83 | not run (size cap) |
+| t501_00 | 501 | 167 | 167 | not run (size cap) |
+| t501_10 | 501 | 167 | 167 | not run (size cap) |
+| t501_19 | 501 | 167 | 167 | not run (size cap) |
 
-CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, 120 items). Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
+CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, 120 items). Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->
+
+"Best known" is the bin count the OR-Library file states. For u120_19 the file states 50;
+49 is the capacity bound, ceil(total weight / capacity), and a packing with 49 bins exists.
 
 ## Search quality against a recorded baseline
 
