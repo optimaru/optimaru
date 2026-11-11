@@ -221,8 +221,8 @@ the whole move is laid out, so a candidate never holds half a request.
 
 | Operator | One application |
 | --- | --- |
-| `requestRuinRecreate` | Takes 1 to `request_ruin_max_requests` requests out (never more than two fifths of the plan's requests) and reinserts each at its cheapest slot pair: large neighbourhood search at request granularity. Which requests: random ones, related ones (the requests of nearby stops), the ones whose stops cost the most driving, the requests of one route, or the requests in adjacent stretches of nearby routes. In which order: at random, or by regret-`regret_k` (the request that loses the most by waiting goes first). `blink_rate` skips a candidate slot now and then, so the same hole is not always rebuilt the same way. Up to two requests waiting in the unassigned pool join each reinsertion, which is how a left-out request gets routed. |
-| `bundleRelocate` | Moves a bundle (1 to `bundle_max_requests` requests whose pickups follow each other on a route) to one other route, each request at its cheapest slot there. A cluster of orders crosses in one step; moved one by one, the plans in between are worse or infeasible. |
+| `requestRuinRecreate` | Takes 1 to `request_ruin_max_requests` requests out (never more than two fifths of the plan's requests; a request of a group brings its whole group, which can take the count past that) and reinserts each at its cheapest slot pair: large neighbourhood search at request granularity. Which requests: random ones, related ones (the requests of nearby stops), the ones whose stops cost the most driving, the requests of one route, or the requests in adjacent stretches of nearby routes. In which order: at random, or by regret-`regret_k` (the request that loses the most by waiting goes first). `blink_rate` skips a candidate slot now and then, so the same hole is not always rebuilt the same way. Up to two requests waiting in the unassigned pool join each reinsertion, which is how a left-out request gets routed. |
+| `bundleRelocate` | Moves a bundle (1 to `bundle_max_requests` requests whose pickups follow each other on a route, a group counting as one) to one other route, each request at its cheapest slot there. A cluster of orders crosses in one step; moved one by one, the plans in between are worse or infeasible. |
 | `bundleExchange` | Swaps a bundle of one route with a bundle of a nearby route, the two sized independently. |
 
 A request with a pinned stop is left where it is, and a request bound to a
@@ -363,7 +363,8 @@ cannot keep) all of it stays in `unassigned`, and the result is still feasible:
 the group is not routed in parts. The requests of a group go onto a vehicle in
 input order, each at its cheapest slot pair behind the earlier ones, and no other
 order is tried. One such offer costs a scan of the route per request, so groups
-are meant to be a handful of requests, not dozens. As with the vehicle limits, the request moves
+are meant to be a handful of requests: nothing caps the size, but a group of
+more than about ten slows every request move that takes it. As with the vehicle limits, the request moves
 keep groups whole whatever level the constraint is scored on; with it soft or
 left out, only the engine's stop moves try plans that split one.
 

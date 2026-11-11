@@ -56,7 +56,8 @@ namespace pdp {
 struct RequestMoveSettings {
     bool ruinRecreate = true;
     // The most requests one requestRuinRecreate takes out (at least 1, and never
-    // more than two fifths of the plan's requests).
+    // more than two fifths of the plan's requests). A request of a group brings
+    // its whole group, which can take the count past this.
     int ruinMaxRequests = 20;
     // Reinsertion by regret-k on half of the applications; below 2, always
     // cheapest-first in random order.
@@ -65,7 +66,7 @@ struct RequestMoveSettings {
     double blinkRate = 0.01;
 
     bool bundleMoves = true;
-    // The most requests in one bundle (at least 1).
+    // The most requests in one bundle (at least 1), a group counting as one.
     int bundleMaxRequests = 3;
 };
 

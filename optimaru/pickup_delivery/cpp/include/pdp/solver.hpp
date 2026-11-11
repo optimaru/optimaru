@@ -106,12 +106,13 @@ public:
         // --- request-level moves (pdp/request_moves.hpp) ---
         // requestRuinRecreate: take up to request_ruin_max_requests requests
         // out and reinsert each at its cheapest feasible slot pair (in random
-        // order, or by regret_k; blink_rate applies).
+        // order, or by regret_k; blink_rate applies). A request of a group
+        // brings its whole group, which can take the count past the setting.
         bool request_ruin_recreate = true;
         int request_ruin_max_requests = 20;
         // bundleRelocate / bundleExchange: move up to bundle_max_requests
         // requests of one route to another route together, or swap two such
-        // bundles.
+        // bundles. A group counts as one request here.
         bool bundle_moves = true;
         int bundle_max_requests = 3;
 
