@@ -1,4 +1,4 @@
-# optimaru.pickup_delivery — Pickup and Delivery for Python
+# optimaru.pickup_delivery (Python)
 
 Python bindings for the C++ pickup-and-delivery solver in
 [`optimaru/pickup_delivery/cpp`](../../../optimaru/pickup_delivery/cpp) — one solver, one module.
@@ -77,6 +77,9 @@ print(plan.unassigned_delivery_ids())  # []
   operators: `request_ruin_recreate` (with `request_ruin_max_requests`),
   `bundle_moves` (with `bundle_max_requests`), `pair_moves`,
   `pair_exchange_moves` and `pair_ruin`; the stubs in `_core.pyi` list them all.
+  `acceptor_type` chooses the rule local search accepts a move by (late
+  acceptance by default); its parameters are listed under
+  [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule).
 - `pdp.calculate_score(plan)` recomputes the derived fields and the score of the
   routes as they are, and stores it in `plan.score`.
 - `pdp.constraint_info()`, `pdp.list_constraints()` and

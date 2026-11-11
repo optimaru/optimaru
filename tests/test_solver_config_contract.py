@@ -64,8 +64,7 @@ def test_the_shared_fields_refuse_the_same_values_with_the_same_words(use_case):
 
 
 # Their SolverConfig lets the caller choose the acceptance rule (optimaru::AcceptanceConfig).
-# Pickup and delivery chooses it too, on fields of its own.
-ACCEPTANCE_USE_CASES = ["quadratic_assignment", "semiconductor_scheduling", "vehicle_routing"]
+ACCEPTANCE_USE_CASES = ["pickup_delivery", "quadratic_assignment", "semiconductor_scheduling", "vehicle_routing"]
 DEFAULT_RULE = {"semiconductor_scheduling": "SIMULATED_ANNEALING"}
 
 

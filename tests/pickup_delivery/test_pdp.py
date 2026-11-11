@@ -391,3 +391,22 @@ def test_package_solve_reports_new_bests():
         on_new_best=lambda step, score: calls.append(step),
     )
     assert calls
+
+
+def _new_bests(acceptor) -> list:
+    # A step limit only: the 4,000 steps end long before the default 30 s, so the cooling
+    # follows the step count and a seed repeats.
+    config = pdp.SolverConfig()
+    config.step_count_limit = 4000
+    config.random_seed = 5
+    config.acceptor_type = acceptor
+    calls = []
+    plan = pdp.build_random_instance(request_count=30, vehicle_count=5, seed=3)
+    pdp.solve(plan, config=config, on_new_best=lambda step, score: calls.append(step))
+    return calls
+
+
+def test_simulated_annealing_is_not_hill_climbing():
+    """Simulated annealing starts at the automatic temperature (1% of the start's soft level):
+    at the engine's own (0, 0) it took no worsening move, which is hill climbing."""
+    assert _new_bests(pdp.AcceptorType.SIMULATED_ANNEALING) != _new_bests(pdp.AcceptorType.HILL_CLIMBING)

@@ -19,6 +19,7 @@
 #include "pdp/score_calculator.hpp"
 #include "pdp/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
+#include "optimaru/python/score_binding.hpp"
 
 namespace py = pybind11;
 using namespace pdp;
@@ -27,13 +28,7 @@ namespace opy = optimaru::python;
 PYBIND11_MODULE(_core, m) {
     m.doc() = "Pickup and delivery (PDPTW) — C++ core exposed to Python";
 
-    py::class_<Score>(m, "Score", py::module_local())
-            .def_readonly("hard", &Score::hard)
-            .def_readonly("medium", &Score::medium)
-            .def_readonly("soft", &Score::soft)
-            .def("is_feasible", &Score::feasible)
-            .def("__str__", &Score::str)
-            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
+    opy::bind_score<Score>(m);
 
     py::class_<Location>(m, "Location", py::module_local())
             .def(py::init([](double latitude, double longitude) {
@@ -218,15 +213,7 @@ PYBIND11_MODULE(_core, m) {
           py::arg("vehicle_count"), py::arg("seed") = 0,
           "A randomly generated PDPTW instance, for demos and benchmarks.");
 
-    py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())
-            .value("HILL_CLIMBING", optimaru::AcceptanceRule::HillClimbing)
-            .value("LATE_ACCEPTANCE", optimaru::AcceptanceRule::LateAcceptance)
-            .value("ENTITY_TABU", optimaru::AcceptanceRule::EntityTabu)
-            .value("SIMULATED_ANNEALING", optimaru::AcceptanceRule::SimulatedAnnealing)
-            .value("GREAT_DELUGE", optimaru::AcceptanceRule::GreatDeluge)
-            .value("STEP_COUNTING_HILL_CLIMBING",
-                   optimaru::AcceptanceRule::StepCountingHillClimbing)
-            .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptanceRule::RecordToRecordTravel);
+    opy::bind_acceptor_type(m);
 
     py::enum_<optimaru::SelectionScheme>(m, "OperatorSelectionType", py::module_local())
             .value("ROULETTE_WHEEL", optimaru::SelectionScheme::RouletteWheel)
@@ -251,11 +238,6 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("first_fit_decreasing", &Solver::Config::first_fit_decreasing)
             .def_readwrite("pair_construction_heuristic",
                            &Solver::Config::pair_construction_heuristic)
-            // --- acceptance ---
-            .def_readwrite("acceptor_type", &Solver::Config::rule)
-            .def_readwrite("record_to_record_start_gap",
-                           &Solver::Config::record_to_record_start_gap)
-            .def_readwrite("record_to_record_end_gap", &Solver::Config::record_to_record_end_gap)
             // --- move mix ---
             .def_readwrite("relocate_move_weight", &Solver::Config::relocate_weight)
             .def_readwrite("list_swap_move_weight", &Solver::Config::list_swap_weight)
@@ -356,35 +338,8 @@ PYBIND11_MODULE(_core, m) {
                     },
                     py::arg("plan"), py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of an assembly on `plan` — the input
-    // optimaru.pickup_delivery.constraints.score() turns into a score. Scoring once is
-    // enough: re-pricing any assembly is pure Python arithmetic on these.
-    // None = the default assembly; a pick list scores exactly those picks
-    // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
-    // of a name keyed "<name>#<k>".
-    m.def(
-            "constraint_costs",
-            [](PdpRoutePlan& plan, const py::object& constraints) {
-                DecomposedCalculator calculator;
-                opy::apply_constraints([] { return defaultConstraints(); }, constraints)
-                        .into(calculator);
-                return opy::constraint_costs(calculator, plan);
-            },
-            py::arg("plan"), py::arg("constraints") = py::none(),
-            "Raw per-unit cost of every constraint, before weight/exponent/offset/level "
-            "(each entry also carries the domain's medium_fold, a per-vehicle one its "
-            "evaluated units).");
-
-    // The constraint names this domain scores, in default-assembly order —
-    // the same strings a score breakdown reports.
-    m.def(
-            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
-            "Constraint names available to optimaru.pickup_delivery.constraints.");
-
-    // The constraint catalog, read off the same default assembly:
-    // constraint_info() -> [ConstraintInfo(name, default_level,
-    // default_weight, level_flippable, reward, default_enabled), ...] in
-    // list_constraints() order. The defaults live in the C++ components only
-    // (unassigned_requests_cost: medium, weight 1 in medium units).
-    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    // constraint_costs(), list_constraints() and constraint_info(), off the
+    // default assembly. The units of constraint_costs() are the vehicles; a
+    // per-vehicle constraint lists the ones it evaluates as "units".
+    opy::bind_constraints<PdpRoutePlan>(m, "plan", [] { return defaultConstraints(); });
 }

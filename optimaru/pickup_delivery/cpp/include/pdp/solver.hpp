@@ -53,7 +53,9 @@ public:
     //                     above
     //   on_new_best       reports each new best in the same levels as the
     //                     final plan.score of the solve() overload in use
-    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
+    struct Config : optimaru::SolverConfigBase<Score>,
+                    optimaru::RuinRecreateConfig,
+                    optimaru::AcceptanceConfig {
         // Two ruin & recreate defaults differ from the shared ones: a kick
         // ruins up to 40% (30% there), and the rewards are {3, 2, 1, 0.5}
         // ({33, 9, 3, 0} there).
@@ -70,10 +72,8 @@ public:
         // individual nodes and strands pairs on larger instances.
         bool pair_construction_heuristic = true;
 
-        // --- acceptance ---
-        optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::LateAcceptance;
-        double record_to_record_start_gap = 0.02;
-        double record_to_record_end_gap = 0.0;
+        // --- acceptance: the rule (late acceptance by default) and each
+        // rule's parameters are the shared AcceptanceConfig ---
 
         // --- move mix ---
         // The built-in element moves are deliberately down-weighted relative
