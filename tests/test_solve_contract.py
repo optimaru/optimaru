@@ -230,8 +230,16 @@ def test_an_employee_scheduling_seed_in_settings_still_counts():
     assert request.random_seed == 7 and request._effective("random_seed") == 7
     request.settings.random_seed = 9
     assert request._effective("random_seed") == 9
+    reloaded = ScheduleRequest.model_validate_json(request.model_dump_json())
+    assert (reloaded.random_seed, reloaded.settings.random_seed, reloaded._effective("random_seed")) == (9, 9, 9)
     request.random_seed = 3
     assert request._effective("random_seed") == 3
+    assert ScheduleRequest.model_validate(request.model_dump())._effective("random_seed") == 3
+    with pytest.raises(ValueError):  # a new name and its earlier name together are refused
+        ScheduleRequest(model_input=model_input, timelimit=1, time_limit_seconds=2)
+    with pytest.raises(ValueError):
+        data = model_input.model_dump()
+        type(model_input).model_validate({**data, "rules": data["constraints"]})
 
 
 @pytest.mark.parametrize("mode", ["canonical", "quickstart"])

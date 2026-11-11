@@ -432,7 +432,7 @@ next_request = with_initial_solution(request, solution)  # or solution.model_dum
 better = solve_request(next_request)
 ```
 
-`with_initial_solution` turns a solution into the `initial_route` of each vehicle (above), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `timelimit=0` a complete solution comes back as it went in.
+`with_initial_solution` turns a solution into the `initial_route` of each vehicle (above), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `time_limit_seconds=0` a complete solution comes back as it went in.
 
 A vehicle's `pinned_stops` stay as the request has them: its route in the solution must start with them, or `ValueError` is raised. The same goes for an unknown id, a stop routed twice, or a request whose pickup and dropoff are apart, so a hard-infeasible result with a broken pair cannot be used as a start.
 

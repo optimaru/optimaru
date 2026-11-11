@@ -60,6 +60,7 @@ from pydantic import (
     TypeAdapter,
     create_model,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -550,7 +551,8 @@ class ScheduleRequest(SolveRequest):
     top level wins and one given only in ``settings`` is taken up, so both say the same.
     After that, a value set at the top level is the one used; until one is set there,
     a change to ``settings`` is. A request read back from its own JSON has the top-level
-    fields set, so there the top level is the one to change.
+    fields set, so there the top level is the one to change. A dump writes the value in
+    use to both places.
 
     ``solver_parameters`` are applied after ``settings``, so a field named in both takes the
     value in ``solver_parameters``. Two things come later still and win over it: the stop
@@ -575,6 +577,19 @@ class ScheduleRequest(SolveRequest):
         # setting `settings`, so it stays out of model_fields_set.
         object.__setattr__(self, "settings", self.settings.model_copy(update=updates))
         return self
+
+    @model_serializer(mode="wrap")
+    def _dump_one_seed_and_target(self, handler):
+        """A dump says the seed and the target this request solves with in both places, so the
+        request read back from it solves the same way."""
+        data = handler(self)
+        for name in ("random_seed", "stop_at_first_feasible"):
+            value = self._effective(name)
+            if name in data:
+                data[name] = value
+            if isinstance(data.get("settings"), dict) and name in data["settings"]:
+                data["settings"][name] = value
+        return data
 
     def _effective(self, name: str):
         """The seed or the target of this solve: the top-level field once it was given or set,
