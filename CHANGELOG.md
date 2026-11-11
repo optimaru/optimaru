@@ -7,9 +7,12 @@ pydantic 2.11 or newer is required (was 2.5). And JSON written by the models use
 names only: `time_limit_seconds` and `parallel_solver_count` in a request (were `timelimit`
 and `num_workers`), `constraints` and `constraint_totals` in employee scheduling (were
 `rules` and `rule_totals`). The earlier names are still read, in JSON, as keywords and as
-attributes, so what a caller sends keeps working. Seven use cases search differently, so
-a seed's result there differs from 0.4.3: bed allocation, food packaging, knapsack,
-maintenance scheduling, max-cut, quadratic assignment and sports league scheduling.
+attributes, so what a caller sends keeps working, and employee scheduling's Python names
+with "rule" in them (`default_rules()`, `Rule`, `RULE_MODELS` and the others) are the
+constraint names under a second name. Seven use cases search differently, so a seed's
+result there differs from 0.4.3: bed allocation, food packaging, knapsack, maintenance
+scheduling, max-cut, quadratic assignment and sports league scheduling. The entries on
+notebooks, benchmarks and guides are about the repository, not the wheel.
 
 - **Vehicle routing and pickup and delivery: parallel starts on a solve with constraints.**
   `parallel_solver_count` (also a request's field; `num_workers` is its earlier name) had no effect when a plan was scored
