@@ -61,6 +61,9 @@ public:
         std::stable_sort(order_.begin(), order_.end(),
                          [&density](int a, int b) { return density[a] > density[b]; });
         // The first rank the capacity leaves out (the last rank when all fit).
+        // Fixed for the solve, and on purpose blind to the selection and to
+        // every rule but the capacity: where mandatory or forbidden items
+        // move the real boundary, the window's jitter is all that follows it.
         std::int64_t load = 0;
         breakRank_ = std::max(0, n - 1);
         for (int rank = 0; rank < n; ++rank) {

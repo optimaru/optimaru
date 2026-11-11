@@ -65,8 +65,8 @@ public:
         // order around the break item exactly, by dynamic programming over
         // the load. At the capacity boundary the improving exchanges are two
         // for one or larger, which no single flip or swap reaches; without it
-        // the 500 to 5,000 item instances of benchmarks/knapsack stay 1 to 6
-        // below their optimum.
+        // the 500, 1,000 and 5,000 item instances of benchmarks/knapsack stay
+        // 1 to 3 below their optimum.
         bool core_repack_moves = true;
     };
 

@@ -174,8 +174,10 @@ rejects an exponent other than 1).
   the acceptor judges it. It looks at the capacity alone: resources, groups,
   dependencies, mandatory and forbidden items are judged by the score, so where they
   shape the instance the move is often refused and the built-in moves do the work.
-  It declines when the table would exceed a million cells (heavy items: it narrows
-  the window first) and is drawn on at most one step in a thousand.
+  It declines when the table would exceed a million cells (it narrows the window
+  first), so on an instance whose weights run into the hundreds of thousands the move
+  does not apply and the search is the built-in moves alone. It is drawn on at most
+  one step in a thousand.
 - `solver` — engine wrapper (greedy construction + Late Acceptance over flip / swap
   moves and `CoreRepackMove` + adaptive ruin & recreate, also as an ordinary move;
   parallel starts each run their own search)
@@ -196,7 +198,7 @@ solves, brute-force optima (0/1 multidimensional instances and instances with ev
 fact), the zero budget with a seed, determinism, multi-start and validation, and
 `CoreRepackMove`: a move raises the value within the capacity, incremental == full
 recompute after it and after its undo, and plain knapsacks of 300 to 2,000 items end on
-their dynamic-programming optimum (three of the six do not without the move).
+their dynamic-programming optimum.
 `ks_plugin_test`: default assembly == monolith bit for bit (score and raw totals),
 plugin incremental == full recompute per constraint after each move, partial
 assemblies, overrides (exponent on the total, per-constraint hard rounding), raw

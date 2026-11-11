@@ -125,6 +125,19 @@ def test_stop_at_first_feasible_leaves_the_callers_config_alone():
     assert config.best_score_limit == before  # the score limit went to a copy
 
 
+def test_the_core_repack_move_can_be_turned_off():
+    config = steps(20_000)
+    config.core_repack_moves = False
+    assert config.core_repack_moves is False
+    core = demo().to_core()
+    knapsack.solve(core, config=config)
+    without = (core.score.hard, core.score.soft)
+    core = demo().to_core()
+    knapsack.solve(core, config=steps(20_000))
+    # The demo is small enough for the built-in moves: the same optimum either way.
+    assert without == (core.score.hard, core.score.soft) and core.score.hard == 0
+
+
 def test_multi_start_returns_a_consistent_best():
     core = demo().to_core()
     knapsack.solve(core, time_limit_seconds=0.3, random_seed=1, parallel_solver_count=4)

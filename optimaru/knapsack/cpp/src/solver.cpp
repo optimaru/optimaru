@@ -43,9 +43,8 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackPr
     // chooses between it and the move mix.
     engineConfig.search.custom_move_probability = 0.001;
 
-    // Nearby swap partners: items of similar weight. The weights are copied,
-    // so the meter stays valid in the multi-start worker threads, whose
-    // problems are copies.
+    // Nearby swap partners: items of similar weight. The meter owns a copy of
+    // the weights.
     if (config.nearby_probability > 0.0 && config.nearby_size > 0) {
         auto weights = std::make_shared<std::vector<std::int64_t>>();
         for (const Item& item : problem.items) weights->push_back(item.weight);

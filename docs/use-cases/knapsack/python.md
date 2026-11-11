@@ -68,7 +68,8 @@ print(core.score, core.assignment(), core.total_value())
 ```
 
 For finer control build `knapsack.SolverConfig()` (time budget, `step_count_limit`,
-multi-start, ALNS knobs, move weights, nearby swaps, the `on_new_best(step, score)`
+multi-start, ALNS knobs, move weights, nearby swaps, `core_repack_moves` (the move that
+re-decides the items around the capacity boundary exactly), the `on_new_best(step, score)`
 callback, `best_score_limit` early stop, ...) and call `knapsack.Solver(cfg).solve(core)`
 or `knapsack.solve(problem, config=cfg)`. A zero budget (`spent_limit_seconds = 0`)
 returns the greedy construction, or a warm-start seed, unchanged.
