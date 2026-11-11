@@ -548,8 +548,11 @@ void constructGroups(VehicleRoutePlan& plan, const VisitGroups& groups) {
         }
         bestPlan(plan, groups, planner, timelines, routes, candidates, waiting, steps, trial);
         if (steps.empty()) {
-            // No vehicle takes them: they wait, whole, where construction
-            // leaves them alone.
+            // No vehicle takes them: they wait together in the pool, where
+            // construction leaves them alone. A group with visits already
+            // on a route was only offered that vehicle, so it starts split
+            // when the rest does not fit there, and the group operator
+            // moves it whole.
             for (int visit : waiting) {
                 if (!parked[static_cast<std::size_t>(visit)]) {
                     parked[static_cast<std::size_t>(visit)] = 1;

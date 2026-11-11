@@ -658,6 +658,22 @@ void testCalculateScore() {
         refused = true;
     }
     check(refused, "an order outside a group is refused");
+
+    // The order constraint read without that check (a caller's own
+    // calculator): an index that is no visit names nothing, and is not read.
+    VehicleRoutePlan stray = buildRandomInstance(6, 2, /*seed=*/3);
+    stray.visits[0].groupIndex = stray.visits[1].groupIndex = 0;
+    stray.visits[1].afterVisitIndices = {0, 999, -1};
+    stray.vehicles[0].visitIndices = {1, 0};
+    stray.vehicles[1].visitIndices = {2, 3, 4, 5};
+    ConstraintAssembly orderOnly;
+    orderOnly.emplace<VisitOrderCost>(1.0);
+    DecomposedCalculator calculator;
+    std::move(orderOnly).into(calculator);
+    calculator.rebuild(stray);
+    calculator.score();
+    check(calculator.level_scores().hard == -1,
+          "visitOrderCost counts the one real pair and skips indices that are no visit");
     std::printf("\n");
 }
 

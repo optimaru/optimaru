@@ -45,16 +45,21 @@ struct GroupMoveSettings {
 
 // The operators the settings turn on, to register with
 // optimaru::Solver::add_move_operator. `groups` is built from the plan of the
-// solve they are registered for.
+// solve they are registered for. They share one workspace that holds the state
+// of that solve: make a new set for every engine solve, and never hand one set
+// to two threads.
 std::vector<std::unique_ptr<optimaru::MoveOperator<VehicleRoutePlan>>> makeGroupMoves(
         const GroupMoveSettings& settings, std::shared_ptr<const VisitGroups> groups);
 
 // Places the groups no route holds whole yet, each on the one vehicle that
 // takes its waiting visits for the least driving: the vehicle that already
 // carries most of the group when some of it is routed, any vehicle otherwise.
-// A group no vehicle takes is parked in the unassigned pool, whole, and so is
-// what is on no route of a group the caller has parked a visit of. Visits in
-// no group are left to the engine's construction.
+// A group no vehicle takes is parked in the unassigned pool, whole. Visits
+// the caller routed or parked stay where they are: when the vehicle carrying
+// part of a group has no room for the rest, or the caller parked one of its
+// visits, the rest waits in the pool and the group starts split, for the
+// group operator to move whole. Visits in no group are left to the engine's
+// construction.
 void constructGroups(VehicleRoutePlan& plan, const VisitGroups& groups);
 
 }  // namespace vrp

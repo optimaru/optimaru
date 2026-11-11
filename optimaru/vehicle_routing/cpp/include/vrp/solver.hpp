@@ -242,6 +242,14 @@ private:
     Config config_;
 };
 
+// What a plan may say about groups and order: no group index below -1, a
+// visit comes after visits of its own group only (each a visit of the plan,
+// named once, never itself), and the order has no cycle. Throws
+// std::invalid_argument otherwise. Every solve runs it, and so does whatever
+// scores a plan handed in from outside (calculateScore, the bindings'
+// constraint_costs), since visitOrderCost reads those indices.
+void checkVisitGroups(const VehicleRoutePlan& plan);
+
 // The score of a plan as it stands, the way solve(plan) scores it: on the
 // four core rules (ScoreCalculator::score), unless the plan has visit groups,
 // which those rules do not price: then on the default constraint assembly.

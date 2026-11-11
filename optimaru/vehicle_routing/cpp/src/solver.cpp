@@ -20,11 +20,9 @@
 
 namespace vrp {
 
-namespace {
-
-// What a plan may say about groups and order: a visit comes after visits of
-// its own group only, and the order has no cycle. Anything else could never be
-// served, and the result would be hard-infeasible without a word of why.
+// What a plan may say about groups and order (see solver.hpp). Anything else
+// could never be served, and the result would be hard-infeasible without a
+// word of why.
 void checkVisitGroups(const VehicleRoutePlan& plan) {
     const int count = static_cast<int>(plan.visits.size());
     std::vector<int> waitingFor(plan.visits.size(), 0);
@@ -83,6 +81,8 @@ void checkVisitGroups(const VehicleRoutePlan& plan) {
         }
     }
 }
+
+namespace {
 
 // Which visits travel together, worked out once for the solve: construction
 // and the group operators read the same object.

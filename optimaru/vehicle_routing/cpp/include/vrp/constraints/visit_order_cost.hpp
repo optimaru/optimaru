@@ -44,7 +44,11 @@ struct VisitOrderCost final : detail::PerVehicleConstraint {
         std::int64_t reversed = 0;
         for (std::size_t i = 0; i < m.size(); ++i) {
             for (int earlier : p.visits[static_cast<std::size_t>(m[i])].afterVisitIndices) {
+                // An index that is no visit (checkVisitGroups refuses it before
+                // a solve) names nothing on this route; a negative one wraps
+                // to a value past the end.
                 const auto e = static_cast<std::size_t>(earlier);
+                if (e >= stamp_.size()) continue;
                 if (stamp_[e] == epoch_ && position_[e] > static_cast<int>(i)) ++reversed;
             }
         }
@@ -53,7 +57,8 @@ struct VisitOrderCost final : detail::PerVehicleConstraint {
 
     // A plan with no order costs nothing on any candidate route, so its
     // previews need no route written out. With an order the candidate route
-    // is costed as it is (cost() above).
+    // is costed as it is (cost() above). The answer depends on the plan: the
+    // objective asks after on_reset(), which is where ordered_ is set.
     bool supports_piecewise_preview() const override { return !ordered_; }
     bool piecewise_cost(const VehicleRoutePlan& /*plan*/, int /*unit*/,
                         const optimaru::ListPiece* /*pieces*/, int /*count*/,

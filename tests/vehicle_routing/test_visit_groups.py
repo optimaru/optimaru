@@ -370,14 +370,27 @@ def test_calculate_score_prices_groups_and_order_on_a_plan_built_by_hand(routes,
     )
 
 
-def test_calculate_score_refuses_an_order_the_solve_refuses():
-    plan = to_plan(two_ends([visit("a", "g"), visit("b", "g"), visit("c")]))
+@pytest.mark.parametrize("read", [vrp.calculate_score, vrp.constraint_costs])
+@pytest.mark.parametrize(
+    ("after", "message"),
+    [
+        ([2], "visit a comes after visit c, which is not in its group"),
+        ([999], "visit a: afterVisitIndices holds 999, out of range 0..2"),
+        ([-1], "visit a: afterVisitIndices holds -1, out of range 0..2"),
+    ],
+)
+def test_scoring_a_plan_refuses_an_order_the_solve_refuses(read, after, message):
+    # The indices come from Python and the order constraint reads them as indices,
+    # so every way to score a plan checks them first.
+    plan = to_plan(two_ends([visit("a", "g"), visit("b", "g"), visit("c")], [vehicle("v", ["a", "b"]), vehicle("w")]))
     visits = plan.visits
-    visits[0].after_visit_indices = [2]
-    stranger = vrp.VehicleRoutePlan(plan.name, plan.locations, plan.vehicles, visits)
+    visits[0].after_visit_indices = after
+    bad = vrp.VehicleRoutePlan(plan.name, plan.locations, plan.vehicles, visits)
 
-    with pytest.raises(ValueError, match="visit a comes after visit c, which is not in its group"):
-        vrp.calculate_score(stranger)
+    with pytest.raises(ValueError, match=message):
+        read(bad)
+    with pytest.raises(ValueError, match=message):
+        vrp.solve(bad, time_limit_seconds=0.1)
 
 
 def test_a_constraint_list_without_the_group_rule_is_used_as_it_is():

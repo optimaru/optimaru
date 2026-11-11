@@ -335,6 +335,10 @@ PYBIND11_MODULE(_core, m) {
 
     // constraint_costs(), list_constraints() and constraint_info(), off the
     // default assembly. The units of constraint_costs() are the vehicles; a per-vehicle
-    // constraint lists the ones it evaluates as "units".
-    opy::bind_constraints<VehicleRoutePlan>(m, "plan", [] { return defaultConstraints(); });
+    // constraint lists the ones it evaluates as "units". The plan is checked
+    // first, as before a solve: its after_visit_indices are written from
+    // Python and visitOrderCost reads them as indices.
+    opy::bind_constraints<VehicleRoutePlan>(
+            m, "plan", [] { return defaultConstraints(); },
+            [](VehicleRoutePlan& plan) { checkVisitGroups(plan); });
 }
