@@ -83,7 +83,10 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     // of benchmarks/maintenance-scheduling at 30 s on three seeds: 13 of 15
     // runs better, the mean soft score 24%, 27%, 3.4%, 3.8% and 0.1% better
     // from the smallest up.
-    engineConfig.search.acceptance.history_growth = 2.0;
+    // A solve that starts from a solution the caller gave has no stages: the
+    // start's score is then no lower than where the search stands, and a stage
+    // would take the place of the kicks that find something there.
+    if (optimaru::nothing_placed(schedule)) engineConfig.search.acceptance.history_growth = 2.0;
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
     engineConfig.search.descent_weight = config.descent_weight;

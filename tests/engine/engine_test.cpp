@@ -298,6 +298,9 @@ void testHistoryStages() {
         // took 0.1, the second took 0.2, the third 0.4, and a fourth, taken
         // to cost 0.8, no longer fits after 0.7.
         optimaru::HistoryStages stages = stagesOf(400, 2.0);
+        check(stages.min_patience() == 0, "before the first new best there is nothing to wait out");
+        stages.on_new_best(0.05);
+        check(stages.min_patience() == 800, "after it, a stage is waited out for two histories");
         check(stages.on_converged(0.1, true), "no kicks: the second stage is due at convergence");
         stages.start_next(0.1);
         check(stages.history() == 800 && stages.min_patience() == 1600, "the history doubles");
@@ -305,7 +308,17 @@ void testHistoryStages() {
         check(stages.on_converged(0.3, true), "a third stage fits (0.3 + 0.4 <= 1)");
         stages.start_next(0.3);
         check(!stages.on_converged(0.7, true), "a fourth does not (0.7 + 0.8 > 1)");
-        check(stages.history() == 1600, "a stage that is not started leaves the history");
+        check(stages.history() == 1600 && stages.enabled(),
+              "a stage that is not started leaves the history, and the stages stay on");
+    }
+    {
+        // A stall before any new best ends the stages: the search began at a
+        // local optimum, and the start's score is where it stands.
+        optimaru::HistoryStages warm = stagesOf(400, 2.0);
+        check(!warm.on_converged(0.1, true) && !warm.enabled(),
+              "a stall with nothing better than the start found: no stage, and none later");
+        warm.on_new_best(0.2);
+        check(!warm.enabled(), "a new best after that does not bring them back");
     }
     {
         // With kicks a stage waits until no new best has come for half as
@@ -321,12 +334,14 @@ void testHistoryStages() {
         // holds: at it a stage restarts with the same length, at the same
         // cost.
         optimaru::HistoryStages slow = stagesOf(1, 1.2);
+        slow.on_new_best(0.005);
         slow.on_converged(0.01, true);
         slow.start_next(0.01);
         check(slow.history() == 2, "a factor of 1.2 takes a one-entry history to two");
 
         const std::size_t cap = optimaru::HistoryStages::kMaxHistory;
         optimaru::HistoryStages capped = stagesOf(cap - 1, 2.0);
+        capped.on_new_best(0.05);
         capped.on_converged(0.1, true);
         capped.start_next(0.1);  // (the acceptor it returns, 16 MB at the cap, is not needed here)
         check(capped.history() == cap, "the history stops at the cap");
@@ -339,6 +354,51 @@ void testHistoryStages() {
         check(!capped.on_converged(0.9, true), "which no longer fits after 0.9");
         check(stagesOf(cap * 4, 2.0).history() == cap, "a configured history above the cap is cut");
     }
+}
+
+// A search that starts at a local optimum, as a warm start from a solved
+// solution does. A stage restarts from the start's score, which is where the
+// search stands, so it loosens nothing; before the stages ended themselves
+// here, each stall took one in the place of the kick, and a solve with a
+// budget for many stages returned its start.
+void testHistoryGrowthOnAWarmStart(const Score& optimum) {
+    std::printf("== late acceptance: history growth on a warm start ==\n");
+    // Late acceptance alone stops short of the optimum of the conflicted
+    // instance: that is the start.
+    TaskAssignment stuck = buildTaskInstance();
+    {
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::minutes(10);
+        config.limits.step_limit = 20000;
+        config.search.acceptance.history_length = 50;
+        config.search.ruin_recreate.enabled = false;
+        config.seed = 7;
+        TaskAssignmentCalculator calculator;
+        const Score local = optimaru::Solver<TaskAssignment>(config).solve(stuck, calculator);
+        check(local < optimum, "late acceptance alone stops below the optimum: the warm start");
+    }
+    const auto run = [&stuck](double growth) {
+        TaskAssignment s = stuck;
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::minutes(10);
+        config.limits.step_limit = 100000;
+        config.search.acceptance.history_length = 50;
+        config.search.acceptance.history_growth = growth;
+        config.search.ruin_recreate.enabled = true;
+        config.search.ruin_recreate.unimproved_step_trigger = 200;
+        config.search.ruin_recreate.min_ruin_fraction = 0.34;
+        config.search.ruin_recreate.max_ruin_fraction = 0.67;
+        config.seed = 7;
+        TaskAssignmentCalculator calculator;
+        const Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
+        return std::make_pair(result, s.assignment);
+    };
+    const auto plain = run(0.0);
+    const auto staged = run(2.0);
+    check(plain.first == optimum, "from the warm start, the kicks reach the optimum");
+    check(staged.first == optimum, "with history growth they still do");
+    check(staged.second == plain.second,
+          "and step for step: the same assignment as without history growth");
 }
 
 void testTerminations(const Score& optimum) {
@@ -1019,6 +1079,26 @@ TspSolution buildRandomTsp(int routeCount, int cityCount) {
     }
     s.routes.assign(routeCount, {});
     return s;
+}
+
+// nothing_placed: what a use case asks before it sets what only suits a
+// start from the construction.
+void testNothingPlaced() {
+    std::printf("== construction: nothing placed ==\n");
+    TaskAssignment tasks = buildTaskInstance();
+    check(optimaru::nothing_placed(tasks), "assignment shape: every entity without a value");
+    tasks.assignment[2] = 0;
+    check(!optimaru::nothing_placed(tasks), "one entity with a value: something is placed");
+
+    PinnedTasks pinned{3, {1, -1, 2, -1}, {1, 0, 1, 0}};
+    check(optimaru::nothing_placed(pinned), "pinned entities with their values do not count");
+    pinned.assignment[1] = 0;
+    check(!optimaru::nothing_placed(pinned), "a value on an entity that is not pinned does");
+
+    TspSolution tour = buildRandomTsp(2, 10);
+    check(optimaru::nothing_placed(tour), "sequence shape: every list empty");
+    tour.routes[1].push_back(3);
+    check(!optimaru::nothing_placed(tour), "one element in a list: something is placed");
 }
 
 void testNearbyAndLnsOnRandomTsp() {
@@ -2394,6 +2474,8 @@ int main() {
     testLnsEscapesLocalOptimum(optimum);
     testHistoryStages();
     testHistoryGrowth(separableOptimum);
+    testHistoryGrowthOnAWarmStart(optimum);
+    testNothingPlaced();
     testNearbyAndLnsOnRandomTsp();
     testHistoryGrowthOnRandomTsp();
     testExpandedMoves();

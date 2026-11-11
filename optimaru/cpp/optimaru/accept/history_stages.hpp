@@ -42,12 +42,33 @@ public:
 
     bool enabled() const { return enabled_; }
     std::size_t history() const { return history_; }
-    std::int64_t min_patience() const { return 2 * static_cast<std::int64_t>(history_); }
+    // A stage has converged only when two histories have gone by without an
+    // improving move. Until the search has found something better than its
+    // start there is no stage to wait out, and nothing but a new best counts
+    // as progress: it then stalls on the step it would without the stages.
+    std::int64_t min_patience() const {
+        return found_best_ ? 2 * static_cast<std::int64_t>(history_) : 0;
+    }
+    // Whether an improving move puts off the stall, as it does inside a
+    // stage, where the search walks below the best for a while.
+    bool counts_improving_moves() const { return enabled_ && found_best_; }
 
     // Tells the stages that the search has converged, and returns whether
     // the next stage starts now. It records how long the stage that just
     // ended took (the first call: a stage of the configured length).
+    //
+    // A search that stalls before it has found anything better than its
+    // start began at a local optimum: a warm start from a solved solution, or
+    // a construction that no move improves. A stage would start over from the
+    // start's score, which is where the search stands, and loosen nothing,
+    // while it takes the place of the kick that is due. The stages end there
+    // for the rest of the solve, and the search goes on as it does without
+    // them.
     bool on_converged(double now, bool no_kicks) {
+        if (!found_best_) {
+            enabled_ = false;
+            return false;
+        }
         if (stage_cost_ < 0.0 || in_stage_) stage_cost_ = now - stage_start_;
         in_stage_ = false;
         const double next_cost =
@@ -68,7 +89,10 @@ public:
         return std::make_unique<LateAcceptance>(history_, initial);
     }
 
-    void on_new_best(double now) { last_best_ = now; }
+    void on_new_best(double now) {
+        last_best_ = now;
+        found_best_ = true;
+    }
 
     // Whether a stage has started since the last call (true once per stage):
     // the first new best after a restart is that far from the one before
@@ -102,6 +126,7 @@ private:
     double last_best_;
     bool in_stage_ = false;
     bool restarted_ = false;
+    bool found_best_ = false;  // a solution better than the start's
 };
 
 }  // namespace optimaru

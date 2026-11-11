@@ -143,7 +143,8 @@ class SolverConfig:
     """LATE_ACCEPTANCE by default."""
     late_acceptance_size: int
     """LATE_ACCEPTANCE: 0 = auto: clamp(8 * facility count, 400, 3200). The first stage's length: the search restarts with
-    a doubled history when it stalls and the next stage fits in the budget."""
+    a doubled history when it stalls and the next stage fits in the budget. A solve that starts
+    from a given solution keeps this one length."""
     entity_tabu_size: int
     """ENTITY_TABU: for how many steps a moved facility stays tabu (7 by default; >= 0).
     ENTITY_TABU accepts only non-worsening swaps (sideways ones blocked on tabu facilities),

@@ -127,7 +127,8 @@ class SolveConfig(SolveConfigBase):
 
     ``late_acceptance_size`` 0 is automatic: ``clamp(32 * matches, 400, 3200)``. A positive value
     is used as it is. Either way it is the first stage's length: the search restarts with a
-    doubled history when it stalls and the next stage fits in the budget.
+    doubled history when it stalls and the next stage fits in the budget. A solve that starts
+    from a given solution keeps this one length.
     """
 
     def to_core(self) -> "_core.SolverConfig":

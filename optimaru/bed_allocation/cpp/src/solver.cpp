@@ -40,7 +40,10 @@ optimaru::Settings configureEngine(const Solver::Config& config, const BedPlan& 
     // is 2.8%, 1.7% and 3.7% better up to 183 stays (the 20-stay instance ends
     // on one value on every seed), and within 0.3% either way from 180 stays
     // up, where few stages fit.
-    engineConfig.search.acceptance.history_growth = 2.0;
+    // A solve that starts from a solution the caller gave has no stages: the
+    // start's score is then no lower than where the search stands, and a stage
+    // would take the place of the kicks that find something there.
+    if (optimaru::nothing_placed(plan)) engineConfig.search.acceptance.history_growth = 2.0;
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
     // Exhaustive assignment descent at the budget-share rule:

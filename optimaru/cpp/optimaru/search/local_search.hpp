@@ -307,7 +307,7 @@ public:
                         // improving, on the score as it is compared: a use case
                         // whose soft level carries rounding noise would see
                         // sideways moves as improving here and never stall.)
-                        if (stages.enabled() && candidate_score > current_score) {
+                        if (stages.counts_improving_moves() && candidate_score > current_score) {
                             steps_since_best_or_lns = -1;
                         }
                         current_score = candidate_score;
