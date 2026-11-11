@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -63,6 +64,27 @@ def test_every_cpsat_benchmark_is_a_project():
         slug = name.replace("_", "-")
         project = ROOT / "benchmarks" / slug / "cpsat" / "pyproject.toml"
         assert project.is_file() or (ROOT / "benchmarks" / slug / "pyproject.toml").is_file(), slug
+
+
+def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
+    """uv installs a project, and so its `[project.scripts]` and its package for `uv run pytest`,
+    only when it has a `[build-system]` table: without one `uv run <slug>-compare` cannot spawn,
+    and CI does not notice, because it runs `python -m` from the project directory. The CP-SAT
+    library is pinned by tag in every project that uses it: one tag, moved in all of them."""
+    projects = sorted((ROOT / "benchmarks").glob("*/cpsat/pyproject.toml"))
+    projects += [ROOT / "benchmarks" / name / "pyproject.toml" for name in ("cpsat-common", "vehicle-routing")]
+    assert len(projects) > 20
+    tags = {}
+    for project in projects:
+        data = tomllib.loads(project.read_text())
+        where = project.relative_to(ROOT)
+        assert "build-system" in data, f"{where}: uv will not install the package or its [project.scripts]"
+        source = data.get("tool", {}).get("uv", {}).get("sources", {}).get("external-solver")
+        if source is not None:
+            assert set(source) == {"git", "tag"}, f"{where}: external-solver is pinned by tag, not {source}"
+            tags[str(where)] = source["tag"]
+    assert len(tags) >= 20
+    assert len(set(tags.values())) == 1, f"the benchmark projects pin different external-solver tags: {tags}"
 
 
 def test_every_use_case_has_a_guide_and_a_benchmark():

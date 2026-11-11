@@ -9,8 +9,10 @@
   The benchmark projects' lock files record optimaru 0.4.2. Six of the projects (conference
   scheduling, food packaging, meeting scheduling, order picking, sports league scheduling,
   task assigning) had no `[build-system]` table, so uv did not install them and the commands
-  their READMEs give (`uv run <slug>-compare`, `uv run pytest -q`) did not run; they are
-  packaged like the other fifteen now, with pytest in the `dev` dependency group.
+  their READMEs give (`uv run <slug>-compare`, `uv run pytest -q`) did not run; they have
+  the table the other fifteen have now, and declare pytest in a `dev` dependency group, so
+  a plain `uv sync` installs it. `tests/test_layout.py` holds every benchmark project to a
+  `[build-system]` table and to one external-solver tag.
 - **Every acceptance rule has its parameters.** Vehicle routing, quadratic assignment and
   semiconductor scheduling let `SolverConfig.acceptor_type` name seven rules, but each bound the
   parameters of only some of them, so `GREAT_DELUGE` kept its water level at the start's score,
