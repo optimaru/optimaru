@@ -1147,7 +1147,8 @@ void testMemberChangeGlobalConstraint() {
     change(0, (old0 + 1) % 4);
     change(1, (old1 + 2) % 4);
     calc->end_batch();
-    check(calc->score() == build()->score(), "... inside a batch too");
+    check(calc->score() == build()->score() && !(calc->score() == before),
+          "... inside a batch too, for a move that changes it");
     calc->begin_rollback();
     calc->begin_batch();
     change(1, old1);
