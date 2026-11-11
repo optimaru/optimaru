@@ -124,6 +124,7 @@ def test_every_use_case_has_a_guide_and_a_benchmark():
     for name in USE_CASES:
         slug = name.replace("_", "-")
         assert (ROOT / "docs" / "use-cases" / slug / "README.md").is_file(), slug
+        assert (ROOT / "docs" / "use-cases" / slug / "extending.md").is_file(), slug
         assert (ROOT / "benchmarks" / slug).is_dir(), slug
 
 

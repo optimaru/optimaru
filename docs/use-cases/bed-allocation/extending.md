@@ -134,6 +134,13 @@ struct UnusedRoomEquipmentCost final : PerStayRoomConstraint {
 The name passed to the base, `"unusedRoomEquipmentCost"`, is the struct name with a
 lower-case first letter. Python derives `unused_room_equipment_cost` from it.
 
+The defaults live in these two constants and nowhere else; Python reads them through
+`ba.constraint_info()`. `kDefaultLevel` is `Hard`, `Medium` or `Soft`, and the weight is
+in units of that level. A medium rule states its weight in medium units
+(`unassignedStaysCost`: 1): the domain folds the medium level into the engine's score
+itself (`kMediumFold` in `domain.hpp`), so no weight carries the 10^9. A hard rule
+returns whole numbers, because a hard contribution is rounded per bed.
+
 **2. The assembly**, `cpp/include/ba/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
@@ -219,14 +226,17 @@ cmake -B build -DOPTIMARU_USE_CASES=bed_allocation && cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-**The counts.** A thirteenth rule fails four checks that count the catalog. Update
-them:
+**The counts.** A thirteenth rule fails four checks that count or list the catalog.
+Update them:
 
-- `ba_plugin_test.cpp`: `constraint_totals().size() == 12` and `rows.size() == 12`
-  (add the row to `verifyCatalog()`);
+- `ba_plugin_test.cpp`: `constraint_totals().size() == 12`, and `rows.size() == 12` in
+  `verifyCatalog()`. Add the new row there, before `mixedGenderRoomCost`. `rowIs()`
+  expects a rule that is on by default, so check the new row's fields directly
+  (`!rows[11].default_enabled`);
 - `tests/bed_allocation/test_constraint_specs.py`:
-  `test_list_constraints_matches_the_spec_names` and
-  `test_constraint_info_reports_the_cpp_defaults`.
+  `test_list_constraints_matches_the_spec_names` (the list), and
+  `test_constraint_info_reports_the_cpp_defaults` (`EXPECTED_INFO`, and its assertion
+  that every row is on by default).
 
 **Incremental against full.** Solve with every score checked against a full
 recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
@@ -352,8 +362,10 @@ from per-night occupancy counters in `incremental_calculator.cpp` (`insert()` an
 
 **3. What else moves.** A rule that is on by default changes every default score:
 
-- the hand-computed scores in `tests/bed_allocation/cpp/ba_test.cpp` and the
-  Python tests that solve at the defaults;
+- the catalog checks of step 3 again: the row's weight, and that it is on by default;
+- the hand-computed scores in `tests/bed_allocation/cpp/ba_test.cpp` (with the
+  example at weight 2, one case that expected a soft score of 0 gets -12) and any
+  Python test that expects a score at the defaults;
 - the tables and the "twelve" in [README.md](README.md), [python.md](python.md),
   `constraints.py`, `__init__.py`, `_core.pyi` and `common.hpp`;
 - the CP-SAT model the benchmark compares against, `external_solver.bed_allocation`
