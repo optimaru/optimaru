@@ -20,12 +20,22 @@ from . import _core
 from .constraints import default_weights, soft_specs
 
 __all__ = [
+    "CalendarModel",
+    "ClassGroupModel",
+    "ClassroomModel",
+    "CourseModel",
     "LessonModel",
     "ObjectiveWeightsModel",
     "RoomModel",
+    "ScheduledLessonModel",
+    "SlotModel",
     "SolveConfig",
+    "SubjectModel",
+    "TeacherModel",
     "TimeslotModel",
     "TimetableModel",
+    "TimetableProblemModel",
+    "TimetableResultModel",
 ]
 
 
@@ -176,3 +186,116 @@ class SolveConfig(SolveConfigBase):
     def to_core(self) -> "_core.SolverConfig":
         """Quickstart-mode config (weights do not exist in the quickstart domain and are ignored)."""
         return self._apply_to(_core.SolverConfig())
+
+
+# ---------------------------------------------------------------------------
+# The canonical problem: what `solve()` takes by default (mode="canonical")
+# ---------------------------------------------------------------------------
+# The pydantic form of the `TimetableProblem` dict that `convert_problem` reads, and of the
+# `Timetable` dict `solve()` returns for it. They add no rule of their own: references and
+# slots are checked by `convert_problem`, as for a dict.
+
+
+class SlotModel(StrictModel):
+    """One lesson cell: a weekday (0 = Monday) and a 1-based period."""
+
+    day: int = Field(ge=0, le=7)
+    period: int = Field(ge=1)
+
+
+class CalendarModel(StrictModel):
+    """Periods per weekday (0 = Monday); days may differ in length."""
+
+    periods_per_day: dict[int, int] = Field(min_length=1)
+
+
+class SubjectModel(StrictModel):
+    id: str
+    name: str
+    required_room_type: str | None = Field(
+        default=None, description="The special room type it needs; None is the class's own room."
+    )
+    preferred_periods: list[int] = Field(
+        default_factory=list, description="Periods it prefers; empty is no preference."
+    )
+    avoided_periods: list[int] = Field(default_factory=list, description="Periods it avoids.")
+
+
+class TeacherModel(StrictModel):
+    id: str
+    name: str
+    subject_ids: list[str] = Field(default_factory=list, description="Subjects the teacher may teach; empty is any.")
+    unavailable: list[SlotModel] = Field(default_factory=list, description="Slots the teacher cannot teach in.")
+    max_periods_per_week: int | None = Field(default=None, ge=0)
+    max_periods_per_day: int = Field(default=6, ge=1)
+    max_consecutive_periods: int = Field(default=4, ge=1, description="Most periods in a row without a break.")
+    preferred_free_days: list[int] = Field(default_factory=list, description="Weekdays the teacher would like free.")
+    homeroom_class_id: str | None = Field(
+        default=None, description="The class group the teacher is homeroom teacher of."
+    )
+
+
+class ClassGroupModel(StrictModel):
+    id: str
+    name: str
+    grade: int = Field(ge=1)
+    unavailable: list[SlotModel] = Field(default_factory=list, description="Slots the class cannot have lessons in.")
+
+
+class ClassroomModel(StrictModel):
+    """A special room. `room_type` is what a subject's `required_room_type` names."""
+
+    id: str
+    name: str
+    room_type: str
+
+
+class CourseModel(StrictModel):
+    """One unit to place: a class group, a subject, its teachers and the periods per week."""
+
+    id: str
+    class_group_id: str
+    subject_id: str
+    teacher_ids: list[str] = Field(min_length=1, description="Two or more teach together.")
+    periods_per_week: int = Field(ge=1)
+    block_periods: int = Field(default=0, ge=0, description="Periods to place in a row; 0 or 1 is no block.")
+    max_periods_per_day: int = Field(default=1, ge=1, description="Most periods of this course on one day.")
+    fixed_slots: list[SlotModel] = Field(default_factory=list, description="Slots the course must be in.")
+    forbidden_slots: list[SlotModel] = Field(default_factory=list, description="Slots the course may not be in.")
+    parallel_group: str | None = Field(
+        default=None, description="Courses that share this value run at the same times (a class split into sections)."
+    )
+
+
+class TimetableProblemModel(StrictModel):
+    """The timetabling problem `solve()` takes: the pydantic form of the `TimetableProblem` dict."""
+
+    calendar: CalendarModel
+    subjects: list[SubjectModel]
+    teachers: list[TeacherModel]
+    class_groups: list[ClassGroupModel]
+    rooms: list[ClassroomModel] = Field(default_factory=list)
+    courses: list[CourseModel]
+
+
+class ScheduledLessonModel(StrictModel):
+    """One placed period of a course."""
+
+    course_id: str
+    class_group_id: str
+    subject_id: str
+    teacher_ids: list[str]
+    slot: SlotModel
+    room_id: str | None = None
+
+
+class TimetableResultModel(StrictModel):
+    """What `solve()` returns for a `TimetableProblemModel`: the pydantic form of the `Timetable` dict."""
+
+    status: str = Field(description="FEASIBLE or INFEASIBLE from the engine.")
+    lessons: list[ScheduledLessonModel] = Field(default_factory=list)
+    objective_value: float | None = None
+    best_objective_bound: float | None = None
+    wall_time_seconds: float = 0.0
+    penalties: dict[str, int] = Field(default_factory=dict, description="Raw violation per soft constraint.")
+    notes: list[str] = Field(default_factory=list)

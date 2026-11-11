@@ -35,6 +35,19 @@ for lesson in result["lessons"]:
     print(lesson["course_id"], lesson["slot"], lesson["room_id"])
 ```
 
+The problem and the result are plain dicts above. `solve` takes the problem as a
+pydantic model too, `optimaru.school_timetabling.models.TimetableProblemModel`
+(the same fields as the dict), and then returns a `TimetableResultModel` with the
+same fields as the result dict: `result.status`, `result.penalties`,
+`result.lessons[0].slot.day`. `initial_solution` takes either form.
+
+```python
+from optimaru.school_timetabling.models import TimetableProblemModel
+
+result = st.solve(TimetableProblemModel.model_validate(problem_dict), time_limit_seconds=10.0)
+print(result.status, result.objective_value)
+```
+
 `weights={"teacher_gap_cost": 40, ...}` changes the soft weights of the
 default fast path (`canon.SolverConfig.weights`, a `canon.ObjectiveWeights`
 keyed by the soft constraint names; the model itself carries no weights) and

@@ -35,20 +35,20 @@ print([solved.employees[who].name for who in solved.assignment()])    # ['Worker
 [Constraints](#constraints)). With `constraints` the solve is a single search and
 `parallel_solver_count` is ignored.
 
-`solve` takes the JSON layer's request model too, and returns a
-`models.ScheduleSolution`:
+`solve` takes the JSON layer's problem model too, a `models.SchedulingInput`, and
+returns a solved copy of it:
 
 ```python
 from optimaru.employee_scheduling import solve
 from optimaru.employee_scheduling.demo import generate_demo_data
 
-request = generate_demo_data()                    # models.ScheduleRequest
-solution = solve(request, time_limit_seconds=2.0)
-print(solution.score_hard, solution.score_soft)
+problem = generate_demo_data().model_input        # models.SchedulingInput
+solved = solve(problem, time_limit_seconds=2.0)
+print(solved.score_hard, solved.score_soft, solved.unassigned)
 ```
 
-With a request, `solve` reads `timelimit`, the seed and search options in `settings`
-(`models.SolverSettings`), and the rule list in `model_input.rules`. The
+Each shift of the copy has its `worker`, and `rule_totals` explains the score rule by
+rule. The rules scored are `problem.rules`. The
 lower-level path takes a `optimaru.employee_scheduling.Solver`, a `SolverConfig` and a
 `DecomposedCalculator` built from `optimaru.employee_scheduling.constraints`. The C++ side
 builds and tests with:
@@ -78,11 +78,11 @@ because hard 0 must mean no violation). `offset=0` is the plain power shaping; s
 from optimaru.employee_scheduling import with_initial_solution
 
 # Start again from that result: construction only fills what it leaves out.
-request = with_initial_solution(request, solution)   # `request`, `solution` from Usage
-print(solve(request).score_soft)
+seeded = with_initial_solution(problem, solved)       # `problem`, `solved` from Usage
+print(solve(seeded).score_soft)
 ```
 
-`with_initial_solution` returns a new request and leaves its input untouched.
+`with_initial_solution` returns a new problem and leaves its input untouched.
 Workers and shifts are matched by id, a partial solution is fine, and a pinned
 shift the solution moves or unassigns raises `ValueError`. Details:
 [`python.md`](python.md#starting-from-an-earlier-solution).

@@ -103,25 +103,46 @@
     other nine (`<Use case> CP-SAT`).
   - `tests/test_layout.py` holds the `cpp/` contents and the `dev` group.
 
-- **`solve()` takes the request model in the four request use cases.** Employee scheduling,
-  order picking, pickup & delivery and vehicle routing model a whole request in pydantic, and
-  their `solve()` took the compiled problem only: the request went through
-  `models.solve_request`. `solve(request, ...)` now takes the request model
-  (`ScheduleRequest`, `OrderPickingRequest`, `PdpRequest`, `RoutePlanRequest`), leaves it
-  unchanged and returns the response model, so every use case solves its pydantic model
-  through `solve`. A keyword that is given replaces what the request says
-  (`time_limit_seconds` its `timelimit`, `random_seed`, `parallel_solver_count` its
-  `num_workers`; `stop_at_first_feasible=True` turns its flag on). In order picking, pickup
-  & delivery and vehicle routing `config` is the base the request's own settings go on top
-  of, so its `spent_limit_seconds`, `random_seed` and `parallel_solver_count` are replaced by
-  the request's fields, and `full_assert`, `on_new_best` and `constraints` apply as for a
-  compiled problem. An employee scheduling request holds its
-  settings and rules itself, so `config` and `constraints` with one raise `ValueError`, and
-  `on_new_best` needs a single start there (further starts run in processes).
-  `models.solve_request` is unchanged and returns what `solve(request)` does; the guides use
-  `solve`. The `TypeError` for a wrong problem type no longer points at `solve_request`.
-  The notebooks in `examples/` still call `solve_request`, because they run on the released
-  package.
+- **Every use case solves its pydantic problem model through `solve()`.** In employee
+  scheduling, order picking, pickup & delivery and vehicle routing, `solve()` took the
+  compiled problem only: the pydantic path was a second function, `models.solve_request`,
+  on a request model that wrapped the problem with its time limit and seed and was answered
+  by a response model. School timetabling took and returned dicts.
+  - *New:* `solve(problem, ...)` takes the pydantic problem model of the four
+    (`SchedulingInput`, the new `OrderPickingInput`, `PdpInput`, `RoutingInput`), leaves it
+    unchanged and returns a new model of the same class with the result on it, as the other
+    use cases do. The result fields are `route` and `metrics` on each vehicle (`route` and
+    `distance` on each trolley, `worker` on each shift), and `unassigned`, the score levels
+    (`score_hard`, `score_medium` where the use case has it, `score_soft`) and the totals
+    (`total_driving_seconds`; `total_distance` and `order_split_count`; `rule_totals`) on
+    the problem. They are `None` on a problem that was not solved and are never read as
+    input, except `ShiftModel.worker`, which is the starting assignment as before. Every
+    keyword applies as for a compiled problem. A routing problem model that sets a vehicle
+    limit is scored with the default constraints, as a request was.
+  - *New:* `with_initial_solution(problem, solution)` takes the problem model and what
+    `solve` returned for it, as the model or as its JSON dict, and returns a problem model.
+  - *New:* school timetabling has `models.TimetableProblemModel` and
+    `models.TimetableResultModel`, the pydantic forms of its problem and result dicts.
+    `solve()` takes the model and then returns the model; `initial_solution` takes either
+    form. Dicts work as before. The package now imports its models with itself, as the
+    others do.
+  - *Kept for now:* the request and response models (`ScheduleRequest` / `ScheduleSolution`,
+    `OrderPickingRequest` / `OrderPickingResponse`, `PdpRequest` / `PdpSolution`,
+    `RoutePlanRequest` / `RouteSolution`) and `models.solve_request`, because the server and
+    the CP-SAT reference models in external-solver speak that JSON and install the released
+    package. `solve(request, ...)` takes a request too and returns its response model; a
+    keyword that is given replaces what the request says (`time_limit_seconds` its
+    `timelimit`, `random_seed`, `parallel_solver_count` its `num_workers`;
+    `stop_at_first_feasible=True` turns its flag on). In order picking, pickup & delivery
+    and vehicle routing `config` is the base the request's own settings go on top of, so
+    its `spent_limit_seconds`, `random_seed` and `parallel_solver_count` are replaced by the
+    request's fields. An employee scheduling request holds its settings and rules itself,
+    so `config` and `constraints` with one raise `ValueError`, and `on_new_best` needs a
+    single start there (further starts run in processes). They go once those callers have
+    moved to the problem models.
+  - The `TypeError` for a wrong problem type no longer points at `solve_request`. The
+    guides use the problem models. The notebooks in `examples/` and the benchmark runners
+    still call `solve_request`, because they run on the released package.
 
 ## 0.4.2
 

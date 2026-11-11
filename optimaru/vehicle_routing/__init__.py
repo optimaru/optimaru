@@ -69,7 +69,15 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .models import RoutePlanRequest, RouteSolution, _solve_request, solve_request, with_initial_solution
+from .models import (
+    RoutePlanRequest,
+    RouteSolution,
+    RoutingInput,
+    _solve_model,
+    _solve_request,
+    solve_request,
+    with_initial_solution,
+)
 
 __all__ = [
     "AcceptorType",
@@ -118,8 +126,21 @@ def solve(
     config: SolverConfig | None = ...,
     constraints=...,
 ) -> RouteSolution: ...
+@overload
 def solve(
-    plan: VehicleRoutePlan | RoutePlanRequest,
+    plan: RoutingInput,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> RoutingInput: ...
+def solve(
+    plan: VehicleRoutePlan | RoutingInput | RoutePlanRequest,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -129,11 +150,20 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> VehicleRoutePlan | RouteSolution:
-    """High-level API that solves `plan` in place and returns it.
+) -> VehicleRoutePlan | RoutingInput | RouteSolution:
+    """High-level API that solves a routing problem and returns it in the same shape.
 
-    Given a `models.RoutePlanRequest` instead, the pydantic request (JSON in, JSON out), `solve`
-    leaves it unchanged and returns a `models.RouteSolution`. The request carries its own
+    `plan` is a `VehicleRoutePlan` (solved in place and returned) or a
+    `models.RoutingInput`, the pydantic problem (converted to the engine shape, solved,
+    and returned as a new `RoutingInput` with the result fields filled in, the one passed
+    in left as it was). A vehicle limit on a `RoutingInput` (``max_travel_time``,
+    ``max_route_duration``, ``max_end_time``, ``max_stops``, ``min_load_ratio``,
+    ``fixed_cost``, ``max_route_radius_meters``) is scored with the default constraints
+    even when ``constraints`` is None.
+
+    A `models.RoutePlanRequest`, the earlier pydantic shape that wraps a `RoutingInput`
+    with its time limit and seed, is still taken: `solve` leaves it unchanged and
+    returns a `models.RouteSolution`. The request carries its own
     ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``, and
     they always apply: with a request, ``config.spent_limit_seconds``, ``random_seed``
     and ``parallel_solver_count`` are replaced by the request's fields, so change those
@@ -160,7 +190,8 @@ def solve(
     such a plan are scored too, and ``parallel_solver_count`` has no effect on it (as on
     every solve with ``constraints``).
 
-    The score is on the result: ``plan.score``, or ``score`` on a `models.RouteSolution`.
+    The score is on the result: ``plan.score``, the ``score_hard`` / ``score_medium`` /
+    ``score_soft`` fields of a `models.RoutingInput`, or ``score`` on a `models.RouteSolution`.
     """
     if isinstance(plan, RoutePlanRequest):
         request = request_with(
@@ -173,8 +204,8 @@ def solve(
         return _solve_request(
             request, constraints=constraints, config=config, full_assert=full_assert, on_new_best=on_new_best
         )
-    if not isinstance(plan, VehicleRoutePlan):
-        raise TypeError(f"plan must be a VehicleRoutePlan or a models.RoutePlanRequest: {type(plan)!r}")
+    if not isinstance(plan, (VehicleRoutePlan, RoutingInput)):
+        raise TypeError(f"plan must be a VehicleRoutePlan or a models.RoutingInput: {type(plan)!r}")
     cfg = solver_config(
         SolverConfig,
         config,
@@ -187,5 +218,7 @@ def solve(
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
         first_feasible_limit=(0, -(2**63), -(2**63)),
     )
+    if isinstance(plan, RoutingInput):
+        return _solve_model(plan, cfg, constraints)
     solve_in_place(Solver(cfg), plan, constraints)
     return plan

@@ -37,7 +37,7 @@ solved = pdp.solve(plan, time_limit_seconds=5.0, random_seed=42)   # solves in p
 print(solved.score.hard, solved.score.medium, solved.score.soft)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`pdp.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out pass `solve` a `models.PdpRequest`: it returns a `models.PdpSolution`, and the request's `timelimit`, `random_seed`, `num_workers` and `stop_at_first_feasible` apply unless a keyword replaces them (they also replace `spent_limit_seconds`, `random_seed` and `parallel_solver_count` of a `config`). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`pdp.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out pass `solve` a `models.PdpInput`: it returns a new `PdpInput` with each vehicle's `route` and `metrics`, `unassigned`, the score fields and `total_driving_seconds` filled in. (`solve` still takes the earlier `models.PdpRequest` and answers it with a `models.PdpSolution`; see [python.md](python.md).) The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=pickup_delivery && cmake --build build -j
@@ -386,7 +386,7 @@ Two requests of a group that are bound to different vehicles, each by its
 could never be whole.
 
 Every entry point scores a grouped plan with the default constraints, since the
-seven core rules do not include this one: `pdp.solve(request)`, `pdp.solve(plan)`,
+seven core rules do not include this one: `pdp.solve(problem)` on a `PdpInput`, `pdp.solve(plan)`,
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two requests or more (a request alone in its group changes nothing).
 That is a solve on the constraint assembly, as when a vehicle limit is set: the
@@ -423,14 +423,14 @@ late, when that costs less than waiting.
 ```python
 from optimaru.pickup_delivery import solve, with_initial_solution
 
-solution = solve(request)                                # request: a PdpRequest
-next_request = with_initial_solution(request, solution)  # or solution.model_dump(mode="json")
-better = solve(next_request)
+solved = solve(problem)                                  # problem: a PdpInput
+next_problem = with_initial_solution(problem, solved)    # or solved.model_dump(mode="json")
+better = solve(next_problem)
 ```
 
-`with_initial_solution` turns a solution into the `initial_route` of each vehicle (above), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `timelimit=0` a complete solution comes back as it went in.
+`with_initial_solution` turns a solution into the `initial_route` of each vehicle (above), replacing the ones the problem had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `timelimit=0` a complete solution comes back as it went in.
 
-A vehicle's `pinned_stops` stay as the request has them: its route in the solution must start with them, or `ValueError` is raised. The same goes for an unknown id, a stop routed twice, or a request whose pickup and dropoff are apart, so a hard-infeasible result with a broken pair cannot be used as a start.
+A vehicle's `pinned_stops` stay as the problem has them: its route in the solution must start with them, or `ValueError` is raised. The same goes for an unknown id, a stop routed twice, or a request whose pickup and dropoff are apart, so a hard-infeasible result with a broken pair cannot be used as a start.
 
 ## Extending
 

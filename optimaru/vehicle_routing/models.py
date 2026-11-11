@@ -24,7 +24,7 @@ Times are integer seconds from a common day start; locations are
 (latitude, longitude) pairs.
 """
 
-from typing import Any
+from typing import Any, TypeVar
 
 from pydantic import Field, model_validator
 
@@ -46,6 +46,30 @@ __all__ = [
     "vehicle_metrics",
     "with_initial_solution",
 ]
+
+
+class VisitStop(StrictModel):
+    visit_id: str
+    arrival_time: int  # seconds from day start
+    demand: int
+
+
+class VehicleMetrics(StrictModel):
+    """Per-vehicle figures derived from a finished route (post-processing).
+
+    Nothing here is scored. The numbers are recomputed from the reported stop
+    order and arrival times with the request's driving matrix.
+    """
+
+    stops: int = 0
+    load: int = 0  # total demand carried
+    driving_seconds: int = 0
+    departure_time: int
+    end_time: int  # departure from the last stop, plus the leg home if it returns
+    route_duration_seconds: int = 0  # end_time - departure_time
+    waiting_seconds: int = 0  # idle time spent before a visit's window opens
+    service_seconds: int = 0
+    return_to_depot: bool = False
 
 
 class VehicleModel(StrictModel):
@@ -76,6 +100,16 @@ class VehicleModel(StrictModel):
             "route holds."
         ),
     )
+    route: list[VisitStop] | None = Field(
+        default=None,
+        description=(
+            "Result, None on a problem that was not solved: the stops of this vehicle in "
+            "order, each with its arrival time. `solve` fills it in; it is not read as input."
+        ),
+    )
+    metrics: VehicleMetrics | None = Field(
+        default=None, description="Result: figures derived from `route`. None on a problem that was not solved."
+    )
 
 
 class VisitModel(StrictModel):
@@ -105,9 +139,22 @@ class VisitModel(StrictModel):
 
 
 class RoutingInput(StrictModel):
+    """The routing problem, and after `solve` its solution too.
+
+    `solve(problem)` returns a copy with the result fields filled in: each vehicle's
+    `route` and `metrics`, `unassigned`, the score levels and `total_driving_seconds`.
+    They are None on a problem that was not solved and are never read as input; the
+    search starts from `initial_route` (see `with_initial_solution`).
+    """
+
     vehicles: list[VehicleModel]
     visits: list[VisitModel]
     driving_seconds: list[list[int]] | None = None
+    unassigned: list[str] | None = Field(default=None, description="Result: ids of the visits on no route.")
+    score_hard: int | None = Field(default=None, description="Result: the hard level of the score. 0 is feasible.")
+    score_medium: int | None = Field(default=None, description="Result: the medium level of the score.")
+    score_soft: int | None = Field(default=None, description="Result: the soft level of the score.")
+    total_driving_seconds: int | None = Field(default=None, description="Result: driving time over all routes.")
 
     @model_validator(mode="after")
     def _unique_ids(self):
@@ -173,30 +220,6 @@ class RoutePlanRequest(StrictModel):
     num_workers: int = Field(default=1, ge=1)
     stop_at_first_feasible: bool = False
     solver_parameters: dict[str, Any] = Field(default_factory=dict)
-
-
-class VisitStop(StrictModel):
-    visit_id: str
-    arrival_time: int  # seconds from day start
-    demand: int
-
-
-class VehicleMetrics(StrictModel):
-    """Per-vehicle figures derived from a finished route (post-processing).
-
-    Nothing here is scored. The numbers are recomputed from the reported stop
-    order and arrival times with the request's driving matrix.
-    """
-
-    stops: int = 0
-    load: int = 0  # total demand carried
-    driving_seconds: int = 0
-    departure_time: int
-    end_time: int  # departure from the last stop, plus the leg home if it returns
-    route_duration_seconds: int = 0  # end_time - departure_time
-    waiting_seconds: int = 0  # idle time spent before a visit's window opens
-    service_seconds: int = 0
-    return_to_depot: bool = False
 
 
 class RouteSolution(StrictModel):
@@ -320,8 +343,6 @@ def _solve_request(
 ) -> RouteSolution:
     """`solve(request, ...)`: ``config`` is the base, and the request's time limit, seed and
     worker count replace the base's, as its ``solver_parameters`` replace the fields they name."""
-    plan = to_plan(request.model_input)
-
     cfg = solver_config(
         _core.SolverConfig,
         config,
@@ -335,7 +356,36 @@ def _solve_request(
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
         cfg.best_score_limit = (0, -(2**63), -(2**63))
-    solver = _core.Solver(cfg)
+    return _solution(_solve_plan(request.model_input, cfg, constraints))
+
+
+def _solve_model(problem: RoutingInput, config: "_core.SolverConfig", constraints=None) -> RoutingInput:
+    """`solve(problem, ...)` for the pydantic problem: a solved copy, `problem` left as it was."""
+    plan = _solve_plan(problem, config, constraints)
+    solution = _solution(plan)
+    vehicles = [
+        vehicle.model_copy(
+            update={"route": solution.routes[vehicle.id], "metrics": solution.vehicle_metrics[vehicle.id]}
+        )
+        for vehicle in problem.vehicles
+    ]
+    return problem.model_copy(
+        update={
+            "vehicles": vehicles,
+            "unassigned": solution.unassigned,
+            "score_hard": plan.score.hard,
+            "score_medium": plan.score.medium,
+            "score_soft": plan.score.soft,
+            "total_driving_seconds": solution.total_driving_seconds,
+        }
+    )
+
+
+def _solve_plan(model_input: RoutingInput, config: "_core.SolverConfig", constraints=None) -> "_core.VehicleRoutePlan":
+    """Build the plan of `model_input` and solve it: on the core rules, or on the constraint
+    assembly when constraints are picked or the input sets a vehicle limit or a visit group."""
+    plan = to_plan(model_input)
+    solver = _core.Solver(config)
     has_route_policy = any(
         v.max_travel_time
         or v.max_route_duration
@@ -344,15 +394,19 @@ def _solve_request(
         or v.min_load_ratio
         or v.fixed_cost
         or v.max_route_radius_meters
-        for v in request.model_input.vehicles
-    ) or _has_groups(request.model_input)
+        for v in model_input.vehicles
+    ) or _has_groups(model_input)
     if constraints is None and not has_route_policy:
         solver.solve(plan)
     else:
         if constraints is None:
             constraints = get_constraints()
         solver.solve_with_constraints(plan, constraints)
+    return plan
 
+
+def _solution(plan: "_core.VehicleRoutePlan") -> RouteSolution:
+    """The routes of a solved plan, with the figures derived from them."""
     routes: dict[str, list[VisitStop]] = {}
     assigned: set[str] = set()
     for vehicle in plan.vehicles:
@@ -381,22 +435,48 @@ def _solve_request(
     )
 
 
-def with_initial_solution(problem: RoutePlanRequest, solution: RouteSolution | dict[str, Any]) -> RoutePlanRequest:
+def _routes_of(solution: "RoutingInput | RouteSolution | dict[str, Any]") -> dict[str, list[str]]:
+    """Visit ids per vehicle id of a result: a solved `RoutingInput`, a `RouteSolution`, or
+    the JSON dict of either. A vehicle the result does not route is left out."""
+    if isinstance(solution, dict):
+        solution = (RoutingInput if "vehicles" in solution else RouteSolution).model_validate(solution)
+    if isinstance(solution, RoutingInput):
+        return {
+            vehicle.id: [stop.visit_id for stop in vehicle.route]
+            for vehicle in solution.vehicles
+            if vehicle.route is not None
+        }
+    return {
+        vehicle: [stop.visit_id for stop in stops]
+        for vehicle, stops in RouteSolution.model_validate(solution).routes.items()
+    }
+
+
+_Problem = TypeVar("_Problem", RoutingInput, RoutePlanRequest)
+
+
+def with_initial_solution(problem: _Problem, solution: "RoutingInput | RouteSolution | dict[str, Any]") -> _Problem:
     """Return a copy of `problem` whose search starts from `solution`.
 
-    `solution` is what `solve(request)` returned, as the model or as its JSON
-    dict. Each vehicle's `initial_route` becomes the visit ids of its route
-    there, replacing what `problem` had; a vehicle the solution leaves out
-    starts empty. Vehicles and visits are matched by id.
+    `problem` is a `RoutingInput` (or, on the request path, a `RoutePlanRequest`).
+    `solution` is what `solve` returned for it, as the model or as its JSON dict: the
+    solved `RoutingInput`, or the `RouteSolution` of a request. Each vehicle's
+    `initial_route` becomes the visit ids of its route there, replacing what
+    `problem` had; a vehicle the solution leaves out starts empty. Vehicles and
+    visits are matched by id.
 
     Visits in no route, `unassigned` ones included, are placed by construction.
     A solution that routes every visit is the exact starting point. Raises
     ValueError on an unknown vehicle or visit, or a visit routed twice.
     """
-    routes = RouteSolution.model_validate(solution).routes
-    if unknown := routes.keys() - {vehicle.id for vehicle in problem.model_input.vehicles}:
+    routes = _routes_of(solution)
+    model_input = problem if isinstance(problem, RoutingInput) else problem.model_input
+    if unknown := routes.keys() - {vehicle.id for vehicle in model_input.vehicles}:
         raise ValueError(f"unknown vehicle {sorted(unknown)}")
-    data = problem.model_dump()
-    for vehicle in data["model_input"]["vehicles"]:
-        vehicle["initial_route"] = [stop.visit_id for stop in routes.get(vehicle["id"], [])]
-    return RoutePlanRequest.model_validate(data)
+    data = model_input.model_dump()
+    for vehicle in data["vehicles"]:
+        vehicle["initial_route"] = routes.get(vehicle["id"], [])
+    seeded = RoutingInput.model_validate(data)
+    if isinstance(problem, RoutingInput):
+        return seeded
+    return problem.model_copy(update={"model_input": seeded})

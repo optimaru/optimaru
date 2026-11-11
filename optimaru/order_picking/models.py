@@ -26,7 +26,7 @@ A shelving is addressed by column letter A..E + shelving row 1..3
 (the id "(A,1)"), a side (LEFT/RIGHT) and a row 0..10 within the shelving.
 """
 
-from typing import Any, Literal, cast
+from typing import Any, Literal, TypeVar, cast
 
 from pydantic import Field, model_validator
 
@@ -37,6 +37,7 @@ from . import _core
 __all__ = [
     "LocationModel",
     "OrderModel",
+    "OrderPickingInput",
     "OrderPickingRequest",
     "OrderPickingResponse",
     "PickStop",
@@ -92,6 +93,14 @@ class OrderModel(StrictModel):
     items: list[ProductModel] = Field(min_length=1)
 
 
+class PickStop(StrictModel):
+    pick_task_id: str
+    order_id: str
+    product_name: str
+    volume: int
+    location: LocationModel
+
+
 class TrolleyModel(StrictModel):
     id: str
     bucket_count: int = Field(ge=0)
@@ -105,6 +114,60 @@ class TrolleyModel(StrictModel):
             "them, and places only what no route holds."
         ),
     )
+    route: list[PickStop] | None = Field(
+        default=None,
+        description=(
+            "Result, None on a problem that was not solved: the pick tasks of this trolley "
+            "in order. `solve` fills it in; it is not read as input."
+        ),
+    )
+    distance: int | None = Field(
+        default=None, description="Result: meters this trolley travels, the walk back included."
+    )
+
+
+def _check_problem(trolleys: list[TrolleyModel], orders: list[OrderModel]) -> None:
+    """Unique trolley and order ids, and initial routes over known pick tasks, each once."""
+    for kind, ids in (
+        ("trolley", [t.id for t in trolleys]),
+        ("order", [o.id for o in orders]),
+    ):
+        if len(ids) != len(set(ids)):
+            raise ValueError(f"duplicate {kind} ids")
+    known = {_pick_task_id(o.id, i) for o in orders for i in range(len(o.items))}
+    seen: set[str] = set()
+    for trolley in trolleys:
+        for task_id in trolley.initial_route:
+            if task_id not in known:
+                raise ValueError(f"trolley {trolley.id}: unknown pick task {task_id!r}")
+            if task_id in seen:
+                raise ValueError(f"trolley {trolley.id}: pick task {task_id!r} appears twice in the initial routes")
+            seen.add(task_id)
+
+
+class OrderPickingInput(StrictModel):
+    """The order picking problem, and after `solve` its solution too.
+
+    `solve(problem)` returns a copy with the result fields filled in: each trolley's
+    `route` and `distance`, `unassigned`, the score levels, `total_distance` and
+    `order_split_count`. They are None on a problem that was not solved and are never
+    read as input; the search starts from `initial_route` (see `with_initial_solution`).
+    """
+
+    trolleys: list[TrolleyModel] = Field(min_length=1)
+    orders: list[OrderModel] = Field(min_length=1)
+    unassigned: list[str] | None = Field(default=None, description="Result: ids of the pick tasks on no route.")
+    score_hard: int | None = Field(default=None, description="Result: the hard level of the score. 0 is feasible.")
+    score_soft: float | None = Field(default=None, description="Result: the soft level of the score.")
+    total_distance: int | None = Field(default=None, description="Result: meters travelled by all trolleys.")
+    order_split_count: int | None = Field(
+        default=None, description="Result: (order, trolley) pairs, the distinct trolleys of each order summed."
+    )
+
+    @model_validator(mode="after")
+    def _valid(self):
+        _check_problem(self.trolleys, self.orders)
+        return self
 
 
 class OrderPickingRequest(StrictModel):
@@ -119,30 +182,8 @@ class OrderPickingRequest(StrictModel):
 
     @model_validator(mode="after")
     def _unique_ids(self):
-        for kind, ids in (
-            ("trolley", [t.id for t in self.trolleys]),
-            ("order", [o.id for o in self.orders]),
-        ):
-            if len(ids) != len(set(ids)):
-                raise ValueError(f"duplicate {kind} ids")
-        known = {_pick_task_id(o.id, i) for o in self.orders for i in range(len(o.items))}
-        seen: set[str] = set()
-        for trolley in self.trolleys:
-            for task_id in trolley.initial_route:
-                if task_id not in known:
-                    raise ValueError(f"trolley {trolley.id}: unknown pick task {task_id!r}")
-                if task_id in seen:
-                    raise ValueError(f"trolley {trolley.id}: pick task {task_id!r} appears twice in the initial routes")
-                seen.add(task_id)
+        _check_problem(self.trolleys, self.orders)
         return self
-
-
-class PickStop(StrictModel):
-    pick_task_id: str
-    order_id: str
-    product_name: str
-    volume: int
-    location: LocationModel
 
 
 class OrderPickingResponse(StrictModel):
@@ -155,8 +196,8 @@ class OrderPickingResponse(StrictModel):
     order_split_count: int  # (order, trolley) pairs = sum over orders of the distinct trolleys carrying it
 
 
-def to_solution(request: OrderPickingRequest) -> "_core.OrderPickingSolution":
-    """Build the C++ OrderPickingSolution from the pydantic request: one
+def to_solution(request: "OrderPickingInput | OrderPickingRequest") -> "_core.OrderPickingSolution":
+    """Build the C++ OrderPickingSolution from the pydantic problem or request: one
     Order per OrderModel and one PickTask per order item (ids "<order>-<i>")."""
     orders = [_core.Order(o.id) for o in request.orders]
     pick_tasks = []
@@ -193,7 +234,6 @@ def _solve_request(
 ) -> OrderPickingResponse:
     """`solve(request, ...)`: ``config`` is the base, and the request's time limit, seed and
     worker count replace the base's, as its ``solver_parameters`` replace the fields they name."""
-    solution = to_solution(request)
     config = solver_config(
         _core.SolverConfig,
         config,
@@ -206,12 +246,46 @@ def _solve_request(
     apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
         config.best_score_limit = (0, float("-inf"))
+    return _response(_solve_core(request, config, constraints))
+
+
+def _solve_model(problem: OrderPickingInput, config: "_core.SolverConfig", constraints=None) -> OrderPickingInput:
+    """`solve(problem, ...)` for the pydantic problem: a solved copy, `problem` left as it was."""
+    solution = _solve_core(problem, config, constraints)
+    response = _response(solution)
+    trolleys = [
+        trolley.model_copy(
+            update={"route": response.routes[trolley.id], "distance": response.distance_by_trolley[trolley.id]}
+        )
+        for trolley in problem.trolleys
+    ]
+    return problem.model_copy(
+        update={
+            "trolleys": trolleys,
+            "unassigned": response.unassigned,
+            "score_hard": solution.score.hard,
+            "score_soft": solution.score.soft,
+            "total_distance": response.total_distance,
+            "order_split_count": response.order_split_count,
+        }
+    )
+
+
+def _solve_core(
+    problem: "OrderPickingInput | OrderPickingRequest", config: "_core.SolverConfig", constraints=None
+) -> "_core.OrderPickingSolution":
+    """Build the engine solution of `problem` and solve it, on the default or the picked constraints."""
+    solution = to_solution(problem)
     solver = _core.Solver(config)
     if constraints is None:
         solver.solve(solution)
     else:
         solver.solve_with_constraints(solution, constraints)
+    return solution
 
+
+def _response(solution: "_core.OrderPickingSolution") -> OrderPickingResponse:
+    """The routes of a solved engine solution, with the figures derived from them."""
     routes: dict[str, list[PickStop]] = {}
     distance_by_trolley: dict[str, int] = {}
     assigned: set[int] = set()
@@ -253,14 +327,37 @@ def _raw_total(raw: dict[str, dict[str, Any]], name: str) -> int:
     return int(sum(raw[name]["costs"]))
 
 
+def _routes_of(solution: "OrderPickingInput | OrderPickingResponse | dict[str, Any]") -> dict[str, list[str]]:
+    """Pick task ids per trolley id of a result: a solved `OrderPickingInput`, an
+    `OrderPickingResponse`, or the JSON dict of either. A trolley the result does not route is
+    left out."""
+    if isinstance(solution, dict):
+        solution = (OrderPickingInput if "trolleys" in solution else OrderPickingResponse).model_validate(solution)
+    if isinstance(solution, OrderPickingInput):
+        return {
+            trolley.id: [stop.pick_task_id for stop in trolley.route]
+            for trolley in solution.trolleys
+            if trolley.route is not None
+        }
+    return {
+        trolley: [stop.pick_task_id for stop in stops]
+        for trolley, stops in OrderPickingResponse.model_validate(solution).routes.items()
+    }
+
+
+_Problem = TypeVar("_Problem", OrderPickingInput, OrderPickingRequest)
+
+
 def with_initial_solution(
-    problem: OrderPickingRequest, solution: OrderPickingResponse | dict[str, Any]
-) -> OrderPickingRequest:
+    problem: _Problem, solution: "OrderPickingInput | OrderPickingResponse | dict[str, Any]"
+) -> _Problem:
     """Return a copy of `problem` whose search starts from `solution`.
 
-    `solution` is what `solve(request)` returned, as the model or as its JSON
-    dict. Each trolley's `initial_route` becomes the pick task ids of its route
-    there, replacing what `problem` had; a trolley the solution leaves out
+    `problem` is an `OrderPickingInput` (or, on the request path, an
+    `OrderPickingRequest`). `solution` is what `solve` returned for it, as the model
+    or as its JSON dict: the solved `OrderPickingInput`, or the `OrderPickingResponse`
+    of a request. Each trolley's `initial_route` becomes the pick task ids of its
+    route there, replacing what `problem` had; a trolley the solution leaves out
     starts empty. Trolleys and pick tasks are matched by id.
 
     A pick task id is "<order id>-<item position>", so it depends on where the
@@ -271,10 +368,10 @@ def with_initial_solution(
     task is the exact starting point. Raises ValueError on an unknown trolley or
     pick task, or a task routed twice.
     """
-    routes = OrderPickingResponse.model_validate(solution).routes
+    routes = _routes_of(solution)
     if unknown := routes.keys() - {trolley.id for trolley in problem.trolleys}:
         raise ValueError(f"unknown trolley {sorted(unknown)}")
     data = problem.model_dump()
     for trolley in data["trolleys"]:
-        trolley["initial_route"] = [stop.pick_task_id for stop in routes.get(trolley["id"], [])]
-    return OrderPickingRequest.model_validate(data)
+        trolley["initial_route"] = routes.get(trolley["id"], [])
+    return type(problem).model_validate(data)

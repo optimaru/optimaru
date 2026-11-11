@@ -77,25 +77,25 @@ hand over their best so far, and the best of all starts is returned. Which start
 gets there first depends on the threads, so with a target and more than one
 start the same seed can give a different solution from run to run.
 
-Four use cases model a whole request (input, time limit, seed) in pydantic
-instead of the problem alone: employee scheduling, order picking, pickup &
-delivery and vehicle routing. Their `solve()` takes that request model as the
-others take a problem model, leaves it unchanged and returns the response model
-(`RouteSolution`, `PdpSolution`, `OrderPickingResponse`, `ScheduleSolution`).
-The request carries its own `timelimit`, `random_seed`, `num_workers` and
-`stop_at_first_feasible`; a keyword that is given replaces what the request
-says, and `stop_at_first_feasible=True` turns the request's flag on. In order
-picking, pickup & delivery and vehicle routing `config` is the base the
-request's settings go on top of: its `spent_limit_seconds`, `random_seed` and
-`parallel_solver_count` are always replaced by the request's fields, so change
-those three through the keywords. An employee scheduling request holds its search settings and rules
-itself (`settings`, `model_input.rules`), so `config` and `constraints` with
-one raise `ValueError`, and its starts beyond the first run in processes, so
-`on_new_best` needs a single start. `models.solve_request(request)`, the name
-this solve had before `solve` took a request, still works and returns the same.
+In employee scheduling, order picking, pickup & delivery and vehicle routing the
+pydantic problem model is `SchedulingInput`, `OrderPickingInput`, `PdpInput` and
+`RoutingInput`. The solved copy carries the decisions on the entities (each
+vehicle's or trolley's `route`, each shift's `worker`) next to `unassigned` and
+the score fields. These four also have an earlier pydantic shape, a request
+that wraps the problem with its time limit and seed (`ScheduleRequest`,
+`OrderPickingRequest`, `PdpRequest`, `RoutePlanRequest`), answered by a response
+model. `solve(request)` and `models.solve_request(request)` still take it: the
+server and the CP-SAT reference models speak that JSON. New code passes the
+problem model. With a request, a keyword that is given replaces what the
+request says, `config` is the base the request's settings go on top of in the
+three routing ones, and an employee scheduling request refuses `config` and
+`constraints` (it holds its settings and rules itself).
 
-School timetabling takes and returns dicts (a `TimetableProblem` in, a
-`Timetable` out) and has two more keywords, `mode` and `initial_solution`.
+School timetabling's pydantic problem is `models.TimetableProblemModel`, and
+`solve` answers it with a `models.TimetableResultModel`: the solution document
+of its API, not a problem that carries a score. The same two as plain dicts (a
+`TimetableProblem` in, a `Timetable` out) work as before. It has two more
+keywords, `mode` and `initial_solution`.
 `Solver(config).solve(problem)` and `solve_with_constraints(problem, picks)`
 are the same solves one level down, without the keyword conveniences.
 
@@ -267,8 +267,8 @@ its JSON:
 ```python
 from optimaru.vehicle_routing import solve, with_initial_solution
 
-first = solve(request)
-better = solve(with_initial_solution(request, first))
+first = solve(problem)                     # problem: a RoutingInput
+better = solve(with_initial_solution(problem, first))
 ```
 
 The contract is the same everywhere:
@@ -290,8 +290,8 @@ The contract is the same everywhere:
 - A seed is used once: a result edited and solved again starts from construction
   unless you pass it through `with_initial_solution` again.
 
-School timetabling takes dicts, so it uses a keyword instead:
-`solve(problem, initial_solution=previous)`. Each use case's README lists its
+School timetabling uses a keyword instead:
+`solve(problem, initial_solution=previous)`, with the result model or dict of an earlier solve. Each use case's README lists its
 exceptions. To stop right after the start, use a zero time limit
 (`spent_limit_seconds = 0`, or `time_limit_seconds=0` where `solve()` takes
 one); `step_count_limit = 0` means no limit, not zero steps.

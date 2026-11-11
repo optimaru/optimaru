@@ -299,38 +299,40 @@ days so the carried-in ones come first: day 0 is the first day of history.
 ```python
 from optimaru.employee_scheduling import solve
 from optimaru.employee_scheduling.constraints import MaxConsecutiveDaysCost
-from optimaru.employee_scheduling.models import (
-    ScheduleRequest, SchedulingInput, ShiftModel, WorkerModel, default_rules,
-)
+from optimaru.employee_scheduling.models import SchedulingInput, ShiftModel, WorkerModel, default_rules
 
-request = ScheduleRequest(
-    timelimit=1,
-    model_input=SchedulingInput(
-        workers=[WorkerModel(id="Worker 01", skills=["Skill A"])],
-        shifts=[ShiftModel(id="Shift 1", start=540, end=1020, required_skill="Skill A")],
-        rules=[*default_rules(), MaxConsecutiveDaysCost(value=6, weight=2)],
-    ),
+problem = SchedulingInput(
+    workers=[WorkerModel(id="Worker 01", skills=["Skill A"])],
+    shifts=[ShiftModel(id="Shift 1", start=540, end=1020, required_skill="Skill A")],
+    rules=[*default_rules(), MaxConsecutiveDaysCost(value=6, weight=2)],
 )
-solution = solve(request)                # a ScheduleRequest in, a ScheduleSolution out
-print(solution.schedule)                 # {"Worker 01": [ShiftAssignmentModel(...)]}
-print(solution.model_dump_json())        # ready to send over the wire
+solved = solve(problem, time_limit_seconds=1)   # a new SchedulingInput; problem is unchanged
+print(solved.shifts[0].worker)                  # "Worker 01"
+print(solved.score_hard, solved.score_soft, solved.unassigned)
+print(solved.model_dump_json())                 # ready to send over the wire
 ```
 
-A keyword of `solve` replaces what the request says: `time_limit_seconds` its
-`timelimit`, `random_seed` the seed in `settings`, `parallel_solver_count` the
-number of starts; `stop_at_first_feasible=True` turns the flag in `settings` on. The search settings
-and the rules are the request's own (`settings`, `model_input.rules`), so
-`config` and `constraints` with a request raise `ValueError`, and `on_new_best`
-needs a single start, because further starts run in separate processes.
-`models.solve_request(request, select=...)` is the same solve under its earlier
-name, with `select` to choose among the starts yourself.
+`solve` fills the result of the copy it returns: `worker` on each shift (`None` where
+it stayed unassigned), and `unassigned`, `score_hard`, `score_soft` and `rule_totals`
+on the problem. `rule_totals` explains the score per rule instance (`name`, `label`,
+`cost`, `level`). The rules scored are `problem.rules`; `constraints=` replaces them
+for one solve, and `config` is a `SolverConfig`, as for an `EmployeeSchedule`.
 
-`ScheduleRequest.model_validate_json(...)` accepts the same JSON back: the rule
+`SchedulingInput.model_validate_json(...)` accepts the same JSON back: the rule
 list is a discriminated union generated from the specs, so
 `{"name": "max_consecutive_days_cost", "value": 6, "level": "soft"}` picks the right
 rule model, and `rule.to_spec()` is the `MaxConsecutiveDaysCost` it states.
-`solution.rule_totals` explains the score per rule instance (`name`, `label`,
-`cost`, `level`).
+
+The earlier pydantic shape still works: a `ScheduleRequest(model_input=problem,
+timelimit=1)` passed to `solve` returns a `ScheduleSolution` (`schedule`, a dict of
+worker id to assignments, with the same score fields). A keyword of `solve` replaces
+what the request says: `time_limit_seconds` its `timelimit`, `random_seed` the seed in
+`settings`, `parallel_solver_count` the number of starts; `stop_at_first_feasible=True`
+turns the flag in `settings` on. The search settings and the rules are the request's
+own (`settings`, `model_input.rules`), so `config` and `constraints` with a request
+raise `ValueError`, and `on_new_best` needs a single start, because further starts
+run in separate processes. `models.solve_request(request, select=...)` is that solve
+with `select` to choose among the starts yourself.
 
 `optimaru.employee_scheduling.demo.generate_demo_data(seed=7, workers=12, days=14)` builds a
 made-up request with skills, unavailable and preferred days, and rules that solve
@@ -338,24 +340,24 @@ to hard 0.
 
 ## Starting from an earlier solution
 
-`with_initial_solution(problem, solution)` returns a new request whose solve
-starts from `solution`, which is what `solve(request)` returned: a
-`ScheduleSolution` or the plain dict of `model_dump(mode="json")`. `problem` is
-not changed.
+`with_initial_solution(problem, solution)` returns a new problem whose solve
+starts from `solution`, which is what `solve(problem)` returned: the solved
+`SchedulingInput` or the plain dict of `model_dump(mode="json")`. `problem` is
+not changed. (A `ScheduleRequest` and its `ScheduleSolution` work the same way.)
 
 ```python
 from optimaru.employee_scheduling import solve, with_initial_solution
 from optimaru.employee_scheduling.demo import generate_demo_data
 
-request = generate_demo_data()
-request.timelimit = 1.0
-first = solve(request)
+problem = generate_demo_data().model_input
+first = solve(problem, time_limit_seconds=1.0)
 
 # Keep Worker 01's shifts and let the solve place everything else again.
 partial = first.model_dump(mode="json")
-partial["schedule"] = {"Worker 01": partial["schedule"]["Worker 01"]}
-partial["unassigned"] = []
-second = solve(with_initial_solution(request, partial))
+for shift in partial["shifts"]:
+    if shift["worker"] != "Worker 01":
+        shift["worker"] = None
+second = solve(with_initial_solution(problem, partial), time_limit_seconds=1.0)
 print(second.score_hard, second.score_soft)
 ```
 

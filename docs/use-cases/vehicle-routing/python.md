@@ -81,21 +81,30 @@ lower `descent_weight`) when a cheaper sampled neighbourhood is preferred.
 
 ```python
 from optimaru.vehicle_routing import solve
-from optimaru.vehicle_routing.models import (RoutePlanRequest, RoutingInput, VehicleModel,
-                                VisitModel)
+from optimaru.vehicle_routing.models import RoutingInput, VehicleModel, VisitModel
 
-request = RoutePlanRequest(
-    timelimit=2,
-    model_input=RoutingInput(
-        vehicles=[VehicleModel(id="V1", capacity=10, depot=(37.5665, 126.9780))],
-        visits=[VisitModel(id="C1", location=(37.57, 126.982), demand=3,
-                           min_start_time=8 * 3600, max_end_time=18 * 3600,
-                           service_duration=600)],
-    ),
+problem = RoutingInput(
+    vehicles=[VehicleModel(id="V1", capacity=10, depot=(37.5665, 126.9780))],
+    visits=[VisitModel(id="C1", location=(37.57, 126.982), demand=3,
+                       min_start_time=8 * 3600, max_end_time=18 * 3600,
+                       service_duration=600)],
 )
-solution = solve(request)              # -> RouteSolution
-print(solution.routes, solution.score, solution.total_driving_seconds)
+solved = solve(problem, time_limit_seconds=2)     # -> a new RoutingInput; problem is unchanged
+print([stop.visit_id for stop in solved.vehicles[0].route], solved.unassigned)
+print(solved.score_hard, solved.score_medium, solved.score_soft, solved.total_driving_seconds)
 ```
+
+`solve` fills the result fields of the copy it returns: `route` (the stops with their
+arrival times) and `metrics` on each vehicle, and `unassigned`, `score_hard`,
+`score_medium`, `score_soft` and `total_driving_seconds` on the problem. They are `None`
+before a solve and are never read as input: a search starts from `initial_route`, which
+`with_initial_solution(problem, solved)` sets.
+
+The earlier pydantic shape still works: a `RoutePlanRequest(model_input=problem,
+timelimit=2)` passed to `solve` (or to `models.solve_request`) returns a
+`RouteSolution` with `routes`, `score` and `vehicle_metrics`. With a request, a keyword
+that is given replaces what the request says, and the request's `timelimit`,
+`random_seed` and `num_workers` replace those three settings of a `config`.
 
 Everything round-trips through JSON (`model_validate_json` /
 `model_dump_json`); fields are snake_case, classes PascalCase.

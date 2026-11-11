@@ -33,20 +33,22 @@ print(solution.routes())          # {trolley id: [pick task id, ...]}
 ```
 
 JSON in/out is `optimaru.order_picking.models` (pydantic v2). `solve` takes the
-request model and returns an `OrderPickingResponse`:
+problem model and returns a solved copy of it:
 
 ```python
-from optimaru.order_picking.models import OrderPickingRequest
+from optimaru.order_picking.models import OrderPickingInput
 
-response = op.solve(OrderPickingRequest.model_validate(request_dict))
-print(response.feasible, response.distance_by_trolley)
+solved = op.solve(OrderPickingInput.model_validate(problem_dict), time_limit_seconds=5.0)
+print(solved.score_hard, solved.total_distance, [t.distance for t in solved.trolleys])
 ```
 
-The request carries its own `timelimit`, `random_seed`, `num_workers` and
-`stop_at_first_feasible`; a keyword of `solve` that is given replaces them, and
-`config` is the base they go on top of (its `spent_limit_seconds`, `random_seed`
-and `parallel_solver_count` are replaced by the request's fields). `models.solve_request(request)` is the
-same solve under its earlier name.
+`solve` fills the result fields of the copy: `route` (the pick tasks in order) and
+`distance` on each trolley, and `unassigned`, `score_hard`, `score_soft`,
+`total_distance` and `order_split_count` on the problem. They are `None` before a
+solve and are never read as input. The earlier pydantic shape still works: an
+`OrderPickingRequest` (the same trolleys and orders with `timelimit`, `random_seed`,
+`num_workers`) passed to `solve` or to `models.solve_request` returns an
+`OrderPickingResponse`.
 
 `SolverConfig` adjusts the engine knobs (time budget, sequence move weights, ALNS, nearby, ScoreChecks::Full,
 `parallel_solver_count` multistart, ...) — see `_core.pyi`.

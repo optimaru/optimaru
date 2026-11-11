@@ -73,7 +73,15 @@ from .constraints import (
     WorkerPairingCost,
 )
 from .helpers import list_constraints, make_random_roster, summary, to_dataframe
-from .models import ScheduleRequest, ScheduleSolution, _request_with, _solve_request, with_initial_solution
+from .models import (
+    ScheduleRequest,
+    ScheduleSolution,
+    SchedulingInput,
+    _request_with,
+    _solve_model,
+    _solve_request,
+    with_initial_solution,
+)
 
 __all__ = [
     "CONSTRAINT_NAMES",
@@ -158,8 +166,21 @@ def solve(
     config: SolverConfig | None = ...,
     constraints=...,
 ) -> ScheduleSolution: ...
+@overload
 def solve(
-    schedule: EmployeeSchedule | ScheduleRequest,
+    schedule: SchedulingInput,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> SchedulingInput: ...
+def solve(
+    schedule: EmployeeSchedule | SchedulingInput | ScheduleRequest,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -169,11 +190,18 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> EmployeeSchedule | ScheduleSolution:
-    """High-level API that solves `schedule` in place and returns it.
+) -> EmployeeSchedule | SchedulingInput | ScheduleSolution:
+    """High-level API that solves a schedule and returns it in the same shape.
 
-    Given a `models.ScheduleRequest` instead, the pydantic request (JSON in, JSON out),
-    `solve` leaves it unchanged and returns a `models.ScheduleSolution`. The request
+    `schedule` is an `EmployeeSchedule` (solved in place and returned) or a
+    `models.SchedulingInput`, the pydantic problem (converted to the engine shape,
+    solved, and returned as a new `SchedulingInput` with each shift's ``worker`` and
+    the result fields filled in, the one passed in left as it was). A `SchedulingInput`
+    is scored on its own ``rules``; ``constraints`` replaces them for the solve.
+
+    A `models.ScheduleRequest`, the earlier pydantic shape that wraps a
+    `SchedulingInput` with its time limit and settings, is still taken: `solve` leaves
+    it unchanged and returns a `models.ScheduleSolution`. The request
     carries its own settings and rules, and a keyword argument that is given replaces
     them: ``time_limit_seconds`` its ``timelimit``, ``random_seed`` the seed in
     ``settings``, and ``parallel_solver_count`` the number of starts (``num_workers``,
@@ -181,7 +209,7 @@ def solve(
     ``settings`` on.
     Starts beyond the first run in separate processes (see `models.solve_request`), so
     ``on_new_best`` needs a single start there. ``config`` and ``constraints`` are for
-    an `EmployeeSchedule`: a request says the same in ``settings`` and
+    an `EmployeeSchedule` or a `SchedulingInput`: a request says the same in ``settings`` and
     ``model_input.rules``, and passing either with one raises ValueError.
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine defaults,
@@ -199,12 +227,12 @@ def solve(
         from optimaru.employee_scheduling.constraints import get_constraints
         es.solve(schedule, constraints=get_constraints())
 
-    The score is on the result: ``schedule.score``.
+    The score is on the result: ``schedule.score``, or ``score_hard`` / ``score_soft`` on a model.
     """
     if isinstance(schedule, ScheduleRequest):
         if config is not None or constraints is not None:
             raise ValueError(
-                "config and constraints are for an EmployeeSchedule: a ScheduleRequest carries them "
+                "config and constraints are for an EmployeeSchedule or a SchedulingInput: a ScheduleRequest carries them "
                 "as settings and model_input.rules"
             )
         request = _request_with(
@@ -215,8 +243,8 @@ def solve(
             stop_at_first_feasible=stop_at_first_feasible,
         )
         return _solve_request(request, full_assert=full_assert, on_new_best=on_new_best)
-    if not isinstance(schedule, EmployeeSchedule):
-        raise TypeError(f"schedule must be an EmployeeSchedule or a models.ScheduleRequest: {type(schedule)!r}")
+    if not isinstance(schedule, (EmployeeSchedule, SchedulingInput)):
+        raise TypeError(f"schedule must be an EmployeeSchedule or a models.SchedulingInput: {type(schedule)!r}")
     cfg = solver_config(
         SolverConfig,
         config,
@@ -227,6 +255,8 @@ def solve(
         full_assert=full_assert,
         on_new_best=on_new_best,
     )
+    if isinstance(schedule, SchedulingInput):
+        return _solve_model(schedule, cfg, constraints)
     if constraints is None:
         Solver(cfg).solve(schedule)
     else:

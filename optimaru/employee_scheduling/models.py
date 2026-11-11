@@ -469,7 +469,30 @@ class SolverSettings(StrictModel):
         return self
 
 
+class RuleTotal(BaseModel):
+    """Weighted cost of one rule instance in the final schedule (positive =
+    penalizing, negative = rewarding) — the score explanation. ``name`` is the
+    constraint name (``"shift_coverage_cost"``); ``label`` tells the instances
+    of a parametrized rule apart (``"Shift coverage[Skill A 1..inf]"``; empty
+    for a rule without one)."""
+
+    name: str
+    label: str = ""
+    cost: float
+    level: Literal["hard", "medium", "soft"] = "soft"
+    is_hard: bool
+
+
 class SchedulingInput(BaseModel):
+    """The scheduling problem, and after `solve` its solution too.
+
+    `solve(problem)` returns a copy with the result filled in: each shift's `worker`
+    (None where it stayed unassigned), `unassigned`, `score_hard`, `score_soft` and
+    `rule_totals`. The result fields are None on a problem that was not solved and are
+    never read as input. `ShiftModel.worker` is both: a solved problem solved again
+    starts from the workers it holds.
+    """
+
     # validate_assignment: `input.rules = [MaxConsecutiveDaysCost(...)]` after
     # construction goes through the same validators as the constructor.
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
@@ -479,6 +502,12 @@ class SchedulingInput(BaseModel):
     # Constraint specs or their JSON form; a rule may repeat (each entry is its
     # own instance), and the list may not be empty.
     rules: list[Rule] = Field(default_factory=default_rules)
+    unassigned: list[str] | None = Field(default=None, description="Result: ids of the shifts with no worker.")
+    score_hard: int | None = Field(default=None, description="Result: the hard level of the score. 0 is feasible.")
+    score_soft: float | None = Field(default=None, description="Result: the soft level of the score.")
+    rule_totals: list[RuleTotal] | None = Field(
+        default=None, description="Result: the weighted cost of each rule instance, which explains the score."
+    )
 
     @field_validator("rules", mode="before")
     @classmethod
@@ -534,20 +563,6 @@ class ShiftAssignmentModel(BaseModel):
     required_skill: str = ""
 
 
-class RuleTotal(BaseModel):
-    """Weighted cost of one rule instance in the final schedule (positive =
-    penalizing, negative = rewarding) — the score explanation. ``name`` is the
-    constraint name (``"shift_coverage_cost"``); ``label`` tells the instances
-    of a parametrized rule apart (``"Shift coverage[Skill A 1..inf]"``; empty
-    for a rule without one)."""
-
-    name: str
-    label: str = ""
-    cost: float
-    level: Literal["hard", "medium", "soft"] = "soft"
-    is_hard: bool
-
-
 class ScheduleSolution(BaseModel):
     schedule: dict[str, list[ShiftAssignmentModel]]  # worker id -> assignments
     unassigned: list[str] = Field(default_factory=list)  # shift ids
@@ -593,12 +608,25 @@ def to_schedule(model_input: SchedulingInput) -> "_core.EmployeeSchedule":
     return _core.EmployeeSchedule(workers, shifts)
 
 
-def _read_solution(solution: "ScheduleSolution | Mapping[str, Any]", model_input: SchedulingInput):
+def _read_solution(solution: "SchedulingInput | ScheduleSolution | Mapping[str, Any]", model_input: SchedulingInput):
     """Check a solution against the problem's ids; returns ({shift id: worker id},
     the shift ids it lists as unassigned)."""
+    if isinstance(solution, Mapping) and "shifts" in solution:
+        solution = SchedulingInput.model_validate(solution)
+    if isinstance(solution, SchedulingInput):
+        # A solved problem: its shifts carry the workers. One without a worker is left out,
+        # as a shift a ScheduleSolution does not mention is.
+        schedule: dict[str, list[dict[str, str]]] = {}
+        for shift in solution.shifts:
+            if shift.worker is not None:
+                schedule.setdefault(shift.worker, []).append({"shift_id": shift.id})
+        solution = {"schedule": schedule}
     data = solution.model_dump(mode="json") if isinstance(solution, ScheduleSolution) else solution
     if not isinstance(data, Mapping) or not isinstance(data.get("schedule"), Mapping):
-        raise ValueError("solution must be a ScheduleSolution or a dict with a 'schedule' mapping")
+        raise ValueError(
+            "solution must be a solved SchedulingInput, a ScheduleSolution, or a dict with a 'schedule' mapping "
+            "(the JSON of a ScheduleSolution) or with 'shifts' (the JSON of a SchedulingInput)"
+        )
     unassigned = data.get("unassigned", [])
     if not isinstance(unassigned, list):
         raise ValueError(f"solution: 'unassigned' must be a list of shift ids, got {unassigned!r}")
@@ -628,15 +656,20 @@ def _read_solution(solution: "ScheduleSolution | Mapping[str, Any]", model_input
     return assigned, set(unassigned)
 
 
-def with_initial_solution(
-    problem: ScheduleRequest,
-    solution: "ScheduleSolution | Mapping[str, Any]",
-) -> ScheduleRequest:
-    """A new request whose solve starts from `solution`; `problem` is not changed.
+_Problem = typing.TypeVar("_Problem", SchedulingInput, "ScheduleRequest")
 
-    `solution` is what `solve_request` returns: a `ScheduleSolution` or the plain
-    dict of `model_dump(mode="json")`. Workers and shifts are matched by id, never
-    by position, and an assignment is read for its `shift_id` only.
+
+def with_initial_solution(
+    problem: _Problem,
+    solution: "SchedulingInput | ScheduleSolution | Mapping[str, Any]",
+) -> _Problem:
+    """A new problem whose solve starts from `solution`; `problem` is not changed.
+
+    `problem` is a `SchedulingInput` (or, on the request path, a `ScheduleRequest`).
+    `solution` is what `solve` returned for it: the solved `SchedulingInput`, the
+    `ScheduleSolution` of a request, or the plain dict of either
+    (`model_dump(mode="json")`). Workers and shifts are matched by id, never by
+    position, and an assignment is read for its `shift_id` only.
 
     Each shift's `ShiftModel.worker` becomes what the solution says, so the solve
     starts there instead of constructing it. A partial solution is fine: a shift
@@ -651,17 +684,48 @@ def with_initial_solution(
     assigned twice or both assigned and unassigned, a malformed assignment, or a
     pinned shift the solution moves away from its worker or unassigns.
     """
-    model_input = problem.model_input
+    model_input = problem if isinstance(problem, SchedulingInput) else problem.model_input
     assigned, unassigned = _read_solution(solution, model_input)
     for shift in model_input.shifts:
         if shift.pinned and (shift.id in unassigned or assigned.get(shift.id, shift.worker) != shift.worker):
             raise ValueError(f"shift {shift.id!r} is pinned to {shift.worker!r}; the solution cannot change it")
 
     seeded = problem.model_copy(deep=True)
-    for shift in seeded.model_input.shifts:
+    for shift in (seeded if isinstance(seeded, SchedulingInput) else seeded.model_input).shifts:
         if not shift.pinned:
             shift.worker = assigned.get(shift.id)
     return seeded
+
+
+def _solve_model(problem: SchedulingInput, config: "_core.SolverConfig", constraints=None) -> SchedulingInput:
+    """`solve(problem, ...)` for the pydantic problem: a solved copy, `problem` left as it was.
+
+    The rules are `problem.rules`; ``constraints`` (a list of specs or a
+    `DecomposedCalculator`) replaces them for this solve."""
+    schedule = to_schedule(problem)
+    if constraints is None:
+        calculator = _core.DecomposedCalculator(_rule_specs(problem.rules))
+    elif isinstance(constraints, _core.DecomposedCalculator):
+        calculator = constraints
+    else:
+        calculator = _core.DecomposedCalculator(constraints)
+    _core.Solver(config).solve(schedule, calculator)
+
+    workers = [worker.id for worker in problem.workers]
+    assignment = schedule.assignment()
+    shifts = [
+        shift.model_copy(update={"worker": workers[index] if index >= 0 else None})
+        for shift, index in zip(problem.shifts, assignment, strict=True)
+    ]
+    return problem.model_copy(
+        update={
+            "shifts": shifts,
+            "unassigned": [shift.id for shift, index in zip(problem.shifts, assignment, strict=True) if index < 0],
+            "score_hard": schedule.score.hard,
+            "score_soft": schedule.score.soft,
+            "rule_totals": [RuleTotal(**total) for total in calculator.constraint_totals()],
+        }
+    )
 
 
 def _rule_specs(rules: list) -> list[_specs.Constraint]:

@@ -88,10 +88,8 @@ print(plan.unassigned_delivery_ids())  # []
   `pdp.constraint_costs(plan, constraints=None)` report the catalog, the names
   and the raw per-unit costs; `optimaru.pickup_delivery.constraints.score(costs,
   constraints=None)` re-prices those raw costs in pure Python.
-- `pdp.solve(request, ...)` with a `models.PdpRequest` and
+- `pdp.solve(problem, ...)` with a `models.PdpInput` and
   `pdp.with_initial_solution(problem, solution)` are the JSON layer (below).
-  `pdp.solve_request(request, constraints=None)` is the same solve under its
-  earlier name.
 
 ## Constraints
 
@@ -143,24 +141,28 @@ pdp.solve(plan, time_limit_seconds=2.0, random_seed=42, constraints=[
 
 ```python
 from optimaru.pickup_delivery import solve
-from optimaru.pickup_delivery.models import (DeliveryModel, PdpInput, PdpRequest, StopModel,
-                                             VehicleModel)
+from optimaru.pickup_delivery.models import DeliveryModel, PdpInput, StopModel, VehicleModel
 
-request = PdpRequest(
-    timelimit=2,
-    model_input=PdpInput(
-        vehicles=[VehicleModel(id="V1", capacity=10, home=(37.5665, 126.9780))],
-        deliveries=[DeliveryModel(
-            id="R1", demand=3,
-            pickup=StopModel(id="R1-pickup", location=(37.57, 126.982), service_duration=300),
-            dropoff=StopModel(id="R1-dropoff", location=(37.574, 126.975), service_duration=300),
-        )],
-    ),
+problem = PdpInput(
+    vehicles=[VehicleModel(id="V1", capacity=10, home=(37.5665, 126.9780))],
+    deliveries=[DeliveryModel(
+        id="R1", demand=3,
+        pickup=StopModel(id="R1-pickup", location=(37.57, 126.982), service_duration=300),
+        dropoff=StopModel(id="R1-dropoff", location=(37.574, 126.975), service_duration=300),
+    )],
 )
-solution = solve(request)              # -> PdpSolution
-print([stop.stop_id for stop in solution.routes["V1"]])   # ['R1-pickup', 'R1-dropoff']
-print(solution.score, solution.feasible, solution.total_driving_seconds)   # 0hard/0medium/-93soft True 93
+solved = solve(problem, time_limit_seconds=2)     # -> a new PdpInput; problem is unchanged
+print([stop.stop_id for stop in solved.vehicles[0].route])   # ['R1-pickup', 'R1-dropoff']
+print(solved.score_hard, solved.score_medium, solved.score_soft, solved.total_driving_seconds)   # 0 0 -93 93
 ```
+
+- `solve` fills the result fields of the copy it returns: `route` (the stops with their
+  arrival times) and `metrics` on each vehicle, and `unassigned`, `score_hard`,
+  `score_medium`, `score_soft` and `total_driving_seconds` on the problem. They are `None`
+  before a solve and are never read as input: a search starts from `initial_route`.
+- The earlier pydantic shape still works: a `PdpRequest(model_input=problem, timelimit=2)`
+  passed to `solve` (or to `pdp.solve_request`) returns a `PdpSolution` with `routes`,
+  `score` and `vehicle_metrics`.
 
 - `PdpRequest` carries `timelimit` (seconds, default 30), `random_seed`,
   `num_workers`, `stop_at_first_feasible` and `solver_parameters`, a dict of
@@ -170,7 +172,7 @@ print(solution.score, solution.feasible, solution.total_driving_seconds)   # 0ha
   `total_driving_seconds` and `vehicle_metrics`.
 - `VehicleModel.max_stops` defaults to 20 here (a request counts as two; `0` lifts
   it), while the compiled `Vehicle` keeps 0, no cap.
-- `with_initial_solution(request, solution)` returns a new request whose solve
+- `with_initial_solution(problem, solution)` returns a new problem whose solve
   starts from `solution`; see
   [Starting from an existing solution](README.md#starting-from-an-existing-solution).
 - Everything round-trips through JSON (`model_validate_json` / `model_dump_json`).

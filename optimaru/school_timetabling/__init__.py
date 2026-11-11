@@ -33,7 +33,9 @@ path); `constraints=` selects a plugin assembly instead (see `constraints.py`)::
         constraints=Assembly().add("teacher_gap_cost", weight=40).drop("teacher_workday_cost"),
     )
 
-Pydantic mirrors (for serialization) live in `optimaru.school_timetabling.models`.
+`solve` also takes the problem as a `models.TimetableProblemModel` and then returns a
+`models.TimetableResultModel`. The pydantic mirrors of the engine classes (for
+serialization) live in `optimaru.school_timetabling.models` too.
 """
 
 import time
@@ -85,6 +87,7 @@ from .convert import (
     convert_solution,
     inject_solution,
 )
+from .models import TimetableProblemModel, TimetableResultModel
 
 #: The raw per-constraint costs of a `canon.Timetable` (the canonical domain):
 #: ``{name: {costs, weight, exponent, hard, global, level, reward,
@@ -215,8 +218,13 @@ def _resolve_config(config, *, canonical: bool):
     raise ValueError("a quickstart-mode config must be a SolverConfig or an object with to_core()")
 
 
+def _as_result(result: dict, as_model: bool) -> dict | TimetableResultModel:
+    """The `Timetable` dict as it is, or as the model when the problem came as a model."""
+    return TimetableResultModel.model_validate(result) if as_model else result
+
+
 def solve(
-    problem: dict,
+    problem: dict | TimetableProblemModel,
     *,
     mode: str = "canonical",
     time_limit_seconds: float | None = None,
@@ -228,18 +236,22 @@ def solve(
     constraints=None,
     on_new_best=None,
     config=None,
-    initial_solution: dict | None = None,
-) -> dict:
-    """High-level API: solves a canonical `TimetableProblem` dict and returns a
-    canonical `Timetable` dict.
+    initial_solution: dict | TimetableResultModel | None = None,
+) -> dict | TimetableResultModel:
+    """High-level API: solves a canonical timetabling problem and returns its timetable.
+
+    ``problem`` is a `models.TimetableProblemModel`, the pydantic problem, and the result
+    is then a `models.TimetableResultModel`; or it is the `TimetableProblem` dict of the
+    same shape (the model's JSON), and the result is the `Timetable` dict. Neither is
+    changed.
 
     ``mode="canonical"`` (default) honours every hard and soft constraint of
     the CP-SAT reference through the st::canon domain.
     ``mode="quickstart"`` is the approximate quickstart-domain conversion
     (unsupported constraints are reported in notes).
 
-    ``initial_solution`` is where the search starts: a `Timetable` dict, as a
-    solve returned it. Problems here are dicts, so this keyword takes the place
+    ``initial_solution`` is where the search starts: a `models.TimetableResultModel`
+    or a `Timetable` dict, as a solve returned it. Problems here are dicts, so this keyword takes the place
     of the `with_initial_solution` function of the other use cases, under the
     same contract. Lessons are matched by course id, and neither dict is
     changed. Periods the solution leaves out are placed by construction, and a
@@ -310,6 +322,13 @@ def solve(
     """
     if mode not in ("canonical", "quickstart"):
         raise ValueError(f"unknown mode: {mode!r} (canonical | quickstart)")
+    as_model = isinstance(problem, TimetableProblemModel)
+    if as_model:
+        problem = problem.model_dump(mode="json")
+    elif not isinstance(problem, dict):
+        raise TypeError(f"problem must be a models.TimetableProblemModel or a TimetableProblem dict: {type(problem)!r}")
+    if isinstance(initial_solution, TimetableResultModel):
+        initial_solution = initial_solution.model_dump(mode="json")
     canonical = mode == "canonical"
     if weights is not None and not canonical:
         raise ValueError("weights are supported in canonical mode only")
@@ -359,9 +378,10 @@ def solve(
             start = time.perf_counter()
             canon.Solver(cfg).solve(converted.table, calculator)
             wall = time.perf_counter() - start
-        return convert_solution(
+        result = convert_solution(
             converted, wall_time_seconds=wall, unassigned_weight=unassigned_weight, weights=report_weights
         )
+        return _as_result(result, as_model)
 
     converted = quickstart.convert_problem(problem)
     if initial_solution is not None:
@@ -369,4 +389,4 @@ def solve(
     start = time.perf_counter()
     Solver(cfg).solve(converted.table)
     wall = time.perf_counter() - start
-    return quickstart.convert_solution(converted, wall_time_seconds=wall)
+    return _as_result(quickstart.convert_solution(converted, wall_time_seconds=wall), as_model)

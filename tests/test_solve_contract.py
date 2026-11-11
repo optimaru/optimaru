@@ -23,8 +23,9 @@ SHARED_KEYWORDS = {
     "constraints",
 }
 
-# Their pydantic layer models a whole request (the input with its time limit, seed and worker
-# count). solve() takes it as it takes the compiled problem, and returns the response model.
+# Their pydantic layer used to be a whole request (the input with its time limit, seed and
+# worker count) answered by a response model. solve() still takes that request, and it takes
+# the problem model inside it as every other use case takes its model: a solved copy comes back.
 # Each entry builds a request with a zero time limit: construction, and no search step.
 REQUEST_MODELS = {
     "employee_scheduling": _call("optimaru.employee_scheduling.demo", "generate_demo_data", workers=6, days=4),
@@ -33,9 +34,6 @@ REQUEST_MODELS = {
     "vehicle_routing": _call(".vehicle_routing.test_initial_solution", "problem"),
 }
 REQUEST_MODEL_USE_CASES = sorted(REQUEST_MODELS)
-
-# Its solve() takes and returns dicts, so the package does not import its pydantic models.
-NO_MODELS_ON_IMPORT = {"school_timetabling"}
 
 # solve() answers with the solution document of its API there, not with a problem that carries
 # a score: an infeasible document does not say how infeasible, so two of them cannot be ordered.
@@ -140,6 +138,83 @@ def test_config_is_the_base_of_a_request(use_case):
     assert time.monotonic() - started < 10.0
     assert one_step == module.solve(request.model_copy(update={"solver_parameters": {"step_count_limit": 1}}))
     assert (config.spent_limit_seconds, config.step_count_limit) == (0.0, 1)
+
+
+def _problem_model(use_case):
+    """The pydantic problem of a request use case: what the request wraps."""
+    request = REQUEST_MODELS[use_case]()
+    if use_case == "order_picking":
+        from optimaru.order_picking.models import OrderPickingInput
+
+        return OrderPickingInput(trolleys=request.trolleys, orders=request.orders)
+    return request.model_input
+
+
+@pytest.mark.parametrize("use_case", REQUEST_MODEL_USE_CASES)
+def test_solve_returns_the_problem_model_solved(use_case):
+    """As in the other use cases: the model passed in is left as it was, and a new model of the
+    same class comes back with the decisions and the score on it, which survives JSON."""
+    module = use_case_module(use_case)
+    problem = _problem_model(use_case)
+    before = problem.model_dump()
+    solved = module.solve(problem, time_limit_seconds=20.0, random_seed=1, stop_at_first_feasible=True)
+    assert type(solved) is type(problem)
+    assert problem.model_dump() == before
+    assert solved.score_hard == 0 and solved.score_soft is not None and solved.unassigned == []
+    assert type(problem).model_validate_json(solved.model_dump_json()) == solved
+    # The result fields are output only: a problem that carries them solves as one without.
+    again = module.solve(solved.model_copy(update={"score_hard": 123}), time_limit_seconds=0.0)
+    assert again.score_hard != 123
+
+
+@pytest.mark.parametrize("use_case", REQUEST_MODEL_USE_CASES)
+def test_a_solved_problem_model_is_a_starting_point(use_case):
+    """with_initial_solution takes the problem model and what solve returned for it, as the
+    model or as its JSON dict, and a zero-second solve from there keeps the score."""
+    module = use_case_module(use_case)
+    problem = _problem_model(use_case)
+    solved = module.solve(problem, time_limit_seconds=20.0, random_seed=1, stop_at_first_feasible=True)
+    for solution in (solved, solved.model_dump(mode="json")):
+        seeded = module.with_initial_solution(problem, solution)
+        assert type(seeded) is type(problem)
+        resumed = module.solve(seeded, time_limit_seconds=0.0)
+        assert (resumed.score_hard, resumed.score_soft) == (solved.score_hard, solved.score_soft)
+
+
+@pytest.mark.parametrize("use_case", REQUEST_MODEL_USE_CASES)
+def test_the_problem_model_takes_every_keyword(use_case):
+    """config is the base and the keywords go on top, as for a compiled problem."""
+    module = use_case_module(use_case)
+    problem = _problem_model(use_case)
+    config = module.SolverConfig()
+    config.spent_limit_seconds = 20.0
+    reported = []
+    started = time.monotonic()
+    solved = module.solve(
+        problem,
+        config=config,
+        time_limit_seconds=0.0,
+        full_assert=True,
+        on_new_best=lambda step, score: reported.append(score),
+        constraints=module.constraints.get_constraints(),
+    )
+    assert time.monotonic() - started < 10.0
+    assert config.spent_limit_seconds == 20.0
+    assert solved.score_hard is not None
+
+
+def test_school_timetabling_takes_its_problem_as_a_model():
+    """A TimetableProblemModel in, a TimetableResultModel out: the dict solve, in pydantic."""
+    module = use_case_module("school_timetabling")
+    problem = small_problem("school_timetabling")
+    model = module.models.TimetableProblemModel.model_validate(problem)
+    assert model.model_dump(mode="json", exclude_defaults=True).keys() == problem.keys()
+    solved = module.solve(model, time_limit_seconds=0.5, random_seed=3)
+    as_dict = module.solve(problem, time_limit_seconds=0.5, random_seed=3)
+    assert isinstance(solved, module.models.TimetableResultModel)
+    assert (solved.status, solved.penalties) == (as_dict["status"], as_dict["penalties"])
+    resumed = module.solve(model, time_limit_seconds=0.0, initial_solution=solved)
+    assert resumed.objective_value == solved.objective_value
 
 
 def _with_seed(request, seed):
@@ -257,6 +332,6 @@ def test_importing_a_use_case_imports_its_models(use_case):
         text=True,
         check=True,
     ).stdout.strip()
-    assert loaded == str(use_case not in NO_MODELS_ON_IMPORT)
+    assert loaded == "True"
     if hasattr(module, "with_initial_solution"):
         assert module.with_initial_solution is module.models.with_initial_solution

@@ -53,7 +53,14 @@ from ._core import (
     list_constraints,
     update_shadow_variables,
 )
-from .models import OrderPickingRequest, OrderPickingResponse, _solve_request, with_initial_solution
+from .models import (
+    OrderPickingInput,
+    OrderPickingRequest,
+    OrderPickingResponse,
+    _solve_model,
+    _solve_request,
+    with_initial_solution,
+)
 
 __all__ = [
     "ConstraintInfo",
@@ -105,8 +112,21 @@ def solve(
     config: SolverConfig | None = ...,
     constraints=...,
 ) -> OrderPickingResponse: ...
+@overload
 def solve(
-    solution: OrderPickingSolution | OrderPickingRequest,
+    solution: OrderPickingInput,
+    *,
+    time_limit_seconds: float | None = ...,
+    random_seed: int | None = ...,
+    parallel_solver_count: int | None = ...,
+    stop_at_first_feasible: bool = ...,
+    full_assert: bool = ...,
+    on_new_best=...,
+    config: SolverConfig | None = ...,
+    constraints=...,
+) -> OrderPickingInput: ...
+def solve(
+    solution: OrderPickingSolution | OrderPickingInput | OrderPickingRequest,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -116,11 +136,17 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> OrderPickingSolution | OrderPickingResponse:
-    """Solve an `OrderPickingSolution` in place and return it.
+) -> OrderPickingSolution | OrderPickingInput | OrderPickingResponse:
+    """Solve an order picking problem and return it in the same shape.
 
-    Given a `models.OrderPickingRequest` instead, the pydantic request (JSON in, JSON out), `solve`
-    leaves it unchanged and returns a `models.OrderPickingResponse`. The request carries its own
+    ``solution`` is an `OrderPickingSolution` (solved in place and returned) or a
+    `models.OrderPickingInput`, the pydantic problem (converted to the engine shape,
+    solved, and returned as a new `OrderPickingInput` with the result fields filled in,
+    the one passed in left as it was).
+
+    A `models.OrderPickingRequest`, the earlier pydantic shape that holds the problem
+    with its time limit and seed, is still taken: `solve` leaves it unchanged and
+    returns a `models.OrderPickingResponse`. The request carries its own
     ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``, and
     they always apply: with a request, ``config.spent_limit_seconds``, ``random_seed``
     and ``parallel_solver_count`` are replaced by the request's fields, so change those
@@ -153,8 +179,8 @@ def solve(
         return _solve_request(
             request, constraints=constraints, config=config, full_assert=full_assert, on_new_best=on_new_best
         )
-    if not isinstance(solution, OrderPickingSolution):
-        raise TypeError(f"solution must be an OrderPickingSolution or a models.OrderPickingRequest: {type(solution)!r}")
+    if not isinstance(solution, (OrderPickingSolution, OrderPickingInput)):
+        raise TypeError(f"solution must be an OrderPickingSolution or a models.OrderPickingInput: {type(solution)!r}")
     cfg = solver_config(
         SolverConfig,
         config,
@@ -165,5 +191,7 @@ def solve(
         full_assert=full_assert,
         on_new_best=on_new_best,
     )
+    if isinstance(solution, OrderPickingInput):
+        return _solve_model(solution, cfg, constraints)
     solve_in_place(Solver(cfg), solution, constraints)
     return solution

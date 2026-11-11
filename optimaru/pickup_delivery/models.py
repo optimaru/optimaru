@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 
 from pydantic import Field, model_validator
 
@@ -25,6 +25,34 @@ __all__ = [
     "vehicle_metrics",
     "with_initial_solution",
 ]
+
+
+class PdpStop(StrictModel):
+    stop_id: str
+    delivery_id: str
+    pickup: bool
+    arrival_time: int
+
+
+class VehicleMetrics(StrictModel):
+    """Per-vehicle figures derived from a finished route (post-processing).
+
+    Nothing here is scored. The numbers are recomputed from the reported stop
+    order and arrival times with the request's driving matrix, so every
+    backend reports them identically for the same routes.
+    """
+
+    stops: int = 0
+    requests: int = 0  # pickup/dropoff pairs served
+    peak_load: int = 0  # most demand carried at any one moment
+    delivered: int = 0  # total demand dropped off
+    driving_seconds: int = 0
+    departure_time: int
+    end_time: int  # departure from the last stop, plus the leg home if it returns
+    route_duration_seconds: int = 0  # end_time - departure_time
+    waiting_seconds: int = 0  # idle time spent before a stop's window opens
+    service_seconds: int = 0
+    return_to_depot: bool = False
 
 
 class VehicleModel(StrictModel):
@@ -71,6 +99,16 @@ class VehicleModel(StrictModel):
             "be reordered, moved to another vehicle or have stops inserted between."
         ),
     )
+    route: list[PdpStop] | None = Field(
+        default=None,
+        description=(
+            "Result, None on a problem that was not solved: the stops of this vehicle in "
+            "order, each with its arrival time. `solve` fills it in; it is not read as input."
+        ),
+    )
+    metrics: VehicleMetrics | None = Field(
+        default=None, description="Result: figures derived from `route`. None on a problem that was not solved."
+    )
 
 
 class StopModel(StrictModel):
@@ -108,9 +146,22 @@ class DeliveryModel(StrictModel):
 
 
 class PdpInput(StrictModel):
+    """The pickup and delivery problem, and after `solve` its solution too.
+
+    `solve(problem)` returns a copy with the result fields filled in: each vehicle's
+    `route` and `metrics`, `unassigned`, the score levels and `total_driving_seconds`.
+    They are None on a problem that was not solved and are never read as input; the
+    search starts from `initial_route` (see `with_initial_solution`).
+    """
+
     vehicles: list[VehicleModel]
     deliveries: list[DeliveryModel]
     driving_seconds: list[list[int]] | None = None
+    unassigned: list[str] | None = Field(default=None, description="Result: ids of the requests on no route.")
+    score_hard: int | None = Field(default=None, description="Result: the hard level of the score. 0 is feasible.")
+    score_medium: int | None = Field(default=None, description="Result: the medium level of the score.")
+    score_soft: int | None = Field(default=None, description="Result: the soft level of the score.")
+    total_driving_seconds: int | None = Field(default=None, description="Result: driving time over all routes.")
 
     @model_validator(mode="after")
     def _unique_ids(self):
@@ -188,34 +239,6 @@ class PdpRequest(StrictModel):
     num_workers: int = Field(default=1, ge=1)
     stop_at_first_feasible: bool = False
     solver_parameters: dict[str, Any] = Field(default_factory=dict)
-
-
-class PdpStop(StrictModel):
-    stop_id: str
-    delivery_id: str
-    pickup: bool
-    arrival_time: int
-
-
-class VehicleMetrics(StrictModel):
-    """Per-vehicle figures derived from a finished route (post-processing).
-
-    Nothing here is scored. The numbers are recomputed from the reported stop
-    order and arrival times with the request's driving matrix, so every
-    backend reports them identically for the same routes.
-    """
-
-    stops: int = 0
-    requests: int = 0  # pickup/dropoff pairs served
-    peak_load: int = 0  # most demand carried at any one moment
-    delivered: int = 0  # total demand dropped off
-    driving_seconds: int = 0
-    departure_time: int
-    end_time: int  # departure from the last stop, plus the leg home if it returns
-    route_duration_seconds: int = 0  # end_time - departure_time
-    waiting_seconds: int = 0  # idle time spent before a stop's window opens
-    service_seconds: int = 0
-    return_to_depot: bool = False
 
 
 class PdpSolution(StrictModel):
@@ -362,7 +385,6 @@ def _solve_request(
 ) -> PdpSolution:
     """`solve(request, ...)`: ``config`` is the base, and the request's time limit, seed and
     worker count replace the base's, as its ``solver_parameters`` replace the fields they name."""
-    plan = to_plan(request.model_input, name=request.name or "plan")
     config = solver_config(
         _core.SolverConfig,
         config,
@@ -376,6 +398,38 @@ def _solve_request(
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
         config.best_score_limit = (0, -(2**63), -(2**63))
+    return _solution(_solve_plan(request.model_input, config, constraints, name=request.name or "plan"))
+
+
+def _solve_model(problem: PdpInput, config: _core.SolverConfig, constraints=None) -> PdpInput:
+    """`solve(problem, ...)` for the pydantic problem: a solved copy, `problem` left as it was."""
+    plan = _solve_plan(problem, config, constraints)
+    solution = _solution(plan)
+    vehicles = [
+        vehicle.model_copy(
+            update={"route": solution.routes[vehicle.id], "metrics": solution.vehicle_metrics[vehicle.id]}
+        )
+        for vehicle in problem.vehicles
+    ]
+    return problem.model_copy(
+        update={
+            "vehicles": vehicles,
+            "unassigned": solution.unassigned,
+            "score_hard": plan.score.hard,
+            "score_medium": plan.score.medium,
+            "score_soft": plan.score.soft,
+            "total_driving_seconds": solution.total_driving_seconds,
+        }
+    )
+
+
+def _solve_plan(
+    model_input: PdpInput, config: _core.SolverConfig, constraints=None, *, name: str = "plan"
+) -> _core.PdpRoutePlan:
+    """Build the plan of `model_input` and solve it: on the core rules, or on the constraint
+    assembly when constraints are picked or the input sets a vehicle limit, a pinned stop or a
+    required vehicle."""
+    plan = to_plan(model_input, name=name)
     solver = _core.Solver(config)
     has_route_policy = any(
         v.max_travel_time
@@ -386,8 +440,8 @@ def _solve_request(
         or v.fixed_cost
         or v.max_route_radius_meters
         or v.pinned_stops
-        for v in request.model_input.vehicles
-    ) or any(d.required_vehicle for d in request.model_input.deliveries)
+        for v in model_input.vehicles
+    ) or any(d.required_vehicle for d in model_input.deliveries)
     if constraints is None and not has_route_policy:
         # Request groups need no entry above: Solver.solve itself scores a plan with a group of
         # two requests or more on the default constraints.
@@ -397,6 +451,11 @@ def _solve_request(
             constraints = get_constraints()
         solver.solve_with_constraints(plan, constraints)
 
+    return plan
+
+
+def _solution(plan: _core.PdpRoutePlan) -> PdpSolution:
+    """The routes of a solved plan, with the figures derived from them."""
     routes: dict[str, list[PdpStop]] = {}
     for vehicle in plan.vehicles:
         stops = []
@@ -423,13 +482,35 @@ def _solve_request(
     )
 
 
-def with_initial_solution(problem: PdpRequest, solution: PdpSolution | dict[str, Any]) -> PdpRequest:
+def _routes_of(solution: PdpInput | PdpSolution | dict[str, Any]) -> dict[str, list[str]]:
+    """Stop ids per vehicle id of a result: a solved `PdpInput`, a `PdpSolution`, or the JSON
+    dict of either. A vehicle the result does not route is left out."""
+    if isinstance(solution, dict):
+        solution = (PdpInput if "vehicles" in solution else PdpSolution).model_validate(solution)
+    if isinstance(solution, PdpInput):
+        return {
+            vehicle.id: [stop.stop_id for stop in vehicle.route]
+            for vehicle in solution.vehicles
+            if vehicle.route is not None
+        }
+    return {
+        vehicle: [stop.stop_id for stop in stops]
+        for vehicle, stops in PdpSolution.model_validate(solution).routes.items()
+    }
+
+
+_Problem = TypeVar("_Problem", PdpInput, PdpRequest)
+
+
+def with_initial_solution(problem: _Problem, solution: PdpInput | PdpSolution | dict[str, Any]) -> _Problem:
     """Return a copy of `problem` whose search starts from `solution`.
 
-    `solution` is what `solve(request)` returned, as the model or as its JSON
-    dict. Each vehicle's `initial_route` becomes the stop ids of its route
-    there, replacing what `problem` had; a vehicle the solution leaves out
-    starts empty. Vehicles and stops are matched by id.
+    `problem` is a `PdpInput` (or, on the request path, a `PdpRequest`). `solution`
+    is what `solve` returned for it, as the model or as its JSON dict: the solved
+    `PdpInput`, or the `PdpSolution` of a request. Each vehicle's `initial_route`
+    becomes the stop ids of its route there, replacing what `problem` had; a
+    vehicle the solution leaves out starts empty. Vehicles and stops are matched
+    by id.
 
     Stops in no route, the requests in `unassigned` included, are placed by
     construction. A solution that routes every request is the exact starting
@@ -442,14 +523,18 @@ def with_initial_solution(problem: PdpRequest, solution: PdpSolution | dict[str,
     last one means a hard-infeasible result with a broken pair cannot be used
     as a starting point.
     """
-    routes = PdpSolution.model_validate(solution).routes
-    if unknown := routes.keys() - {vehicle.id for vehicle in problem.model_input.vehicles}:
+    routes = _routes_of(solution)
+    model_input = problem if isinstance(problem, PdpInput) else problem.model_input
+    if unknown := routes.keys() - {vehicle.id for vehicle in model_input.vehicles}:
         raise ValueError(f"unknown vehicle {sorted(unknown)}")
-    data = problem.model_dump()
-    for vehicle in data["model_input"]["vehicles"]:
-        route = [stop.stop_id for stop in routes.get(vehicle["id"], [])]
+    data = model_input.model_dump()
+    for vehicle in data["vehicles"]:
+        route = routes.get(vehicle["id"], [])
         pinned = vehicle["initial_route"][: vehicle["pinned_stops"]]
         if route[: len(pinned)] != pinned:
             raise ValueError(f"vehicle {vehicle['id']}: the route does not start with its pinned stops {pinned}")
         vehicle["initial_route"] = route
-    return PdpRequest.model_validate(data)
+    seeded = PdpInput.model_validate(data)
+    if isinstance(problem, PdpInput):
+        return seeded
+    return problem.model_copy(update={"model_input": seeded})
