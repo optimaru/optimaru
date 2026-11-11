@@ -106,9 +106,10 @@ void addGroupOperators(optimaru::Solver<VehicleRoutePlan>& engine, const Solver:
 
 // Shared engine wiring for both solve() overloads: what settings_from() takes
 // off the Config's bases (the limits, the acceptance rule, the ALNS knobs),
-// then the automatic late-acceptance size, the sequence move mix and the
-// driving-time nearby selection (all pure problem-fact lookups, so they apply
-// to the plugin path too).
+// then, among others, the target score, the construction order, the
+// automatic late-acceptance size, the sequence move mix and the driving-time
+// nearby selection (all pure problem-fact lookups, so they apply to the plugin
+// path too).
 optimaru::Settings buildEngineConfig(const Solver::Config& config, const VehicleRoutePlan& plan) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.parallel_starts = 1;
