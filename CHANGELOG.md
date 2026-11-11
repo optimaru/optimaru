@@ -82,9 +82,9 @@
     of 30 s with three levels); the first level now keeps the time that is
     left. Two rungs whose whole result was that early end, the 4-line plant of
     food packaging and the 240-task instance of task assigning, are back in
-    their ladders, and the five comparisons solved level by level (conference
-    scheduling, food packaging, meeting scheduling, task assigning, tournament
-    scheduling) were measured on that release.
+    their ladders, and the five comparisons that use the level-by-level solve
+    (conference scheduling, food packaging, meeting scheduling, task assigning,
+    tournament scheduling) were measured on that release.
   - The comparison runner takes `--solver engine` or `--solver cp-sat`, so the
     single-threaded engine runs and the CP-SAT runs can be measured side by
     side. The publisher joins the two files (`compare/<slug>.engine.json`,

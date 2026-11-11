@@ -83,7 +83,8 @@ levels (`("hard", "medium", "soft")`): the soft[1]-over-soft[2] order is carried
 `squared_makespan_cost`'s default weight 10^7 on the one soft level, as in the engine, and
 a pick moved to soft lands on the soft level there too. The folded CP-SAT objective does
 not fit one int64 for the demo, so CP-SAT optimizes the three levels one after another
-(cpsat-common's staged solve).
+(`ObjectiveBuilder.solve` in external-solver; how the levels share the time limit is in
+[how a CP-SAT run is timed](../../../benchmarks/README.md#how-a-cp-sat-run-is-timed)).
 
 Every constraint takes the knobs `weight`, `level`, `exponent`, `offset` and `clip`
 (`offset` and `clip` keyword-only), and may be picked several times. A raw cost `x` (per employee for the five unit constraints, on

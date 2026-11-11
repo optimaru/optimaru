@@ -103,9 +103,11 @@ budget passed without one. A later level that finds nothing in its share
 returns the solution of the level before it. Food packaging and tournament
 scheduling are solved this way on every instance of their ladders, conference
 scheduling, meeting scheduling and task assigning on every instance but the
-smallest. Two of their rows are runs whose first level found nothing in the
-whole budget: the demo plant of food packaging and the 16-meeting instance of
-meeting scheduling. (Before external-solver `v0.2.2`, which the benchmark
+smallest. Of the ten rows without a CP-SAT solution in those five tables, two
+are runs whose first level found nothing in the whole budget: the demo plant
+of food packaging and the 16-meeting instance of meeting scheduling. The other
+eight are runs the runner stopped 60 s past the budget, with the model still
+being built or the search still running. (Before external-solver `v0.2.2`, which the benchmark
 projects pin, a first level without a solution ended the run at its share; two
 rungs were left out of the ladders for that reason, and both are back.)
 
@@ -136,13 +138,13 @@ How far a number repeats differs by use case. The 38 instances of the earlier
 generated ladders were measured on two days: the engine's score was the same
 both times on all of them, and CP-SAT's differed on 8 (eight workers under a
 time limit). The `v0.2.2` run on 2026-11-11 measured 25 instances again (the
-five comparisons solved level by level, on a later build of the engine): the
-engine's score was the same on 24 of them (the 24-meeting instance of meeting
-scheduling moved by half a percent), and CP-SAT's result on 18. The engine's
-own result does move elsewhere: by a few percent on the larger semiconductor
-instances (see that README), and on the 400-request synthetic pickup-delivery
-instance it did with the stop-granular search those days measured (54 vehicles
-one day, 55 the other; the request-level search that replaced it returned the
-same plan in two runs on 2026-11-11). Read a small margin in any table as
-noise.
+five comparisons that use the level-by-level solve, on a later build of the
+engine): the engine's score was the same on 24 of them (the 24-meeting
+instance of meeting scheduling moved by half a percent), and CP-SAT's result
+on 18. The engine's own result does move elsewhere: by a few percent on the
+larger semiconductor instances (see that README), and on the 400-request
+synthetic pickup-delivery instance it did with the stop-granular search those
+days measured (54 vehicles one day, 55 the other; the request-level search
+that replaced it returned the same plan in two runs on 2026-11-11). Read a
+small margin in any table as noise.
 
