@@ -382,9 +382,13 @@ Two requests of a group that are bound to different vehicles, each by its
 could never be whole.
 
 `solve_request` scores groups whenever a request names one: it then solves on the
-constraint assembly, as it does when a vehicle limit is set. On a hand-built
-plan pass `constraints=get_constraints()`; `pdp.solve(plan)` alone scores the
-seven core rules, which do not include this one. Like `required_vehicle_cost`
+constraint assembly, as it does when a vehicle limit is set. `pdp.solve(plan)`
+does the same for a plan with a `group_index` set. One level down,
+`Solver(config).solve(plan)` (the C++ `Solver::solve(plan)`) scores the seven
+core rules, which do not include this one: use `solve_with_constraints` there.
+With `pair_construction_heuristic` off the engine's own construction places
+stops one at a time and may start with a group split, which the search then has
+to mend. Like `required_vehicle_cost`
 and `pinned_stops_cost` the constraint is engine-only: the CP-SAT reference has
 no plugin for it and does not read `group`.
 

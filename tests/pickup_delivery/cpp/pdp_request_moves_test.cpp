@@ -1036,6 +1036,22 @@ void testPairMoveDoesNotRouteABoundGroupInParts() {
     std::printf("\n");
 }
 
+// Parallel starts each build their own groups and operators on their copy of
+// the plan.
+void testGroupsWithParallelStarts() {
+    std::printf("== Request groups with parallel starts ==\n");
+    PdpRoutePlan plan = buildRandomInstance(18, 3, /*seed=*/13);
+    groupInOrder(plan, 3);
+    Solver::Config config;
+    config.time_limit = std::chrono::minutes(1);  // safety net: the step limit ends the solve
+    config.step_limit = 1500;
+    config.parallel_solver_count = 2;
+    Solver(config).solve(plan);
+    check(everyStopOnce(plan) && plan.score.feasible() && plan.unassignedNodeIndices.empty(),
+          "two starts solve a grouped plan (" + plan.score.str() + ")");
+    std::printf("\n");
+}
+
 // A group no vehicle can take whole waits whole: its requests are not routed
 // one by one.
 void testGroupWithNoRoomWaits() {
@@ -1112,6 +1128,7 @@ int main() {
     testGroupsFollowTheirVehicle();
     testStrayRequestRejoinsItsWaitingGroup();
     testPairMoveDoesNotRouteABoundGroupInParts();
+    testGroupsWithParallelStarts();
     testGroupWithNoRoomWaits();
     testRequestMovesMatter();
     std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures,

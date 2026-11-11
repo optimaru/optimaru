@@ -126,6 +126,18 @@ def test_a_group_joins_its_pinned_request(timelimit):
     assert solution.routes["v"][0].stop_id == "bp"
 
 
+def test_a_request_that_starts_off_its_groups_required_vehicle_is_brought_over():
+    # `b` starts on v, unpinned, while `a` of its group must ride w.
+    vehicles = [vehicle("v", ["bp", "bd"]), vehicle("w")]
+    deliveries = [request("a", group="g", required_vehicle="w"), request("b", group="g"), request("c")]
+
+    solution = solve_request(PdpRequest(model_input=two_ends(deliveries, vehicles), timelimit=0.3))
+
+    assert solution.feasible and not solution.unassigned
+    riding = vehicle_of(solution)
+    assert riding["a"] == riding["b"] == "w"
+
+
 def test_construction_puts_waiting_requests_where_their_group_already_rides():
     # `b` and `c` are next to w, but `a` of their group starts on v.
     vehicles = [vehicle("v", ["ap", "ad"]), vehicle("w")]
@@ -283,6 +295,21 @@ def test_an_empty_group_name_is_no_group():
     assert [delivery.group_index for delivery in to_plan(model_input).deliveries] == [-1, -1, -1]
     solution = solve_request(PdpRequest(model_input=model_input, timelimit=0.3))
     assert vehicle_of(solution) == {"a": "v", "b": "w", "c": "w"}
+
+
+def test_solve_scores_groups_on_a_plan_without_being_asked():
+    # No vehicle takes both requests of the group (one request each), so it has to wait whole.
+    # Scored on the seven core rules alone, routing the two apart would look feasible and better.
+    vehicles = [vehicle("v", max_stops=2), vehicle("w", max_stops=2)]
+    plan = to_plan(two_ends([request("a", group="g"), request("b", group="g")], vehicles))
+    config = pdp.SolverConfig()
+    config.step_count_limit = 3000
+
+    pdp.solve(plan, config=config)
+
+    assert plan.score.is_feasible()
+    assert sorted(plan.unassigned_delivery_ids()) == ["a", "b"]
+    assert plan.score.medium == -4  # two requests of 2 service minutes each
 
 
 def test_to_plan_numbers_the_groups_in_input_order():

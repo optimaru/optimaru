@@ -56,6 +56,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .constraints import get_constraints
 from .models import solve_request, with_initial_solution
 
 __all__ = [
@@ -108,6 +109,10 @@ def solve(
         from optimaru.pickup_delivery.constraints import get_constraints
         pdp.solve(plan, constraints=get_constraints())
 
+    A plan that puts requests in groups (`Delivery.group_index`) is scored with the
+    default constraints even when ``constraints`` is None: `request_group_cost` is one of
+    them, and it is not among the seven core rules a plan is otherwise scored on.
+
     The score is on the result: ``plan.score``. `solve_request` is the same solve for
     a `models` request (JSON in, JSON out).
     """
@@ -127,5 +132,7 @@ def solve(
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
         first_feasible_limit=(0, -(2**63), -(2**63)),
     )
+    if constraints is None and any(delivery.group_index >= 0 for delivery in plan.deliveries):
+        constraints = get_constraints()
     solve_in_place(Solver(cfg), plan, constraints)
     return plan

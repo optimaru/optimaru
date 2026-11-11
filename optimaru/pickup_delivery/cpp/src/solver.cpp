@@ -308,28 +308,49 @@ private:
         ctx.editor.end_list_edit(listIndex);
     }
 
-    // The vehicle another request of the request's group rides, or -1 when
+    // The vehicle the other requests of the request's group ride, or -1 when
     // none of them is routed: the vehicle of a pinned one (it stays there),
-    // else of the first one found on a route.
+    // else the one that carries most of them, which is where requestGroupCost
+    // wants the request. On a tie the request's own vehicle wins, then the
+    // first found.
     int vehicleOfPeer(const PdpRoutePlan& plan, const optimaru::OperatorContext<PdpRoutePlan>& ctx,
-                      int deliveryIndex) const {
+                      int deliveryIndex) {
         if (!groups_->pinned(deliveryIndex) && groups_->groupPinnedOn(deliveryIndex) >= 0) {
             return groups_->groupPinnedOn(deliveryIndex);
         }
         const int pool = Descriptor::unassigned_list(plan);
+        const int own = ctx.element_list[plan.deliveries[static_cast<std::size_t>(deliveryIndex)]
+                                                 .pickupNodeIndex];
+        peersOn_.clear();
         for (int d = groups_->leaderOf(deliveryIndex); d >= 0; d = groups_->nextOf(d)) {
             if (d == deliveryIndex) continue;
             const int list =
                     ctx.element_list[plan.deliveries[static_cast<std::size_t>(d)].pickupNodeIndex];
-            if (list >= 0 && list != pool) return list;
+            if (list < 0 || list == pool) continue;
+            const auto at = std::find_if(peersOn_.begin(), peersOn_.end(),
+                                         [list](const auto& entry) { return entry.first == list; });
+            if (at == peersOn_.end()) {
+                peersOn_.emplace_back(list, 1);
+            } else {
+                ++at->second;
+            }
         }
-        return -1;
+        int vehicle = -1;
+        int most = 0;
+        for (const auto& [list, peers] : peersOn_) {
+            if (peers > most || (peers == most && list == own)) {
+                most = peers;
+                vehicle = list;
+            }
+        }
+        return vehicle;
     }
 
     double repairProbability_;
     double assignmentProbability_;
     std::vector<std::pair<int, std::vector<int>>> saved_;
     PlanTimelines timelines_;                      // for routing a request that waits in the pool
+    std::vector<std::pair<int, int>> peersOn_;     // scratch: (vehicle, peers riding it)
     std::shared_ptr<const RequestGroups> groups_;  // which requests travel together
 };
 
