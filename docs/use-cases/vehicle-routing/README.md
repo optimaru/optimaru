@@ -31,7 +31,8 @@ print(solved.score, solved.routes())            # 0hard/0medium/-38soft {'V1': [
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
 ctest --test-dir build   # vrp_test, vrp_plugin_test (assembly == monolith,
-                                         # raw costs by hand, catalog, medium level)
+                                         # raw costs by hand, catalog, medium level),
+                                         # vrp_group_moves_test (visit groups)
 ```
 
 ## Constraints
@@ -51,11 +52,14 @@ ctest --test-dir build   # vrp_test, vrp_plugin_test (assembly == monolith,
 | `route_duration_cost` | `RouteDurationCost` | soft | 0 (opt-in) | per used vehicle: seconds from departure to the route end |
 | `latency_cost` | `LatencyCost` | soft | 0 (opt-in) | per vehicle: seconds from departure to each visit's arrival, summed |
 | `vehicle_fixed_cost` | `VehicleFixedCost` | soft | 1 | per used vehicle: its `fixed_cost` |
+| `visit_order_cost` | `VisitOrderCost` | hard | 1000 | per vehicle: pairs of its visits served the wrong way round, a visit before one its `after` names (see [Visit groups](#visit-groups)) |
+| `visit_group_cost` | `VisitGroupCost` | hard | 1000 | grouped visits that are not where most of their `group` is: on another vehicle, or unassigned while the others ride |
 | `unassigned_visits_cost` | `UnassignedVisitsCost` | medium | 1 | penalty minutes of the visits left unrouted (`unassigned_penalty_minutes`, by default the service time in whole minutes) |
 
-That is the `list_constraints()` order: the thirteen per-vehicle unit constraints
+That is the `list_constraints()` order: the fourteen per-vehicle unit constraints
 (each vehicle; `constraint_costs()` lists the unassigned pool as one more cell, always
-0, which no route constraint evaluates), then the global `unassigned_visits_cost`. `optimaru.vehicle_routing.constraint_info()` reports exactly this
+0, which no route constraint evaluates), then the two globals, `visit_group_cost` and
+`unassigned_visits_cost`. `optimaru.vehicle_routing.constraint_info()` reports exactly this
 table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every
 constraint is flippable onto any of the three levels (`level="hard"`, `"medium"` or
 `"soft"`, or a `Level`), none is a reward, and every one at a weight above 0 is scored
@@ -123,6 +127,90 @@ names (`max_travel_time`, `max_route_duration`, `max_end_time`, `max_stops`,
 soft and `level="hard"` charges 1 hard unit per penalty minute. `enclosing_circle_radius_cost`
 defaults to weight 0 (opt-in).
 
+## Visit groups
+
+Orders the input has already merged into one job get the same `group`: a name on
+`VisitModel` (`None` or an empty name is no group), `Visit.group_index` on a plan
+(-1 for none). The visits of a group ride **one vehicle together, or all stay
+unassigned**. A group holds any number of visits and a visit belongs to at most
+one. Other visits may be served between them.
+
+`after` puts a **partial order** on a group: it lists the visits of the same
+group that are served before this one on the route (`Visit.after_visit_indices`
+on a plan). Visits the order does not relate may be served either way round.
+
+```python
+VisitModel(id="load", group="job-4", location=...)
+VisitModel(id="unload-a", group="job-4", after=["load"], location=...)
+VisitModel(id="unload-b", group="job-4", after=["load"], location=...)   # a and b in either order
+VisitModel(id="sign-off", group="job-4", after=["unload-a", "unload-b"], location=...)
+```
+
+A visit may only come after visits of its own group, and the order must have no
+cycle; anything else is refused (`ValueError`), since it could never be served.
+
+Two hard constraints score it, both at weight 1000, well above a typical lateness
+or overload, so a broken group is mended before windows are polished:
+
+- `visit_group_cost` counts the grouped visits that are not where most of their
+  group is, on a vehicle or on none. A group of three with one visit on another
+  vehicle costs 1, and so does one with a visit left unassigned while two ride;
+  spread over three vehicles it costs 2. Every visit that joins the others takes
+  1 off, which is the slope the engine's one-visit moves follow back to a whole
+  group.
+- `visit_order_cost` counts, per vehicle, the pairs of its visits that are served
+  the wrong way round. A pair whose visits ride different vehicles is left to
+  `visit_group_cost`.
+
+The search moves a group as one unit. Before the engine's construction runs,
+each group is placed whole on the vehicle that takes all of its visits for the
+least added driving, every visit at its cheapest slot behind the ones it comes
+after (`constructGroups`); a group no vehicle takes is parked unassigned, whole.
+A domain move operator, `groupRuinRecreate` (`vrp/group_moves.hpp`), then takes a
+group out of its route, alone or with up to `group_ruin_max_visits` more visits
+(the groups and single visits of nearby stops, or other groups), and puts each
+unit back on one vehicle, the larger units first. That is how a group changes
+vehicle, how groups trade places, and how a waiting group gets routed; the
+engine's own moves reorder a group inside its route and are priced by the two
+constraints when they would split one. The operator is registered only for a
+plan with groups, so a plan without them is solved exactly as before.
+
+The slots it offers are the ones the plan allows: the vehicle's capacity, every
+visit's window, and the vehicle limits that are set (`max_end_time`,
+`max_route_duration`, `max_travel_time`, `max_stops`), whatever level those
+constraints are scored on. The visits of a group go onto a vehicle in an order
+that respects `after`, each at its cheapest slot once the earlier ones are in;
+one such offer costs a walk of the route per visit, so groups are meant to be a
+handful of visits, not dozens.
+
+What the operator is worth, on generated instances of 90 visits around one depot
+with morning or afternoon windows, visits in groups of three picked at random
+(4 s, 5 seeds, mean driving seconds; every group whole and in order in all 60
+results):
+
+| Instances | with `groupRuinRecreate` (default) | the engine's moves alone | nothing grouped |
+| --- | --- | --- | --- |
+| half the visits grouped | 8,986 | 10,760 | 6,256 |
+| half grouped, each group a chain | 9,769 | 11,182 | 6,256 |
+| every visit grouped, each group a chain | 12,647 | 15,709 | 6,256 |
+| half grouped in chains, a tighter fleet | 10,185 | 11,277 | 6,447 |
+
+The operator drives 10% to 20% less and is better in 19 of the 20 pairs. The last
+column is what such groups cost: three visits picked at random across town and
+tied to one vehicle pull every route across town, so these plans drive 44% to
+102% more than the same visits left free. Groups whose visits lie near each
+other cost far less. A grouped plan also settles early: on two of these instances
+a 60 s solve ends within 2% of a 4 s one, while nine seeds end 3% and 6% apart
+(10 s), so another seed buys more than a longer run.
+
+`solve_request` scores groups whenever a visit names one: it then solves on the
+constraint assembly, as it does when a vehicle limit is set, where `num_workers`
+has no effect. `vrp.solve(plan)` does the same for a plan with a `group_index`
+set. One level down, `Solver(config).solve(plan)` (the C++ `Solver::solve(plan)`)
+scores the four core rules, which include neither constraint: use
+`solve_with_constraints` there. Both constraints are engine-only: the CP-SAT
+reference has no plugin for them and reads neither `group` nor `after`.
+
 ## Starting from an existing solution
 
 ```python
@@ -142,7 +230,7 @@ The solution has the **sequence** shape; the domain solver that configures the
 engine is `optimaru/vehicle_routing/cpp/include/vrp/solver.hpp` + `optimaru/vehicle_routing/cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
-(weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
+(weights in `Solver::Config`). The one domain move is `groupRuinRecreate` in `optimaru/vehicle_routing/cpp/src/group_moves.cpp` (on the insertion scan of `visit_insertion.cpp`), registered for plans with [visit groups](#visit-groups) — use it as a template. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `optimaru/vehicle_routing/cpp/src/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
@@ -157,7 +245,8 @@ solver's `solve` before the engine runs — the engine only fills what is still 
 `travel_time_cost`, `max_travel_time_cost`, `max_route_duration_cost`,
 `vehicle_max_end_time_cost`, `max_stops_cost`, `max_route_radius_cost`,
 `enclosing_circle_radius_cost`, `min_capacity_utilization_cost`, `route_duration_cost`,
-`latency_cost`, `vehicle_fixed_cost`, `unassigned_visits_cost`; plus `common.hpp`, the
+`latency_cost`, `vehicle_fixed_cost`, `visit_order_cost`, `visit_group_cost`,
+`unassigned_visits_cost`; plus `common.hpp`, the
 shared prefix sums in `route_sums.hpp` and the enclosing-circle helpers in
 `route_geometry.hpp`):
 1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or

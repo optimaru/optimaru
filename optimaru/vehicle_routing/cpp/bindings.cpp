@@ -43,7 +43,8 @@ PYBIND11_MODULE(_core, m) {
     py::class_<Visit>(m, "Visit", py::module_local())
             .def(py::init([](std::string id, std::string name, int locationIndex, int demand,
                              Seconds minStart, Seconds maxEnd, Seconds service,
-                             std::int64_t unassignedPenalty) {
+                             std::int64_t unassignedPenalty, int groupIndex,
+                             std::vector<int> afterVisitIndices) {
                      Visit v;
                      v.id = std::move(id);
                      v.name = std::move(name);
@@ -53,11 +54,14 @@ PYBIND11_MODULE(_core, m) {
                      v.maxEndTime = maxEnd;
                      v.serviceDuration = service;
                      v.unassignedPenaltyMinutes = unassignedPenalty;
+                     v.groupIndex = groupIndex;
+                     v.afterVisitIndices = std::move(afterVisitIndices);
                      return v;
                  }),
                  py::arg("id"), py::arg("name"), py::arg("location_index"), py::arg("demand"),
                  py::arg("min_start_time"), py::arg("max_end_time"), py::arg("service_duration"),
-                 py::arg("unassigned_penalty_minutes") = Visit::kUnassignedPenaltyAuto)
+                 py::arg("unassigned_penalty_minutes") = Visit::kUnassignedPenaltyAuto,
+                 py::arg("group_index") = -1, py::arg("after_visit_indices") = std::vector<int>{})
             .def_readwrite("id", &Visit::id)
             .def_readwrite("name", &Visit::name)
             .def_readwrite("location_index", &Visit::locationIndex)
@@ -66,6 +70,8 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("max_end_time", &Visit::maxEndTime)
             .def_readwrite("service_duration", &Visit::serviceDuration)
             .def_readwrite("unassigned_penalty_minutes", &Visit::unassignedPenaltyMinutes)
+            .def_readwrite("group_index", &Visit::groupIndex)
+            .def_readwrite("after_visit_indices", &Visit::afterVisitIndices)
             .def("unassigned_penalty", &Visit::unassignedPenalty,
                  "The medium-level cost charged when this visit is left unrouted.")
             // Derived fields, recomputed by calculate_score / solve.
@@ -249,6 +255,17 @@ PYBIND11_MODULE(_core, m) {
                            &Solver::Config::iterated_local_search_max_segment)
             .def_readwrite("iterated_local_search_max_evaluations",
                            &Solver::Config::iterated_local_search_max_evaluations)
+            // --- visit groups ---
+            .def_readwrite("group_ruin_recreate", &Solver::Config::group_ruin_recreate)
+            .def_property(
+                    "group_ruin_max_visits",
+                    [](const Solver::Config& c) { return c.group_ruin_max_visits; },
+                    [](Solver::Config& c, int count) {
+                        if (count < 0) {
+                            throw py::value_error("group_ruin_max_visits must not be negative");
+                        }
+                        c.group_ruin_max_visits = count;
+                    })
             .def_readwrite("ruin_recreate_selection_type",
                            &Solver::Config::ruin_recreate_selection_type)
             .def_readwrite("ruin_recreate_selection_segment_length",

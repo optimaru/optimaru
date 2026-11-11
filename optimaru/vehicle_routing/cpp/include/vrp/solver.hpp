@@ -32,6 +32,15 @@ namespace vrp {
 // operators that matter on routing problems — SISR substring removal and
 // whole-route removal alongside random / related / worst.
 //
+// Visit groups: the visits of one group (Visit::groupIndex) ride one vehicle
+// together or all wait, in an order that respects Visit::afterVisitIndices.
+// When a plan has groups, they are placed whole before the engine's
+// construction runs and a group operator joins the move mix
+// (vrp/group_moves.hpp), which carries a group between vehicles as one unit.
+// The two rules are scored by visitGroupCost and visitOrderCost, which belong
+// to the constraint assembly: the solve(plan) overload scores the four core
+// rules only.
+//
 // Unassigned visits: leaving a visit out of every route is modelled with
 // the plan's virtual unassigned pool (see VehicleRoutePlan). solve() fills the
 // pool for you, so a plan built with visits simply left out of every route is
@@ -160,6 +169,19 @@ public:
         int iterated_local_search_max_ruin = 8;
         int iterated_local_search_max_segment = 1;
         std::int64_t iterated_local_search_max_evaluations = 5000000;
+
+        // --- visit groups (vrp/group_moves.hpp) -----------------------------
+        // groupRuinRecreate: take a group out, alone or with up to
+        // group_ruin_max_visits more visits (the groups and single visits of
+        // nearby stops, or other groups), and put each unit back whole at its
+        // cheapest feasible place. Registered only for a plan with groups.
+        //
+        // 30 measured on generated instances of 90 and 250 visits with half or
+        // all of the visits in groups of three (10-20 s, two instances, four
+        // seeds each): against 12 it drives 2-3% less on three of four
+        // classes and the same on the fourth; 60 and 100 are no better.
+        bool group_ruin_recreate = true;
+        int group_ruin_max_visits = 30;
 
         // Which adaptive scheme weights the ruin operators.
         optimaru::SelectionScheme ruin_recreate_selection_type =

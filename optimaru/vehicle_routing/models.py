@@ -85,6 +85,21 @@ class VisitModel(StrictModel):
     service_duration: int = 0
     name: str | None = None
     unassigned_penalty_minutes: int = Field(default=-1, ge=-1)
+    group: str | None = Field(
+        default=None,
+        description=(
+            "A name shared by visits that are one job. The visits of a group ride one "
+            "vehicle together, or all stay unassigned. None or an empty name is no group."
+        ),
+    )
+    after: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ids of visits of the same group that are served before this one on the route. "
+            "Together these are a partial order on the group: visits it does not relate may "
+            "be served in either order, and other visits may come in between."
+        ),
+    )
 
 
 class RoutingInput(StrictModel):
@@ -105,7 +120,34 @@ class RoutingInput(StrictModel):
             if any(value < 0 for row in self.driving_seconds for value in row):
                 raise ValueError("driving_seconds values must be non-negative")
         self._check_initial_routes()
+        self._check_groups()
         return self
+
+    def _check_groups(self) -> None:
+        """A visit comes after visits of its own group only, and the order has no cycle."""
+        by_id = {visit.id: visit for visit in self.visits}
+        for visit in self.visits:
+            for earlier in visit.after:
+                if earlier not in by_id:
+                    raise ValueError(f"visit {visit.id}: `after` names an unknown visit {earlier!r}")
+                if earlier == visit.id:
+                    raise ValueError(f"visit {visit.id} comes after itself")
+                if not visit.group or by_id[earlier].group != visit.group:
+                    raise ValueError(f"visit {visit.id} comes after visit {earlier}, which is not in its group")
+        # Every visit can be listed behind the ones it comes after, or there is a cycle.
+        waiting = {visit.id: len(set(visit.after)) for visit in self.visits}
+        followers: dict[str, list[str]] = {}
+        for visit in self.visits:
+            for earlier in set(visit.after):
+                followers.setdefault(earlier, []).append(visit.id)
+        ready = [visit_id for visit_id, count in waiting.items() if count == 0]
+        while ready:
+            for follower in followers.get(ready.pop(), ()):
+                waiting[follower] -= 1
+                if waiting[follower] == 0:
+                    ready.append(follower)
+        if stuck := sorted(visit_id for visit_id, count in waiting.items() if count > 0):
+            raise ValueError(f"the order of the visits has a cycle through {stuck}")
 
     def _check_initial_routes(self) -> None:
         known = {visit.id for visit in self.visits}
@@ -183,6 +225,8 @@ def to_plan(model_input: RoutingInput) -> "_core.VehicleRoutePlan":
         )
         for i, v in enumerate(model_input.vehicles)
     ]
+    visit_index = {visit.id: i for i, visit in enumerate(model_input.visits)}
+    group_index: dict[str, int] = {}
     visits = []
     for visit in model_input.visits:
         locations.append(_core.Location(*visit.location))
@@ -196,9 +240,10 @@ def to_plan(model_input: RoutingInput) -> "_core.VehicleRoutePlan":
                 visit.max_end_time,
                 visit.service_duration,
                 visit.unassigned_penalty_minutes,
+                group_index.setdefault(visit.group, len(group_index)) if visit.group else -1,
+                [visit_index[earlier] for earlier in visit.after],
             )
         )
-    visit_index = {visit.id: i for i, visit in enumerate(model_input.visits)}
     for vehicle, model in zip(vehicles, model_input.vehicles, strict=True):
         vehicle.visit_indices = [visit_index[visit_id] for visit_id in model.initial_route]
     # The pool stays empty on purpose. The constraints= path does not clear it,
@@ -268,7 +313,7 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
         or v.fixed_cost
         or v.max_route_radius_meters
         for v in request.model_input.vehicles
-    )
+    ) or any(visit.group for visit in request.model_input.visits)
     if constraints is None and not has_route_policy:
         solver.solve(plan)
     else:

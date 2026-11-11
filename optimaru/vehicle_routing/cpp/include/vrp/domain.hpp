@@ -122,6 +122,15 @@ struct Visit {
                                                                   : unassignedPenaltyMinutes;
     }
 
+    // The group this visit travels in, or -1 for none. The visits of one
+    // group ride one vehicle together, or all wait (visitGroupCost): several
+    // orders the input has merged into one job.
+    int groupIndex = -1;
+    // The visits of its group this one comes after on the route
+    // (visitOrderCost). Together they are a partial order on the group: a
+    // visit named by none and naming none may go anywhere among the others.
+    std::vector<int> afterVisitIndices = {};
+
     // --- derived (recomputed by ScoreCalculator::updateShadowVariables) ---
     int vehicleIndex = -1;  // -1 == unassigned
     Seconds arrivalTime = NULL_TIME;
