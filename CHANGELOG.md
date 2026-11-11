@@ -9,6 +9,30 @@
   read), and its employee scheduling plugins say constraint where they said rule
   (`SchedulePlugin` was `RulePlugin`); the runners and the READMEs here use the new names.
   No table changes: the CP-SAT models are unchanged since `v0.2.3`.
+- **Notebooks on 0.5.0.** Every notebook in `examples/` is saved with outputs from optimaru
+  0.5.0 and asks for it; `examples/README.md` names that version. The four that build a
+  request use the names of 0.5: `time_limit_seconds`, and in employee scheduling
+  `default_constraints()`, `model_input.constraints` and `constraint_totals`. Thirteen of the
+  twenty-two print and draw exactly what they did on 0.4.3, max-cut among them. Three move
+  within the run-to-run noise of solves that stop on the clock, and no text quotes a number
+  that moved: conference scheduling, flight crew scheduling, and order picking's chart of
+  rounds. The other six are use cases whose search changed, and four of them had an
+  experiment that no longer showed its point. Knapsack compares its move sets at 20,000
+  steps each (were 2 seconds, in which flips alone now reach the best plan) with
+  `core_repack_moves` off beside the other moves, and its rounds are 2,000 steps (were
+  1,000). Bed allocation restarts its new admissions on seed 3 (on seed 7 the three step
+  budgets return one plan). Food packaging's rounds are 100,000 steps (were 50,000), and its
+  rush-order replans stop on a step limit (were 1.5 seconds). Maintenance scheduling's short
+  runs and restart rounds are 100,000 steps each (were 0.3 seconds), and its comparison of
+  ruin and recreate on and off is gone: over 8 and 12 seeds it makes no clear difference
+  there on 0.5.0. Quadratic assignment says that `late_acceptance_size` is the first stage's
+  memory, and sports league scheduling says of a restart what it said of every search.
+  One thing these re-runs showed about 0.5.0 itself, not fixed here: in the use cases that
+  search in stages, a solve that starts from an existing plan (`with_initial_solution`) can
+  return that plan unchanged where 0.4.3 improved it, and more often with a larger budget.
+  A food packaging restart that 0.4.3 improves on four seeds of four at every budget tried
+  is improved on none of the four at 200,000 steps or more, or at 1 and 5 seconds. The
+  restart experiments above use budgets at which they show their point on 0.5.0.
 
 ## 0.5.0
 
