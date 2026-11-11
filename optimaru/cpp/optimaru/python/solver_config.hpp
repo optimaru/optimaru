@@ -90,7 +90,37 @@ struct HasRuinRecreateRewards<Config,
                               std::void_t<decltype(std::declval<Config&>().ruin_recreate_rewards)>>
     : std::true_type {};
 
+// A (hard, soft) amount an acceptance rule works with (a temperature, a water
+// level step): both finite and >= 0.
+inline Score non_negative_score(const std::pair<std::int64_t, double>& value, const char* name) {
+    if (value.first < 0 || !(value.second >= 0.0) || !std::isfinite(value.second)) {
+        throw pybind11::value_error(std::string(name) + " must be finite and >= 0");
+    }
+    return Score{value.first, value.second};
+}
+
+inline double non_negative_gap(double gap, const char* name) {
+    if (!(gap >= 0.0) || !std::isfinite(gap)) {
+        throw pybind11::value_error(std::string(name) + " must be finite and >= 0");
+    }
+    return gap;
+}
+
 }  // namespace detail
+
+// `<pkg>._core.AcceptorType`: the engine's acceptance rules, for a use case
+// whose SolverConfig is built on AcceptanceConfig (its `acceptor_type`). Call
+// it before bind_solver_config.
+inline void bind_acceptor_type(pybind11::module_& m) {
+    pybind11::enum_<AcceptanceRule>(m, "AcceptorType", pybind11::module_local())
+            .value("HILL_CLIMBING", AcceptanceRule::HillClimbing)
+            .value("LATE_ACCEPTANCE", AcceptanceRule::LateAcceptance)
+            .value("ENTITY_TABU", AcceptanceRule::EntityTabu)
+            .value("SIMULATED_ANNEALING", AcceptanceRule::SimulatedAnnealing)
+            .value("GREAT_DELUGE", AcceptanceRule::GreatDeluge)
+            .value("STEP_COUNTING_HILL_CLIMBING", AcceptanceRule::StepCountingHillClimbing)
+            .value("RECORD_TO_RECORD_TRAVEL", AcceptanceRule::RecordToRecordTravel);
+}
 
 // The part of SolverConfig that is the same in every use case, bound once so
 // the names, the range checks and their messages cannot drift apart:
@@ -117,6 +147,8 @@ struct HasRuinRecreateRewards<Config,
 //   ruin_recreate, ruin_recreate_*   RuinRecreateConfig, and the two
 //                                    ruin_recreate_as_move_* knobs where the
 //                                    Config has them
+//   acceptor_type and the rules'     AcceptanceConfig (bind_acceptor_type
+//   parameters                       binds the enum, see there)
 //
 // A use case binds its own fields (move weights, nearby settings, ...) on
 // the class this returns.
@@ -209,6 +241,69 @@ Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
             cls.def_readwrite("ruin_recreate_as_move_max_ruin",
                               &Config::ruin_recreate_as_move_max_ruin);
         }
+    }
+    if constexpr (std::is_base_of_v<AcceptanceConfig, Config>) {
+        cls.def_readwrite("acceptor_type", &Config::rule);
+        cls.def_property(
+                "entity_tabu_size", [](const Config& c) { return c.tabu_tenure; },
+                [](Config& c, int size) {
+                    if (size < 0) throw pybind11::value_error("entity_tabu_size must be >= 0");
+                    c.tabu_tenure = size;
+                });
+        // (0, 0) = automatic: soft = the fraction below x |the start's soft score|.
+        cls.def_property(
+                "simulated_annealing_starting_temperature",
+                [](const Config& c) {
+                    return pybind11::make_tuple(c.start_temperature.hard, c.start_temperature.soft);
+                },
+                [](Config& c, std::pair<std::int64_t, double> temperature) {
+                    c.start_temperature = detail::non_negative_score(
+                            temperature, "simulated_annealing_starting_temperature");
+                });
+        cls.def_property(
+                "simulated_annealing_temperature_fraction",
+                [](const Config& c) { return c.simulated_annealing_temperature_fraction; },
+                [](Config& c, double fraction) {
+                    if (!(fraction > 0.0) || !std::isfinite(fraction)) {
+                        throw pybind11::value_error(
+                                "simulated_annealing_temperature_fraction must be finite and > 0");
+                    }
+                    c.simulated_annealing_temperature_fraction = fraction;
+                });
+        // (0, 0) leaves the water level at the start's score.
+        cls.def_property(
+                "great_deluge_water_level_step",
+                [](const Config& c) {
+                    return pybind11::make_tuple(c.water_level_step.hard, c.water_level_step.soft);
+                },
+                [](Config& c, std::pair<std::int64_t, double> step) {
+                    c.water_level_step =
+                            detail::non_negative_score(step, "great_deluge_water_level_step");
+                });
+        cls.def_property(
+                "step_counting_hill_climbing_size",
+                [](const Config& c) { return c.recount_interval; },
+                [](Config& c, std::int64_t size) {
+                    if (size <= 0) {
+                        throw pybind11::value_error(
+                                "step_counting_hill_climbing_size must be positive");
+                    }
+                    c.recount_interval = size;
+                });
+        cls.def_property(
+                "record_to_record_start_gap",
+                [](const Config& c) { return c.record_to_record_start_gap; },
+                [](Config& c, double gap) {
+                    c.record_to_record_start_gap =
+                            detail::non_negative_gap(gap, "record_to_record_start_gap");
+                });
+        cls.def_property(
+                "record_to_record_end_gap",
+                [](const Config& c) { return c.record_to_record_end_gap; },
+                [](Config& c, double gap) {
+                    c.record_to_record_end_gap =
+                            detail::non_negative_gap(gap, "record_to_record_end_gap");
+                });
     }
     return cls;
 }

@@ -39,21 +39,21 @@ public:
     //   parallel_solver_count  the constraints overload runs a single start
     //                          (see there)
     //   ruin_recreate          off by default (see the constructor)
-    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
+    struct Config : optimaru::SolverConfigBase<Score>,
+                    optimaru::RuinRecreateConfig,
+                    optimaru::AcceptanceConfig {
         // Ruin-and-recreate (the engine's ALNS) is off here: a recreate
         // evaluates every value of every ruined row, each one a decode.
-        Config() { ruin_recreate = false; }
-
-        // Acceptor: simulated annealing. With a
-        // (0, 0) starting temperature (the default) it is auto: hard 0 (a
-        // hard-worse move is never taken) and soft
-        // simulated_annealing_temperature_fraction * |the start's soft score|
-        // (at least 1), cooling linearly over the spent limit. Measured on the
+        //
+        // Acceptor: simulated annealing, at the shared AcceptanceConfig's
+        // automatic starting temperature (hard 0, soft 1% of the start's soft
+        // score, cooling linearly over the spent limit). Measured on the
         // benchmark instances and the web demo, 1% beat late acceptance (which
         // stalls within a second on these plateaus) and 0.5% / 2% / 5%.
-        optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::SimulatedAnnealing;
-        Score start_temperature{0, 0.0};
-        double simulated_annealing_temperature_fraction = 0.01;
+        Config() {
+            ruin_recreate = false;
+            rule = optimaru::AcceptanceRule::SimulatedAnnealing;
+        }
 
         // Moves. The change move draws its value from the recommender: with
         // machine_move_probability another machine for the row (rank kept),

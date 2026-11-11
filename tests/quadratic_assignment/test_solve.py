@@ -255,9 +255,11 @@ def _random_instance(n: int, seed: int) -> QuadraticAssignmentProblemModel:
     )
 
 
-def _new_bests(acceptor) -> list:
+def _new_bests(acceptor, **knobs) -> list:
     config = steps(3000, seed=7)
     config.acceptor_type = acceptor
+    for name, value in knobs.items():
+        setattr(config, name, value)
     calls = []
     qap.solve(_random_instance(15, 3).to_core(), config=config, on_new_best=lambda step, score: calls.append(step))
     return calls
@@ -271,6 +273,20 @@ def test_simulated_annealing_is_not_hill_climbing():
     with pytest.raises(ValueError):
         config.simulated_annealing_temperature_fraction = 0
     assert _new_bests(qap.AcceptorType.SIMULATED_ANNEALING) != _new_bests(qap.AcceptorType.HILL_CLIMBING)
+
+
+def test_great_deluge_rises_by_its_water_level_step():
+    """The water level starts at the start's score and stays there at the default step (0, 0);
+    with a step it rises, and the search is another one."""
+    great_deluge = qap.AcceptorType.GREAT_DELUGE
+    assert _new_bests(great_deluge) == _new_bests(great_deluge, great_deluge_water_level_step=(0, 0.0))
+    assert _new_bests(great_deluge) != _new_bests(great_deluge, great_deluge_water_level_step=(0, 0.5))
+
+
+def test_step_counting_hill_climbing_reads_its_size():
+    step_counting = qap.AcceptorType.STEP_COUNTING_HILL_CLIMBING
+    assert _new_bests(step_counting) == _new_bests(step_counting, step_counting_hill_climbing_size=400)
+    assert _new_bests(step_counting) != _new_bests(step_counting, step_counting_hill_climbing_size=5)
 
 
 def test_stop_at_first_feasible_stops_whatever_the_soft_total():

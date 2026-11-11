@@ -12,6 +12,8 @@
 //       double change_weight = 0.75;  // ... the use case's own knobs
 //   };
 //
+// (and optimaru::AcceptanceConfig, where the caller chooses the acceptance rule)
+//
 //   optimaru::check_config(config);                           // before anything is touched
 //   optimaru::Settings settings = optimaru::settings_from(config);
 //   settings.search.moves.change_weight = config.change_weight;  // ... its own knobs
@@ -22,6 +24,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -101,6 +104,40 @@ struct RuinRecreateConfig {
     std::int64_t ruin_recreate_polish_steps = 5000;
 };
 
+// A further base, for a use case that lets the caller choose the acceptance
+// rule: the rule and the one or two parameters each rule has, with the
+// engine's defaults. A use case with another default rule sets it in its
+// Config's constructor. history_length (SolverConfigBase) is late acceptance's.
+struct AcceptanceConfig {
+    AcceptanceRule rule = AcceptanceRule::LateAcceptance;
+
+    // EntityTabu: for how many steps a moved entity stays tabu.
+    int tabu_tenure = 7;
+
+    // SimulatedAnnealing: the starting temperature (hard, soft), cooling to 0
+    // over the time limit (or the step limit, when that is further along).
+    // (0, 0) is automatic: hard 0 and soft =
+    // simulated_annealing_temperature_fraction * |the start's soft level|, at
+    // least 1. A medium level folded into the engine's soft does not count.
+    Score start_temperature{0, 0.0};
+    double simulated_annealing_temperature_fraction = 0.01;
+
+    // GreatDeluge: how much the water level, which starts at the start's
+    // score, rises per step. (0, 0) leaves it there: only moves that keep the
+    // score at or above the start's are taken.
+    Score water_level_step{0, 0.0};
+
+    // StepCountingHillClimbing: the bar is reset to the current score every
+    // this many steps.
+    std::int64_t recount_interval = 400;
+
+    // RecordToRecordTravel: the acceptable gap below the best score, as a
+    // fraction of the start's soft magnitude, shrinking from start to end
+    // over the solve.
+    double record_to_record_start_gap = 0.02;
+    double record_to_record_end_gap = 0.0;
+};
+
 namespace detail {
 
 // Whether Config derives from SolverConfigBase<its score type>.
@@ -136,12 +173,40 @@ struct HasAsMoveKnobs<
 // refused before the problem is touched.
 template <typename Config>
 void check_config(const Config& config) {
+    (void)config;  // a Config on neither base below has nothing to check here
     if constexpr (std::is_base_of_v<RuinRecreateConfig, Config>) {
         if (config.ruin_recreate_rewards.size() != 4) {
             throw std::invalid_argument("ruin_recreate_rewards must contain exactly 4 values");
         }
-    } else {
-        (void)config;
+    }
+    if constexpr (std::is_base_of_v<AcceptanceConfig, Config>) {
+        const auto finite_from = [](double value, double least, bool inclusive) {
+            return std::isfinite(value) && (inclusive ? value >= least : value > least);
+        };
+        const auto amount = [&finite_from](const Score& value) {
+            return value.hard >= 0 && finite_from(value.soft, 0.0, true);
+        };
+        if (config.tabu_tenure < 0) throw std::invalid_argument("entity_tabu_size must be >= 0");
+        if (!amount(config.start_temperature)) {
+            throw std::invalid_argument(
+                    "simulated_annealing_starting_temperature must be finite and >= 0");
+        }
+        if (!finite_from(config.simulated_annealing_temperature_fraction, 0.0, false)) {
+            throw std::invalid_argument(
+                    "simulated_annealing_temperature_fraction must be finite and > 0");
+        }
+        if (!amount(config.water_level_step)) {
+            throw std::invalid_argument("great_deluge_water_level_step must be finite and >= 0");
+        }
+        if (config.recount_interval <= 0) {
+            throw std::invalid_argument("step_counting_hill_climbing_size must be positive");
+        }
+        if (!finite_from(config.record_to_record_start_gap, 0.0, true)) {
+            throw std::invalid_argument("record_to_record_start_gap must be finite and >= 0");
+        }
+        if (!finite_from(config.record_to_record_end_gap, 0.0, true)) {
+            throw std::invalid_argument("record_to_record_end_gap must be finite and >= 0");
+        }
     }
 }
 
@@ -163,6 +228,17 @@ Settings settings_from(const Config& config) {
     if constexpr (std::is_base_of_v<SolverConfigBase<Score>, Config>) {
         settings.limits.target_score = config.target_score;
         settings.on_new_best = config.on_new_best;
+    }
+    if constexpr (std::is_base_of_v<AcceptanceConfig, Config>) {
+        AcceptanceSettings& acceptance = settings.search.acceptance;
+        acceptance.rule = config.rule;
+        acceptance.tabu_tenure = config.tabu_tenure;
+        acceptance.start_temperature = config.start_temperature;
+        acceptance.start_temperature_fraction = config.simulated_annealing_temperature_fraction;
+        acceptance.water_level_step = config.water_level_step;
+        acceptance.recount_interval = config.recount_interval;
+        acceptance.rrt_start_gap = config.record_to_record_start_gap;
+        acceptance.rrt_end_gap = config.record_to_record_end_gap;
     }
     if constexpr (std::is_base_of_v<RuinRecreateConfig, Config>) {
         RuinRecreateSettings& kicks = settings.search.ruin_recreate;

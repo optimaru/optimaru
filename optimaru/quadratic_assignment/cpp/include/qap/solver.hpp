@@ -34,19 +34,9 @@ public:
     //   history_length 0       clamp(8 * facility count, 400, 3200)
     //   parallel_solver_count  the engine's multi-start; ignored by the
     //                          constraint-assembly overload
-    struct Config : optimaru::SolverConfigBase<Score> {
-        // The local-search acceptor. Late acceptance by default.
-        optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::LateAcceptance;
-        int tabu_tenure = 7;  // ENTITY_TABU
-        // SIMULATED_ANNEALING's starting temperature (hard, soft). (0, 0), the
-        // default, = auto: hard 0, soft = simulated_annealing_temperature_fraction
-        // * |the start's soft score| (at least 1), the semiconductor-scheduling
-        // rule. The engine's own default (0, 0) would make SA reject every
-        // worsening swap, i.e. hill climbing. It cools to 0 over the time
-        // limit, or over step_limit when that is further along.
-        Score start_temperature{0, 0.0};
-        double simulated_annealing_temperature_fraction = 0.01;
-    };
+    // The acceptance rule and its parameters are the shared AcceptanceConfig
+    // (late acceptance by default).
+    struct Config : optimaru::SolverConfigBase<Score>, optimaru::AcceptanceConfig {};
 
     Solver() = default;
     explicit Solver(Config config) : config_(std::move(config)) {}

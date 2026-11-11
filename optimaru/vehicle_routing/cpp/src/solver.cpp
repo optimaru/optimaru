@@ -54,7 +54,6 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
     }
 
     auto& acceptor = engineConfig.search.acceptance;
-    acceptor.rule = config.rule;
     // history_length 0 = auto-scale with the instance (see Config). The
     // horizon shrinks as the instance grows: steps get slower with route
     // count/length, and what matters is the horizon in wall-time, not in
@@ -68,8 +67,6 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
                     ? config.history_length
                     : std::clamp<std::size_t>(60000 / std::max<std::size_t>(plan.visits.size(), 1),
                                               100, 400);
-    acceptor.rrt_start_gap = config.record_to_record_start_gap;
-    acceptor.rrt_end_gap = config.record_to_record_end_gap;
 
     auto& moves = engineConfig.search.moves;
     moves.relocate_weight = config.relocate_weight;

@@ -47,7 +47,16 @@ struct TaskAssignment {
     std::vector<int> assignment;                 // decision variable; -1 = unassigned
 };
 
+// A solution type whose medium level folds into the engine's soft at 10^9
+// (only its fold is used, in testAcceptanceConfig).
+struct FoldedToy {};
+
 }  // namespace
+
+template <>
+struct optimaru::MediumFoldOf<FoldedToy> {
+    static constexpr optimaru::MediumFold value = optimaru::MediumFold::into_soft(1e9);
+};
 
 template <>
 struct optimaru::SolutionTraits<TaskAssignment> {
@@ -1759,6 +1768,8 @@ struct ToyConfig : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConf
     int ruin_recreate_as_move_max_ruin = 7;
 };
 
+struct AcceptingConfig : optimaru::SolverConfigBase<Score>, optimaru::AcceptanceConfig {};
+
 // A start that "searches" until the run's stop flag is raised (30 s at most).
 bool waitForStop(const ToyConfig& start) {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
@@ -2028,6 +2039,91 @@ void testSolverConfig() {
     std::printf("\n");
 }
 
+void testAcceptanceConfig() {
+    std::printf("== solver_config.hpp: AcceptanceConfig ==\n");
+    {  // The defaults are the engine's, with the automatic starting temperature on.
+        const optimaru::AcceptanceSettings engine;
+        const optimaru::AcceptanceSettings from =
+                optimaru::settings_from(AcceptingConfig{}).search.acceptance;
+        check(from.rule == engine.rule && from.tabu_tenure == engine.tabu_tenure &&
+                      from.start_temperature == engine.start_temperature &&
+                      from.water_level_step == engine.water_level_step &&
+                      from.recount_interval == engine.recount_interval &&
+                      from.rrt_start_gap == engine.rrt_start_gap &&
+                      from.rrt_end_gap == engine.rrt_end_gap,
+              "an untouched AcceptanceConfig keeps the engine's acceptance settings");
+        check(from.start_temperature_fraction == 0.01,
+              "... and asks for the automatic starting temperature, 1% of the start");
+    }
+    {  // settings_from puts every field in its place.
+        AcceptingConfig config;
+        config.rule = optimaru::AcceptanceRule::GreatDeluge;
+        config.tabu_tenure = 3;
+        config.start_temperature = {2, 50.0};
+        config.simulated_annealing_temperature_fraction = 0.05;
+        config.water_level_step = {1, 0.25};
+        config.recount_interval = 9;
+        config.record_to_record_start_gap = 0.3;
+        config.record_to_record_end_gap = 0.1;
+        const optimaru::AcceptanceSettings from = optimaru::settings_from(config).search.acceptance;
+        check(from.rule == optimaru::AcceptanceRule::GreatDeluge && from.tabu_tenure == 3 &&
+                      from.start_temperature == Score{2, 50.0} &&
+                      from.start_temperature_fraction == 0.05 &&
+                      from.water_level_step == Score{1, 0.25} && from.recount_interval == 9 &&
+                      from.rrt_start_gap == 0.3 && from.rrt_end_gap == 0.1,
+              "settings_from: the rule and the parameters of every rule");
+    }
+    {  // check_config refuses what no rule can run with, in the Python setters' words.
+        auto refusal = [](AcceptingConfig config) -> std::string {
+            try {
+                optimaru::check_config(config);
+            } catch (const std::invalid_argument& error) {
+                return error.what();
+            }
+            return "";
+        };
+        AcceptingConfig tabu, zero, interval, temperature, fraction, step, start, end;
+        tabu.tabu_tenure = -1;
+        zero.simulated_annealing_temperature_fraction = 0.0;
+        interval.recount_interval = 0;
+        temperature.start_temperature = {0, std::numeric_limits<double>::quiet_NaN()};
+        fraction.simulated_annealing_temperature_fraction = std::numeric_limits<double>::infinity();
+        step.water_level_step = {-1, 0.0};
+        start.record_to_record_start_gap = std::numeric_limits<double>::infinity();
+        end.record_to_record_end_gap = -0.1;
+        const std::string fractionWords =
+                "simulated_annealing_temperature_fraction must be finite and > 0";
+        check(refusal(AcceptingConfig{}).empty(), "check_config accepts the defaults");
+        check(refusal(tabu) == "entity_tabu_size must be >= 0" &&
+                      refusal(interval) == "step_counting_hill_climbing_size must be positive",
+              "check_config: a negative tabu tenure, a zero recount interval");
+        check(refusal(zero) == fractionWords && refusal(fraction) == fractionWords &&
+                      refusal(temperature) ==
+                              "simulated_annealing_starting_temperature must be finite and >= 0" &&
+                      refusal(step) == "great_deluge_water_level_step must be finite and >= 0",
+              "check_config: a fraction, a temperature or a step that is not finite or too low");
+        check(refusal(start) == "record_to_record_start_gap must be finite and >= 0" &&
+                      refusal(end) == "record_to_record_end_gap must be finite and >= 0",
+              "check_config: each record-to-record gap, by its name");
+    }
+    // The automatic starting temperature: hard 0, the fraction of the start's
+    // soft magnitude, at least 1.
+    check(optimaru::automatic_start_temperature(-250.0, 0.01) == Score{0, 2.5} &&
+                  optimaru::automatic_start_temperature(400.0, 0.5) == Score{0, 200.0} &&
+                  optimaru::automatic_start_temperature(-40.0, 0.01) == Score{0, 1.0},
+          "automatic_start_temperature");
+    // ... of the soft level alone: three unassigned units on a medium level
+    // folded at 10^9 must not set the temperature.
+    check(optimaru::unfolded_soft<FoldedToy>(Score{0, -3e9 - 250.0}) == -250.0 &&
+                  optimaru::unfolded_soft<FoldedToy>(Score{0, -250.0}) == -250.0 &&
+                  optimaru::unfolded_soft<TaskAssignment>(Score{0, -3e9 - 250.0}) == -3e9 - 250.0,
+          "unfolded_soft drops a medium level folded into the soft, and nothing else");
+    // What one packed number cannot give back: a soft level of a whole unit
+    // or more loses its units (a lower temperature, never none).
+    check(optimaru::unfolded_soft<FoldedToy>(Score{0, -3e9 - 2e9 - 250.0}) == -250.0,
+          "... a soft level beyond the unit comes back without its whole units");
+}
+
 void testStallStepLimitAndRequestStop() {
     std::printf("== stall_step_limit, request_stop ==\n");
     using Clock = std::chrono::steady_clock;
@@ -2137,6 +2233,7 @@ int main() {
     testDecomposedPiecewisePreviews();
     testConstraintAssembly();
     testSolverConfig();
+    testAcceptanceConfig();
     testStallStepLimitAndRequestStop();
     testHardMediumSoftScore();
 

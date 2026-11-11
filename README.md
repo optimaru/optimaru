@@ -149,7 +149,9 @@ instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
   ends a running solve from another thread.
 - **Custom operators**: implement `MoveOperator` / `RuinOperator`
   (`search/operators.hpp`) and register them with `Solver::add_move_operator` /
-  `add_ruin_operator`; `set_acceptor_factory` swaps the acceptor.
+  `add_ruin_operator`; `set_acceptor_factory` swaps the acceptor. (Simulated
+  annealing needs none for its starting temperature: with
+  `start_temperature_fraction` the engine sizes it from the start's soft level.)
 
 ## Repository layout
 

@@ -144,13 +144,26 @@ class SolverConfig:
     late_acceptance_size: int
     """0 = auto: clamp(8 * facility count, 400, 3200)."""
     entity_tabu_size: int
-    """ENTITY_TABU tenure (7 by default). ENTITY_TABU accepts only non-worsening swaps
-    (sideways ones blocked on tabu facilities), so it climbs like HILL_CLIMBING."""
+    """ENTITY_TABU: for how many steps a moved facility stays tabu (7 by default; >= 0).
+    ENTITY_TABU accepts only non-worsening swaps (sideways ones blocked on tabu facilities),
+    so it climbs like HILL_CLIMBING."""
     simulated_annealing_starting_temperature: tuple[int, float]
-    """SIMULATED_ANNEALING's (hard, soft) starting temperature. (0, 0), the default, = auto:
-    hard 0, soft = simulated_annealing_temperature_fraction x |start soft| (at least 1)."""
+    """SIMULATED_ANNEALING's (hard, soft) starting temperature, cooling to 0 over the solve.
+    (0, 0), the default, = auto: hard 0, soft = simulated_annealing_temperature_fraction x
+    |start soft| (at least 1)."""
     simulated_annealing_temperature_fraction: float
     """The auto temperature's fraction of the start's |soft| (0.01 by default; > 0)."""
+    great_deluge_water_level_step: tuple[int, float]
+    """GREAT_DELUGE: how much the (hard, soft) water level, which starts at the start's score,
+    rises per step. (0, 0), the default, leaves it there: only moves that keep the score at or
+    above the start's are taken."""
+    step_counting_hill_climbing_size: int
+    """STEP_COUNTING_HILL_CLIMBING: the bar is reset to the current score every this many
+    steps (400 by default; > 0)."""
+    record_to_record_start_gap: float
+    record_to_record_end_gap: float
+    """RECORD_TO_RECORD_TRAVEL: the acceptable gap below the best score, as a fraction of the
+    start's |soft|, shrinking from start (0.02) to end (0.0) over the solve."""
     full_assert: bool
     best_score_limit: tuple[int, float]
     """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at

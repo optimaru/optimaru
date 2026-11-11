@@ -29,14 +29,10 @@ optimaru::Settings engineConfigOf(const Solver::Config& config,
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.parallel_starts = starts;
 
-    auto& acceptor = engineConfig.search.acceptance;
-    acceptor.rule = config.rule;
-    acceptor.history_length =
+    engineConfig.search.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * problem.facilities.size(), 400, 3200);
-    acceptor.tabu_tenure = config.tabu_tenure;
-    acceptor.start_temperature = config.start_temperature;
 
     auto& local = engineConfig.search;
     local.moves.change_weight = 0.0;
@@ -56,29 +52,6 @@ void requireConfig(const Solver::Config& config) {
     optimaru::check_config(config);
     if (config.parallel_solver_count <= 0)
         throw std::invalid_argument("parallel_solver_count must be positive");
-    if (config.tabu_tenure < 0) throw std::invalid_argument("entityTabuSize must be >= 0");
-    if (!(config.simulated_annealing_temperature_fraction > 0.0))
-        throw std::invalid_argument("simulated_annealing_temperature_fraction must be > 0");
-}
-
-// SIMULATED_ANNEALING with the auto starting temperature (0, 0): the
-// acceptor factory computes it from the start's score. The engine shares the
-// factory with every multi-start start. (An explicit temperature goes into the
-// engine config, see engineConfigOf.)
-bool autoTemperature(const Solver::Config& config) {
-    return config.rule == optimaru::AcceptanceRule::SimulatedAnnealing &&
-           config.start_temperature.hard == 0 && config.start_temperature.soft == 0.0;
-}
-
-void installAutoTemperature(const Solver::Config& config,
-                            optimaru::Solver<QuadraticAssignmentProblem>& engine) {
-    if (!autoTemperature(config)) return;
-    const double fraction = config.simulated_annealing_temperature_fraction;
-    engine.set_acceptor_factory(
-            [fraction](const optimaru::Score& start) -> std::unique_ptr<optimaru::Acceptor> {
-                const double soft = std::max(1.0, fraction * std::fabs(start.soft));
-                return std::make_unique<optimaru::SimulatedAnnealing>(optimaru::Score{0, soft});
-            });
 }
 
 // Validates and lays out the start: the seed (a full bijection) once, else
@@ -113,7 +86,6 @@ void Solver::solve(QuadraticAssignmentProblem& problem) {
         const int starts = std::max(1, config_.parallel_solver_count);
         optimaru::Solver<QuadraticAssignmentProblem> engine(
                 engineConfigOf(config_, problem, starts));
-        installAutoTemperature(config_, engine);
         engine.solve_multistart(problem, [] {
             return std::make_unique<QuadraticAssignmentIncrementalScoreCalculator>();
         });
@@ -129,7 +101,6 @@ void Solver::solve(QuadraticAssignmentProblem& problem,
     if (start(problem)) {
         // Single-start: the caller-owned calculator cannot be cloned.
         optimaru::Solver<QuadraticAssignmentProblem> engine(engineConfigOf(config_, problem, 1));
-        installAutoTemperature(config_, engine);
         engine.solve(problem, calculator);
     }
     requireBijection(problem);

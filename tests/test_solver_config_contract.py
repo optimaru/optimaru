@@ -61,3 +61,68 @@ def test_the_shared_fields_refuse_the_same_values_with_the_same_words(use_case):
     if hasattr(config, "ruin_recreate_rewards"):
         with pytest.raises(ValueError, match="ruin_recreate_rewards must contain exactly 4 values"):
             config.ruin_recreate_rewards = [1.0]
+
+
+# Their SolverConfig lets the caller choose the acceptance rule (optimaru::AcceptanceConfig).
+# Pickup and delivery chooses it too, on fields of its own.
+ACCEPTANCE_USE_CASES = ["quadratic_assignment", "semiconductor_scheduling", "vehicle_routing"]
+DEFAULT_RULE = {"semiconductor_scheduling": "SIMULATED_ANNEALING"}
+
+
+@pytest.mark.parametrize("use_case", ACCEPTANCE_USE_CASES)
+def test_the_acceptance_rules_and_their_parameters(use_case):
+    module = use_case_module(use_case)
+    assert set(module.AcceptorType.__members__) == {
+        "HILL_CLIMBING",
+        "LATE_ACCEPTANCE",
+        "ENTITY_TABU",
+        "SIMULATED_ANNEALING",
+        "GREAT_DELUGE",
+        "STEP_COUNTING_HILL_CLIMBING",
+        "RECORD_TO_RECORD_TRAVEL",
+    }
+    config = module.SolverConfig()
+    assert config.acceptor_type == getattr(module.AcceptorType, DEFAULT_RULE.get(use_case, "LATE_ACCEPTANCE"))
+    assert config.entity_tabu_size == 7
+    assert config.simulated_annealing_starting_temperature == (0, 0.0)
+    assert config.simulated_annealing_temperature_fraction == pytest.approx(0.01)
+    assert config.great_deluge_water_level_step == (0, 0.0)
+    assert config.step_counting_hill_climbing_size == 400
+    assert (config.record_to_record_start_gap, config.record_to_record_end_gap) == (0.02, 0.0)
+
+    config.acceptor_type = module.AcceptorType.GREAT_DELUGE
+    config.entity_tabu_size = 3
+    config.simulated_annealing_starting_temperature = (1, 20.0)
+    config.simulated_annealing_temperature_fraction = 0.05
+    config.great_deluge_water_level_step = (0, 0.5)
+    config.step_counting_hill_climbing_size = 50
+    config.record_to_record_start_gap = 0.1
+    clone = copy.copy(config)
+    assert clone.acceptor_type == module.AcceptorType.GREAT_DELUGE
+    assert (clone.entity_tabu_size, clone.step_counting_hill_climbing_size) == (3, 50)
+    assert clone.simulated_annealing_starting_temperature == (1, 20.0)
+    assert clone.simulated_annealing_temperature_fraction == pytest.approx(0.05)
+    assert clone.great_deluge_water_level_step == (0, 0.5)
+    assert clone.record_to_record_start_gap == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize("use_case", ACCEPTANCE_USE_CASES)
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        ("entity_tabu_size", -1, "entity_tabu_size must be >= 0"),
+        ("simulated_annealing_starting_temperature", (-1, 0.0), "must be finite and >= 0"),
+        ("simulated_annealing_starting_temperature", (0, float("inf")), "must be finite and >= 0"),
+        ("simulated_annealing_temperature_fraction", 0, "must be finite and > 0"),
+        ("simulated_annealing_temperature_fraction", float("inf"), "must be finite and > 0"),
+        ("great_deluge_water_level_step", (0, -0.5), "great_deluge_water_level_step must be finite and >= 0"),
+        ("great_deluge_water_level_step", (0, float("nan")), "great_deluge_water_level_step must be finite and >= 0"),
+        ("step_counting_hill_climbing_size", 0, "step_counting_hill_climbing_size must be positive"),
+        ("record_to_record_start_gap", -0.1, "record_to_record_start_gap must be finite and >= 0"),
+        ("record_to_record_end_gap", float("nan"), "record_to_record_end_gap must be finite and >= 0"),
+    ],
+)
+def test_the_acceptance_parameters_refuse_the_same_values_with_the_same_words(use_case, name, value, message):
+    config = use_case_module(use_case).SolverConfig()
+    with pytest.raises(ValueError, match=message):
+        setattr(config, name, value)

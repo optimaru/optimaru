@@ -189,15 +189,7 @@ PYBIND11_MODULE(_core, m) {
             "hard / medium / soft score (also stores plan.score).");
 
     // The acceptance criteria the engine offers.
-    py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())
-            .value("HILL_CLIMBING", optimaru::AcceptanceRule::HillClimbing)
-            .value("LATE_ACCEPTANCE", optimaru::AcceptanceRule::LateAcceptance)
-            .value("ENTITY_TABU", optimaru::AcceptanceRule::EntityTabu)
-            .value("SIMULATED_ANNEALING", optimaru::AcceptanceRule::SimulatedAnnealing)
-            .value("GREAT_DELUGE", optimaru::AcceptanceRule::GreatDeluge)
-            .value("STEP_COUNTING_HILL_CLIMBING",
-                   optimaru::AcceptanceRule::StepCountingHillClimbing)
-            .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptanceRule::RecordToRecordTravel);
+    opy::bind_acceptor_type(m);
 
     // The adaptive operator-selection schemes.
     py::enum_<optimaru::SelectionScheme>(m, "OperatorSelectionType", py::module_local())
@@ -221,11 +213,6 @@ PYBIND11_MODULE(_core, m) {
                                 Score{std::get<0>(hms), std::get<1>(hms), std::get<2>(hms)};
                     })
             .def_readwrite("first_fit_decreasing", &Solver::Config::first_fit_decreasing)
-            // --- acceptance ---
-            .def_readwrite("acceptor_type", &Solver::Config::rule)
-            .def_readwrite("record_to_record_start_gap",
-                           &Solver::Config::record_to_record_start_gap)
-            .def_readwrite("record_to_record_end_gap", &Solver::Config::record_to_record_end_gap)
             // --- move mix ---
             .def_readwrite("relocate_move_weight", &Solver::Config::relocate_weight)
             .def_readwrite("list_swap_move_weight", &Solver::Config::list_swap_weight)

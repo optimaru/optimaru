@@ -45,6 +45,9 @@ print(plan.routes())                   # {'V1': ['C1']}
 debugging aid, much slower), `on_new_best`, `constraints` and a full `config`: a
 `vrp.SolverConfig`, whose fields the keywords override on a copy.
 `vrp.Solver(config).solve(plan)` is the same solve one level down.
+`config.acceptor_type` chooses the rule local search accepts a move by (late
+acceptance by default); its parameters are listed under
+[Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule).
 
 - Times are integer **seconds from a common day start** (`8 * 3600` = 08:00).
 - The driving-time matrix is precomputed from the haversine distance when the
