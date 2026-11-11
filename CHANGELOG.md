@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **Vehicle routing: visit groups with a partial order.** Visits that share a `group`
+  (`VisitModel.group`, a name; `Visit.group_index` on a plan) are one job: they ride one
+  vehicle together, or all stay unassigned. `after` (`Visit.after_visit_indices`) lists the
+  visits of the same group served before a visit, a partial order on the group; an order
+  with a cycle or one that leaves the group is refused. Two new hard constraints at weight
+  1000 score it: `visit_group_cost` (the grouped visits not where most of their group is,
+  the same counting as pickup-delivery's `request_group_cost`, now the engine's
+  `optimaru::GroupPlacement`) and `visit_order_cost` (per vehicle, the pairs served the
+  wrong way round). Both answer the move previews. Groups are placed whole before the
+  engine's construction, and the use case's first domain move, `groupRuinRecreate`, carries
+  a group between vehicles as one unit (`SolverConfig.group_ruin_recreate`,
+  `group_ruin_max_visits`); it is registered only for a plan with groups, so a plan without
+  them is solved exactly as before. Every entry point scores a grouped input on the
+  constraint assembly (`solve_request`, `vrp.solve(plan)`, `Solver.solve(plan)`), on a
+  single start. Engine-only: the CP-SAT reference reads neither field.
+  `list_constraints()` and `constraint_info()` have two more rows.
 - **Every acceptance rule has its parameters.** Vehicle routing, quadratic assignment and
   semiconductor scheduling let `SolverConfig.acceptor_type` name seven rules, but each bound the
   parameters of only some of them, so `GREAT_DELUGE` kept its water level at the start's score,
@@ -20,22 +36,6 @@
 
 ## 0.4.2
 
-- **Vehicle routing: visit groups with a partial order.** Visits that share a `group`
-  (`VisitModel.group`, a name; `Visit.group_index` on a plan) are one job: they ride one
-  vehicle together, or all stay unassigned. `after` (`Visit.after_visit_indices`) lists the
-  visits of the same group served before a visit, a partial order on the group; an order
-  with a cycle or one that leaves the group is refused. Two new hard constraints at weight
-  1000 score it: `visit_group_cost` (the grouped visits not where most of their group is,
-  the same counting as pickup-delivery's `request_group_cost`, now the engine's
-  `optimaru::GroupPlacement`) and `visit_order_cost` (per vehicle, the pairs served the
-  wrong way round). Both answer the move previews. Groups are placed whole before the
-  engine's construction, and the use case's first domain move, `groupRuinRecreate`, carries
-  a group between vehicles as one unit (`SolverConfig.group_ruin_recreate`,
-  `group_ruin_max_visits`); it is registered only for a plan with groups, so a plan without
-  them is solved exactly as before. Every entry point scores a grouped input on the
-  constraint assembly (`solve_request`, `vrp.solve(plan)`, `Solver.solve(plan)`), on a
-  single start. Engine-only: the CP-SAT reference reads neither field.
-  `list_constraints()` and `constraint_info()` have two more rows.
 - **Pickup and delivery: request groups.** Requests that share a `group`
   (`DeliveryModel.group`, a name; `Delivery.group_index` on a plan) are one job: they ride
   one vehicle together, or all stay unassigned. Their stops stay ordinary stops, visited in
