@@ -397,7 +397,7 @@ with six) and ended on the score the assembly gave at weight 200.
   `constraints.py`, `__init__.py`, `_core.pyi`, `common.hpp` and `score_calculator.hpp`,
   and what `domain.hpp` says soft[2] holds;
 - the CP-SAT model the benchmark compares against,
-  [`external_solver.task_assigning.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/task_assigning/constraints.py)
+  [`external_solver.task_assigning.constraints`](https://github.com/optimaru/external-solver/blob/v0.3.0/src/external_solver/task_assigning/constraints.py)
   in external-solver: a plugin that subclasses the Python spec and takes its defaults from
   `constraint_info()`. Without the same constraint there,
   [`benchmarks/task-assigning`](../../../benchmarks/task-assigning) no longer compares one

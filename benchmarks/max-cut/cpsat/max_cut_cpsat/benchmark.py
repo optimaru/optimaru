@@ -69,7 +69,7 @@ def solve_engine(problem: Any, seconds: float, seed: int) -> None:
 def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.max_cut import solve
 
-    return solve(problem, time_limit_seconds=seconds, random_seed=seed, num_workers=workers)
+    return solve(problem, time_limit_seconds=seconds, random_seed=seed, parallel_solver_count=workers)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -3,9 +3,9 @@
 The [`quadratic-assignment`](../../docs/use-cases/quadratic-assignment) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `quadratic_assignment_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units — one external-solver `ConstraintPlugin` per
-constraint ([`external_solver.quadratic_assignment.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/quadratic_assignment/constraints.py)), each a subclass of the domain spec with its
+constraint ([`external_solver.quadratic_assignment.constraints`](https://github.com/optimaru/external-solver/blob/v0.3.0/src/external_solver/quadratic_assignment/constraints.py)), each a subclass of the domain spec with its
 defaults read from `quadratic_assignment.constraint_info()` — so both answers are rescored by the use
-case's own evaluator. External-solver's [`tests/quadratic_assignment/test_constraint_parity.py`](https://github.com/optimaru/external-solver/blob/v0.2.3/tests/quadratic_assignment/test_constraint_parity.py) pins every permutation of small
+case's own evaluator. External-solver's [`tests/quadratic_assignment/test_constraint_parity.py`](https://github.com/optimaru/external-solver/blob/v0.3.0/tests/quadratic_assignment/test_constraint_parity.py) pins every permutation of small
 feature-rich instances (and 100 random ones of a 6-facility instance) and checks that each constraint's
 CP-SAT term equals the engine's `constraint_costs()` total (0 exactly when the engine reports no
 violation), and that the CP-SAT optimum equals the brute-force optimum of the engine's score, per

@@ -163,7 +163,7 @@ def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
         ConferenceScheduleModel.from_core(problem),
         time_limit_seconds=seconds,
         random_seed=seed,
-        num_workers=workers,
+        parallel_solver_count=workers,
     )
     return solved.to_core()
 

@@ -398,7 +398,7 @@ weight 10.
   [python.md](python.md), `constraints.py`, `__init__.py`, `common.hpp`,
   `constraints.hpp`, `score_calculator.hpp` and the soft-weight note in `domain.hpp`;
 - the CP-SAT model the benchmark compares against,
-  [`external_solver.maintenance_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/maintenance_scheduling/constraints.py)
+  [`external_solver.maintenance_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.3.0/src/external_solver/maintenance_scheduling/constraints.py)
   in external-solver: plugins that subclass the Python specs and take their defaults from
   `constraint_info()`. The four date constraints share `_DateBoundaryPlugin`, one term per (crew,
   start date) cell from `raw(job, start, end)`; the example is one more boundary there. Without the

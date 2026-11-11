@@ -4,7 +4,7 @@ Full hard/medium/soft CP-SAT formulation for `MeetingScheduleModel`, including
 room and attendee conflicts, overtime, capacity, preferences, breaks, room
 changes, and pinned assignments. Returned scores come from the engine.
 
-One plugin per engine constraint ([`external_solver.meeting_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/meeting_scheduling/constraints.py)), each a
+One plugin per engine constraint ([`external_solver.meeting_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.3.0/src/external_solver/meeting_scheduling/constraints.py)), each a
 subclass of the domain spec of the same name (`RoomConflictCost`, `OvertimeCost`, ...)
 carrying only `build()`; the registry lists them in `list_constraints()` order. The
 default level and weight of every plugin come from the engine's
