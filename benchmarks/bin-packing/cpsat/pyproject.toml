@@ -23,7 +23,7 @@ bin-packing-compare = "bin_packing_cpsat.benchmark:main"
 override-dependencies = ["optimaru"]
 
 [tool.uv.sources]
-external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.2.2" }
+external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.2.3" }
 optimaru = { path = "../../..", editable = true }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
 

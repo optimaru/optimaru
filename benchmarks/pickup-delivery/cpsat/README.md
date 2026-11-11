@@ -8,7 +8,7 @@ shares `optimaru.pickup_delivery.models` with the C++ backend.
 
 ## Constraints
 
-Each plugin in [`external_solver.pickup_delivery.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.2/src/external_solver/pickup_delivery/constraints.py) subclasses the engine spec of
+Each plugin in [`external_solver.pickup_delivery.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/pickup_delivery/constraints.py) subclasses the engine spec of
 the same name (`optimaru.pickup_delivery.constraints`) and only builds its CP-SAT expression; the
 default level and weight come from `optimaru.pickup_delivery.constraint_info()`, so the two
 solvers cannot disagree on a default. Selections use the engine's names and knobs

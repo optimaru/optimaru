@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -63,6 +64,39 @@ def test_every_cpsat_benchmark_is_a_project():
         slug = name.replace("_", "-")
         project = ROOT / "benchmarks" / slug / "cpsat" / "pyproject.toml"
         assert project.is_file() or (ROOT / "benchmarks" / slug / "pyproject.toml").is_file(), slug
+
+
+def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
+    """uv installs a project, and so its `[project.scripts]` and its package for `uv run pytest`,
+    only when it has a `[build-system]` table: without one `uv run <slug>-compare` cannot spawn,
+    and CI does not notice, because it runs `python -m` from the project directory. The CP-SAT
+    library is pinned by tag in every project that uses it (every use case but vehicle routing,
+    compared with OR-Tools Routing, and school timetabling, which keeps its model here): one
+    tag, moved in all of them, and the links into the library follow it."""
+    slugs = {name.replace("_", "-") for name in USE_CASES}
+    projects = {slug: ROOT / "benchmarks" / slug / "cpsat" / "pyproject.toml" for slug in slugs - {"vehicle-routing"}}
+    projects["vehicle-routing"] = ROOT / "benchmarks" / "vehicle-routing" / "pyproject.toml"
+    projects["cpsat-common"] = ROOT / "benchmarks" / "cpsat-common" / "pyproject.toml"
+    tags = {}
+    for slug, project in sorted(projects.items()):
+        data = tomllib.loads(project.read_text())
+        assert "build-system" in data, f"{slug}: uv will not install the package or its [project.scripts]"
+        source = data.get("tool", {}).get("uv", {}).get("sources", {}).get("external-solver")
+        if source is not None:
+            assert set(source) == {"git", "tag"}, f"{slug}: external-solver is pinned by tag, not {source}"
+            tags[slug] = source["tag"]
+    assert set(tags) == slugs - {"vehicle-routing", "school-timetabling"}
+    assert len(set(tags.values())) == 1, f"the benchmark projects pin different external-solver tags: {tags}"
+    (tag,) = set(tags.values())
+    tracked = subprocess.run(["git", "ls-files", "*.md"], cwd=ROOT, capture_output=True, text=True)
+    if tracked.returncode != 0:
+        pytest.skip("not a git checkout")
+    stale = {}
+    for name in tracked.stdout.split():
+        found = set(re.findall(r"optimaru/external-solver/blob/(v[\w.]+)/", (ROOT / name).read_text()))
+        if found - {tag}:
+            stale[name] = sorted(found - {tag})
+    assert not stale, f"links into external-solver that are not on {tag}: {stale}"
 
 
 def test_every_use_case_has_a_guide_and_a_benchmark():

@@ -44,6 +44,18 @@
   with outputs from optimaru 0.4.2: the same problem now ends at 5.2 hours of driving, where
   0.4.1 ended at 5.4. Its rounds of more search are 10,000 steps each (were 0.3 seconds),
   because 0.4.2 settles within one 0.3-second round and both lines of the chart stayed flat.
+- **Benchmarks: the projects pin external-solver `v0.2.3`.** That release lists the engine's
+  new `request_group_cost` among the pickup-delivery constraints the CP-SAT model has no
+  plugin for (selecting it there is an unknown-constraint error, as with
+  `required_vehicle_cost`); its models are those of `v0.2.2`, so no published result moves.
+  The benchmark projects' lock files record optimaru 0.4.2. Six of the projects (conference
+  scheduling, food packaging, meeting scheduling, order picking, sports league scheduling,
+  task assigning) had no `[build-system]` table, so uv did not install them and the commands
+  their READMEs give (`uv run <slug>-compare`, `uv run pytest -q`) did not run; they have
+  the table the other fifteen have now, and declare pytest in a `dev` dependency group, so
+  a plain `uv sync` installs it. `tests/test_layout.py` holds every benchmark project to a
+  `[build-system]` table and to one external-solver tag, and the links into external-solver
+  to that tag.
 
 ## 0.4.2
 

@@ -17,7 +17,7 @@ knapsack-compare = "knapsack_cpsat.benchmark:main"
 override-dependencies = ["optimaru"]
 
 [tool.uv.sources]
-external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.2.2" }
+external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.2.3" }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
 optimaru = { path = "../../..", editable = true }
 

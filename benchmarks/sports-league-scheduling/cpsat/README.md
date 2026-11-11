@@ -4,7 +4,7 @@ CP-SAT round assignment with team/day conflicts, four-or-more home/away runs,
 reverse fixtures, travel hops, workday-derby penalties, and lexicographic
 hard/soft optimization. Results are re-scored by the shared engine.
 
-One plugin per constraint ([`external_solver.sports_league_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.2/src/external_solver/sports_league_scheduling/constraints.py)), each subclassing the
+One plugin per constraint ([`external_solver.sports_league_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/sports_league_scheduling/constraints.py)), each subclassing the
 domain spec of the same name (`TeamConflictCost`, `WorkdayClassicMatchesCost`, ...) and
 registered in `optimaru.sports_league_scheduling.list_constraints()` order. The default level and weight of
 every plugin come from the engine's `optimaru.sports_league_scheduling.constraint_info()`, so the two solvers
