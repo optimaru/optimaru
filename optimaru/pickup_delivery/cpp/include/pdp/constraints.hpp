@@ -25,6 +25,7 @@
 #include "pdp/constraints/paired_request_cost.hpp"
 #include "pdp/constraints/pickup_before_dropoff_cost.hpp"
 #include "pdp/constraints/pinned_stops_cost.hpp"
+#include "pdp/constraints/request_group_cost.hpp"
 #include "pdp/constraints/required_vehicle_cost.hpp"
 #include "pdp/constraints/route_duration_cost.hpp"
 #include "pdp/constraints/same_vehicle_cost.hpp"
@@ -46,6 +47,7 @@ namespace pdp {
 //   pairedRequestCost            hard, weight 1000
 //   sameVehicleCost              hard, weight 1000
 //   pickupBeforeDropoffCost      hard, weight 1000
+//   requestGroupCost             hard, weight 1000
 //   vehicleCapacityCost          hard, weight 1
 //   maxEndTimeCost               hard, weight 1
 //   unassignedRequestsCost       medium, weight 1 (folded into soft x 10^9)
@@ -64,8 +66,8 @@ namespace pdp {
 //   pinnedStopsCost              hard, weight 1e12
 //   requiredVehicleCost          hard, weight 1000
 //
-// On a plan that sets no route policy, pins nothing and binds no request,
-// this assembly scores bit-for-bit like ScoreCalculator::score (both
+// On a plan that sets no route policy, pins nothing, binds no request and
+// groups none, this assembly scores bit-for-bit like ScoreCalculator::score (both
 // read the same kDefaultWeight constants). It is also the domain's constraint
 // catalog: constraint_info() reads the defaults off it, so they live in the
 // component constructors and nowhere else.
@@ -86,6 +88,7 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<PairedRequestCost>();
     assembly.emplace<SameVehicleCost>();
     assembly.emplace<PickupBeforeDropoffCost>();
+    assembly.emplace<RequestGroupCost>();
     assembly.emplace<VehicleCapacityCost>();
     assembly.emplace<MaxEndTimeCost>();
     assembly.emplace<UnassignedRequestsCost>();

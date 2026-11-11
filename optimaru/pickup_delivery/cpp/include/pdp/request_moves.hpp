@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "pdp/domain.hpp"
+#include "pdp/request_insertion.hpp"
 #include "optimaru/search/operators.hpp"
 
 namespace pdp {
@@ -43,13 +44,20 @@ namespace pdp {
 //   bundleExchange       Swaps a bundle of one route with a bundle of a nearby
 //                        route, the two sized independently.
 //
+// Requests the input has put in one group (Delivery::groupIndex) are one unit
+// in all three: they are taken out together and go back on one vehicle, each at
+// its cheapest slot pair once the earlier ones are in, or stay out together
+// when no vehicle has room for all of them (RequestGroups in
+// request_insertion.hpp).
+//
 // The operators only read the plan (the stops, the windows, the vehicle
-// limits), never the objective, so they serve the default calculator and a
-// caller's constraint assembly alike.
+// limits, the groups), never the objective, so they serve the default
+// calculator and a caller's constraint assembly alike.
 struct RequestMoveSettings {
     bool ruinRecreate = true;
     // The most requests one requestRuinRecreate takes out (at least 1, and never
-    // more than two fifths of the plan's requests).
+    // more than two fifths of the plan's requests). A request of a group brings
+    // its whole group, which can take the count past this.
     int ruinMaxRequests = 20;
     // Reinsertion by regret-k on half of the applications; below 2, always
     // cheapest-first in random order.
@@ -58,15 +66,15 @@ struct RequestMoveSettings {
     double blinkRate = 0.01;
 
     bool bundleMoves = true;
-    // The most requests in one bundle (at least 1).
+    // The most requests in one bundle (at least 1), a group counting as one.
     int bundleMaxRequests = 3;
 };
 
 // The operators the settings turn on, to register with
 // optimaru::Solver::add_move_operator. They share their working state, so they
-// belong to one engine and one solve.
+// belong to one engine and one solve; `groups` is built from that solve's plan.
 std::vector<std::unique_ptr<optimaru::MoveOperator<PdpRoutePlan>>> makeRequestMoves(
-        const RequestMoveSettings& settings);
+        const RequestMoveSettings& settings, std::shared_ptr<const RequestGroups> groups);
 
 }  // namespace pdp
 

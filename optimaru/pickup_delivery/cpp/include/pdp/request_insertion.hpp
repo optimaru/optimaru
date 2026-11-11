@@ -30,6 +30,10 @@ namespace pdp {
 // feasible slots the cheapest in added driving time wins. The objective still
 // judges the result: an operator applies what this search proposes through the
 // editor, and the acceptor sees the real score.
+//
+// Requests the input has put in one group (Delivery::groupIndex) go in as one
+// unit, all on one vehicle: RequestGroups says which requests travel together
+// and UnitPlanner finds their slots on a route.
 
 // One way to add a request to a route.
 struct RequestInsertion {
@@ -88,6 +92,8 @@ public:
     Seconds removalGain(const PdpRoutePlan& plan, int pickupPosition, int dropoffPosition) const;
 
     int size() const { return static_cast<int>(stops_.size()); }
+    // The vehicle whose route this is.
+    int vehicle() const { return vehicle_; }
     // Driving seconds of the route, the leg home included when it is driven.
     Seconds travel() const { return travel_; }
 
@@ -128,10 +134,11 @@ public:
         return timelines_[static_cast<std::size_t>(vehicleIndex)];
     }
 
-    // The vehicles worth offering `delivery` to: its required vehicle if it has
-    // one, otherwise every vehicle with a route and, of the idle vehicles that
-    // would serve it identically, only the first.
-    void candidateVehicles(const PdpRoutePlan& plan, const Delivery& delivery,
+    // The vehicles worth offering a request to: `requiredVehicle` alone when
+    // the request is bound to one (0 or more), otherwise every vehicle with a
+    // route and, of the idle vehicles that would serve it identically, only the
+    // first.
+    void candidateVehicles(const PdpRoutePlan& plan, int requiredVehicle,
                            std::vector<int>& out) const;
 
     // The cheapest feasible insertion of `delivery` over every vehicle.
@@ -146,6 +153,90 @@ private:
     int classCount_ = 0;
     mutable std::vector<char> idleClassSeen_;
     mutable std::vector<int> candidateScratch_;
+};
+
+// ---------------------------------------------------------------------------
+// Request groups
+// ---------------------------------------------------------------------------
+// Which requests travel together. The requests of one group
+// (Delivery::groupIndex) ride one vehicle or all wait, so the request-level
+// operators move them as one unit: they leave their routes together and go
+// back on one vehicle, or stay out together.
+//
+// A unit is named by its first request, its leader; a request in no group is a
+// unit of one and its own leader. A request with a pinned stop cannot leave its
+// route: it is a unit of one that stays, and the rest of its group is bound to
+// its vehicle, as it is to the required vehicle of any request of the group.
+class RequestGroups {
+public:
+    void build(const PdpRoutePlan& plan);
+
+    // Whether some unit holds more than one request.
+    bool any() const { return any_; }
+    int leaderOf(int deliveryIndex) const {
+        return leader_[static_cast<std::size_t>(deliveryIndex)];
+    }
+    // The requests of a unit: start at its leader and follow nextOf() to -1.
+    int nextOf(int deliveryIndex) const { return next_[static_cast<std::size_t>(deliveryIndex)]; }
+    int sizeOf(int leader) const { return size_[static_cast<std::size_t>(leader)]; }
+    // The one vehicle the request may ride (its own required vehicle, or the
+    // one its group is bound to), or -1 for any.
+    int vehicleOf(int deliveryIndex) const {
+        return vehicle_[static_cast<std::size_t>(deliveryIndex)];
+    }
+    // The vehicle that pins one of the request's stops, or -1.
+    int pinnedOn(int deliveryIndex) const {
+        return pinnedOn_[static_cast<std::size_t>(deliveryIndex)];
+    }
+    bool pinned(int deliveryIndex) const { return pinnedOn(deliveryIndex) >= 0; }
+    // The other requests of the request's group, pinned ones included: 0 for
+    // a request that travels alone. (A unit leaves the pinned ones out, so its
+    // size does not say this.)
+    int peersOf(int deliveryIndex) const { return peers_[static_cast<std::size_t>(deliveryIndex)]; }
+    // The vehicle a pinned request of the request's group rides, or -1.
+    int groupPinnedOn(int deliveryIndex) const {
+        return groupPinnedOn_[static_cast<std::size_t>(deliveryIndex)];
+    }
+
+private:
+    std::vector<int> leader_;
+    std::vector<int> next_;
+    std::vector<int> size_;
+    std::vector<int> vehicle_;
+    std::vector<int> pinnedOn_;
+    std::vector<int> peers_;
+    std::vector<int> groupPinnedOn_;
+    bool any_ = false;
+};
+
+// One request's place in a unit's plan. The slot pair reads the route with the
+// plan's earlier steps in.
+struct UnitStep {
+    int delivery = -1;
+    RequestInsertion slot;
+};
+
+// Finds room for several requests on one route: they go in one after another,
+// in the order given, each at the cheapest slot pair the route has once the
+// ones before it are in. No other order is tried: on tight generated routes a
+// second order found room for about one unit in a hundred of those the first
+// order had no room for.
+//
+// One plan costs a route scan per request, so this is for groups of a handful
+// of requests.
+class UnitPlanner {
+public:
+    // Plans `requests` onto `route`, whose timeline is `timeline`. Appends one
+    // step per request to `steps`, in the order to apply them, and returns the
+    // driving seconds they add together in `addedTravel`. Returns false, with
+    // `steps` as it was, when one of them has no slot.
+    bool plan(const PdpRoutePlan& plan, const RouteTimeline& timeline,
+              const std::vector<int>& route, const std::vector<int>& requests, Blinker& blinker,
+              std::vector<UnitStep>& steps, Seconds& addedTravel);
+
+private:
+    std::vector<int> route_;
+    RouteTimeline timeline_;
 };
 
 }  // namespace pdp

@@ -112,6 +112,7 @@ print(plan.unassigned_delivery_ids())  # []
 | `paired_request_cost` | `PairedRequestCost` | hard | 1000 | yes |
 | `same_vehicle_cost` | `SameVehicleCost` | hard | 1000 | yes |
 | `pickup_before_dropoff_cost` | `PickupBeforeDropoffCost` | hard | 1000 | yes |
+| `request_group_cost` | `RequestGroupCost` | hard | 1000 | yes |
 | `unassigned_requests_cost` | `UnassignedRequestsCost` | medium | 1 | yes |
 
 Every constraint is flippable onto another level and none is a reward. What each

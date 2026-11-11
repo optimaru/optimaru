@@ -94,6 +94,14 @@ class DeliveryModel(StrictModel):
         default=None,
         description="The vehicle this request must ride on. Its place on the route stays free.",
     )
+    group: str | None = Field(
+        default=None,
+        description=(
+            "A name shared by requests that are one job. The requests of a group ride one "
+            "vehicle together, or all stay unassigned; their stops may still be visited in "
+            "any order, between other stops. None or an empty name is no group."
+        ),
+    )
     pickup: StopModel
     dropoff: StopModel
 
@@ -124,7 +132,28 @@ class PdpInput(StrictModel):
         for delivery in self.deliveries:
             if delivery.required_vehicle and delivery.required_vehicle not in vehicle_ids:
                 raise ValueError(f"request {delivery.id}: unknown vehicle {delivery.required_vehicle!r}")
+        self._check_groups()
         return self
+
+    def _check_groups(self) -> None:
+        """The requests of a group ride one vehicle, so two cannot be bound to different ones."""
+        pinned_on = {stop_id: v.id for v in self.vehicles for stop_id in v.initial_route[: v.pinned_stops]}
+        bound: dict[str, tuple[str, str]] = {}  # group -> (vehicle, the request that binds it)
+        for delivery in self.deliveries:
+            if not delivery.group:
+                continue
+            # A request is bound by its required vehicle, else by the vehicle that pins one of its stops.
+            vehicle = (
+                delivery.required_vehicle or pinned_on.get(delivery.pickup.id) or pinned_on.get(delivery.dropoff.id)
+            )
+            if not vehicle:
+                continue
+            first_vehicle, first = bound.setdefault(delivery.group, (vehicle, delivery.id))
+            if first_vehicle != vehicle:
+                raise ValueError(
+                    f"group {delivery.group!r}: requests {first} and {delivery.id} are bound to different "
+                    f"vehicles ({first_vehicle} and {vehicle}) by a required vehicle or a pinned stop"
+                )
 
     def _check_initial_routes(self) -> None:
         requests = {stop.id: delivery for delivery in self.deliveries for stop in (delivery.pickup, delivery.dropoff)}
@@ -217,6 +246,7 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
         for i, vehicle in enumerate(model_input.vehicles)
     ]
     vehicle_index = {vehicle.id: i for i, vehicle in enumerate(model_input.vehicles)}
+    group_index: dict[str, int] = {}
     nodes = []
     deliveries = []
     for d, delivery in enumerate(model_input.deliveries):
@@ -254,6 +284,7 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
                 delivery.demand,
                 delivery.order_time,
                 vehicle_index[delivery.required_vehicle] if delivery.required_vehicle else -1,
+                group_index.setdefault(delivery.group, len(group_index)) if delivery.group else -1,
             )
         )
     node_index = {node.id: index for index, node in enumerate(nodes)}
@@ -338,7 +369,7 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
         or v.max_route_radius_meters
         or v.pinned_stops
         for v in request.model_input.vehicles
-    ) or any(d.required_vehicle for d in request.model_input.deliveries)
+    ) or any(d.required_vehicle or d.group for d in request.model_input.deliveries)
     if constraints is None and not has_route_policy:
         solver.solve(plan)
     else:

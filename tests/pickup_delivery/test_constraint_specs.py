@@ -82,7 +82,7 @@ def solve(constraints=None, seconds=0.4, seed=1):
 
 def test_list_constraints_matches_the_spec_names():
     """Names carried by specs must be names the core actually knows."""
-    # Unit constraints first, global constraints (the three coupling terms + unassigned) after.
+    # Unit constraints first, global constraints (the three coupling terms, groups, unassigned) after.
     available = pdp.list_constraints()
     assert available == [
         "vehicle_capacity_cost",
@@ -104,6 +104,7 @@ def test_list_constraints_matches_the_spec_names():
         "paired_request_cost",
         "same_vehicle_cost",
         "pickup_before_dropoff_cost",
+        "request_group_cost",
         "unassigned_requests_cost",
     ]
     for spec in get_constraints():
@@ -393,6 +394,7 @@ EXPECTED_INFO = [
     ("paired_request_cost", "hard", 1000.0, True),
     ("same_vehicle_cost", "hard", 1000.0, True),
     ("pickup_before_dropoff_cost", "hard", 1000.0, True),
+    ("request_group_cost", "hard", 1000.0, True),
     ("unassigned_requests_cost", "medium", 1.0, True),
 ]
 GLOBALS = {
@@ -400,6 +402,7 @@ GLOBALS = {
     "same_vehicle_cost",
     "pickup_before_dropoff_cost",
     "unassigned_requests_cost",
+    "request_group_cost",
 }
 
 

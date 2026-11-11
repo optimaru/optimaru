@@ -36,6 +36,13 @@ namespace pdp {
 //     requests rather than individual stops, so it never leaves a pickup
 //     stranded without its dropoff.
 //
+// Requests of one group (Delivery::groupIndex) ride one vehicle together or all
+// wait. Construction and the request moves place a group as one unit; the
+// operators that work one request at a time stay inside a group (the pair move
+// takes a request only to where another request of its group rides). The rule is
+// scored by requestGroupCost, which belongs to the constraint assembly: the
+// solve(plan) overload scores the seven core rules only.
+//
 // All join the engine's adaptive selection alongside the built-ins, so their
 // weight is learned rather than fixed.
 class Solver {
@@ -99,12 +106,13 @@ public:
         // --- request-level moves (pdp/request_moves.hpp) ---
         // requestRuinRecreate: take up to request_ruin_max_requests requests
         // out and reinsert each at its cheapest feasible slot pair (in random
-        // order, or by regret_k; blink_rate applies).
+        // order, or by regret_k; blink_rate applies). A request of a group
+        // brings its whole group, which can take the count past the setting.
         bool request_ruin_recreate = true;
         int request_ruin_max_requests = 20;
         // bundleRelocate / bundleExchange: move up to bundle_max_requests
         // requests of one route to another route together, or swap two such
-        // bundles.
+        // bundles. A group counts as one request here.
         bool bundle_moves = true;
         int bundle_max_requests = 3;
 

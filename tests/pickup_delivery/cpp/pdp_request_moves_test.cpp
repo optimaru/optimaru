@@ -1,12 +1,15 @@
 // Request-level search: the two-slot insertion scan against a brute-force
-// enumeration, and the request moves (requestRuinRecreate, bundleRelocate,
-// bundleExchange) inside a solve.
+// enumeration, the request moves (requestRuinRecreate, bundleRelocate,
+// bundleExchange) inside a solve, and request groups (requests that ride one
+// vehicle together).
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <map>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -256,17 +259,17 @@ void testCandidateVehicles() {
     PlanTimelines timelines;
     timelines.rebuild(plan);
     std::vector<int> offered;
-    timelines.candidateVehicles(plan, plan.deliveries[0], offered);
+    timelines.candidateVehicles(plan, plan.deliveries[0].requiredVehicleIndex, offered);
     check(offered == std::vector<int>({0}), "identical idle vehicles are offered once");
 
     plan.vehicles[0].nodeIndices = {plan.deliveries[1].pickupNodeIndex,
                                     plan.deliveries[1].dropoffNodeIndex};
     timelines.rebuildRoute(plan, 0, plan.vehicles[0].nodeIndices);
-    timelines.candidateVehicles(plan, plan.deliveries[0], offered);
+    timelines.candidateVehicles(plan, plan.deliveries[0].requiredVehicleIndex, offered);
     check(offered == std::vector<int>({0, 1}), "a busy vehicle and the first idle one are offered");
 
     plan.deliveries[0].requiredVehicleIndex = 2;
-    timelines.candidateVehicles(plan, plan.deliveries[0], offered);
+    timelines.candidateVehicles(plan, plan.deliveries[0].requiredVehicleIndex, offered);
     check(offered == std::vector<int>({2}), "a bound request is offered to its vehicle only");
     Blinker every;
     check(timelines.best(plan, plan.deliveries[0], every).vehicle == 2,
@@ -278,7 +281,7 @@ void testCandidateVehicles() {
     mixed.vehicles[1].maxEndTime = hourMinute(20, 0);
     PlanTimelines mixedTimelines;
     mixedTimelines.rebuild(mixed);
-    mixedTimelines.candidateVehicles(mixed, mixed.deliveries[0], offered);
+    mixedTimelines.candidateVehicles(mixed, mixed.deliveries[0].requiredVehicleIndex, offered);
     check(offered == std::vector<int>({0, 1}),
           "idle vehicles with different limits are both offered");
 
@@ -292,7 +295,7 @@ void testCandidateVehicles() {
     HaversineDrivingTimeCalculator::initDrivingTimeMatrix(depot);
     PlanTimelines depotTimelines;
     depotTimelines.rebuild(depot);
-    depotTimelines.candidateVehicles(depot, depot.deliveries[0], offered);
+    depotTimelines.candidateVehicles(depot, depot.deliveries[0].requiredVehicleIndex, offered);
     check(offered == std::vector<int>({0}),
           "two location entries of one depot are one vehicle class");
 
@@ -301,7 +304,7 @@ void testCandidateVehicles() {
     depot.drivingSeconds[secondHome][stop] += 60;
     PlanTimelines slowerTimelines;
     slowerTimelines.rebuild(depot);
-    slowerTimelines.candidateVehicles(depot, depot.deliveries[0], offered);
+    slowerTimelines.candidateVehicles(depot, depot.deliveries[0].requiredVehicleIndex, offered);
     check(offered == std::vector<int>({0, 1}),
           "a different driving time from home makes two classes");
     std::printf("\n");
@@ -592,6 +595,485 @@ void testPinnedRequestsStay() {
     std::printf("\n");
 }
 
+// ---------------------------------------------------------------------------
+// Request groups
+// ---------------------------------------------------------------------------
+
+// Groups the requests `size` at a time, in input order.
+void groupInOrder(PdpRoutePlan& plan, int size) {
+    for (std::size_t d = 0; d < plan.deliveries.size(); ++d) {
+        plan.deliveries[d].groupIndex = static_cast<int>(d) / size;
+    }
+}
+
+// The vehicle each request's pickup rides, or -1.
+std::vector<int> vehicleOfRequests(const PdpRoutePlan& plan) {
+    std::vector<int> onNode(plan.nodes.size(), -1);
+    for (std::size_t v = 0; v < plan.vehicles.size(); ++v) {
+        for (int nodeIndex : plan.vehicles[v].nodeIndices)
+            onNode[static_cast<std::size_t>(nodeIndex)] = static_cast<int>(v);
+    }
+    std::vector<int> on;
+    for (const Delivery& delivery : plan.deliveries)
+        on.push_back(onNode[static_cast<std::size_t>(delivery.pickupNodeIndex)]);
+    return on;
+}
+
+// Whether every group is whole: on one vehicle, or waiting together.
+bool groupsWhole(const PdpRoutePlan& plan) {
+    const std::vector<int> on = vehicleOfRequests(plan);
+    std::map<int, int> place;
+    for (std::size_t d = 0; d < plan.deliveries.size(); ++d) {
+        const int group = plan.deliveries[d].groupIndex;
+        if (group < 0) continue;
+        const auto [at, first] = place.emplace(group, on[d]);
+        if (!first && at->second != on[d]) return false;
+    }
+    return true;
+}
+
+// The requests apart from their group, as requestGroupCost counts them.
+std::int64_t requestsApart(PdpRoutePlan& plan) {
+    ConstraintAssembly assembly;
+    assembly.emplace<RequestGroupCost>(1.0);
+    DecomposedCalculator calculator;
+    std::move(assembly).into(calculator);
+    calculator.rebuild(plan);
+    calculator.score();
+    return -static_cast<std::int64_t>(calculator.level_scores().hard);
+}
+
+void testGroupsAreRead() {
+    std::printf("== Request groups: who travels with whom ==\n");
+    PdpRoutePlan plan = buildRandomInstance(6, 3, /*seed=*/2);
+    plan.deliveries[0].groupIndex = 40;
+    plan.deliveries[2].groupIndex = 40;
+    plan.deliveries[4].groupIndex = 40;
+    plan.deliveries[1].groupIndex = 7;  // a group of one
+    RequestGroups groups;
+    groups.build(plan);
+    check(groups.any(), "a group of three is a unit of several requests");
+    check(groups.leaderOf(0) == 0 && groups.leaderOf(2) == 0 && groups.leaderOf(4) == 0 &&
+                  groups.sizeOf(0) == 3 && groups.nextOf(0) == 2 && groups.nextOf(2) == 4 &&
+                  groups.nextOf(4) == -1,
+          "its unit lists the three requests from the first one");
+    check(groups.leaderOf(1) == 1 && groups.sizeOf(1) == 1 && groups.nextOf(1) == -1 &&
+                  groups.leaderOf(3) == 3 && groups.sizeOf(3) == 1,
+          "a group of one and a request in no group are units of one");
+    check(groups.vehicleOf(0) == -1 && groups.vehicleOf(3) == -1, "nothing is bound to a vehicle");
+
+    // One request of the group requires a vehicle: the whole group is bound.
+    plan.deliveries[2].requiredVehicleIndex = 1;
+    groups.build(plan);
+    check(groups.vehicleOf(0) == 1 && groups.vehicleOf(2) == 1 && groups.vehicleOf(4) == 1 &&
+                  groups.vehicleOf(1) == -1,
+          "a required vehicle binds every request of the group");
+
+    // A request with a pinned stop stays on its route; the rest of the group
+    // follows it there.
+    plan.deliveries[2].requiredVehicleIndex = -1;
+    plan.vehicles[2].nodeIndices = {plan.deliveries[0].pickupNodeIndex,
+                                    plan.deliveries[0].dropoffNodeIndex};
+    plan.vehicles[2].pinnedNodeIndices = {plan.deliveries[0].pickupNodeIndex};
+    groups.build(plan);
+    check(groups.pinned(0) && groups.leaderOf(0) == 0 && groups.sizeOf(0) == 1,
+          "a pinned request is a unit of its own");
+    check(groups.leaderOf(2) == 2 && groups.leaderOf(4) == 2 && groups.sizeOf(2) == 2 &&
+                  groups.vehicleOf(2) == 2 && groups.vehicleOf(4) == 2,
+          "and the rest of its group is one unit bound to its vehicle");
+    check(groups.peersOf(0) == 2 && groups.peersOf(2) == 2 && groups.peersOf(4) == 2 &&
+                  groups.peersOf(1) == 0 && groups.peersOf(3) == 0,
+          "every request of the group has two peers, the pinned one included");
+    check(groups.groupPinnedOn(2) == 2 && groups.groupPinnedOn(4) == 2 &&
+                  groups.groupPinnedOn(3) == -1,
+          "and knows the vehicle its pinned peer rides");
+
+    // Two requests of one group cannot be promised to two vehicles.
+    PdpRoutePlan clash = buildRandomInstance(4, 2, /*seed=*/2);
+    clash.deliveries[0].groupIndex = clash.deliveries[1].groupIndex = 0;
+    clash.deliveries[0].requiredVehicleIndex = 0;
+    clash.deliveries[1].requiredVehicleIndex = 1;
+    bool refused = false;
+    try {
+        Solver().solve(clash);
+    } catch (const std::invalid_argument&) {
+        refused = true;
+    }
+    check(refused, "a group whose requests require different vehicles is refused");
+
+    // Nor held on two by pinned stops, or by a pinned stop and a required vehicle.
+    const auto refuses = [](PdpRoutePlan plan) {
+        try {
+            Solver::Config config;
+            config.time_limit = std::chrono::minutes(1);  // safety net
+            config.step_limit = 50;
+            DecomposedCalculator calculator;
+            addDefaultConstraints(calculator);
+            Solver(config).solve(plan, calculator);
+        } catch (const std::invalid_argument&) {
+            return true;
+        }
+        return false;
+    };
+    PdpRoutePlan pins = buildRandomInstance(4, 2, /*seed=*/2);
+    pins.deliveries[0].groupIndex = pins.deliveries[1].groupIndex = 0;
+    for (int v : {0, 1}) {
+        const Delivery& held = pins.deliveries[static_cast<std::size_t>(v)];
+        pins.vehicles[static_cast<std::size_t>(v)].nodeIndices = {held.pickupNodeIndex,
+                                                                  held.dropoffNodeIndex};
+        pins.vehicles[static_cast<std::size_t>(v)].pinnedNodeIndices = {held.pickupNodeIndex};
+    }
+    pins.rebuildUnassignedPool();
+    check(refuses(pins), "a group pinned on two vehicles is refused");
+    PdpRoutePlan mixed = pins;
+    mixed.vehicles[1].nodeIndices.clear();
+    mixed.vehicles[1].pinnedNodeIndices.clear();
+    mixed.deliveries[1].requiredVehicleIndex = 1;
+    mixed.rebuildUnassignedPool();
+    check(refuses(mixed), "a group pinned on one vehicle and required on another is refused");
+    mixed.deliveries[1].requiredVehicleIndex = 0;
+    check(!refuses(mixed), "pinned and required on the same vehicle is accepted");
+    std::printf("\n");
+}
+
+// The planner's steps, applied one after another, give a route that keeps
+// every limit and drives exactly what the planner said: the same plan as
+// placing each request at its cheapest slot pair the slow way.
+void testUnitPlanner() {
+    std::printf("== Request groups: room for several requests on one route ==\n");
+    int planned = 0;
+    int refused = 0;
+    for (std::uint64_t seed = 0; seed < 120; ++seed) {
+        // Tight enough that some units have no room.
+        PdpRoutePlan plan = tighten(buildRandomInstance(9, 1, seed), /*capacity=*/5,
+                                    /*windowMinutes=*/static_cast<Seconds>(120 + 30 * (seed % 5)));
+        plan.vehicles[0].returnToDepot = seed % 2 == 0;
+        if (seed % 7 == 0) plan.vehicles[0].maxStops = 10;  // room for five requests
+        std::vector<int> route;
+        for (int d = 0; d < 3; ++d) {
+            const RequestInsertion slot = bruteForce(plan, 0, route, plan.deliveries[d]);
+            if (!slot.found()) continue;
+            route = withRequest(route, plan.deliveries[d], slot.pickupPosition,
+                                slot.dropoffPosition);
+        }
+        RouteTimeline timeline;
+        timeline.rebuild(plan, 0, route);
+        const std::vector<int> requests = {3, 4, 5};
+        std::vector<UnitStep> steps = {UnitStep{}};  // one already there
+        Seconds added = 0;
+        Blinker every;
+        UnitPlanner planner;
+        const bool found = planner.plan(plan, timeline, route, requests, every, steps, added);
+
+        std::vector<int> expected = route;
+        bool fits = true;
+        for (int d : requests) {
+            const RequestInsertion slot = bruteForce(plan, 0, expected, plan.deliveries[d]);
+            if (!slot.found()) {
+                fits = false;
+                break;
+            }
+            expected = withRequest(expected, plan.deliveries[d], slot.pickupPosition,
+                                   slot.dropoffPosition);
+        }
+
+        const std::string label = "seed " + std::to_string(seed);
+        if (found != fits) {
+            check(false,
+                  label + ": the planner and the slow way agree on whether the requests fit");
+            continue;
+        }
+        if (!found) {
+            ++refused;
+            check(steps.size() == 1, label + ": a unit that does not fit leaves the steps alone");
+            continue;
+        }
+        ++planned;
+        std::vector<int> built = route;
+        std::vector<int> order;
+        for (std::size_t i = 1; i < steps.size(); ++i) {
+            order.push_back(steps[i].delivery);
+            built = withRequest(built, plan.deliveries[static_cast<std::size_t>(steps[i].delivery)],
+                                steps[i].slot.pickupPosition, steps[i].slot.dropoffPosition);
+        }
+        const Walk before = walk(plan, 0, route);
+        const Walk after = walk(plan, 0, built);
+        if (!(order == requests && after.feasible && after.travel - before.travel == added &&
+              after.travel == walk(plan, 0, expected).travel)) {
+            check(false,
+                  label + ": the planned steps keep every limit and add what the planner said");
+        }
+    }
+    std::printf("    %d planned, %d refused\n", planned, refused);
+    check(planned >= 20 && refused >= 5, "the cases cover units that fit and units that do not");
+    std::printf("\n");
+}
+
+// Groups under the whole search: the request moves carry a group as one unit,
+// and the stop-granular moves and the kick are priced by requestGroupCost.
+void testGroupsRideTogether() {
+    std::printf("== Request groups in a solve ==\n");
+    struct Case {
+        const char* name;
+        bool requestMovesOnly;
+        bool tight;  // some groups have to wait, whole
+    };
+    const Case cases[] = {
+            {"every operator", false, false},
+            {"request moves only", true, false},
+            {"every operator, groups left out", false, true},
+            {"request moves only, groups left out", true, true},
+    };
+    for (const Case& c : cases) {
+        PdpRoutePlan plan = c.tight ? tighten(buildRandomInstance(30, 2, /*seed=*/11), 5, 100)
+                                    : buildRandomInstance(24, 4, /*seed=*/11);
+        groupInOrder(plan, c.tight ? 2 : 3);
+        Solver::Config config = c.requestMovesOnly
+                                        ? requestMovesOnly(/*ruinRecreate=*/true, /*bundles=*/true)
+                                        : Solver::Config{};
+        config.time_limit = std::chrono::minutes(1);  // safety net: the step limit ends the solve
+        config.seed = 11;
+        config.step_limit = 4000;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        bool threw = false;
+        try {
+            Solver(config).solve(plan, calculator);
+        } catch (const optimaru::ScoreMismatchError&) {
+            threw = true;
+        }
+        const std::string label = c.name;
+        check(!threw && everyStopOnce(plan),
+              label + ": the score stays exact and every stop appears once");
+        check(plan.score.feasible() && groupsWhole(plan),
+              label + ": every group rides one vehicle or waits together (" + plan.score.str() +
+                      ")");
+        if (c.tight) {
+            check(!plan.unassignedNodeIndices.empty(), label + ": some requests wait");
+        } else {
+            check(plan.unassignedNodeIndices.empty(), label + ": every request is routed");
+        }
+    }
+    std::printf("\n");
+}
+
+// A start with a group spread over the fleet: taking the group out and putting
+// it back on one vehicle is how it is mended.
+void testScatteredGroupIsMended() {
+    std::printf("== Request groups: a scattered start ==\n");
+    PdpRoutePlan plan = buildRandomInstance(12, 4, /*seed=*/6);
+    groupInOrder(plan, 3);
+    for (std::size_t d = 0; d < plan.deliveries.size(); ++d) {
+        std::vector<int>& route = plan.vehicles[d % 4].nodeIndices;  // one group, three vehicles
+        route.push_back(plan.deliveries[d].pickupNodeIndex);
+        route.push_back(plan.deliveries[d].dropoffNodeIndex);
+    }
+    plan.rebuildUnassignedPool();
+    check(!groupsWhole(plan) && requestsApart(plan) == 8,
+          "the start has every group on three vehicles: two requests apart in each of four");
+
+    for (int requestMoves = 0; requestMoves < 2; ++requestMoves) {
+        PdpRoutePlan work = plan;
+        Solver::Config config = requestMoves == 1 ? requestMovesOnly(true, true) : Solver::Config{};
+        if (requestMoves == 0) {
+            // The stop-granular search alone: one request at a time has to
+            // find its way to the others.
+            config.request_ruin_recreate = false;
+            config.bundle_moves = false;
+        }
+        config.time_limit = std::chrono::minutes(1);
+        config.pair_construction_heuristic = false;
+        config.step_limit = 20'000;
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        Solver(config).solve(work, calculator);
+        check(work.score.feasible() && groupsWhole(work) && everyStopOnce(work),
+              std::string(requestMoves == 1 ? "the request moves" : "the stop-granular search") +
+                      " bring every group onto one vehicle (" + work.score.str() + ")");
+    }
+    std::printf("\n");
+}
+
+// What binds a group to a vehicle: a required vehicle on one of its requests,
+// a pinned stop, or a request of it that already rides a route.
+void testGroupsFollowTheirVehicle() {
+    std::printf("== Request groups bound to a vehicle ==\n");
+    const auto solved = [](PdpRoutePlan plan) {
+        Solver::Config config;
+        config.time_limit = std::chrono::minutes(1);
+        config.step_limit = 3000;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        Solver(config).solve(plan, calculator);
+        return plan;
+    };
+
+    {
+        PdpRoutePlan plan = buildRandomInstance(9, 3, /*seed=*/5);
+        for (int d : {0, 1, 2}) plan.deliveries[static_cast<std::size_t>(d)].groupIndex = 0;
+        plan.deliveries[1].requiredVehicleIndex = 2;
+        const PdpRoutePlan result = solved(plan);
+        const std::vector<int> on = vehicleOfRequests(result);
+        check(result.score.feasible() && on[0] == 2 && on[1] == 2 && on[2] == 2,
+              "a required vehicle on one request takes its whole group there");
+    }
+    {
+        PdpRoutePlan plan = buildRandomInstance(9, 3, /*seed=*/5);
+        for (int d : {0, 1, 2}) plan.deliveries[static_cast<std::size_t>(d)].groupIndex = 0;
+        const Delivery& first = plan.deliveries[0];
+        plan.vehicles[1].nodeIndices = {first.pickupNodeIndex, first.dropoffNodeIndex};
+        plan.vehicles[1].pinnedNodeIndices = {first.pickupNodeIndex};
+        plan.rebuildUnassignedPool();
+        const PdpRoutePlan result = solved(plan);
+        const std::vector<int> on = vehicleOfRequests(result);
+        check(result.score.feasible() && on[0] == 1 && on[1] == 1 && on[2] == 1 &&
+                      result.vehicles[1].nodeIndices.front() == first.pickupNodeIndex,
+              "a pinned stop keeps its group on its vehicle");
+    }
+    {
+        // Construction alone: the two waiting requests join the one that
+        // already rides, though another vehicle is as good for them.
+        PdpRoutePlan plan = buildRandomInstance(9, 3, /*seed=*/5);
+        for (int d : {0, 1, 2}) plan.deliveries[static_cast<std::size_t>(d)].groupIndex = 0;
+        const Delivery& first = plan.deliveries[0];
+        plan.vehicles[2].nodeIndices = {first.pickupNodeIndex, first.dropoffNodeIndex};
+        plan.rebuildUnassignedPool();
+        Solver::Config config;
+        config.time_limit = std::chrono::minutes(1);
+        config.step_limit = 1;
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        Solver(config).solve(plan, calculator);
+        check(plan.score.feasible() && groupsWhole(plan),
+              "construction puts waiting requests where their group already rides");
+    }
+    std::printf("\n");
+}
+
+// One request of a group rides while the rest of the group cannot: the pair
+// move may drop it, so the group waits whole. (The request moves do this as a
+// unit; here they are off.)
+void testStrayRequestRejoinsItsWaitingGroup() {
+    std::printf("== Request groups: one request riding, the rest waiting ==\n");
+    PdpRoutePlan plan = buildRandomInstance(4, 2, /*seed=*/3);
+    plan.deliveries[0].groupIndex = plan.deliveries[1].groupIndex = 0;
+    // Request 2 of the group can ride nowhere: its pickup closes before any vehicle leaves.
+    plan.nodes[static_cast<std::size_t>(plan.deliveries[1].pickupNodeIndex)].maxEndTime =
+            hourMinute(7, 0);
+    const auto routed = [&plan](int vehicle, int deliveryIndex) {
+        const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(deliveryIndex)];
+        std::vector<int>& route = plan.vehicles[static_cast<std::size_t>(vehicle)].nodeIndices;
+        route.push_back(delivery.pickupNodeIndex);
+        route.push_back(delivery.dropoffNodeIndex);
+    };
+    routed(0, 0);
+    routed(0, 2);
+    routed(1, 3);
+    plan.rebuildUnassignedPool();
+    check(requestsApart(plan) == 1, "the start has one request of the group riding alone");
+
+    Solver::Config config;
+    config.time_limit = std::chrono::minutes(1);  // safety net: the step limit ends the solve
+    config.step_limit = 4000;
+    config.pair_construction_heuristic = false;
+    config.request_ruin_recreate = false;
+    config.bundle_moves = false;
+    config.pair_exchange_moves = false;
+    config.pair_ruin = false;
+    config.ruin_recreate = false;
+    // Only the pair move can take both stops of a request to the pool at once.
+    config.or_opt_weight = 0.0;
+    config.tail_swap_weight = 0.0;
+    config.pair_assignment_probability = 0.5;
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    Solver(config).solve(plan, calculator);
+    const std::vector<int> on = vehicleOfRequests(plan);
+    check(requestsApart(plan) == 0 && on[0] < 0 && on[1] < 0 && everyStopOnce(plan),
+          "the pair move drops it, and the group waits whole (" + plan.score.str() + ")");
+    std::printf("\n");
+}
+
+// A group bound to a vehicle by a required vehicle, all of it waiting: the pair
+// move does not take one request onto that vehicle alone. The group rule is
+// left out of the score here, so nothing would refuse such a move: if the pair
+// move made it, the request would ride.
+void testPairMoveDoesNotRouteABoundGroupInParts() {
+    std::printf("== Request groups: the pair move and a waiting bound group ==\n");
+    PdpRoutePlan plan = buildRandomInstance(6, 2, /*seed=*/7);
+    for (int d : {0, 1, 2}) plan.deliveries[static_cast<std::size_t>(d)].groupIndex = 0;
+    plan.deliveries[0].requiredVehicleIndex = 1;
+    for (int d : {3, 4, 5}) {
+        const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(d)];
+        plan.vehicles[0].nodeIndices.push_back(delivery.pickupNodeIndex);
+        plan.vehicles[0].nodeIndices.push_back(delivery.dropoffNodeIndex);
+    }
+    plan.rebuildUnassignedPool();
+
+    Solver::Config config;
+    config.time_limit = std::chrono::minutes(1);  // safety net: the step limit ends the solve
+    config.step_limit = 3000;
+    config.pair_construction_heuristic = false;
+    config.request_ruin_recreate = false;
+    config.bundle_moves = false;
+    config.pair_exchange_moves = false;
+    config.pair_ruin = false;
+    config.ruin_recreate = false;
+    // No engine move that carries a stop out of the pool: only the pair move could.
+    config.relocate_weight = 0.0;
+    config.list_swap_weight = 0.0;
+    config.or_opt_weight = 0.0;
+    config.tail_swap_weight = 0.0;
+    DecomposedCalculator calculator;
+    defaultConstraints().drop("requestGroupCost").into(calculator);
+    Solver(config).solve(plan, calculator);
+    const std::vector<int> on = vehicleOfRequests(plan);
+    check(on[0] < 0 && on[1] < 0 && on[2] < 0 && everyStopOnce(plan),
+          "the group still waits whole, though no rule in the score asked for it (" +
+                  plan.score.str() + ")");
+    std::printf("\n");
+}
+
+// Parallel starts each build their own groups and operators on their copy of
+// the plan.
+void testGroupsWithParallelStarts() {
+    std::printf("== Request groups with parallel starts ==\n");
+    PdpRoutePlan plan = buildRandomInstance(18, 3, /*seed=*/13);
+    groupInOrder(plan, 3);
+    Solver::Config config;
+    config.time_limit = std::chrono::minutes(1);  // safety net: the step limit ends the solve
+    config.step_limit = 1500;
+    config.parallel_solver_count = 2;
+    Solver(config).solve(plan);
+    check(everyStopOnce(plan) && plan.score.feasible() && plan.unassignedNodeIndices.empty(),
+          "two starts solve a grouped plan (" + plan.score.str() + ")");
+    std::printf("\n");
+}
+
+// A group no vehicle can take whole waits whole: its requests are not routed
+// one by one.
+void testGroupWithNoRoomWaits() {
+    std::printf("== Request groups: no vehicle takes the whole group ==\n");
+    PdpRoutePlan plan = buildRandomInstance(8, 3, /*seed=*/9);
+    for (Vehicle& vehicle : plan.vehicles) vehicle.maxStops = 4;  // two requests each
+    for (int d : {0, 1, 2}) plan.deliveries[static_cast<std::size_t>(d)].groupIndex = 0;
+    Solver::Config config;
+    config.time_limit = std::chrono::minutes(1);
+    config.step_limit = 6000;
+    config.score_checks = optimaru::ScoreChecks::Full;
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    Solver(config).solve(plan, calculator);
+    const std::vector<int> on = vehicleOfRequests(plan);
+    check(plan.score.feasible() && on[0] < 0 && on[1] < 0 && on[2] < 0,
+          "the three requests of the group stay unassigned together (" + plan.score.str() + ")");
+    check(plan.unassignedNodeIndices.size() == 6 && everyStopOnce(plan),
+          "and the five other requests are routed");
+    std::printf("\n");
+}
+
 // What the request moves are for. Step budgets, so the same seed gives the
 // same result on every machine: the plans are compared after equally many
 // moves, of which a request move is the far more expensive one.
@@ -639,6 +1121,15 @@ int main() {
     testFarRouteIsOfferedWhenNearOnesAreFull();
     testInfeasibleStartIsMended();
     testPinnedRequestsStay();
+    testGroupsAreRead();
+    testUnitPlanner();
+    testGroupsRideTogether();
+    testScatteredGroupIsMended();
+    testGroupsFollowTheirVehicle();
+    testStrayRequestRejoinsItsWaitingGroup();
+    testPairMoveDoesNotRouteABoundGroupInParts();
+    testGroupsWithParallelStarts();
+    testGroupWithNoRoomWaits();
     testRequestMovesMatter();
     std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures,
                 failures == 1 ? "" : "s");

@@ -88,6 +88,7 @@ class Delivery:
         demand: int,
         order_time: int = 0,
         required_vehicle_index: int = -1,
+        group_index: int = -1,
     ) -> None: ...
     id: str
     pickup_node_index: int
@@ -100,6 +101,9 @@ class Delivery:
     required_vehicle_index: int
     """Index into PdpRoutePlan.vehicles of the vehicle this request must ride
     on; -1 == any."""
+    group_index: int
+    """The group this request travels in; -1 == none. The requests that share a
+    group ride one vehicle together, or all wait (request_group_cost)."""
 
 class Vehicle:
     def __init__(
@@ -235,12 +239,13 @@ class SolverConfig:
     reinsertion."""
     request_ruin_max_requests: int
     """The most requests one application takes out (1 = a pair relocate with the
-    best slot). Never more than two fifths of the plan's requests."""
+    best slot). Never more than two fifths of the plan's requests; a request of a
+    group brings its whole group, which can take the count past that."""
     bundle_moves: bool
     """Move requests whose pickups follow each other on a route to another route
     together, or swap two such bundles between nearby routes."""
     bundle_max_requests: int
-    """The most requests in one bundle."""
+    """The most requests in one bundle, a group counting as one."""
 
     # --- adaptive ruin & recreate (ALNS) ---
     ruin_recreate: bool
@@ -282,7 +287,11 @@ class Solver:
     request-level move and ruin operators. Solves IN PLACE: fills
     vehicle.node_indices, the unassigned pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
-    def solve(self, plan: PdpRoutePlan) -> None: ...
+    def solve(self, plan: PdpRoutePlan) -> None:
+        """Solve on the seven core rules. They do not include request_group_cost,
+        required_vehicle_cost, pinned_stops_cost or the vehicle limits: for a plan
+        that uses any of those, call solve_with_constraints (or optimaru.pickup_delivery.solve,
+        which picks the default constraints for a plan with groups)."""
     def solve_with_constraints(self, plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see optimaru.pickup_delivery.constraints). The given list replaces the default set;
@@ -294,8 +303,8 @@ class Solver:
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
     the sixteen per-vehicle constraints (vehicle_capacity_cost ... required_vehicle_cost),
-    then the four request-level globals (paired_request_cost, same_vehicle_cost,
-    pickup_before_dropoff_cost, unassigned_requests_cost).
+    then the five request-level globals (paired_request_cost, same_vehicle_cost,
+    pickup_before_dropoff_cost, request_group_cost, unassigned_requests_cost).
     The same names optimaru.pickup_delivery.constraints uses."""
 
 def constraint_costs(plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
@@ -330,8 +339,9 @@ class ConstraintInfo(NamedTuple):
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order: the default level and
     weight of each constraint (unassigned_requests_cost is medium at weight 1 in
-    medium units; pinned_stops_cost hard at 1e12; the coupling rules and
-    required_vehicle_cost hard at 1000). All flippable, none a reward;
+    medium units; pinned_stops_cost hard at 1e12; the coupling rules,
+    required_vehicle_cost and request_group_cost hard at 1000). All flippable, none
+    a reward;
     default_enabled is False for the opt-in weight-0 objectives
     (enclosing_circle_radius_cost, route_duration_cost, latency_cost,
     squared_order_age_cost)."""

@@ -98,6 +98,7 @@ __all__ = [
     "PairedRequestCost",
     "PickupBeforeDropoffCost",
     "PinnedStopsCost",
+    "RequestGroupCost",
     "RequiredVehicleCost",
     "RouteDurationCost",
     "SameVehicleCost",
@@ -120,6 +121,7 @@ __all__ = [
     "paired_request_cost",
     "pickup_before_dropoff_cost",
     "pinned_stops_cost",
+    "request_group_cost",
     "required_vehicle_cost",
     "route_duration_cost",
     "same_vehicle_cost",
@@ -498,6 +500,27 @@ class PickupBeforeDropoffCost(Constraint):
     )
 
 
+class RequestGroupCost(Constraint):
+    """Grouped requests that are apart from the rest of their group. Default: hard, weight 1000.
+
+    The requests of a `group` are one job: they ride one vehicle together, or all wait.
+    A request is where its pickup is — on a vehicle, or on none. Engine-only (no CP-SAT plugin)."""
+
+    name = "request_group_cost"
+    label_en = "Request group"
+    label_ko = "요청 묶음"
+    description_en = (
+        "Requests that are not where most of their `group` is: on another vehicle, or left unassigned "
+        "while the others ride (or riding while the others wait). One unit of cost is one such request; "
+        "0 means every group rides one vehicle together or waits together."
+    )
+    description_ko = (
+        "같은 묶음(`group`)의 요청 가운데 묶음의 다수와 떨어져 있는 요청을 셉니다. 다른 차량에 배정됐거나, "
+        "나머지는 배정됐는데 혼자 미배정이거나 그 반대인 요청 하나가 비용 1이며, 0이면 모든 묶음이 한 차량에 "
+        "함께 배정되거나 함께 미배정으로 남습니다."
+    )
+
+
 class UnassignedRequestsCost(Constraint):
     """Service minutes of requests with **neither** node assigned. Default: medium, weight 1.
 
@@ -541,9 +564,10 @@ required_vehicle_cost = RequiredVehicleCost()
 paired_request_cost = PairedRequestCost()
 same_vehicle_cost = SameVehicleCost()
 pickup_before_dropoff_cost = PickupBeforeDropoffCost()
+request_group_cost = RequestGroupCost()
 unassigned_requests_cost = UnassignedRequestsCost()
 
-# The default set, in list_constraints() order (unit constraints, then the four globals).
+# The default set, in list_constraints() order (unit constraints, then the five globals).
 _DEFAULTS = (
     vehicle_capacity_cost,
     max_end_time_cost,
@@ -564,6 +588,7 @@ _DEFAULTS = (
     paired_request_cost,
     same_vehicle_cost,
     pickup_before_dropoff_cost,
+    request_group_cost,
     unassigned_requests_cost,
 )
 

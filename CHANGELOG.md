@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **Pickup and delivery: request groups.** Requests that share a `group`
+  (`DeliveryModel.group`, a name; `Delivery.group_index` on a plan) are one job: they ride
+  one vehicle together, or all stay unassigned. Their stops stay ordinary stops, visited in
+  any order between other requests' stops. The new constraint `request_group_cost` (hard,
+  weight 1000, flippable) counts the grouped requests that are not where most of their
+  group is. Construction and the request moves place a group as one unit, each request at
+  its cheapest slot pair once the earlier ones are in, and leave all of it unassigned when
+  no single vehicle has room; the pair move, the pair exchange and the pair ruin stay
+  inside a group. A `required_vehicle` on one request, a pinned stop or a request already
+  on an initial route binds the whole group to that vehicle, and two requests of a group
+  bound to different vehicles (by a required vehicle or a pinned stop) are refused.
+  `solve_request` scores groups whenever a request names one, and so does `pdp.solve(plan)`
+  for a plan with a `group_index` set (both then score the whole default set). Engine-only:
+  the CP-SAT reference does not read `group`. `list_constraints()` and `constraint_info()`
+  have one more row, before `unassigned_requests_cost`. A plan without groups is solved
+  exactly as before.
 - **Engine: `MemberChangeGlobalConstraint`.** A global constraint that keeps its aggregates
   from joins and leaves alone derives from `optimaru::MemberChangeGlobalConstraint<Solution>`
   (`optimaru/score/decomposed_objective.hpp`) and writes `on_member_changed()` only; ten use
