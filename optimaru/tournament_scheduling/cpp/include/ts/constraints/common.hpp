@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 #include <vector>
 
 #include "optimaru/score/constraint_assembly.hpp"

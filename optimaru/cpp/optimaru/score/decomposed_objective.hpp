@@ -561,6 +561,10 @@ struct MemberChangeGlobalConstraint : GlobalConstraint<Solution> {
     bool supports_member_change() const final { return true; }
     void on_unit_changed(const Solution& /*solution*/, int /*unit*/,
                          const std::vector<int>& /*members*/) final {
+        // A sequence-shaped solution reports list edits unit by unit, to
+        // every global: this base cannot serve one.
+        static_assert(SolutionTraits<Solution>::shape == Shape::Assignment,
+                      "MemberChangeGlobalConstraint is for assignment-shaped solutions");
         throw std::logic_error(this->name +
                                ": on_unit_changed is unreachable (member-change fast path)");
     }
