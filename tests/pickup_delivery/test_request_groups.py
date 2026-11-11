@@ -272,6 +272,33 @@ def test_the_engine_refuses_the_same_clash_on_a_plan():
         pdp.solve(clash, time_limit_seconds=0.1, constraints=get_constraints())
 
 
+@pytest.mark.parametrize("pair_construction", [True, False])
+def test_a_refused_plan_is_left_as_it_was_and_can_still_be_scored(pair_construction):
+    plan = to_plan(two_ends([request("a", group="g"), request("b", group="g"), request("c")]))
+    deliveries = plan.deliveries
+    deliveries[0].required_vehicle_index = 0
+    deliveries[1].required_vehicle_index = 1
+    clash = pdp.PdpRoutePlan(plan.name, plan.locations, plan.vehicles, plan.nodes, deliveries)
+    clash.rebuild_unassigned_pool()
+    waiting = list(clash.unassigned_node_indices)
+    config = pdp.SolverConfig()
+    config.step_count_limit = 100
+    config.pair_construction_heuristic = pair_construction
+
+    # No constraint list: the engine's own switch for a grouped plan, which with the pair
+    # construction off empties the pool before it solves.
+    with pytest.raises(ValueError, match="requests a and b share a group but are bound to different vehicles"):
+        pdp.Solver(config).solve(clash)
+
+    assert len(waiting) == 6
+    assert list(clash.unassigned_node_indices) == waiting
+
+    # calculate_score does not validate: the plan is scored as it stands, all of it waiting
+    # (two requests off the vehicle they require, three requests of 2 service minutes each).
+    score = pdp.calculate_score(clash)
+    assert (score.hard, score.medium) == (-2000, -6)
+
+
 def test_the_engine_refuses_a_group_pinned_on_two_vehicles():
     plan = to_plan(two_ends([request("a", group="g"), request("b", group="g"), request("c")]))
     vehicles = plan.vehicles

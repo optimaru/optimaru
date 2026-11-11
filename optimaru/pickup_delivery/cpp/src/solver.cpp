@@ -822,6 +822,10 @@ Score levelScoreOf(const optimaru::DecomposedObjective<PdpRoutePlan>& calculator
 }  // namespace
 
 void Solver::solve(PdpRoutePlan& plan) {
+    // Refused before anything in the plan is touched, the pool included.
+    checkRequiredVehicles(plan);
+    const std::shared_ptr<const RequestGroups> groups = requestGroupsOf(plan);
+    checkRequestGroups(plan, *groups);
     // The seven core rules do not price groups, and on them a split group
     // would end as a feasible plan. A plan with groups is scored with the
     // whole default assembly instead (single-start, like every solve on a
@@ -836,9 +840,6 @@ void Solver::solve(PdpRoutePlan& plan) {
         solve(plan, calculator);
         return;
     }
-    checkRequiredVehicles(plan);
-    const std::shared_ptr<const RequestGroups> groups = requestGroupsOf(plan);
-    checkRequestGroups(plan, *groups);
     // Empty pool so the construction heuristic places every stop itself.
     if (config_.pair_construction_heuristic && !plan.vehicles.empty())
         constructPairs(plan, config_.first_fit_decreasing, *groups);
