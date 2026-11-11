@@ -9,6 +9,23 @@
 
 namespace ks {
 
+std::vector<int> densityOrder(const KnapsackProblem& problem) {
+    const int n = problem.itemCount();
+    // The density as Python computed it (value / weight as a double); a
+    // stable sort keeps equal densities in item order, like sorted(...,
+    // reverse=True).
+    std::vector<double> density(static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i) {
+        density[i] = static_cast<double>(problem.items[i].value) /
+                     static_cast<double>(problem.items[i].weight);
+    }
+    std::vector<int> order(static_cast<std::size_t>(n));
+    std::iota(order.begin(), order.end(), 0);
+    std::stable_sort(order.begin(), order.end(),
+                     [&density](int a, int b) { return density[a] > density[b]; });
+    return order;
+}
+
 std::vector<int> greedySelection(const KnapsackProblem& problem, const std::vector<int>& fixed) {
     const int n = problem.itemCount();
     if (static_cast<int>(fixed.size()) != n) {
@@ -23,18 +40,7 @@ std::vector<int> greedySelection(const KnapsackProblem& problem, const std::vect
         }
     }
 
-    // The density as Python computed it (value / weight as a double); a
-    // stable sort keeps equal densities in item order, like sorted(...,
-    // reverse=True).
-    std::vector<double> density(n);
-    for (int i = 0; i < n; ++i) {
-        density[i] = static_cast<double>(problem.items[i].value) /
-                     static_cast<double>(problem.items[i].weight);
-    }
-    std::vector<int> order(n);
-    std::iota(order.begin(), order.end(), 0);
-    std::stable_sort(order.begin(), order.end(),
-                     [&density](int a, int b) { return density[a] > density[b]; });
+    const std::vector<int> order = densityOrder(problem);
 
     std::vector<int> selection(n, kNotSelected);
     std::int64_t load = 0;

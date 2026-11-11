@@ -50,6 +50,27 @@
   stage does not know the `unimproved_*` limits: one shorter than a stage ends the solve
   inside it, with the best solution so far. A history stops growing at 2^20 entries (16 MB
   per start).
+- **Knapsack: `CoreRepackMove`.** Sorted by value per weight, what the greedy leaves to
+  decide sits in a narrow band around the first item the capacity leaves out, and an
+  improving exchange there is two items for one or larger, which no flip or swap reaches:
+  the 500 to 5,000 item instances of the benchmark stayed 1 to 3 below their optimum. The
+  new move (`ks/moves.hpp`, `SolverConfig.core_repack_moves`, on by default) takes a window
+  of that order around the break item, frees the capacity its selected items hold and
+  fills it with the most valuable subset of the window, a small 0/1 knapsack solved exactly
+  by dynamic programming over the weight; the acceptor judges the trade. It looks at the
+  capacity only (the score judges resources, groups and dependencies), declines when its
+  table would pass a million cells, and is drawn on at most one step in a thousand. All
+  seven benchmark instances now end on CP-SAT's value, the four large ones within 0.01 s.
+  Parallel starts run the solver's own search (a registered move does not reach the
+  engine's multi-start threads).
+- **Late acceptance in stages: bed allocation and maintenance scheduling too.** Measured
+  on their eleven benchmark instances at 30 s over three seeds. Maintenance scheduling: 13
+  of 15 runs better, the mean soft score 24%, 27%, 3.4%, 3.8% and 0.1% better from the
+  smallest instance up (the two worse runs: 28 jobs on seed 1, the published one, and 48
+  jobs by 2 in 259). Bed allocation: 2.8%, 1.7% and 3.7% better up to 183 stays, the
+  20-stay instance on CP-SAT's value on every seed, and within 0.3% either way on the three
+  larger instances, where few stages fit. Facility location was measured too and stays as
+  it was: its 60-consumer instance got worse on all three seeds.
 - **Benchmarks: three more rungs, five tables and QAPLIB measured again.** `random25`
   (quadratic assignment), `g1600` (max-cut) and `teams12` (sports league scheduling) join
   their comparison ladders. Rows where CP-SAT still has the better score: three knapsacks

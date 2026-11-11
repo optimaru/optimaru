@@ -170,7 +170,9 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             // Nearby swap partners: items of similar weight. probability 0 = off.
             .def_readwrite("nearby_probability", &Solver::Config::nearby_probability)
-            .def_readwrite("nearby_size", &Solver::Config::nearby_size);
+            .def_readwrite("nearby_size", &Solver::Config::nearby_size)
+            // CoreRepackMove: a window around the break item, re-decided exactly.
+            .def_readwrite("core_repack_moves", &Solver::Config::core_repack_moves);
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())
