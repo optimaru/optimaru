@@ -15,8 +15,9 @@ uv run task-assigning-compare --seconds 10 --workers 8   # engine vs CP-SAT (--m
 
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 
-The engine runs single-threaded; CP-SAT gets `--workers` search
-workers and its time includes model construction.
+The engine runs single-threaded. CP-SAT gets `--workers` search workers;
+its budget starts once its model is built, and the time the runner reports
+for it includes building the model.
 
 On every instance but the smallest, the CP-SAT model of this use case is
 solved one score level at a time, hard first, within the one budget

@@ -58,8 +58,9 @@ With the 1 s CI smoke budget CP-SAT returns an 8-facility answer (not always the
 presolving the 10-facility model (reported as UNKNOWN); with 2 workers it proves the 8-facility optimum
 in about 1.5 s. At 30 s the two solvers tie up to 12 facilities and are within a few percent of each
 other, either way, above that (table below).
-The engine runs single-threaded; CP-SAT gets `--workers` search workers and its time includes model
-construction.
+The engine runs single-threaded. CP-SAT gets `--workers` search workers;
+its budget starts once its model is built, and the time the runner reports
+for it includes building the model.
 
 ## QAPLIB harness
 

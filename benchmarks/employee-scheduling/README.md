@@ -16,8 +16,9 @@ uv run employee-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT
 CP-SAT formulation notes, and what the model refuses: [`cpsat/README.md`](cpsat/README.md).
 
 The instances are `optimaru.employee_scheduling.demo.generate_demo_data` at fixed seeds. The
-engine runs single-threaded; CP-SAT gets `--workers` search workers and its time
-includes model construction.
+engine runs single-threaded. CP-SAT gets `--workers` search workers;
+its budget starts once its model is built, and the time the runner reports
+for it includes building the model.
 
 The largest instance has 80 workers. At 96 CP-SAT rejects the model
 (`MODEL_INVALID`: the squared-load objective leaves int64), which is a limit of

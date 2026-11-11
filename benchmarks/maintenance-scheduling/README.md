@@ -15,8 +15,9 @@ uv run maintenance-scheduling-compare --seconds 10 --workers 8   # engine vs CP-
 
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 
-The engine runs single-threaded; CP-SAT gets `--workers` search
-workers and its time includes model construction.
+The engine runs single-threaded. CP-SAT gets `--workers` search workers;
+its budget starts once its model is built, and the time the runner reports
+for it includes building the model.
 
 <!-- results:start -->
 ## Results

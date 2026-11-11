@@ -107,9 +107,11 @@ smallest. Of the ten rows without a CP-SAT solution in those five tables, two
 are runs whose first level found nothing in the whole budget: the demo plant
 of food packaging and the 16-meeting instance of meeting scheduling. The other
 eight are runs the runner stopped 60 s past the budget, with the model still
-being built or the search still running. The shares are of one clock that
-starts with the first level and also runs between the levels, while the
-solution of one level is written into the model as the hint of the next.
+being built or the search still running. All shares come from one clock: it
+starts with the first level and keeps running between levels, while each
+level's solution is written into the model as the next level's hint. A row
+that this split shapes stays in its table, with a note beside it (the 4-line
+plant of food packaging), and is not left out.
 (Before external-solver `v0.2.2`, which the benchmark projects pin, a first
 level without a solution ended the run at its share; two rungs were left out
 of the ladders for that reason, and both are back.)
@@ -143,11 +145,12 @@ both times on all of them, and CP-SAT's differed on 8 (eight workers under a
 time limit). The `v0.2.2` run on 2026-11-11 measured 25 instances again (the
 five comparisons that use the level-by-level solve, on a later build of the
 engine): the engine's score was the same on 24 of them (the 24-meeting
-instance of meeting scheduling moved by half a percent, on engine code that
-had changed in between), and CP-SAT's result on 18. The engine's own result
-does move elsewhere: by a few percent on the larger semiconductor instances
-(see that README), and on the 400-request synthetic pickup-delivery instance
-it did with the stop-granular search those days measured (54 vehicles one day,
-55 the other; the request-level search that replaced it returned the same plan
-in two runs on 2026-11-11). Read a small margin in any table as noise.
+instance of meeting scheduling moved by half a percent, `-3049soft` to
+`-3035soft`, on engine code that had changed in between), and CP-SAT's result
+on 18. The engine's own result does move elsewhere: by a few percent on the
+larger semiconductor instances (see that README), and on the 400-request
+synthetic pickup-delivery instance it did with the stop-granular search those
+days measured (54 vehicles one day, 55 the other; the request-level search
+that replaced it returned the same plan in two runs on 2026-11-11). Read a
+small margin in any table as noise.
 

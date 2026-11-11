@@ -15,8 +15,9 @@ uv run pytest -q                       # benchmark harness tests
 uv run semiconductor-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
 
-The engine runs single-threaded; CP-SAT gets `--workers` search workers and
-its time includes model construction.
+The engine runs single-threaded. CP-SAT gets `--workers` search workers;
+its budget starts once its model is built, and the time the runner reports
+for it includes building the model.
 
 The engine's result on the larger instances varies between runs of the same
 build: four 30 s runs of the 18-lot instance gave soft -839, -842, -881 and
