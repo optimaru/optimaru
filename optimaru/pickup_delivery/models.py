@@ -136,14 +136,23 @@ class PdpInput(StrictModel):
         return self
 
     def _check_groups(self) -> None:
-        bound: dict[str, DeliveryModel] = {}
+        """The requests of a group ride one vehicle, so two cannot be bound to different ones."""
+        pinned_on = {stop_id: v.id for v in self.vehicles for stop_id in v.initial_route[: v.pinned_stops]}
+        bound: dict[str, tuple[str, str]] = {}  # group -> (vehicle, the request that binds it)
         for delivery in self.deliveries:
-            if delivery.group is None or not delivery.required_vehicle:
+            if delivery.group is None:
                 continue
-            first = bound.setdefault(delivery.group, delivery)
-            if first.required_vehicle != delivery.required_vehicle:
+            # A request is bound by its required vehicle, else by the vehicle that pins one of its stops.
+            vehicle = (
+                delivery.required_vehicle or pinned_on.get(delivery.pickup.id) or pinned_on.get(delivery.dropoff.id)
+            )
+            if not vehicle:
+                continue
+            first_vehicle, first = bound.setdefault(delivery.group, (vehicle, delivery.id))
+            if first_vehicle != vehicle:
                 raise ValueError(
-                    f"group {delivery.group!r}: requests {first.id} and {delivery.id} require different vehicles"
+                    f"group {delivery.group!r}: requests {first} and {delivery.id} are bound to different "
+                    f"vehicles ({first_vehicle} and {vehicle}) by a required vehicle or a pinned stop"
                 )
 
     def _check_initial_routes(self) -> None:

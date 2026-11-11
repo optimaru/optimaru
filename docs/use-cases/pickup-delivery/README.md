@@ -364,12 +364,17 @@ left out, only the engine's stop moves try plans that split one.
 
 A group is bound to a vehicle by any of these:
 
-- `required_vehicle` on one of its requests binds all of them. Two requests of a
-  group that name different vehicles are refused (`ValueError`).
+- `required_vehicle` on one of its requests binds all of them.
 - A pinned stop. That request cannot leave its route, so the rest of the group
   joins it there.
 - A request already on an `initial_route`. Construction adds the waiting requests
-  of the group to that vehicle; the search may then move the whole group.
+  of the group to that vehicle; the search may then move the whole group. When
+  the group starts on several vehicles the waiting requests join the one that
+  holds most of it, and the search brings the rest over.
+
+Two requests of a group that are bound to different vehicles, each by its
+`required_vehicle` or by a pinned stop, are refused (`ValueError`): such a group
+could never be whole.
 
 `solve_request` scores groups whenever a request names one: it then solves on the
 constraint assembly, as it does when a vehicle limit is set. On a hand-built

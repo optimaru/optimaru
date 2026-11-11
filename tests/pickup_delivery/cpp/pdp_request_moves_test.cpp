@@ -694,6 +694,39 @@ void testGroupsAreRead() {
         refused = true;
     }
     check(refused, "a group whose requests require different vehicles is refused");
+
+    // Nor held on two by pinned stops, or by a pinned stop and a required vehicle.
+    const auto refuses = [](PdpRoutePlan plan) {
+        try {
+            Solver::Config config;
+            config.time_limit = std::chrono::minutes(1);  // safety net
+            config.step_limit = 50;
+            DecomposedCalculator calculator;
+            addDefaultConstraints(calculator);
+            Solver(config).solve(plan, calculator);
+        } catch (const std::invalid_argument&) {
+            return true;
+        }
+        return false;
+    };
+    PdpRoutePlan pins = buildRandomInstance(4, 2, /*seed=*/2);
+    pins.deliveries[0].groupIndex = pins.deliveries[1].groupIndex = 0;
+    for (int v : {0, 1}) {
+        const Delivery& held = pins.deliveries[static_cast<std::size_t>(v)];
+        pins.vehicles[static_cast<std::size_t>(v)].nodeIndices = {held.pickupNodeIndex,
+                                                                  held.dropoffNodeIndex};
+        pins.vehicles[static_cast<std::size_t>(v)].pinnedNodeIndices = {held.pickupNodeIndex};
+    }
+    pins.rebuildUnassignedPool();
+    check(refuses(pins), "a group pinned on two vehicles is refused");
+    PdpRoutePlan mixed = pins;
+    mixed.vehicles[1].nodeIndices.clear();
+    mixed.vehicles[1].pinnedNodeIndices.clear();
+    mixed.deliveries[1].requiredVehicleIndex = 1;
+    mixed.rebuildUnassignedPool();
+    check(refuses(mixed), "a group pinned on one vehicle and required on another is refused");
+    mixed.deliveries[1].requiredVehicleIndex = 0;
+    check(!refuses(mixed), "pinned and required on the same vehicle is accepted");
     std::printf("\n");
 }
 

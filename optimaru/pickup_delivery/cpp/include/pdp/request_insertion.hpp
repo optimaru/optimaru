@@ -184,17 +184,18 @@ public:
     int vehicleOf(int deliveryIndex) const {
         return vehicle_[static_cast<std::size_t>(deliveryIndex)];
     }
-    // Whether one of the request's stops is pinned.
-    bool pinned(int deliveryIndex) const {
-        return pinned_[static_cast<std::size_t>(deliveryIndex)] != 0;
+    // The vehicle that pins one of the request's stops, or -1.
+    int pinnedOn(int deliveryIndex) const {
+        return pinnedOn_[static_cast<std::size_t>(deliveryIndex)];
     }
+    bool pinned(int deliveryIndex) const { return pinnedOn(deliveryIndex) >= 0; }
 
 private:
     std::vector<int> leader_;
     std::vector<int> next_;
     std::vector<int> size_;
     std::vector<int> vehicle_;
-    std::vector<char> pinned_;
+    std::vector<int> pinnedOn_;
     bool any_ = false;
 };
 

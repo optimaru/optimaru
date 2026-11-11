@@ -325,15 +325,13 @@ void RequestGroups::build(const PdpRoutePlan& plan) {
     next_.assign(count, -1);
     size_.assign(count, 1);
     vehicle_.resize(count);
-    pinned_.assign(count, 0);
+    pinnedOn_.assign(count, -1);
     any_ = false;
-    std::vector<int> pinnedOn(count, -1);
     for (std::size_t v = 0; v < plan.vehicles.size(); ++v) {
         for (int nodeIndex : plan.vehicles[v].pinnedNodeIndices) {
-            const auto d = static_cast<std::size_t>(
-                    plan.nodes[static_cast<std::size_t>(nodeIndex)].deliveryIndex);
-            pinned_[d] = 1;
-            pinnedOn[d] = static_cast<int>(v);
+            pinnedOn_[static_cast<std::size_t>(
+                    plan.nodes[static_cast<std::size_t>(nodeIndex)].deliveryIndex)] =
+                    static_cast<int>(v);
         }
     }
     std::vector<int> grouped;
@@ -360,14 +358,14 @@ void RequestGroups::build(const PdpRoutePlan& plan) {
             bound = plan.deliveries[static_cast<std::size_t>(grouped[i])].requiredVehicleIndex;
         }
         for (std::size_t i = first; i < last && bound < 0; ++i) {
-            bound = pinnedOn[static_cast<std::size_t>(grouped[i])];
+            bound = pinnedOn_[static_cast<std::size_t>(grouped[i])];
         }
         int leader = -1;
         int previous = -1;
         for (std::size_t i = first; i < last; ++i) {
             const auto d = static_cast<std::size_t>(grouped[i]);
             if (vehicle_[d] < 0) vehicle_[d] = bound;
-            if (pinned_[d]) continue;  // stays where it is, a unit of its own
+            if (pinnedOn_[d] >= 0) continue;  // stays where it is, a unit of its own
             if (leader < 0) {
                 leader = grouped[i];
                 size_[d] = 0;

@@ -360,13 +360,45 @@ void constructPairs(PdpRoutePlan& plan, bool decreasing) {
     }
     RequestGroups groups;
     groups.build(plan);
+    // The vehicle each unit has to go to, by leader: the one it is bound to,
+    // else the one that already carries most of its requests (the first such
+    // when they start on several), else -1.
+    std::vector<int> boundOf(plan.deliveries.size(), -1);
+    std::vector<std::pair<int, int>> riding;  // (vehicle, requests of the unit on it)
+    for (int deliveryIndex : order) {
+        const int leader = groups.leaderOf(deliveryIndex);
+        int& bound = boundOf[static_cast<std::size_t>(leader)];
+        bound = groups.vehicleOf(leader);
+        if (bound >= 0 || groups.sizeOf(leader) == 1) continue;
+        riding.clear();
+        for (int d = leader; d >= 0; d = groups.nextOf(d)) {
+            const int on = routedOn[static_cast<std::size_t>(
+                    plan.deliveries[static_cast<std::size_t>(d)].pickupNodeIndex)];
+            if (on < 0) continue;
+            const auto at = std::find_if(riding.begin(), riding.end(),
+                                         [on](const auto& entry) { return entry.first == on; });
+            if (at == riding.end()) {
+                riding.emplace_back(on, 1);
+            } else {
+                ++at->second;
+            }
+        }
+        int most = 0;
+        for (const auto& [vehicle, requests] : riding) {
+            if (requests > most) {
+                most = requests;
+                bound = vehicle;
+            }
+        }
+    }
     // A bound request has one vehicle to go to, so it goes first: a free
     // request placed before it could take the only slot that fits. A group
     // needs one vehicle with room for all of its requests, so it goes before
     // the requests that travel alone.
-    const auto rank = [&groups](int deliveryIndex) {
-        if (groups.vehicleOf(deliveryIndex) >= 0) return 0;
-        return groups.sizeOf(groups.leaderOf(deliveryIndex)) > 1 ? 1 : 2;
+    const auto rank = [&groups, &boundOf](int deliveryIndex) {
+        const int leader = groups.leaderOf(deliveryIndex);
+        if (boundOf[static_cast<std::size_t>(leader)] >= 0) return 0;
+        return groups.sizeOf(leader) > 1 ? 1 : 2;
     };
     std::stable_sort(order.begin(), order.end(),
                      [&rank](int a, int b) { return rank(a) < rank(b); });
@@ -385,16 +417,13 @@ void constructPairs(PdpRoutePlan& plan, bool decreasing) {
         if (done[static_cast<std::size_t>(leader)]) continue;  // went in with its group
         done[static_cast<std::size_t>(leader)] = 1;
 
-        // The requests of the unit still to place, and where the others ride.
+        // The requests of the unit still to place.
         waiting.clear();
-        int bound = groups.vehicleOf(leader);
+        const int bound = boundOf[static_cast<std::size_t>(leader)];
         for (int d = leader; d >= 0; d = groups.nextOf(d)) {
-            const int on = routedOn[static_cast<std::size_t>(
-                    plan.deliveries[static_cast<std::size_t>(d)].pickupNodeIndex)];
-            if (on < 0) {
+            if (routedOn[static_cast<std::size_t>(
+                        plan.deliveries[static_cast<std::size_t>(d)].pickupNodeIndex)] < 0) {
                 waiting.push_back(d);
-            } else if (bound < 0) {
-                bound = on;
             }
         }
 
@@ -442,6 +471,10 @@ public:
                std::vector<int>& entities) override {
         PdpRoutePlan& plan = ctx.editor.solution();
         if (plan.deliveries.size() < 2) return false;
+        if (!groupsBuilt_) {
+            groups_.build(plan);
+            groupsBuilt_ = true;
+        }
         const int pool = Descriptor::unassigned_list(plan);
         for (int attempt = 0; attempt < 12; ++attempt) {
             const int a = static_cast<int>(rng() % plan.deliveries.size());
@@ -450,7 +483,8 @@ public:
             const Delivery& da = plan.deliveries[static_cast<std::size_t>(a)];
             const Delivery& db = plan.deliveries[static_cast<std::size_t>(b)];
             // A group changes vehicle as one, in the request moves.
-            if (da.groupIndex >= 0 || db.groupIndex >= 0) continue;
+            if (groups_.sizeOf(groups_.leaderOf(a)) > 1 || groups_.sizeOf(groups_.leaderOf(b)) > 1)
+                continue;
             const int listA = ctx.element_list[da.pickupNodeIndex];
             const int listB = ctx.element_list[db.pickupNodeIndex];
             if (listA < 0 || listB < 0 || listA == listB || listA == pool || listB == pool ||
@@ -512,6 +546,8 @@ private:
     }
 
     std::vector<std::pair<int, std::vector<int>>> saved_;
+    RequestGroups groups_;  // which requests travel together
+    bool groupsBuilt_ = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -601,19 +637,30 @@ void checkRequiredVehicles(const PdpRoutePlan& plan) {
     }
 }
 
-// The requests of a group ride one vehicle, so they cannot be promised to two.
+// The requests of a group ride one vehicle, so two of them cannot be bound to
+// different ones. A request is bound by its required vehicle, else by the
+// vehicle that pins one of its stops. Such a group could never be whole, and
+// the result would be hard-infeasible without a word of why.
 void checkRequestGroups(const PdpRoutePlan& plan) {
-    std::unordered_map<int, const Delivery*> boundBy;
-    for (const Delivery& delivery : plan.deliveries) {
+    RequestGroups groups;
+    groups.build(plan);
+    std::unordered_map<int, std::pair<int, const Delivery*>> boundBy;  // group -> (vehicle, by)
+    for (std::size_t d = 0; d < plan.deliveries.size(); ++d) {
+        const Delivery& delivery = plan.deliveries[d];
         if (delivery.groupIndex < -1) {
             throw std::invalid_argument("request " + delivery.id + ": groupIndex " +
                                         std::to_string(delivery.groupIndex) + " is below -1");
         }
-        if (delivery.groupIndex < 0 || delivery.requiredVehicleIndex < 0) continue;
-        const Delivery* first = boundBy.emplace(delivery.groupIndex, &delivery).first->second;
-        if (first->requiredVehicleIndex != delivery.requiredVehicleIndex) {
-            throw std::invalid_argument("requests " + first->id + " and " + delivery.id +
-                                        " share a group but require different vehicles");
+        if (delivery.groupIndex < 0) continue;
+        const int vehicle = delivery.requiredVehicleIndex >= 0
+                                    ? delivery.requiredVehicleIndex
+                                    : groups.pinnedOn(static_cast<int>(d));
+        if (vehicle < 0) continue;
+        const auto& first = boundBy.emplace(delivery.groupIndex, std::make_pair(vehicle, &delivery))
+                                    .first->second;
+        if (first.first != vehicle) {
+            throw std::invalid_argument("requests " + first.second->id + " and " + delivery.id +
+                                        " share a group but are bound to different vehicles");
         }
     }
 }

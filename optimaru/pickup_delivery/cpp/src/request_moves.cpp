@@ -786,6 +786,8 @@ private:
     std::vector<char> taken_;   // unit is in pending_
     std::vector<int> moved_;    // requests detached by this move
     // The slot pairs UnitOption::steps points into; cleared when a move begins.
+    // Within a move it only grows: improveUnit() drops no more than what it
+    // has just added, so the steps of an option handed out earlier stay.
     std::vector<RequestInsertion> steps_;
     UnitPlanner planner_;
     std::vector<std::pair<int, std::vector<int>>> saved_;  // lists as they were, for undo

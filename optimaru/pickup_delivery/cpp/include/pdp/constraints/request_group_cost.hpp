@@ -58,6 +58,7 @@ struct RequestGroupCost final : PdpGlobalConstraint {
             first = last;
         }
         place_.assign(groupOf_.size(), -1);
+        slotsOn_.assign(members_per_unit.size(), {});
         cost_.assign(start_.size() - 1, 0);
         touched_.assign(start_.size() - 1, 0);
         total_ = 0;
@@ -67,7 +68,9 @@ struct RequestGroupCost final : PdpGlobalConstraint {
             if (detail::isPool(plan, static_cast<int>(unit))) continue;
             for (int nodeIndex : members_per_unit[unit]) {
                 const int slot = slotOf_[static_cast<std::size_t>(nodeIndex)];
-                if (slot >= 0) place_[static_cast<std::size_t>(slot)] = static_cast<int>(unit);
+                if (slot < 0) continue;
+                place_[static_cast<std::size_t>(slot)] = static_cast<int>(unit);
+                slotsOn_[unit].push_back(slot);
             }
         }
         for (std::size_t group = 0; group + 1 < start_.size(); ++group) {
@@ -81,17 +84,20 @@ struct RequestGroupCost final : PdpGlobalConstraint {
         // The pool is "on no vehicle", which is what a pickup that left its
         // route already reads as.
         if (groupOf_.empty() || detail::isPool(plan, unit)) return;
-        // Whatever used to ride this vehicle is nowhere until recorded anew.
-        for (std::size_t slot = 0; slot < place_.size(); ++slot) {
-            if (place_[slot] == unit) {
-                place_[slot] = -1;
-                touch(groupOf_[slot]);
-            }
+        // Whatever was last recorded on this vehicle is nowhere until recorded
+        // anew, unless another vehicle has recorded it since.
+        std::vector<int>& recorded = slotsOn_[static_cast<std::size_t>(unit)];
+        for (int slot : recorded) {
+            if (place_[static_cast<std::size_t>(slot)] != unit) continue;
+            place_[static_cast<std::size_t>(slot)] = -1;
+            touch(groupOf_[static_cast<std::size_t>(slot)]);
         }
+        recorded.clear();
         for (int nodeIndex : members) {
             const int slot = slotOf_[static_cast<std::size_t>(nodeIndex)];
             if (slot < 0) continue;
             place_[static_cast<std::size_t>(slot)] = unit;
+            recorded.push_back(slot);
             touch(groupOf_[static_cast<std::size_t>(slot)]);
         }
         for (int group : touchedList_) {
@@ -131,10 +137,13 @@ private:
         return static_cast<std::int64_t>(scratch_.size() - most);
     }
 
-    std::vector<int> slotOf_;         // node -> its slot below, or -1 (not a grouped pickup)
-    std::vector<int> groupOf_;        // slot -> its group, the groups numbered densely
-    std::vector<int> start_;          // group -> its first slot; one past the last group at the end
-    std::vector<int> place_;          // slot -> the vehicle the pickup rides, or -1
+    std::vector<int> slotOf_;   // node -> its slot below, or -1 (not a grouped pickup)
+    std::vector<int> groupOf_;  // slot -> its group, the groups numbered densely
+    std::vector<int> start_;    // group -> its first slot; one past the last group at the end
+    std::vector<int> place_;    // slot -> the vehicle the pickup rides, or -1
+    // vehicle -> the slots last recorded on it, so a change costs what the
+    // route holds and not every grouped request of the plan
+    std::vector<std::vector<int>> slotsOn_;
     std::vector<std::int64_t> cost_;  // group -> its requests apart
     std::int64_t total_ = 0;
 

@@ -12,7 +12,7 @@
   no single vehicle has room; the pair move, the pair exchange and the pair ruin stay
   inside a group. A `required_vehicle` on one request, a pinned stop or a request already
   on an initial route binds the whole group to that vehicle, and two requests of a group
-  that require different vehicles are refused. `solve_request` scores groups whenever a
+  bound to different vehicles (by a required vehicle or a pinned stop) are refused. `solve_request` scores groups whenever a
   request names one; on a hand-built plan pass `constraints=get_constraints()`. Engine-only:
   the CP-SAT reference does not read `group`. `list_constraints()` and `constraint_info()`
   have one more row, before `unassigned_requests_cost`. A plan without groups is solved
