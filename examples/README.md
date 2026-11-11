@@ -7,16 +7,16 @@ are saved with their outputs, so you can read them on GitHub without running any
 ## Run them
 
 ```bash
-pip install "optimaru>=0.4.1" matplotlib jupyter
+pip install "optimaru>=0.4.2" matplotlib jupyter
 jupyter lab
 ```
 
-Requires Python 3.11+ and optimaru 0.4.1 or later. Each notebook stands alone, so you can download a
+Requires Python 3.11+ and optimaru 0.4.2 or later. Each notebook stands alone, so you can download a
 single file and run it.
 
 Most solves stop on a time limit, so your scores and charts can differ a little from the saved outputs,
 depending on your machine. The saved outputs come from a run of optimaru 0.4.1 on macOS (Apple
-silicon); regenerate them there, so that a re-run changes only what the engine changed. On another platform the same seed can take a different path, even in a solve with a step limit.
+silicon), those of [`pickup-delivery.ipynb`](pickup-delivery.ipynb) from 0.4.2; regenerate them there, so that a re-run changes only what the engine changed. On another platform the same seed can take a different path, even in a solve with a step limit.
 
 ## Where to start
 

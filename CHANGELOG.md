@@ -17,6 +17,11 @@
   fields are the new `optimaru::AcceptanceConfig` base (`optimaru/solver_config.hpp`), the
   automatic temperature is the engine's (`AcceptanceSettings::start_temperature_fraction`), and
   `optimaru::python::bind_acceptor_type()` binds the enum. Pickup and delivery follows.
+- **Pickup and delivery notebook re-run on 0.4.2.** `examples/pickup-delivery.ipynb` is saved
+  with outputs from optimaru 0.4.2: the same problem now ends at 5.2 hours of driving, where
+  0.4.1 ended at 5.4. Its rounds of more search are 0.02 seconds each (was 0.3), because 0.4.2
+  settles within one 0.3-second round and both lines of the chart stayed flat. The install
+  line in `examples/README.md` asks for 0.4.2, the version that notebook needs.
 
 ## 0.4.2
 
