@@ -131,8 +131,9 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
   "reward", "level_flippable", "name", "label", ...}}`; the per-item lists (one item per lot,
   route pair, machine, window, ...) are `constraint_items(problem)`.
 - **`SolverConfig`**: the engine's knobs (`spent_limit_seconds`, `step_count_limit`,
-  `unimproved_*`, `random_seed`, `parallel_solver_count`, `acceptor_type`,
-  `simulated_annealing_starting_temperature`, `simulated_annealing_temperature_fraction`,
+  `unimproved_*`, `random_seed`, `parallel_solver_count`, `acceptor_type` and the
+  parameters of each rule (see
+  [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule)),
   `late_acceptance_size`, `machine_move_probability`, `priority_swap_moves`,
   `custom_move_probability`, `change_move_weight`, `swap_move_weight`, `ruin_recreate*`,
   `best_score_limit`, `full_assert`,

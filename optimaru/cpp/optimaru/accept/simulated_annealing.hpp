@@ -4,6 +4,7 @@
 #ifndef OPTIMARU_ACCEPT_SIMULATED_ANNEALING_HPP
 #define OPTIMARU_ACCEPT_SIMULATED_ANNEALING_HPP
 
+#include <algorithm>
 #include <cmath>
 #include <random>
 
@@ -44,6 +45,13 @@ public:
 private:
     Score start_temperature_;
 };
+
+// The starting temperature that stands in for (0, 0) when a fraction is
+// given: hard 0, so a hard-worse move is never taken, and that fraction of the
+// initial score's soft magnitude, at least 1.
+inline Score automatic_start_temperature(const Score& initial_score, double fraction) {
+    return {0, std::max(1.0, fraction * std::fabs(initial_score.soft))};
+}
 
 }  // namespace optimaru
 

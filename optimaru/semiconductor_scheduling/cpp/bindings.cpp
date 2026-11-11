@@ -336,41 +336,11 @@ PYBIND11_MODULE(_core, m) {
             "total_weighted_tardiness and "
             "total_cycle_time.");
 
-    py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())
-            .value("HILL_CLIMBING", optimaru::AcceptanceRule::HillClimbing)
-            .value("LATE_ACCEPTANCE", optimaru::AcceptanceRule::LateAcceptance)
-            .value("ENTITY_TABU", optimaru::AcceptanceRule::EntityTabu)
-            .value("SIMULATED_ANNEALING", optimaru::AcceptanceRule::SimulatedAnnealing)
-            .value("GREAT_DELUGE", optimaru::AcceptanceRule::GreatDeluge)
-            .value("STEP_COUNTING_HILL_CLIMBING",
-                   optimaru::AcceptanceRule::StepCountingHillClimbing)
-            .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptanceRule::RecordToRecordTravel);
+    opy::bind_acceptor_type(m);
 
     optimaru::python::bind_solver_config(
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
             .def(py::init<>())
-            .def_readwrite("acceptor_type", &Solver::Config::rule)
-            .def_property(
-                    "simulated_annealing_starting_temperature",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.start_temperature.hard, c.start_temperature.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        c.start_temperature = Score{hs.first, hs.second};
-                    })
-            // SIMULATED_ANNEALING with a (0, 0) starting temperature: soft
-            // temperature = this fraction of the start's |soft| (hard 0).
-            .def_property(
-                    "simulated_annealing_temperature_fraction",
-                    [](const Solver::Config& c) {
-                        return c.simulated_annealing_temperature_fraction;
-                    },
-                    [](Solver::Config& c, double f) {
-                        if (!(f > 0.0))
-                            throw py::value_error(
-                                    "simulated_annealing_temperature_fraction must be > 0");
-                        c.simulated_annealing_temperature_fraction = f;
-                    })
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
             .def_property(

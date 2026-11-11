@@ -112,8 +112,13 @@ struct AcceptanceSettings {
 
     std::size_t history_length = 400;  // LateAcceptance
     int tabu_tenure = 7;               // EntityTabu
-    // SimulatedAnnealing: must be set to a sensible starting temperature.
+    // SimulatedAnnealing: the starting temperature, cooling to 0 over the
+    // solve. (0, 0) with a start_temperature_fraction above 0 is automatic:
+    // hard 0 (a hard-worse move is never taken) and soft = the fraction of
+    // the initial score's soft magnitude, at least 1. (0, 0) with a fraction
+    // of 0 accepts no worsening move at all.
     Score start_temperature{0, 0.0};
+    double start_temperature_fraction = 0.0;
     // GreatDeluge: how much the water level rises per step.
     Score water_level_step{0, 0.0};
     std::int64_t recount_interval = 400;  // StepCountingHillClimbing

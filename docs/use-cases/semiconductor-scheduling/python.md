@@ -82,6 +82,7 @@ For finer control build `fab.SolverConfig()` and pass `config=`:
 | `acceptor_type` | `SIMULATED_ANNEALING` | the engine's acceptor (`LATE_ACCEPTANCE`, `HILL_CLIMBING`, ...) |
 | `simulated_annealing_starting_temperature`, `simulated_annealing_temperature_fraction` | (0, 0) = auto, 0.01 | auto: hard 0, soft = 1% of the start's \|soft\|, cooling over the time limit (or over `step_count_limit` when that is further along). A seeded `step_count_limit` run repeats only while its step fraction leads the time fraction: give it a time limit generous enough for the step budget |
 | `late_acceptance_size` | 0 (= clamp(16 x rows, 400, 3200)) | for `LATE_ACCEPTANCE` |
+| `entity_tabu_size`, `great_deluge_water_level_step`, `step_counting_hill_climbing_size`, `record_to_record_start_gap`, `record_to_record_end_gap` | 7, (0, 0), 400, 0.02, 0.0 | the parameters of the other rules: see [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule) |
 | `machine_move_probability` | 0.55 | share of change moves that switch a machine (else a priority shift of 1..8) |
 | `priority_swap_moves`, `custom_move_probability` | True, 0.45 | the priority swap of two operations, and its gate |
 | `change_move_weight`, `swap_move_weight` | 1, 0 | the engine's assignment-shape move mix |

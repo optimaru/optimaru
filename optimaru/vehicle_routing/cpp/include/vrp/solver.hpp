@@ -54,7 +54,11 @@ public:
     //                     the plugin path both are read off the calculator
     //                     before the medium fold, so a soft total of 10^9 or
     //                     more stays on soft in both.
-    struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
+    //   acceptance        the shared AcceptanceConfig: the rule (late
+    //                     acceptance by default) and each rule's parameters
+    struct Config : optimaru::SolverConfigBase<Score>,
+                    optimaru::RuinRecreateConfig,
+                    optimaru::AcceptanceConfig {
         // The stagnation KICK (ruin 10-30%, repair, make it the incumbent
         // unconditionally) is OFF by default: on a tightly loaded fleet the
         // kicked solution is far below the best and the search never finds
@@ -71,13 +75,6 @@ public:
         // First Fit Decreasing: initialize the tightest-window, largest-demand
         // visits first. Plain First Fit (input order) with false.
         bool first_fit_decreasing = true;
-
-        // --- acceptance ---------------------------------------------------
-        optimaru::AcceptanceRule rule = optimaru::AcceptanceRule::LateAcceptance;
-        // RECORD_TO_RECORD_TRAVEL: the acceptable gap below the best score,
-        // as a fraction of the initial objective, shrinking start -> end.
-        double record_to_record_start_gap = 0.02;
-        double record_to_record_end_gap = 0.0;
 
         // --- move mix -----------------------------------------------------
         double relocate_weight = 0.4;

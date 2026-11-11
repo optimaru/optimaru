@@ -191,53 +191,11 @@ PYBIND11_MODULE(_core, m) {
             "Full recompute of the score at the default constraints (also "
             "stores problem.score).");
 
-    py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())
-            .value("HILL_CLIMBING", optimaru::AcceptanceRule::HillClimbing)
-            .value("LATE_ACCEPTANCE", optimaru::AcceptanceRule::LateAcceptance)
-            .value("ENTITY_TABU", optimaru::AcceptanceRule::EntityTabu)
-            .value("SIMULATED_ANNEALING", optimaru::AcceptanceRule::SimulatedAnnealing)
-            .value("GREAT_DELUGE", optimaru::AcceptanceRule::GreatDeluge)
-            .value("STEP_COUNTING_HILL_CLIMBING",
-                   optimaru::AcceptanceRule::StepCountingHillClimbing)
-            .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptanceRule::RecordToRecordTravel);
+    opy::bind_acceptor_type(m);
 
     optimaru::python::bind_solver_config(
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))
-            .def(py::init<>())
-            // The local-search acceptor (LATE_ACCEPTANCE by default).
-            .def_readwrite("acceptor_type", &Solver::Config::rule)
-            .def_property(
-                    "entity_tabu_size", [](const Solver::Config& c) { return c.tabu_tenure; },
-                    [](Solver::Config& c, int size) {
-                        if (size < 0) throw py::value_error("entity_tabu_size must be >= 0");
-                        c.tabu_tenure = size;
-                    })
-            // SIMULATED_ANNEALING: (0, 0) = auto, soft = the fraction below x
-            // |the start's soft score| (the semiconductor-scheduling rule).
-            .def_property(
-                    "simulated_annealing_starting_temperature",
-                    [](const Solver::Config& c) {
-                        return py::make_tuple(c.start_temperature.hard, c.start_temperature.soft);
-                    },
-                    [](Solver::Config& c, std::pair<std::int64_t, double> hs) {
-                        if (hs.first < 0 || !(hs.second >= 0.0) || !std::isfinite(hs.second))
-                            throw py::value_error(
-                                    "simulated_annealing_starting_temperature must be finite and "
-                                    ">= 0");
-                        c.start_temperature = Score{hs.first, hs.second};
-                    })
-            .def_property(
-                    "simulated_annealing_temperature_fraction",
-                    [](const Solver::Config& c) {
-                        return c.simulated_annealing_temperature_fraction;
-                    },
-                    [](Solver::Config& c, double f) {
-                        if (!(f > 0.0) || !std::isfinite(f))
-                            throw py::value_error(
-                                    "simulated_annealing_temperature_fraction must be finite and > "
-                                    "0");
-                        c.simulated_annealing_temperature_fraction = f;
-                    });
+            .def(py::init<>());
 
     py::class_<Solver>(m, "Solver", py::module_local())
             .def(py::init<>())

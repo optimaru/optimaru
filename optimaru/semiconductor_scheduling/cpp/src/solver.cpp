@@ -81,8 +81,6 @@ void validate(const Solver::Config& config) {
         throw std::invalid_argument("parallel_solver_count must be positive");
     if (config.machine_move_probability < 0.0 || config.machine_move_probability > 1.0)
         throw std::invalid_argument("machine_move_probability must be in [0, 1]");
-    if (!(config.simulated_annealing_temperature_fraction > 0.0))
-        throw std::invalid_argument("simulated_annealing_temperature_fraction must be > 0");
 }
 
 // The change move's value: another machine for the row (rank kept), or a
@@ -118,13 +116,10 @@ void Solver::runSingle(SemiconductorSchedule& schedule,
                        optimaru::Objective<SemiconductorSchedule>& calculator) const {
     optimaru::Settings engineConfig = optimaru::settings_from(config_);
 
-    auto& acceptor = engineConfig.search.acceptance;
-    acceptor.rule = config_.rule;
-    acceptor.history_length =
+    engineConfig.search.acceptance.history_length =
             config_.history_length != 0
                     ? config_.history_length
                     : std::clamp<std::size_t>(16 * schedule.rows.size(), 400, 3200);
-    acceptor.start_temperature = config_.start_temperature;
 
     engineConfig.search.moves.change_weight = config_.change_weight;
     engineConfig.search.moves.swap_weight = config_.swap_weight;
@@ -133,19 +128,8 @@ void Solver::runSingle(SemiconductorSchedule& schedule,
     // working values through it.
     engineConfig.search.value_hint = value_hint(&schedule, config_.machine_move_probability);
 
-    const bool autoTemperature = config_.rule == optimaru::AcceptanceRule::SimulatedAnnealing &&
-                                 config_.start_temperature.hard == 0 &&
-                                 config_.start_temperature.soft == 0.0;
     optimaru::Solver<SemiconductorSchedule> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (autoTemperature) {
-        const double fraction = config_.simulated_annealing_temperature_fraction;
-        engine.set_acceptor_factory(
-                [fraction](const optimaru::Score& start) -> std::unique_ptr<optimaru::Acceptor> {
-                    const double soft = std::max(1.0, fraction * std::fabs(start.soft));
-                    return std::make_unique<optimaru::SimulatedAnnealing>(optimaru::Score{0, soft});
-                });
-    }
     if (config_.priority_swap_moves) engine.add_move_operator(std::make_unique<PrioritySwapMove>());
     engine.solve(schedule, calculator);
 }

@@ -161,8 +161,8 @@ The package is the C++ engine with pybind11 bindings, like the other C++ use cas
 - **`SolverConfig`** is the engine's (`spent_limit_seconds`,
   `unimproved_spent_limit_seconds`, `step_count_limit`,
   `unimproved_step_count_limit`, `random_seed`, `parallel_solver_count`,
-  `acceptor_type`, `late_acceptance_size`, `entity_tabu_size`, `full_assert`,
-  `best_score_limit`, `on_new_best`), set by attribute. Zero budget
+  `acceptor_type` and the parameters of each rule, `late_acceptance_size`,
+  `full_assert`, `best_score_limit`, `on_new_best`), set by attribute. Zero budget
   = `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded
   search = `step_count_limit = N`. Without a time limit a solve runs the 30 s
   budget. `on_new_best(step, score)` is called on each new best. Parallel starts are
@@ -181,7 +181,10 @@ The package is the C++ engine with pybind11 bindings, like the other C++ use cas
   step-limited run repeats only while the step fraction leads, so give it a
   time limit generous enough for the step budget; once the clock leads, the
   run depends on timing. `ENTITY_TABU` accepts only non-worsening swaps (a hill
-  climber), and `GREAT_DELUGE` keeps the start score as its water level.
+  climber), and `GREAT_DELUGE` keeps the start score as its water level until
+  `great_deluge_water_level_step` gives it a rise per step. The parameters of
+  every rule are listed under
+  [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule).
 - `solve()` returns the solved problem: the engine object it was given, solved in place (its `score` is the engine `Score`: `.hard`, `.soft`, `is_feasible()`), or, for a model, a new model with the result and `score_hard` / `score_soft` (the model passed in is not changed).
   `calculate_score(problem, constraints)` returns the engine `Score` for the
   defaults and a `constraints.Score(hard, soft)` named tuple for a selection.

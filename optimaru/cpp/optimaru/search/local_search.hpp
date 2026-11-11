@@ -399,8 +399,14 @@ private:
                 return std::make_unique<HillClimbing>();
             case AcceptanceRule::EntityTabu:
                 return std::make_unique<EntityTabu>(c.tabu_tenure);
-            case AcceptanceRule::SimulatedAnnealing:
-                return std::make_unique<SimulatedAnnealing>(c.start_temperature);
+            case AcceptanceRule::SimulatedAnnealing: {
+                const bool automatic =
+                        c.start_temperature == Score{0, 0.0} && c.start_temperature_fraction > 0.0;
+                return std::make_unique<SimulatedAnnealing>(
+                        automatic ? automatic_start_temperature(initial_score,
+                                                                c.start_temperature_fraction)
+                                  : c.start_temperature);
+            }
             case AcceptanceRule::GreatDeluge:
                 return std::make_unique<GreatDeluge>(initial_score, c.water_level_step);
             case AcceptanceRule::StepCountingHillClimbing:
