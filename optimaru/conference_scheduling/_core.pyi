@@ -8,7 +8,8 @@ class Score:
     def hard(self) -> int: ...
     @property
     def soft(self) -> float: ...
-    def is_feasible(self) -> bool: ...
+    def is_feasible(self) -> bool:
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Timeslot:
     id: str

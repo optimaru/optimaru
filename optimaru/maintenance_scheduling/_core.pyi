@@ -39,7 +39,7 @@ class Score:
     @property
     def soft(self) -> float: ...
     def is_feasible(self) -> bool:
-        """True if hard == 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Crew:
     """Problem fact: a crew. It can do at most one job per day."""

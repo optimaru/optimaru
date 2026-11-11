@@ -31,7 +31,7 @@ class Score:
     @property
     def soft(self) -> float: ...
     def is_feasible(self) -> bool:
-        """True if hard >= 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Airport:
     """Problem fact: an airport. Other objects reference it by index into this list."""

@@ -22,7 +22,7 @@ class Score:
     @property
     def soft(self) -> float: ...
     def is_feasible(self) -> bool:
-        """True iff hard >= 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Facility:
     """A facility placed at exactly one location."""
@@ -142,7 +142,7 @@ class SolverConfig:
     acceptor_type: AcceptorType
     """LATE_ACCEPTANCE by default."""
     late_acceptance_size: int
-    """0 = auto: clamp(8 * facility count, 400, 3200)."""
+    """LATE_ACCEPTANCE: 0 = auto: clamp(8 * facility count, 400, 3200)."""
     entity_tabu_size: int
     """ENTITY_TABU: for how many steps a moved facility stays tabu (7 by default; >= 0).
     ENTITY_TABU accepts only non-worsening swaps (sideways ones blocked on tabu facilities),

@@ -41,7 +41,7 @@ class Score:
     @property
     def soft2(self) -> int: ...
     def is_feasible(self) -> bool:
-        """True if hard >= 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Affinity(Enum):
     """Employee-customer affinity. Duration multiplier: HIGH 1 / MEDIUM 2 / LOW 3 / NONE 4."""

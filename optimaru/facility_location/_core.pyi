@@ -20,7 +20,7 @@ class Score:
     @property
     def soft(self) -> float: ...
     def is_feasible(self) -> bool:
-        """True iff hard >= 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Location:
     def __init__(self, latitude: float, longitude: float) -> None: ...
