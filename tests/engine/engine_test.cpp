@@ -1017,6 +1017,36 @@ void testNearbyAndLnsOnRandomTsp() {
 // ===========================================================================
 namespace {
 
+// The stages at work. With a history of one entry and no kicks, late
+// acceptance is a hill climber that stops at the first tour no single move
+// improves; nothing else in this configuration can leave it. The same search
+// with history_growth restarts with longer and longer histories, so a shorter
+// tour under the same step limit means stages started and found it. A factor
+// close to 1 must still lengthen a one-entry history.
+void testHistoryGrowthOnRandomTsp() {
+    std::printf("== late acceptance: history growth on random TSP (100 cities) ==\n");
+    auto solveWith = [&](double growth) {
+        TspSolution s = buildRandomTsp(1, 100);
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::minutes(10);  // the step limit binds
+        config.limits.step_limit = 600000;
+        config.seed = 11;
+        config.search.acceptance.history_length = 1;
+        config.search.acceptance.history_growth = growth;
+        TspCalculator calculator;
+        Score result = optimaru::Solver<TspSolution>(config).solve(s, calculator);
+        return -result.soft;  // tour length
+    };
+    const double fixed = solveWith(0.0);
+    const double doubled = solveWith(2.0);
+    const double slow = solveWith(1.2);
+    std::printf("    history 1: tour = %.3f, growth 2: %.3f, growth 1.2: %.3f\n", fixed, doubled,
+                slow);
+    check(doubled < fixed - 1e-9, "a doubled history per stage finds a shorter tour");
+    check(slow < fixed - 1e-9, "a factor of 1.2 still lengthens a one-entry history");
+    check(solveWith(1.0) == fixed, "a factor of 1 is off: the same tour as without");
+}
+
 void testExpandedMoves() {
     std::printf("== Moves: Or-opt + tail swap (2-opt*) ==\n");
     {  // 2 routes with the full move mix under ScoreChecks::Full + conservation.
@@ -2268,6 +2298,7 @@ int main() {
     testLnsEscapesLocalOptimum(optimum);
     testHistoryGrowth(separableOptimum);
     testNearbyAndLnsOnRandomTsp();
+    testHistoryGrowthOnRandomTsp();
     testExpandedMoves();
     testDecomposedDeltaCalculator();
     testMemberChangeGlobalConstraint();

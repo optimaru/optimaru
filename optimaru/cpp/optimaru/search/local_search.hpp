@@ -5,6 +5,7 @@
 #define OPTIMARU_SEARCH_LOCAL_SEARCH_HPP
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -231,7 +232,7 @@ public:
             // without an improving move.
             if (stages.enabled()) patience = std::max(patience, stages.min_patience());
             if (stages.enabled() && steps_since_best_or_lns >= patience &&
-                stages.next_is_due(stop.progress(), !lns.enabled)) {
+                stages.converged(stop.progress(), !lns.enabled)) {
                 acceptor = stages.start_next(stop.progress());
                 steps_since_best_or_lns = 0;
             } else if (lns.enabled && steps_since_best_or_lns >= patience) {
@@ -243,6 +244,7 @@ public:
                 // the following small moves re-polish the kicked solution
                 // instead of instantly rejecting it (best is snapshotted, so
                 // a bad kick can never worsen the returned solution).
+                // (In stages: with the history of the stage the search is in.)
                 acceptor = stages.enabled() ? stages.acceptor(current_score)
                                             : make_acceptor(current_score);
                 steps_since_best_or_lns = 0;
@@ -365,7 +367,8 @@ private:
             : growth_(config.search.acceptance.history_growth),
               enabled_(growth_ > 1.0 && !custom_acceptor &&
                        config.search.acceptance.rule == AcceptanceRule::LateAcceptance),
-              history_(config.search.acceptance.history_length),
+              history_(std::clamp<std::size_t>(config.search.acceptance.history_length, 1,
+                                               kMaxHistory)),
               start_score_(start_score),
               stage_start_(now),
               last_best_(now) {}
@@ -373,18 +376,20 @@ private:
         bool enabled() const { return enabled_; }
         std::int64_t min_patience() const { return 2 * static_cast<std::int64_t>(history_); }
 
-        // Called once the current stage has converged. The first call
-        // measures how long a stage of the current length takes.
-        bool next_is_due(double now, bool no_kicks) {
+        // Tells the stages that the search has converged, and returns whether
+        // the next stage starts now. It records how long the stage that just
+        // ended took (the first call: a stage of the configured length).
+        bool converged(double now, bool no_kicks) {
             if (stage_cost_ < 0.0 || in_stage_) stage_cost_ = now - stage_start_;
             in_stage_ = false;
-            const double next_cost = growth_ * stage_cost_;
+            const double next_cost = stage_cost_ * static_cast<double>(next_history()) /
+                                     static_cast<double>(history_);
             const bool stalled = no_kicks || now - last_best_ >= 0.5 * next_cost;
             return stalled && now + next_cost <= 1.0;
         }
 
         std::unique_ptr<Acceptor> start_next(double now) {
-            history_ = static_cast<std::size_t>(static_cast<double>(history_) * growth_);
+            history_ = next_history();
             stage_start_ = now;
             in_stage_ = true;
             return acceptor(start_score_);
@@ -397,6 +402,22 @@ private:
         void on_new_best(double now) { last_best_ = now; }
 
     private:
+        // A history holds one Score per step it remembers, so its length is
+        // memory: a long budget on a small instance would otherwise double it
+        // without end. At the cap a stage restarts with the same length, an
+        // independent run of the search.
+        static constexpr std::size_t kMaxHistory = std::size_t{1} << 20;
+
+        // Always longer than the current one below the cap, also for a factor
+        // close to 1 on a short history.
+        std::size_t next_history() const {
+            const double grown = std::ceil(static_cast<double>(history_) * growth_);
+            const std::size_t next = grown >= static_cast<double>(kMaxHistory)
+                                             ? kMaxHistory
+                                             : static_cast<std::size_t>(grown);
+            return std::min(kMaxHistory, std::max(history_ + 1, next));
+        }
+
         double growth_;
         bool enabled_;
         std::size_t history_;

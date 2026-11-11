@@ -123,7 +123,14 @@ struct AcceptanceSettings {
     // still fits in the budget (a stage is taken to last the factor times the
     // one before). The search goes on from the current solution and the best
     // one is kept as always, so a stage that finds nothing costs only its
-    // time. Kicks between stages use the stage's history. 1 or less = off.
+    // time. The history stops growing at 2^20 entries (16 MB); from there a
+    // stage restarts with that length. 1 or less = off.
+    //
+    // Stages also change when a ruin & recreate kick fires: a kick's acceptor
+    // has the history of the stage the search is in, stagnation counts from
+    // the last improving move (a stage starts far below the best), and a kick
+    // waits at least two histories, so unimproved_step_trigger has less
+    // effect the longer the history gets.
     double history_growth = 0.0;
     int tabu_tenure = 7;  // EntityTabu
     // SimulatedAnnealing: the starting temperature, cooling to 0 over the

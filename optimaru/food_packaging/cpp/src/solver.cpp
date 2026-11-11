@@ -17,6 +17,19 @@ namespace fp {
 
 namespace {
 
+// Late acceptance of both solve() overloads: the automatic history length,
+// and a restart with a doubled history when the search stalls (see
+// AcceptanceSettings::history_growth; measured on every instance of
+// benchmarks/food-packaging, none worse at 30 s on three seeds).
+void setLateAcceptance(optimaru::AcceptanceSettings& acceptance, std::size_t historyLength,
+                       int movableJobs) {
+    acceptance.history_length =
+            historyLength != 0
+                    ? historyLength
+                    : std::clamp<std::size_t>(8 * static_cast<std::size_t>(movableJobs), 400, 3200);
+    acceptance.history_growth = 2.0;
+}
+
 // Raw cleaning-window overlap minutes between every pair of lines (operator
 // agnostic), from the current job lists. overlap[i][j] is what the
 // operatorCleaningConflictCost constraint would charge if lines i and j
@@ -180,15 +193,7 @@ void Solver::solve(PackagingSchedule& schedule) {
         }
         engineConfig.limits.time_limit = remaining / (rounds - round);
         engineConfig.limits.target_score = config_.target_score;
-        engineConfig.search.acceptance.history_length =
-                config_.history_length != 0
-                        ? config_.history_length
-                        : std::clamp<std::size_t>(8 * static_cast<std::size_t>(movableJobs), 400,
-                                                  3200);
-        // Restart late acceptance with a doubled history when the search stalls
-        // (see AcceptanceSettings::history_growth): measured on every instance of
-        // benchmarks/food-packaging, none worse at 30 s.
-        engineConfig.search.acceptance.history_growth = 2.0;
+        setLateAcceptance(engineConfig.search.acceptance, config_.history_length, movableJobs);
         auto& moves = engineConfig.search.moves;
         moves.relocate_weight = config_.relocate_weight;
         moves.list_swap_weight = config_.list_swap_weight;
@@ -272,15 +277,7 @@ void Solver::solve(PackagingSchedule& schedule,
             };
         }
         engineConfig.limits.target_score = config_.target_score;
-        engineConfig.search.acceptance.history_length =
-                config_.history_length != 0
-                        ? config_.history_length
-                        : std::clamp<std::size_t>(8 * static_cast<std::size_t>(movableJobs), 400,
-                                                  3200);
-        // Restart late acceptance with a doubled history when the search stalls
-        // (see AcceptanceSettings::history_growth): measured on every instance of
-        // benchmarks/food-packaging, none worse at 30 s.
-        engineConfig.search.acceptance.history_growth = 2.0;
+        setLateAcceptance(engineConfig.search.acceptance, config_.history_length, movableJobs);
         auto& moves = engineConfig.search.moves;
         moves.relocate_weight = config_.relocate_weight;
         moves.list_swap_weight = config_.list_swap_weight;
