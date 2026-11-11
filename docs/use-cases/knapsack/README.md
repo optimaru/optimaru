@@ -131,7 +131,7 @@ rejects an exponent other than 1).
   `parallel_solver_count`, `late_acceptance_size` (the first stage's:
   [late acceptance in stages](../README.md#late-acceptance-in-stages)), `full_assert`, `ruin_recreate*`,
   `change/swap_move_weight`, `descent_weight`, `nearby_probability` /
-  `nearby_size`, `best_score_limit`, `on_new_best`), set by attribute. Zero budget =
+  `nearby_size`, `core_repack_moves`, `best_score_limit`, `on_new_best`), set by attribute. Zero budget =
   `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded search =
   `step_count_limit = N`. Without a time limit a solve runs the 30 s budget.
   `on_new_best(step, score)`.
@@ -163,9 +163,22 @@ rejects an exponent other than 1).
 - `score_calculator` — `prepare()` (validation + derived indexes) and the full
   recompute (the reference)
 - `incremental_calculator` — O(resources + groups + dependencies of the item) per flip
+- `moves` — the domain's macro move, `CoreRepackMove` (`core_repack_moves`, on by
+  default). Sorted by value per weight, what is left to decide after the greedy sits
+  in a narrow band around the first item the capacity leaves out, and an improving
+  exchange there is two items for one or larger: no single flip or swap reaches it.
+  The move takes a window of that order around the break item (8 to 64 ranks to each
+  side), frees the capacity its selected items hold and fills it again with the most
+  valuable subset of the window, a small 0/1 knapsack solved exactly by dynamic
+  programming over the weight. It is a move only when that subset is worth more, and
+  the acceptor judges it. It looks at the capacity alone: resources, groups,
+  dependencies, mandatory and forbidden items are judged by the score, so where they
+  shape the instance the move is often refused and the built-in moves do the work.
+  It declines when the table would exceed a million cells (heavy items: it narrows
+  the window first) and is drawn on at most one step in a thousand.
 - `solver` — engine wrapper (greedy construction + Late Acceptance over flip / swap
-  moves + adaptive ruin & recreate, also as an ordinary move; multi-start through
-  the engine)
+  moves and `CoreRepackMove` + adaptive ruin & recreate, also as an ordinary move;
+  parallel starts each run their own search)
 - `optimaru/knapsack/cpp/src/main.cpp` — the web demo (camping trip) solved and explained per constraint
 
 ```bash
@@ -180,7 +193,10 @@ the incremental calculator, incremental == full recompute over random flip / swa
 undecided / batch moves (the score and every constraint's raw total after each move,
 with every constraint non-zero during the walk), the greedy cases, ScoreChecks::Full
 solves, brute-force optima (0/1 multidimensional instances and instances with every
-fact), the zero budget with a seed, determinism, multi-start and validation.
+fact), the zero budget with a seed, determinism, multi-start and validation, and
+`CoreRepackMove`: a move raises the value within the capacity, incremental == full
+recompute after it and after its undo, and plain knapsacks of 300 to 2,000 items end on
+their dynamic-programming optimum (three of the six do not without the move).
 `ks_plugin_test`: default assembly == monolith bit for bit (score and raw totals),
 plugin incremental == full recompute per constraint after each move, partial
 assemblies, overrides (exponent on the total, per-constraint hard rounding), raw
@@ -215,10 +231,12 @@ The solution has the **assignment** shape; the domain solver that configures the
 
 **Adding a move.** The engine already mixes flip (change) and swap moves (weights in
 `Solver::Config`) and runs ruin-and-recreate both on stagnation and as an ordinary
-move. A new move (a 2-for-1 exchange, say) is an `optimaru::MoveOperator<…>`
-registered with `engine.add_move_operator(...)` in `optimaru/knapsack/cpp/src/solver.cpp`; registered
-operators do not reach the engine's multi-start threads, so a solver that registers
-one runs its own worker threads (see facility-location's `CloseFacilityMove`).
+move, and the domain adds `CoreRepackMove` (`optimaru/knapsack/cpp/include/ks/moves.hpp`).
+A new move is an `optimaru::MoveOperator<…>` next to it, registered with
+`engine.add_move_operator(...)` in `optimaru/knapsack/cpp/src/solver.cpp` (`runEngine`).
+Registered operators do not reach the engine's multi-start threads, which is why the
+solver runs its parallel starts itself (`optimaru::solve_parallel_starts`). A move
+that costs much more than a flip wants the gate `custom_move_probability` there.
 
 **Changing the construction heuristic.** `optimaru/knapsack/cpp/src/construction.cpp` decides every item
 before the engine starts. It is the reference's greedy; `ks_test` and the

@@ -34,6 +34,7 @@ def test_solver_config_defaults():
     assert config.ruin_recreate is True
     assert config.ruin_recreate_as_move_weight == 0.05
     assert (config.descent_weight, config.nearby_probability) == (0.0, 0.0)
+    assert config.core_repack_moves is True
     assert config.full_assert is False
     assert config.on_new_best is None
 
