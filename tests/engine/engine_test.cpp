@@ -294,17 +294,17 @@ void testHistoryStages() {
           "another rule or a custom acceptor: off");
     {
         // Without kicks a stage starts as soon as the search has converged
-        // and the next one fits: the first took 0.1, the second is taken to
-        // take 0.2 (twice the history), the third 0.4, and a fourth of 0.8
-        // no longer fits after 0.7.
+        // and the next one fits. The first stage (the configured history)
+        // took 0.1, the second took 0.2, the third 0.4, and a fourth, taken
+        // to cost 0.8, no longer fits after 0.7.
         optimaru::HistoryStages stages = stagesOf(400, 2.0);
-        check(stages.on_converged(0.1, true), "no kicks: the next stage is due at convergence");
+        check(stages.on_converged(0.1, true), "no kicks: the second stage is due at convergence");
         stages.start_next(0.1);
         check(stages.history() == 800 && stages.min_patience() == 1600, "the history doubles");
         check(stages.take_restart() && !stages.take_restart(), "a restart is reported once");
-        check(stages.on_converged(0.3, true), "a second stage fits (0.3 + 0.4 <= 1)");
+        check(stages.on_converged(0.3, true), "a third stage fits (0.3 + 0.4 <= 1)");
         stages.start_next(0.3);
-        check(!stages.on_converged(0.7, true), "a third does not (0.7 + 0.8 > 1)");
+        check(!stages.on_converged(0.7, true), "a fourth does not (0.7 + 0.8 > 1)");
         check(stages.history() == 1600, "a stage that is not started leaves the history");
     }
     {
@@ -330,9 +330,13 @@ void testHistoryStages() {
         capped.on_converged(0.1, true);
         capped.start_next(0.1);
         check(capped.history() == cap, "the history stops at the cap");
-        check(capped.on_converged(0.3, true), "at the cap the next stage costs what the last did");
-        capped.start_next(0.3);
+        // That stage took 0.4. One of the same cost fits after 0.5; a doubled
+        // one (0.8) would not.
+        check(capped.on_converged(0.5, true),
+              "at the cap the next stage costs what the last did (0.5 + 0.4 <= 1)");
+        capped.start_next(0.5);
         check(capped.history() == cap, "and has the same length");
+        check(!capped.on_converged(0.9, true), "which no longer fits after 0.9");
         check(stagesOf(cap * 4, 2.0).history() == cap, "a configured history above the cap is cut");
     }
 }

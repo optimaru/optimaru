@@ -74,7 +74,8 @@ public:
     // the first new best after a restart is that far from the one before
     // because of the restart. The step loop asks at a new best, so the flag
     // stays set until the next one, however many stages or kicks come in
-    // between.
+    // between. A kick is not a restart: kicks are part of the rhythm of
+    // stalls and new bests that the average is there to follow.
     bool take_restart() {
         const bool restarted = restarted_;
         restarted_ = false;

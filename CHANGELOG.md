@@ -84,8 +84,9 @@
   tests of the lengths, the cap and when a stage is due.
 - **Benchmarks: the seven tables with stages and QAPLIB measured on this build**
   (2026-11-12). Of their 46 instances the engine has the best score on 45 (18 of them ties)
-  and CP-SAT on one: the 14-job maintenance schedule, -3145 against -3133. Before this
-  series CP-SAT had the better score on 14 of the 43 instances those tables had then.
+  and CP-SAT on one: the 14-job maintenance schedule, -3145 against -3133. In 0.4.3,
+  before the entries above, CP-SAT had the better score on 14 of the 43 instances those
+  tables had.
   QAPLIB: mean gap 0.26% (2.22% before), 17 of 28 at the best known value.
 - **Benchmarks: three more rungs, five tables and QAPLIB measured again.** `random25`
   (quadratic assignment), `g1600` (max-cut) and `teams12` (sports league scheduling) join
