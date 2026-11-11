@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- **Vehicle routing and pickup and delivery: parallel starts on a solve with constraints.**
+  `parallel_solver_count` (`num_workers` in a request) had no effect when a plan was scored
+  with constraint plugins: a list passed as `constraints`, a request with a vehicle limit, a
+  pinned stop or a required vehicle, or a plan with groups. Those solves now run that many
+  starts, start *i* on `random_seed + i` and on its own copy of the constraints, and return
+  the best, as a solve on the core rules does. With one start nothing changes. On generated
+  grouped plans four starts end 0.8% to 2.4% shorter than one in the same 4 s (vehicle
+  routing, four classes) and 2.1% shorter (pickup and delivery), never longer. In C++,
+  `Solver::solve(plan, makeCalculator)` takes a factory that builds one calculator per
+  start; the overload that takes a calculator stays a single start. Vehicle routing's
+  `solve_request` leaves visit groups to the engine, as pickup and delivery's does since
+  0.4.3. Both solvers refuse a bad `SolverConfig` before the plan is touched: the check ran
+  after the unassigned pool was cleared, and in pickup and delivery after the pair
+  construction.
+
 ## 0.4.3
 
 - **Vehicle routing: visit groups with a partial order.** Visits that share a `group`
