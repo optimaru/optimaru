@@ -298,13 +298,14 @@ class Solver:
         """Solve on the four core constraints, which do not include the vehicle limits: for a
         plan that sets one, call solve_with_constraints. A plan with a group of two
         visits or more (Visit.group_index) is the exception: it is scored with the default
-        constraints, visit_group_cost and visit_order_cost among them, on a single
-        start (parallel_solver_count has no effect on it)."""
+        constraints, visit_group_cost and visit_order_cost among them, every parallel
+        start on a set of its own."""
     def solve_with_constraints(self, plan: VehicleRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see optimaru.vehicle_routing.constraints). The given list replaces the default set;
         None keeps the default set. A name may be picked several times: each pick is
-        its own instance with its own knobs, and the instances add up."""
+        its own instance with its own knobs, and the instances add up. With
+        parallel_solver_count above 1 every start is scored by its own copy of the picks."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):

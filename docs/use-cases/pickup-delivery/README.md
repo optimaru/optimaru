@@ -390,8 +390,12 @@ seven core constraints do not include this one: `solve_request`, `pdp.solve(plan
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two requests or more (a request alone in its group changes nothing).
 That is a solve on the constraint assembly, as when a vehicle limit is set: the
-whole default set is scored, and `parallel_solver_count` has no
-effect. `calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same
+whole default set is scored. `parallel_solver_count` runs that
+many starts there as on the core constraints, each start on a set of its own (on a
+generated instance of 100 requests, half of them in groups of three, four
+starts end 2.1% shorter than one in the same 4 s: 5 seeds, shorter in 4 and
+equal in 1).
+`calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same
 way, so it returns the score the solve stored and prices a split group on a plan
 built by hand.
 With `pair_construction_heuristic` off the engine's own construction places
@@ -428,7 +432,7 @@ next_request = with_initial_solution(request, solution)  # or solution.model_dum
 better = solve_request(next_request)
 ```
 
-`with_initial_solution` turns a solution into the `initial_route` of each vehicle (above), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `time_limit_seconds=0` a complete solution comes back as it went in.
+`with_initial_solution` turns a solution into the `initial_route` of each vehicle (above), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `timelimit=0` a complete solution comes back as it went in.
 
 A vehicle's `pinned_stops` stay as the request has them: its route in the solution must start with them, or `ValueError` is raised. The same goes for an unknown id, a stop routed twice, or a request whose pickup and dropoff are apart, so a hard-infeasible result with a broken pair cannot be used as a start.
 

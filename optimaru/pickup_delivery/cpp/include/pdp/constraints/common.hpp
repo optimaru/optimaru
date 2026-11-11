@@ -28,7 +28,7 @@ namespace pdp {
 // vehicles only (detail::PerVehicleConstraint); requiredVehicleCost and
 // squaredOrderAgeCost price the pool too and evaluate every list.
 //
-// The per-route rules run as UnitConstraints. The three coupling constraints relate
+// The per-route constraints run as UnitConstraints. The three coupling constraints relate
 // a request's pickup to its dropoff — which may sit in different routes, which
 // is the whole point of the rule — and unassignedRequestsCost counts requests
 // in no route at all, so those four are GlobalConstraints
@@ -180,7 +180,7 @@ inline double haversineMeters(const Location& a, const Location& b) {
 // ---------------------------------------------------------------------------
 // Request-coupling global constraints
 // ---------------------------------------------------------------------------
-// Shared base of the three rules that judge a request's pickup against its
+// Shared base of the three constraints that judge a request's pickup against its
 // dropoff. It tracks where each node currently sits and at which position —
 // the solution's own derived fields cannot be used, because on a leave
 // notification they are already stale — and re-scores whole routes on every

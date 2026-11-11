@@ -11,6 +11,7 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "pdp/constraints.hpp"
@@ -1038,20 +1039,104 @@ void testPairMoveDoesNotRouteABoundGroupInParts() {
 
 // Parallel starts each build their own groups and operators on their copy of
 // the plan.
-// solve(plan) with parallel starts asked for: a grouped plan goes to the
-// default assembly, which is one start, and comes back whole.
-void testGroupsWithParallelStartsAskedFor() {
-    std::printf("== Request groups through solve(plan), parallel starts asked for ==\n");
-    PdpRoutePlan plan = buildRandomInstance(18, 3, /*seed=*/13);
-    groupInOrder(plan, 3);
-    Solver::Config config;
-    config.time_limit = std::chrono::minutes(1);  // safety net: the step limit ends the solve
-    config.step_limit = 3000;
-    config.parallel_solver_count = 2;
-    Solver(config).solve(plan);
-    check(everyStopOnce(plan) && plan.score.feasible() && plan.unassignedNodeIndices.empty() &&
-                  groupsWhole(plan),
-          "the grouped plan is solved whole (" + plan.score.str() + ")");
+// Parallel starts on the constraint assembly: every start gets a calculator of
+// its own, start i searches with seed + i, and the best plan wins. Step
+// limits, so each start is the same search wherever it runs.
+void testParallelStartsOnTheAssembly() {
+    std::printf("== Request groups: parallel starts, a calculator each ==\n");
+    const auto grouped = [] {
+        PdpRoutePlan plan = buildRandomInstance(18, 3, /*seed=*/13);
+        groupInOrder(plan, 3);
+        return plan;
+    };
+    const auto defaults = [] {
+        auto calculator = std::make_unique<DecomposedCalculator>();
+        addDefaultConstraints(*calculator);
+        return calculator;
+    };
+    const auto stepLimited = [](std::uint64_t seed, int starts) {
+        Solver::Config config;
+        config.time_limit = std::chrono::minutes(1);  // safety net: the step limit ends the solve
+        config.step_limit = 3000;
+        config.seed = seed;
+        config.parallel_solver_count = starts;
+        return config;
+    };
+    // What each seed reaches alone, through solve(plan) and the default set.
+    std::vector<Score> alone;
+    for (std::uint64_t seed = 5; seed < 8; ++seed) {
+        PdpRoutePlan plan = grouped();
+        Solver(stepLimited(seed, 1)).solve(plan);
+        alone.push_back(plan.score);
+    }
+    const Score best = *std::max_element(alone.begin(), alone.end());
+
+    // solve(plan) with three starts asked for: the best of the three.
+    PdpRoutePlan plan = grouped();
+    Solver(stepLimited(5, 3)).solve(plan);
+    check(plan.score == best && everyStopOnce(plan) && groupsWhole(plan),
+          "solve(plan) on a grouped plan returns the best of its three starts (" +
+                  plan.score.str() + ")");
+
+    // The factory overload: one calculator per start, made on the calling
+    // thread before any start runs.
+    PdpRoutePlan made = grouped();
+    int calls = 0;
+    bool onCaller = true;
+    const std::thread::id caller = std::this_thread::get_id();
+    Solver(stepLimited(5, 3)).solve(made, [&] {
+        ++calls;
+        onCaller = onCaller && std::this_thread::get_id() == caller;
+        return defaults();
+    });
+    check(calls == 3 && onCaller, "the factory makes three calculators, on the calling thread");
+    check(made.score == best, "and the starts give the same best plan (" + made.score.str() + ")");
+
+    // One start: the single-calculator solve.
+    PdpRoutePlan single = grouped();
+    Solver(stepLimited(5, 1)).solve(single, defaults);
+    check(single.score == alone.front(), "with one start it is that start's solve");
+
+    bool refused = false;
+    try {
+        PdpRoutePlan none = grouped();
+        Solver(stepLimited(5, 1)).solve(none, [] {
+            return std::unique_ptr<DecomposedCalculator>();
+        });
+    } catch (const std::invalid_argument&) {
+        refused = true;
+    }
+    check(refused, "a factory that makes nothing is refused");
+
+    // A config check_config refuses, on every path: nothing in the plan moves
+    // (the pair construction used to route the plan before the check).
+    for (const bool withGroups : {false, true}) {
+        PdpRoutePlan start = buildRandomInstance(18, 3, /*seed=*/13);
+        if (withGroups) groupInOrder(start, 3);
+        start.rebuildUnassignedPool();
+        Solver::Config bad = stepLimited(5, 1);
+        bad.tabu_tenure = -1;
+        int untouched = 0;
+        for (int path = 0; path < 2; ++path) {
+            PdpRoutePlan work = start;
+            bool thrown = false;
+            try {
+                if (path == 0) {
+                    Solver(bad).solve(work);
+                } else {
+                    Solver(bad).solve(work, defaults);
+                }
+            } catch (const std::invalid_argument&) {
+                thrown = true;
+            }
+            bool same = thrown && work.unassignedNodeIndices == start.unassignedNodeIndices;
+            for (std::size_t v = 0; same && v < work.vehicles.size(); ++v)
+                same = work.vehicles[v].nodeIndices == start.vehicles[v].nodeIndices;
+            if (same) ++untouched;
+        }
+        check(untouched == 2, std::string("a bad config is refused with the plan untouched (") +
+                                      (withGroups ? "grouped" : "no groups") + ")");
+    }
     std::printf("\n");
 }
 
@@ -1188,7 +1273,7 @@ int main() {
     testGroupsFollowTheirVehicle();
     testStrayRequestRejoinsItsWaitingGroup();
     testPairMoveDoesNotRouteABoundGroupInParts();
-    testGroupsWithParallelStartsAskedFor();
+    testParallelStartsOnTheAssembly();
     testGroupWithNoRoomWaits();
     testCalculateScore();
     testRequestMovesMatter();

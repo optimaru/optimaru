@@ -113,9 +113,10 @@ def solve(
     scored with the default constraints even when ``constraints`` is None:
     `request_group_cost` is one of them, and it is not among the seven core constraints a plan is
     otherwise scored on. That is the whole default set, so the vehicle limits, pinned stops
-    and required vehicles of such a plan are scored too, on a single start. The engine
-    does this itself, so `Solver(config).solve(plan)` and `calculate_score(plan)` read
-    such a plan the same way. A list passed as ``constraints`` is used as it is.
+    and required vehicles of such a plan are scored too. The engine does this itself, so
+    `Solver(config).solve(plan)` and `calculate_score(plan)` read such a plan the same way.
+    A list passed as ``constraints`` is used as it is. ``parallel_solver_count`` applies on
+    every path: with constraints, each start scores on its own copy of them.
 
     The score is on the result: ``plan.score``. `solve_request` is the same solve for
     a `models` request (JSON in, JSON out).

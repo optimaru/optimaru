@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **Vehicle routing and pickup and delivery: parallel starts on a solve with constraints.**
+  `parallel_solver_count` (`num_workers` in a request) had no effect when a plan was scored
+  with constraint plugins: a list passed as `constraints`, a request with a vehicle limit, a
+  pinned stop or a required vehicle, or a plan with groups. Those solves now run that many
+  starts, start *i* on `random_seed + i` and on its own copy of the constraints, and return
+  the best, as a solve on the core rules does. With one start nothing changes. On generated
+  grouped plans four starts end 0.8% to 2.4% shorter than one in the same 4 s (vehicle
+  routing, four classes) and 2.1% shorter (pickup and delivery), longer in none of the 25
+  pairs. In C++,
+  `Solver::solve(plan, makeCalculator)` takes a factory that builds one calculator per
+  start; the overload that takes a calculator stays a single start. Vehicle routing's
+  `solve_request` leaves visit groups to the engine, as pickup and delivery's does since
+  0.4.3. Both solvers refuse a bad `SolverConfig` before the plan is touched: the check ran
+  after the unassigned pool was cleared, and in pickup and delivery after the pair
+  construction.
+- **Benchmarks: the lock files record optimaru 0.4.3.** The benchmark projects install
+  optimaru from this checkout, and their locks name its version: they still said 0.4.2 after
+  the release, so the first `uv sync` rewrote them. Nothing else moves; the projects stay on
+  external-solver `v0.2.3`, which needs no change for 0.4.3.
 - **`solve` for a problem, `solve_request` for a pydantic request, in every use case.** The
   pydantic path had two shapes: four use cases took a request through `models.solve_request`,
   the others took their problem model through `solve`, and school timetabling took dicts.

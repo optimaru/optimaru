@@ -74,8 +74,9 @@ mechanically, so there is no hand-maintained alias table — check them with
 `pdp.list_constraints()`. Module-level instance names use the same snake_case,
 so they match the strings `list_constraints()` prints.
 
-`parallel_solver_count` does not apply on the plugin path (a caller-owned
-calculator cannot be cloned into workers). The request-level move/ruin operators read
+`parallel_solver_count` applies on the plugin path: every start scores on its own copy
+of the picks (in C++, only the `Solver::solve` overload that takes one caller-owned
+calculator stays a single start). The request-level move/ruin operators read
 the plan, not the calculator, so they still run. They only propose placements that keep
 the plan's time windows, capacity and vehicle limits, whatever level a selection scores
 those on: with one of them soft or left out, the engine's stop moves are what try plans

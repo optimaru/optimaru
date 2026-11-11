@@ -2,6 +2,8 @@
 #define PDP_SOLVER_HPP
 
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <utility>
 
 #include "pdp/domain.hpp"
@@ -153,8 +155,8 @@ public:
     // plan.unassignedNodeIndices, and stores the best score in plan.score.
     // Scored on the seven core constraints, unless the plan has request groups
     // (PdpRoutePlan::hasRequestGroups): then on the default constraint assembly
-    // (pdp/constraints.hpp), as the overload below would with
-    // addDefaultConstraints(), single-start.
+    // (pdp/constraints.hpp), every start on an assembly of its own (the
+    // factory overload below).
     void solve(PdpRoutePlan& plan);
 
     // Solves with a caller-assembled plugin calculator (see
@@ -167,8 +169,23 @@ public:
     // on_new_best reports its scores the same way. The calculator is left
     // primed on the final solution, so constraint_totals() explains exactly
     // that score. Single-start: the caller-owned calculator cannot be cloned,
-    // so parallel_solver_count is ignored.
+    // so parallel_solver_count is ignored. The overload below runs the
+    // parallel starts.
     void solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePlan>& calculator);
+
+    // Builds the calculator of one start.
+    using CalculatorFactory =
+            std::function<std::unique_ptr<optimaru::DecomposedObjective<PdpRoutePlan>>()>;
+
+    // The solve above on Config::parallel_solver_count independent starts
+    // (seeds seed, seed + 1, ...), each scored by a calculator of its own; the
+    // best final plan.score wins, the lowest start on ties. `makeCalculator`
+    // is called once per start, on the calling thread and before any start
+    // runs, so it may read state that is not thread-safe. on_new_best reports
+    // the first start only, and a start that reaches the target stops the
+    // others, as on the core constraints. With one start this is the overload above
+    // on the one calculator the factory makes.
+    void solve(PdpRoutePlan& plan, const CalculatorFactory& makeCalculator);
 
 private:
     Config config_;
@@ -176,7 +193,7 @@ private:
 
 // The score of a plan as it stands, the way solve(plan) scores it: on the
 // seven core constraints (ScoreCalculator::score), unless the plan has request
-// groups, which those rules do not price: then on the default constraint
+// groups, which those constraints do not price: then on the default constraint
 // assembly. Refreshes the derived fields and stores the score in plan.score.
 // Does not validate the plan: what solve() refuses (a required vehicle out of
 // range, a group bound to two vehicles) is scored as it stands.
