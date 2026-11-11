@@ -65,7 +65,7 @@ acceptance by default); its parameters are listed under
 - `vrp.constraint_info()` lists every constraint with its default level and
   weight (the C++ components' `kDefaultLevel` / `kDefaultWeight`);
   `optimaru.vehicle_routing.constraints` picks, re-weights and flips them for
-  `Solver.solve_with_constraints` / `solve_request(..., constraints=...)`. Every
+  `Solver.solve_with_constraints` / `solve(..., constraints=...)`. Every
   constraint takes five knobs (`weight`, `level`, `exponent` and the keyword-only
   `offset` / `clip`) and may be picked several times, each pick with its own knobs
   (`[TravelTimeCost(), TravelTimeCost(exponent=2, offset=3600)]` is the driving time
@@ -80,8 +80,9 @@ lower `descent_weight`) when a cheaper sampled neighbourhood is preferred.
 ## JSON in, JSON out (pydantic)
 
 ```python
+from optimaru.vehicle_routing import solve
 from optimaru.vehicle_routing.models import (RoutePlanRequest, RoutingInput, VehicleModel,
-                                VisitModel, solve_request)
+                                VisitModel)
 
 request = RoutePlanRequest(
     timelimit=2,
@@ -92,7 +93,7 @@ request = RoutePlanRequest(
                            service_duration=600)],
     ),
 )
-solution = solve_request(request)      # -> RouteSolution
+solution = solve(request)              # -> RouteSolution
 print(solution.routes, solution.score, solution.total_driving_seconds)
 ```
 

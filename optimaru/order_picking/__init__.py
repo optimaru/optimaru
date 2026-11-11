@@ -26,10 +26,11 @@ Quick start::
     print(solution.score, solution.routes())
 
 pydantic request/response models (JSON in/out) live in
-`optimaru.order_picking.models`.
+`optimaru.order_picking.models`; `solve` takes a `models.OrderPickingRequest` too
+and returns a `models.OrderPickingResponse`.
 """
 
-from .._solve import solve_in_place, solver_config
+from .._solve import request_with, solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
     Order,
@@ -50,7 +51,7 @@ from ._core import (
     list_constraints,
     update_shadow_variables,
 )
-from .models import with_initial_solution
+from .models import OrderPickingRequest, OrderPickingResponse, _solve_request, with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -77,7 +78,7 @@ __all__ = [
 
 
 def solve(
-    solution: OrderPickingSolution,
+    solution: OrderPickingSolution | OrderPickingRequest,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -87,8 +88,13 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> OrderPickingSolution:
+) -> OrderPickingSolution | OrderPickingResponse:
     """Solve an `OrderPickingSolution` in place and return it.
+
+    Given a `models.OrderPickingRequest` instead, the pydantic request (JSON in, JSON out), `solve`
+    leaves it unchanged and returns a `models.OrderPickingResponse`. The request carries its own
+    ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``: they
+    apply on top of ``config``, and a keyword argument that is given replaces them.
 
     ``config`` (a `SolverConfig`) is the base configuration; the explicit
     keyword arguments override it. ``stop_at_first_feasible`` terminates as
@@ -105,10 +111,19 @@ def solve(
         from optimaru.order_picking.constraints import get_constraints
         op.solve(solution, constraints=get_constraints())
     """
-    if not isinstance(solution, OrderPickingSolution):
-        raise TypeError(
-            f"solution must be an instance of OrderPickingSolution: {type(solution)!r} (models.solve_request solves a models.OrderPickingRequest)"
+    if isinstance(solution, OrderPickingRequest):
+        request = request_with(
+            solution,
+            time_limit_seconds=time_limit_seconds,
+            random_seed=random_seed,
+            parallel_solver_count=parallel_solver_count,
+            stop_at_first_feasible=stop_at_first_feasible,
         )
+        return _solve_request(
+            request, constraints=constraints, config=config, full_assert=full_assert, on_new_best=on_new_best
+        )
+    if not isinstance(solution, OrderPickingSolution):
+        raise TypeError(f"solution must be an OrderPickingSolution or a models.OrderPickingRequest: {type(solution)!r}")
     cfg = solver_config(
         SolverConfig,
         config,

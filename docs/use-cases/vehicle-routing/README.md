@@ -26,7 +26,7 @@ solved = vrp.solve(plan, time_limit_seconds=5.0, random_seed=42)   # solves in p
 print(solved.score, solved.routes())            # 0hard/0medium/-38soft {'V1': ['C1']}
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`vrp.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out use `optimaru.vehicle_routing.models.solve_request(...)`, which also takes `constraints=`. The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`vrp.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out pass `solve` a `models.RoutePlanRequest`: it returns a `models.RouteSolution`, and the request's `timelimit`, `random_seed`, `num_workers` and `stop_at_first_feasible` apply unless a keyword replaces them. The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
@@ -207,7 +207,7 @@ a 60 s solve ends within 2% of a 4 s one, while nine seeds end 3% and 6% apart
 (10 s), so another seed buys more than a longer run.
 
 Every entry point scores a grouped plan with the default constraints, since the
-four core rules include neither of these two: `solve_request`, `vrp.solve(plan)`,
+four core rules include neither of these two: `vrp.solve(request)`, `vrp.solve(plan)`,
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two visits or more (a visit alone in its group changes nothing). That is a solve on the
 constraint assembly, as when a vehicle limit is set: the whole default set is
@@ -221,11 +221,11 @@ reads neither `group` nor `after`.
 ## Starting from an existing solution
 
 ```python
-from optimaru.vehicle_routing.models import solve_request, with_initial_solution
+from optimaru.vehicle_routing import solve, with_initial_solution
 
-solution = solve_request(request)                        # request: a RoutePlanRequest
+solution = solve(request)                                # request: a RoutePlanRequest
 next_request = with_initial_solution(request, solution)  # or solution.model_dump(mode="json")
-better = solve_request(next_request)
+better = solve(next_request)
 ```
 
 `with_initial_solution` returns a new request whose vehicles carry `initial_route`, a list of visit ids. The solve keeps those routes as its starting point and construction places only the visits in no route, so a partial solution works and the `unassigned` visits get another try. With `timelimit=0` a complete solution comes back as it went in. An unknown id or a visit routed twice raises `ValueError`.

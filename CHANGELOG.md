@@ -103,6 +103,24 @@
     other nine (`<Use case> CP-SAT`).
   - `tests/test_layout.py` holds the `cpp/` contents and the `dev` group.
 
+- **`solve()` takes the request model in the four request use cases.** Employee scheduling,
+  order picking, pickup & delivery and vehicle routing model a whole request in pydantic, and
+  their `solve()` took the compiled problem only: the request went through
+  `models.solve_request`. `solve(request, ...)` now takes the request model
+  (`ScheduleRequest`, `OrderPickingRequest`, `PdpRequest`, `RoutePlanRequest`), leaves it
+  unchanged and returns the response model, so every use case solves its pydantic model
+  through `solve`. A keyword that is given replaces what the request says
+  (`time_limit_seconds` its `timelimit`, `random_seed`, `parallel_solver_count` its
+  `num_workers`, `stop_at_first_feasible`); in the three routing ones `config` is the base
+  the request's own settings go on top of, and `full_assert`, `on_new_best` and
+  `constraints` apply as for a compiled problem. An employee scheduling request holds its
+  settings and rules itself, so `config` and `constraints` with one raise `ValueError`, and
+  `on_new_best` needs a single start there (further starts run in processes).
+  `models.solve_request` is unchanged and returns what `solve(request)` does; the guides use
+  `solve`. The `TypeError` for a wrong problem type no longer points at `solve_request`.
+  The notebooks in `examples/` still call `solve_request`, because they run on the released
+  package.
+
 ## 0.4.2
 
 - **Pickup and delivery: request groups.** Requests that share a `group`

@@ -26,6 +26,7 @@ A shelving is addressed by column letter A..E + shelving row 1..3
 (the id "(A,1)"), a side (LEFT/RIGHT) and a row 0..10 within the shelving.
 """
 
+import copy
 from typing import Any, Literal, cast
 
 from pydantic import Field, model_validator
@@ -179,15 +180,30 @@ def to_solution(request: OrderPickingRequest) -> "_core.OrderPickingSolution":
 
 def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPickingResponse:
     """Solve the request and shape the response (routes per trolley plus the
-    per-trolley travel distance)."""
+    per-trolley travel distance).
+
+    The same as `optimaru.order_picking.solve(request, constraints=constraints)`, which
+    also takes the other `solve` keywords. Kept for the callers written before `solve`
+    took a request."""
+    return _solve_request(request, constraints=constraints)
+
+
+def _solve_request(
+    request: OrderPickingRequest, *, constraints=None, config=None, full_assert: bool = False, on_new_best=None
+) -> OrderPickingResponse:
+    """`solve(request, ...)`: ``config`` is the base, the request's own settings go on top."""
     solution = to_solution(request)
-    config = _core.SolverConfig()
+    config = _core.SolverConfig() if config is None else copy.copy(config)
     config.spent_limit_seconds = request.timelimit
     config.random_seed = request.random_seed
     config.parallel_solver_count = request.num_workers
     apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
         config.best_score_limit = (0, float("-inf"))
+    if full_assert:
+        config.full_assert = True
+    if on_new_best is not None:
+        config.on_new_best = on_new_best
     solver = _core.Solver(config)
     if constraints is None:
         solver.solve(solution)
@@ -240,7 +256,7 @@ def with_initial_solution(
 ) -> OrderPickingRequest:
     """Return a copy of `problem` whose search starts from `solution`.
 
-    `solution` is what `solve_request` returned, as the model or as its JSON
+    `solution` is what `solve(request)` returned, as the model or as its JSON
     dict. Each trolley's `initial_route` becomes the pick task ids of its route
     there, replacing what `problem` had; a trolley the solution leaves out
     starts empty. Trolleys and pick tasks are matched by id.

@@ -37,7 +37,7 @@ solved = pdp.solve(plan, time_limit_seconds=5.0, random_seed=42)   # solves in p
 print(solved.score.hard, solved.score.medium, solved.score.soft)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`pdp.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out use `optimaru.pickup_delivery.models.solve_request(...)`, which also takes `constraints=`. The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`pdp.SolverConfig`, whose fields include `spent_limit_seconds`, `random_seed`, `parallel_solver_count` and `full_assert`; the keywords override a copy of it) and `constraints` (see below). `Solver(config).solve(plan)` and `Solver(config).solve_with_constraints(plan, picks)` are the same solves one level down, on the engine objects; for JSON in/out pass `solve` a `models.PdpRequest`: it returns a `models.PdpSolution`, and the request's `timelimit`, `random_seed`, `num_workers` and `stop_at_first_feasible` apply unless a keyword replaces them. The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=pickup_delivery && cmake --build build -j
@@ -386,7 +386,7 @@ Two requests of a group that are bound to different vehicles, each by its
 could never be whole.
 
 Every entry point scores a grouped plan with the default constraints, since the
-seven core rules do not include this one: `solve_request`, `pdp.solve(plan)`,
+seven core rules do not include this one: `pdp.solve(request)`, `pdp.solve(plan)`,
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two requests or more (a request alone in its group changes nothing).
 That is a solve on the constraint assembly, as when a vehicle limit is set: the
@@ -421,11 +421,11 @@ one, and the result is hard-infeasible. Search may still put it on its own vehic
 late, when that costs less than waiting.
 
 ```python
-from optimaru.pickup_delivery.models import solve_request, with_initial_solution
+from optimaru.pickup_delivery import solve, with_initial_solution
 
-solution = solve_request(request)                        # request: a PdpRequest
+solution = solve(request)                                # request: a PdpRequest
 next_request = with_initial_solution(request, solution)  # or solution.model_dump(mode="json")
-better = solve_request(next_request)
+better = solve(next_request)
 ```
 
 `with_initial_solution` turns a solution into the `initial_route` of each vehicle (above), replacing the ones the request had. Construction places only the requests in no route, so a partial solution works and the `unassigned` ones get another try. With `timelimit=0` a complete solution comes back as it went in.

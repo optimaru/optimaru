@@ -88,8 +88,10 @@ print(plan.unassigned_delivery_ids())  # []
   `pdp.constraint_costs(plan, constraints=None)` report the catalog, the names
   and the raw per-unit costs; `optimaru.pickup_delivery.constraints.score(costs,
   constraints=None)` re-prices those raw costs in pure Python.
-- `pdp.solve_request(request, constraints=None)` and
+- `pdp.solve(request, ...)` with a `models.PdpRequest` and
   `pdp.with_initial_solution(problem, solution)` are the JSON layer (below).
+  `pdp.solve_request(request, constraints=None)` is the same solve under its
+  earlier name.
 
 ## Constraints
 
@@ -140,8 +142,9 @@ pdp.solve(plan, time_limit_seconds=2.0, random_seed=42, constraints=[
 ## JSON in, JSON out (pydantic)
 
 ```python
+from optimaru.pickup_delivery import solve
 from optimaru.pickup_delivery.models import (DeliveryModel, PdpInput, PdpRequest, StopModel,
-                                             VehicleModel, solve_request)
+                                             VehicleModel)
 
 request = PdpRequest(
     timelimit=2,
@@ -154,7 +157,7 @@ request = PdpRequest(
         )],
     ),
 )
-solution = solve_request(request)      # -> PdpSolution
+solution = solve(request)              # -> PdpSolution
 print([stop.stop_id for stop in solution.routes["V1"]])   # ['R1-pickup', 'R1-dropoff']
 print(solution.score, solution.feasible, solution.total_driving_seconds)   # 0hard/0medium/-93soft True 93
 ```

@@ -9,7 +9,8 @@ constraint specs (see `constraints.py`, one class per constraint):
 `default_calculator()`. `constraint_info()` lists all 30 constraints with their
 C++ default level and weight (the eight defaults first); `list_constraints()`
 the names the rule factory accepts. `solve(schedule, ...)` solves a schedule in
-place and returns it; `make_random_roster`, `summary` and `to_dataframe` are
+place and returns it, and given a `models.ScheduleRequest` it returns a
+`models.ScheduleSolution`; `make_random_roster`, `summary` and `to_dataframe` are
 pure-Python conveniences.
 
 The JSON-friendly request/solution layer is `optimaru.employee_scheduling.models` (pydantic);
@@ -70,7 +71,7 @@ from .constraints import (
     WorkerPairingCost,
 )
 from .helpers import list_constraints, make_random_roster, summary, to_dataframe
-from .models import with_initial_solution
+from .models import ScheduleRequest, ScheduleSolution, _solve_request, with_initial_solution
 
 __all__ = [
     "CONSTRAINT_NAMES",
@@ -130,7 +131,7 @@ __all__ = [
 
 
 def solve(
-    schedule: EmployeeSchedule,
+    schedule: EmployeeSchedule | ScheduleRequest,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -140,8 +141,19 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> EmployeeSchedule:
+) -> EmployeeSchedule | ScheduleSolution:
     """High-level API that solves `schedule` in place and returns it.
+
+    Given a `models.ScheduleRequest` instead, the pydantic request (JSON in, JSON out),
+    `solve` leaves it unchanged and returns a `models.ScheduleSolution`. The request
+    carries its own settings and rules, and a keyword argument that is given replaces
+    them: ``time_limit_seconds`` its ``timelimit``, ``random_seed`` and
+    ``stop_at_first_feasible`` the fields of ``settings``, and ``parallel_solver_count``
+    the number of starts (``num_workers``, with ``settings.multi_start`` set to 1).
+    Starts beyond the first run in separate processes (see `models.solve_request`), so
+    ``on_new_best`` needs a single start there. ``config`` and ``constraints`` are for
+    an `EmployeeSchedule`: a request says the same in ``settings`` and
+    ``model_input.rules``, and passing either with one raises ValueError.
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine defaults,
     a 30 s budget). Explicit keyword arguments override config.
@@ -160,10 +172,31 @@ def solve(
 
     The score is on the result: ``schedule.score``.
     """
+    if isinstance(schedule, ScheduleRequest):
+        if config is not None or constraints is not None:
+            raise ValueError(
+                "config and constraints are for an EmployeeSchedule: a ScheduleRequest carries them "
+                "as settings and model_input.rules"
+            )
+        update: dict = {}
+        settings: dict = {}
+        if time_limit_seconds is not None:
+            update["timelimit"] = time_limit_seconds
+        if random_seed is not None:
+            settings["random_seed"] = random_seed
+        if stop_at_first_feasible:
+            settings["stop_at_first_feasible"] = True
+        if parallel_solver_count is not None:
+            if parallel_solver_count < 1:
+                raise ValueError(f"parallel_solver_count must be at least 1: {parallel_solver_count}")
+            update["num_workers"] = parallel_solver_count
+            settings["multi_start"] = 1
+        if settings:
+            update["settings"] = schedule.settings.model_copy(update=settings)
+        request = schedule.model_copy(update=update) if update else schedule
+        return _solve_request(request, full_assert=full_assert, on_new_best=on_new_best)
     if not isinstance(schedule, EmployeeSchedule):
-        raise TypeError(
-            f"schedule must be an instance of EmployeeSchedule: {type(schedule)!r} (models.solve_request solves a models.ScheduleRequest)"
-        )
+        raise TypeError(f"schedule must be an EmployeeSchedule or a models.ScheduleRequest: {type(schedule)!r}")
     cfg = solver_config(
         SolverConfig,
         config,

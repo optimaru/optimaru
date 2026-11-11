@@ -6,8 +6,8 @@ come from the compiled C++ core (`_core`). Each vehicle's ordered
 `visit_indices` list (its route) is the decision; a visit
 missing from every route is unassigned (penalized on the medium score level)
 and ends up in `plan.unassigned_visit_indices` after solving. `solve(plan, ...)`
-solves a plan in place and returns it; `solve_request` does the same for a
-`models` request.
+solves a plan in place and returns it; given a `models.RoutePlanRequest`, the
+pydantic request, it returns a `models.RouteSolution`.
 
 The solver is the shared engine in `optimaru/cpp/optimaru/`: a cheapest-insertion construction
 heuristic, then local search over relocate / swap / 2-opt / or-opt / tail-swap
@@ -50,7 +50,7 @@ Compared lexicographically: hard dominates medium dominates soft.
 `optimaru.vehicle_routing.constraints` picks and re-weights them.
 """
 
-from .._solve import solve_in_place, solver_config
+from .._solve import request_with, solve_in_place, solver_config
 from ._core import (
     AcceptorType,
     ConstraintInfo,
@@ -67,7 +67,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .models import solve_request, with_initial_solution
+from .models import RoutePlanRequest, RouteSolution, _solve_request, solve_request, with_initial_solution
 
 __all__ = [
     "AcceptorType",
@@ -91,7 +91,7 @@ __all__ = [
 
 
 def solve(
-    plan: VehicleRoutePlan,
+    plan: VehicleRoutePlan | RoutePlanRequest,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -101,8 +101,13 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> VehicleRoutePlan:
+) -> VehicleRoutePlan | RouteSolution:
     """High-level API that solves `plan` in place and returns it.
+
+    Given a `models.RoutePlanRequest` instead, the pydantic request (JSON in, JSON out), `solve`
+    leaves it unchanged and returns a `models.RouteSolution`. The request carries its own
+    ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``: they
+    apply on top of ``config``, and a keyword argument that is given replaces them.
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine defaults,
     a 30 s budget). Explicit keyword arguments override config.
@@ -124,13 +129,21 @@ def solve(
     such a plan are scored too, and ``parallel_solver_count`` has no effect on it (as on
     every solve with ``constraints``).
 
-    The score is on the result: ``plan.score``. `solve_request` is the same solve for
-    a `models` request (JSON in, JSON out).
+    The score is on the result: ``plan.score``, or ``score`` on a `models.RouteSolution`.
     """
-    if not isinstance(plan, VehicleRoutePlan):
-        raise TypeError(
-            f"plan must be an instance of VehicleRoutePlan: {type(plan)!r} (models.solve_request solves a models.RoutePlanRequest)"
+    if isinstance(plan, RoutePlanRequest):
+        request = request_with(
+            plan,
+            time_limit_seconds=time_limit_seconds,
+            random_seed=random_seed,
+            parallel_solver_count=parallel_solver_count,
+            stop_at_first_feasible=stop_at_first_feasible,
         )
+        return _solve_request(
+            request, constraints=constraints, config=config, full_assert=full_assert, on_new_best=on_new_best
+        )
+    if not isinstance(plan, VehicleRoutePlan):
+        raise TypeError(f"plan must be a VehicleRoutePlan or a models.RoutePlanRequest: {type(plan)!r}")
     cfg = solver_config(
         SolverConfig,
         config,

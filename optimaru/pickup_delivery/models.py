@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from pydantic import Field, model_validator
@@ -348,9 +349,20 @@ def vehicle_metrics(plan: _core.PdpRoutePlan, routes: dict[str, list[PdpStop]]) 
 
 
 def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
-    """Solve a JSON-friendly request with the metaheuristic backend."""
+    """Solve a JSON-friendly request with the metaheuristic backend.
+
+    The same as `optimaru.pickup_delivery.solve(request, constraints=constraints)`, which
+    also takes the other `solve` keywords. Kept for the callers written before `solve`
+    took a request."""
+    return _solve_request(request, constraints=constraints)
+
+
+def _solve_request(
+    request: PdpRequest, *, constraints=None, config=None, full_assert: bool = False, on_new_best=None
+) -> PdpSolution:
+    """`solve(request, ...)`: ``config`` is the base, the request's own settings go on top."""
     plan = to_plan(request.model_input, name=request.name or "plan")
-    config = _core.SolverConfig()
+    config = _core.SolverConfig() if config is None else copy.copy(config)
     config.spent_limit_seconds = request.timelimit
     config.random_seed = request.random_seed
     config.parallel_solver_count = request.num_workers
@@ -358,6 +370,10 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
         config.best_score_limit = (0, -(2**63), -(2**63))
+    if full_assert:
+        config.full_assert = True
+    if on_new_best is not None:
+        config.on_new_best = on_new_best
     solver = _core.Solver(config)
     has_route_policy = any(
         v.max_travel_time
@@ -408,7 +424,7 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
 def with_initial_solution(problem: PdpRequest, solution: PdpSolution | dict[str, Any]) -> PdpRequest:
     """Return a copy of `problem` whose search starts from `solution`.
 
-    `solution` is what `solve_request` returned, as the model or as its JSON
+    `solution` is what `solve(request)` returned, as the model or as its JSON
     dict. Each vehicle's `initial_route` becomes the stop ids of its route
     there, replacing what `problem` had; a vehicle the solution leaves out
     starts empty. Vehicles and stops are matched by id.

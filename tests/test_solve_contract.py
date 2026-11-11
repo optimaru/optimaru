@@ -10,7 +10,7 @@ import pytest
 import optimaru
 
 from ._build import use_case_module
-from ._problems import levels_of, score_of, small_problem
+from ._problems import _call, levels_of, score_of, small_problem
 
 SHARED_KEYWORDS = {
     "time_limit_seconds",
@@ -23,8 +23,16 @@ SHARED_KEYWORDS = {
     "constraints",
 }
 
-# Their pydantic layer models a whole request: solve() takes the compiled problem only.
-REQUEST_MODEL_USE_CASES = ["employee_scheduling", "order_picking", "pickup_delivery", "vehicle_routing"]
+# Their pydantic layer models a whole request (the input with its time limit, seed and worker
+# count). solve() takes it as it takes the compiled problem, and returns the response model.
+# Each entry builds a request with a zero time limit: construction, and no search step.
+REQUEST_MODELS = {
+    "employee_scheduling": _call("optimaru.employee_scheduling.demo", "generate_demo_data", workers=6, days=4),
+    "order_picking": _call(".order_picking.test_initial_solution", "problem"),
+    "pickup_delivery": _call(".pickup_delivery.test_initial_solution", "problem"),
+    "vehicle_routing": _call(".vehicle_routing.test_initial_solution", "problem"),
+}
+REQUEST_MODEL_USE_CASES = sorted(REQUEST_MODELS)
 
 # Its solve() takes and returns dicts, so the package does not import its pydantic models.
 NO_MODELS_ON_IMPORT = {"school_timetabling"}
@@ -65,10 +73,76 @@ def test_solve_takes_the_shared_keywords(use_case):
     assert len(positional) == 1  # the problem
 
 
-@pytest.mark.parametrize("use_case", REQUEST_MODEL_USE_CASES)
-def test_solve_points_a_request_model_at_solve_request(use_case):
-    with pytest.raises(TypeError, match="solve_request"):
+@pytest.mark.parametrize("use_case", optimaru.__all__)
+def test_solve_refuses_what_is_no_problem(use_case):
+    with pytest.raises((TypeError, ValueError, AttributeError)):
         use_case_module(use_case).solve(object())
+
+
+def _request(use_case):
+    request = REQUEST_MODELS[use_case]()
+    return request.model_copy(update={"timelimit": 0.0})
+
+
+@pytest.mark.parametrize("use_case", REQUEST_MODEL_USE_CASES)
+def test_solve_takes_the_request_model_and_returns_the_response_model(use_case):
+    """solve(request) is the solve models.solve_request runs: the same response, and the
+    request is left as it was."""
+    module = use_case_module(use_case)
+    request = _request(use_case)
+    before = request.model_dump()
+    solved = module.solve(request)
+    assert type(solved) is type(module.models.solve_request(request))
+    assert solved == module.models.solve_request(request)
+    assert request.model_dump() == before
+
+
+@pytest.mark.parametrize("use_case", REQUEST_MODEL_USE_CASES)
+def test_the_keywords_of_solve_replace_what_the_request_says(use_case):
+    """A request with a 20 s budget and a zero-second keyword returns at once, and the callback
+    of a single start is called with the score of the result."""
+    module = use_case_module(use_case)
+    request = REQUEST_MODELS[use_case]().model_copy(update={"timelimit": 20.0})
+    started = time.monotonic()
+    assert module.solve(request, time_limit_seconds=0.0, random_seed=3) == module.models.solve_request(
+        _with_seed(request.model_copy(update={"timelimit": 0.0}), 3)
+    )
+    assert time.monotonic() - started < 10.0
+    assert request.timelimit == 20.0
+
+    reported = []
+    module.solve(
+        request,
+        time_limit_seconds=20.0,
+        stop_at_first_feasible=True,
+        full_assert=True,
+        on_new_best=lambda step, score: reported.append(score),
+    )
+    assert time.monotonic() - started < 15.0
+    assert reported and reported[-1].hard == 0
+
+
+def _with_seed(request, seed):
+    if hasattr(request, "random_seed"):
+        return request.model_copy(update={"random_seed": seed})
+    return request.model_copy(update={"settings": request.settings.model_copy(update={"random_seed": seed})})
+
+
+def test_an_employee_scheduling_request_keeps_its_rules_and_settings():
+    """config and constraints belong to the compiled schedule: a request says both itself.
+    And the starts of a request run in processes, which cannot call back."""
+    module = use_case_module("employee_scheduling")
+    request = _request("employee_scheduling")
+    with pytest.raises(ValueError, match="settings and model_input.rules"):
+        module.solve(request, config=module.SolverConfig())
+    with pytest.raises(ValueError, match="settings and model_input.rules"):
+        module.solve(request, constraints=[])
+    with pytest.raises(ValueError, match="single start"):
+        module.solve(request, parallel_solver_count=2, on_new_best=lambda step, score: None)
+    with pytest.raises(ValueError, match="at least 1"):
+        module.solve(request, parallel_solver_count=0)
+    many = request.model_copy(update={"settings": request.settings.model_copy(update={"multi_start": 3})})
+    assert module.solve(many, parallel_solver_count=1) == module.solve(request)
 
 
 def _feasible(solved) -> bool:

@@ -35,19 +35,19 @@ print([solved.employees[who].name for who in solved.assignment()])    # ['Worker
 [Constraints](#constraints)). With `constraints` the solve is a single search and
 `parallel_solver_count` is ignored.
 
-The JSON layer solves a request model:
+`solve` takes the JSON layer's request model too, and returns a
+`models.ScheduleSolution`:
 
 ```python
+from optimaru.employee_scheduling import solve
 from optimaru.employee_scheduling.demo import generate_demo_data
-from optimaru.employee_scheduling.models import solve_request
 
 request = generate_demo_data()                    # models.ScheduleRequest
-request.timelimit = 2.0
-solution = solve_request(request)
+solution = solve(request, time_limit_seconds=2.0)
 print(solution.score_hard, solution.score_soft)
 ```
 
-`solve_request` reads `timelimit`, the seed and search options in `settings`
+With a request, `solve` reads `timelimit`, the seed and search options in `settings`
 (`models.SolverSettings`), and the rule list in `model_input.rules`. The
 lower-level path takes a `optimaru.employee_scheduling.Solver`, a `SolverConfig` and a
 `DecomposedCalculator` built from `optimaru.employee_scheduling.constraints`. The C++ side
@@ -79,7 +79,7 @@ from optimaru.employee_scheduling import with_initial_solution
 
 # Start again from that result: construction only fills what it leaves out.
 request = with_initial_solution(request, solution)   # `request`, `solution` from Usage
-print(solve_request(request).score_soft)
+print(solve(request).score_soft)
 ```
 
 `with_initial_solution` returns a new request and leaves its input untouched.

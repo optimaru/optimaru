@@ -32,14 +32,20 @@ print(solution.score)             # e.g. 0hard/-8652soft
 print(solution.routes())          # {trolley id: [pick task id, ...]}
 ```
 
-JSON in/out is `optimaru.order_picking.models` (pydantic v2):
+JSON in/out is `optimaru.order_picking.models` (pydantic v2). `solve` takes the
+request model and returns an `OrderPickingResponse`:
 
 ```python
-from optimaru.order_picking.models import OrderPickingRequest, solve_request
+from optimaru.order_picking.models import OrderPickingRequest
 
-response = solve_request(OrderPickingRequest.model_validate(request_dict))
+response = op.solve(OrderPickingRequest.model_validate(request_dict))
 print(response.feasible, response.distance_by_trolley)
 ```
+
+The request carries its own `timelimit`, `random_seed`, `num_workers` and
+`stop_at_first_feasible`; a keyword of `solve` that is given replaces them, and
+`config` is the base they go on top of. `models.solve_request(request)` is the
+same solve under its earlier name.
 
 `SolverConfig` adjusts the engine knobs (time budget, sequence move weights, ALNS, nearby, ScoreChecks::Full,
 `parallel_solver_count` multistart, ...) — see `_core.pyi`.

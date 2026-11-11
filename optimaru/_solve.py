@@ -14,7 +14,9 @@ steps that are the same from one use case to the next are here, and a package's
         return problem
 
 Which problem types a use case takes, and what it returns for each of them, stays in
-its own ``solve()``. So does the solver call of employee scheduling and school
+its own ``solve()``. Four use cases model a whole request in pydantic (the input with its
+time limit, seed and worker count); their ``solve()`` takes that request too, and
+``request_with`` puts the keyword arguments on it. So does the solver call of employee scheduling and school
 timetabling, whose constraints path hands the solver a calculator.
 """
 
@@ -22,7 +24,7 @@ import copy
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-__all__ = ["FIRST_FEASIBLE_LIMIT", "solve_in_place", "solver_config"]
+__all__ = ["FIRST_FEASIBLE_LIMIT", "request_with", "solve_in_place", "solver_config"]
 
 _Config = TypeVar("_Config")
 
@@ -84,3 +86,30 @@ def solve_in_place(solver: Any, problem: Any, constraints: Any = None) -> None:
         solver.solve(problem)
     else:
         solver.solve_with_constraints(problem, constraints)
+
+
+def request_with(
+    request: Any,
+    *,
+    time_limit_seconds: float | None = None,
+    random_seed: int | None = None,
+    parallel_solver_count: int | None = None,
+    stop_at_first_feasible: bool = False,
+) -> Any:
+    """The pydantic ``request`` of one ``solve()`` call: a copy with the keyword arguments applied.
+
+    A request model carries its own ``timelimit``, ``random_seed``, ``num_workers`` and
+    ``stop_at_first_feasible``. A keyword left at its default keeps what the request says;
+    one that is given replaces it, as it replaces the ``config`` setting of a compiled
+    problem. The values are checked where the solver configuration is: by the engine.
+    """
+    update: dict[str, Any] = {}
+    if time_limit_seconds is not None:
+        update["timelimit"] = time_limit_seconds
+    if random_seed is not None:
+        update["random_seed"] = random_seed
+    if parallel_solver_count is not None:
+        update["num_workers"] = parallel_solver_count
+    if stop_at_first_feasible:
+        update["stop_at_first_feasible"] = True
+    return request.model_copy(update=update) if update else request

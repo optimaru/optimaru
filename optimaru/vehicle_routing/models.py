@@ -2,8 +2,9 @@
 
 JSON-friendly in/out (snake_case fields, PascalCase classes):
 
+    from optimaru.vehicle_routing import solve
     from optimaru.vehicle_routing.models import (RoutePlanRequest, RoutingInput,
-                                    VehicleModel, VisitModel, solve_request)
+                                    VehicleModel, VisitModel)
 
     request = RoutePlanRequest(
         timelimit=2,
@@ -15,7 +16,7 @@ JSON-friendly in/out (snake_case fields, PascalCase classes):
                                service_duration=600)],
         ),
     )
-    solution = solve_request(request)
+    solution = solve(request)
     print(solution.routes)          # {"V1": ["A"]}
     print(solution.score)           # "0hard/0medium/-...soft"
 
@@ -23,6 +24,7 @@ Times are integer seconds from a common day start; locations are
 (latitude, longitude) pairs.
 """
 
+import copy
 from typing import Any
 
 from pydantic import Field, model_validator
@@ -305,10 +307,21 @@ def _has_groups(model_input: RoutingInput) -> bool:
 
 
 def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSolution:
-    """Solve a routing request end-to-end and return the pydantic solution."""
+    """Solve a routing request end-to-end and return the pydantic solution.
+
+    The same as `optimaru.vehicle_routing.solve(request, constraints=constraints)`, which
+    also takes the other `solve` keywords. Kept for the callers written before `solve`
+    took a request."""
+    return _solve_request(request, constraints=constraints)
+
+
+def _solve_request(
+    request: RoutePlanRequest, *, constraints=None, config=None, full_assert: bool = False, on_new_best=None
+) -> RouteSolution:
+    """`solve(request, ...)`: ``config`` is the base, the request's own settings go on top."""
     plan = to_plan(request.model_input)
 
-    cfg = _core.SolverConfig()
+    cfg = _core.SolverConfig() if config is None else copy.copy(config)
     cfg.spent_limit_seconds = request.timelimit
     cfg.random_seed = request.random_seed
     cfg.parallel_solver_count = request.num_workers
@@ -316,6 +329,10 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).
         cfg.best_score_limit = (0, -(2**63), -(2**63))
+    if full_assert:
+        cfg.full_assert = True
+    if on_new_best is not None:
+        cfg.on_new_best = on_new_best
     solver = _core.Solver(cfg)
     has_route_policy = any(
         v.max_travel_time
@@ -365,7 +382,7 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
 def with_initial_solution(problem: RoutePlanRequest, solution: RouteSolution | dict[str, Any]) -> RoutePlanRequest:
     """Return a copy of `problem` whose search starts from `solution`.
 
-    `solution` is what `solve_request` returned, as the model or as its JSON
+    `solution` is what `solve(request)` returned, as the model or as its JSON
     dict. Each vehicle's `initial_route` becomes the visit ids of its route
     there, replacing what `problem` had; a vehicle the solution leaves out
     starts empty. Vehicles and visits are matched by id.

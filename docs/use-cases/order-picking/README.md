@@ -45,7 +45,7 @@ none is a reward and all four are scored by default (`default_enabled`);
 `kDefaultWeight`). `order_picking.constraint_costs(solution)` is the only
 per-constraint surface: the travel distance is the sum of the two distance entries,
 the (order, trolley) pair count the sum of `order_split_by_trolley_cost`
-(`models.solve_request` fills `total_distance` / `order_split_count` from it).
+(`solve(request)` fills `total_distance` / `order_split_count` of its response from it).
 
 `order_split_by_trolley_cost`'s raw cost is the (order, trolley) pair count; its default
 weight is 1000.
@@ -80,11 +80,11 @@ op.solve(solution, constraints=[
 ## Starting from an existing solution
 
 ```python
-from optimaru.order_picking.models import solve_request, with_initial_solution
+from optimaru.order_picking import solve, with_initial_solution
 
-solution = solve_request(request)                        # request: an OrderPickingRequest
+solution = solve(request)                                # request: an OrderPickingRequest
 next_request = with_initial_solution(request, solution)  # or solution.model_dump(mode="json")
-better = solve_request(next_request)
+better = solve(next_request)
 ```
 
 `with_initial_solution` returns a new request whose trolleys carry `initial_route`, a list of pick task ids. The solve keeps those routes as its starting point and construction places only the tasks in no route, so a partial solution works. With `timelimit=0` a complete solution comes back as it went in. An unknown id or a task routed twice raises `ValueError`.

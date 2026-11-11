@@ -824,6 +824,9 @@ def solve_request(
 ) -> ScheduleSolution:
     """Solve a pydantic request end-to-end and return the pydantic solution.
 
+    `optimaru.employee_scheduling.solve(request)` is this solve behind the keywords
+    every use case's `solve` takes; ``select`` is the one argument only this function has.
+
     ``request.num_workers`` or ``settings.multi_start`` > 1 runs that many
     independent solves (the larger of the two; seeds ``random_seed + i``) in
     parallel processes and returns the best-scoring one. Each start gets the
@@ -847,16 +850,41 @@ def solve_request(
     full list of solutions) instead of the built-in faithful-score key -- e.g.
     to rank candidates on an external objective the internal score only
     approximates. Ignored for a single start."""
+    return _solve_request(request, select=select)
+
+
+def _solve_request(
+    request: ScheduleRequest,
+    *,
+    select: Callable[[list[ScheduleSolution]], ScheduleSolution] | None = None,
+    full_assert: bool = False,
+    on_new_best=None,
+) -> ScheduleSolution:
+    """`solve(request, ...)` and `solve_request`: one start, or the best of several.
+
+    ``full_assert`` goes to every start. ``on_new_best`` is for a single start: the
+    starts of a multi-start solve run in other processes, which cannot call back."""
     n = max(request.num_workers, request.settings.multi_start)
+    always: dict[str, Any] = {"full_assert": True} if full_assert else {}
     if n <= 1:
-        return _build_and_solve(request, request.settings.random_seed)
+        if on_new_best is not None:
+            always["on_new_best"] = on_new_best
+        return _build_and_solve(request, request.settings.random_seed, always)
+    if on_new_best is not None:
+        raise ValueError(
+            "on_new_best needs a single start: the starts of a ScheduleRequest with num_workers or "
+            "settings.multi_start above 1 run in separate processes"
+        )
 
     # Portfolio multi-start: start i uses seed random_seed+i AND per-start config
     # overrides portfolio[i % len] (diversifying late_acceptance_size / ruin
     # aggressiveness so the n starts explore complementary basins rather than
     # n seeds of one identical config). Empty portfolio => all identical.
     port = request.settings.portfolio
-    jobs = [(request, request.settings.random_seed + i, port[i % len(port)] if port else {}) for i in range(n)]
+    jobs = [
+        (request, request.settings.random_seed + i, {**always, **(port[i % len(port)] if port else {})})
+        for i in range(n)
+    ]
     solutions = _solve_in_processes(jobs, min(n, os.cpu_count() or 1))
     if solutions is None:
         # Sequential best-of-n, so the feature always works, just without the

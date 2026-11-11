@@ -79,9 +79,17 @@ start the same seed can give a different solution from run to run.
 
 Four use cases model a whole request (input, time limit, seed) in pydantic
 instead of the problem alone: employee scheduling, order picking, pickup &
-delivery and vehicle routing. Their `solve()` takes the compiled problem only,
-and `solve_request(request)` in `optimaru.<use case>.models` is the pydantic
-path (JSON in, JSON out).
+delivery and vehicle routing. Their `solve()` takes that request model as the
+others take a problem model, leaves it unchanged and returns the response model
+(`RouteSolution`, `PdpSolution`, `OrderPickingResponse`, `ScheduleSolution`).
+The request carries its own `timelimit`, `random_seed`, `num_workers` and
+`stop_at_first_feasible`; a keyword that is given replaces what the request
+says. In the three routing ones `config` is the base the request's settings go
+on top of. An employee scheduling request holds its search settings and rules
+itself (`settings`, `model_input.rules`), so `config` and `constraints` with
+one raise `ValueError`, and its starts beyond the first run in processes, so
+`on_new_best` needs a single start. `models.solve_request(request)`, the name
+this solve had before `solve` took a request, still works and returns the same.
 
 School timetabling takes and returns dicts (a `TimetableProblem` in, a
 `Timetable` out) and has two more keywords, `mode` and `initial_solution`.
@@ -254,10 +262,10 @@ constructing one. Pass what a previous solve returned, as the result model or as
 its JSON:
 
 ```python
-from optimaru.vehicle_routing.models import solve_request, with_initial_solution
+from optimaru.vehicle_routing import solve, with_initial_solution
 
-first = solve_request(request)
-better = solve_request(with_initial_solution(request, first))
+first = solve(request)
+better = solve(with_initial_solution(request, first))
 ```
 
 The contract is the same everywhere:

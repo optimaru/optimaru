@@ -297,9 +297,10 @@ days so the carried-in ones come first: day 0 is the first day of history.
 ## JSON in, JSON out
 
 ```python
+from optimaru.employee_scheduling import solve
 from optimaru.employee_scheduling.constraints import MaxConsecutiveDaysCost
 from optimaru.employee_scheduling.models import (
-    ScheduleRequest, SchedulingInput, ShiftModel, WorkerModel, default_rules, solve_request,
+    ScheduleRequest, SchedulingInput, ShiftModel, WorkerModel, default_rules,
 )
 
 request = ScheduleRequest(
@@ -310,10 +311,19 @@ request = ScheduleRequest(
         rules=[*default_rules(), MaxConsecutiveDaysCost(value=6, weight=2)],
     ),
 )
-solution = solve_request(request)
+solution = solve(request)                # a ScheduleRequest in, a ScheduleSolution out
 print(solution.schedule)                 # {"Worker 01": [ShiftAssignmentModel(...)]}
 print(solution.model_dump_json())        # ready to send over the wire
 ```
+
+A keyword of `solve` replaces what the request says: `time_limit_seconds` its
+`timelimit`, `random_seed` and `stop_at_first_feasible` the fields of
+`settings`, `parallel_solver_count` the number of starts. The search settings
+and the rules are the request's own (`settings`, `model_input.rules`), so
+`config` and `constraints` with a request raise `ValueError`, and `on_new_best`
+needs a single start, because further starts run in separate processes.
+`models.solve_request(request, select=...)` is the same solve under its earlier
+name, with `select` to choose among the starts yourself.
 
 `ScheduleRequest.model_validate_json(...)` accepts the same JSON back: the rule
 list is a discriminated union generated from the specs, so
@@ -329,24 +339,23 @@ to hard 0.
 ## Starting from an earlier solution
 
 `with_initial_solution(problem, solution)` returns a new request whose solve
-starts from `solution`, which is what `solve_request` returned: a
+starts from `solution`, which is what `solve(request)` returned: a
 `ScheduleSolution` or the plain dict of `model_dump(mode="json")`. `problem` is
 not changed.
 
 ```python
-from optimaru.employee_scheduling import with_initial_solution
+from optimaru.employee_scheduling import solve, with_initial_solution
 from optimaru.employee_scheduling.demo import generate_demo_data
-from optimaru.employee_scheduling.models import solve_request
 
 request = generate_demo_data()
 request.timelimit = 1.0
-first = solve_request(request)
+first = solve(request)
 
 # Keep Worker 01's shifts and let the solve place everything else again.
 partial = first.model_dump(mode="json")
 partial["schedule"] = {"Worker 01": partial["schedule"]["Worker 01"]}
 partial["unassigned"] = []
-second = solve_request(with_initial_solution(request, partial))
+second = solve(with_initial_solution(request, partial))
 print(second.score_hard, second.score_soft)
 ```
 

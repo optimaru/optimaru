@@ -37,7 +37,7 @@ one job: they ride one vehicle together or all stay unassigned
 (`request_group_cost`), and the request moves carry them as one unit.
 """
 
-from .._solve import solve_in_place, solver_config
+from .._solve import request_with, solve_in_place, solver_config
 from ._core import (
     AcceptorType,
     ConstraintInfo,
@@ -57,7 +57,7 @@ from ._core import (
     list_constraints,
 )
 from .constraints import get_constraints
-from .models import solve_request, with_initial_solution
+from .models import PdpRequest, PdpSolution, _solve_request, solve_request, with_initial_solution
 
 __all__ = [
     "AcceptorType",
@@ -83,7 +83,7 @@ __all__ = [
 
 
 def solve(
-    plan: PdpRoutePlan,
+    plan: PdpRoutePlan | PdpRequest,
     *,
     time_limit_seconds: float | None = None,
     random_seed: int | None = None,
@@ -93,8 +93,13 @@ def solve(
     on_new_best=None,
     config: SolverConfig | None = None,
     constraints=None,
-) -> PdpRoutePlan:
+) -> PdpRoutePlan | PdpSolution:
     """High-level API that solves `plan` in place and returns it.
+
+    Given a `models.PdpRequest` instead, the pydantic request (JSON in, JSON out), `solve`
+    leaves it unchanged and returns a `models.PdpSolution`. The request carries its own
+    ``timelimit``, ``random_seed``, ``num_workers`` and ``stop_at_first_feasible``: they
+    apply on top of ``config``, and a keyword argument that is given replaces them.
 
     ``config`` becomes the base settings (`SolverConfig`; None = engine defaults,
     a 30 s budget). Explicit keyword arguments override config.
@@ -117,13 +122,21 @@ def solve(
     does this itself, so `Solver(config).solve(plan)` and `calculate_score(plan)` read
     such a plan the same way. A list passed as ``constraints`` is used as it is.
 
-    The score is on the result: ``plan.score``. `solve_request` is the same solve for
-    a `models` request (JSON in, JSON out).
+    The score is on the result: ``plan.score``, or ``score`` on a `models.PdpSolution`.
     """
-    if not isinstance(plan, PdpRoutePlan):
-        raise TypeError(
-            f"plan must be an instance of PdpRoutePlan: {type(plan)!r} (models.solve_request solves a models.PdpRequest)"
+    if isinstance(plan, PdpRequest):
+        request = request_with(
+            plan,
+            time_limit_seconds=time_limit_seconds,
+            random_seed=random_seed,
+            parallel_solver_count=parallel_solver_count,
+            stop_at_first_feasible=stop_at_first_feasible,
         )
+        return _solve_request(
+            request, constraints=constraints, config=config, full_assert=full_assert, on_new_best=on_new_best
+        )
+    if not isinstance(plan, PdpRoutePlan):
+        raise TypeError(f"plan must be a PdpRoutePlan or a models.PdpRequest: {type(plan)!r}")
     cfg = solver_config(
         SolverConfig,
         config,
