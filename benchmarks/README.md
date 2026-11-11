@@ -166,5 +166,8 @@ depends on the clock: of the 35 instances of five of them, measured twice on
 (the 10-line plant of food packaging moved by 0.01%, the 400-vertex max-cut by
 0.1%, the 18-team league by 5%), and all 33 QAPLIB results were the same.
 The tables of the seven and of QAPLIB are of one run on 2026-11-12, the CP-SAT
-lane beside the engine's as before. Read a small margin in any table as noise.
+lane beside the engine's as before. One seed says little about a change of
+the search: the 8-team and the 14-team league of that run are 2% and 4% behind
+the run of the day before, on a build whose mean over three seeds is 2% ahead.
+Read a small margin in any table as noise.
 

@@ -72,7 +72,9 @@ public:
 
     // Whether a stage has started since the last call (true once per stage):
     // the first new best after a restart is that far from the one before
-    // because of the restart.
+    // because of the restart. The step loop asks at a new best, so the flag
+    // stays set until the next one, however many stages or kicks come in
+    // between.
     bool take_restart() {
         const bool restarted = restarted_;
         restarted_ = false;

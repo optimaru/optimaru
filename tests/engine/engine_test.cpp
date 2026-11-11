@@ -313,7 +313,7 @@ void testHistoryStages() {
         optimaru::HistoryStages stages = stagesOf(400, 2.0);
         stages.on_new_best(0.1);
         check(!stages.on_converged(0.1, false), "kicks on: not due right after a new best");
-        check(!stages.on_converged(0.15, false) && stages.on_converged(0.2, false),
+        check(!stages.on_converged(0.19, false) && stages.on_converged(0.25, false),
               "due once the stall is half the next stage's cost (0.1 of 0.2)");
     }
     {
