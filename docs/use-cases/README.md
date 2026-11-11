@@ -156,8 +156,8 @@ tightens.
 ### Late acceptance in stages
 
 A late acceptance history is a trade: a short one converges fast, a long one
-finds more and needs longer. In bed allocation, food packaging, knapsack,
-maintenance scheduling, max-cut, quadratic assignment and sports league
+finds more and needs longer. In bed allocation, facility location, food packaging,
+knapsack, maintenance scheduling, max-cut, quadratic assignment and sports league
 scheduling the search does not stay with one length. `late_acceptance_size`
 is the history of the first stage. Once that stage has converged and no new
 best has come for a while, late acceptance starts over from the start's score
@@ -170,6 +170,12 @@ history stops growing at 2^20 entries (16 MB per start); from there a stage
 starts over with that length. A stage walks below the best for a while and
 does not know the `unimproved_*` limits: one shorter than a stage ends the
 solve inside it, with the best solution so far.
+
+A use case can also draw its own macro moves less often from the first
+restart on (`AcceptanceSettings::later_stage_custom_move_share`): a later stage
+takes worse solutions for a long while, and moves that each make a pass over
+the whole solution would take the steps of the moves that polish. Facility
+location does, at a tenth of `custom_move_probability`.
 
 Only a solve that the construction starts runs in stages. One that starts from
 a solution you give (`with_initial_solution`, a request's `initial_solution`),

@@ -24,8 +24,9 @@ figures, not the steps.
 
 A consumer is assigned a facility. The score is kept per **unit**: one facility, with
 the consumers assigned to it as its **members**. A consumer without a facility (`-1`)
-is in no unit and scores nothing. A move changes one or two consumers, or all the
-consumers of one facility (`CloseFacilityMove`), so only the facilities they leave
+is in no unit and scores nothing. A move changes one or two consumers, or the
+consumers of a facility that closes or opens (`CloseFacilityMove`, and `SwapFacilityMove`,
+which came after the measurements on this page), so only the facilities they leave
 and join are scored again.
 
 There are two scoring paths, and they give the same score for the same assignment

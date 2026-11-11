@@ -150,6 +150,16 @@ struct AcceptanceSettings {
     // waits at least two histories, so unimproved_step_trigger has less
     // effect the longer the history gets.
     double history_growth = 0.0;
+    // With history_growth: what SearchSettings::custom_move_probability is
+    // multiplied by once late acceptance has started over for the first
+    // time. The first stage is the descent from the start, where a use
+    // case's macro moves do their work at the gate it set. A later stage
+    // takes worse solutions for a long while, the adaptive selector counts
+    // outcomes and not what a move costs, and macro moves that each make a
+    // pass over the solution then take the steps of the moves that polish. 1
+    // = the same gate throughout; 0 = custom operators in the first stage
+    // only.
+    double later_stage_custom_move_share = 1.0;
     int tabu_tenure = 7;  // EntityTabu
     // SimulatedAnnealing: the starting temperature, cooling to 0 over the
     // solve. (0, 0) with a start_temperature_fraction above 0 is automatic:

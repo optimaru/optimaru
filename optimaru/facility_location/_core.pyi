@@ -92,7 +92,9 @@ class SolverConfig:
     random_seed: int
     parallel_solver_count: int
     late_acceptance_size: int
-    """0 = auto: clamp(8 * consumer count, 400, 3200)."""
+    """0 = auto: clamp(8 * consumer count, 400, 3200). The first stage's length: the search restarts with
+    a doubled history when it stalls and the next stage fits in the budget. A solve that starts
+    from a given solution keeps this one length."""
     full_assert: bool
     ruin_recreate: bool
     ruin_recreate_unimproved_step_trigger: int
@@ -122,16 +124,25 @@ class SolverConfig:
     full nearby-pair descent (~2 * facility count evaluations per sweep)
     instead of one sampled move. 0 = off."""
     custom_move_probability: float
-    """Gate on how often a step may draw CloseFacilityMove; 1 = unrestricted."""
+    """Gate on how often a step may draw one of the macro moves (CloseFacilityMove,
+    SwapFacilityMove) instead of a change or a swap; 1 = unrestricted. A solve that starts from
+    nothing draws them on a tenth of this once late acceptance has started over for the first
+    time."""
     close_facility_moves: bool
     """Enable the facility-closing macro move: it empties one used facility in
     a single step, the only way past the setup-cost step function."""
     close_facility_keep: int
-    """How far down a consumer's distance-ordered facility list the closing
-    move looks for a new home."""
+    """How far down a consumer's distance-ordered facility list the two macro
+    moves look for a new home (SwapFacilityMove for the consumers of the
+    facility it closes). 0 switches both moves off."""
     close_facility_migrate_probability: float
     """Probability that an emptied facility's consumers migrate together to one
     alternative site instead of being redistributed over the open ones."""
+    swap_facility_moves: bool
+    """Enable SwapFacilityMove: open a closed facility and close the one that serves its
+    surroundings in a single step; the closed one's consumers go to their nearest facility with
+    room, and the facilities with room take the consumers nearer to them. Without it the search
+    keeps the facilities it first settles on."""
     best_score_limit: tuple[int, float]
     """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
     the first feasible solution."""

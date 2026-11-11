@@ -299,12 +299,14 @@ void testHistoryStages() {
         // to cost 0.8, no longer fits after 0.7.
         optimaru::HistoryStages stages = stagesOf(400, 2.0);
         check(stages.min_patience() == 0, "before the first new best there is nothing to wait out");
+        check(!stages.in_later_stage(), "the first stage is not a later one");
         stages.on_new_best(0.05);
         check(stages.min_patience() == 800, "after it, a stage is waited out for two histories");
         check(stages.on_converged(0.1, true), "no kicks: the second stage is due at convergence");
         stages.start_next(0.1);
         check(stages.history() == 800 && stages.min_patience() == 1600, "the history doubles");
         check(stages.take_restart() && !stages.take_restart(), "a restart is reported once");
+        check(stages.in_later_stage(), "from the first restart on the search is in a later stage");
         check(stages.on_converged(0.3, true), "a third stage fits (0.3 + 0.4 <= 1)");
         stages.start_next(0.3);
         check(!stages.on_converged(0.7, true), "a fourth does not (0.7 + 0.8 > 1)");
@@ -983,16 +985,16 @@ void testRouletteWheelSelector() {
           "rewarded operator dominates selection (" + std::to_string(picks[1]) + "/3000)");
 }
 
-class CountingMove final : public optimaru::MoveOperator<TaskAssignment> {
+template <typename Solution>
+class CountingMove final : public optimaru::MoveOperator<Solution> {
 public:
     explicit CountingMove(int& calls) : calls_(calls) {}
     const char* name() const override { return "counting"; }
-    bool apply(optimaru::OperatorContext<TaskAssignment>&, std::mt19937_64&,
-               std::vector<int>&) override {
+    bool apply(optimaru::OperatorContext<Solution>&, std::mt19937_64&, std::vector<int>&) override {
         ++calls_;
         return false;
     }
-    void undo_last(optimaru::OperatorContext<TaskAssignment>&) override {}
+    void undo_last(optimaru::OperatorContext<Solution>&) override {}
 
 private:
     int& calls_;
@@ -1010,7 +1012,7 @@ void testCustomMoveProbability() {
         config.seed = 7;
         int calls = 0;
         optimaru::Solver<TaskAssignment> solver(config);
-        solver.add_move_operator(std::make_unique<CountingMove>(calls));
+        solver.add_move_operator(std::make_unique<CountingMove<TaskAssignment>>(calls));
         TaskAssignmentCalculator calculator;
         solver.solve(s, calculator);
         return calls;
@@ -1165,6 +1167,41 @@ void testNearbyAndLnsOnRandomTsp() {
 // Engine breadth: expanded moves, limits
 // ===========================================================================
 namespace {
+
+// In stages the gate on custom operators can be narrower from the first
+// restart on (AcceptanceSettings::later_stage_custom_move_share). With a
+// one-entry history on the 100-city tour the first stage is over within a
+// fraction of the run, so most of it is later stages. The counting operator
+// makes no move, so its gate is 0.1: the search has to get on at nearly its
+// own pace for the stages to fit in the steps.
+void testCustomMoveShareInLaterStages() {
+    std::printf("== late acceptance: the custom move gate in later stages ==\n");
+    auto staged = [](double share) {
+        TspSolution s = buildRandomTsp(1, 100);
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::minutes(10);  // the step limit binds
+        config.limits.step_limit = 600000;
+        config.seed = 11;
+        config.search.custom_move_probability = 0.1;
+        config.search.acceptance.history_length = 1;
+        config.search.acceptance.history_growth = 2.0;
+        config.search.acceptance.later_stage_custom_move_share = share;
+        int calls = 0;
+        optimaru::Solver<TspSolution> solver(config);
+        solver.add_move_operator(std::make_unique<CountingMove<TspSolution>>(calls));
+        TspCalculator calculator;
+        solver.solve(s, calculator);
+        return calls;
+    };
+    const int whole = staged(1.0);
+    const int tenth = staged(0.1);
+    const int firstOnly = staged(0.0);
+    std::printf("    custom operator draws in 600000 steps: share 1 %d, share 0.1 %d, share 0 %d\n",
+                whole, tenth, firstOnly);
+    check(firstOnly > 0 && firstOnly < whole / 2,
+          "a later-stage share of 0: the operator is drawn in the first stage only");
+    check(tenth > firstOnly && tenth < whole / 2, "a share of 0.1: drawn far less in later stages");
+}
 
 // The stages at work. With a history of one entry and no kicks, late
 // acceptance is a hill climber that stops at the first tour no single move
@@ -2478,6 +2515,7 @@ int main() {
     testNothingPlaced();
     testNearbyAndLnsOnRandomTsp();
     testHistoryGrowthOnRandomTsp();
+    testCustomMoveShareInLaterStages();
     testExpandedMoves();
     testDecomposedDeltaCalculator();
     testMemberChangeGlobalConstraint();

@@ -13,13 +13,18 @@ namespace fl {
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
 // wires up the incremental score calculator and delegates solving to
 // optimaru::Solver<FacilityLocationProblem>, with the engine's adaptive
-// ruin-and-recreate (ALNS) enabled on top of the built-in change/swap moves.
+// ruin-and-recreate (ALNS) enabled on top of the built-in change/swap moves
+// and the domain's two macro moves (CloseFacilityMove, SwapFacilityMove).
 class Solver {
 public:
     // The limits, the seed, the parallel starts, the callback and the ruin &
     // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
     //   history_length 0  clamp(8 * consumerCount, 400, 3200), the scaling
-    //                     adopted on the school-timetabling quality bench
+    //                     adopted on the school-timetabling quality bench. It
+    //                     is the first stage's length: the search restarts
+    //                     with a doubled history when it stalls (the engine's
+    //                     history_growth); a solve that starts from a given
+    //                     assignment keeps this one length
     //   ruin_recreate     reassigning one consumer at a time cannot close a used
     //                     facility whose consumers must move together; a ruin
     //                     batch can
@@ -59,10 +64,13 @@ public:
         // value range. 0 (default) = off.
         double descent_weight = 0.0;
 
-        // Upper gate on how often a step may draw a caller-registered macro
-        // move (CloseFacilityMove) instead of the ordinary mix; the adaptive
-        // selector still chooses inside the gate. 1 = unrestricted (engine
-        // default).
+        // Upper gate on how often a step may draw one of the domain's macro
+        // moves (CloseFacilityMove, SwapFacilityMove) instead of the ordinary
+        // mix; the adaptive selector still chooses inside the gate. 1 =
+        // unrestricted (the engine's default). In a solve that the
+        // construction starts, the macro moves are drawn on a tenth of this
+        // from the first restart of late acceptance on (see runEngine in
+        // solver.cpp, and swap_facility_moves for what that is worth).
         double custom_move_probability = 1.0;
 
         // CloseFacilityMove: empty one used facility in a single move (see
@@ -71,12 +79,56 @@ public:
         // of a second and then stops improving.
         bool close_facility_moves = true;
         // How far down a consumer's distance-ordered facility list the move
-        // looks for a new home.
+        // looks for a new home. SwapFacilityMove uses the same shortlist for
+        // the consumers of the facility it closes, so 0 switches both moves
+        // off.
         int close_facility_keep = 8;
         // Probability that the emptied facility's consumers migrate together
         // to one alternative site instead of being redistributed over the
         // facilities that are already open.
         double close_facility_migrate_probability = 0.25;
+
+        // SwapFacilityMove: open a closed facility and close the one that
+        // serves its surroundings, in a single move (see solver.cpp). Without
+        // it the search keeps the facilities it settled on: on the 200-consumer
+        // comparison instance it ended with 11 of CP-SAT's 12 facilities and
+        // an assignment within 0.03% of the best one for its own 12, 1.4%
+        // behind on the score.
+        //
+        // Measured on the six instances of benchmarks/facility-location
+        // (2026-11-12, 30 s, three seeds, solved from the construction), as
+        // the mean cost above CP-SAT's at 30 s on 8 workers. Stages are late
+        // acceptance restarting with a doubled history; the share is what the
+        // gate on the macro moves is multiplied by, in the first five rows
+        // for the whole solve:
+        //   as in 0.5.0 (no swaps, no stages)                    1.91%
+        //   stages                                               1.71%
+        //   stages, a share of 0.1                               0.91%
+        //   swaps, a share of 0.1                                0.18%
+        //   swaps, stages                                        0.51%
+        //   swaps, stages, a share of 0.1                        0.04%
+        //   the same, the share from the first restart on only   0.07%
+        // The last row is what a solve does. With the share from the start
+        // the macro moves are too rare to close what the construction opens,
+        // and a short solve pays for it: after 50,000 steps the mean cost of
+        // a 200-consumer instance over 8 seeds was 3.90 million, against
+        // 3.22 million in 0.5.0 and 3.10 million with the share from the
+        // first restart on (which is ahead of 0.5.0 at every step limit from
+        // 20,000 to 2 million, also on 30 and on 1,200 consumers).
+        //
+        // From a given assignment (no stages, so the full gate; 300,000
+        // steps, 36 seeds, the mean cost above CP-SAT's score of the
+        // instance), from a rough assignment and from a solved 80% of the
+        // consumers with the rest left to place, with swaps against without:
+        //   30 consumers    0.00% against 0.18%; from the solved 80% no run
+        //                   of either gets below 8.77% above: it takes one
+        //                   facility more, and no move opens one without
+        //                   closing another
+        //   60 consumers    0.15% against 2.40%, 0.19% against 2.62%
+        //   200 consumers   0.78% against 3.00%, 0.80% against 2.72%
+        // A tenth of the gate there gives 0.50%, 1.22%, 1.00% and 0.95% on
+        // the last four.
+        bool swap_facility_moves = true;
     };
 
     Solver() = default;

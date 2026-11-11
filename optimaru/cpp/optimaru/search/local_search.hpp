@@ -263,7 +263,7 @@ public:
                 // and hears the outcome (0 is the move mix).
                 MoveOperator<Solution>* op = draw_strategy(strategies, rng);
                 int selector_index = -1;
-                if (op == nullptr && custom_operators_get_a_turn(rng)) {
+                if (op == nullptr && custom_operators_get_a_turn(rng, stages.in_later_stage())) {
                     selector_index = move_selector->select(rng);
                     if (selector_index > 0) {
                         op = move_operators_[static_cast<std::size_t>(selector_index) - 1].get();
@@ -397,9 +397,10 @@ private:
 
     // Whether this step asks the adaptive selector to choose between the move
     // mix and the caller's operators (SearchSettings::custom_move_probability).
-    bool custom_operators_get_a_turn(std::mt19937_64& rng) {
+    bool custom_operators_get_a_turn(std::mt19937_64& rng, bool in_later_stage) {
         if (move_operators_.empty()) return false;
-        const double gate = config_.search.custom_move_probability;
+        double gate = config_.search.custom_move_probability;
+        if (in_later_stage) gate *= config_.search.acceptance.later_stage_custom_move_share;
         return gate >= 1.0 || (gate > 0.0 && unit_(rng) < gate);
     }
 

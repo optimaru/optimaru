@@ -65,6 +65,37 @@
   the six triplet instances of 60 and 120 items before). The table of generated instances
   in `benchmarks/bin-packing` is measured again as well, with each part of the search
   switched off in turn.
+- **Facility location: `SwapFacilityMove`, and a solve from scratch in stages.** The search
+  could close a facility (`CloseFacilityMove`) but not put another in its place, so it kept
+  the facilities it first settled on: on the 200-consumer comparison instance it ended with
+  11 of CP-SAT's 12 facilities, 1.4% behind. `SwapFacilityMove`
+  (`SolverConfig.swap_facility_moves`, on by default) opens a closed facility and closes the
+  one that serves its surroundings in one move; the closed one's consumers go to their
+  nearest facility with room, and each facility with room takes the consumers nearer to it.
+  A solve that starts from nothing now also restarts late acceptance with a doubled history
+  when it stalls (`late_acceptance_size` is the first stage's length), and from the first
+  restart on it draws the macro moves on a tenth of the steps `custom_move_probability`
+  allows. A solve from a given assignment has no stages and keeps the full gate.
+  - Measured on the six instances of `benchmarks/facility-location` (30 s, three seeds): the
+    mean cost above CP-SAT's is 0.07%, from 1.91%.
+  - A short solve: after 50,000 steps the mean cost of a 200-consumer instance over 8 seeds
+    is 3.10 million, against 3.22 million; it is lower at every step limit from 20,000 to 2
+    million, also with 30 and with 1,200 consumers.
+  - From a given assignment (36 seeds, 300,000 steps): 0.15% to 0.80% above CP-SAT's cost on
+    the 60- and the 200-consumer instance, against 2.40% to 3.00%. A plan that needs one more
+    facility for its new consumers keeps its facilities, as before: no move opens a facility
+    without closing another.
+  - A seed's result in facility location differs from 0.5.0.
+- **Engine: `AcceptanceSettings::later_stage_custom_move_share`.** With `history_growth`,
+  the gate on a use case's own move operators (`custom_move_probability`) is multiplied by
+  this once late acceptance has started over for the first time. A later stage takes worse
+  solutions for a long while, the adaptive selector counts outcomes and not what a move
+  costs, and macro moves that each make a pass over the solution then take the steps of the
+  moves that polish; the first stage, the descent from the start, keeps the gate as set. 1
+  by default (no change); facility location sets 0.1.
+- **Benchmarks: the facility location table measured again.** The engine has CP-SAT's score
+  on the four instances up to 200 consumers (on two before) and is 0.02% and 0.29% behind on
+  the two larger ones (1.4% to 3.3% behind on four before).
 
 ## 0.5.0
 

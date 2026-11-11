@@ -54,7 +54,9 @@ print(problem.total_cost(), problem.total_distance_meters())
 ```
 
 For finer control build `fl.SolverConfig()` (time budget, multistart, ALNS knobs,
-the `on_new_best` callback, `best_score_limit` early stop, ...) and call
+the macro moves `close_facility_moves` and `swap_facility_moves` with their gate
+`custom_move_probability`, the `on_new_best` callback, `best_score_limit` early stop, ...;
+see the guide's [Search](README.md#search)) and call
 `fl.Solver(cfg).solve(problem)` or `fl.solve(problem, config=cfg)`.
 
 The pydantic v2 mirror (JSON serialization) is `optimaru.facility_location.models`:
