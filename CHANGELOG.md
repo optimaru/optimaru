@@ -9,8 +9,6 @@
   read), and its employee scheduling plugins say constraint where they said rule
   (`SchedulePlugin` was `RulePlugin`); the runners and the READMEs here use the new names.
   No table changes: the CP-SAT models are unchanged since `v0.2.3`.
-- **Changelog: the upgrade note of 0.5.0** also names the routing solves whose result
-  changed (a solve with constraints and more than one parallel start).
 
 ## 0.5.0
 
