@@ -220,10 +220,21 @@ public:
         std::int64_t last_best_step = 0;
         std::int64_t ema_best_gap = 0;
         bool force_time_check = false;
+        // Late acceptance in stages of growing history
+        // (AcceptanceSettings::history_growth).
+        HistoryStages stages(config_, acceptor_factory_ != nullptr, current_score, stop.progress());
 
         while (!stop.should_stop(step, best_score, force_time_check)) {
             force_time_check = false;
-            if (lns.enabled && steps_since_best_or_lns >= std::max(lns_trigger, 8 * ema_best_gap)) {
+            std::int64_t patience = std::max(lns_trigger, 8 * ema_best_gap);
+            // A stage has converged only when a whole history has gone by
+            // without an improving move.
+            if (stages.enabled()) patience = std::max(patience, stages.min_patience());
+            if (stages.enabled() && steps_since_best_or_lns >= patience &&
+                stages.next_is_due(stop.progress(), !lns.enabled)) {
+                acceptor = stages.start_next(stop.progress());
+                steps_since_best_or_lns = 0;
+            } else if (lns.enabled && steps_since_best_or_lns >= patience) {
                 current_score = lns_iteration(editor, current_score, best_score, *ruin_selector,
                                               ruins, operator_context, rng);
                 force_time_check = true;
@@ -232,9 +243,12 @@ public:
                 // the following small moves re-polish the kicked solution
                 // instead of instantly rejecting it (best is snapshotted, so
                 // a bad kick can never worsen the returned solution).
-                acceptor = make_acceptor(current_score);
+                acceptor = stages.enabled() ? stages.acceptor(current_score)
+                                            : make_acceptor(current_score);
                 steps_since_best_or_lns = 0;
                 lns_trigger = std::min(lns_trigger * 2, lns_trigger_cap);
+            } else if (stages.enabled() && steps_since_best_or_lns >= patience) {
+                steps_since_best_or_lns = 0;  // no kicks and no stage fits: look again later
             } else {
                 // A built-in strategy plugin if one is drawn; otherwise a
                 // caller's operator or the ordinary move mix (op == nullptr),
@@ -282,6 +296,11 @@ public:
                     const MoveOutcome outcome =
                             classify(candidate_score, current_score, best_score, accepted);
                     if (accepted) {
+                        // In stages, stagnation counts from the last improving
+                        // move: a stage starts far below the best.
+                        if (stages.enabled() && candidate_score > current_score) {
+                            steps_since_best_or_lns = -1;
+                        }
                         current_score = candidate_score;
                         acceptor->on_accepted(entities, entity_count);
                         if (previewed) apply_previewed(editor, move);
@@ -318,6 +337,7 @@ public:
                 best_score = current_score;
                 Snapshot::capture(best, solution);  // reuses the snapshot's storage
                 stop.on_improvement(step);
+                stages.on_new_best(stop.progress());
                 steps_since_best_or_lns = 0;
                 lns_trigger = lns.unimproved_step_trigger;
                 const std::int64_t gap = step - last_best_step;
@@ -335,6 +355,58 @@ public:
     }
 
 private:
+    // Late acceptance in stages of growing history: see
+    // AcceptanceSettings::history_growth. Times are fractions of the solve
+    // (StopCondition::progress()).
+    class HistoryStages {
+    public:
+        HistoryStages(const Settings& config, bool custom_acceptor, const Score& start_score,
+                      double now)
+            : growth_(config.search.acceptance.history_growth),
+              enabled_(growth_ > 1.0 && !custom_acceptor &&
+                       config.search.acceptance.rule == AcceptanceRule::LateAcceptance),
+              history_(config.search.acceptance.history_length),
+              start_score_(start_score),
+              stage_start_(now),
+              last_best_(now) {}
+
+        bool enabled() const { return enabled_; }
+        std::int64_t min_patience() const { return 2 * static_cast<std::int64_t>(history_); }
+
+        // Called once the current stage has converged. The first call
+        // measures how long a stage of the current length takes.
+        bool next_is_due(double now, bool no_kicks) {
+            if (stage_cost_ < 0.0 || in_stage_) stage_cost_ = now - stage_start_;
+            in_stage_ = false;
+            const double next_cost = growth_ * stage_cost_;
+            const bool stalled = no_kicks || now - last_best_ >= 0.5 * next_cost;
+            return stalled && now + next_cost <= 1.0;
+        }
+
+        std::unique_ptr<Acceptor> start_next(double now) {
+            history_ = static_cast<std::size_t>(static_cast<double>(history_) * growth_);
+            stage_start_ = now;
+            in_stage_ = true;
+            return acceptor(start_score_);
+        }
+
+        std::unique_ptr<Acceptor> acceptor(const Score& initial) const {
+            return std::make_unique<LateAcceptance>(history_, initial);
+        }
+
+        void on_new_best(double now) { last_best_ = now; }
+
+    private:
+        double growth_;
+        bool enabled_;
+        std::size_t history_;
+        Score start_score_;
+        double stage_start_;
+        double stage_cost_ = -1.0;
+        double last_best_;
+        bool in_stage_ = false;
+    };
+
     // A built-in strategy plugin and the probability a step draws it.
     struct WeightedStrategy {
         double weight;

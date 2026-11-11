@@ -34,6 +34,14 @@ optimaru::Settings engineConfigOf(const Solver::Config& config,
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * problem.facilities.size(), 400, 3200);
 
+    // Restart late acceptance with a doubled history when the search stalls
+
+    // (see AcceptanceSettings::history_growth): measured on every instance of
+
+    // benchmarks/quadratic-assignment, none worse at 30 s.
+
+    engineConfig.search.acceptance.history_growth = 2.0;
+
     auto& local = engineConfig.search;
     local.moves.change_weight = 0.0;
     local.moves.swap_weight = 1.0;

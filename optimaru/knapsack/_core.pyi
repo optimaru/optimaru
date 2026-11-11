@@ -123,7 +123,8 @@ class SolverConfig:
     """Independent starts (seed + i each); the best wins. Ignored by
     solve_with_constraints."""
     late_acceptance_size: int
-    """0 = auto: clamp(8 * item count, 400, 3200)."""
+    """0 = auto: clamp(8 * item count, 400, 3200). The first stage's length: the search restarts with
+    a doubled history when it stalls and the next stage fits in the budget."""
     full_assert: bool
     ruin_recreate: bool
     ruin_recreate_unimproved_step_trigger: int

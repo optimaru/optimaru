@@ -111,7 +111,21 @@ struct AcceptanceSettings {
     AcceptanceRule rule = AcceptanceRule::LateAcceptance;
 
     std::size_t history_length = 400;  // LateAcceptance
-    int tabu_tenure = 7;               // EntityTabu
+    // LateAcceptance only: search in stages of growing history. A longer
+    // history explores more widely and converges later, so the right length
+    // depends on the time there is, which one fixed number cannot follow: a
+    // short one converges in a fraction of a second on a small instance and
+    // leaves the rest of the budget to the kicks alone. Above 1, this is the
+    // factor from one stage to the next: once the search has converged and no
+    // new best has come for half as long as the next stage would take (at
+    // once, where ruin & recreate is off), the acceptor starts over from the
+    // start's score with the history this much longer, provided that stage
+    // still fits in the budget (a stage is taken to last the factor times the
+    // one before). The search goes on from the current solution and the best
+    // one is kept as always, so a stage that finds nothing costs only its
+    // time. Kicks between stages use the stage's history. 1 or less = off.
+    double history_growth = 0.0;
+    int tabu_tenure = 7;  // EntityTabu
     // SimulatedAnnealing: the starting temperature, cooling to 0 over the
     // solve. (0, 0) with a start_temperature_fraction above 0 is automatic:
     // hard 0 (a hard-worse move is never taken) and soft = the fraction of

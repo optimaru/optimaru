@@ -27,6 +27,24 @@
   optimaru from this checkout, and their locks name its version: they still said 0.4.2 after
   the release, so the first `uv sync` rewrote them. Nothing else moves; the projects stay on
   external-solver `v0.2.3`, which needs no change for 0.4.3.
+- **Late acceptance in stages of growing history.** A late acceptance history is a trade
+  between converging fast and finding more, and the use cases set one short length (400 to
+  3,200 steps), so a small instance converged within a fraction of a second and the kicks
+  alone had the rest of the budget: quadratic assignment, which has no kicks, did nothing
+  for the last 29.9 of 30 seconds on 14 facilities. The engine's new
+  `AcceptanceSettings::history_growth` (C++; off by default) restarts late acceptance from
+  the start's score with the history that many times longer once the search has converged
+  and found no new best for half as long as the next stage would take, as long as that
+  stage fits in the budget; the best solution is kept as always. It is on, at 2, in **food
+  packaging, knapsack, max-cut, quadratic assignment and sports league scheduling**, where
+  `late_acceptance_size` is now the first stage's length. Measured on every instance of
+  their five benchmark ladders at 30 s over three seeds: 62 runs better, 33 equal, 1 worse
+  (a knapsack by 1 in 17,470); sports league scheduling 5 to 15% less travel, quadratic
+  assignment at 14, 16 and 20 facilities the same value on every seed, 2 to 3% below the
+  old one. Every other use case searches exactly as before. With a time limit, the stage a
+  solve reaches depends on the clock; a step-limited solve repeats for a seed.
+- **Benchmarks: three more rungs.** `random25` (quadratic assignment), `g1600` (max-cut)
+  and `teams12` (sports league scheduling) join their comparison ladders.
 
 ## 0.4.3
 

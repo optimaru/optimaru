@@ -185,6 +185,10 @@ void Solver::solve(PackagingSchedule& schedule) {
                         ? config_.history_length
                         : std::clamp<std::size_t>(8 * static_cast<std::size_t>(movableJobs), 400,
                                                   3200);
+        // Restart late acceptance with a doubled history when the search stalls
+        // (see AcceptanceSettings::history_growth): measured on every instance of
+        // benchmarks/food-packaging, none worse at 30 s.
+        engineConfig.search.acceptance.history_growth = 2.0;
         auto& moves = engineConfig.search.moves;
         moves.relocate_weight = config_.relocate_weight;
         moves.list_swap_weight = config_.list_swap_weight;
@@ -273,6 +277,10 @@ void Solver::solve(PackagingSchedule& schedule,
                         ? config_.history_length
                         : std::clamp<std::size_t>(8 * static_cast<std::size_t>(movableJobs), 400,
                                                   3200);
+        // Restart late acceptance with a doubled history when the search stalls
+        // (see AcceptanceSettings::history_growth): measured on every instance of
+        // benchmarks/food-packaging, none worse at 30 s.
+        engineConfig.search.acceptance.history_growth = 2.0;
         auto& moves = engineConfig.search.moves;
         moves.relocate_weight = config_.relocate_weight;
         moves.list_swap_weight = config_.list_swap_weight;

@@ -135,6 +135,8 @@ instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
   sequences.
 - **Acceptors**: hill climbing, late acceptance, entity tabu, simulated
   annealing, great deluge, step counting hill climbing, record-to-record travel.
+  Late acceptance can run in stages of growing history
+  (`AcceptanceSettings::history_growth`), which fits its length to the budget.
 - **Limits** (`Limits`): wall time, stall time, steps, stall steps, target
   score; the first one reached ends the solve.
 - **Moves**: change / swap (assignment); relocate / swap / 2-opt / Or-opt /

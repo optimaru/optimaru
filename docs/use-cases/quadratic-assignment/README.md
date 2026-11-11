@@ -170,11 +170,16 @@ The package is the C++ engine with pybind11 bindings, like the other C++ use cas
   seed + i.
 - **Acceptors.** `LATE_ACCEPTANCE` (the default) and the others work on swaps
   only, and no move perturbs a permutation (ruin-and-recreate would break the
-  bijection). So late acceptance stops improving at a 2-swap local optimum: most
-  of a long budget can be idle, and re-solving a returned solution rarely
-  improves it. Use the `unimproved_*` limits to stop early, independent starts
-  (`parallel_solver_count`), `RECORD_TO_RECORD_TRAVEL`, or `SIMULATED_ANNEALING`,
-  whose starting temperature is automatic: `simulated_annealing_temperature_fraction`
+  bijection). One late acceptance history stops improving at a 2-swap local
+  optimum, so the default runs in stages: each time the search converges it
+  starts over from the start's score with the history doubled, as long as the
+  next stage fits in the budget
+  ([Late acceptance in stages](../README.md#late-acceptance-in-stages)). A
+  solve that starts at a local optimum (a warm start from a returned solution)
+  has no worse score to start over from, and rarely improves. The other ways
+  out are independent starts (`parallel_solver_count`),
+  `RECORD_TO_RECORD_TRAVEL`, or `SIMULATED_ANNEALING`, whose starting
+  temperature is automatic: `simulated_annealing_temperature_fraction`
   (0.01) × |start soft|, or `simulated_annealing_starting_temperature` set
   explicitly; it cools to 0 over the time limit, or over `step_count_limit` when
   that is further along (the larger of the step and time fractions). A seeded,
@@ -302,7 +307,7 @@ full bijection.
 ## Benchmark
 
 [`benchmarks/quadratic-assignment`](../../../benchmarks/quadratic-assignment) compares this
-use case with OR-Tools CP-SAT on generated instances of up to 20 facilities, rescored
+use case with OR-Tools CP-SAT on generated instances of up to 25 facilities, rescored
 by the same evaluator, and runs the QAPLIB instances below.
 
 ### QAPLIB benchmark

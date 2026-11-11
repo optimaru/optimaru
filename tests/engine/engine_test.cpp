@@ -231,6 +231,47 @@ void testAcceptors(const Score& separableOptimum, const Score& optimum) {
     }
 }
 
+void testHistoryGrowth(const Score& separableOptimum) {
+    std::printf("== late acceptance: history growth ==\n");
+    // Stages restart the acceptor; whatever they do, the solve must return its
+    // best solution with a consistent score, the same one for the same seed.
+    // The step limit is the only binding criterion (the stages are timed on
+    // the solve's progress, which a step limit drives), so the run is the
+    // same on every machine.
+    const auto run = [](bool kicks, optimaru::ScoreChecks checks, std::int64_t steps) {
+        TaskAssignment s = buildSeparableInstance();
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::minutes(10);
+        config.limits.step_limit = steps;
+        config.search.acceptance.history_length = 1;
+        config.search.acceptance.history_growth = 2.0;
+        config.search.ruin_recreate.enabled = kicks;
+        config.search.ruin_recreate.unimproved_step_trigger = 200;
+        config.score_checks = checks;
+        config.seed = 7;
+        TaskAssignmentCalculator calculator;
+        const Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
+        return std::make_pair(result, s.assignment);
+    };
+    for (bool kicks : {false, true}) {
+        const auto [result, assignment] = run(kicks, optimaru::ScoreChecks::Off, 200000);
+        TaskAssignment s = buildSeparableInstance();
+        s.assignment = assignment;
+        const std::string mode = kicks ? " (with kicks)" : " (no kicks)";
+        check(result == separableOptimum && fullScore(s) == separableOptimum,
+              "history growth reaches the separable optimum" + mode);
+        check(run(kicks, optimaru::ScoreChecks::Off, 200000).second == assignment,
+              "history growth is deterministic for a seed" + mode);
+    }
+    bool threw = false;
+    try {
+        run(true, optimaru::ScoreChecks::Full, 5000);
+    } catch (const optimaru::ScoreMismatchError&) {
+        threw = true;
+    }
+    check(!threw, "history growth passes ScoreChecks::Full");
+}
+
 void testTerminations(const Score& optimum) {
     std::printf("== assignment: terminations ==\n");
     using Clock = std::chrono::steady_clock;
@@ -2225,6 +2266,7 @@ int main() {
     testRouletteWheelSelector();
     testCustomMoveProbability();
     testLnsEscapesLocalOptimum(optimum);
+    testHistoryGrowth(separableOptimum);
     testNearbyAndLnsOnRandomTsp();
     testExpandedMoves();
     testDecomposedDeltaCalculator();
