@@ -5,8 +5,6 @@ file covers the selection path that picks "which constraints are on", the five k
 (the level included) and repeated picks.
 """
 
-import pickle
-import re
 from types import SimpleNamespace
 
 import pytest
@@ -14,7 +12,6 @@ import pytest
 import optimaru.flight_crew_scheduling as fc
 from optimaru._constraint import instance_keys
 from optimaru.flight_crew_scheduling.constraints import (
-    Constraint,
     EmployeeUnavailabilityCost,
     FirstAssignmentNotDepartingFromHomeCost,
     FlightConflictCost,
@@ -83,10 +80,6 @@ def test_list_constraints_matches_the_spec_names():
         assert spec.name in available
 
 
-def test_get_constraints_defaults_to_the_full_set():
-    assert [spec.name for spec in get_constraints()] == fc.list_constraints()
-
-
 def test_default_solve_equals_explicit_default_constraints():
     """`constraints=get_constraints()` must score the same as the default path."""
     plain = solve()
@@ -121,32 +114,6 @@ def test_level_can_be_flipped():
     assert soft_level.hard == 0
 
 
-def test_unknown_constraint_name_raises():
-    """A typo must not silently leave the cost function unchanged."""
-
-    class Typo:
-        name = "required_skill_costs"  # trailing s
-        weight = None
-        level = None
-        exponent = 1.0
-
-    with pytest.raises(ValueError, match="unknown constraint"):
-        solve([Typo()])
-
-
-def test_empty_constraint_list_is_rejected():
-    """An empty list means 'score nothing', which is most likely a mistake."""
-    with pytest.raises(ValueError, match="must not be empty"):
-        fc.solve(build_schedule(), time_limit_seconds=0.2, constraints=[])
-
-
-def test_spec_subclass_must_name_a_constraint():
-    with pytest.raises(TypeError, match="registry `name`"):
-
-        class Nameless(Constraint):
-            pass
-
-
 def test_module_level_instances_keep_every_default():
     """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
@@ -161,13 +128,6 @@ def test_module_level_instances_keep_every_default():
         assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert list(instances) == get_constraints()
     assert [spec.name for spec in instances] == fc.list_constraints()
-
-
-def test_every_spec_has_labels_and_descriptions_in_both_languages():
-    for spec in get_constraints():
-        cls = type(spec)
-        for attr in ("label_en", "label_ko", "description_en", "description_ko"):
-            assert getattr(cls, attr), f"{cls.__name__}.{attr} is empty"
 
 
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
@@ -218,17 +178,6 @@ def test_score_reweighting_is_linear_without_rescoring():
         assert ten.hard == pytest.approx(base.hard * factor, rel=1e-6)
     else:
         assert ten.soft == pytest.approx(base.soft * factor, rel=1e-9)
-
-
-def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name must not be silently ignored."""
-    raw, _ = _raw()
-
-    class Misnamed(Constraint):
-        name = "definitely_not_a_constraint"
-
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Misnamed()])
 
 
 @pytest.mark.parametrize(
@@ -306,22 +255,6 @@ def test_constraint_info_reports_the_cpp_defaults():
     ]
 
 
-def test_constraint_info_rows_are_plain_values():
-    row = fc.constraint_info()[0]
-    assert isinstance(row, fc.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "required_skill_cost",
-        "default_level": "hard",
-        "default_weight": 100.0,
-        "level_flippable": True,
-        "reward": False,
-        "default_enabled": True,
-    }
-    assert repr(row).startswith("ConstraintInfo(name='required_skill_cost'")
-    assert pickle.loads(pickle.dumps(fc.constraint_info())) == fc.constraint_info()
-    assert fc.ConstraintInfo.__module__ == fc._core.__name__
-
-
 def test_constraint_info_matches_the_raw_cost_metadata():
     """constraint_costs() reports the same defaults (weight, level) for every constraint."""
     raw = fc.constraint_costs(build_schedule())
@@ -353,80 +286,6 @@ def test_weight_none_means_the_component_default():
     raw, schedule = _raw()
     assert score(raw) == score(raw, explicit)
     assert score(raw) == (schedule.score.hard, schedule.score.soft)
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "error"),
-    [
-        ({"weight": -1}, ValueError),
-        ({"weight": float("nan")}, ValueError),
-        ({"weight": float("inf")}, ValueError),
-        ({"weight": "2"}, TypeError),
-        ({"exponent": 0}, ValueError),
-        ({"exponent": -1.0}, ValueError),
-        ({"hard": 1}, TypeError),
-    ],
-)
-def test_specs_validate_their_knobs(kwargs, error):
-    with pytest.raises(error):
-        RequiredSkillCost(**kwargs)
-
-
-def test_core_refuses_invalid_knobs_from_duck_typed_picks():
-    """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-
-    class Negative:
-        name = "flight_conflict_cost"
-        weight = -2.0
-        level = None
-        exponent = 1.0
-
-    class Flat:
-        name = "flight_conflict_cost"
-        weight = None
-        level = None
-        exponent = 0.0
-
-    class Unbounded:
-        name = "flight_conflict_cost"
-        weight = None
-        level = None
-        exponent = 1.0
-        offset = float("inf")
-
-    for pick, message in (
-        (Negative(), "weight must be finite and >= 0"),
-        (Flat(), "exponent must be finite and > 0"),
-        (Unbounded(), "offset must be finite, not inf"),
-    ):
-        with pytest.raises(ValueError, match=message):
-            fc.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
-    with pytest.raises(ValueError, match="offset must be finite, not nan"):
-        FlightConflictCost(offset=float("nan"))
-
-
-@pytest.mark.parametrize(
-    ("knobs", "message"),
-    [
-        ({"weight": True}, "weight must be a number or None, not True"),
-        ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"level": 1}, "level must be a Level, its name or None, not 1"),
-        ({"exponent": True}, "exponent must be a number, not True"),
-        ({"offset": "5"}, "offset must be a number, not '5'"),
-        ({"offset": False}, "offset must be a number, not False"),
-        ({"clip": 1}, "clip must be True or False, not 1"),
-        ({"clip": "no"}, "clip must be True or False, not 'no'"),
-    ],
-)
-def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="flight_conflict_cost", weight=None, level=None, exponent=1.0)
-    for key, value in knobs.items():
-        setattr(pick, key, value)
-    with pytest.raises(TypeError, match=f"constraint 'flight_conflict_cost': {re.escape(message)}"):
-        fc.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
-    with pytest.raises(TypeError, match=re.escape(message)):
-        FlightConflictCost(**knobs)
 
 
 # --- Raw costs by hand ------------------------------------------------------------
@@ -700,16 +559,6 @@ def test_medium_is_refused_without_a_medium_level(level):
             fc.constraint_costs(_hand_schedule(), picks)
         with pytest.raises(ValueError, match=message):
             score(fc.constraint_costs(_hand_schedule()), picks)
-
-
-def test_a_level_must_be_a_level():
-    with pytest.raises(TypeError, match="level must be a Level"):
-        FlightConflictCost(level=False)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        FlightConflictCost(level="firm")
-    pick = SimpleNamespace(name="flight_conflict_cost", weight=None, level="firm", exponent=1.0)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        _zero_budget([FlightConflictCost(), pick])
 
 
 # --- clip=False with an offset stays off the hard score -------------------------

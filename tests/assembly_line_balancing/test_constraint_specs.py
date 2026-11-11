@@ -4,8 +4,6 @@
 picks are covered here.
 """
 
-import pickle
-import re
 from types import SimpleNamespace
 
 import pytest
@@ -13,7 +11,6 @@ import pytest
 import optimaru.assembly_line_balancing as alb
 from optimaru._constraint import instance_keys
 from optimaru.assembly_line_balancing.constraints import (
-    Constraint,
     DifferentStationPairsCost,
     FixedTaskStationsCost,
     ForbiddenTaskStationsCost,
@@ -144,10 +141,6 @@ def test_list_constraints_matches_the_spec_names():
         assert spec.name in alb.list_constraints()
 
 
-def test_get_constraints_defaults_to_the_full_set():
-    assert [spec.name for spec in get_constraints()] == alb.list_constraints()
-
-
 def test_default_solve_equals_explicit_default_constraints():
     """`constraints=get_constraints()` must score the same as the default path."""
     plain = solve()
@@ -190,31 +183,6 @@ def test_level_can_be_flipped():
     assert (promoted.hard, promoted.soft) == (-1, 0.0)
 
 
-def test_unknown_constraint_name_raises():
-    """A typo must not silently leave the cost function unchanged."""
-
-    class Typo:
-        name = "station_capacity_costs"  # trailing s
-        weight = None
-        level = None
-        exponent = 1.0
-
-    with pytest.raises(ValueError, match="unknown constraint"):
-        solve([Typo()])
-
-
-def test_empty_constraint_list_is_rejected():
-    with pytest.raises(ValueError, match="must not be empty"):
-        alb.solve(build_problem(), config=_config(), constraints=[])
-
-
-def test_spec_subclass_must_name_a_constraint():
-    with pytest.raises(TypeError, match="registry `name`"):
-
-        class Nameless(Constraint):
-            pass
-
-
 def test_module_level_instances_keep_every_default():
     for spec in INSTANCES:
         assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
@@ -245,22 +213,6 @@ def test_constraint_info_reports_the_cpp_defaults():
     ]
 
 
-def test_constraint_info_rows_are_plain_values():
-    row = alb.constraint_info()[0]
-    assert isinstance(row, alb.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "station_capacity_cost",
-        "default_level": "hard",
-        "default_weight": 1.0,
-        "level_flippable": True,
-        "reward": False,
-        "default_enabled": True,
-    }
-    assert repr(row).startswith("ConstraintInfo(name='station_capacity_cost'")
-    assert pickle.loads(pickle.dumps(alb.constraint_info())) == alb.constraint_info()
-    assert alb.ConstraintInfo.__module__ == alb._core.__name__
-
-
 def test_constraint_info_matches_the_raw_cost_metadata():
     """constraint_costs() reports the same defaults (weight, level) for every constraint, in catalog order."""
     raw = alb.constraint_costs(build_problem())
@@ -287,64 +239,6 @@ def test_weight_none_means_the_component_default():
     raw = alb.constraint_costs(problem)
     engine = alb.calculate_score(problem)
     assert score(raw) == score(raw, explicit) == (engine.hard, engine.soft) == (-10, -3.0)
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "error"),
-    [
-        ({"weight": -1}, ValueError),
-        ({"weight": float("nan")}, ValueError),
-        ({"weight": float("inf")}, ValueError),
-        ({"weight": "2"}, TypeError),
-        ({"exponent": 0}, ValueError),
-        ({"exponent": -1.0}, ValueError),
-        ({"hard": 1}, TypeError),
-        ({"offset": float("nan")}, ValueError),
-        ({"offset": "1"}, TypeError),
-        ({"clip": 0}, TypeError),
-    ],
-)
-def test_specs_validate_their_knobs(kwargs, error):
-    with pytest.raises(error):
-        UsedStationsCost(**kwargs)
-
-
-def test_core_refuses_invalid_knobs_from_duck_typed_picks():
-    """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    for knobs, message in (
-        ({"weight": -2.0}, "weight must be finite and >= 0"),
-        ({"exponent": 0.0}, "exponent must be finite and > 0"),
-        ({"offset": float("inf")}, "offset must be finite, not inf"),
-    ):
-        pick = SimpleNamespace(name="used_stations_cost", weight=None, level=None, exponent=1.0)
-        for key, value in knobs.items():
-            setattr(pick, key, value)
-        with pytest.raises(ValueError, match=message):
-            alb.solve(build_problem(), config=_config(), constraints=[pick])
-
-
-@pytest.mark.parametrize(
-    ("knobs", "message"),
-    [
-        ({"weight": True}, "weight must be a number or None, not True"),
-        ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"level": 1}, "level must be a Level, its name or None, not 1"),
-        ({"exponent": True}, "exponent must be a number, not True"),
-        ({"offset": "5"}, "offset must be a number, not '5'"),
-        ({"offset": False}, "offset must be a number, not False"),
-        ({"clip": 1}, "clip must be True or False, not 1"),
-        ({"clip": "no"}, "clip must be True or False, not 'no'"),
-    ],
-)
-def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="used_stations_cost", weight=None, level=None, exponent=1.0)
-    for key, value in knobs.items():
-        setattr(pick, key, value)
-    with pytest.raises(TypeError, match=f"constraint 'used_stations_cost': {re.escape(message)}"):
-        alb.solve(build_problem(), config=_config(), constraints=[pick])
-    with pytest.raises(TypeError, match=re.escape(message)):
-        UsedStationsCost(**knobs)
 
 
 def test_constraint_costs_match_every_constraint_by_hand():
@@ -714,16 +608,6 @@ def test_medium_is_refused_without_a_medium_level(level):
             score(alb.constraint_costs(fixture_h()), picks)
         with pytest.raises(ValueError, match=message):
             alb.calculate_score(fixture_h(), picks)
-
-
-def test_a_level_must_be_a_level():
-    with pytest.raises(TypeError, match="level must be a Level"):
-        UsedStationsCost(level=True)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        UsedStationsCost(level="firm")
-    pick = SimpleNamespace(name="used_stations_cost", weight=None, level="firm", exponent=1.0)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        _engine([UsedStationsCost(), pick])
 
 
 # --- clip=False with an offset stays off the hard score -------------------------------

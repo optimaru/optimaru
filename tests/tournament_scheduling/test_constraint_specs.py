@@ -5,8 +5,6 @@ file covers the selection path that picks "which constraints are on", the
 catalog (`constraint_info()`), the five knobs, repeated picks and the medium level.
 """
 
-import pickle
-import re
 from types import SimpleNamespace
 
 import pytest
@@ -16,7 +14,6 @@ from optimaru._constraint import instance_keys
 from optimaru.tournament_scheduling.constraints import (
     AssignmentCountImbalanceCost,
     ConfrontationCountImbalanceCost,
-    Constraint,
     Level,
     TeamConflictCost,
     TeamUnavailabilityCost,
@@ -54,10 +51,6 @@ def test_list_constraints_matches_the_spec_names():
     ]
     for spec in get_constraints():
         assert spec.name in available
-
-
-def test_get_constraints_defaults_to_the_full_set():
-    assert [spec.name for spec in get_constraints()] == ts.list_constraints()
 
 
 def test_default_constraints_reproduce_the_monolithic_cost_function():
@@ -110,19 +103,6 @@ def test_level_can_be_flipped():
     assert hard_level.soft == 0
 
 
-def test_empty_constraint_list_is_rejected():
-    """An empty list means 'score nothing', which is most likely a mistake."""
-    with pytest.raises(ValueError, match="must not be empty"):
-        ts.solve(build_schedule(), time_limit_seconds=0.2, constraints=[])
-
-
-def test_spec_subclass_must_name_a_constraint():
-    with pytest.raises(TypeError, match="registry `name`"):
-
-        class Nameless(Constraint):
-            pass
-
-
 def test_module_level_instances_keep_every_default():
     """Module-level instances must keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
@@ -134,13 +114,6 @@ def test_module_level_instances_keep_every_default():
     for spec in instances:
         assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0)
     assert [spec.name for spec in instances] == ts.list_constraints()
-
-
-def test_every_spec_has_labels_and_descriptions_in_both_languages():
-    for spec in get_constraints():
-        cls = type(spec)
-        for attr in ("label_en", "label_ko", "description_en", "description_ko"):
-            assert getattr(cls, attr), f"{cls.__name__}.{attr} is empty"
 
 
 def test_the_spec_no_longer_shadows_the_unavailability_fact():
@@ -165,22 +138,6 @@ def test_constraint_info_reports_the_cpp_defaults():
         ("medium", 1.0, True, False, True),  # assignment_count_imbalance_cost
         ("soft", 1.0, True, False, True),  # confrontation_count_imbalance_cost
     ]
-
-
-def test_constraint_info_rows_are_plain_values():
-    row = ts.constraint_info()[0]
-    assert isinstance(row, ts.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "team_conflict_cost",
-        "default_level": "hard",
-        "default_weight": 1.0,
-        "level_flippable": True,
-        "reward": False,
-        "default_enabled": True,
-    }
-    assert repr(row).startswith("ConstraintInfo(name='team_conflict_cost'")
-    assert pickle.loads(pickle.dumps(ts.constraint_info())) == ts.constraint_info()
-    assert ts.ConstraintInfo.__module__ == ts._core.__name__
 
 
 def test_constraint_info_matches_the_raw_cost_metadata():
@@ -213,83 +170,6 @@ def test_weight_none_means_the_component_default():
     raw = ts.constraint_costs(schedule)
     assert score(raw) == score(raw, explicit)
     assert score(raw) == (schedule.score.hard, pytest.approx(schedule.score.soft))
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "error"),
-    [
-        ({"weight": -1}, ValueError),
-        ({"weight": float("nan")}, ValueError),
-        ({"weight": float("inf")}, ValueError),
-        ({"weight": "2"}, TypeError),
-        ({"exponent": 0}, ValueError),
-        ({"exponent": -1.0}, ValueError),
-        ({"hard": 1}, TypeError),
-    ],
-)
-def test_specs_validate_their_knobs(kwargs, error):
-    with pytest.raises(error):
-        ConfrontationCountImbalanceCost(**kwargs)
-
-
-def test_core_refuses_invalid_knobs_from_duck_typed_picks():
-    """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-
-    class Negative:
-        name = "confrontation_count_imbalance_cost"
-        weight = -2.0
-        level = None
-        exponent = 1.0
-
-    class Flat:
-        name = "confrontation_count_imbalance_cost"
-        weight = None
-        level = None
-        exponent = 0.0
-
-    class Unbounded:
-        name = "confrontation_count_imbalance_cost"
-        weight = None
-        level = None
-        exponent = 1.0
-        offset = float("inf")
-
-    for pick, message in (
-        (Negative(), "weight must be finite and >= 0"),
-        (Flat(), "exponent must be finite and > 0"),
-        (Unbounded(), "offset must be finite, not inf"),
-    ):
-        with pytest.raises(ValueError, match=message):
-            ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
-        with pytest.raises(ValueError, match=message):
-            ts.constraint_costs(build_schedule(), [pick])
-    with pytest.raises(ValueError, match="offset must be finite, not nan"):
-        ConfrontationCountImbalanceCost(offset=float("nan"))
-
-
-@pytest.mark.parametrize(
-    ("knobs", "message"),
-    [
-        ({"weight": True}, "weight must be a number or None, not True"),
-        ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"level": 1}, "level must be a Level, its name or None, not 1"),
-        ({"exponent": True}, "exponent must be a number, not True"),
-        ({"offset": "5"}, "offset must be a number, not '5'"),
-        ({"offset": False}, "offset must be a number, not False"),
-        ({"clip": 1}, "clip must be True or False, not 1"),
-        ({"clip": "no"}, "clip must be True or False, not 'no'"),
-    ],
-)
-def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    name = "confrontation_count_imbalance_cost"
-    pick = SimpleNamespace(name=name, weight=None, level=None, exponent=1.0)
-    for key, value in knobs.items():
-        setattr(pick, key, value)
-    with pytest.raises(TypeError, match=f"constraint '{name}': {re.escape(message)}"):
-        ts.solve(build_schedule(), time_limit_seconds=0.1, constraints=[pick])
-    with pytest.raises(TypeError, match=re.escape(message)):
-        ConfrontationCountImbalanceCost(**knobs)
 
 
 NEAR_MISSES = (
@@ -451,17 +331,6 @@ def test_score_reweighting_is_linear_without_rescoring():
         assert ten.hard == pytest.approx(base.hard * factor, rel=1e-6)
     else:
         assert ten.soft == pytest.approx(base.soft * factor, rel=1e-9)
-
-
-def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a typo) must not be silently ignored."""
-    raw, _ = _raw()
-
-    class Misnamed(Constraint):
-        name = "definitely_not_a_constraint"
-
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Misnamed()])
 
 
 def test_naming_a_constraint_twice_scores_both_picks():
@@ -729,15 +598,6 @@ def test_a_soft_constraint_can_move_to_medium():
     assert schedule.score.hard == 0
     assert schedule.score.soft == pytest.approx(expected)
     assert _agrees(score(raw, picks), (schedule.score.hard, schedule.score.soft))
-
-
-def test_a_level_must_be_a_level():
-    with pytest.raises(TypeError, match="level must be a Level"):
-        TeamConflictCost(level=True)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
-        TeamConflictCost(level="firm")
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
-        TeamConflictCost(level="HARD")
 
 
 def test_core_refuses_an_unknown_level_like_the_python_base():

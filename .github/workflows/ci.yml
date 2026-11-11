@@ -144,7 +144,7 @@ jobs:
       - name: Test (the use case, and the contracts every use case shares)
         run: >-
           uv run --python 3.14 python -m pytest -q tests/${{ matrix.use_case }}
-          tests/test_solve_contract.py tests/test_solver_config_contract.py
+          tests/test_solve_contract.py tests/test_solver_config_contract.py tests/test_constraints_contract.py
 
   benchmark-cpsat:
     name: ${{ matrix.benchmark }} (CP-SAT benchmark)

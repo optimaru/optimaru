@@ -6,8 +6,6 @@ selection path that picks "which constraints are on", the catalog (`constraint_i
 the five knobs, repeated picks and the medium level.
 """
 
-import pickle
-import re
 from types import SimpleNamespace
 
 import pytest
@@ -17,7 +15,6 @@ from optimaru._constraint import instance_keys
 from optimaru.bed_allocation import constraints as specs
 from optimaru.bed_allocation.constraints import (
     BedConflictCost,
-    Constraint,
     DepartmentSpecialtyCost,
     Level,
     MixedGenderRoomCost,
@@ -105,10 +102,6 @@ def test_list_constraints_matches_the_spec_names():
         assert spec.name in available
 
 
-def test_get_constraints_defaults_to_the_full_set():
-    assert [spec.name for spec in get_constraints()] == ba.list_constraints()
-
-
 def test_default_solve_equals_explicit_default_constraints():
     """`constraints=get_constraints()` must score the same as the default path."""
     plain = solve()
@@ -157,43 +150,11 @@ def test_level_can_be_flipped():
     assert flipped.soft < 0
 
 
-def test_unknown_constraint_name_raises():
-    """A typo must not silently leave the cost function unchanged."""
-
-    class Typo:
-        name = "bed_conflict_costs"  # trailing s
-        weight = None
-        level = None
-        exponent = 1.0
-
-    with pytest.raises(ValueError, match="unknown constraint"):
-        solve([Typo()])
-
-
-def test_empty_constraint_list_is_rejected():
-    """An empty list means 'score nothing', which is most likely a mistake."""
-    with pytest.raises(ValueError, match="must not be empty"):
-        ba.solve(build_plan(), time_limit_seconds=0.2, constraints=[])
-
-
-def test_spec_subclass_must_name_a_constraint():
-    with pytest.raises(TypeError, match="registry `name`"):
-
-        class Nameless(Constraint):
-            pass
-
-
 def test_default_instance_carries_no_overrides():
     """Module-level instances must keep the defaults (weight=None)."""
     for spec in get_constraints():
         assert (spec.weight, spec.level, spec.exponent) == (None, None, 1.0), spec.name
         assert getattr(specs, spec.name) is spec  # the instance is named after the constraint
-
-
-def test_every_spec_has_labels_and_descriptions_in_both_languages():
-    for spec in get_constraints():
-        for attribute in ("label_en", "label_ko", "description_en", "description_ko"):
-            assert getattr(type(spec), attribute).strip(), f"{spec.name}.{attribute}"
 
 
 # --- Pure-Python scoring (constraint_costs -> score) ------------------------
@@ -239,17 +200,6 @@ def test_score_reweighting_is_linear_without_rescoring():
         assert ten.soft == pytest.approx(base.soft * factor, rel=1e-9)
 
 
-def test_score_rejects_an_unknown_constraint_name():
-    """A spec with a wrong name (e.g. a misspelled component) must not be silently ignored."""
-    raw, _ = _raw()
-
-    class Misnamed(Constraint):
-        name = "definitely_not_a_constraint"
-
-    with pytest.raises(ValueError, match="unknown constraint"):
-        score(raw, [Misnamed()])
-
-
 # --- The catalog: constraint_info() -------------------------------------------
 
 # (name, default level, default weight), in list_constraints() order.
@@ -276,22 +226,6 @@ def test_constraint_info_reports_the_cpp_defaults():
     assert [(row.name, row.default_level, row.default_weight) for row in rows] == EXPECTED_INFO
     # Every constraint is flippable, none is a reward, and all twelve are on by default.
     assert all(row.level_flippable and not row.reward and row.default_enabled for row in rows)
-
-
-def test_constraint_info_rows_are_plain_values():
-    row = ba.constraint_info()[6]
-    assert isinstance(row, ba.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "unassigned_stays_cost",
-        "default_level": "medium",
-        "default_weight": 1.0,
-        "level_flippable": True,
-        "reward": False,
-        "default_enabled": True,
-    }
-    assert repr(row).startswith("ConstraintInfo(name='unassigned_stays_cost'")
-    assert pickle.loads(pickle.dumps(ba.constraint_info())) == ba.constraint_info()
-    assert ba.ConstraintInfo.__module__ == ba._core.__name__
 
 
 def test_constraint_info_matches_the_raw_cost_metadata():
@@ -397,62 +331,6 @@ def test_on_new_best_reports_the_levels_of_the_final_score(constraints):
     if constraints is not None:
         assert final == (0, -6, -18 * 10**8)
         assert score(ba.constraint_costs(plan), constraints) == (0, -6 * MEDIUM_UNIT - 18 * 10**8)
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "error"),
-    [
-        ({"weight": -1}, ValueError),
-        ({"weight": float("nan")}, ValueError),
-        ({"weight": "2"}, TypeError),
-        ({"exponent": 0}, ValueError),
-        ({"hard": 1}, TypeError),
-    ],
-)
-def test_specs_validate_their_knobs(kwargs, error):
-    with pytest.raises(error):
-        BedConflictCost(**kwargs)
-
-
-def test_core_refuses_invalid_knobs_from_duck_typed_picks():
-    """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="bed_conflict_cost", weight=-2.0, level=None, exponent=1.0)
-    flat = SimpleNamespace(name="bed_conflict_cost", weight=None, level=None, exponent=0.0)
-    unbounded = SimpleNamespace(name="bed_conflict_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
-    for pick, message in (
-        (negative, "weight must be finite and >= 0"),
-        (flat, "exponent must be finite and > 0"),
-        (unbounded, "offset must be finite, not inf"),
-    ):
-        with pytest.raises(ValueError, match=message):
-            ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[pick])
-        with pytest.raises(ValueError, match=message):
-            ba.constraint_costs(build_plan(), [pick])
-    with pytest.raises(ValueError, match="offset must be finite, not nan"):
-        BedConflictCost(offset=float("nan"))
-
-
-@pytest.mark.parametrize(
-    ("knobs", "message"),
-    [
-        ({"weight": True}, "weight must be a number or None, not True"),
-        ({"level": 1}, "level must be a Level, its name or None, not 1"),
-        ({"exponent": True}, "exponent must be a number, not True"),
-        ({"offset": "5"}, "offset must be a number, not '5'"),
-        ({"offset": False}, "offset must be a number, not False"),
-        ({"clip": 1}, "clip must be True or False, not 1"),
-        ({"clip": "no"}, "clip must be True or False, not 'no'"),
-    ],
-)
-def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="unassigned_stays_cost", weight=None, level=None, exponent=1.0)
-    for key, value in knobs.items():
-        setattr(pick, key, value)
-    with pytest.raises(TypeError, match=f"constraint 'unassigned_stays_cost': {re.escape(message)}"):
-        ba.solve(build_plan(), time_limit_seconds=0.1, constraints=[pick])
-    with pytest.raises(TypeError, match=re.escape(message)):
-        UnassignedStaysCost(**knobs)
 
 
 # --- repeated picks and the offset / clip knobs ------------------------------------
@@ -748,15 +626,6 @@ def test_a_soft_constraint_can_move_to_medium():
     medium_level = solve([*picks, PreferredMaxRoomCapacityCost(level=Level.MEDIUM)])
     assert (soft_level.hard, soft_level.medium, soft_level.soft) == (0, -6, -144)
     assert (medium_level.hard, medium_level.medium, medium_level.soft) == (0, -24, 0)
-
-
-def test_a_level_must_be_a_level():
-    with pytest.raises(TypeError, match="level must be a Level"):
-        BedConflictCost(level=True)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
-        BedConflictCost(level="firm")
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft'"):
-        BedConflictCost(level="HARD")
 
 
 def test_core_refuses_an_unknown_level_like_the_python_base():

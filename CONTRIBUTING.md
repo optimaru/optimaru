@@ -19,9 +19,9 @@ ctest --test-dir build --output-on-failure   # the engine tests and <uc>'s C++ t
 
 `<uc>` is the subpackage name, such as `vehicle_routing` or `bin_packing`. Leave
 `OPTIMARU_USE_CASES` unset to build all 22, and keep it exported while you test:
-uv rebuilds when it changes, and the two contract tests
-(`tests/test_solve_contract.py`, `tests/test_solver_config_contract.py`) skip
-only the use cases it leaves out. You need a C++17 compiler, CMake and uv.
+uv rebuilds when it changes, and the three contract tests
+(`tests/test_solve_contract.py`, `tests/test_solver_config_contract.py`,
+`tests/test_constraints_contract.py`) skip only the use cases it leaves out. You need a C++17 compiler, CMake and uv.
 
 ## Where things are
 

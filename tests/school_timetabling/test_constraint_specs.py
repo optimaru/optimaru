@@ -6,7 +6,6 @@ repository — returns exactly the seventeen default constraints, in
 labels; the defaults live in C++ and come back through `constraint_info()`.
 """
 
-import pickle
 import re
 from types import SimpleNamespace
 
@@ -144,22 +143,6 @@ def test_constraint_info_reports_the_cpp_defaults():
     assert [
         (row.default_level, row.default_weight, row.level_flippable, row.reward, row.default_enabled) for row in rows
     ] == expected
-
-
-def test_constraint_info_rows_are_plain_values():
-    row = st.constraint_info()[0]
-    assert isinstance(row, st.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "unassigned_lessons_cost",
-        "default_level": "hard",
-        "default_weight": 1.0,
-        "level_flippable": True,
-        "reward": False,
-        "default_enabled": True,
-    }
-    assert repr(row).startswith("ConstraintInfo(name='unassigned_lessons_cost'")
-    assert pickle.loads(pickle.dumps(st.constraint_info())) == st.constraint_info()
-    assert st.ConstraintInfo.__module__ == st._core.__name__
 
 
 def test_constraint_costs_metadata_matches_constraint_info(problem):

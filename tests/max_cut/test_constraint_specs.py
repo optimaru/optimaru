@@ -5,8 +5,6 @@ picks are covered here.
 """
 
 import json
-import pickle
-import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,7 +13,6 @@ import pytest
 from optimaru import max_cut
 from optimaru._constraint import instance_keys
 from optimaru.max_cut.constraints import (
-    Constraint,
     CutWeightCost,
     DifferentPartitionPairsCost,
     FixedPartitionCost,
@@ -103,10 +100,6 @@ def test_list_constraints_matches_the_spec_names():
         assert spec.name in NAMES
 
 
-def test_get_constraints_defaults_to_the_full_set():
-    assert [spec.name for spec in get_constraints()] == max_cut.list_constraints()
-
-
 def test_module_level_instances_keep_every_default():
     """Module-level instances keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
@@ -123,20 +116,6 @@ def test_module_level_instances_keep_every_default():
     assert list(instances) == get_constraints()
 
 
-def test_every_spec_has_labels_and_descriptions_in_both_languages():
-    for spec in get_constraints():
-        cls = type(spec)
-        for attr in ("label_en", "label_ko", "description_en", "description_ko"):
-            assert getattr(cls, attr), f"{cls.__name__}.{attr} is empty"
-
-
-def test_spec_subclass_must_name_a_constraint():
-    with pytest.raises(TypeError, match="registry `name`"):
-
-        class Nameless(Constraint):
-            pass
-
-
 # --- The catalog (constraint_info) -------------------------------------------
 
 
@@ -150,22 +129,6 @@ def test_constraint_info_reports_the_cpp_defaults():
         ("soft", 0.0, True, False, False),  # partition_imbalance_cost: opt-in
         ("soft", 1.0, False, True, True),  # cut_weight_cost: a reward
     ]
-
-
-def test_constraint_info_rows_are_plain_values():
-    row = max_cut.constraint_info()[-1]
-    assert isinstance(row, max_cut.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "cut_weight_cost",
-        "default_level": "soft",
-        "default_weight": 1.0,
-        "level_flippable": False,
-        "reward": True,
-        "default_enabled": True,
-    }
-    assert repr(max_cut.constraint_info()[0]).startswith("ConstraintInfo(name='fixed_partition_cost'")
-    assert pickle.loads(pickle.dumps(max_cut.constraint_info())) == max_cut.constraint_info()
-    assert max_cut.ConstraintInfo.__module__ == max_cut._core.__name__
 
 
 def test_constraint_info_matches_the_raw_cost_metadata():
@@ -295,67 +258,6 @@ def test_the_reward_refuses_level_hard_on_every_path(level):
     # level="soft" re-states its level: allowed, and scores like the default.
     assert max_cut.calculate_score(problem, [CutWeightCost(level="soft")]) == (0, 2.0)
     assert engine_score(problem, [CutWeightCost(level="soft")]) == (0, 2.0)
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "error"),
-    [
-        ({"weight": -1}, ValueError),
-        ({"weight": float("nan")}, ValueError),
-        ({"weight": float("inf")}, ValueError),
-        ({"weight": "2"}, TypeError),
-        ({"exponent": 0}, ValueError),
-        ({"exponent": -1.0}, ValueError),
-        ({"level": 1}, TypeError),
-        ({"level": "firm"}, ValueError),
-        ({"hard": True}, TypeError),  # an unknown keyword
-    ],
-)
-def test_specs_validate_their_knobs(kwargs, error):
-    with pytest.raises(error):
-        FixedPartitionCost(**kwargs)
-
-
-def test_core_refuses_invalid_knobs_from_duck_typed_picks():
-    """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="fixed_partition_cost", weight=-2.0, level=None, exponent=1.0)
-    flat = SimpleNamespace(name="fixed_partition_cost", weight=None, level=None, exponent=0.0)
-    unbounded = SimpleNamespace(name="fixed_partition_cost", weight=None, level=None, exponent=1.0, offset=float("inf"))
-    for pick, message in (
-        (negative, "weight must be finite and >= 0"),
-        (flat, "exponent must be finite and > 0"),
-        (unbounded, "offset must be finite, not inf"),
-    ):
-        with pytest.raises(ValueError, match=message):
-            max_cut.solve(plain(), time_limit_seconds=0, constraints=[pick])
-        with pytest.raises(ValueError, match=message):
-            max_cut.constraint_costs(fixture_h(), [pick])
-    with pytest.raises(ValueError, match="offset must be finite, not nan"):
-        FixedPartitionCost(offset=float("nan"))
-
-
-@pytest.mark.parametrize(
-    ("knobs", "message"),
-    [
-        ({"weight": True}, "weight must be a number or None, not True"),
-        ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"level": 1}, "level must be a Level, its name or None, not 1"),
-        ({"exponent": True}, "exponent must be a number, not True"),
-        ({"offset": "5"}, "offset must be a number, not '5'"),
-        ({"offset": False}, "offset must be a number, not False"),
-        ({"clip": 1}, "clip must be True or False, not 1"),
-        ({"clip": "no"}, "clip must be True or False, not 'no'"),
-    ],
-)
-def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="partition_size_bounds_cost", weight=None, level=None, exponent=1.0)
-    for key, value in knobs.items():
-        setattr(pick, key, value)
-    with pytest.raises(TypeError, match=f"constraint 'partition_size_bounds_cost': {re.escape(message)}"):
-        max_cut.solve(plain(), time_limit_seconds=0, constraints=[pick])
-    with pytest.raises(TypeError, match=re.escape(message)):
-        PartitionSizeBoundsCost(**knobs)
 
 
 def test_unknown_names_are_refused():
@@ -694,16 +596,6 @@ def test_medium_is_refused_without_a_medium_level(level):
                 score(max_cut.constraint_costs(fixture_h()), picks)
             with pytest.raises(ValueError, match=message):
                 max_cut.calculate_score(fixture_h(), picks)
-
-
-def test_a_level_must_be_a_level():
-    with pytest.raises(TypeError, match="level must be a Level"):
-        PartitionSizeBoundsCost(level=True)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        PartitionSizeBoundsCost(level="firm")
-    pick = SimpleNamespace(name="partition_size_bounds_cost", weight=None, level="firm", exponent=1.0)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        engine_solve(fixture_h(), [PartitionSizeBoundsCost(), pick])
 
 
 def test_a_level_name_equals_its_enum():

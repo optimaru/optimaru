@@ -4,8 +4,6 @@
 picks are covered here.
 """
 
-import pickle
-import re
 from types import SimpleNamespace
 
 import pytest
@@ -13,7 +11,6 @@ import pytest
 from optimaru import knapsack
 from optimaru._constraint import instance_keys
 from optimaru.knapsack.constraints import (
-    Constraint,
     ForbiddenItemsCost,
     ItemDependencyCost,
     KnapsackCapacityCost,
@@ -89,10 +86,6 @@ def test_list_constraints_matches_the_spec_names():
         assert spec.name in NAMES
 
 
-def test_get_constraints_defaults_to_the_full_set():
-    assert [spec.name for spec in get_constraints()] == knapsack.list_constraints()
-
-
 def test_module_level_instances_keep_every_default():
     """Module-level instances keep the defaults (weight=None, level=None, exponent=1)."""
     instances = (
@@ -109,20 +102,6 @@ def test_module_level_instances_keep_every_default():
     assert list(instances) == get_constraints()
 
 
-def test_every_spec_has_labels_and_descriptions_in_both_languages():
-    for spec in get_constraints():
-        cls = type(spec)
-        for attr in ("label_en", "label_ko", "description_en", "description_ko"):
-            assert getattr(cls, attr), f"{cls.__name__}.{attr} is empty"
-
-
-def test_spec_subclass_must_name_a_constraint():
-    with pytest.raises(TypeError, match="registry `name`"):
-
-        class Nameless(Constraint):
-            pass
-
-
 # --- The catalog (constraint_info) -------------------------------------------
 
 
@@ -133,22 +112,6 @@ def test_constraint_info_reports_the_cpp_defaults():
     assert [
         (row.default_level, row.default_weight, row.level_flippable, row.reward, row.default_enabled) for row in rows
     ] == [("hard", 1.0, True, False, True)] * 6 + [("soft", 1.0, False, True, True)]
-
-
-def test_constraint_info_rows_are_plain_values():
-    row = knapsack.constraint_info()[-1]
-    assert isinstance(row, knapsack.ConstraintInfo)
-    assert row._asdict() == {
-        "name": "selected_value_cost",
-        "default_level": "soft",
-        "default_weight": 1.0,
-        "level_flippable": False,
-        "reward": True,
-        "default_enabled": True,
-    }
-    assert repr(knapsack.constraint_info()[0]).startswith("ConstraintInfo(name='knapsack_capacity_cost'")
-    assert pickle.loads(pickle.dumps(knapsack.constraint_info())) == knapsack.constraint_info()
-    assert knapsack.ConstraintInfo.__module__ == knapsack._core.__name__
 
 
 def test_constraint_info_matches_the_raw_cost_metadata():
@@ -287,69 +250,6 @@ def test_the_reward_refuses_level_hard_on_every_path(level):
         knapsack.Solver(_zero()).solve_with_constraints(problem.to_core(), [duck])
     # level="soft" re-states its level: allowed, and scores like the default.
     assert knapsack.calculate_score(problem, [SelectedValueCost(level="soft")]) == (0, 5.0)
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "error"),
-    [
-        ({"weight": -1}, ValueError),
-        ({"weight": float("nan")}, ValueError),
-        ({"weight": float("inf")}, ValueError),
-        ({"weight": "2"}, TypeError),
-        ({"exponent": 0}, ValueError),
-        ({"exponent": -1.0}, ValueError),
-        ({"level": 1}, TypeError),
-        ({"level": "firm"}, ValueError),
-        ({"hard": True}, TypeError),  # an unknown keyword
-    ],
-)
-def test_specs_validate_their_knobs(kwargs, error):
-    with pytest.raises(error):
-        KnapsackCapacityCost(**kwargs)
-
-
-def test_core_refuses_invalid_knobs_from_duck_typed_picks():
-    """The C++ side guards too: a duck-typed pick cannot smuggle a negative weight in."""
-    negative = SimpleNamespace(name="knapsack_capacity_cost", weight=-2.0, level=None, exponent=1.0)
-    flat = SimpleNamespace(name="knapsack_capacity_cost", weight=None, level=None, exponent=0.0)
-    unbounded = SimpleNamespace(
-        name="knapsack_capacity_cost", weight=None, level=None, exponent=1.0, offset=float("inf")
-    )
-    for pick, message in (
-        (negative, "weight must be finite and >= 0"),
-        (flat, "exponent must be finite and > 0"),
-        (unbounded, "offset must be finite, not inf"),
-    ):
-        with pytest.raises(ValueError, match=message):
-            knapsack.solve(basic(), time_limit_seconds=0, constraints=[pick])
-        with pytest.raises(ValueError, match=message):
-            knapsack.constraint_costs(basic(), [pick])
-    with pytest.raises(ValueError, match="offset must be finite, not nan"):
-        KnapsackCapacityCost(offset=float("nan"))
-
-
-@pytest.mark.parametrize(
-    ("knobs", "message"),
-    [
-        ({"weight": True}, "weight must be a number or None, not True"),
-        ({"weight": "2"}, "weight must be a number or None, not '2'"),
-        ({"level": 1}, "level must be a Level, its name or None, not 1"),
-        ({"exponent": True}, "exponent must be a number, not True"),
-        ({"offset": "5"}, "offset must be a number, not '5'"),
-        ({"offset": False}, "offset must be a number, not False"),
-        ({"clip": 1}, "clip must be True or False, not 1"),
-        ({"clip": "no"}, "clip must be True or False, not 'no'"),
-    ],
-)
-def test_core_refuses_the_types_the_python_base_refuses(knobs, message):
-    """The C++ path checks the knob types like _constraint.py: TypeError, the same words."""
-    pick = SimpleNamespace(name="mandatory_items_cost", weight=None, level=None, exponent=1.0)
-    for key, value in knobs.items():
-        setattr(pick, key, value)
-    with pytest.raises(TypeError, match=f"constraint 'mandatory_items_cost': {re.escape(message)}"):
-        knapsack.solve(basic(), time_limit_seconds=0, constraints=[pick])
-    with pytest.raises(TypeError, match=re.escape(message)):
-        MandatoryItemsCost(**knobs)
 
 
 def test_unknown_names_are_refused():
@@ -705,16 +605,6 @@ def test_medium_is_refused_without_a_medium_level(level):
         engine_solve(shifted(), reward)
     with pytest.raises(ValueError, match=message):
         score(knapsack.constraint_costs(shifted()), reward)
-
-
-def test_a_level_must_be_a_level():
-    with pytest.raises(TypeError, match="level must be a Level"):
-        MandatoryItemsCost(level=True)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        MandatoryItemsCost(level="firm")
-    pick = SimpleNamespace(name="mandatory_items_cost", weight=None, level="firm", exponent=1.0)
-    with pytest.raises(ValueError, match="level must be 'hard', 'medium' or 'soft', not 'firm'"):
-        engine_solve(shifted(), [MandatoryItemsCost(), pick])
 
 
 def test_a_level_name_equals_its_enum():
