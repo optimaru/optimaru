@@ -199,7 +199,9 @@ public:
 
     // `preference`: as for CloseFacilityMove. `nearest`: per facility, the
     // `reach` nearest consumers in ascending distance (flattened
-    // facilityIndex * reach + rank).
+    // facilityIndex * reach + rank). `reach` and `keep` are at least 1:
+    // runEngine registers the move for a problem with consumers and
+    // facilities only (Solver::solve returns before it otherwise).
     SwapFacilityMove(std::shared_ptr<std::vector<int>> preference, int keep,
                      std::shared_ptr<std::vector<int>> nearest, int reach)
         : preference_(std::move(preference)),
@@ -318,16 +320,18 @@ private:
         const std::int64_t demand = problem.consumers[consumerIndex].demand;
         auto fits = [&](int f) { return load_[f] + demand <= problem.facilities[f].capacity; };
         const int* order = preference_->data() + static_cast<std::size_t>(consumerIndex) * keep_;
-        int target = fits(opened) ? opened : -1;
-        for (int rank = 0; rank < keep_; ++rank) {
+        // The shortlist is in ascending distance: its first open facility
+        // with room is its nearest one.
+        int listed = -1;
+        for (int rank = 0; rank < keep_ && listed < 0; ++rank) {
             const int f = order[rank];
-            if (!open_[f] || !fits(f)) continue;
-            if (target < 0 ||
-                problem.distanceOf(consumerIndex, f) < problem.distanceOf(consumerIndex, target))
-                target = f;
-            break;  // the shortlist is in ascending distance
+            if (open_[f] && fits(f)) listed = f;
         }
-        return target;
+        if (!fits(opened)) return listed;
+        if (listed < 0) return opened;
+        return problem.distanceOf(consumerIndex, listed) < problem.distanceOf(consumerIndex, opened)
+                       ? listed
+                       : opened;
     }
 
     std::shared_ptr<std::vector<int>> preference_;
@@ -439,7 +443,8 @@ void runEngine(const Solver::Config& config, FacilityLocationProblem& problem,
 
     // Distance-ordered facility shortlist per consumer: where
     // CloseFacilityMove and SwapFacilityMove look for a new home for each
-    // evicted consumer.
+    // evicted consumer. A shortlist of 0 (close_facility_keep) leaves both
+    // moves out.
     const int preferenceKeep = std::min(config.close_facility_keep, problem.facilityCount());
     std::shared_ptr<std::vector<int>> preference;
     if ((config.close_facility_moves || config.swap_facility_moves) && preferenceKeep > 0)

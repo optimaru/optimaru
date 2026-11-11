@@ -79,7 +79,9 @@ public:
         // of a second and then stops improving.
         bool close_facility_moves = true;
         // How far down a consumer's distance-ordered facility list the move
-        // looks for a new home.
+        // looks for a new home. SwapFacilityMove uses the same shortlist for
+        // the consumers of the facility it closes, so 0 switches both moves
+        // off.
         int close_facility_keep = 8;
         // Probability that the emptied facility's consumers migrate together
         // to one alternative site instead of being redistributed over the

@@ -132,8 +132,9 @@ class SolverConfig:
     """Enable the facility-closing macro move: it empties one used facility in
     a single step, the only way past the setup-cost step function."""
     close_facility_keep: int
-    """How far down a consumer's distance-ordered facility list the closing
-    move looks for a new home."""
+    """How far down a consumer's distance-ordered facility list the two macro
+    moves look for a new home (SwapFacilityMove for the consumers of the
+    facility it closes). 0 switches both moves off."""
     close_facility_migrate_probability: float
     """Probability that an emptied facility's consumers migrate together to one
     alternative site instead of being redistributed over the open ones."""

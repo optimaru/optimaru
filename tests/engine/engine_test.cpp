@@ -1168,12 +1168,6 @@ void testNearbyAndLnsOnRandomTsp() {
 // ===========================================================================
 namespace {
 
-// The stages at work. With a history of one entry and no kicks, late
-// acceptance is a hill climber that stops at the first tour no single move
-// improves; nothing else in this configuration can leave it. The same search
-// with history_growth restarts with longer and longer histories, so a shorter
-// tour under the same step limit means stages started and found it. A factor
-// close to 1 must still lengthen a one-entry history.
 // In stages the gate on custom operators can be narrower from the first
 // restart on (AcceptanceSettings::later_stage_custom_move_share). With a
 // one-entry history on the 100-city tour the first stage is over within a
@@ -1209,6 +1203,12 @@ void testCustomMoveShareInLaterStages() {
     check(tenth > firstOnly && tenth < whole / 2, "a share of 0.1: drawn far less in later stages");
 }
 
+// The stages at work. With a history of one entry and no kicks, late
+// acceptance is a hill climber that stops at the first tour no single move
+// improves; nothing else in this configuration can leave it. The same search
+// with history_growth restarts with longer and longer histories, so a shorter
+// tour under the same step limit means stages started and found it. A factor
+// close to 1 must still lengthen a one-entry history.
 void testHistoryGrowthOnRandomTsp() {
     std::printf("== late acceptance: history growth on random TSP (100 cities) ==\n");
     auto solveWith = [&](double growth) {

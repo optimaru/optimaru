@@ -171,6 +171,12 @@ starts over with that length. A stage walks below the best for a while and
 does not know the `unimproved_*` limits: one shorter than a stage ends the
 solve inside it, with the best solution so far.
 
+A use case can also draw its own macro moves less often from the first
+restart on (`AcceptanceSettings::later_stage_custom_move_share`): a later stage
+takes worse solutions for a long while, and moves that each make a pass over
+the whole solution would take the steps of the moves that polish. Facility
+location does, at a tenth of `custom_move_probability`.
+
 Only a solve that the construction starts runs in stages. One that starts from
 a solution you give (`with_initial_solution`, a request's `initial_solution`),
 also one that places only a part and leaves the rest to the construction,
