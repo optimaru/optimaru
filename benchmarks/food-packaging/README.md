@@ -21,11 +21,12 @@ workers and its time includes model construction.
 The CP-SAT model of this use case is solved one score level at a time, hard
 first, within the one budget
 ([how a CP-SAT run is timed](../README.md#how-a-cp-sat-run-is-timed)). On the
-4-line plant the hard level has no solution when its share of the budget ends,
-and the medium level, which places the jobs, finds nothing better in what is
-left: CP-SAT's answer there leaves every job unassigned (`-12914medium` is the
-12,914 minutes of the 60 jobs, and `0soft` an empty plan). On the demo plant
-the hard level finds no solution in its 30 s.
+4-line plant the hard level finds its first solution, the empty plan, only
+after its share of the budget has ended, and the medium level, which places
+the jobs, finds nothing better in its share of what is left: CP-SAT's answer
+there leaves every job unassigned (`-12914medium` is the 12,914 minutes of the
+60 jobs, and `0soft` an empty plan). On the demo plant the hard level finds no
+solution in its 30 s.
 
 <!-- results:start -->
 ## Results
