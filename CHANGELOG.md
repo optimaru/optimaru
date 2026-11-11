@@ -49,7 +49,10 @@
   on a single start, and `calculate_score(plan)` (C++: `pdp::calculateScore`) reads a grouped
   plan the same way instead of overwriting its score with the core rules'. As in vehicle
   routing, a request alone in its group changes nothing: such a plan stays on the core rules,
-  where 0.4.2 switched for any `group`. `request_group_cost` answers the move previews since
+  where 0.4.2 switched for any `group`. With `pair_construction_heuristic` off, a grouped plan
+  now starts as any other does there: the engine's construction places every stop, where
+  `pdp.solve(plan)` used to leave the caller's unassigned pool for the search to route.
+  `request_group_cost` answers the move previews since
   it counts with `optimaru::GroupPlacement`, and answers them piecewise for a plan without
   groups; the default set still applies every move, because its three request-coupling
   constraints do not preview.

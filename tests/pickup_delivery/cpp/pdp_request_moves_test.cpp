@@ -1081,6 +1081,8 @@ void testGroupWithNoRoomWaits() {
     PdpRoutePlan core = buildRandomInstance(8, 3, /*seed=*/9);
     for (Vehicle& vehicle : core.vehicles) vehicle.maxStops = 4;
     for (int d : {0, 1, 2}) core.deliveries[static_cast<std::size_t>(d)].groupIndex = 0;
+    // Without the score checks, which only verify and never steer the search:
+    // the same seed and step budget give the same plan.
     config.score_checks = optimaru::ScoreChecks::Off;
     Solver(config).solve(core);
     const std::vector<int> coreOn = vehicleOfRequests(core);

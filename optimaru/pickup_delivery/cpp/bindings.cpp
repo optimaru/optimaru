@@ -310,13 +310,10 @@ PYBIND11_MODULE(_core, m) {
                     [](Solver& solver, PdpRoutePlan& plan) {
                         solver.solve(plan);
                         // A plan with groups was scored with the default
-                        // constraints (Solver::solve); the core score would
-                        // leave the group rule out of plan.score.
-                        if (plan.hasRequestGroups()) {
-                            ScoreCalculator::updateShadowVariables(plan);
-                        } else {
-                            ScoreCalculator::score(plan);
-                        }
+                        // constraints (Solver::solve), derived fields
+                        // included; the core score would leave the group rule
+                        // out of plan.score.
+                        if (!plan.hasRequestGroups()) ScoreCalculator::score(plan);
                     },
                     py::arg("plan"),
                     // Released for the solve: with parallel_solver_count > 1 the

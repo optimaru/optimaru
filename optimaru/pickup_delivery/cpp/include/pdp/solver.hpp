@@ -178,6 +178,8 @@ private:
 // seven core rules (ScoreCalculator::score), unless the plan has request
 // groups, which those rules do not price: then on the default constraint
 // assembly. Refreshes the derived fields and stores the score in plan.score.
+// Does not validate the plan: what solve() refuses (a required vehicle out of
+// range, a group bound to two vehicles) is scored as it stands.
 Score calculateScore(PdpRoutePlan& plan);
 
 }  // namespace pdp
