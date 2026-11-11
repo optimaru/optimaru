@@ -88,11 +88,47 @@
   stage does not know the `unimproved_*` limits: one shorter than a stage ends the solve
   inside it, with the best solution so far. A history stops growing at 2^20 entries (16 MB
   per start).
+- **Knapsack: `CoreRepackMove`.** Sorted by value per weight, what the greedy leaves to
+  decide sits in a narrow band around the first item the capacity leaves out, and an
+  improving exchange there is two items for one or larger, which no flip or swap reaches:
+  the 500 to 5,000 item instances of the benchmark stayed 1 to 3 below their optimum. The
+  new move (`ks/moves.hpp`, `SolverConfig.core_repack_moves`, on by default) takes a window
+  of that order around the break item, frees the capacity its selected items hold and
+  fills it with the most valuable subset of the window, a small 0/1 knapsack solved exactly
+  by dynamic programming over the weight; the acceptor judges the trade. It looks at the
+  capacity only (the score judges resources, groups and dependencies), declines when its
+  table would pass a million cells, and is drawn on at most one step in a thousand. All
+  seven benchmark instances now end on CP-SAT's value, the four large ones within 0.01 s.
+  Parallel starts run the solver's own search (a registered move does not reach the
+  engine's multi-start threads).
+- **Late acceptance in stages: bed allocation and maintenance scheduling too.** Measured
+  on their eleven benchmark instances at 30 s over three seeds. Maintenance scheduling: 13
+  of 15 runs better, the mean soft score 24%, 27%, 3.4%, 3.8% and 0.1% better from the
+  smallest instance up (the two worse runs: 28 jobs on seed 1, the published one, and 48
+  jobs by 2 in 259). Bed allocation: 2.8%, 1.7% and 3.7% better up to 183 stays, the
+  20-stay instance on CP-SAT's value on every seed, and within 0.3% either way on the three
+  larger instances, where few stages fit. Facility location was measured too and stays as
+  it was: its 60-consumer instance got worse on all three seeds.
+- **Stages: a restart no longer delays the next one.** The patience before a kick or a
+  stage is read from the average gap between new bests, and the gap from the last best of
+  one stage to the first of the next spans the whole restart, so after a stage that found
+  something the search waited about twice that stage's length before it moved on. That gap
+  is now left out of the average. Measured on the six ladders with stages and kicks or
+  restarts to gain from, at 30 s over three seeds: sports league scheduling 2.0% less
+  travel on average (11 runs better, 4 worse), max-cut 5 better and none worse, bed
+  allocation and food packaging level (+0.4%, +0.1%), maintenance scheduling level (6
+  better, 5 worse), quadratic assignment the same on every run. The stages are their own
+  engine header now, `accept/history_stages.hpp` (`optimaru::HistoryStages`), with unit
+  tests of the lengths, the cap and when a stage is due.
+- **Benchmarks: the seven tables with stages and QAPLIB measured on this build**
+  (2026-11-12). Of their 46 instances the engine has the best score on 45 (18 of them ties)
+  and CP-SAT on one: the 14-job maintenance schedule, -3145 against -3133. In 0.4.3,
+  before the entries above, CP-SAT had the better score on 14 of the 43 instances those
+  tables had.
+  QAPLIB: mean gap 0.26% (2.22% before), 17 of 28 at the best known value.
 - **Benchmarks: three more rungs, five tables and QAPLIB measured again.** `random25`
   (quadratic assignment), `g1600` (max-cut) and `teams12` (sports league scheduling) join
-  their comparison ladders. Rows where CP-SAT still has the better score: three knapsacks
-  (by 1 to 3 in 17,000 to 170,000), the 120-vertex max-cut (2340 against 2341) and the
-  6-team league.
+  their comparison ladders.
 - **Docs: adding a constraint, step by step, in every use case.** Each use case has
   `docs/use-cases/<slug>/extending.md` ("Adding a constraint" under its name on the docs
   site). It takes one new constraint through that use case's own files in six steps: change

@@ -26,11 +26,11 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
-| small | 14 jobs / 3 crews / 40 dates | 0hard/-5139soft | **0hard/-3133soft** |
-| medium | 28 jobs / 4 crews / 60 dates | **0hard/-11252soft** | — (no solution in time) |
-| medium-2 | 28 jobs / 4 crews / 60 dates | **0hard/-10320soft** | — (no solution in time) |
-| large | 48 jobs / 5 crews / 80 dates | **0hard/-259soft** | — (no solution in time) |
-| xlarge | 96 jobs / 8 crews / 120 dates | **0hard/-8379soft** | — (no solution in time) |
+| small | 14 jobs / 3 crews / 40 dates | 0hard/-3145soft | **0hard/-3133soft** |
+| medium | 28 jobs / 4 crews / 60 dates | **0hard/-12237soft** | — (no solution in time) |
+| medium-2 | 28 jobs / 4 crews / 60 dates | **0hard/-10280soft** | — (no solution in time) |
+| large | 48 jobs / 5 crews / 80 dates | **0hard/-261soft** | — (no solution in time) |
+| xlarge | 96 jobs / 8 crews / 120 dates | **0hard/-8374soft** | — (no solution in time) |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
+Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

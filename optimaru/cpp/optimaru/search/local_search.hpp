@@ -5,7 +5,6 @@
 #define OPTIMARU_SEARCH_LOCAL_SEARCH_HPP
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -26,6 +25,7 @@
 #include "optimaru/ruin_recreate/sisr_ruin.hpp"
 #include "optimaru/ruin_recreate/worst_ruin.hpp"
 #include "optimaru/accept/acceptors.hpp"
+#include "optimaru/accept/history_stages.hpp"
 #include "optimaru/model/element_index.hpp"
 #include "optimaru/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/moves/list_move.hpp"
@@ -350,7 +350,12 @@ public:
                 steps_since_best_or_lns = 0;
                 lns_trigger = lns.unimproved_step_trigger;
                 const std::int64_t gap = step - last_best_step;
-                ema_best_gap = ema_best_gap == 0 ? gap : (3 * ema_best_gap + gap) / 4;
+                // The gap that spans a stage's restart is the length of the
+                // restart, not how often this search improves: it stays out
+                // of the average the patience is read from.
+                if (!stages.take_restart()) {
+                    ema_best_gap = ema_best_gap == 0 ? gap : (3 * ema_best_gap + gap) / 4;
+                }
                 last_best_step = step;
                 if (config_.on_new_best) config_.on_new_best(step, best_score);
             } else {
@@ -364,77 +369,6 @@ public:
     }
 
 private:
-    // Late acceptance in stages of growing history: see
-    // AcceptanceSettings::history_growth. Times are fractions of the solve
-    // (StopCondition::progress()).
-    class HistoryStages {
-    public:
-        HistoryStages(const Settings& config, bool custom_acceptor, const Score& start_score,
-                      double now)
-            : growth_(config.search.acceptance.history_growth),
-              enabled_(growth_ > 1.0 && !custom_acceptor &&
-                       config.search.acceptance.rule == AcceptanceRule::LateAcceptance),
-              history_(std::clamp<std::size_t>(config.search.acceptance.history_length, 1,
-                                               kMaxHistory)),
-              start_score_(start_score),
-              stage_start_(now),
-              last_best_(now) {}
-
-        bool enabled() const { return enabled_; }
-        std::int64_t min_patience() const { return 2 * static_cast<std::int64_t>(history_); }
-
-        // Tells the stages that the search has converged, and returns whether
-        // the next stage starts now. It records how long the stage that just
-        // ended took (the first call: a stage of the configured length).
-        bool on_converged(double now, bool no_kicks) {
-            if (stage_cost_ < 0.0 || in_stage_) stage_cost_ = now - stage_start_;
-            in_stage_ = false;
-            const double next_cost = stage_cost_ * static_cast<double>(next_history()) /
-                                     static_cast<double>(history_);
-            const bool stalled = no_kicks || now - last_best_ >= 0.5 * next_cost;
-            return stalled && now + next_cost <= 1.0;
-        }
-
-        std::unique_ptr<Acceptor> start_next(double now) {
-            history_ = next_history();
-            stage_start_ = now;
-            in_stage_ = true;
-            return acceptor(start_score_);
-        }
-
-        std::unique_ptr<Acceptor> acceptor(const Score& initial) const {
-            return std::make_unique<LateAcceptance>(history_, initial);
-        }
-
-        void on_new_best(double now) { last_best_ = now; }
-
-    private:
-        // A history holds one Score per step it remembers, so its length is
-        // memory: a long budget on a small instance would otherwise double it
-        // without end. At the cap a stage restarts with the same length, an
-        // independent run of the search.
-        static constexpr std::size_t kMaxHistory = std::size_t{1} << 20;
-
-        // Always longer than the current one below the cap, also for a factor
-        // close to 1 on a short history.
-        std::size_t next_history() const {
-            const double grown = std::ceil(static_cast<double>(history_) * growth_);
-            const std::size_t next = grown >= static_cast<double>(kMaxHistory)
-                                             ? kMaxHistory
-                                             : static_cast<std::size_t>(grown);
-            return std::min(kMaxHistory, std::max(history_ + 1, next));
-        }
-
-        double growth_;
-        bool enabled_;
-        std::size_t history_;
-        Score start_score_;
-        double stage_start_;
-        double stage_cost_ = -1.0;
-        double last_best_;
-        bool in_stage_ = false;
-    };
-
     // A built-in strategy plugin and the probability a step draws it.
     struct WeightedStrategy {
         double weight;

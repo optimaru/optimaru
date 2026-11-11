@@ -134,7 +134,8 @@ class SolverConfig:
     random_seed: int
     parallel_solver_count: int
     late_acceptance_size: int
-    """0 = auto: clamp(8 * jobs, 400, 3200)."""
+    """0 = auto: clamp(8 * jobs, 400, 3200). The first stage's length: the search restarts with
+    a doubled history when it stalls and the next stage fits in the budget."""
     full_assert: bool
     """If True, re-checks incremental == full on every move (for debugging; very
     slow)."""

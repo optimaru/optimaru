@@ -26,7 +26,10 @@ public:
     //                     against the previous clamp(8 * stayCount, 400, 3200):
     //                     soft +5.7% / +5.1% / +2.6%. 16000 was better still on
     //                     the mid instance but 4.6% worse on the largest, so the
-    //                     floor stops at 8000.
+    //                     floor stops at 8000. It is the first stage's length:
+    //                     the search restarts with a doubled history when it
+    //                     stalls (the engine's history_growth), which is what
+    //                     a small instance has the time for.
     //   ruin_recreate     without the kicks the LA acceptor can lock into a
     //                     local optimum within milliseconds on small instances
     //                     and never escape

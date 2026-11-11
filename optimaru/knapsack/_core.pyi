@@ -148,15 +148,20 @@ class SolverConfig:
     """Bias swap partners toward items of similar weight with this
     probability. 0 = off (uniform-random)."""
     nearby_size: int
+    core_repack_moves: bool
+    """Re-decide a window of the value / weight order around the break item
+    exactly, by dynamic programming over the weight (on by default): the
+    exchanges at the capacity boundary that no single flip or swap reaches. It
+    looks at the capacity only; the score judges everything else."""
     best_score_limit: tuple[int, float]
     """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
     the first feasible solution."""
     on_new_best: Callable[[int, Score], None] | None
 
 class Solver:
-    """Greedy construction + Late Acceptance local search (+ adaptive
-    ruin-and-recreate). Solves IN PLACE: sets item.selected, problem.score and
-    warm_start = False."""
+    """Greedy construction + Late Acceptance local search with the core repack
+    move (+ adaptive ruin-and-recreate). Solves IN PLACE: sets item.selected,
+    problem.score and warm_start = False."""
 
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, problem: KnapsackProblem) -> None: ...

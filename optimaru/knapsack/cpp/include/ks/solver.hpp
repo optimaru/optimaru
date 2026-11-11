@@ -15,8 +15,8 @@ namespace ks {
 // incremental score calculator and delegates the search to
 // optimaru::Solver<KnapsackProblem> — late acceptance over the built-in assignment
 // moves (a change move is a flip, a swap move trades a selected item for an
-// unselected one), with the engine's adaptive ruin-and-recreate (ALNS) on
-// stagnation.
+// unselected one) and the domain's CoreRepackMove (ks/moves.hpp), with the
+// engine's adaptive ruin-and-recreate (ALNS) on stagnation.
 class Solver {
 public:
     // The limits, the seed, the parallel starts, the callback and the ruin &
@@ -25,7 +25,8 @@ public:
     //                          first stage's length: the search restarts with
     //                          a doubled history when it stalls (the engine's
     //                          history_growth)
-    //   parallel_solver_count  the engine's multi-start; ignored by the
+    //   parallel_solver_count  every start searches its own copy of the
+    //                          constructed selection; ignored by the
     //                          constraint-assembly overload
     //   ruin_recreate          a batch of items is dropped to undecided and the
     //                          engine's greedy recreate picks 0 or 1 for each by
@@ -59,6 +60,14 @@ public:
         // selection uniform-random.
         double nearby_probability = 0.0;
         int nearby_size = 20;
+
+        // CoreRepackMove (ks/moves.hpp): re-decide a window of the density
+        // order around the break item exactly, by dynamic programming over
+        // the load. At the capacity boundary the improving exchanges are two
+        // for one or larger, which no single flip or swap reaches; without it
+        // the 500, 1,000 and 5,000 item instances of benchmarks/knapsack stay
+        // 1 to 3 below their optimum.
+        bool core_repack_moves = true;
     };
 
     Solver() = default;

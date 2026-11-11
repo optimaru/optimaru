@@ -9,6 +9,10 @@
 //   (3) the greedy construction (the reference expectations, ties, fixed items)
 //   (4) the solver: ScoreChecks::Full, brute-force optima, the zero budget with a
 //       seed, reproducibility under a step limit, multi-start, validation
+//   (5) CoreRepackMove (ks/moves.hpp): a move is worth more and within the
+//       capacity, incremental == full recompute after it and after its undo,
+//       and the dynamic-programming optimum of plain knapsacks that the
+//       built-in moves leave short of
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -23,10 +27,13 @@
 #include "ks/construction.hpp"
 #include "ks/domain.hpp"
 #include "ks/incremental_calculator.hpp"
+#include "ks/moves.hpp"
 #include "ks/score_calculator.hpp"
 #include "ks/solver.hpp"
 #include "ks_fixtures.hpp"
 #include "optimaru/model/editor.hpp"
+#include "optimaru/model/neighborhoods.hpp"
+#include "optimaru/search/operators.hpp"
 
 using namespace ks;
 using namespace ks_test;
@@ -503,6 +510,161 @@ void verifySolver() {
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (5) CoreRepackMove.
+// -------------------------------------------------------------------------
+// A plain knapsack in the shape of benchmarks/knapsack: weights 5..60, values
+// 10..100, capacity a third of the total weight.
+KnapsackProblem plainKnapsack(int itemCount, std::uint64_t seed) {
+    std::mt19937_64 rng(seed);
+    KnapsackProblem problem;
+    std::int64_t totalWeight = 0;
+    for (int i = 0; i < itemCount; ++i) {
+        const int weight = 5 + static_cast<int>(rng() % 56);
+        const int value = 10 + static_cast<int>(rng() % 91);
+        problem.items.push_back(makeItem("I" + std::to_string(i), weight, value));
+        totalWeight += weight;
+    }
+    problem.capacity = totalWeight / 3;
+    return problem;
+}
+
+// The optimum of a plain knapsack: the best value per load, item by item.
+std::int64_t dynamicProgrammingOptimum(const KnapsackProblem& problem) {
+    std::vector<std::int64_t> best(static_cast<std::size_t>(problem.capacity) + 1, 0);
+    for (const Item& item : problem.items) {
+        for (std::int64_t load = problem.capacity; load >= item.weight; --load) {
+            best[load] = std::max(best[load], best[load - item.weight] + item.value);
+        }
+    }
+    return best[problem.capacity];
+}
+
+void verifyCoreRepackMove() {
+    std::printf("== (5) CoreRepackMove ==\n");
+    {
+        // Through an Editor, as the engine drives it, from random feasible
+        // selections of plain knapsacks: a move raises the value, stays
+        // within the capacity, reports the items it flipped, leaves the
+        // incremental score equal to a full recompute, and its undo restores
+        // the selection and the score. A selection over capacity is declined.
+        int moves = 0, notBetter = 0, overCapacity = 0, badReport = 0, mismatches = 0;
+        int undoMismatches = 0;
+        for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+            KnapsackProblem p = plainKnapsack(60 + static_cast<int>(seed) * 80, seed);
+            ScoreCalculator::prepare(p);
+            constructSelection(p);
+            std::mt19937_64 rng(seed * 7);
+            // Loosen the greedy selection so the move has work to do.
+            for (Item& item : p.items) {
+                if (item.isSelected() && rng() % 4 == 0) item.selected = kNotSelected;
+            }
+            KnapsackIncrementalScoreCalculator calculator;
+            optimaru::Editor<KnapsackProblem> editor(p, calculator);
+            optimaru::Neighborhoods nearby;
+            const std::vector<int> noLists;
+            optimaru::OperatorContext<KnapsackProblem> ctx{editor, nearby, noLists, noLists};
+            CoreRepackMove move(p);
+            std::vector<int> entities;
+            for (int step = 0; step < 200; ++step) {
+                const std::vector<int> before = p.assignment();
+                const Score scoreBefore = editor.score();
+                const std::int64_t valueBefore = p.totalValue();
+                entities.clear();
+                if (!move.apply(ctx, rng, entities)) continue;
+                ++moves;
+                if (p.totalValue() <= valueBefore) ++notBetter;
+                if (p.totalWeight() > p.capacity) ++overCapacity;
+                std::vector<int> changed;
+                for (int i = 0; i < p.itemCount(); ++i) {
+                    if (p.items[i].selected != before[i]) changed.push_back(i);
+                }
+                std::vector<int> reported = entities;
+                std::sort(reported.begin(), reported.end());
+                if (changed.empty() || changed != reported) ++badReport;
+                KnapsackProblem rescored = p;
+                if (!sameScore(editor.score(), ScoreCalculator::score(rescored))) ++mismatches;
+                if (step % 2 == 0) {  // keep every other move, undo the rest
+                    move.undo_last(ctx);
+                    if (p.assignment() != before || !sameScore(editor.score(), scoreBefore)) {
+                        ++undoMismatches;
+                    }
+                }
+            }
+        }
+        check(moves > 0 && notBetter == 0 && overCapacity == 0,
+              std::to_string(moves) + " moves: each raises the value within the capacity");
+        check(badReport == 0, "a move reports exactly the items it flipped");
+        check(mismatches == 0, "incremental == full recompute after a move");
+        check(undoMismatches == 0, "undo_last restores the selection and the score");
+
+        KnapsackProblem over = plainKnapsack(40, 9);
+        ScoreCalculator::prepare(over);
+        for (Item& item : over.items) item.selected = kSelected;
+        KnapsackIncrementalScoreCalculator calculator;
+        optimaru::Editor<KnapsackProblem> editor(over, calculator);
+        optimaru::Neighborhoods nearby;
+        const std::vector<int> noLists;
+        optimaru::OperatorContext<KnapsackProblem> ctx{editor, nearby, noLists, noLists};
+        CoreRepackMove move(over);
+        std::mt19937_64 rng(1);
+        std::vector<int> entities;
+        check(!move.apply(ctx, rng, entities) && entities.empty(),
+              "a selection over capacity is declined");
+
+        // A capacity near the int64 limit with heavy items: the table bound
+        // is checked without overflow, and the move declines.
+        KnapsackProblem huge = plainKnapsack(40, 9);
+        for (Item& item : huge.items) item.weight *= 1'000'000'000'000;
+        huge.capacity = std::numeric_limits<std::int64_t>::max() - 1;
+        ScoreCalculator::prepare(huge);
+        constructSelection(huge);
+        KnapsackIncrementalScoreCalculator hugeCalculator;
+        optimaru::Editor<KnapsackProblem> hugeEditor(huge, hugeCalculator);
+        optimaru::OperatorContext<KnapsackProblem> hugeCtx{hugeEditor, nearby, noLists, noLists};
+        CoreRepackMove hugeMove(huge);
+        bool declined = true;
+        for (int draw = 0; draw < 50; ++draw) {
+            declined = declined && !hugeMove.apply(hugeCtx, rng, entities);
+        }
+        check(declined, "a table that would not fit is declined, whatever the capacity");
+    }
+    {
+        // Plain knapsacks of 300 to 2,000 items under a step limit: with the
+        // move the solve ends on the dynamic-programming optimum (the
+        // built-in moves alone stayed below it on three when this was
+        // written).
+        int reached = 0, reachedWithout = 0;
+        const int instances = 6;
+        for (int index = 0; index < instances; ++index) {
+            const int itemCount = 300 + 340 * index;
+            const std::uint64_t seed = 40 + static_cast<std::uint64_t>(index);
+            const std::int64_t optimum = dynamicProgrammingOptimum(plainKnapsack(itemCount, seed));
+            for (bool coreRepacks : {true, false}) {
+                KnapsackProblem p = plainKnapsack(itemCount, seed);
+                Solver::Config config;
+                config.time_limit = std::chrono::minutes(10);  // the step limit binds
+                config.step_limit = 400000;
+                config.seed = seed;
+                config.core_repack_moves = coreRepacks;
+                Solver(config).solve(p);
+                const bool optimal = p.score.hard == 0 && p.totalValue() == optimum;
+                (coreRepacks ? reached : reachedWithout) += optimal;
+                if (coreRepacks && !optimal) {
+                    std::printf("  %d items, seed %llu: %lld, optimum %lld\n", itemCount,
+                                static_cast<unsigned long long>(seed),
+                                static_cast<long long>(p.totalValue()),
+                                static_cast<long long>(optimum));
+                }
+            }
+        }
+        check(reached == instances, "plain knapsacks reach the dynamic-programming optimum");
+        // For the record, not a check: the built-in moves may get there too one day.
+        std::printf("    without the move %d of %d reach it\n", reachedWithout, instances);
+    }
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main() {
@@ -510,6 +672,7 @@ int main() {
     verifyIncrementalWalk();
     verifyGreedy();
     verifySolver();
+    verifyCoreRepackMove();
     if (failures) {
         std::printf("%d check(s) FAILED\n", failures);
         return 1;

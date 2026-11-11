@@ -34,6 +34,7 @@ def test_solver_config_defaults():
     assert config.ruin_recreate is True
     assert config.ruin_recreate_as_move_weight == 0.05
     assert (config.descent_weight, config.nearby_probability) == (0.0, 0.0)
+    assert config.core_repack_moves is True
     assert config.full_assert is False
     assert config.on_new_best is None
 
@@ -122,6 +123,19 @@ def test_stop_at_first_feasible_leaves_the_callers_config_alone():
     before = config.best_score_limit
     knapsack.solve(demo(), time_limit_seconds=5.0, stop_at_first_feasible=True, config=config)
     assert config.best_score_limit == before  # the score limit went to a copy
+
+
+def test_core_repack_moves_round_trips_and_solves():
+    config = steps(20_000)
+    config.core_repack_moves = False
+    assert config.core_repack_moves is False
+    core = demo().to_core()
+    knapsack.solve(core, config=config)
+    without = (core.score.hard, core.score.soft)
+    core = demo().to_core()
+    knapsack.solve(core, config=steps(20_000))
+    # The demo is small enough for the built-in moves: the same optimum either way.
+    assert without == (core.score.hard, core.score.soft) and core.score.hard == 0
 
 
 def test_multi_start_returns_a_consistent_best():

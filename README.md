@@ -238,7 +238,8 @@ optimaru/cpp/optimaru/
 ├── accept/                       Acceptor and one file per rule: hill climbing,
 │                                 late acceptance, entity tabu, simulated
 │                                 annealing, great deluge, step counting,
-│                                 record-to-record travel
+│                                 record-to-record travel; history_stages, late
+│                                 acceptance in stages of growing history
 ├── select/                       adaptive operator selection: MoveOutcome,
 │                                 roulette wheel, segmented roulette, alpha-UCB,
 │                                 uniform
