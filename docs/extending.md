@@ -6,6 +6,12 @@ under the table below. The examples use real code you can open next to this
 guide: bin packing's `EmptyBinMove` for a move and vehicle routing's
 `LatencyCost` for a cost.
 
+This page is the reference for the contracts. To see a cost added from start to
+finish in one use case, read that use case's `use-cases/<slug>/extending.md`
+([bed allocation's](use-cases/bed-allocation/extending.md), for one): it takes a new
+constraint from a pick in Python to the default fast path in six steps and measures
+the steps per second at each.
+
 ## Where things are
 
 For a use case `<uc>` (the subpackage name, such as `vehicle_routing`) with the

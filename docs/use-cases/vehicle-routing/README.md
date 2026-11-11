@@ -253,33 +253,9 @@ to the engine construction in `optimaru/vehicle_routing/cpp/src/solver.cpp`; a r
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/vehicle_routing/cpp/include/vrp/constraints/` (currently `vehicle_capacity_cost`, `max_end_time_cost`,
-`travel_time_cost`, `max_travel_time_cost`, `max_route_duration_cost`,
-`vehicle_max_end_time_cost`, `max_stops_cost`, `max_route_radius_cost`,
-`enclosing_circle_radius_cost`, `min_capacity_utilization_cost`, `route_duration_cost`,
-`latency_cost`, `vehicle_fixed_cost`, `visit_order_cost`, `visit_group_cost`,
-`unassigned_visits_cost`; plus `common.hpp`, the
-shared prefix sums in `route_sums.hpp` and the enclosing-circle helpers in
-`route_geometry.hpp`):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
-   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
-   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
-   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/vehicle_routing/cpp/include/vrp/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for one of the core rules, add the same raw cost to
-   `score_calculator` / `incremental_calculator`, weighted by the component's
-   `kDefaultWeight` — `vrp_plugin_test` checks they agree bit for bit — and a positive and a
-   zero hand-calculated case to `vrp_plugin_test` (`verifyRawCostsByHand`) and the catalog
-   row to `verifyCatalog`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/vehicle_routing/constraints.py` (plus its
-   module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, level="hard")]`.
-
-The CVRP benchmark scores plain distance, so a new cost does not change it.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

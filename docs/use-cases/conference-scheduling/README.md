@@ -220,31 +220,9 @@ to the engine construction in `optimaru/conference_scheduling/cpp/src/solver.cpp
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/conference_scheduling/cpp/include/cs/constraints/` (currently `talk_type_incompatibility_cost`, `room_unavailability_cost`, `room_conflict_cost`, `speaker_unavailability_cost`, `speaker_conflict_cost`, `talk_prerequisite_talks_cost`, `talk_mutually_exclusive_talks_tags_cost`, `consecutive_talks_pause_cost`, `crowd_control_risk_cost`, `speaker_required_timeslot_tags_cost`, `speaker_prohibited_timeslot_tags_cost`, `talk_required_timeslot_tags_cost`, `talk_prohibited_timeslot_tags_cost`, `speaker_required_room_tags_cost`, `speaker_prohibited_room_tags_cost`, `talk_required_room_tags_cost`, `talk_prohibited_room_tags_cost`, `theme_track_conflict_cost`, `theme_track_room_change_cost`, `sector_conflict_cost`, `audience_type_theme_track_conflict_cost`, `content_audience_level_flow_violation_cost`, `content_conflict_cost`, `different_day_talks_cost`, `popular_talks_room_size_cost`, `speaker_preferred_timeslot_tags_cost`, `speaker_undesired_timeslot_tags_cost`, `talk_preferred_timeslot_tags_cost`, `talk_undesired_timeslot_tags_cost`, `speaker_preferred_room_tags_cost`, `speaker_undesired_room_tags_cost`, `talk_preferred_room_tags_cost`, `talk_undesired_room_tags_cost`, `speaker_makespan_cost`, `audience_type_diversity_cost`, `audience_level_diversity_cost`, `language_diversity_cost`):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
-   `GlobalConstraint` — here a `BreakdownConstraint` projecting one `Breakdown` member;
-   positive raw cost = penalty, 0 = no violation, negative = reward) declaring
-   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
-   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter); a reward sets
-   `reward = true; level_flippable = false;` in its constructor;
-2. include it in `optimaru/conference_scheduling/cpp/include/cs/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for a default constraint, add the same raw cost to `score_calculator` (a `Breakdown`
-   member of the same name, weighted in `hardTotal()` / `softPenaltyTotal()` /
-   `softRewardTotal()` by the component's `kDefaultWeight`) and `incremental_calculator`
-   — `cs_plugin_test` checks they agree bit for bit — and a positive and a zero
-   hand-calculated case to `cs_test` / `cs_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/conference_scheduling/constraints.py`
-   (plus its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model, `external_solver.conference_scheduling` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), so the benchmark in
-   [`benchmarks/conference-scheduling/cpsat`](../../../benchmarks/conference-scheduling/cpsat)
-   stays like for like.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

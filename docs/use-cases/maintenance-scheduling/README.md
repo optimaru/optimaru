@@ -169,31 +169,9 @@ to the engine construction in `optimaru/maintenance_scheduling/cpp/src/solver.cp
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/maintenance_scheduling/cpp/include/mnt/constraints/` (currently `min_start_date_cost`, `max_end_date_cost`,
-`before_ideal_end_date_cost`, `after_ideal_end_date_cost`, `crew_conflict_cost`,
-`tag_conflict_cost`):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` —
-   usually a `PerJobConstraint` — or a `GlobalConstraint` such as a `DayOverlapGlobalConstraint`;
-   positive raw cost = penalty, 0 = no violation) declaring
-   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
-   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/maintenance_scheduling/cpp/include/mnt/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator`, weighted by the component's
-   `kDefaultWeight` — `mnt_plugin_test` checks they agree bit for bit — and a positive and a
-   zero hand-calculated case to `mnt_test` / `mnt_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/maintenance_scheduling/constraints.py`
-   (plus its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model, `external_solver.maintenance_scheduling` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), so the benchmark in
-   [`benchmarks/maintenance-scheduling/cpsat`](../../../benchmarks/maintenance-scheduling/cpsat)
-   stays like for like.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

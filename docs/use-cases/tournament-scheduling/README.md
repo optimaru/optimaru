@@ -116,31 +116,9 @@ to the engine construction in `optimaru/tournament_scheduling/cpp/src/solver.cpp
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/tournament_scheduling/cpp/include/ts/constraints/` (currently `assignment_count_imbalance_cost`,
-`confrontation_count_imbalance_cost`, `team_conflict_cost`, `team_unavailability_cost`, plus
-`common.hpp` with the calculator aliases and the member-change global base):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
-   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
-   `static constexpr double kDefaultWeight` and
-   `static constexpr optimaru::Level kDefaultLevel`, an
-   `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/tournament_scheduling/cpp/include/ts/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator`, weighted by the component's
-   `kDefaultWeight` (`kHardWeight<...>` / `kMediumWeight<...>` / `kSoftWeight<...>`) —
-   `ts_plugin_test` checks they agree bit for bit — and a positive and a zero
-   hand-calculated case to `ts_test` / `ts_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/tournament_scheduling/constraints.py` (plus
-   its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model in external-solver's
-   [`external_solver.tournament_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/tournament_scheduling/constraints.py) (a plugin
-   subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
-   for like, and state in [`benchmarks/tournament-scheduling/cpsat`](../../../benchmarks/tournament-scheduling/cpsat) whether its CP-SAT term is raw-identical to the engine's.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

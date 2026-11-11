@@ -246,25 +246,9 @@ registered with `engine.add_move_operator(...)` — use it as the template.
 the seed state of a warm start); the engine's construction heuristic finds nothing to
 assign.
 
-**Adding a hard or soft cost.**
-1. add `optimaru/semiconductor_scheduling/cpp/include/fab/constraints/<subject>_cost.hpp` with `struct <Subject>Cost final :
-   ScheduleViewConstraint` declaring `static constexpr double kDefaultWeight`,
-   `static constexpr optimaru::Level kDefaultLevel`, its `Term`, an
-   `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor passing the registry
-   name (`"<subject>Cost"`), and its raw formula as a static unit function (positive =
-   penalty, 0 = no violation);
-2. add the `Term` (`score_terms.hpp`), the include and the `emplace` in
-   `optimaru/semiconductor_scheduling/cpp/include/fab/constraints.hpp`, and call the unit function in `rawCostsOf`
-   (`optimaru/semiconductor_scheduling/cpp/src/score_calculator.cpp`) and in the evaluator's re-cost (`optimaru/semiconductor_scheduling/cpp/src/evaluator.cpp`);
-   the monolithic default score (`ScoreCalculator::scoreOf`) reads `kDefaultWeight`;
-3. a hand-calculated positive and zero case in `tests/semiconductor_scheduling/cpp/fab_test.cpp` (and the catalog
-   row in `fab_plugin_test.cpp`);
-4. the Python spec in `optimaru/semiconductor_scheduling/constraints.py`
-   (`class <Subject>Cost(Constraint)` with `name`, `label_en/ko`, `description_en/ko`, a
-   module-level instance and a place in `_DEFAULTS`);
-5. its CP-SAT plugin in external-solver's
-   [`external_solver.semiconductor_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/semiconductor_scheduling/constraints.py)
-   with a parity case.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

@@ -453,36 +453,9 @@ to the engine construction in `optimaru/pickup_delivery/cpp/src/solver.cpp`; a r
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/pickup_delivery/cpp/include/pdp/constraints/` (currently `vehicle_capacity_cost`, `max_end_time_cost`,
-`travel_time_cost`, `max_travel_time_cost`, `max_route_duration_cost`,
-`vehicle_max_end_time_cost`, `max_stops_cost`, `max_route_radius_cost`,
-`enclosing_circle_radius_cost`, `min_capacity_utilization_cost`, `route_duration_cost`,
-`latency_cost`, `squared_order_age_cost`, `vehicle_fixed_cost`, `pinned_stops_cost`,
-`required_vehicle_cost`, `paired_request_cost`, `same_vehicle_cost`,
-`pickup_before_dropoff_cost`, `request_group_cost`, `unassigned_requests_cost`; plus `common.hpp` and the
-enclosing-circle helpers in `route_geometry.hpp`):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
-   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
-   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
-   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/pickup_delivery/cpp/include/pdp/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for one of the core rules, add the same raw cost to
-   `score_calculator` / `incremental_calculator`, weighted by the component's
-   `kDefaultWeight` — `pdp_plugin_test` checks they agree bit for bit — and a positive and a
-   zero hand-calculated case to `pdp_plugin_test` (`verifyRawCostsByHand`) and the catalog
-   row to `verifyCatalog`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/pickup_delivery/constraints.py` (plus its
-   module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model, `external_solver.pickup_delivery` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), so the benchmark in
-   [`benchmarks/pickup-delivery/cpsat`](../../../benchmarks/pickup-delivery/cpsat)
-   stays like for like.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

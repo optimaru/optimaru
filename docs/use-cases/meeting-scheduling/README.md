@@ -115,34 +115,9 @@ to the engine construction in `optimaru/meeting_scheduling/cpp/src/solver.cpp`; 
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/meeting_scheduling/cpp/include/ms/constraints/` (currently `consecutive_meetings_cost`, `day_crossing_cost`,
-`larger_room_capacity_cost`, `meeting_end_time_cost`, `meeting_overlap_cost`, `overtime_cost`,
-`preferred_attendance_conflict_cost`, `required_and_preferred_attendance_conflict_cost`,
-`required_attendance_conflict_cost`, `room_capacity_cost`, `room_change_cost`,
-`room_conflict_cost`, plus `common.hpp` with the three shared bases):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
-   `GlobalConstraint`, usually over one of the shared bases; positive raw cost = penalty,
-   0 = no violation) declaring `static constexpr double kDefaultWeight` and
-   `static constexpr optimaru::Level kDefaultLevel`, an
-   `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/meeting_scheduling/cpp/include/ms/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for a default constraint, add the same raw cost to
-   `score_calculator` (a `Breakdown` member named after the registry name) /
-   `incremental_calculator`, weighted by the component's `kDefaultWeight` —
-   `ms_plugin_test` checks they agree bit for bit — and a positive and a zero
-   hand-calculated case to `ms_test` / `ms_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/meeting_scheduling/constraints.py` (plus
-   its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model, `external_solver.meeting_scheduling` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), so the benchmark in
-   [`benchmarks/meeting-scheduling/cpsat`](../../../benchmarks/meeting-scheduling/cpsat)
-   stays like for like.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

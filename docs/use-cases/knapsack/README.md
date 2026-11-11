@@ -224,30 +224,9 @@ one runs its own worker threads (see facility-location's `CloseFacilityMove`).
 before the engine starts. It is the reference's greedy; `ks_test` and the
 Python reference-parity tests pin its results (and `with_initial_solution` uses it).
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/knapsack/cpp/include/ks/constraints/`:
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a
-   `detail::SelectionConstraint` — a member-change `GlobalConstraint` told when an item
-   becomes selected or stops being selected; positive raw cost = penalty, 0 = no
-   violation) declaring `static constexpr double kDefaultWeight` and
-   `static constexpr optimaru::Level kDefaultLevel`, an
-   `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/knapsack/cpp/include/ks/constraints.hpp` and add it to `defaultConstraints()` if
-   it belongs to the default set (that is also the catalog order);
-3. for a default constraint, add the same raw cost to `score_calculator` /
-   `incremental_calculator`, weighted by the component's `kDefaultWeight` —
-   `ks_plugin_test` checks they agree bit for bit — and a positive and a zero
-   hand-calculated case to `ks_test` / `ks_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/knapsack/constraints.py` (plus its
-   module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model, `external_solver.knapsack` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), with an exact encoding so its
-   `tests/knapsack/test_constraint_parity.py` can pin selections;
-   [`benchmarks/knapsack/cpsat`](../../../benchmarks/knapsack/cpsat) runs it against this engine.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 
