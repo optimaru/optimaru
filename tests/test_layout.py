@@ -1,8 +1,9 @@
 """Every list of use cases agrees with the subpackages.
 
 A use case is a subpackage optimaru/<use case>/ with a _core.pyi stub (setup.py
-builds exactly those). The lists below name the use cases by hand; when one of
-them misses a new use case, its C++ or Python tests silently stop running in CI.
+builds exactly those). CI reads that list off the repository; the lists that are
+still written by hand are checked here, so a new use case cannot be left out of
+one of them.
 """
 
 from __future__ import annotations
@@ -17,13 +18,6 @@ import optimaru
 
 ROOT = Path(__file__).resolve().parent.parent
 USE_CASES = {path.parent.name for path in (ROOT / "optimaru").glob("*/_core.pyi")}
-
-
-def _matrix(workflow: str, key: str) -> set[str]:
-    """The values of the CI matrix list `key:` in a workflow file (plain YAML list items)."""
-    lists = re.findall(rf"^(\s+){key}:\n((?:\1  - .+\n)+)", (ROOT / workflow).read_text(), re.M)
-    assert lists, f"{workflow}: no matrix list {key!r}"
-    return {item for _, block in lists for item in re.findall(r"- (\S+)", block)}
 
 
 def test_every_subpackage_is_a_use_case():
@@ -50,14 +44,23 @@ def test_cmake_builds_every_use_case():
     assert set(block.group(1).split()) == USE_CASES
 
 
-def test_ci_tests_every_use_case():
-    assert _matrix(".github/workflows/ci.yml", "use_case") == USE_CASES
+def test_ci_reads_the_use_cases_off_the_repository():
+    """ci.yml lists no use case by hand: its `use-cases` job globs the same stubs as USE_CASES
+    above, and the three matrices take their lists from that job."""
+    text = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    assert "for stub in optimaru/*/_core.pyi" in text
+    assert text.count("fromJSON(needs.use-cases.outputs.names)") == 2
+    assert text.count("fromJSON(needs.use-cases.outputs.benchmarks)") == 1
+    assert not any(re.search(rf"^\s+- {name}$", text, re.M) for name in USE_CASES)
 
 
-def test_ci_benchmarks_every_use_case():
-    # vehicle-routing has its own job (the OR-Tools Routing comparison); cpsat-common is the shared runner.
-    benchmarks = _matrix(".github/workflows/ci.yml", "benchmark") - {"cpsat-common"}
-    assert benchmarks | {"vehicle-routing"} == {name.replace("_", "-") for name in USE_CASES}
+def test_every_cpsat_benchmark_is_a_project():
+    """What the `benchmark-cpsat` matrix runs for each use case but vehicle routing (which has
+    the OR-Tools Routing comparison in benchmarks/vehicle-routing itself)."""
+    for name in USE_CASES - {"vehicle_routing"}:
+        slug = name.replace("_", "-")
+        project = ROOT / "benchmarks" / slug / "cpsat" / "pyproject.toml"
+        assert project.is_file() or (ROOT / "benchmarks" / slug / "pyproject.toml").is_file(), slug
 
 
 def test_every_use_case_has_a_guide_and_a_benchmark():
