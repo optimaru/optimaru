@@ -2,7 +2,7 @@
 equivalence, incremental (delta) scoring exactness, cost shaping and hard/soft
 overrides.
 
-Requires the compiled extension: uv sync --all-groups --all-extras
+Requires the compiled extension: uv sync
 """
 
 import threading

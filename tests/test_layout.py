@@ -97,8 +97,9 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
     for slug, project in sorted(projects.items()):
         data = tomllib.loads(project.read_text())
         assert "build-system" in data, f"{slug}: uv will not install the package or its [project.scripts]"
-        dev = data.get("dependency-groups", {}).get("dev", [])
-        assert any(entry.startswith("pytest") for entry in dev), f"{slug}: a plain uv sync installs no pytest"
+        groups = data.get("dependency-groups", {})
+        assert set(groups) == {"dev"}, f"{slug}: one dependency group, dev, which a plain uv sync installs"
+        assert any(entry.startswith("pytest") for entry in groups["dev"]), f"{slug}: no pytest in the dev group"
         assert "optional-dependencies" not in data["project"], f"{slug}: test tools go in [dependency-groups]"
         source = data.get("tool", {}).get("uv", {}).get("sources", {}).get("external-solver")
         if source is not None:
