@@ -1100,7 +1100,9 @@ void testParallelStartsOnTheAssembly() {
     bool refused = false;
     try {
         PdpRoutePlan none = grouped();
-        Solver(stepLimited(5, 1)).solve(none, [] { return std::unique_ptr<DecomposedCalculator>(); });
+        Solver(stepLimited(5, 1)).solve(none, [] {
+            return std::unique_ptr<DecomposedCalculator>();
+        });
     } catch (const std::invalid_argument&) {
         refused = true;
     }

@@ -925,13 +925,13 @@ void Solver::solve(PdpRoutePlan& plan, const CalculatorFactory& makeCalculator) 
     calculators.reserve(static_cast<std::size_t>(starts));
     for (int start = 0; start < starts; ++start) {
         calculators.push_back(makeCalculator());
-        if (!calculators.back()) throw std::invalid_argument("makeCalculator returned no calculator");
+        if (!calculators.back())
+            throw std::invalid_argument("makeCalculator returned no calculator");
     }
     // Each start is the single-start solve on its copy of the plan and its own
     // calculator; solve_parallel_starts keeps the copy with the best
     // plan.score, which that solve stores from its calculator's three levels.
-    const auto solveOne = [&calculators](const Config& config, PdpRoutePlan& candidate,
-                                         int start) {
+    const auto solveOne = [&calculators](const Config& config, PdpRoutePlan& candidate, int start) {
         Solver(config).solve(candidate, *calculators[static_cast<std::size_t>(start)]);
     };
     optimaru::solve_parallel_starts(config_, plan, solveOne);
