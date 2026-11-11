@@ -161,9 +161,11 @@ class SolverConfig:
     """STEP_COUNTING_HILL_CLIMBING: the bar is reset to the current score every this many
     steps (400 by default; > 0)."""
     record_to_record_start_gap: float
+    """RECORD_TO_RECORD_TRAVEL: the gap below the best score that is still accepted at the
+    start of the solve, as a fraction of the start's |soft| (0.02 by default; >= 0)."""
     record_to_record_end_gap: float
-    """RECORD_TO_RECORD_TRAVEL: the acceptable gap below the best score, as a fraction of the
-    start's |soft|, shrinking from start (0.02) to end (0.0) over the solve."""
+    """RECORD_TO_RECORD_TRAVEL: the same gap at the end of the solve (0.0 by default; >= 0);
+    the gap shrinks from the start gap to this one."""
     full_assert: bool
     best_score_limit: tuple[int, float]
     """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at

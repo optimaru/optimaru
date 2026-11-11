@@ -214,18 +214,24 @@ class SolverConfig:
     |start soft| (at least 1); the soft level alone, without the medium level of the
     unassigned requests."""
     simulated_annealing_temperature_fraction: float
-    """The auto temperature's fraction of the start's |soft| (0.01 by default; > 0)."""
+    """The auto temperature's fraction of the start's soft level, without the medium level of
+    the unassigned requests (0.01 by default; > 0)."""
     great_deluge_water_level_step: tuple[int, float]
     """GREAT_DELUGE: how much the (hard, soft) water level, which starts at the start's score,
     rises per step. (0, 0), the default, leaves it there: only moves that keep the score at or
-    above the start's are taken."""
+    above the start's are taken. A soft amount you give here, like an explicit starting
+    temperature, is on the scale the search compares in, where one unit of the medium level
+    (a penalty minute of an unassigned request) counts 10^9: only the automatic temperature
+    leaves the medium level out."""
     step_counting_hill_climbing_size: int
     """STEP_COUNTING_HILL_CLIMBING: the bar is reset to the current score every this many
     steps (400 by default; > 0)."""
     record_to_record_start_gap: float
+    """RECORD_TO_RECORD_TRAVEL: the gap below the best score that is still accepted at the
+    start of the solve, as a fraction of the start's |soft| (0.02 by default; >= 0)."""
     record_to_record_end_gap: float
-    """RECORD_TO_RECORD_TRAVEL: the acceptable gap below the best score, as a fraction of the
-    start's |soft|, shrinking from start (0.02) to end (0.0) over the solve."""
+    """RECORD_TO_RECORD_TRAVEL: the same gap at the end of the solve (0.0 by default; >= 0);
+    the gap shrinks from the start gap to this one."""
 
     # --- move mix (relative weights) ---
     relocate_move_weight: float

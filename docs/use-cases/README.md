@@ -105,7 +105,10 @@ vehicle routing let you choose the rule local search accepts a move by, on
 | `RECORD_TO_RECORD_TRAVEL` | `record_to_record_start_gap`, `record_to_record_end_gap`: the gap below the best score that is still accepted, as a fraction of the start's soft score | 0.02, shrinking to 0.0 over the solve (an end gap above the start gap is the gap throughout) |
 
 The default rule is late acceptance, and simulated annealing in semiconductor
-scheduling. A great deluge needs a step chosen for the instance: at (0, 0) it
+scheduling. In vehicle routing and pickup and delivery an amount you give
+yourself (a starting temperature, a water level step) is on the scale the
+search compares in, where the medium level counts 10^9 per unit: only the
+automatic temperature leaves the medium level out. A great deluge needs a step chosen for the instance: at (0, 0) it
 takes every move that keeps the score at or above the start's and never
 tightens.
 
