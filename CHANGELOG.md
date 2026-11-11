@@ -59,13 +59,15 @@
   `docs/use-cases/<slug>/extending.md` ("Adding a constraint" under its name on the docs
   site). It takes one new constraint through that use case's own files in six steps: change
   a constraint that exists from Python, write a new one as a component, check it, make it
-  cheaper per move, put it on the default fast path, measure. Every snippet was compiled and
-  every figure measured on 0.4.3, on the use case's demo or a generated instance; each guide
-  says how its two scoring paths differ (which constraints the default path scores, what a
-  step is, whether a pick at weight 0 is still computed, when `on_reset()` runs) instead of
-  repeating one text. The "Adding a hard or soft cost" list in each use case's README is
-  now a pointer to that guide, and `docs/extending.md` stays the reference for the
-  contracts. `tests/test_layout.py` requires the guide for every use case.
+  cheaper per move, put it on the default fast path, measure. Every snippet comes from a patch
+  that was compiled and tested, and every figure was measured, on 0.4.3, on the use case's
+  demo or a generated instance; each guide says how its two scoring paths differ (which
+  constraints the default path scores, what a step is, whether a pick at weight 0 is still
+  computed, when `on_reset()` runs) instead of repeating one text. The "Adding a hard or soft
+  cost" list in each use case's README is now a pointer to that guide, and
+  `docs/extending.md` stays the reference for the contracts. `tests/test_layout.py` requires
+  the guide for every use case and holds it to the code: the number of constraints its first
+  paragraph states, and every test and C++ test target it names.
 
 ## 0.4.3
 

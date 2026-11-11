@@ -125,7 +125,7 @@ namespace pjs {
 // of the non-renewable resources the assigned execution modes consume, within
 // capacity or not. Raw cost (one global total) = sum over the assigned
 // allocations of their mode's requirements on non-renewable resources, in
-// resource units, so 0 = no stock is consumed. The capacity rule charges only
+// resource units, so 0 = no stock is consumed. The capacity constraint charges only
 // what exceeds a stock; this one prices every unit taken from it.
 struct NonRenewableResourceUsageCost final : ScheduleAggregateConstraint {
     static constexpr double kDefaultWeight = 0.0;

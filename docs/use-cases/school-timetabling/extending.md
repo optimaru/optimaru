@@ -387,7 +387,7 @@ and on every step under `full_assert`:
         for (std::size_t i = 0; i < table.lessons.size(); ++i)
             rooms_[i] = roomsOf(table.lessons[i]);
     }
-    // The engine asks this rule about the last periods only.
+    // The engine asks this constraint about the last periods only.
     const std::vector<int>* scoped_units() const override { return &lastSlots_; }
     double delta_cost(const Timetable& /*table*/, int unit, const std::vector<int>& /*members*/,
                       int entity) const override {
@@ -444,10 +444,16 @@ loop of step 2 over every slot.
 **3. The incremental calculator**, `canonical_incremental_calculator.hpp` and `.cpp`: a
 running total `lastRooms_` and the table `lastSlot_`, both set in `rebuild()`.
 `insert()` and `retract()` already walk the lesson's room demand for
-`roomCapacityCost`, so the term is one line in each loop:
+`roomCapacityCost`, so the term is one line in each loop, in `insert()`
 
 ```cpp
-        if (lastSlot_[slot] != 0) lastRooms_ += demand;  // retract(): -= demand
+        if (lastSlot_[slot] != 0) lastRooms_ += demand;
+```
+
+and in `retract()`:
+
+```cpp
+        if (lastSlot_[slot] != 0) lastRooms_ -= demand;
 ```
 
 `score()` adds `w.specialRoomLastPeriodCost * static_cast<double>(lastRooms_)` last, in

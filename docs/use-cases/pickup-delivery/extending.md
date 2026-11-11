@@ -143,7 +143,7 @@ namespace pdp {
 // it picks up and then drops off of (arrival at the dropoff - departure from
 // the pickup), in seconds; 0 = the vehicle carries nothing (and the pool
 // list). A request whose dropoff is not behind its pickup on this route
-// counts nothing here: the coupling rules price it. Give it a weight to keep
+// counts nothing here: the coupling constraints price it. Give it a weight to keep
 // goods or passengers from being driven around.
 struct RideTimeCost final : detail::PerVehicleConstraint {
     static constexpr double kDefaultWeight = 0.0;

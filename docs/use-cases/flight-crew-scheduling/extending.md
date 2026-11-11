@@ -138,7 +138,7 @@ namespace fcs {
 // leaves on the day after one, so the time off starts or ends with a flight.
 // Raw cost per employee = the number of such assignments, so 0 = every
 // unavailable day has a free day on both sides. A flight that touches the
-// unavailable day itself is employeeUnavailabilityCost's, not this rule's.
+// unavailable day itself is employeeUnavailabilityCost's, not this constraint's.
 struct UnavailabilityBufferCost final : PerAssignmentConstraint {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;

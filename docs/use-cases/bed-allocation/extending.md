@@ -299,8 +299,19 @@ ends, not per move:
     }
 
 private:
-    // The loop of step 2, moved here unchanged.
-    static double unusedNights(const BedPlan& plan, int roomIndex, int stayIndex);
+    static double unusedNights(const BedPlan& plan, int roomIndex, int stayIndex) {
+        const Stay& stay = plan.stays[stayIndex];
+        const auto listed = [](const std::vector<int>& ids, int id) {
+            return std::find(ids.begin(), ids.end(), id) != ids.end();
+        };
+        std::int64_t unused = 0;
+        for (int id = 0; id < plan.equipmentTypeCount; ++id) {
+            if (!plan.roomHasEquipment(roomIndex, id)) continue;
+            if (!listed(stay.requiredEquipmentIds, id) && !listed(stay.preferredEquipmentIds, id))
+                ++unused;
+        }
+        return static_cast<double>(stay.nightCount() * unused);
+    }
 
     std::size_t stayCount_ = 0;
     std::vector<double> table_;  // rooms x stays
