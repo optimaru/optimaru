@@ -10,6 +10,32 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # The use cases, read off the repository: a subpackage of optimaru/ with a _core.pyi
+  # stub, which is what setup.py builds. The three matrices below take their lists from
+  # here, so a new use case is built and tested without a line in this file.
+  use-cases:
+    runs-on: ubuntu-latest
+    outputs:
+      names: ${{ steps.list.outputs.names }}
+      benchmarks: ${{ steps.list.outputs.benchmarks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Only the stubs: every matrix job waits for this one.
+          sparse-checkout: optimaru/*/_core.pyi
+          sparse-checkout-cone-mode: false
+      - id: list
+        run: |
+          shopt -s nullglob
+          names=$(for stub in optimaru/*/_core.pyi; do basename "$(dirname "$stub")"; done | jq -R . | jq -sc .)
+          [ "$(jq length <<<"$names")" -gt 0 ] || { echo "no use case found: optimaru/*/_core.pyi matched nothing"; exit 1; }
+          echo "names=$names" >> "$GITHUB_OUTPUT"
+          # The CP-SAT comparisons: the shared runner, then every use case but vehicle
+          # routing, whose comparison (OR-Tools Routing) is the vehicle-routing-benchmark job.
+          benchmarks=$(jq -c '["cpsat-common"] + [.[] | gsub("_"; "-") | select(. != "vehicle-routing")]' <<<"$names")
+          echo "benchmarks=$benchmarks" >> "$GITHUB_OUTPUT"
+          echo "$names"; echo "$benchmarks"
+
   engine:
     strategy:
       fail-fast: false
@@ -70,33 +96,12 @@ jobs:
 
   use-case-cpp:
     name: ${{ matrix.use_case }} (C++)
+    needs: use-cases
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        use_case:
-          - assembly_line_balancing
-          - bed_allocation
-          - bin_packing
-          - conference_scheduling
-          - employee_scheduling
-          - facility_location
-          - flight_crew_scheduling
-          - food_packaging
-          - knapsack
-          - maintenance_scheduling
-          - max_cut
-          - meeting_scheduling
-          - order_picking
-          - pickup_delivery
-          - project_job_scheduling
-          - quadratic_assignment
-          - school_timetabling
-          - semiconductor_scheduling
-          - sports_league_scheduling
-          - task_assigning
-          - tournament_scheduling
-          - vehicle_routing
+        use_case: ${{ fromJSON(needs.use-cases.outputs.names) }}
     steps:
       - uses: actions/checkout@v4
       - uses: hendrikmuhs/ccache-action@v1.2
@@ -113,33 +118,12 @@ jobs:
 
   use-case-python:
     name: ${{ matrix.use_case }} (Python)
+    needs: use-cases
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        use_case:
-          - assembly_line_balancing
-          - bed_allocation
-          - bin_packing
-          - conference_scheduling
-          - employee_scheduling
-          - facility_location
-          - flight_crew_scheduling
-          - food_packaging
-          - knapsack
-          - maintenance_scheduling
-          - max_cut
-          - meeting_scheduling
-          - order_picking
-          - pickup_delivery
-          - project_job_scheduling
-          - quadratic_assignment
-          - school_timetabling
-          - semiconductor_scheduling
-          - sports_league_scheduling
-          - task_assigning
-          - tournament_scheduling
-          - vehicle_routing
+        use_case: ${{ fromJSON(needs.use-cases.outputs.names) }}
     env:
       # setup.py builds only this use case's extension.
       OPTIMARU_USE_CASES: ${{ matrix.use_case }}
@@ -164,33 +148,12 @@ jobs:
 
   benchmark-cpsat:
     name: ${{ matrix.benchmark }} (CP-SAT benchmark)
+    needs: use-cases
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        benchmark:
-          - cpsat-common
-          - assembly-line-balancing
-          - bed-allocation
-          - bin-packing
-          - conference-scheduling
-          - employee-scheduling
-          - facility-location
-          - flight-crew-scheduling
-          - food-packaging
-          - knapsack
-          - maintenance-scheduling
-          - max-cut
-          - meeting-scheduling
-          - order-picking
-          - pickup-delivery
-          - project-job-scheduling
-          - quadratic-assignment
-          - school-timetabling
-          - semiconductor-scheduling
-          - sports-league-scheduling
-          - task-assigning
-          - tournament-scheduling
+        benchmark: ${{ fromJSON(needs.use-cases.outputs.benchmarks) }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
