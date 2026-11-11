@@ -311,8 +311,10 @@ struct MyRuleCost final : detail::PerVehicleConstraint {
 - **Global constraints.** A cost that belongs to no single unit (an
   unassigned count, a balance across units) is an
   `optimaru::GlobalConstraint<Solution>`. It keeps its own aggregates in
-  `reset()` / `on_unit_changed()` (or the O(1) `on_member_changed()` when
-  `supports_member_change()` is true), and `cost()` returns the total. All of
+  `reset()` / `on_unit_changed()`, and `cost()` returns the total. On the
+  assignment shape, one that can keep them from joins and leaves alone derives
+  from `optimaru::MemberChangeGlobalConstraint<Solution>` and writes the O(1)
+  `on_member_changed()` instead. All of
   knapsack's constraints are globals, for example
   [`ks/constraints/mandatory_items_cost.hpp`](../optimaru/knapsack/cpp/include/ks/constraints/mandatory_items_cost.hpp).
 - **Rewards and structural constraints.** A reward sets `reward = true;` in its

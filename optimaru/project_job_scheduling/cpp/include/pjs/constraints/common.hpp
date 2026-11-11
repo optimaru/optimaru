@@ -47,40 +47,12 @@ namespace pjs {
 // accumulator and applies the fold, so no component carries the 10^9 factor
 // in its weight.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                    // the whole default set ...
-//       .weight("nonRenewableResourceCapacityCost", 2)  // ... then only
-//       .soft("renewableResourceCapacityCost")          //     what differs
-//       .drop("makespanCost")
-//       .into(calc);
-//   solver.solve(schedule, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from
-// scratch than start from the defaults.
-//
-// Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
-// assembly-time metadata, not part of the cost. Override them per instance
-// with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent` / `offset` / `clip`, or by name through ConstraintAssembly
-// (weight / level / exponent / offset / clip; hard() / soft() are
-// level(Hard) / level(Soft)). A name may be held several times
-// (ConstraintAssembly::add_instances): each instance has its own knobs, its
-// level included, and the instances add up. Any component may take any of
-// the three levels: the medium component moved to hard / soft costs 1 hard /
-// 1 soft unit per raw unit, a hard or soft one moved to medium 1 medium unit,
-// and a weight is in units of the level in effect. The monolithic calculators
-// read the same kDefaultWeight constants, which is why the default assembly
-// scores bit-for-bit like them.
-//
-// Registry names are the struct names with a lower-case first letter
-// ("makespanCost"); Python sees them through python_name() ("makespan_cost").
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; the calculator negates into the score. An
-// assembly of all four components at their default weights therefore scores
-// bit-for-bit like ScoreCalculator::score.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The monolithic calculators read the same
+// kDefaultWeight constants, so the default assembly scores bit-for-bit like
+// ScoreCalculator::score.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).

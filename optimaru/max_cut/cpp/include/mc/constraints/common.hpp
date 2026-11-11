@@ -41,33 +41,12 @@ namespace mc {
 // term, and a hard cost is rounded per side. At exponent 1 and integral
 // weights both are bit-identical to the Python reference's per-term scoring.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                          // the whole default set
-//       .weight("partitionImbalanceCost", 1)      // ... then only what differs
-//       .soft("partitionSizeBoundsCost")
-//       .drop("fixedPartitionCost")
-//       .into(calc);
-//   solver.solve(problem, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from scratch.
-//
-// Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
-// assembly-time metadata, not part of the cost. Override them per instance
-// with the constructor's weight argument or the validated setters
-// (set_weight / set_level / set_exponent), or by name through
-// ConstraintAssembly. The canonical problem carries no weights: the
-// monolithic calculators read the same kDefaultWeight constants, which is why
-// the default assembly scores bit-for-bit like them.
-//
-// Registry names are the struct names with a lower-case first letter
-// ("fixedPartitionCost"); Python sees them through python_name()
-// ("fixed_partition_cost").
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; cutWeightCost is a reward (raw <= 0, never
-// hard). The calculator negates into the score.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The monolithic calculators read the same
+// kDefaultWeight constants, so the default assembly scores bit-for-bit like
+// ScoreCalculator::score. cutWeightCost is a reward (raw <= 0, never hard).
 //
 // The pair deltas read the partner's side from the working solution. That is
 // exact because the engine notifies assignment changes one entity at a time
@@ -81,7 +60,6 @@ namespace mc {
 using DecomposedCalculator = optimaru::DecomposedObjective<MaxCutProblem>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<MaxCutProblem>;
 using McUnitConstraint = optimaru::UnitConstraint<MaxCutProblem>;
-using McGlobalConstraint = optimaru::GlobalConstraint<MaxCutProblem>;
 
 namespace detail {
 
@@ -104,16 +82,7 @@ inline std::vector<char> memberFlags(const MaxCutProblem& problem,
 }
 
 // The common shape of the two globals: driven by joins / leaves.
-struct MemberChangeConstraint : McGlobalConstraint {
-    using McGlobalConstraint::McGlobalConstraint;
-
-    bool supports_member_change() const final { return true; }
-
-    // Never called (supports_member_change): every change arrives as a
-    // join/leave through on_member_changed.
-    void on_unit_changed(const MaxCutProblem& /*problem*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) final {}
-};
+using MemberChangeConstraint = optimaru::MemberChangeGlobalConstraint<MaxCutProblem>;
 
 }  // namespace detail
 

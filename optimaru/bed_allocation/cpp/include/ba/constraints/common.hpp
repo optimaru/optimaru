@@ -45,37 +45,12 @@ namespace ba {
 // unassignedStaysCost (weight 1) is the only one. No weight carries the
 // 10^9 factor.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                          // the whole default set
-//       .weight("preferredPatientEquipmentCost", 25)  // ... then only
-//       .soft("departmentMaxAgeCost")                 //     what differs
-//       .drop("departmentSpecialtyPriorityCost")
-//       .into(calc);
-//   solver.solve(plan, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from
-// scratch than start from the defaults.
-//
-// Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
-// assembly-time metadata, not part of the cost. Override them per instance
-// with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent` / `offset` / `clip`, or by name through ConstraintAssembly
-// (`.level()`, with `.hard()` / `.soft()` as its shortcuts, `.weight()`,
-// `.exponent()`, `.offset()`, `.clip()`); any component may take any of the
-// three levels, and a name may be held several times
-// (ConstraintAssembly::add_instances), each instance with its own knobs. The
-// monolithic calculators read the same kDefaultWeight
-// constants, which is why the default assembly scores bit-for-bit like
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The monolithic calculators read the same
+// kDefaultWeight constants, so the default assembly scores bit-for-bit like
 // ScoreCalculator::score.
-//
-// Registry names are the struct names with a lower-case first letter
-// ("bedConflictCost"); Python sees them through python_name()
-// ("bed_conflict_cost").
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; the calculator negates into the score.
 //
 // Every component requires ScoreCalculator::prepare(plan) to have run (the
 // solve() overload and the monolithic path both call it).
@@ -83,7 +58,6 @@ namespace ba {
 using DecomposedCalculator = optimaru::DecomposedObjective<BedPlan>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<BedPlan>;
 using BaUnitConstraint = optimaru::UnitConstraint<BedPlan>;
-using BaGlobalConstraint = optimaru::GlobalConstraint<BedPlan>;
 
 namespace detail {
 
@@ -175,18 +149,8 @@ private:
 // ---------------------------------------------------------------------------
 // Cross-unit global constraints
 // ---------------------------------------------------------------------------
-// Shared base: supports_member_change() routes everything through
-// on_member_changed; the unit-diff hook is unreachable for assignment-shaped solutions.
-struct MemberChangeGlobalConstraint : BaGlobalConstraint {
-    using BaGlobalConstraint::BaGlobalConstraint;
-    bool supports_member_change() const override { return true; }
-    void on_unit_changed(const BedPlan& /*plan*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) override {
-        throw std::logic_error(name +
-                               ": onUnitChanged is unreachable "
-                               "(member-change fast path)");
-    }
-};
+// Shared base: the aggregates are kept from joins and leaves alone.
+using MemberChangeGlobalConstraint = optimaru::MemberChangeGlobalConstraint<BedPlan>;
 
 }  // namespace ba
 

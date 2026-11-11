@@ -31,40 +31,19 @@ namespace ks {
 // constraint_costs() reports ONE raw total per constraint, the exponent
 // shapes that total, and a hard total is rounded once per constraint.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                         // the whole default set
-//       .weight("resourceCapacityCost", 4)       // ... then only what differs
-//       .soft("forbiddenItemsCost")
-//       .drop("itemDependencyCost")
-//       .into(calc);
-//   solver.solve(problem, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from scratch.
-//
-// Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
-// assembly-time metadata, not part of the cost. Override them per instance
-// with the constructor's weight argument or the validated setters
-// (set_weight / set_level / set_exponent), or by name through
-// ConstraintAssembly. The canonical problem carries no weights: the
-// monolithic calculators read the same kDefaultWeight constants, which is why
-// the default assembly scores bit-for-bit like them.
-//
-// Registry names are the struct names with a lower-case first letter
-// ("knapsackCapacityCost"); Python sees them through python_name()
-// ("knapsack_capacity_cost").
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; selectedValueCost is a reward (raw <= 0, never
-// hard). The calculator negates into the score.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The monolithic calculators read the same
+// kDefaultWeight constants, so the default assembly scores bit-for-bit like
+// ScoreCalculator::score. selectedValueCost is a reward (raw <= 0, never
+// hard).
 //
 // Every component requires ScoreCalculator::prepare(problem) to have run
 // (both solve() overloads and the monolithic path call it).
 
 using DecomposedCalculator = optimaru::DecomposedObjective<KnapsackProblem>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<KnapsackProblem>;
-using KsGlobalConstraint = optimaru::GlobalConstraint<KnapsackProblem>;
 
 namespace detail {
 
@@ -89,20 +68,13 @@ inline std::vector<char> selectedFlags(const KnapsackProblem& problem,
 
 // The common shape of the seven components: a global constraint driven by
 // joins/leaves of unit 1.
-struct SelectionConstraint : KsGlobalConstraint {
-    using KsGlobalConstraint::KsGlobalConstraint;
-
-    bool supports_member_change() const final { return true; }
+struct SelectionConstraint : optimaru::MemberChangeGlobalConstraint<KnapsackProblem> {
+    using MemberChangeGlobalConstraint::MemberChangeGlobalConstraint;
 
     void on_member_changed(const KnapsackProblem& problem, int unit,
                            const std::vector<int>& /*members*/, int item, bool joined) final {
         if (unit == kSelected) onSelectionChanged(problem, item, joined);
     }
-
-    // Never called (supports_member_change): every change arrives as a
-    // join/leave above.
-    void on_unit_changed(const KnapsackProblem& /*problem*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) final {}
 
     // `item` became selected (selected == true) or stopped being selected.
     virtual void onSelectionChanged(const KnapsackProblem& problem, int item, bool selected) = 0;

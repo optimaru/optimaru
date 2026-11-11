@@ -63,12 +63,10 @@ namespace st::canon {
 //     projection per assembly instead of five private copies.
 // Both are transparent to partial assemblies and metadata overrides.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints().weight("teacherGapCost", 40).into(calc);
-//   solver.solve(table, calc);
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty; the calculator negates into the score.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md.
 //
 // Every component requires ScoreCalculator::prepare(table) to have run (the
 // solve() overload and the monolithic path both call it).
@@ -76,7 +74,6 @@ namespace st::canon {
 using DecomposedCalculator = optimaru::DecomposedObjective<Timetable>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<Timetable>;
 using CanonUnitConstraint = optimaru::UnitConstraint<Timetable>;
-using CanonGlobalConstraint = optimaru::GlobalConstraint<Timetable>;
 
 namespace detail {
 

@@ -47,17 +47,11 @@ namespace sls {
 //   (repeat_match_on_next_day_cost.hpp carries its own state: its cost is a
 //    clamped per-match indicator, not a pair sum.)
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                          // the whole default set
-//       .weight("workdayClassicMatchesCost", 2)  // ... then only what differs
-//       .soft("consecutiveHomeMatchesCost")
-//       .drop("awayToEndHopCost")
-//       .into(calc);
-//   solver.solve(schedule, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from
-// scratch than start from the defaults.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. An assembly of all ten components at
+// their default weights scores bit-for-bit like ScoreCalculator::score.
 //
 // The pattern every component follows (constraints/<subject>_cost.hpp, one
 // component per header):
@@ -77,18 +71,12 @@ namespace sls {
 //     named edits. The travel-hop rules cost plain kilometres at weight 1,
 //     and workdayClassicMatchesCost carries x 1'000.
 //
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; the calculator negates into the score. An
-// assembly of all ten components at their default weights therefore scores
-// bit-for-bit like ScoreCalculator::score.
-//
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
 using DecomposedCalculator = optimaru::DecomposedObjective<LeagueSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<LeagueSchedule>;
 using SlsUnitConstraint = optimaru::UnitConstraint<LeagueSchedule>;
-using SlsGlobalConstraint = optimaru::GlobalConstraint<LeagueSchedule>;
 
 // A component's kDefaultWeight as an exact integer, for the monolithic
 // calculators (Breakdown's weighted totals and the incremental calculator),
@@ -157,16 +145,8 @@ struct PerMatchConstraint : SlsUnitConstraint {
 // Shared base of the rules whose total is a sum over match pairs keyed by the
 // round index. It keeps the matches bucketed by index and asks the subclass
 // for the marginal of one match against the buckets it can pair with.
-struct RoundIndexPairConstraint : SlsGlobalConstraint {
-    using SlsGlobalConstraint::SlsGlobalConstraint;
-
-    bool supports_member_change() const override { return true; }
-    void on_unit_changed(const LeagueSchedule& /*schedule*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) override {
-        throw std::logic_error(name +
-                               ": onUnitChanged is unreachable "
-                               "(member-change fast path)");
-    }
+struct RoundIndexPairConstraint : optimaru::MemberChangeGlobalConstraint<LeagueSchedule> {
+    using MemberChangeGlobalConstraint::MemberChangeGlobalConstraint;
 
     void reset(const LeagueSchedule& schedule,
                const std::vector<std::vector<int>>& members_per_unit) override {
@@ -229,19 +209,11 @@ private:
 // count, with the one touched team's row re-scored through
 // ScoreCalculator::runPenalty. O(indexCount) per move, and exact by
 // construction rather than by an incremental run-splicing argument.
-struct TeamSideRunConstraint : SlsGlobalConstraint {
-    using SlsGlobalConstraint::SlsGlobalConstraint;
+struct TeamSideRunConstraint : optimaru::MemberChangeGlobalConstraint<LeagueSchedule> {
+    using MemberChangeGlobalConstraint::MemberChangeGlobalConstraint;
 
     // Which team of the match this side tracks (home or away).
     virtual int teamOf(const Match& match) const = 0;
-
-    bool supports_member_change() const override { return true; }
-    void on_unit_changed(const LeagueSchedule& /*schedule*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) override {
-        throw std::logic_error(name +
-                               ": onUnitChanged is unreachable "
-                               "(member-change fast path)");
-    }
 
     void reset(const LeagueSchedule& schedule,
                const std::vector<std::vector<int>>& members_per_unit) override {

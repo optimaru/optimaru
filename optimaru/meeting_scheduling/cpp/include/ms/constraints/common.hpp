@@ -54,17 +54,11 @@ namespace ms {
 // calculator keeps a separate medium accumulator and folds it with that
 // constant; the soft ones carry the x 1 / x 100 / x 10 factors.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                          // the whole default set
-//       .weight("meetingOverlapCost", 2)          // ... then only what differs
-//       .soft("roomCapacityCost")
-//       .drop("overtimeCost")
-//       .into(calc);
-//   solver.solve(schedule, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from
-// scratch than start from the defaults.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. An assembly of all twelve components at
+// their default weights scores bit-for-bit like ScoreCalculator::score.
 //
 // The level and the weight of each component are DEFAULTS — assembly-time
 // metadata, not part of the cost. Override them per instance through the
@@ -76,18 +70,12 @@ namespace ms {
 // raw unit, moved to soft 1 soft per raw unit (outside the fold); an explicit
 // weight stays in units of the level in effect.
 //
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty; the calculator negates into the score. An assembly of all twelve
-// components at their default weights therefore scores bit-for-bit like
-// ScoreCalculator::score.
-//
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
 
 using DecomposedCalculator = optimaru::DecomposedObjective<MeetingSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<MeetingSchedule>;
 using MsUnitConstraint = optimaru::UnitConstraint<MeetingSchedule>;
-using MsGlobalConstraint = optimaru::GlobalConstraint<MeetingSchedule>;
 
 // A component's kDefaultWeight as an exact integer, for the monolithic
 // calculators (Breakdown's weighted totals and the incremental calculator),
@@ -173,16 +161,8 @@ struct PerAssignmentConstraint : MsUnitConstraint {
 // against every other. Join adds the marginal before the placement is
 // recorded, leave subtracts it after the placement is cleared, so the
 // aggregate is exactly reversible.
-struct AssignmentPairConstraint : MsGlobalConstraint {
-    using MsGlobalConstraint::MsGlobalConstraint;
-
-    bool supports_member_change() const override { return true; }
-    void on_unit_changed(const MeetingSchedule& /*schedule*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) override {
-        throw std::logic_error(name +
-                               ": onUnitChanged is unreachable "
-                               "(member-change fast path)");
-    }
+struct AssignmentPairConstraint : optimaru::MemberChangeGlobalConstraint<MeetingSchedule> {
+    using MemberChangeGlobalConstraint::MemberChangeGlobalConstraint;
 
     void reset(const MeetingSchedule& schedule,
                const std::vector<std::vector<int>>& members_per_unit) override {

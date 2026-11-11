@@ -56,17 +56,10 @@ namespace ts {
 // ScoreCalculator::unfairnessFromAggregates, so an assembly of all four
 // reproduces the monolithic double bit-for-bit.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                              // the default set
-//       .weight("confrontationCountImbalanceCost", 2) // ... then the changes
-//       .soft("teamUnavailabilityCost")
-//       .drop("assignmentCountImbalanceCost")
-//       .into(calc);
-//   solver.solve(schedule, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from
-// scratch than start from the defaults.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md.
 //
 // The level and the weight of each component are DEFAULTS — assembly-time
 // metadata, not part of the cost. Override them per instance through the
@@ -79,14 +72,10 @@ namespace ts {
 // the fold), a hard or soft one moved to medium 1 medium unit; an explicit
 // weight is in units of the level in effect. A name may be held several
 // times (ConstraintAssembly::add_instances), each instance with its own knobs.
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty; the calculator negates into the score.
 
 using DecomposedCalculator = optimaru::DecomposedObjective<TournamentSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<TournamentSchedule>;
 using TsUnitConstraint = optimaru::UnitConstraint<TournamentSchedule>;
-using TsGlobalConstraint = optimaru::GlobalConstraint<TournamentSchedule>;
 
 // A component's kDefaultWeight as an exact integer, for the monolithic
 // calculators (score_calculator.cpp / incremental_calculator.cpp), which are
@@ -122,18 +111,8 @@ inline int dayOf(const TournamentSchedule& schedule, int assignmentIndex) {
 // ---------------------------------------------------------------------------
 // Cross-unit global constraints
 // ---------------------------------------------------------------------------
-// Shared base: supports_member_change() routes everything through
-// on_member_changed; the unit-diff hook is unreachable for assignment-shaped solutions.
-struct MemberChangeGlobalConstraint : TsGlobalConstraint {
-    using TsGlobalConstraint::TsGlobalConstraint;
-    bool supports_member_change() const override { return true; }
-    void on_unit_changed(const TournamentSchedule& /*schedule*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) override {
-        throw std::logic_error(name +
-                               ": onUnitChanged is unreachable "
-                               "(member-change fast path)");
-    }
-};
+// Shared base: the aggregates are kept from joins and leaves alone.
+using MemberChangeGlobalConstraint = optimaru::MemberChangeGlobalConstraint<TournamentSchedule>;
 
 }  // namespace ts
 

@@ -48,38 +48,15 @@ namespace cs {
 // path, not the throughput path. Reach for the monolithic calculator when you
 // want speed, and for this one when you want to change the cost function.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                        // the whole default set
-//       .weight("contentConflictCost", 500)     // ... then only what differs
-//       .soft("roomConflictCost")
-//       .drop("speakerMakespanCost")
-//       .into(calc);
-//   solver.solve(schedule, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from
-// scratch than start from the defaults.
-//
-// Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor.
-// They are assembly-time metadata, not part
-// of the cost. Override them per instance with the constructor's weight
-// argument or the mutable `level` / `weight` / `exponent`, or by name through
-// ConstraintAssembly. The monolithic calculators (Breakdown::hardTotal() /
-// softPenaltyTotal() / softRewardTotal() and the incremental calculator) read
-// the same kDefaultWeight constants.
-//
-// Registry names are the struct names with a lower-case first letter
-// ("roomConflictCost"); Python sees them through python_name()
-// ("room_conflict_cost"). Each Breakdown member carries the same name.
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation, NEGATIVE = reward. The three *DiversityCost rules
-// are rewards and return negative costs (they are
-// marked `reward = true; level_flippable = false;`, so hard() and any level
-// change are refused), which is why an assembly of all 37 components at their
-// default weights reproduces ScoreCalculator::score bit-for-bit,
-// rewards included.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The monolithic calculators read the same
+// kDefaultWeight constants, so the default assembly scores bit-for-bit like
+// ScoreCalculator::score. Each Breakdown member carries its component's
+// registry name. The three *DiversityCost rules are rewards: they return
+// negative costs and are marked `reward = true; level_flippable = false;`, so
+// hard() and any level change are refused.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).

@@ -61,22 +61,11 @@ namespace vrp {
 // unit per penalty minute. The opt-in objectives (enclosingCircleRadiusCost,
 // routeDurationCost, latencyCost) default to weight 0.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                     // the whole default set
-//       .weight("travelTimeCost", 2)         // ... then only what differs
-//       .soft("vehicleCapacityCost")
-//       .drop("maxStopsCost")
-//       .into(calc);
-//   solver.solve(plan, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from
-// scratch than start from the defaults.
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; the calculator negates into the score. The
-// default assembly therefore scores bit-for-bit like
-// ScoreCalculator::score on a plan without route policies.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The default assembly scores bit-for-bit
+// like ScoreCalculator::score on a plan without route policies.
 
 using DecomposedCalculator = optimaru::DecomposedObjective<VehicleRoutePlan>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<VehicleRoutePlan>;

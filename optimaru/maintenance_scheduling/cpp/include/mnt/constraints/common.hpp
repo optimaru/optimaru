@@ -34,36 +34,14 @@ namespace mnt {
 // on_member_changed fast path, keeping the same per-(crew, day) /
 // per-(tag, day) occupancy counters the monolithic calculator does.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                         // the whole default set
-//       .weight("afterIdealEndDateCost", 2)      // ... then only what differs
-//       .soft("maxEndDateCost")
-//       .drop("beforeIdealEndDateCost")
-//       .into(calc);
-//   solver.solve(schedule, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from
-// scratch than start from the defaults.
-//
-// Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
-// assembly-time metadata, not part of the cost. Override them per instance
-// with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent`, or by name through ConstraintAssembly. The soft weights
-// (x 1 beforeIdealEndDateCost, x 1'000 tagConflictCost, x 1'000'000
-// afterIdealEndDateCost) are exactly these defaults, so re-pricing a term is
-// a one-argument change; the monolithic calculators read the same
-// kDefaultWeight constants.
-//
-// Registry names are the struct names with a lower-case first letter
-// ("crewConflictCost"); Python sees them through python_name()
-// ("crew_conflict_cost").
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; the calculator negates into the score. An
-// assembly of all six components at their default weights therefore scores
-// bit-for-bit like ScoreCalculator::score.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The monolithic calculators read the same
+// kDefaultWeight constants, so the default assembly scores bit-for-bit like
+// ScoreCalculator::score. The soft weights (x 1 beforeIdealEndDateCost, x
+// 1'000 tagConflictCost, x 1'000'000 afterIdealEndDateCost) are exactly these
+// defaults, so re-pricing a term is a one-argument change.
 //
 // Every component requires ScoreCalculator::prepare(schedule) to have run
 // (the solve() overload and the monolithic path both call it).
@@ -71,7 +49,6 @@ namespace mnt {
 using DecomposedCalculator = optimaru::DecomposedObjective<MaintenanceSchedule>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<MaintenanceSchedule>;
 using MntUnitConstraint = optimaru::UnitConstraint<MaintenanceSchedule>;
-using MntGlobalConstraint = optimaru::GlobalConstraint<MaintenanceSchedule>;
 
 namespace detail {
 
@@ -130,8 +107,8 @@ struct PerJobConstraint : MntUnitConstraint {
 // already are occupants of that (owner, day) — the telescoping identity the
 // monolithic calculator uses. `ownerCount` and the owners of one job are what
 // the subclass supplies.
-struct DayOverlapGlobalConstraint : MntGlobalConstraint {
-    using MntGlobalConstraint::MntGlobalConstraint;
+struct DayOverlapGlobalConstraint : optimaru::MemberChangeGlobalConstraint<MaintenanceSchedule> {
+    using MemberChangeGlobalConstraint::MemberChangeGlobalConstraint;
 
     // How many owner rows the occupancy table has (crews, or tags).
     virtual int ownerCount(const MaintenanceSchedule& schedule) const = 0;
@@ -139,14 +116,6 @@ struct DayOverlapGlobalConstraint : MntGlobalConstraint {
     // to `owners` (cleared by the caller).
     virtual void ownersOf(const MaintenanceSchedule& schedule, int unit, int jobIndex,
                           std::vector<int>& owners) const = 0;
-
-    bool supports_member_change() const override { return true; }
-    void on_unit_changed(const MaintenanceSchedule& /*schedule*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) override {
-        throw std::logic_error(name +
-                               ": onUnitChanged is unreachable "
-                               "(member-change fast path)");
-    }
 
     void reset(const MaintenanceSchedule& schedule,
                const std::vector<std::vector<int>>& members_per_unit) override {

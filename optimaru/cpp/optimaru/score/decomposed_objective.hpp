@@ -549,6 +549,25 @@ struct GlobalConstraint : ConstraintMetadata {
     virtual void bind_shared_context(SharedConstraintContext& /*context*/) {}
 };
 
+// A GlobalConstraint of an assignment-shaped solution that keeps its
+// aggregates from joins and leaves alone: the objective hands every one of
+// them to on_member_changed (inside a batch too, and the inverse writes of a
+// rolled-back move), so an exactly reversible aggregate stays consistent and
+// no unit is ever diffed for it. on_unit_changed is therefore unreachable.
+template <typename Solution>
+struct MemberChangeGlobalConstraint : GlobalConstraint<Solution> {
+    using GlobalConstraint<Solution>::GlobalConstraint;
+
+    bool supports_member_change() const final { return true; }
+    void on_unit_changed(const Solution& /*solution*/, int /*unit*/,
+                         const std::vector<int>& /*members*/) final {
+        throw std::logic_error(this->name +
+                               ": on_unit_changed is unreachable (member-change fast path)");
+    }
+    void on_member_changed(const Solution& solution, int unit, const std::vector<int>& members,
+                           int entity, bool joined) override = 0;
+};
+
 // One entry of the per-constraint score breakdown (the seed of a score
 // analysis / constraint-match view). `cost` is in units of `level`: a medium
 // total is NOT multiplied by the domain's medium fold.

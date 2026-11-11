@@ -31,31 +31,12 @@ namespace alb {
 //     usedStationsCost, workloadImbalanceCost) are GlobalConstraints on the
 //     on_member_changed fast path: the exponent shapes their single total.
 //
-//   DecomposedCalculator calc;
-//   defaultConstraints()                         // the whole default set
-//       .weight("workloadImbalanceCost", 1)      // ... then only what differs
-//       .soft("maxStationsCost")
-//       .drop("fixedTaskStationsCost")
-//       .into(calc);
-//   solver.solve(problem, calc);
-//
-// Or `addDefaultConstraints(calc)` when nothing differs, and
-// `ConstraintAssembly{}` when you would rather list components from scratch.
-//
-// Each component declares its defaults once, as static constexpr
-// kDefaultWeight / kDefaultLevel passed to the base constructor; they are
-// assembly-time metadata, not part of the cost. Override them per instance
-// with the constructor's weight argument or the mutable `level` / `weight` /
-// `exponent`, or by name through ConstraintAssembly. The canonical problem
-// carries no weights: the monolithic calculators read the same kDefaultWeight
-// constants, which is why the default assembly scores bit-for-bit like them.
-//
-// Registry names are the struct names with a lower-case first letter
-// ("stationCapacityCost"); Python sees them through python_name()
-// ("station_capacity_cost").
-//
-// Cost sign convention (see score/decomposed_objective.hpp): positive =
-// penalty, 0 = no violation; the calculator negates into the score.
+// The conventions every use case shares are described once: editing an
+// assembly by name in optimaru/score/constraint_assembly.hpp; kDefaultWeight /
+// kDefaultLevel, the registry names and the cost sign (positive = penalty, 0 =
+// no violation) in docs/extending.md. The monolithic calculators read the same
+// kDefaultWeight constants, so the default assembly scores bit-for-bit like
+// ScoreCalculator::score.
 //
 // Every component requires ScoreCalculator::prepare(problem) to have run
 // (the Solver, the Python calculate_score / constraint_costs and the
@@ -69,7 +50,6 @@ namespace alb {
 using DecomposedCalculator = optimaru::DecomposedObjective<AssemblyLineBalancingProblem>;
 using ConstraintAssembly = optimaru::ConstraintAssembly<AssemblyLineBalancingProblem>;
 using AlbUnitConstraint = optimaru::UnitConstraint<AssemblyLineBalancingProblem>;
-using AlbGlobalConstraint = optimaru::GlobalConstraint<AssemblyLineBalancingProblem>;
 
 namespace detail {
 
@@ -118,20 +98,10 @@ struct PerTaskConstraint : AlbUnitConstraint {
 // ---------------------------------------------------------------------------
 // Cross-station global constraints
 // ---------------------------------------------------------------------------
-// Shared base of the four globals: all of them run on the member-change fast
-// path (every join / leave is delivered directly, also inside a batch), so
-// on_unit_changed is unreachable.
-struct MemberChangeGlobalConstraint : AlbGlobalConstraint {
-    using AlbGlobalConstraint::AlbGlobalConstraint;
-
-    bool supports_member_change() const override { return true; }
-    void on_unit_changed(const AssemblyLineBalancingProblem& /*problem*/, int /*unit*/,
-                         const std::vector<int>& /*members*/) override {
-        throw std::logic_error(name +
-                               ": onUnitChanged is unreachable "
-                               "(member-change fast path)");
-    }
-};
+// Shared base of the four globals: all of them keep their aggregates from
+// joins and leaves alone.
+using MemberChangeGlobalConstraint =
+        optimaru::MemberChangeGlobalConstraint<AssemblyLineBalancingProblem>;
 
 }  // namespace alb
 
