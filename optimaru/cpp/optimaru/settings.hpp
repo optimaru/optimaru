@@ -122,17 +122,25 @@ struct AcceptanceSettings {
     // start's score with the history this much longer, provided that stage
     // still fits in the budget (a stage is taken to last the factor times the
     // one before). The search goes on from the current solution and the best
-    // one is kept as always, so a stage that finds nothing costs only its
-    // time. The history stops growing at 2^20 entries (16 MB per start); from
-    // there a stage restarts with that length. 1 or less = off.
+    // one is kept as always, so a stage that finds nothing costs its time and
+    // the kicks that would have fired in it. The history stops growing at
+    // 2^20 entries (16 MB per start); from there a stage restarts with that
+    // length. 1 or less = off.
     //
-    // Two things a stage does not do. It does not loosen a search that starts
-    // at a local optimum (a warm start from a solved solution): the start's
-    // score is then the best there is, and the stage is a hill climb with a
-    // longer history. And it does not know the stall limits: a stage walks
-    // below the best for a while, so a stall_time_limit or stall_step_limit
-    // shorter than a stage ends the solve inside it, with the best solution
-    // so far.
+    // Set it for a solve that starts from a construction, and for no other
+    // (a use case asks nothing_placed(), construct/construction.hpp). A stage
+    // starts over from the start's score, which loosens the search only where
+    // it began well below where it stands. On a warm start from a solved
+    // solution the start's score is where the search stands: a stage loosens
+    // nothing there, and it is taken at a stall in the place of the kick that
+    // is due, so a search whose improvements are the kicks' would return its
+    // start. The engine guards the plainest case itself: a search that stalls
+    // before it has found anything better than its start has no stages from
+    // there on, and goes on as it does without them.
+    //
+    // A stage does not know the stall limits: it walks below the best for a
+    // while, so a stall_time_limit or stall_step_limit shorter than a stage
+    // ends the solve inside it, with the best solution so far.
     //
     // Stages also change when a ruin & recreate kick fires: a kick's acceptor
     // has the history of the stage the search is in, stagnation counts from

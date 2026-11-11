@@ -175,8 +175,9 @@ The package is the C++ engine with pybind11 bindings, like the other C++ use cas
   starts over from the start's score with the history doubled, as long as the
   next stage fits in the budget
   ([Late acceptance in stages](../README.md#late-acceptance-in-stages)). A
-  solve that starts at a local optimum (a warm start from a returned solution)
-  has no worse score to start over from, and rarely improves. The other ways
+  solve that starts from a given assignment (a warm start from a returned
+  solution) has no stages: there is no worse score to start over from, and it
+  rarely improves. The other ways
   out are independent starts (`parallel_solver_count`),
   `RECORD_TO_RECORD_TRAVEL`, or `SIMULATED_ANNEALING`, whose starting
   temperature is automatic: `simulated_annealing_temperature_fraction`

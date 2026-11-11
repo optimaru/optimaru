@@ -28,7 +28,10 @@ void configureEngine(const Solver::Config& config, LeagueSchedule& schedule,
     // Restart late acceptance with a doubled history when the search stalls
     // (see AcceptanceSettings::history_growth): measured on every instance of
     // benchmarks/sports-league-scheduling, none worse at 30 s on three seeds.
-    engineConfig.search.acceptance.history_growth = 2.0;
+    // A solve that starts from a solution the caller gave has no stages: the
+    // start's score is then no lower than where the search stands, and a stage
+    // would take the place of the kicks that find something there.
+    if (optimaru::nothing_placed(schedule)) engineConfig.search.acceptance.history_growth = 2.0;
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
 

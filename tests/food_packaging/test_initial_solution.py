@@ -2,6 +2,7 @@
 
 import json
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -16,6 +17,7 @@ from optimaru.food_packaging.models import (
     with_initial_solution,
 )
 
+FIXTURES = Path(__file__).parent / "fixtures"
 PATHS = [pytest.param(lambda: None, id="default"), pytest.param(get_constraints, id="constraints")]
 START = datetime(2026, 1, 5, 6)
 JOBS = ["a1", "a2", "a3", "b1", "b2", "b3"]
@@ -251,6 +253,27 @@ def test_a_short_search_is_not_worse_than_its_seed(constraints):
     improved = solve(seeded, constraints=constraints(), seconds=0.2)
 
     assert score(improved) >= score(start)
+
+
+def test_a_restart_from_a_plan_still_gets_its_kicks():
+    """A packed week with 15 jobs pinned, the plan of the week before, and one new job on no
+    line. No single move improves on that start; a ruin-and-recreate kick finds the better plan,
+    which places the new job and leaves out another. In 0.5.0 a solve from a given plan took a
+    late-acceptance stage at every stall in the place of the kick, and with a budget of 200,000
+    steps or more it returned the start on every seed tried.
+    """
+    problem = PackagingScheduleModel.model_validate_json((FIXTURES / "rush_week_problem.json").read_text())
+    plan = PackagingScheduleModel.model_validate_json((FIXTURES / "rush_week_plan.json").read_text())
+    start = with_initial_solution(problem, plan).to_core()
+    fp.solve(start, config=no_search())
+    assert (start.score.hard, start.score.medium, start.score.soft) == (0, -1065, -185126625)
+    for seed in (7, 8):
+        restarted = with_initial_solution(problem, plan).to_core()
+        config = fp.SolverConfig()
+        config.step_count_limit = 200_000
+        fp.solve(restarted, config=config, time_limit_seconds=600.0, random_seed=seed)
+        assert (restarted.score.hard, restarted.score.medium) == (0, -1065)
+        assert restarted.score.soft > start.score.soft
 
 
 def test_the_package_exports_it():

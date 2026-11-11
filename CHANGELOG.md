@@ -21,12 +21,30 @@
   rounds and rush-order replan, maintenance scheduling's short runs, restart rounds and
   urgent-job replan. Maintenance scheduling's comparison of ruin and recreate on and off is
   gone: over 8 and 12 seeds it makes no clear difference there on 0.5.0.
-- **Known in 0.5.0, found by those re-runs and not fixed here:** in the use cases that search
-  in stages, a solve that starts from an existing plan (`with_initial_solution`) can return
-  that plan unchanged where 0.4.3 improved it, and more often with a larger budget. A food
-  packaging restart that 0.4.3 improves on four seeds of four at every budget tried is
-  improved on none of the four at 200,000 steps or more, or at 1 and 5 seconds. The
-  comparisons in `benchmarks/` are of solves from scratch and do not show it.
+- **Fixed: a solve from a given solution in the seven use cases with stages (#110).** In
+  0.5.0 bed allocation, food packaging, knapsack, maintenance scheduling, max-cut, quadratic
+  assignment and sports league scheduling ran late acceptance in stages on every solve, also
+  one that starts from a solution the caller gave (`with_initial_solution`, a request's
+  `initial_solution`). A stage starts over from the start's score, which on such a solve is
+  where the search already stands: it loosened nothing and was taken at each stall in the
+  place of the ruin-and-recreate kick. A solve whose improvements come from the kicks then
+  returned its start once the budget had room for stages: a food packaging week with one new
+  job improved on 4 of 4 seeds at every step limit in 0.4.3, and on 0 of 4 from 200,000 steps
+  up in 0.5.0; a bed allocation plan with five new stays ended at a mean medium score of
+  -10.58 after 10 million steps over 12 seeds, against -10.33 in 0.4.3, and worse under a
+  larger step limit than under a smaller one on 2 of the 12. Now only a solve that the
+  construction starts has stages (`optimaru::nothing_placed`, or the use case's own seed
+  flag; a solution that places only a part counts as given). The engine also ends the stages
+  by itself when a search stalls before it has found anything better than its start, whatever
+  started it: a construction that no move improves has none either, which matters to a caller
+  who sets `AcceptanceSettings::history_growth` directly. Measured: both cases are back at
+  the 0.4.3 numbers (4 of 4 at every limit; the bed allocation table of 0.4.3 seed by seed,
+  none worse under a larger limit); on 36 instances of the seven benchmark ladders a solve
+  from a given plan finds exactly what a build without stages finds, new best by new best;
+  and the 46 instances solved from the construction end on the same score as in 0.5.0 at
+  300,000 and at 3 million steps, so the benchmark tables stand. The notebooks' restart
+  experiments, moved to step budgets for 0.5.0 (the entry above), run on this as they did on
+  0.4.3.
 
 ## 0.5.0
 

@@ -34,7 +34,8 @@ public:
     //   history_length 0       clamp(8 * vertex count, 400, 3200). It is the
     //                          first stage's length: the search restarts with
     //                          a doubled history when it stalls (the engine's
-    //                          history_growth)
+    //                          history_growth); a solve from a seed keeps this
+    //                          one length
     //   parallel_solver_count  every start searches its own copy of the start
     //                          partition; a start that throws (a throwing
     //                          on_new_best included) stops the others and is

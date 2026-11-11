@@ -29,7 +29,8 @@ public:
     //                     floor stops at 8000. It is the first stage's length:
     //                     the search restarts with a doubled history when it
     //                     stalls (the engine's history_growth), which is what
-    //                     a small instance has the time for.
+    //                     a small instance has the time for. A solve that
+    //                     starts from a given plan keeps this one length.
     //   ruin_recreate     without the kicks the LA acceptor can lock into a
     //                     local optimum within milliseconds on small instances
     //                     and never escape

@@ -1,10 +1,14 @@
 """with_initial_solution: a seed reaches the search untouched and bad input never reaches C++."""
 
+from pathlib import Path
+
 import pytest
 
 import optimaru.bed_allocation as ba
 from optimaru.bed_allocation.demo import generate_demo_data
 from optimaru.bed_allocation.models import BedPlanModel
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _beds(model):
@@ -143,3 +147,29 @@ def test_seeded_solve_is_not_worse_than_the_seed():
     seeded = ba.with_initial_solution(plan, _non_greedy_seed(plan))
     start = _construct(seeded)
     assert _score(ba.solve(seeded, time_limit_seconds=0.3, random_seed=1)) >= _score(start)
+
+
+def test_a_restart_from_a_plan_finds_the_same_under_a_larger_budget():
+    """A solved plan and five new stays, solved again from that plan. Late acceptance in stages
+    is timed on the budget, and a solve that starts from a given plan has none: what it finds in
+    a million steps is the beginning of what it finds in three million. In 0.5.0 it had them,
+    and on this seed the plan after three million steps was worse (medium -11) than the one
+    after a million (-10).
+    """
+    problem = BedPlanModel.model_validate_json((FIXTURES / "restart_problem.json").read_text())
+    plan = BedPlanModel.model_validate_json((FIXTURES / "restart_plan.json").read_text())
+
+    def restart(steps):
+        seen = []
+        config = ba.SolverConfig()
+        config.random_seed = 9
+        config.step_count_limit = steps
+        config.on_new_best = lambda step, score: seen.append((step, score.hard, score.medium, score.soft))
+        out = ba.solve(ba.with_initial_solution(problem, plan), config=config)
+        return seen, (out.score_hard, out.score_medium, out.score_soft)
+
+    short, short_score = restart(1_000_000)
+    longer, longer_score = restart(3_000_000)
+    assert short
+    assert longer[: len(short)] == short
+    assert longer_score >= short_score

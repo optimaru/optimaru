@@ -20,17 +20,18 @@ namespace {
 // Late acceptance of both solve() overloads: the automatic history length,
 // and a restart with a doubled history when the search stalls (see
 // AcceptanceSettings::history_growth; measured on every instance of
-// benchmarks/food-packaging, none worse at 30 s on three seeds). The stages
-// loosen the first round, which starts from the construction: a later round
-// starts from the round before's best, so its stages only lengthen the
-// history of a hill climb.
+// benchmarks/food-packaging, none worse at 30 s on three seeds). Only for a
+// search that starts from the construction, with no unpinned job on a line
+// or in the pool yet: one that starts from a plan the caller gave, or from
+// the round before's best, has no lower score to start over from, and a
+// stage would take the place of the kicks that find something there.
 void setLateAcceptance(optimaru::AcceptanceSettings& acceptance, std::size_t historyLength,
-                       int movableJobs) {
+                       int movableJobs, const PackagingSchedule& schedule) {
     acceptance.history_length =
             historyLength != 0
                     ? historyLength
                     : std::clamp<std::size_t>(8 * static_cast<std::size_t>(movableJobs), 400, 3200);
-    acceptance.history_growth = 2.0;
+    if (optimaru::nothing_placed(schedule)) acceptance.history_growth = 2.0;
 }
 
 // Raw cleaning-window overlap minutes between every pair of lines (operator
@@ -196,7 +197,8 @@ void Solver::solve(PackagingSchedule& schedule) {
         }
         engineConfig.limits.time_limit = remaining / (rounds - round);
         engineConfig.limits.target_score = config_.target_score;
-        setLateAcceptance(engineConfig.search.acceptance, config_.history_length, movableJobs);
+        setLateAcceptance(engineConfig.search.acceptance, config_.history_length, movableJobs,
+                          schedule);
         auto& moves = engineConfig.search.moves;
         moves.relocate_weight = config_.relocate_weight;
         moves.list_swap_weight = config_.list_swap_weight;
@@ -280,7 +282,8 @@ void Solver::solve(PackagingSchedule& schedule,
             };
         }
         engineConfig.limits.target_score = config_.target_score;
-        setLateAcceptance(engineConfig.search.acceptance, config_.history_length, movableJobs);
+        setLateAcceptance(engineConfig.search.acceptance, config_.history_length, movableJobs,
+                          schedule);
         auto& moves = engineConfig.search.moves;
         moves.relocate_weight = config_.relocate_weight;
         moves.list_swap_weight = config_.list_swap_weight;

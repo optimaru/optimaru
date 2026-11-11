@@ -169,8 +169,16 @@ short history would leave idle. A
 history stops growing at 2^20 entries (16 MB per start); from there a stage
 starts over with that length. A stage walks below the best for a while and
 does not know the `unimproved_*` limits: one shorter than a stage ends the
-solve inside it, with the best solution so far. A warm start from a solved
-solution has no worse score to start over from, so its stages change little.
+solve inside it, with the best solution so far.
+
+Only a solve that the construction starts runs in stages. One that starts from
+a solution you give (`with_initial_solution`, a request's `initial_solution`)
+keeps the one history of `late_acceptance_size` and searches with the
+ruin-and-recreate kicks, as every solve did before the stages: the start's
+score is then no lower than where the search stands, so starting over from it
+would loosen nothing and take the place of a kick. In 0.5.0 such a solve ran
+in stages too, and one whose improvements come from the kicks could return its
+start whatever the budget.
 
 Whether a stage fits is judged on how far the solve is: the larger of the time
 used over the time limit and the steps used over the step limit. So with a

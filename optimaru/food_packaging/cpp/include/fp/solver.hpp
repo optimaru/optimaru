@@ -68,7 +68,8 @@ public:
         // Late-acceptance history length. 0 (the default) = auto:
         // clamp(8 * unpinned job count, 400, 3200). It is the first stage's
         // length: the search restarts with a doubled history when it stalls
-        // (the engine's history_growth).
+        // (the engine's history_growth). A solve that starts from a given
+        // plan keeps this one length.
         std::size_t history_length = 0;
         std::uint64_t seed = 0;
 

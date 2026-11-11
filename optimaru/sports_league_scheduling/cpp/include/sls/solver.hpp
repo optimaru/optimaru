@@ -24,7 +24,9 @@ public:
     //                     ceiling, and the small-instance multiplier only
     //                     matters below ~100 matches. It is the first stage's
     //                     length: the search restarts with a doubled history
-    //                     when it stalls (the engine's history_growth)
+    //                     when it stalls (the engine's history_growth); a solve
+    //                     that starts from a given schedule keeps this one
+    //                     length
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;
