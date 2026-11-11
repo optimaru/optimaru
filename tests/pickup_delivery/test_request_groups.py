@@ -312,6 +312,30 @@ def test_solve_scores_groups_on_a_plan_without_being_asked():
     assert plan.score.medium == -4  # two requests of 2 service minutes each
 
 
+def test_a_constraint_list_without_the_group_rule_is_used_as_it_is():
+    # The group starts on two vehicles and neither takes both requests. With the caller's own
+    # list, which leaves `request_group_cost` out, nothing in the score is wrong with that.
+    vehicles = [vehicle("v", ["ap", "ad"], max_stops=2), vehicle("w", ["bp", "bd"], max_stops=2)]
+    model_input = two_ends([request("a", group="g"), request("b", group="g")], vehicles)
+    config = pdp.SolverConfig()
+    config.step_count_limit = 500
+    others = [spec for spec in get_constraints() if spec.name != "request_group_cost"]
+
+    plan = to_plan(model_input)
+    pdp.solve(plan, config=config, constraints=others)
+
+    assert plan.score.is_feasible()
+    assert plan.unassigned_delivery_ids() == []
+    assert plan.routes() == {"v": ["ap", "ad"], "w": ["bp", "bd"]}
+
+    # The default set does score it: the split group is a hard violation until it waits whole.
+    plan = to_plan(model_input)
+    pdp.solve(plan, config=config)
+
+    assert plan.score.is_feasible()
+    assert sorted(plan.unassigned_delivery_ids()) == ["a", "b"]
+
+
 def test_to_plan_numbers_the_groups_in_input_order():
     deliveries = [request("a", group="late"), request("b"), request("c", group="early"), request("d", group="late")]
     places = TWO_ENDS | {"dp": 30, "dd": 40}

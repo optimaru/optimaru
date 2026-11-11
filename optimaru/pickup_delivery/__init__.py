@@ -111,7 +111,9 @@ def solve(
 
     A plan that puts requests in groups (`Delivery.group_index`) is scored with the
     default constraints even when ``constraints`` is None: `request_group_cost` is one of
-    them, and it is not among the seven core rules a plan is otherwise scored on.
+    them, and it is not among the seven core rules a plan is otherwise scored on. That is
+    the whole default set, so the vehicle limits, pinned stops and required vehicles of
+    such a plan are scored too. A list passed as ``constraints`` is used as it is.
 
     The score is on the result: ``plan.score``. `solve_request` is the same solve for
     a `models` request (JSON in, JSON out).
