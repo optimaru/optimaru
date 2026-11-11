@@ -44,11 +44,14 @@ public:
     std::size_t history() const { return history_; }
     // A stage has converged only when two histories have gone by without an
     // improving move. Until the search has found something better than its
-    // start there is no stage to wait out: it then stalls when it would
-    // without the stages.
+    // start there is no stage to wait out, and nothing but a new best counts
+    // as progress: it then stalls on the step it would without the stages.
     std::int64_t min_patience() const {
         return found_best_ ? 2 * static_cast<std::int64_t>(history_) : 0;
     }
+    // Whether an improving move puts off the stall, as it does inside a
+    // stage, where the search walks below the best for a while.
+    bool counts_improving_moves() const { return enabled_ && found_best_; }
 
     // Tells the stages that the search has converged, and returns whether
     // the next stage starts now. It records how long the stage that just

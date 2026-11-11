@@ -172,7 +172,8 @@ does not know the `unimproved_*` limits: one shorter than a stage ends the
 solve inside it, with the best solution so far.
 
 Only a solve that the construction starts runs in stages. One that starts from
-a solution you give (`with_initial_solution`, a request's `initial_solution`)
+a solution you give (`with_initial_solution`, a request's `initial_solution`),
+also one that places only a part and leaves the rest to the construction,
 keeps the one history of `late_acceptance_size` and searches with the
 ruin-and-recreate kicks, as every solve did before the stages: the start's
 score is then no lower than where the search stands, so starting over from it

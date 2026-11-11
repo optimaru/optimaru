@@ -155,6 +155,9 @@ def test_a_restart_from_a_plan_finds_the_same_under_a_larger_budget():
     a million steps is the beginning of what it finds in three million. In 0.5.0 it had them,
     and on this seed the plan after three million steps was worse (medium -11) than the one
     after a million (-10).
+
+    The comparison holds as long as nothing in a solve from a given plan is timed on its
+    budget. A failure here is not a flaky run: it means some part of the search is.
     """
     problem = BedPlanModel.model_validate_json((FIXTURES / "restart_problem.json").read_text())
     plan = BedPlanModel.model_validate_json((FIXTURES / "restart_plan.json").read_text())
