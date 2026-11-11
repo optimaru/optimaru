@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "bp/construction.hpp"
+#include "bp/fill_late_acceptance.hpp"
 #include "bp/incremental_calculator.hpp"
 #include "bp/moves.hpp"
 #include "bp/score_calculator.hpp"
@@ -44,7 +45,8 @@ void prepareSolve(BinPackingProblem& problem) {
 }
 
 // Shared engine wiring for both solve() overloads: late-acceptance local
-// search (+ ALNS kicks), plus the domain's macro moves (bp/moves.hpp) and
+// search (+ ALNS kicks), plus the domain's macro moves (bp/moves.hpp), its
+// rule for steps that keep the score (bp/fill_late_acceptance.hpp) and
 // value recommender, driven by whichever calculator the caller brought (the monolithic
 // incremental one, or a plugin assembly). The engine's construction heuristic
 // finds nothing left to place: constructBins assigned every item.
@@ -78,14 +80,25 @@ void runEngine(const Solver::Config& config, BinPackingProblem& problem,
         };
     }
 
+    const std::size_t historyLength = engineConfig.search.acceptance.history_length;
     optimaru::Solver<BinPackingProblem> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
+    // Late acceptance that compares equal scores by how full the bins are.
+    // The engine solves in place, so the acceptor reads the working solution.
+    if (config.fill_tie_break) {
+        const BinPackingProblem& live = problem;
+        engine.set_acceptor_factory([&live, historyLength](const Score& initial) {
+            return std::make_unique<FillLateAcceptance>(historyLength, initial, live);
+        });
+    }
     if (config.empty_bin_moves && problem.itemCount() >= 2)
         engine.add_move_operator(std::make_unique<EmptyBinMove>(config.empty_bin_candidates));
     if (config.repack_moves && problem.itemCount() >= 2) {
         engine.add_move_operator(std::make_unique<RepackMove>(config.empty_bin_candidates,
                                                               config.repack_partner_bins));
     }
+    if (config.trade_moves && problem.itemCount() >= 2)
+        engine.add_move_operator(std::make_unique<TradeMove>(config.empty_bin_candidates));
     engine.solve(problem, calculator);
 }
 

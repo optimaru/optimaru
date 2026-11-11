@@ -25,8 +25,9 @@ steps.
 An item is assigned a bin. There are as many bins as items, all alike. The score is
 kept per **unit**: one bin, with the items assigned to it as its **members**. A
 change moves one item and a swap two, so only the bins they leave and join are
-scored again. The two macro moves of the domain (`EmptyBinMove`, `RepackMove`) move
-several items in one step.
+scored again. The macro moves of the domain (`EmptyBinMove`, `RepackMove`, and
+`TradeMove`, which came after the measurements on this page) move several items in one
+step.
 
 There are two scoring paths, and they give the same score for the same packing
 (`bp_plugin_test` checks it on 500 random assignments):
@@ -41,8 +42,9 @@ There are two scoring paths, and they give the same score for the same packing
 
 The speeds are a generated instance of 120 items ("sq1" of the benchmark, 43 bins at
 best), one thread of an Apple M4 Max; [step 6](#6-measure) has the script. In the
-default search the two macro moves take most of a step, so the two paths are close.
-With them off (`empty_bin_moves`, `repack_moves`) a step is a change or a swap and
+default search the macro moves take most of a step, so the two paths are close.
+With them off (`empty_bin_moves`, `repack_moves`, `trade_moves`, and `fill_tie_break`,
+which follows every step in a copy of the loads) a step is a change or a swap and
 scoring is most of it: the monolithic calculators are then 2.5 times as fast. That
 search is the worse one, though: it ends on 45 bins after 10 million steps where the
 default search reaches 43 in 2 million. Steps 1 to 4 work on the assembly. Step 5
@@ -464,6 +466,7 @@ for macro_moves, steps in ((True, 2_000_000), (False, 10_000_000)):
         config.spent_limit_seconds = 600
         config.random_seed = 1
         config.empty_bin_moves = config.repack_moves = macro_moves
+        config.trade_moves = config.fill_tie_break = macro_moves
         start = time.perf_counter()
         bp.solve(problem, config=config, constraints=picked)
         seconds = time.perf_counter() - start

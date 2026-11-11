@@ -15,7 +15,7 @@ namespace bp {
 
 // The domain's macro moves, registered with the engine by Solver (see
 // solver.cpp, runEngine). Header-only so the tests can drive them through a
-// Editor directly. Both read the derived facts of
+// Editor directly. RepackMove reads the derived facts of
 // ScoreCalculator::prepare (every solve and every calculator reset runs it).
 
 // ---------------------------------------------------------------------------
@@ -348,6 +348,215 @@ private:
     std::vector<char> open_;                 // per bin: may receive an item
     std::vector<Candidate> used_;            // [0] the source, then open bins
     std::vector<int> removed_;
+    std::vector<std::pair<int, int>> moved_;  // (item, bin before the move)
+};
+
+// ---------------------------------------------------------------------------
+// TradeMove — a trade between two bins that leaves one of them fuller
+// ---------------------------------------------------------------------------
+// usedBinsCost counts bins, so every packing with the same number of bins has
+// the same score, and a bin closes only once the other bins have taken up its
+// whole load. Nothing in the change and swap moves leads there: on
+// Falkenauer's triplets, where the best packing fills every bin exactly, the
+// search stayed one bin above it.
+//
+// This move takes one bin (with probability 1/2 one of the `candidates`
+// lightest, as in the other two moves, else any non-empty bin) and up to
+// kMaxPartners other non-empty bins. Against each partner it looks at every
+// trade of none, one or two items of the first bin for none, one or two of
+// the partner that keeps both within the capacity and leaves the fuller of
+// the two at least as full as the fuller one was. It makes the trade that
+// raises the two bins' sum of squared loads most, random among equal ones.
+// A trade that raises nothing still changes which items make up the two bins
+// (two full bins stay full, or the two bins swap loads), and is made when no
+// trade raises the sum: it is how items get from a full bin to the bins that
+// need them. Not counted as a trade: the same weights changing hands, and all
+// of one bin for all of the other. No trade with any of the partners = no
+// move.
+//
+// The move cannot hold what it gains on its own: plain late acceptance takes
+// every step that keeps the score, and the change and swap moves undo the
+// trades as fast as they are made. FillLateAcceptance
+// (bp/fill_late_acceptance.hpp) compares equal scores by the same sum of
+// squared loads; the two are meant to run together.
+//
+// It checks the capacity only; colours and conflicts are judged by the
+// score, through the acceptor, like everything else.
+//
+// Cost per move: an O(n) census, and per partner at most 37 x 37 trades
+// (kMaxItems items of a bin are looked at; a bin of three items has 7 x 7).
+class TradeMove final : public optimaru::MoveOperator<BinPackingProblem> {
+public:
+    static constexpr std::size_t kMaxItems = 8;
+    static constexpr std::size_t kMaxPartners = 16;
+
+    explicit TradeMove(int candidates) : candidates_(std::max(1, candidates)) {}
+
+    const char* name() const override { return "trade"; }
+
+    bool apply(optimaru::OperatorContext<BinPackingProblem>& ctx, std::mt19937_64& rng,
+               std::vector<int>& entities) override {
+        BinPackingProblem& problem = ctx.editor.solution();
+        const int n = problem.itemCount();
+        const std::int64_t capacity = problem.binCapacity;
+
+        // Census: load and items per bin.
+        load_.assign(static_cast<std::size_t>(n), 0);
+        if (members_.size() < static_cast<std::size_t>(n))
+            members_.resize(static_cast<std::size_t>(n));
+        for (int b = 0; b < n; ++b) members_[b].clear();
+        for (int i = 0; i < n; ++i) {
+            const int bin = problem.items[i].bin;
+            if (bin >= 0) {
+                load_[bin] += problem.items[i].weight;
+                members_[bin].push_back(i);
+            }
+        }
+        used_.clear();
+        for (int b = 0; b < n; ++b) {
+            if (!members_[b].empty()) used_.push_back({load_[b], rng(), b});
+        }
+        if (used_.size() < 2) return false;  // no second bin to trade with
+
+        // The first bin, to the front: one of the k lightest, or any.
+        std::size_t pick = rng() % used_.size();
+        if (rng() % 2 == 0) {
+            const std::size_t k =
+                    std::min<std::size_t>(static_cast<std::size_t>(candidates_), used_.size());
+            std::partial_sort(used_.begin(), used_.begin() + static_cast<std::ptrdiff_t>(k),
+                              used_.end());
+            pick = rng() % k;
+        }
+        std::swap(used_[0], used_[pick]);
+        const int first = used_[0].bin;
+        parts(problem, members_[first], rng, give_);
+
+        // The best trade over the partners, drawn without repetition.
+        double best = -1.0;
+        std::uint64_t ties = 0;
+        Part give{}, take{};
+        int partner = -1;
+        const std::size_t partners = std::min(kMaxPartners, used_.size() - 1);
+        for (std::size_t p = 0; p < partners; ++p) {
+            std::swap(used_[1 + p], used_[1 + p + rng() % (used_.size() - 1 - p)]);
+            const int other = used_[1 + p].bin;
+            parts(problem, members_[other], rng, take_);
+            const std::int64_t fuller = std::max(load_[first], load_[other]);
+            const std::int64_t lighter = std::min(load_[first], load_[other]);
+            for (const Part& given : give_) {
+                for (const Part& taken : take_) {
+                    // Nothing would change: the same weights change hands, or
+                    // the two bins change contents.
+                    if (given.weight == taken.weight && sameWeights(problem, given, taken))
+                        continue;
+                    if (count(given) == members_[first].size() &&
+                        count(taken) == members_[other].size())
+                        continue;
+                    const std::int64_t change = given.weight - taken.weight;
+                    const std::int64_t top = std::max(load_[first] - change, load_[other] + change);
+                    // Both stay within the capacity, and the fuller one of
+                    // the two is no less full than before.
+                    if (top > capacity || top < fuller) continue;
+                    // Half the rise of the two squared loads.
+                    const double gain =
+                            static_cast<double>(top - fuller) * static_cast<double>(top - lighter);
+                    if (gain < best) continue;
+                    if (gain > best) {
+                        best = gain;
+                        ties = 0;
+                    }
+                    if (rng() % ++ties != 0) continue;  // uniform among the equal ones
+                    give = given;
+                    take = taken;
+                    partner = other;
+                }
+            }
+        }
+        if (partner < 0) return false;
+
+        moved_.clear();
+        for (int item : {give.first, give.second}) {
+            if (item >= 0) moved_.push_back({item, first});
+        }
+        for (int item : {take.first, take.second}) {
+            if (item >= 0) moved_.push_back({item, partner});
+        }
+        ctx.editor.begin_batch();
+        for (const std::pair<int, int>& move : moved_) {
+            ctx.editor.assign(move.first, move.second == first ? partner : first);
+            entities.push_back(move.first);
+        }
+        ctx.editor.end_batch();
+        return true;
+    }
+
+    void undo_last(optimaru::OperatorContext<BinPackingProblem>& ctx) override {
+        ctx.editor.begin_batch();
+        for (const std::pair<int, int>& move : moved_) ctx.editor.assign(move.first, move.second);
+        ctx.editor.end_batch();
+    }
+
+private:
+    struct Candidate {
+        std::int64_t load;
+        std::uint64_t tieBreak;
+        int bin;
+        bool operator<(const Candidate& other) const {
+            if (load != other.load) return load < other.load;
+            return tieBreak < other.tieBreak;
+        }
+    };
+
+    // What one bin puts into a trade: no item, one or two (-1 = none).
+    struct Part {
+        int first = -1;
+        int second = -1;
+        std::int64_t weight = 0;
+    };
+
+    // Every part of a bin: nothing, each item, each pair. Of a bin with more
+    // than kMaxItems items, a uniform sample of that many.
+    static void parts(const BinPackingProblem& problem, std::vector<int>& items,
+                      std::mt19937_64& rng, std::vector<Part>& out) {
+        std::size_t count = items.size();
+        if (count > kMaxItems) {
+            count = kMaxItems;
+            for (std::size_t i = 0; i < count; ++i)
+                std::swap(items[i], items[i + rng() % (items.size() - i)]);
+        }
+        out.clear();
+        out.push_back({});
+        for (std::size_t a = 0; a < count; ++a) {
+            const std::int64_t weight = problem.items[items[a]].weight;
+            out.push_back({items[a], -1, weight});
+            for (std::size_t b = a + 1; b < count; ++b)
+                out.push_back({items[a], items[b], weight + problem.items[items[b]].weight});
+        }
+    }
+
+    static std::size_t count(const Part& part) {
+        return static_cast<std::size_t>(part.first >= 0) +
+               static_cast<std::size_t>(part.second >= 0);
+    }
+
+    // Two parts of equal weight: do the same weights change hands (nothing
+    // for nothing, an item for one as heavy, a pair for the same two weights)?
+    static bool sameWeights(const BinPackingProblem& problem, const Part& a, const Part& b) {
+        if (a.first < 0 || b.first < 0) return true;         // weights are positive: both are empty
+        if ((a.second < 0) != (b.second < 0)) return false;  // one item for two
+        if (a.second < 0) return true;
+        const std::int64_t weight = problem.items[a.first].weight;
+        return weight == problem.items[b.first].weight || weight == problem.items[b.second].weight;
+    }
+
+    int candidates_;
+
+    // Scratch, reused across moves.
+    std::vector<std::int64_t> load_;
+    std::vector<std::vector<int>> members_;   // per bin
+    std::vector<Candidate> used_;             // [0] the first bin, then the partners drawn
+    std::vector<Part> give_;                  // the first bin's parts
+    std::vector<Part> take_;                  // a partner's parts
     std::vector<std::pair<int, int>> moved_;  // (item, bin before the move)
 };
 

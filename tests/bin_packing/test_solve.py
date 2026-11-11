@@ -169,7 +169,8 @@ def coloured_instance(seed: int = 20261031, count: int = 120) -> bp.BinPackingPr
 
 def test_repack_moves_close_the_bins_colours_and_conflicts_keep_open():
     """EmptyBinMove alone ends at 45-46 bins on this instance at 2-30 s; with RepackMove the
-    step-limited search gets to 44 or fewer."""
+    step-limited search gets to 44 or fewer. TradeMove is off here: it closes these bins
+    too, with or without RepackMove."""
     bins = {}
     for repack in (True, False):
         problem = coloured_instance()
@@ -177,6 +178,8 @@ def test_repack_moves_close_the_bins_colours_and_conflicts_keep_open():
         config.step_count_limit = 50_000
         config.random_seed = 1
         config.repack_moves = repack
+        config.trade_moves = False
+        config.fill_tie_break = False
         score = bp.solve(problem, config=config).score
         assert score.hard == 0
         bins[repack] = problem.bins_used()
@@ -184,10 +187,58 @@ def test_repack_moves_close_the_bins_colours_and_conflicts_keep_open():
     assert bins[True] < bins[False]
 
 
+def triplets(triples: int, seed: int) -> bp.BinPackingProblem:
+    """`triples` bins' worth of items that fill capacity 1000 three at a time, drawn as
+    Falkenauer's triplet class draws them: 380..490, then 250..half of the rest, then the rest."""
+    rng = random.Random(seed)
+    weights = []
+    for _ in range(triples):
+        first = rng.randint(380, 490)
+        second = rng.randint(250, (1000 - first) // 2)
+        weights += [first, second, 1000 - first - second]
+    rng.shuffle(weights)
+    items = [{"id": f"I{index:03d}", "weight": weight} for index, weight in enumerate(weights)]
+    return BinPackingProblemModel.model_validate({"bin_capacity": 1000, "items": items}).to_core()
+
+
+def test_trades_and_the_fill_tie_break_fill_every_bin_of_a_triplet_instance():
+    """Ten bins' worth of triplets. The construction ends at 11 bins, and so does the search
+    without TradeMove and the fill tie-break, at this step limit and at twenty times it (five
+    seeds each); with both it gets to the 10 full bins."""
+    bins = {}
+    for on in (True, False):
+        problem = triplets(10, seed=1)
+        config = bp.SolverConfig()
+        config.step_count_limit = 20_000
+        config.random_seed = 1
+        config.trade_moves = on
+        config.fill_tie_break = on
+        score = bp.solve(problem, config=config).score
+        assert score == bp.Score(0, -float(problem.bins_used()))
+        bins[on] = problem.bins_used()
+    assert bins[True] == 10
+    assert bins[False] == 11
+
+
+def test_the_fill_tie_break_keeps_on_new_best_to_the_score():
+    """The fill decides between equal scores inside the search only: every reported score is
+    a whole number of bins, each better than the one before."""
+    seen = []
+    problem = triplets(10, seed=1)
+    config = bp.SolverConfig()
+    config.step_count_limit = 20_000
+    config.random_seed = 1
+    config.on_new_best = lambda _step, score: seen.append(score)
+    bp.solve(problem, config=config)
+    assert seen[-1] == bp.Score(0, -10.0)
+    assert all(score.soft == int(score.soft) for score in seen)
+    assert all(later > earlier for earlier, later in zip(seen, seen[1:], strict=False))
+
+
 @pytest.mark.parametrize("shaped", [False, True])
 def test_full_assert_solve_with_the_macro_moves(shaped):
-    """ScoreChecks::Full re-checks the incremental score after every move, RepackMove and
-    EmptyBinMove included, on the default calculator and on a re-weighted assembly."""
+    """ScoreChecks::Full re-checks the incremental score after every move, the three macro
+    moves included, on the default calculator and on a re-weighted assembly."""
     problem = coloured_instance(seed=7, count=40)
     picks = (
         [BinCapacityCost(weight=2), ColorConflictCost(exponent=2.0), ItemConflictCost(), UsedBinsCost(weight=3)]
