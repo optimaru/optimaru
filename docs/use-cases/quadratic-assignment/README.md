@@ -291,7 +291,7 @@ full bijection.
    instance); callers then pick, reweight or flip it:
    `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in external-solver's
-   [`external_solver.quadratic_assignment.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/quadratic_assignment/constraints.py)
+   [`external_solver.quadratic_assignment.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.2/src/external_solver/quadratic_assignment/constraints.py)
    (a plugin subclassing the spec; defaults come from `constraint_info()`), with an
    exact encoding so external-solver's `tests/quadratic_assignment/test_constraint_parity.py`
    can pin permutations.

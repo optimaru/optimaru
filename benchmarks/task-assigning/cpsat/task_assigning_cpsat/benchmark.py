@@ -103,12 +103,7 @@ def instances() -> dict[str, Callable[[], Any]]:
         "demo": lambda: demo.generate_demo_data().to_core(),
         "medium": lambda: _generate(60, 12, 6, seed=2),
         "large": lambda: _generate(120, 20, 8, seed=3),
-        # No larger rung: the reference model solves this use case one score level at a
-        # time, a third of the budget each, and ends without a solution when the first
-        # level finds none in its share. At 240 tasks / 32 employees / 12 customers
-        # (`_generate(240, 32, 12, seed=4)`) that is what a 30 s run does, although the
-        # first level succeeds when it has the whole 30 s: a row that would show the
-        # split, not the solver.
+        "xlarge": lambda: _generate(240, 32, 12, seed=4),
     }
 
 

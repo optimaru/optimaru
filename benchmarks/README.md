@@ -96,15 +96,20 @@ in time". The public-instance runners have no such stop.
 Where the score levels of an instance do not fit one 64-bit objective, the
 reference model minimises them one after another, hard first, and gives each
 level an equal share of the time that is left (`ObjectiveBuilder.solve` in
-external-solver); a first level that finds no solution in its share ends the
-run without one. Food packaging and tournament scheduling are solved this way
-on every instance of their ladders, conference scheduling, meeting scheduling
-and task assigning on every instance but the smallest. A row where that early
-end is the whole result is not published: a rung is left out of the ladder
-when the first level finds a solution once it has the whole budget (task
-assigning above 120 tasks, the 4-line plant of food packaging; see their
-`benchmark.py`), and stays when it does not (the demo plant of food packaging,
-the 16-meeting instance of meeting scheduling).
+external-solver). The first level has no solution to fall back on: when its
+share ends without one it keeps the time that is left and stops at the first
+solution it finds, so such a run ends without a solution only when the whole
+budget passed without one. A later level that finds nothing in its share
+returns the solution of the level before it. Food packaging and tournament
+scheduling are solved this way on every instance of their ladders, conference
+scheduling, meeting scheduling and task assigning on every instance but the
+smallest. Two of their rows are runs whose first level found nothing in the
+whole budget: the demo plant of food packaging and the 16-meeting instance of
+meeting scheduling. (The benchmark projects pin external-solver `v0.2.2`.
+Before it, a first level without a solution ended the run at its share, a
+third of the budget, and two rungs were left out of the ladders because that
+early end was their whole result: the 4-line plant of food packaging and the
+240-task instance of task assigning. Both are back.)
 
 The `<slug>-compare` commands in the READMEs use `--seconds 10` for a quick
 check, and the public-instance runners show their own budgets. Every results
@@ -132,7 +137,10 @@ engine's runs and CP-SAT's were made at the same time, not one after the other.
 How far a number repeats differs by use case. The 38 instances of the earlier
 generated ladders were measured on two days: the engine's score was the same
 both times on all of them, and CP-SAT's differed on 8 (eight workers under a
-time limit). The engine's own result does move elsewhere: by a few percent on
+time limit). A later build measured 25 instances again (the five comparisons
+solved level by level): the engine's score was the same on 24 of them (the
+24-meeting instance of meeting scheduling moved by half a percent), and
+CP-SAT's result on 18. The engine's own result does move elsewhere: by a few percent on
 the larger semiconductor instances (see that README), and on the 400-request
 synthetic pickup-delivery instance it did with the stop-granular search those
 days measured (54 vehicles one day, 55 the other; the request-level search that
