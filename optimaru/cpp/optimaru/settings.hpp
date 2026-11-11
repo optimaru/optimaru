@@ -157,7 +157,8 @@ struct AcceptanceSettings {
     // takes worse solutions for a long while, the adaptive selector counts
     // outcomes and not what a move costs, and macro moves that each make a
     // pass over the solution then take the steps of the moves that polish. 1
-    // = the same gate throughout.
+    // = the same gate throughout; 0 = custom operators in the first stage
+    // only.
     double later_stage_custom_move_share = 1.0;
     int tabu_tenure = 7;  // EntityTabu
     // SimulatedAnnealing: the starting temperature, cooling to 0 over the
