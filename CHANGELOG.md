@@ -37,8 +37,7 @@
     (was `num_workers`), `stop_at_first_feasible`, and the new `full_assert`, beside
     `solver_parameters`. The shared base is `optimaru._models.SolveRequest`. `timelimit` and
     `num_workers` are still accepted as aliases, in JSON, as keywords and as attributes; a
-    dump uses the new names. Code that passes the old names to `model_copy(update=...)`,
-    which does not read aliases, must use the new ones.
+    dump uses the new names. `model_copy(update=...)` reads the old names too.
   - *Employee scheduling:* `ScheduleRequest` has `random_seed` and `stop_at_first_feasible`
     at the top level like the others; `settings.random_seed` and
     `settings.stop_at_first_feasible` are the same fields under another name (a top-level

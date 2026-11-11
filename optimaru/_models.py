@@ -228,6 +228,17 @@ class SolveRequest(StrictModel):
         default_factory=dict, description="Further SolverConfig fields by name, such as step_count_limit."
     )
 
+    def model_copy(self, *, update=None, deep: bool = False):
+        """`BaseModel.model_copy`, with the earlier field names in ``update`` read as the new ones.
+
+        pydantic does not read aliases in ``update``: without this, ``{"timelimit": 5}`` would
+        be stored beside the fields and the copy would keep its old time limit.
+        """
+        if update:
+            aliases = {"timelimit": "time_limit_seconds", "num_workers": "parallel_solver_count"}
+            update = {aliases.get(name, name): value for name, value in update.items()}
+        return super().model_copy(update=update, deep=deep)
+
     @property
     def timelimit(self) -> float:
         """Alias of `time_limit_seconds`."""

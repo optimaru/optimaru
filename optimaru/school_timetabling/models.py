@@ -337,7 +337,8 @@ def solve_request(request: TimetableRequest, *, constraints=None) -> TimetableRe
         apply_solver_parameters(config, request.solver_parameters)
     initial = request.initial_solution
     result = solve(
-        request.model_input.model_dump(mode="json"),
+        # Unset optional fields are left out, as in a hand-written problem dict.
+        request.model_input.model_dump(mode="json", exclude_none=True),
         mode=request.mode,
         time_limit_seconds=request.time_limit_seconds,
         random_seed=request.random_seed,

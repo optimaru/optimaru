@@ -215,6 +215,9 @@ def test_the_earlier_request_field_names_are_aliases():
     assert {"time_limit_seconds", "parallel_solver_count"} <= request.model_dump().keys()
     request.timelimit = 5
     assert request.time_limit_seconds == 5
+    copied = request.model_copy(update={"timelimit": 7, "num_workers": 2})
+    assert (copied.time_limit_seconds, copied.parallel_solver_count) == (7, 2)
+    assert "timelimit" not in copied.model_dump() and request.time_limit_seconds == 5
 
 
 def test_an_employee_scheduling_seed_in_settings_still_counts():
