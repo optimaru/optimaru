@@ -1133,26 +1133,34 @@ void testMemberChangeGlobalConstraint() {
     std::mt19937_64 rng(7);
     bool agrees = true;
     for (int step = 0; step < 2000; ++step) {
-        change(static_cast<int>(rng() % 6), (rng() % 8 == 0) ? -1 : static_cast<int>(rng() % 4));
+        // One draw per statement: the order two draws in one argument list
+        // are made in is the compiler's choice.
+        const int task = static_cast<int>(rng() % 6);
+        // Occasionally unassign, so a leave without a join is exercised.
+        const int worker = (rng() % 8 == 0) ? -1 : static_cast<int>(rng() % 4);
+        change(task, worker);
         if (!(calc->score() == build()->score())) agrees = false;
     }
     check(agrees, "joins and leaves keep the aggregate equal to a fresh reset, 2000 moves");
 
-    // A batched composite move, rejected: the inverse writes restore the aggregate.
+    // A batched composite move, rejected: the inverse writes restore the
+    // aggregate. From loads 3, 1, 1, 1 (squares 12) the move makes 1, 2, 2, 1
+    // (squares 10), whatever the moves above left.
+    const int loads[6] = {0, 0, 0, 1, 2, 3};
+    for (int task = 0; task < 6; ++task) change(task, loads[task]);
     const Score before = calc->score();
-    const int old0 = s.assignment[0];
-    const int old1 = s.assignment[1];
     calc->begin_trial();
     calc->begin_batch();
-    change(0, (old0 + 1) % 4);
-    change(1, (old1 + 2) % 4);
+    change(0, 1);
+    change(1, 2);
     calc->end_batch();
-    check(calc->score() == build()->score() && !(calc->score() == before),
+    check(before == Score{0, -12.0} && calc->score() == Score{0, -10.0} &&
+                  calc->score() == build()->score(),
           "... inside a batch too, for a move that changes it");
     calc->begin_rollback();
     calc->begin_batch();
-    change(1, old1);
-    change(0, old0);
+    change(1, 0);
+    change(0, 0);
     calc->end_batch();
     calc->end_trial(false);
     check(calc->score() == before, "... and a rolled-back move restores it");
