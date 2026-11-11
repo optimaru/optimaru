@@ -213,7 +213,8 @@ the number of bins alone. A step that changes the score is judged as before.
 What the two add, on Falkenauer's instances
 ([`benchmarks/bin-packing`](../../../benchmarks/bin-packing/README.md): three instances
 of each of the eight classes, two seeds, 10 s, one thread), as runs that end above the
-capacity bound ceil(total weight / capacity), which is the best known bin count of all 24:
+capacity bound ceil(total weight / capacity). The bound is the best known bin count the
+OR-Library file states for 23 of the 24, and one below the file's count for `u120_19`:
 
 | `trade_moves` | `fill_tie_break` | runs above the bound, of 48 | where |
 | --- | --- | ---: | --- |
