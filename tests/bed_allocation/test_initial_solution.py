@@ -173,6 +173,7 @@ def test_a_restart_from_a_plan_finds_the_same_under_a_larger_budget():
         out = ba.solve(ba.with_initial_solution(problem, plan), time_limit_seconds=600.0, config=config)
         return seen, (out.score_hard, out.score_medium, out.score_soft)
 
+    # The two limits at which 0.5.0 showed it on this seed; together they take a third of a second.
     short, short_score = restart(1_000_000)
     longer, longer_score = restart(3_000_000)
     assert short

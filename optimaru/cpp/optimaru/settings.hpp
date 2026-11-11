@@ -136,7 +136,9 @@ struct AcceptanceSettings {
     // is due, so a search whose improvements are the kicks' would return its
     // start. The engine guards the plainest case itself: a search that stalls
     // before it has found anything better than its start has no stages from
-    // there on, and goes on as it does without them.
+    // there on, and goes on as it does without them. That holds for a
+    // construction too: one that no move improves runs without stages for the
+    // whole solve, also when a kick finds something later.
     //
     // A stage does not know the stall limits: it walks below the best for a
     // while, so a stall_time_limit or stall_step_limit shorter than a stage

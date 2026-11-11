@@ -28,23 +28,25 @@
   `initial_solution`). A stage starts over from the start's score, which on such a solve is
   where the search already stands: it loosened nothing and was taken at each stall in the
   place of the ruin-and-recreate kick. A solve whose improvements come from the kicks then
-  returned its start once the budget had room for stages: a food packaging week with one new
-  job improved on 4 of 4 seeds at every step limit in 0.4.3, and on 0 of 4 from 200,000 steps
-  up in 0.5.0; a bed allocation plan with five new stays ended at a mean medium score of
-  -10.58 after 10 million steps over 12 seeds, against -10.33 in 0.4.3, and worse under a
-  larger step limit than under a smaller one on 2 of the 12. Now only a solve that the
-  construction starts has stages (`optimaru::nothing_placed`, or the use case's own seed
-  flag; a solution that places only a part counts as given). The engine also ends the stages
-  by itself when a search stalls before it has found anything better than its start, whatever
-  started it: a construction that no move improves has none either, which matters to a caller
-  who sets `AcceptanceSettings::history_growth` directly. Measured: both cases are back at
-  the 0.4.3 numbers (4 of 4 at every limit; the bed allocation table of 0.4.3 seed by seed,
-  none worse under a larger limit); on 36 instances of the seven benchmark ladders a solve
-  from a given plan finds exactly what a build without stages finds, new best by new best;
-  and the 46 instances solved from the construction end on the same score as in 0.5.0 at
-  300,000 and at 3 million steps, so the benchmark tables stand. The notebooks' restart
-  experiments were moved to step budgets for 0.5.0 (the entry above) and have not been run
-  again on this.
+  returned its start once the budget had room for stages.
+  - Now only a solve that the construction starts has stages (`optimaru::nothing_placed`, or
+    the use case's own seed flag). A solution that places only a part counts as given.
+  - The engine also ends the stages by itself when a search stalls before it has found
+    anything better than its start, whatever started it: a construction that no move improves
+    has none either, which matters to a caller who sets `AcceptanceSettings::history_growth`
+    directly.
+  - Measured, a food packaging week with one new job, four seeds: improved on 4 of 4 at every
+    step limit in 0.4.3 and again now, on 0 of 4 from 200,000 steps up in 0.5.0.
+  - Measured, a bed allocation plan with five new stays, 12 seeds: a mean medium score of
+    -10.33 after 10 million steps in 0.4.3 and now (the same table, seed by seed), -10.58 in
+    0.5.0, where 2 of the 12 seeds ended worse under a larger step limit than under a smaller
+    one.
+  - On 36 instances of the seven benchmark ladders a solve from a given plan finds exactly
+    what a build without stages finds, new best by new best. The 46 instances solved from
+    the construction end on the same score as in 0.5.0 at 300,000 and at 3 million steps, so
+    the benchmark tables stand.
+  - The notebooks' restart experiments were moved to step budgets for 0.5.0 (the entry
+    above) and have not been run again on this.
 
 ## 0.5.0
 
