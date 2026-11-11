@@ -2021,8 +2021,12 @@ void testHardMediumSoftScore() {
     };
     check(refused(optimaru::MediumFold::none()) &&
                   refused(optimaru::MediumFold::below_hard(1000)) &&
-                  refused(optimaru::MediumFold::into_soft(1.5)),
+                  refused(optimaru::MediumFold::into_soft(1.5)) &&
+                  refused(optimaru::MediumFold::into_soft(1e19)),
           "from_engine_score refuses a fold that is not into_soft with a whole-number unit");
+    const HardMediumSoftScore softOnly{0, 0, -7};
+    check(optimaru::from_engine_score(fold, optimaru::to_engine_score(fold, softOnly)) == softOnly,
+          "... and decodes a score with no medium part");
 }
 
 }  // namespace

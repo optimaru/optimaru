@@ -286,8 +286,9 @@ inline std::int64_t fold_below_hard_saturating(const HardTotal& hard, double med
 //   constexpr std::int64_t kMediumUnit = 1000000000LL;
 //   constexpr optimaru::MediumFold kMediumFold =
 //       optimaru::MediumFold::into_soft(kMediumUnit);
+//   using Score = optimaru::HardMediumSoftScore;   // hard_medium_soft_score.hpp
 //   inline optimaru::Score toEngineScore(const Score& s) {
-//       return kMediumFold.to_engine(s.hard, s.medium, s.soft);
+//       return optimaru::to_engine_score(kMediumFold, s);
 //   }
 //   ...
 //   template <> struct optimaru::MediumFoldOf<vrp::VrpSolution> {

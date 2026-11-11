@@ -213,8 +213,8 @@ optimaru/cpp/optimaru/
 ├── score/                        scoring
 │   ├── score.hpp                 Score, ScoreChecks, ScoreMismatchError
 │   ├── levels.hpp                Level (hard / medium / soft), MediumFold
-│   ├── hard_medium_soft_score.hpp  the three-level Score of a use case with a
-│   │                             medium level, to and from the engine's Score
+│   ├── hard_medium_soft_score.hpp  a use case's three-level Score,
+│   │                             to and from the engine's Score
 │   ├── objective.hpp             Objective: the incremental scoring contract
 │   ├── decomposed_objective.hpp  per-unit and global constraint plugins
 │   └── constraint_assembly.hpp   default constraint set: weight / level /

@@ -84,14 +84,17 @@ inline Score to_engine_score_limit(const MediumFold& fold, const HardMediumSoftS
 }
 
 // The inverse of to_engine_score, for an into_soft fold with a whole-number
-// unit (any other fold is a std::logic_error: the soft level would not hold
-// the medium one, or not exactly). Penalties are whole numbers at or below
-// zero, so the truncating division, which rounds toward zero, decodes both
-// levels exactly.
+// unit of at most 2^53 (any other fold is a std::logic_error: the soft level
+// would not hold the medium one, or not exactly). It decodes exactly a score
+// whose medium and soft levels are whole numbers of the same sign, as
+// penalties are (both at or below zero), with |soft| below the unit: the
+// truncating division rounds toward zero. One packed number cannot tell the
+// levels apart when their signs differ.
 inline HardMediumSoftScore from_engine_score(const MediumFold& fold, const Score& engine) {
-    if (fold.kind != MediumFold::Kind::IntoSoft || fold.unit != std::floor(fold.unit)) {
+    if (fold.kind != MediumFold::Kind::IntoSoft || fold.unit != std::floor(fold.unit) ||
+        fold.unit > 0x1p53) {
         throw std::logic_error(
-                "from_engine_score needs an into_soft fold with a whole-number unit");
+                "from_engine_score needs an into_soft fold with a whole-number unit up to 2^53");
     }
     const auto unit = static_cast<std::int64_t>(fold.unit);
     const std::int64_t combined = round_score_level(engine.soft, "soft");
