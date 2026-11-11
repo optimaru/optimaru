@@ -168,7 +168,7 @@ def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
         BedPlanModel.from_core(problem),
         time_limit_seconds=seconds,
         random_seed=seed,
-        num_workers=workers,
+        parallel_solver_count=workers,
     )
     core = solved.to_core()
     # ``BedPlanModel`` represents both the uninitialized value and the solved

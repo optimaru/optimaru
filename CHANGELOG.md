@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Benchmarks: external-solver `v0.3.0`.** The benchmark projects pin the external-solver
+  release that follows optimaru 0.5, the links into its sources point at that tag, and
+  their lock files record optimaru 0.5.0. In `v0.3.0` the worker count of a CP-SAT `solve`
+  is `parallel_solver_count`, the name of the engine's keyword (`num_workers` is still
+  read), and its employee scheduling plugins say constraint where they said rule
+  (`SchedulePlugin` was `RulePlugin`); the runners and the READMEs here use the new names.
+  No table changes: the CP-SAT models are unchanged since `v0.2.3`.
+
 ## 0.5.0
 
 **Upgrading from 0.4.** Two things can break a caller; the entries below have the details.
@@ -11,8 +21,10 @@ attributes, so what a caller sends keeps working, and employee scheduling's Pyth
 with "rule" in them (`default_rules()`, `Rule`, `RULE_MODELS` and the others) are the
 constraint names under a second name. Seven use cases search differently, so a seed's
 result there differs from 0.4.3: bed allocation, food packaging, knapsack, maintenance
-scheduling, max-cut, quadratic assignment and sports league scheduling. The entries on
-notebooks, benchmarks and guides are about the repository, not the wheel.
+scheduling, max-cut, quadratic assignment and sports league scheduling. So does a solve
+with constraints in vehicle routing or pickup and delivery that asks for more than one
+parallel start: it runs them now. The entries on notebooks, benchmarks and guides are
+about the repository, not the wheel.
 
 - **Vehicle routing and pickup and delivery: parallel starts on a solve with constraints.**
   `parallel_solver_count` (also a request's field; `num_workers` is its earlier name) had no effect when a plan was scored

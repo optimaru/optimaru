@@ -252,7 +252,7 @@ def _run(
 ) -> tuple[ProjectJobScheduleModel, float]:
     started = time.perf_counter()
     if backend == "engine":
-        # The engine always runs single-threaded; `--workers` is CP-SAT's.
+        # The engine runs one start here, on one thread; `--workers` is CP-SAT's.
         solved = pjs.solve(
             model,
             time_limit_seconds=seconds,
@@ -264,7 +264,7 @@ def _run(
             model,
             time_limit_seconds=seconds,
             random_seed=seed,
-            num_workers=workers,
+            parallel_solver_count=workers,
             _strict_resources=True,
         )
     return solved, time.perf_counter() - started
@@ -366,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
         "--workers",
         type=int,
         default=1,
-        help="CP-SAT search workers; the engine always runs single-threaded",
+        help="CP-SAT search workers; the engine runs one start here, on one thread",
     )
     parser.add_argument("--backend", choices=("engine", "cpsat", "both"), default="both")
     parser.add_argument("--cache-dir", type=Path, default=Path(__file__).with_name(".cache"))

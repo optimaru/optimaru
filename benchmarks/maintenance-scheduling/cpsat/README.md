@@ -4,7 +4,7 @@ CP-SAT backend for `MaintenanceScheduleModel`. It models crew/date choices,
 business-day end dates, crew and shared-tag overlap, date bounds, pinned jobs,
 and the lexicographic hard/soft objective. Results are re-scored by the engine.
 
-The constraint plugins ([`external_solver.maintenance_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/maintenance_scheduling/constraints.py)) subclass the
+The constraint plugins ([`external_solver.maintenance_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.3.0/src/external_solver/maintenance_scheduling/constraints.py)) subclass the
 domain specs (`MinStartDateCost`, `MaxEndDateCost`, `BeforeIdealEndDateCost`,
 `AfterIdealEndDateCost`, `CrewConflictCost`, `TagConflictCost`) and are registered in
 `list_constraints()` order. Their default level and weight come from the engine's

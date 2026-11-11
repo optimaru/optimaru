@@ -366,7 +366,7 @@ def rescore(
 def _run(backend: str, request: PdpRequest):
     started = time.perf_counter()
     if backend == "engine":
-        # The engine always runs single-threaded; `--workers` is CP-SAT's.
+        # The engine runs one start here, on one thread; `--workers` is CP-SAT's.
         solution = solve_engine_request(
             request.model_copy(update={"parallel_solver_count": 1}),
             constraints=ENGINE_CONSTRAINTS,
@@ -488,7 +488,7 @@ def main(argv: list[str] | None = None) -> int:
         "--workers",
         type=int,
         default=1,
-        help="CP-SAT search workers; the engine always runs single-threaded",
+        help="CP-SAT search workers; the engine runs one start here, on one thread",
     )
     parser.add_argument(
         "--requests",

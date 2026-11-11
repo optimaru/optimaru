@@ -17,8 +17,8 @@ uv run project-job-scheduling-public-bench --all --seconds 30 --workers 8     # 
 
 `--instance` repeats, `--all` runs the five instances, `--json` prints the
 results as JSON (progress goes to stderr), and `--out FILE` rewrites FILE with
-the results after every instance. The engine always runs
-single-threaded; `--workers` is CP-SAT's.
+the results after every instance. The engine runs one start
+here, on one thread; `--workers` is CP-SAT's.
 
 <!-- results:start -->
 Makespan of each solver's schedule, re-verified independently (durations, precedences and

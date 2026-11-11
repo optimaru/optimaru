@@ -41,8 +41,8 @@ source file, `--all` runs every instance of the archive (whole, unless
 `--requests` says otherwise), `--json` prints the results as JSON (progress
 goes to stderr), and `--out FILE` rewrites FILE with the results after every
 instance, so an interrupted sweep keeps what it measured. A run records its outcome (`ok`, `no solution`, `incomplete`,
-`infeasible`) and the budget, seed and workers it was given. The engine always runs
-single-threaded; `--workers` is CP-SAT's. The CP-SAT circuit model grows
+`infeasible`) and the budget, seed and workers it was given. The engine runs one start
+here, on one thread; `--workers` is CP-SAT's. The CP-SAT circuit model grows
 quadratically per vehicle, so a whole instance (about 50 requests, 25 vehicles)
 is past what it solves in 30 s.
 

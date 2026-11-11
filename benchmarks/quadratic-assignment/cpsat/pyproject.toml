@@ -17,7 +17,7 @@ quadratic-assignment-compare = "quadratic_assignment_cpsat.benchmark:main"
 override-dependencies = ["optimaru"]
 
 [tool.uv.sources]
-external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.2.3" }
+external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.3.0" }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
 optimaru = { path = "../../..", editable = true }
 
