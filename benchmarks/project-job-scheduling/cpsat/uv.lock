@@ -58,8 +58,8 @@ dev = [
 
 [[package]]
 name = "external-solver"
-version = "0.2.3"
-source = { git = "https://github.com/optimaru/external-solver?tag=v0.2.3#f8c530144b6ee8008fb7d686d2056a127acb530d" }
+version = "0.3.0"
+source = { git = "https://github.com/optimaru/external-solver?tag=v0.3.0#26fd423cb6c0be6e8f739f74bfe22cf80b302002" }
 dependencies = [
     { name = "optimaru" },
     { name = "ortools" },
@@ -251,7 +251,7 @@ wheels = [
 
 [[package]]
 name = "optimaru"
-version = "0.4.3"
+version = "0.5.0"
 source = { editable = "../../../" }
 dependencies = [
     { name = "pydantic" },
@@ -405,7 +405,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cpsat-plugins", editable = "../../cpsat-common" },
-    { name = "external-solver", git = "https://github.com/optimaru/external-solver?tag=v0.2.3" },
+    { name = "external-solver", git = "https://github.com/optimaru/external-solver?tag=v0.3.0" },
     { name = "optimaru", editable = "../../../" },
     { name = "ortools", specifier = ">=9.10" },
     { name = "pydantic", specifier = ">=2" },

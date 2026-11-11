@@ -82,7 +82,7 @@ def solve_cpsat(problem: Roster, seconds: float, seed: int, workers: int) -> Ros
         problem,
         time_limit_seconds=seconds,
         random_seed=seed,
-        num_workers=workers,
+        parallel_solver_count=workers,
     )
 
 

@@ -60,7 +60,7 @@ def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
             problem,
             time_limit_seconds=seconds,
             random_seed=seed,
-            num_workers=workers,
+            parallel_solver_count=workers,
         )
     except RuntimeError as error:
         return {

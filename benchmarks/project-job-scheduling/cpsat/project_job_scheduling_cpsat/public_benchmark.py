@@ -264,7 +264,7 @@ def _run(
             model,
             time_limit_seconds=seconds,
             random_seed=seed,
-            num_workers=workers,
+            parallel_solver_count=workers,
             _strict_resources=True,
         )
     return solved, time.perf_counter() - started

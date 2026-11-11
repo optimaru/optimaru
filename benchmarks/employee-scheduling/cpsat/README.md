@@ -33,7 +33,7 @@ settings and one start.
 All 30 constraints of `optimaru.employee_scheduling.constraints` are modelled; external-solver's `tests/employee_scheduling/test_solve.py`
 checks that list against the constraint union and `catalog()` against
 `optimaru.employee_scheduling.constraint_info()` row for row. Each plugin subclasses its spec
-(`class MaxConsecutiveDaysCost(domain.MaxConsecutiveDaysCost, RulePlugin)`) and
+(`class MaxConsecutiveDaysCost(domain.MaxConsecutiveDaysCost, SchedulePlugin)`) and
 adds only `build()`: the default level, weight and reward flag are the engine's
 `constraint_info()` rows (read by external-solver), and `level="soft"` demotes to soft
 exactly as in the engine. A request may hold one constraint several times; the

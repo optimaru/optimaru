@@ -23,7 +23,7 @@ bed-allocation-compare = "bed_allocation_cpsat.benchmark:main"
 override-dependencies = ["optimaru"]
 
 [tool.uv.sources]
-external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.2.3" }
+external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.3.0" }
 optimaru = { path = "../../..", editable = true }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
 
