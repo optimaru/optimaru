@@ -488,6 +488,61 @@ def groups_are_whole_and_in_order(model_input: RoutingInput, solution) -> bool:
     return all(len(where) == 1 for where in riding.values())
 
 
+@pytest.mark.parametrize("path", ["groups", "a constraint list", "solve_request"])
+def test_parallel_starts_return_the_best_single_start_on_the_constraint_path(path):
+    # Start i searches with random_seed + i on constraints of its own and the best score wins,
+    # so three step-limited starts return what the best of three single-start solves does.
+    model_input = grouped_input(24, 3, size=3, seed=4)
+
+    def score(seed: int, starts: int) -> str:
+        if path == "solve_request":
+            request = RoutePlanRequest(
+                model_input=model_input,
+                timelimit=60,
+                random_seed=seed,
+                num_workers=starts,
+                solver_parameters={"step_count_limit": 2000},
+            )
+            return solve_request(request).score
+        config = vrp.SolverConfig()
+        config.spent_limit_seconds = 60.0  # the step limit ends the solve
+        config.step_count_limit = 2000
+        config.random_seed = seed
+        config.parallel_solver_count = starts
+        plan = to_plan(model_input)
+        vrp.solve(plan, config=config, constraints=get_constraints() if path == "a constraint list" else None)
+        return str(plan.score)
+
+    def levels(text: str) -> tuple[int, ...]:
+        return tuple(int(part.rstrip("hardmediumsoft")) for part in text.split("/"))
+
+    for seed in (0, 10):
+        singles = [score(seed + start, 1) for start in range(3)]
+        assert score(seed, 1) == singles[0], "a step-limited start is not reproducible"
+        assert levels(score(seed, 3)) == max(levels(single) for single in singles)
+
+
+def test_on_new_best_reports_from_parallel_starts_on_a_constraint_list():
+    # The picks are Python objects: every start's calculator is built from them with the GIL
+    # held, and the first start's callback takes it back while the others search.
+    plan = to_plan(grouped_input(24, 3, size=3, seed=4))
+    config = vrp.SolverConfig()
+    config.spent_limit_seconds = 60.0
+    config.step_count_limit = 2000
+    config.parallel_solver_count = 3
+    reported = []
+
+    vrp.solve(
+        plan,
+        config=config,
+        constraints=[VisitGroupCost(), VisitOrderCost(), *get_constraints()[:4]],
+        on_new_best=lambda step, score: reported.append((step, score.hard)),
+    )
+
+    assert reported and reported[-1][1] <= 0
+    assert [step for step, _ in reported] == sorted(step for step, _ in reported)
+
+
 @pytest.mark.parametrize("group_operator", [True, False])
 def test_groups_stay_whole_and_in_order_in_a_larger_solve(group_operator):
     model_input = grouped_input(36, 4, 3, seed=3)

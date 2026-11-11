@@ -330,16 +330,29 @@ PYBIND11_MODULE(_core, m) {
             // stored the score THIS calculator computed, and a full recompute
             // would overwrite it with the monolithic default one.
             //
-            // The picks are read with the GIL held; the solve itself releases it
-            // like solve() above (an on_new_best callback takes it back).
+            // Every parallel start gets a calculator of its own, built from the
+            // same picks. The picks are Python objects, read with the GIL held:
+            // the first calculator is built before the solve releases the GIL
+            // (so a bad pick raises with nothing started), the others by the
+            // factory, which takes the GIL back for the read. The solve itself
+            // runs without it, like solve() above (an on_new_best callback
+            // takes it back).
             .def(
                     "solve_with_constraints",
                     [](Solver& solver, PdpRoutePlan& plan, const py::object& constraints) {
-                        DecomposedCalculator calculator;
-                        opy::apply_constraints([] { return defaultConstraints(); }, constraints)
-                                .into(calculator);
+                        const auto build = [&constraints] {
+                            auto calculator = std::make_unique<DecomposedCalculator>();
+                            opy::apply_constraints([] { return defaultConstraints(); }, constraints)
+                                    .into(*calculator);
+                            return calculator;
+                        };
+                        std::unique_ptr<DecomposedCalculator> first = build();
                         py::gil_scoped_release release;
-                        solver.solve(plan, calculator);
+                        solver.solve(plan, [&first, &build]() {
+                            if (first) return std::move(first);
+                            py::gil_scoped_acquire gil;
+                            return build();
+                        });
                         ScoreCalculator::updateShadowVariables(plan);
                     },
                     py::arg("plan"), py::arg("constraints") = py::none());

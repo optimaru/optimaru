@@ -10,6 +10,7 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "optimaru/testing/check.hpp"
@@ -598,18 +599,70 @@ void testGroupWithNoRoomWaits() {
     std::printf("\n");
 }
 
-// solve(plan) with parallel starts asked for: a grouped plan goes to the
-// default assembly, which is one start, and comes back whole and in order.
-void testGroupsWithParallelStartsAskedFor() {
-    std::printf("== Visit groups through solve(plan), parallel starts asked for ==\n");
-    VehicleRoutePlan plan = buildRandomInstance(24, 3, /*seed=*/13);
-    groupInOrder(plan, /*grouped=*/12, /*size=*/3, /*chained=*/true);
+// Parallel starts on the constraint assembly: every start gets a calculator of
+// its own, start i searches with seed + i, and the best plan wins. Step
+// limits, so each start is the same search wherever it runs.
+void testParallelStartsOnTheAssembly() {
+    std::printf("== Visit groups: parallel starts, a calculator each ==\n");
+    const auto grouped = [] {
+        VehicleRoutePlan plan = buildRandomInstance(24, 3, /*seed=*/13);
+        groupInOrder(plan, /*grouped=*/12, /*size=*/3, /*chained=*/true);
+        return plan;
+    };
+    const auto defaults = [] {
+        auto calculator = std::make_unique<DecomposedCalculator>();
+        addDefaultConstraints(*calculator);
+        return calculator;
+    };
+    // What each seed reaches alone, through solve(plan) and the default set.
+    std::vector<Score> alone;
+    for (std::uint64_t seed = 5; seed < 8; ++seed) {
+        VehicleRoutePlan plan = grouped();
+        Solver::Config config = stepLimited(3000);
+        config.seed = seed;
+        Solver(config).solve(plan);
+        alone.push_back(plan.score);
+    }
+    const Score best = *std::max_element(alone.begin(), alone.end());
+
+    // solve(plan) with three starts asked for: the best of the three.
+    VehicleRoutePlan plan = grouped();
     Solver::Config config = stepLimited(3000);
-    config.parallel_solver_count = 2;
+    config.seed = 5;
+    config.parallel_solver_count = 3;
     Solver(config).solve(plan);
-    check(everyVisitOnce(plan) && plan.score.feasible() && waitingCount(plan) == 0 &&
-                  groupsWhole(plan) && orderKept(plan),
-          "the grouped plan is solved whole and in order (" + plan.score.str() + ")");
+    check(plan.score == best && everyVisitOnce(plan) && groupsWhole(plan) && orderKept(plan),
+          "solve(plan) on a grouped plan returns the best of its three starts (" +
+                  plan.score.str() + ")");
+
+    // The factory overload: one calculator per start, made on the calling
+    // thread before any start runs.
+    VehicleRoutePlan made = grouped();
+    int calls = 0;
+    bool onCaller = true;
+    const std::thread::id caller = std::this_thread::get_id();
+    Solver(config).solve(made, [&] {
+        ++calls;
+        onCaller = onCaller && std::this_thread::get_id() == caller;
+        return defaults();
+    });
+    check(calls == 3 && onCaller, "the factory makes three calculators, on the calling thread");
+    check(made.score == best, "and the starts give the same best plan (" + made.score.str() + ")");
+
+    // One start: the single-calculator solve.
+    VehicleRoutePlan single = grouped();
+    config.parallel_solver_count = 1;
+    Solver(config).solve(single, defaults);
+    check(single.score == alone.front(), "with one start it is that start's solve");
+
+    bool refused = false;
+    try {
+        VehicleRoutePlan none = grouped();
+        Solver(config).solve(none, [] { return std::unique_ptr<DecomposedCalculator>(); });
+    } catch (const std::invalid_argument&) {
+        refused = true;
+    }
+    check(refused, "a factory that makes nothing is refused");
     std::printf("\n");
 }
 
@@ -724,7 +777,7 @@ int main() {
     testGroupsRideTogether();
     testScatteredStartIsMended();
     testGroupWithNoRoomWaits();
-    testGroupsWithParallelStartsAskedFor();
+    testParallelStartsOnTheAssembly();
     testCalculateScore();
     testGroupMovesMatter();
     std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures,

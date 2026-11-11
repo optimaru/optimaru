@@ -319,8 +319,8 @@ class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: PdpRoutePlan) -> None:
         """Solve on the seven core rules, or on the default constraints when two
-        requests or more share a group (request_group_cost is not a core rule; that
-        solve is a single start). The core rules do not include required_vehicle_cost,
+        requests or more share a group (request_group_cost is not a core rule; every
+        parallel start then has a set of its own). The core rules do not include required_vehicle_cost,
         pinned_stops_cost or the vehicle limits either: for a plan without groups
         that uses any of those, call solve_with_constraints."""
     def solve_with_constraints(self, plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
@@ -329,7 +329,8 @@ class Solver:
         None keeps the default set. A name may be picked several times: each pick is
         its own instance with its own knobs, and the instances add up. plan.score and
         on_new_best report the three levels unfolded, so a soft total of 10^9 or more
-        stays soft."""
+        stays soft. With parallel_solver_count above 1 every start is scored by its own
+        copy of the picks."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):

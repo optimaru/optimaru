@@ -70,7 +70,8 @@ It returns the solved problem, and the score is on it.
 
 `parallel_solver_count=N` runs N independent starts, start *i* with
 `random_seed + i`, and returns the best of them (a solve with `constraints=...`
-runs one start). `on_new_best` reports the first start only, so the returned
+runs one start, except in vehicle routing and pickup and delivery, where every
+start scores on its own copy of the picks). `on_new_best` reports the first start only, so the returned
 score can be better than the last one it was called with. A start that reaches
 a target (`stop_at_first_feasible`, `best_score_limit`) stops the others: they
 hand over their best so far, and the best of all starts is returned. Which start

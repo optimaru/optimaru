@@ -826,18 +826,20 @@ void Solver::solve(PdpRoutePlan& plan) {
     checkRequiredVehicles(plan);
     const std::shared_ptr<const RequestGroups> groups = requestGroupsOf(plan);
     checkRequestGroups(plan, *groups);
+    optimaru::check_config(config_);
     // The seven core rules do not price groups, and on them a split group
     // would end as a feasible plan. A plan with groups is scored with the
-    // whole default assembly instead (single-start, like every solve on a
-    // caller's assembly).
+    // whole default assembly instead, every start on one of its own.
     if (plan.hasRequestGroups()) {
         // The same pool handling as the core path below: without the pair
         // construction, the engine's own construction places every stop.
         if (!config_.pair_construction_heuristic || plan.vehicles.empty())
             plan.unassignedNodeIndices.clear();
-        DecomposedCalculator calculator;
-        addDefaultConstraints(calculator);
-        solve(plan, calculator);
+        solve(plan, [] {
+            auto calculator = std::make_unique<DecomposedCalculator>();
+            addDefaultConstraints(*calculator);
+            return calculator;
+        });
         return;
     }
     // Empty pool so the construction heuristic places every stop itself.
@@ -850,7 +852,6 @@ void Solver::solve(PdpRoutePlan& plan) {
         ScoreCalculator::score(plan);
         return;
     }
-    optimaru::check_config(config_);
 
     // Parallel starts of this solver's own search: the request-level operators
     // are registered per engine, so the engine's multi-start would run without
@@ -912,6 +913,28 @@ void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePla
     ScoreCalculator::updateShadowVariables(plan);
     calculator.rebuild(plan);
     plan.score = levelScoreOf(calculator);
+}
+
+void Solver::solve(PdpRoutePlan& plan, const CalculatorFactory& makeCalculator) {
+    // Refused before a calculator is made or a start runs.
+    checkRequiredVehicles(plan);
+    checkRequestGroups(plan, *requestGroupsOf(plan));
+    optimaru::check_config(config_);
+    const int starts = std::max(1, config_.parallel_solver_count);
+    std::vector<std::unique_ptr<optimaru::DecomposedObjective<PdpRoutePlan>>> calculators;
+    calculators.reserve(static_cast<std::size_t>(starts));
+    for (int start = 0; start < starts; ++start) {
+        calculators.push_back(makeCalculator());
+        if (!calculators.back()) throw std::invalid_argument("makeCalculator returned no calculator");
+    }
+    // Each start is the single-start solve on its copy of the plan and its own
+    // calculator; solve_parallel_starts keeps the copy with the best
+    // plan.score, which that solve stores from its calculator's three levels.
+    const auto solveOne = [&calculators](const Config& config, PdpRoutePlan& candidate,
+                                         int start) {
+        Solver(config).solve(candidate, *calculators[static_cast<std::size_t>(start)]);
+    };
+    optimaru::solve_parallel_starts(config_, plan, solveOne);
 }
 
 Score calculateScore(PdpRoutePlan& plan) {

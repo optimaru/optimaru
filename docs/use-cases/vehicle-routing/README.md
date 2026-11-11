@@ -211,7 +211,8 @@ four core rules include neither of these two: `solve_request`, `vrp.solve(plan)`
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two visits or more (a visit alone in its group changes nothing). That is a solve on the
 constraint assembly, as when a vehicle limit is set: the whole default set is
-scored, and `num_workers` / `parallel_solver_count` have no effect.
+scored. `num_workers` / `parallel_solver_count` run that many starts there as
+on the core rules, each start on a set of its own.
 `calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same way,
 so it returns the score the solve stored and prices a split or reversed group
 on a plan built by hand. Both
