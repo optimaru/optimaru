@@ -23,10 +23,11 @@ first, within the one budget
 ([how a CP-SAT run is timed](../README.md#how-a-cp-sat-run-is-timed)). On the
 4-line plant the hard level finds its first solution, the empty plan, after
 about 16 s, past its 10 s share of the budget, and the medium level, which
-places the jobs, finds nothing better in its share of what is left (about
-5 s): CP-SAT's answer there leaves every job unassigned (`-12914medium` is the
-12,914 minutes of the 60 jobs, and `0soft` an empty plan). On the demo plant
-the hard level finds no solution in its 30 s.
+places the jobs, finds nothing better in its share (about 5 s: half of what is
+left once the hard level's solution has been written into the model as a
+hint): CP-SAT's answer there leaves every job unassigned (`-12914medium` is
+the 12,914 minutes of the 60 jobs, and `0soft` an empty plan). On the demo
+plant the hard level finds no solution in its 30 s.
 
 <!-- results:start -->
 ## Results
