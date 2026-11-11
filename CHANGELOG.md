@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Engine: the three-level score is one type.** `optimaru::HardMediumSoftScore`
+  (`optimaru/score/hard_medium_soft_score.hpp`) replaces the identical `Score` structs that
+  bed allocation, food packaging, project job scheduling and vehicle routing each declared,
+  with `to_engine_score()`, `to_engine_score_limit()` and `from_engine_score()` for the fold
+  into the engine's two levels. Each use case's `Score`, `toEngineScore()` and
+  `fromEngineScore()` keep their names and results. `kNoLevelFloor` moves to
+  `optimaru/score/levels.hpp`. Nothing changes in Python.
 - **Pickup and delivery: the search works in whole requests.** Three new move operators take
   a pickup and its dropoff out of a route together and put them back together, at the
   cheapest feasible slot pair, so the acceptor is offered plans with every request whole

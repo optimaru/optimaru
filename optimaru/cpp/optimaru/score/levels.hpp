@@ -194,6 +194,12 @@ inline std::int64_t round_score_level(double value, const char* level) {
     return std::llround(value);
 }
 
+// On a level of a use case's target score (Solver::Config::target_score): "no
+// floor on this level". The use case's conversion of a target to the engine
+// score turns it into a soft limit of -inf, so the levels above decide alone
+// (to_engine_score_limit in hard_medium_soft_score.hpp).
+inline constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
+
 // An exact hard-level sum that cannot wrap (rule 2): the true value is
 // lo + wraps * 2^64, so additions and the subtractions an incremental update
 // makes stay exact and reversible however large the total grows. Reads

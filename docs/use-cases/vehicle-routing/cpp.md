@@ -28,7 +28,7 @@ cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
 | `struct Vehicle`                                 | capacity, home location, departure time, the optional route policies, and the decision: `std::vector<int> visitIndices`, the ordered visits it serves |
 | `struct Visit`                                   | location, demand, time window, service duration, unassigned penalty (+ derived `vehicleIndex`, `arrivalTime`) |
 | `ScoreCalculator::updateShadowVariables`         | recomputes every visit's derived `vehicleIndex` / `arrivalTime` from the routes |
-| `struct Score`                                   | the hard / medium / soft levels (lexicographic compare) |
+| `Score`                                          | the hard / medium / soft levels (lexicographic compare): the engine's `optimaru::HardMediumSoftScore` |
 | `HaversineDrivingTimeCalculator` (`haversine.{hpp,cpp}`) | driving time from the haversine distance at 50 km/h; fills `drivingSeconds` |
 | `ScoreCalculator` (reference) + `VehicleRoutingIncrementalScoreCalculator` (live) | the four default constraints: a full recompute, and the incremental calculator the search calls |
 | `Solver` (`solver.hpp`)                          | wraps `optimaru/cpp/optimaru/`'s `optimaru::Solver`: construction heuristic + local search |

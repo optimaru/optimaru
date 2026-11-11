@@ -116,7 +116,7 @@ inline optimaru::Score toEngineScore(const Score& s) {
 // soft score, however low, can miss the stop. stop_at_first_feasible passes
 // (0, 0, kNoLevelFloor, kNoLevelFloor): every skill met and every task
 // assigned. Any other limit folds as a score.
-constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
+using optimaru::kNoLevelFloor;
 
 inline optimaru::Score toEngineScoreLimit(const Score& limit) {
     if (limit.soft1 == kNoLevelFloor || limit.soft2 == kNoLevelFloor)

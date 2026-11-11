@@ -39,8 +39,9 @@
 namespace optimaru {
 
 // The first base of a use case's Solver::Config. ScoreT is the Score the use
-// case reports: the engine's (hard, soft) Score, or a three-level one of its
-// own that declares `static ScoreT unreachable()`.
+// case reports: the engine's (hard, soft) Score, the three-level
+// HardMediumSoftScore, or one of its own that declares
+// `static ScoreT unreachable()`.
 template <typename ScoreT>
 struct SolverConfigBase {
     using score_type = ScoreT;

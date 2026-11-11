@@ -10,6 +10,7 @@
 
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
+#include "optimaru/score/hard_medium_soft_score.hpp"
 #include "optimaru/score/levels.hpp"
 
 namespace fp {
@@ -58,44 +59,15 @@ constexpr std::int64_t kMediumUnit = 10000000000LL;  // 10^10
 constexpr optimaru::MediumFold kMediumFold =
         optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
 
-struct Score {
-    std::int64_t hard = 0;
-    std::int64_t medium = 0;
-    std::int64_t soft = 0;
-
-    bool feasible() const { return hard >= 0; }
-
-    bool operator<(const Score& o) const {
-        if (hard != o.hard) return hard < o.hard;
-        if (medium != o.medium) return medium < o.medium;
-        return soft < o.soft;
-    }
-    bool operator>(const Score& o) const { return o < *this; }
-    bool operator<=(const Score& o) const { return !(o < *this); }
-    bool operator>=(const Score& o) const { return !(*this < o); }
-    bool operator==(const Score& o) const {
-        return hard == o.hard && medium == o.medium && soft == o.soft;
-    }
-
-    std::string str() const {
-        return std::to_string(hard) + "hard/" + std::to_string(medium) + "medium/" +
-               std::to_string(soft) + "soft";
-    }
-};
+using Score = optimaru::HardMediumSoftScore;
 
 inline optimaru::Score toEngineScore(const Score& s) {
-    // soft + medium * 10^10: for the integral levels of this domain the same
-    // value as the int64 `medium * kMediumUnit + soft` (exact while
-    // |engine soft| < 2^53, see above).
-    return kMediumFold.to_engine(s.hard, static_cast<double>(s.medium),
-                                 static_cast<double>(s.soft));
+    return optimaru::to_engine_score(kMediumFold, s);
 }
 
-// Inverse of toEngineScore. Every constraint penalizes (medium/soft <= 0 and
-// integral), so truncating integer division decodes the two levels exactly.
+// Inverse of toEngineScore.
 inline Score fromEngineScore(const optimaru::Score& e) {
-    const std::int64_t combined = optimaru::round_score_level(e.soft, "soft");
-    return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
+    return optimaru::from_engine_score(kMediumFold, e);
 }
 
 // ---------------------------------------------------------------------------
