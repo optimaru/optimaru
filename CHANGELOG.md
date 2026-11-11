@@ -9,6 +9,24 @@
   read), and its employee scheduling plugins say constraint where they said rule
   (`SchedulePlugin` was `RulePlugin`); the runners and the READMEs here use the new names.
   No table changes: the CP-SAT models are unchanged since `v0.2.3`.
+- **Notebooks on 0.5.0.** Every notebook in `examples/` is saved with outputs from optimaru
+  0.5.0 and asks for it; `examples/README.md` names that version. The four that build a request
+  use the names of 0.5: `time_limit_seconds`, and in employee scheduling
+  `default_constraints()`, `model_input.constraints` and `constraint_totals`. Twelve of the
+  twenty-two print and draw exactly what they did on 0.4.3, and four move within the noise of
+  solves that stop on the clock. The other six are of use cases whose search changed, and some
+  of their experiments no longer showed their point; those now run on a step budget or another
+  seed: knapsack's comparison of move sets (20,000 steps each, `core_repack_moves` off beside
+  the other moves) and its restart rounds, bed allocation's new admissions, food packaging's
+  rounds and rush-order replan, maintenance scheduling's short runs, restart rounds and
+  urgent-job replan. Maintenance scheduling's comparison of ruin and recreate on and off is
+  gone: over 8 and 12 seeds it makes no clear difference there on 0.5.0.
+- **Known in 0.5.0, found by those re-runs and not fixed here:** in the use cases that search
+  in stages, a solve that starts from an existing plan (`with_initial_solution`) can return
+  that plan unchanged where 0.4.3 improved it, and more often with a larger budget. A food
+  packaging restart that 0.4.3 improves on four seeds of four at every budget tried is
+  improved on none of the four at 200,000 steps or more, or at 1 and 5 seconds. The
+  comparisons in `benchmarks/` are of solves from scratch and do not show it.
 - **Bin packing: `TradeMove` and a fill tie-break.** `used_bins_cost` counts bins, so every
   packing with the same number of bins has the same score, and the search wandered from one
   to the next: on Falkenauer's triplets it ended one bin above the best known count. Two
