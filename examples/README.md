@@ -15,8 +15,9 @@ Requires Python 3.11+ and optimaru 0.4.2 or later. Each notebook stands alone, s
 single file and run it.
 
 Most solves stop on a time limit, so your scores and charts can differ a little from the saved outputs,
-depending on your machine. The saved outputs come from a run of optimaru 0.4.1 on macOS (Apple
-silicon), those of [`pickup-delivery.ipynb`](pickup-delivery.ipynb) from 0.4.2; regenerate them there, so that a re-run changes only what the engine changed. On another platform the same seed can take a different path, even in a solve with a step limit.
+depending on your machine. The saved outputs come from optimaru 0.4.1 on macOS (Apple silicon), except
+those of [`pickup-delivery.ipynb`](pickup-delivery.ipynb), which come from 0.4.2. Regenerate them
+there, so that a re-run changes only what the engine changed. On another platform the same seed can take a different path, even in a solve with a step limit.
 
 ## Where to start
 
