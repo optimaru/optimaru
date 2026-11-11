@@ -57,12 +57,12 @@
   of the squared bin loads, and otherwise one time in eight (`bp/fill_late_acceptance.hpp`,
   `SolverConfig.fill_tie_break`). That sum is not part of the score: the score, the limits
   and `on_new_best` are as they were. On the 24 sampled Falkenauer instances (two seeds,
-  10 s) no run ends above the capacity bound, which is the best known count of each; 39 of
-  the 48 did. A seed's result in bin packing differs from 0.5.0.
+  10 s) no run ends above the capacity bound, which is the best known count the OR-Library
+  file states for 23 of them and one below it for `u120_19`; 39 of the 48 did. A seed's result in bin packing differs from 0.5.0.
 - **Benchmarks: the bin packing table measured again.** With the two additions above the
-  engine uses the best known number of bins on all 24 Falkenauer instances of the table (6
-  before), one bin fewer than the file's count on u120_19, and CP-SAT is ahead on none (on
-  the six triplet instances of 60 and 120 items before). The table of generated instances
+  engine uses the best known number of bins the OR-Library file states on 23 of the 24
+  Falkenauer instances of the table (on 6 before) and one bin fewer on `u120_19`, and CP-SAT
+  is ahead on none (on the six triplet instances of 60 and 120 items before). The table of generated instances
   in `benchmarks/bin-packing` is measured again as well, with each part of the search
   switched off in turn.
 - **Facility location: `SwapFacilityMove`, and a solve from scratch in stages.** The search
