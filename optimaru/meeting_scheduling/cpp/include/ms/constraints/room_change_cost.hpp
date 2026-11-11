@@ -7,7 +7,7 @@ namespace ms {
 
 // Soft, weight 1: roomChangeCost — a shared attendee whose next meeting
 // starts within two grains but in a different room, so they have to pack up
-// and walk. Unlike the three conflict rules this one is not about overlap: it
+// and walk. Unlike the three conflict constraints this one is not about overlap: it
 // fires precisely when the meetings do NOT overlap much. Raw cost (global) =
 // for every such pair of meetings, the shared-attendance multiplicity
 // (attendee room switches); 0 = nobody changes rooms between close meetings.

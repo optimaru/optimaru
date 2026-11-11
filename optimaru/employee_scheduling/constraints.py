@@ -11,7 +11,7 @@ takes, plus the constraint's own domain parameters::
         ShiftCountImbalanceCost(exponent=2.0),
         MaxConsecutiveDaysCost(value=5, worker_indices=(0, 1)),   # scoped
         DayPatternCost(pattern="Location A,OFF,Location B"),
-        DayPatternCost(pattern="WORK,WORK,WORK,WORK,WORK,WORK,WORK"),  # same rule, again
+        DayPatternCost(pattern="WORK,WORK,WORK,WORK,WORK,WORK,WORK"),  # same constraint, again
         UndesiredDayCost(weight=0.01, exponent=2, offset=120),   # + (minutes beyond 2 h)^2
     ]
     solver.solve(schedule, DecomposedCalculator(get_constraints(constraints)))
@@ -31,19 +31,19 @@ The knobs (see ``_constraint.py``):
 - ``clip``     (keyword) ``True`` (the default, the threshold) counts only
                what lies beyond the offset, ``sign(c) * max(0, |c| - offset)
                ** exponent``; ``False`` (the literal formula) shapes ``c -
-               offset`` as it is, which charges every employee the rule
-               evaluates (a raw 0 included; a worker-scoped rule evaluates
+               offset`` as it is, which charges every employee the constraint
+               evaluates (a raw 0 included; a worker-scoped constraint evaluates
                only the employees in its scope) and rewards a cost below the
                offset. With an offset it is refused on hard (the pick's level,
-               or the default: ``RequiredSkillCost`` and the other hard rules),
+               or the default: ``RequiredSkillCost`` and the other hard constraints),
                because hard 0 must mean no violation.
 
 The defaults live in C++ only; ``optimaru.employee_scheduling.constraint_info()`` reports
 them for all 30 constraints. Every other field is a domain parameter
-(``spec.params()``), including the rule scope ``worker_indices`` /
+(``spec.params()``), including the constraint scope ``worker_indices`` /
 ``shift_indices`` (engine indices; ``None`` = everyone) of the unit
 constraints and of ``ShiftCoverageCost``. A domain parameter's bounds are
-declared once, in the class's ``bounds``, and checked here; the JSON rule
+declared once, in the class's ``bounds``, and checked here; the JSON constraint
 models (``optimaru.employee_scheduling.models``) are generated from these classes and turn
 the same bounds into pydantic constraints.
 
@@ -164,7 +164,7 @@ class _EsConstraint(Constraint, abstract=True):
 
 @dataclass(frozen=True)
 class _Scoped(_EsConstraint, abstract=True):
-    """A unit-constraint rule that may be restricted to workers / shifts.
+    """A unit constraint that may be restricted to workers / shifts.
 
     ``worker_indices`` / ``shift_indices`` are engine indices (positions in the
     schedule's employee / shift lists); ``None`` = no restriction on that
@@ -355,7 +355,7 @@ class ShiftCountImbalanceCost(_EsConstraint):
 
 
 # ---------------------------------------------------------------------------
-# Rule-only constraints (not in the default set)
+# Opt-in constraints (not in the default set)
 # ---------------------------------------------------------------------------
 
 
@@ -657,7 +657,7 @@ class LocationRunLengthCost(_Scoped):
     min_run: int = 0
     max_run: int = -1
     # Whether a run reaching the end of the horizon waives its min-run shortfall
-    # (it might continue past the schedule). Set False when the rule stays in
+    # (it might continue past the schedule). Set False when the constraint stays in
     # force past the last scheduled day, so an end run shorter than min_run is
     # still a violation.
     waive_min_at_end: bool = True
@@ -943,7 +943,7 @@ location_imbalance_cost = LocationImbalanceCost()
 worker_pairing_cost = WorkerPairingCost()
 
 #: The default set, in the order ``es::defaultConstraints()`` builds it (the
-#: first rows of ``constraint_info()``). The other 22 are opt-in rules.
+#: first rows of ``constraint_info()``). The other 22 are opt-in constraints.
 _DEFAULTS: tuple[Constraint, ...] = (
     required_skill_cost,
     employee_unavailability_cost,
@@ -982,9 +982,9 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     """Score raw constraint costs with a selection — pure Python, the engine's arithmetic.
 
     `costs` must be ``constraint_costs(schedule, constraints)`` of the SAME
-    list (repeated rules are keyed ``"<name>#<k>"``); None = the defaults on
+    list (repeated constraints are keyed ``"<name>#<k>"``); None = the defaults on
     both sides. Each spec's weight / level / exponent / offset / clip re-prices
-    its entry without another scoring pass. A repeat of a rule without domain
+    its entry without another scoring pass. A repeat of a constraint without domain
     parameters may also be scored from costs that hold it once (the same raw
     costs); a parametrized repeat needs its own ``"<name>#<k>"`` entry.
     """

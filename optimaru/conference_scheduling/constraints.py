@@ -520,7 +520,7 @@ class ContentAudienceLevelFlowViolationCost(Constraint):
 
 
 class ContentConflictCost(Constraint):
-    """Two overlapping talks of the same content. The most expensive soft rule — the same
+    """Two overlapping talks of the same content. The most expensive soft constraint — the same
     audience wants both. Default: soft, weight 100."""
 
     name = "content_conflict_cost"

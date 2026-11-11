@@ -938,7 +938,7 @@ HARD_KEYWORD = (
 
 
 def test_add_refuses_a_hard_keyword():
-    """add() reads other keywords as rule parameters, where hard= would vanish silently."""
+    """add() reads other keywords as constraint parameters, where hard= would vanish silently."""
     for value in (True, False):
         with pytest.raises(TypeError) as raised:
             es.DecomposedCalculator().add("required_skill_cost", hard=value)

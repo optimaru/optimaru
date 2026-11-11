@@ -351,7 +351,7 @@ def test_constraint_info_reports_the_cpp_defaults():
     rows = pdp.constraint_info()
     assert [row.name for row in rows] == pdp.list_constraints()
     assert [(row.name, row.default_level, row.default_weight, row.default_enabled) for row in rows] == EXPECTED_INFO
-    # Every constraint is flippable in the engine (the coupling rules are structural
+    # Every constraint is flippable in the engine (the coupling constraints are structural
     # on the CP-SAT path only) and none is a reward.
     assert all(row.level_flippable and not row.reward for row in rows)
 
@@ -694,7 +694,7 @@ def test_a_repeated_medium_pick_adds_up():
         (VehicleCapacityCost(offset=1), (-1, 0.0)),
         (VehicleCapacityCost(offset=-0.5), (-3, 0.0)),  # hard rounds per vehicle: 2.5 -> 3, the zeros stay 0
         # The literal formula with an offset is refused on hard (the default of the
-        # capacity, stop and coupling rules), so these picks sit on soft, where it charges
+        # capacity, stop and coupling constraints), so these picks sit on soft, where it charges
         # every evaluated unit: 2 x ((2 - 2.5) + (0 - 2.5) x 2) = -11 for the capacity.
         (VehicleCapacityCost(level="soft", offset=2.5, clip=False, weight=2), (0, 11.0)),
         (MaxStopsCost(level="soft", offset=2, clip=False), (0, 6.0)),  # all zero: 3 vehicles x -2, never the pool

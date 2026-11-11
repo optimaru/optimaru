@@ -18,17 +18,27 @@ Score mapping (hard / medium / soft -> engine Score):
 
 from pydantic import Field, model_validator
 
-from .._models import StrictModel, entities_by_id, require_same_order, solution_dict, valid_positions
+from .._models import (
+    SolveRequest,
+    StrictModel,
+    entities_by_id,
+    require_same_order,
+    solution_dict,
+    solve_model_request,
+    valid_positions,
+)
 from . import _core
 
 __all__ = [
     "MeetingAssignmentModel",
     "MeetingModel",
     "MeetingScheduleModel",
+    "MeetingScheduleRequest",
     "PersonModel",
     "RoomModel",
     "TimeGrainModel",
     "demo_data",
+    "solve_request",
     "with_initial_solution",
 ]
 
@@ -220,3 +230,21 @@ def with_initial_solution(problem, solution):
                 f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range {valid_values}"
             )
     return seeded
+
+
+class MeetingScheduleRequest(SolveRequest):
+    """The meeting schedule with the settings of one solve (see `SolveRequest` for those)."""
+
+    model_input: MeetingScheduleModel
+
+
+def solve_request(request: MeetingScheduleRequest, *, constraints=None) -> MeetingScheduleModel:
+    """Solve a pydantic request and return the solved problem model.
+
+    This is ``solve(request.model_input, ...)`` with the request's settings as the keywords
+    of the same names (see `SolveRequest`), and ``constraints`` the selection ``solve``
+    takes. The request is not changed.
+    """
+    from . import SolverConfig, solve
+
+    return solve_model_request(solve, SolverConfig, request, constraints=constraints)

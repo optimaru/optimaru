@@ -405,7 +405,7 @@ class PinnedStopsCost(Constraint):
     """Routes that do not start with their vehicle's pinned stops. Default: hard, weight 1e12.
 
     Each misplaced stop counts once. Silent for a vehicle that pins nothing. The weight is far above
-    what the other hard rules total on real input, so no trade between them moves a pinned stop."""
+    what the other hard constraints total on real input, so no trade between them moves a pinned stop."""
 
     name = "pinned_stops_cost"
     label_en = "Pinned stops"
@@ -413,7 +413,7 @@ class PinnedStopsCost(Constraint):
     description_en = (
         "Positions at the start of a route that do not hold the vehicle's pinned stops, in order. One "
         "unit of cost is one misplaced pinned stop; 0 means every route starts with its pinned stops. "
-        "The weight 1e12 keeps any trade between other hard rules from moving a pinned stop."
+        "The weight 1e12 keeps any trade between other hard constraints from moving a pinned stop."
     )
     description_ko = (
         "경로 앞부분에서 차량의 고정 정차지가 정해진 순서대로 놓이지 않은 자리를 셉니다. 어긋난 고정 "

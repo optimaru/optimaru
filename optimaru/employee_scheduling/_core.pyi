@@ -28,7 +28,7 @@ Two ways to define the cost function:
    parity).
 
 The defaults (level, weight, reward) live in the C++ components and are
-reported by :func:`constraint_info`; the rule factory accepts the 30 names of
+reported by :func:`constraint_info`; the constraint factory accepts the 30 names of
 ``CONSTRAINT_NAMES``.
 """
 
@@ -36,7 +36,7 @@ from typing import Any, Callable, Iterable, Literal, NamedTuple, Protocol, Typed
 
 class ConstraintSpec(Protocol):
     """Anything with the spec attributes: the `Constraint` dataclasses
-    (optimaru.employee_scheduling.constraints) and the pydantic rule models
+    (optimaru.employee_scheduling.constraints) and the pydantic constraint models
     (optimaru.employee_scheduling.models) both qualify. ``params()`` (optional) returns the
     domain parameters."""
 
@@ -55,7 +55,7 @@ MINUTES_PER_DAY: int
 MAX_DAY: int
 """The last day a shift or a day range may reach."""
 CONSTRAINT_NAMES: tuple[str, ...]
-"""Every name the rule factory accepts (:meth:`DecomposedCalculator.add`, the
+"""Every name the constraint factory accepts (:meth:`DecomposedCalculator.add`, the
 spec classes), in factory order. Default level and weight 1 each (the eight
 defaults first in :func:`constraint_info`):
 
@@ -164,7 +164,7 @@ class Employee:
     undesired_dates: set[int]
     desired_dates: set[int]
     desired_shifts: set[tuple[int, str]]
-    """(day, location) location-specific work preferences (see the desired_shift_cost rule)."""
+    """(day, location) location-specific work preferences (see the desired_shift_cost constraint)."""
 
 class Shift:
     """One shift to be assigned to one employee.
@@ -215,7 +215,7 @@ class ConstraintTotalDict(TypedDict):
     name: str
     """The constraint's Python name, e.g. ``"day_pattern_cost"``."""
     label: str
-    """Display text of this instance of a parametrized rule, e.g.
+    """Display text of this instance of a parametrized constraint, e.g.
     ``"Day pattern[Location A,OFF,Location B]"``; "" for one without."""
     cost: float
     """Weighted + shaped total; positive = penalizing, negative = rewarding."""
@@ -243,12 +243,12 @@ class DecomposedCalculator:
     def __init__(self, constraints: Iterable[ConstraintSpec]) -> None:
         """Duck-typed: each item only needs `.name`, `.weight`, `.level`,
         `.exponent` (plus an optional `.offset` / `.clip` and `params()`) —
-        the `Constraint` dataclasses and the pydantic rule models both
+        the `Constraint` dataclasses and the pydantic constraint models both
         qualify. A name may be picked several times: each pick is its own
         instance with its own knobs, and the instances add up. Raises
         ValueError for an empty list (use ``DecomposedCalculator()`` and
         ``add()`` to start empty), an unknown name, a reward made hard, a
-        scope on a global rule other than shift_coverage_cost, or an invalid
+        scope on a global constraint other than shift_coverage_cost, or an invalid
         knob value, and TypeError for a knob of the wrong type."""
     def add(
         self,
@@ -283,7 +283,7 @@ class DecomposedCalculator:
                   beyond it counts: ``sign(c) * max(0, abs(c) - offset) **
                   exponent``; with ``clip=False`` the literal ``(c - offset)
                   ** exponent`` (sign-preserving), which charges every
-                  employee the rule evaluates, a raw 0 included (a worker
+                  employee the constraint evaluates, a raw 0 included (a worker
                   scope evaluates its employees only), and rewards below the
                   offset; with an offset it is refused on hard (ValueError),
                   because hard 0 must mean no violation.
@@ -326,7 +326,7 @@ def constraint_costs(
     ValueError). The key is the Python name, ``"<name>#<k>"`` for the k-th
     instance of a name picked more than once; ``name`` is always the plain
     name and ``label`` the instance's display text. A global constraint
-    reports its single total as a one-element list. A worker-scoped rule
+    reports its single total as a one-element list. A worker-scoped constraint
     carries ``"units"``, the employee indices it evaluates (ascending, in
     range, each once): the literal offset formula charges those and no
     other. Feed the result to ``optimaru.employee_scheduling.constraints.score`` with the
@@ -343,9 +343,9 @@ class ConstraintInfo(NamedTuple):
     default_enabled: bool
 
 def constraint_info() -> list[ConstraintInfo]:
-    """The constraint catalog: one row per name the rule factory accepts (30).
+    """The constraint catalog: one row per name the constraint factory accepts (30).
     The eight defaults come first (``default_enabled=True``, in
-    ``get_constraints()`` order), then the opt-in rules
+    ``get_constraints()`` order), then the opt-in constraints
     (``default_enabled=False``; unit constraints before global ones). Every
     default weight is 1; ``desired_day_cost`` / ``desired_shift_cost`` are
     rewards (``reward=True``, ``level_flippable=False``)."""

@@ -158,7 +158,7 @@ class VehicleRoutePlan:
 def calculate_score(plan: VehicleRoutePlan) -> Score:
     """Recompute the derived fields and the score (also stores plan.score).
 
-    The score is the one solve(plan) stores: the four core rules, or the default
+    The score is the one solve(plan) stores: the four core constraints, or the default
     constraints when the plan has a group of two or more visits.
     """
 
@@ -295,7 +295,7 @@ class Solver:
     pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: VehicleRoutePlan) -> None:
-        """Solve on the four core rules, which do not include the vehicle limits: for a
+        """Solve on the four core constraints, which do not include the vehicle limits: for a
         plan that sets one, call solve_with_constraints. A plan with a group of two
         visits or more (Visit.group_index) is the exception: it is scored with the default
         constraints, visit_group_cost and visit_order_cost among them, every parallel

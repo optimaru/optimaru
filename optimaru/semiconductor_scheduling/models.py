@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from .._models import StrictModel
+from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
 __all__ = [
@@ -13,9 +13,11 @@ __all__ = [
     "MachineOptionModel",
     "OperationModel",
     "SemiconductorScheduleModel",
+    "SemiconductorScheduleRequest",
     "SetupTimeModel",
     "TimeWindowModel",
     "TransportTimeModel",
+    "solve_request",
     "with_initial_solution",
 ]
 
@@ -466,3 +468,21 @@ def with_initial_solution(problem, solution):
     seeded.score_hard = seeded.score_soft = None
     seeded.warm_start = True
     return seeded
+
+
+class SemiconductorScheduleRequest(SolveRequest):
+    """The semiconductor schedule with the settings of one solve (see `SolveRequest` for those)."""
+
+    model_input: SemiconductorScheduleModel
+
+
+def solve_request(request: SemiconductorScheduleRequest, *, constraints=None) -> SemiconductorScheduleModel:
+    """Solve a pydantic request and return the solved problem model.
+
+    This is ``solve(request.model_input, ...)`` with the request's settings as the keywords
+    of the same names (see `SolveRequest`), and ``constraints`` the selection ``solve``
+    takes. The request is not changed.
+    """
+    from . import SolverConfig, solve
+
+    return solve_model_request(solve, SolverConfig, request, constraints=constraints)

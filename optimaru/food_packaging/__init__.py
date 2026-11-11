@@ -72,7 +72,7 @@ from ._core import (
     improve_operator_assignment,
     list_constraints,
 )
-from .models import PackagingScheduleModel, with_initial_solution
+from .models import PackagingScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -92,6 +92,7 @@ __all__ = [
     "improve_operator_assignment",
     "list_constraints",
     "solve",
+    "solve_request",
     "with_initial_solution",
 ]
 

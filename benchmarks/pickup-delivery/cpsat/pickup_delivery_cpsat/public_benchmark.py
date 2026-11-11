@@ -263,9 +263,9 @@ def make_request(
     return (
         PdpRequest(
             name=instance.name,
-            timelimit=seconds,
+            time_limit_seconds=seconds,
             random_seed=seed,
-            num_workers=workers,
+            parallel_solver_count=workers,
             model_input=PdpInput(
                 vehicles=[
                     VehicleModel(
@@ -368,7 +368,7 @@ def _run(backend: str, request: PdpRequest):
     if backend == "engine":
         # The engine always runs single-threaded; `--workers` is CP-SAT's.
         solution = solve_engine_request(
-            request.model_copy(update={"num_workers": 1}),
+            request.model_copy(update={"parallel_solver_count": 1}),
             constraints=ENGINE_CONSTRAINTS,
         )
     else:

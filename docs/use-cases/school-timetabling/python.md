@@ -44,6 +44,24 @@ options. The low-level API is `convert_problem` /
 (injects an external solution, for warm starts and checks); the pydantic
 serialization mirrors live in `optimaru.school_timetabling.models`.
 
+## JSON in, JSON out
+
+`solve_request` takes a pydantic request, `models.TimetableRequest`: the problem as a
+`models.TimetableProblemModel` (the same fields as the `TimetableProblem` dict) in
+`model_input`, with the settings of the solve under the names of `solve`'s keywords
+(`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert`, `solver_parameters`) and this use case's three more, `mode`, `weights` and
+`initial_solution`. It returns a `models.TimetableResultModel`, the same fields as the
+result dict, and leaves the request unchanged.
+
+```python
+from optimaru.school_timetabling import solve_request
+from optimaru.school_timetabling.models import TimetableRequest
+
+result = solve_request(TimetableRequest(model_input=problem_dict, time_limit_seconds=10.0))
+print(result.status, result.penalties)
+```
+
 ## Constraints
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |

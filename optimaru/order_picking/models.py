@@ -8,7 +8,7 @@ JSON-friendly in/out (snake_case fields, PascalCase classes), same pattern as
                                       TrolleyModel, solve_request)
 
     request = OrderPickingRequest(
-        timelimit=2,
+        time_limit_seconds=2,
         trolleys=[TrolleyModel(id="1", bucket_count=4, bucket_capacity=48000,
                                location=LocationModel(column="A", shelving_row=1,
                                                       side="LEFT", row=0))],
@@ -30,7 +30,7 @@ from typing import Any, Literal, cast
 
 from pydantic import Field, model_validator
 
-from .._models import StrictModel, apply_solver_parameters
+from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
 
 __all__ = [
@@ -106,15 +106,11 @@ class TrolleyModel(StrictModel):
     )
 
 
-class OrderPickingRequest(StrictModel):
-    name: str | None = None
-    timelimit: float = Field(default=30.0, ge=0, description="seconds")
+class OrderPickingRequest(SolveRequest):
+    """The trolleys and orders with the settings of one solve (see `SolveRequest` for those)."""
+
     trolleys: list[TrolleyModel] = Field(min_length=1)
     orders: list[OrderModel] = Field(min_length=1)
-    random_seed: int = 0
-    num_workers: int = Field(default=1, ge=1)
-    stop_at_first_feasible: bool = False
-    solver_parameters: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _unique_ids(self):
@@ -182,9 +178,10 @@ def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPic
     per-trolley travel distance)."""
     solution = to_solution(request)
     config = _core.SolverConfig()
-    config.spent_limit_seconds = request.timelimit
+    config.spent_limit_seconds = request.time_limit_seconds
     config.random_seed = request.random_seed
-    config.parallel_solver_count = request.num_workers
+    config.parallel_solver_count = request.parallel_solver_count
+    config.full_assert = request.full_assert
     apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
         config.best_score_limit = (0, float("-inf"))

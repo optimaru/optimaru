@@ -43,7 +43,7 @@ public:
     // a typical lateness so the search fixes broken pairs before it polishes
     // time windows.
     static constexpr std::int64_t kCouplingPenalty = 1000;
-    // Far above what the other hard rules total on any real input (lateness
+    // Far above what the other hard constraints total on any real input (lateness
     // has no ceiling, but it would take 1e12 minutes of it), so no trade between
     // hard violations pays for disturbing a pinned stop. pinnedStopsCost's
     // kDefaultWeight.

@@ -322,8 +322,8 @@ def test_score_reproduces_the_engine_score_exactly():
 def test_score_matches_the_engine_for_arbitrary_specs(specs):
     """Rescoring a solution solved with arbitrary specs under those specs must equal the engine score.
 
-    exponent applies per unit (per cell for the date rules, on the total for the
-    two global conflict rules), so reproducing it needs the per-unit raw costs."""
+    exponent applies per unit (per cell for the date constraints, on the total for the
+    two global conflict constraints), so reproducing it needs the per-unit raw costs."""
     schedule = _solved(specs)
     python = score(mnt.constraint_costs(schedule), specs)
     assert python.hard == schedule.score.hard

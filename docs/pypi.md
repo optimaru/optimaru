@@ -12,7 +12,9 @@ with different settings — without touching the solver.
 pip install optimaru
 ```
 
-Requires Python 3.11+ (wheels for CPython 3.11–3.14). Wheels are published for Linux, macOS and Windows.
+Requires Python 3.11+ (wheels for CPython 3.11–3.14) and pydantic 2.11+, which comes with the package. Wheels are published for Linux, macOS and Windows.
+
+Every use case has two entry points: `solve(problem, ...)` for a problem built in Python, and `solve_request(request)` for a pydantic request (JSON in, JSON out), whose settings have the names of `solve`'s keywords.
 
 ## Example: vehicle routing
 

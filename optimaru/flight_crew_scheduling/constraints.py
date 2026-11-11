@@ -26,7 +26,7 @@ Every spec takes five knobs:
 - ``weight``   linear multiplier on the constraint cost. ``None`` = the component
                default (RequiredSkillCost 100, FlightConflictCost 10,
                TransferBetweenTwoFlightsCost 1, EmployeeUnavailabilityCost 10,
-               the two home-airport rules 1000); ``fcs.constraint_info()`` reports them.
+               the two home-airport constraints 1000); ``fcs.constraint_info()`` reports them.
 - ``level``    ``None`` = the default level, otherwise ``Level.HARD`` or
                ``Level.SOFT`` (or the names ``"hard"`` and ``"soft"``). This use
                case has no medium level: ``level="medium"`` raises ValueError.
@@ -85,7 +85,7 @@ __all__ = [
 class RequiredSkillCost(Constraint):
     """Crew assignments lacking the skill the seat requires. Default: hard, weight 100.
 
-    The heaviest hard rule — a crew member who cannot take the seat is
+    The heaviest hard constraint — a crew member who cannot take the seat is
     worse than any scheduling inconvenience."""
 
     name = "required_skill_cost"

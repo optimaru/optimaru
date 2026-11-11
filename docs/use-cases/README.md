@@ -40,7 +40,13 @@ tested against.
 
 ## One way to solve
 
-Every use case has the same entry point, `optimaru.<use case>.solve`:
+Every use case has the same two entry points: `optimaru.<use case>.solve` for
+a problem in Python, and `optimaru.<use case>.solve_request` for a pydantic
+request (JSON in, JSON out). The request carries the settings of the solve
+under the names of `solve`'s keywords, so the two say the same thing in the
+same words.
+
+`solve` takes the problem and the settings as keywords:
 
 ```python
 solved = uc.solve(
@@ -79,14 +85,45 @@ hand over their best so far, and the best of all starts is returned. Which start
 gets there first depends on the threads, so with a target and more than one
 start the same seed can give a different solution from run to run.
 
-Four use cases model a whole request (input, time limit, seed) in pydantic
-instead of the problem alone: employee scheduling, order picking, pickup &
-delivery and vehicle routing. Their `solve()` takes the compiled problem only,
-and `solve_request(request)` in `optimaru.<use case>.models` is the pydantic
-path (JSON in, JSON out).
+`solve_request` takes a request model, `optimaru.<use case>.models.<Name>Request`,
+and the constraint selection:
 
-School timetabling takes and returns dicts (a `TimetableProblem` in, a
-`Timetable` out) and has two more keywords, `mode` and `initial_solution`.
+```python
+request = uc.models.KnapsackRequest(  # each use case names its own request
+    model_input=problem_model,        # the pydantic problem
+    time_limit_seconds=5.0,           # the fields below are optional and mean
+    random_seed=42,                   # what solve's keywords of the same name do
+    parallel_solver_count=1,
+    stop_at_first_feasible=False,
+    full_assert=False,
+    solver_parameters={},             # further SolverConfig fields by name
+)
+solved = uc.solve_request(request, constraints=None)
+```
+
+Every request has these fields (the shared base is `optimaru._models.SolveRequest`).
+Earlier versions named two of them differently, and those names are still
+accepted, in JSON, as keywords and as attributes: `timelimit` for
+`time_limit_seconds` and `num_workers` for `parallel_solver_count`. The request
+is not changed. What comes back:
+
+- In 17 use cases the request wraps the problem model as `model_input`, and
+  `solve_request` returns what `solve` returns for that model: a new, solved
+  model.
+- Employee scheduling, order picking, pickup & delivery and vehicle routing
+  answer with a response model of their own (`ScheduleSolution`,
+  `OrderPickingResponse`, `PdpSolution`, `RouteSolution`). Their `solve()` takes
+  the compiled problem only. Order picking's request holds `trolleys` and
+  `orders` itself instead of a `model_input`. An employee scheduling request
+  also has `settings`, the search options of that use case; its
+  `settings.random_seed` and `settings.stop_at_first_feasible` are the request's
+  own fields under another name.
+- School timetabling's `solve` takes and returns dicts (a `TimetableProblem` in,
+  a `Timetable` out) and has three more keywords, `mode`, `weights` and
+  `initial_solution`. Its request, `TimetableRequest`, holds the problem as a
+  `TimetableProblemModel` and those three as fields, and `solve_request`
+  returns a `TimetableResultModel`.
+
 `Solver(config).solve(problem)` and `solve_with_constraints(problem, picks)`
 are the same solves one level down, without the keyword conveniences.
 
@@ -220,7 +257,7 @@ component). Python reads them from `<package>.constraint_info()`, one
 `default_weight`, `level_flippable`, `reward` and `default_enabled`.
 
 - `list_constraints()` lists the default set. Employee-scheduling lists all 30
-  rules its factory accepts; its defaults are the `default_enabled` rows.
+  constraints its factory accepts; its defaults are the `default_enabled` rows.
 - `constraint_costs(solution, constraints=None)` reports every selected
   constraint's raw costs as `{key: {costs, weight, exponent, offset, clip,
   global, level, reward, level_flippable, name, label, default_weight,

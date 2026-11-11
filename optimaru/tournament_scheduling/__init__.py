@@ -39,7 +39,7 @@ from ._core import (
     list_constraints,
     unfairness,
 )
-from .models import TournamentScheduleModel, with_initial_solution
+from .models import TournamentScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
     "MEDIUM_SCALE",
@@ -57,6 +57,7 @@ __all__ = [
     "constraint_info",
     "list_constraints",
     "solve",
+    "solve_request",
     "unfairness",
     "with_initial_solution",
 ]

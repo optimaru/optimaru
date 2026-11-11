@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **Vehicle routing and pickup and delivery: parallel starts on a solve with constraints.**
-  `parallel_solver_count` (`num_workers` in a request) had no effect when a plan was scored
+  `parallel_solver_count` (also a request's field; `num_workers` is its earlier name) had no effect when a plan was scored
   with constraint plugins: a list passed as `constraints`, a request with a vehicle limit, a
   pinned stop or a required vehicle, or a plan with groups. Those solves now run that many
   starts, start *i* on `random_seed + i` and on its own copy of the constraints, and return
@@ -27,6 +27,44 @@
   optimaru from this checkout, and their locks name its version: they still said 0.4.2 after
   the release, so the first `uv sync` rewrote them. Nothing else moves; the projects stay on
   external-solver `v0.2.3`, which needs no change for 0.4.3.
+- **`solve` for a problem, `solve_request` for a pydantic request, in every use case.** The
+  pydantic path had two shapes: four use cases took a request through `models.solve_request`,
+  the others took their problem model through `solve`, and school timetabling took dicts.
+  Every use case now has both entry points, and the package exports both
+  (`optimaru.<use case>.solve_request` is `models.solve_request`).
+  - *New:* a request model in the other 17 and in school timetabling: `models.<Name>Request`, the problem model as
+    `model_input` with the settings of one solve, and `models.solve_request(request, *,
+    constraints=None)`, which returns what `solve` returns for that model. School
+    timetabling's `TimetableRequest` holds the problem as the new `TimetableProblemModel`
+    with `mode`, `weights` and `initial_solution`, and `solve_request` returns the new
+    `TimetableResultModel`; the package now imports its models with itself.
+  - *Renamed:* the settings of a request have the names of `solve`'s keywords in every use
+    case: `time_limit_seconds` (was `timelimit`), `random_seed`, `parallel_solver_count`
+    (was `num_workers`), `stop_at_first_feasible`, and the new `full_assert`, beside
+    `solver_parameters`. The shared base is `optimaru._models.SolveRequest`. `timelimit` and
+    `num_workers` are still accepted as aliases, in JSON, as keywords and as attributes; a
+    dump uses the new names. `model_copy(update=...)` reads the old names too, and refuses a name given with its old name.
+  - *Employee scheduling:* `ScheduleRequest` has `random_seed` and `stop_at_first_feasible`
+    at the top level like the others; `settings.random_seed` and
+    `settings.stop_at_first_feasible` are the same fields under another name (a top-level
+    value wins once it is given). Its `solve_request` takes `constraints=`, a list of specs
+    that replaces `model_input.constraints` for the solve, and it reads `solver_parameters`
+    and `full_assert` too.
+- **pydantic 2.11 or newer.** The request models read their earlier field names through
+  `validate_by_name` / `validate_by_alias`, which pydantic has from 2.11 (the floor was 2.5).
+- **Constraints, not rules.** Employee scheduling called its constraints rules in its API and
+  guides; every use case now says constraints. `SchedulingInput.rules` is
+  `SchedulingInput.constraints`, `default_rules()` is `default_constraints()`, `Rule`,
+  `RuleBase` and `RULE_MODELS` are `ConstraintModel`, `ConstraintModelBase` and
+  `CONSTRAINT_MODELS`, `rule_model()` is `constraint_model()`, and `RuleTotal` /
+  `ScheduleSolution.rule_totals` are `ConstraintTotal` / `constraint_totals`. The earlier
+  names are kept as aliases: `rules` and `rule_totals` are read from JSON and as
+  attributes (`rule_totals` read-only), and the old functions and classes are the new ones under a second name.
+  *Breaking for JSON consumers:* a dump writes the new names only, so code that reads
+  `rules` from a dumped input or `rule_totals` from a dumped solution must read
+  `constraints` and `constraint_totals`. The same holds for `timelimit` and `num_workers`
+  in a dumped request. The guides and docstrings of the other use cases say "core
+  constraints", "coupling constraints" and so on where they said rules for constraints.
 - **Late acceptance in stages of growing history.** A late acceptance history is a trade
   between converging fast and finding more, and the use cases set one short length (400 to
   3,200 steps), so a small instance converged within a fraction of a second and the kicks

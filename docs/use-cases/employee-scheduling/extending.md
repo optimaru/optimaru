@@ -3,7 +3,7 @@
 Six steps, from a change that needs no build to a constraint on the default fast path. Each step is
 complete by itself, so stop at the first one that does what you need. The engine contracts
 behind the steps are in [Extending a use case](../../extending.md); the model and its 30
-constraints are in the [guide](README.md) and in [python.md](python.md#the-rules).
+constraints are in the [guide](README.md) and in [python.md](python.md#the-constraints).
 
 | Step | What you do | What it touches |
 | --- | --- | --- |
@@ -46,7 +46,7 @@ There are two scoring paths, and they give the same score for the same schedule
 | Parallel starts | `parallel_solver_count` | one start |
 
 The JSON layer, `models.solve_request()`, and so the CP-SAT benchmark, always search on the
-assembly of `model_input.rules`; only `es.solve(schedule)` without `constraints` and the C++
+assembly of `model_input.constraints`; only `es.solve(schedule)` without `constraints` and the C++
 `Solver::solve(schedule)` reach the monolithic calculators.
 
 The speeds are the demo generator at the size of the benchmark's medium instance
@@ -89,7 +89,7 @@ The knobs (`weight`, `level`, `exponent`, `offset`, `clip`), the scopes (`worker
 `shift_indices`) and picking a constraint twice are described in
 [`constraints.py`](../../../optimaru/employee_scheduling/constraints.py). There is no medium
 level: `level="medium"` raises `ValueError`. A JSON request states the same picks in
-`model_input.rules`. Stop here if the constraint you need is one of the 30.
+`model_input.constraints`. Stop here if the constraint you need is one of the 30.
 
 ## 2. A new constraint from one function
 
@@ -215,7 +215,7 @@ class UnusedSkillCost(_Scoped):
 
 `_Scoped` gives a unit constraint its `worker_indices` / `shift_indices`; a global constraint
 derives from `_EsConstraint`. Parameters are dataclass fields with their limits in `bounds`. The
-JSON constraint model (`models.RULE_MODELS`) is generated from the spec.
+JSON constraint model (`models.CONSTRAINT_MODELS`) is generated from the spec.
 
 **5. Its place**, in the same file: `UnusedSkillCost` at the end of `SPEC_CLASSES` (the factory
 order), `unused_skill_cost = UnusedSkillCost()` with the other instances, and both names in
@@ -306,7 +306,7 @@ ctest --test-dir build --output-on-failure           # es_demo, es_plugin_test
 uv run pytest -q tests/employee_scheduling tests/test_constraints_contract.py
 ```
 
-**The tables.** The opt-in table in [python.md](python.md#rule-catalog) must equal
+**The tables.** The opt-in table in [python.md](python.md#constraint-catalog) must equal
 `es.constraint_info()`; add the row. The count of 30 (22 opt-in) is also written in
 `constraints.py`, `__init__.py`, `helpers.py`, `_core.pyi`, `constraints/common.hpp` and the
 comments of `constraints.hpp`. The notebook `examples/employee-scheduling.ipynb` prints
@@ -415,8 +415,8 @@ still forms for the others.
 
 Do this when the constraint should be on in every solve. Then `es.solve(schedule)` must score it,
 and `es.solve(schedule)` scores with the monolithic calculators: 1.4 times the steps per second of
-the assembly, and the only path that runs parallel starts. A request that leaves out `rules` gets
-`models.default_rules()`, which is built from `get_constraints()`, so it picks up the constraint as
+the assembly, and the only path that runs parallel starts. A request that leaves out `constraints` gets
+`models.default_constraints()`, which is built from `get_constraints()`, so it picks up the constraint as
 well.
 
 `es_plugin_test` compares the default assembly with the monolithic calculators on random
@@ -486,7 +486,7 @@ several employees has no place in these tables: it needs its own state in
 - the CP-SAT model the benchmark compares against, `external_solver.employee_scheduling` in
   [external-solver](https://github.com/optimaru/external-solver): one plugin per constraint, which
   subclasses the spec of step 2 and adds `build()`; its defaults come from `constraint_info()`.
-  The benchmark instances carry `default_rules()`, so without that plugin
+  The benchmark instances carry `default_constraints()`, so without that plugin
   [`benchmarks/employee-scheduling`](../../../benchmarks/employee-scheduling) no longer compares
   one objective. An opt-in constraint needs the plugin too, for requests that pick it. Then the
   published results, and `CHANGELOG.md`.

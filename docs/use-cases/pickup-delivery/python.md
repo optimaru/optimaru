@@ -48,7 +48,7 @@ print(plan.unassigned_delivery_ids())  # []
   route is unassigned and lands in `plan.unassigned_node_indices`.
 - Score (hard, medium, soft; lexicographic), at the default weights: **hard** =
   capacity peak along the route (`vehicle_capacity_cost`) + time-window lateness
-  (`max_end_time_cost`) + the coupling rules (`paired_request_cost`,
+  (`max_end_time_cost`) + the coupling constraints (`paired_request_cost`,
   `same_vehicle_cost`, `pickup_before_dropoff_cost`) (0 = feasible), **medium** =
   −(service minutes of the requests left unrouted, `unassigned_requests_cost`;
   folded into the engine's soft as `medium * 10^9`), **soft** = −(total driving
@@ -82,7 +82,7 @@ print(plan.unassigned_delivery_ids())  # []
   [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule).
 - `pdp.calculate_score(plan)` recomputes the derived fields and the score of the
   routes as they are, and stores it in `plan.score`. It is the score
-  `pdp.solve(plan)` stores: the seven core rules, or the default constraints when
+  `pdp.solve(plan)` stores: the seven core constraints, or the default constraints when
   two requests or more share a group.
 - `pdp.constraint_info()`, `pdp.list_constraints()` and
   `pdp.constraint_costs(plan, constraints=None)` report the catalog, the names
@@ -144,7 +144,7 @@ from optimaru.pickup_delivery.models import (DeliveryModel, PdpInput, PdpRequest
                                              VehicleModel, solve_request)
 
 request = PdpRequest(
-    timelimit=2,
+    time_limit_seconds=2,
     model_input=PdpInput(
         vehicles=[VehicleModel(id="V1", capacity=10, home=(37.5665, 126.9780))],
         deliveries=[DeliveryModel(
@@ -159,8 +159,9 @@ print([stop.stop_id for stop in solution.routes["V1"]])   # ['R1-pickup', 'R1-dr
 print(solution.score, solution.feasible, solution.total_driving_seconds)   # 0hard/0medium/-93soft True 93
 ```
 
-- `PdpRequest` carries `timelimit` (seconds, default 30), `random_seed`,
-  `num_workers`, `stop_at_first_feasible` and `solver_parameters`, a dict of
+- `PdpRequest` carries `time_limit_seconds` (seconds, default 30; alias
+  `timelimit`), `random_seed`, `parallel_solver_count` (alias `num_workers`),
+  `stop_at_first_feasible`, `full_assert` and `solver_parameters`, a dict of
   further `SolverConfig` fields by name.
 - `PdpSolution` has `routes` (vehicle id to a list of `PdpStop` with `stop_id`,
   `delivery_id`, `pickup`, `arrival_time`), `unassigned`, `score`, `feasible`,

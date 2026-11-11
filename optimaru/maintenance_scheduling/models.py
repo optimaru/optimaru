@@ -16,15 +16,17 @@ from datetime import date, timedelta
 
 from pydantic import Field, TypeAdapter
 
-from .._models import StrictModel, entities_by_id, solution_dict
+from .._models import SolveRequest, StrictModel, entities_by_id, solution_dict, solve_model_request
 from . import _core
 
 __all__ = [
     "CrewModel",
     "JobModel",
     "MaintenanceScheduleModel",
+    "MaintenanceScheduleRequest",
     "date_to_epoch",
     "epoch_to_date",
+    "solve_request",
     "with_initial_solution",
 ]
 
@@ -196,3 +198,21 @@ def with_initial_solution(problem, solution):
             raise ValueError(f"job {job.id}: unknown crew_id {job.crew_id!r}")
     seeded.to_core()  # rejects a start_date that is not a weekday inside the work calendar
     return seeded
+
+
+class MaintenanceScheduleRequest(SolveRequest):
+    """The maintenance schedule with the settings of one solve (see `SolveRequest` for those)."""
+
+    model_input: MaintenanceScheduleModel
+
+
+def solve_request(request: MaintenanceScheduleRequest, *, constraints=None) -> MaintenanceScheduleModel:
+    """Solve a pydantic request and return the solved problem model.
+
+    This is ``solve(request.model_input, ...)`` with the request's settings as the keywords
+    of the same names (see `SolveRequest`), and ``constraints`` the selection ``solve``
+    takes. The request is not changed.
+    """
+    from . import SolverConfig, solve
+
+    return solve_model_request(solve, SolverConfig, request, constraints=constraints)

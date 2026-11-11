@@ -26,7 +26,7 @@ namespace mnt {
 // members are the jobs placed there. Unassigned jobs (crewDate == -1) belong
 // to no unit and so contribute nothing.
 //
-// The four date rules are per-job terms of that cell and derive from
+// The four date constraints are per-job terms of that cell and derive from
 // PerJobConstraint below. The two pairwise rules (crewConflictCost,
 // tagConflictCost) compare jobs that share a crew or a tag on some DAY,
 // which spans cells — two jobs of one crew starting on different dates sit
@@ -74,7 +74,7 @@ inline void occupancyOf(const MaintenanceSchedule& schedule, int unit, int jobIn
 // ---------------------------------------------------------------------------
 // Per-job unit constraints
 // ---------------------------------------------------------------------------
-// Shared base of the four date rules: their cost is a sum of independent
+// Shared base of the four date constraints: their cost is a sum of independent
 // per-(job, cell) terms, so the subclass writes `jobCost` only and both the
 // full re-cost and the exact O(1) delta follow from it.
 struct PerJobConstraint : MntUnitConstraint {

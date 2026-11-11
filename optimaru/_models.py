@@ -10,21 +10,29 @@ classes. The parts several of them need are written once, here:
   checks ``with_initial_solution`` makes while it carries a solution over to a problem.
 - `apply_solver_parameters`, a request's free-form ``solver_parameters`` on a
   ``SolverConfig``.
+- `SolveRequest`, the base of every use case's request model, and `solve_model_request`,
+  the ``solve_request`` of a use case whose request wraps its problem model.
+
+Every use case solves a compiled problem with ``solve(problem, ...)`` and a pydantic
+request with ``models.solve_request(request, ...)``. A request carries the settings of
+one solve under the names of ``solve``'s keywords (`SolveRequest`).
 """
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from ._solve import FIRST_FEASIBLE_LIMIT
 
 __all__ = [
     "SolveConfigBase",
+    "SolveRequest",
     "StrictModel",
     "apply_solver_parameters",
     "entities_by_id",
     "require_same_order",
     "solution_dict",
+    "solve_model_request",
     "valid_positions",
 ]
 
@@ -177,3 +185,103 @@ def apply_solver_parameters(config, parameters: dict[str, Any]) -> None:
             setattr(config, name, value)
         except (TypeError, ValueError) as exc:
             raise ValueError(f"invalid solver parameter {name!r}: {exc}") from exc
+
+
+class SolveRequest(StrictModel):
+    """The settings of one solve, in a use case's pydantic request (``models.<Name>Request``).
+
+    The fields are named like the keywords of ``solve()``, so a request and a call say
+    the same thing in the same words: ``time_limit_seconds``, ``random_seed``,
+    ``parallel_solver_count``, ``stop_at_first_feasible`` and ``full_assert``.
+    ``solver_parameters`` sets further ``SolverConfig`` fields by name (see
+    `apply_solver_parameters`). The names of earlier versions are accepted as aliases:
+    ``timelimit`` for ``time_limit_seconds`` and ``num_workers`` for
+    ``parallel_solver_count``, in JSON, as keywords and as attributes.
+
+    ``name`` is a label for the caller's own use; no solve reads it. Where a request has
+    both ``stop_at_first_feasible`` and a ``best_score_limit`` (in ``solver_parameters``
+    or, for employee scheduling, in ``settings``), the solve stops at the first feasible
+    solution; employee scheduling is the exception and keeps the explicit limit.
+    """
+
+    model_config = ConfigDict(extra="forbid", validate_by_name=True, validate_by_alias=True)
+
+    name: str | None = None
+    time_limit_seconds: float = Field(
+        default=30.0,
+        ge=0,
+        validation_alias=AliasChoices("time_limit_seconds", "timelimit"),
+        description="Seconds the search may run. Alias: timelimit.",
+    )
+    random_seed: int = Field(default=0, description="Seed of the first start; start i uses random_seed + i.")
+    parallel_solver_count: int = Field(
+        default=1,
+        ge=1,
+        validation_alias=AliasChoices("parallel_solver_count", "num_workers"),
+        description="Independent starts; the best is returned. Alias: num_workers.",
+    )
+    stop_at_first_feasible: bool = Field(default=False, description="Stop as soon as the hard score is 0.")
+    full_assert: bool = Field(
+        default=False, description="Check every incremental score against a full recompute (slow; for debugging)."
+    )
+    solver_parameters: dict[str, Any] = Field(
+        default_factory=dict, description="Further SolverConfig fields by name, such as step_count_limit."
+    )
+
+    def model_copy(self, *, update=None, deep: bool = False):
+        """`BaseModel.model_copy`, with the earlier field names in ``update`` read as the new ones.
+
+        pydantic does not read aliases in ``update``: without this, ``{"timelimit": 5}`` would
+        be stored beside the fields and the copy would keep its old time limit. A name given
+        together with its earlier name is refused, as it is when a request is built.
+        """
+        if update:
+            aliases = {"timelimit": "time_limit_seconds", "num_workers": "parallel_solver_count"}
+            for old, new in aliases.items():
+                if old in update and new in update:
+                    raise ValueError(f"{new} and {old} are the same field: give one")
+            update = {aliases.get(name, name): value for name, value in update.items()}
+        return super().model_copy(update=update, deep=deep)
+
+    @property
+    def timelimit(self) -> float:
+        """Alias of `time_limit_seconds`."""
+        return self.time_limit_seconds
+
+    @timelimit.setter
+    def timelimit(self, value: float) -> None:
+        self.time_limit_seconds = value
+
+    @property
+    def num_workers(self) -> int:
+        """Alias of `parallel_solver_count`."""
+        return self.parallel_solver_count
+
+    @num_workers.setter
+    def num_workers(self, value: int) -> None:
+        self.parallel_solver_count = value
+
+
+def solve_model_request(solve, config_type, request: SolveRequest, **keywords):
+    """``solve_request`` where the request wraps the use case's problem model as ``model_input``.
+
+    It is ``solve(request.model_input, ...)`` with the request's settings as the keywords
+    of the same names, and ``solver_parameters`` on a ``config_type()`` passed as
+    ``config``. ``keywords`` (``constraints=``, and what else that use case's ``solve``
+    takes) go through as they are. The result is what ``solve`` returns for the model:
+    a new, solved model; the request is not changed.
+    """
+    config = None
+    if request.solver_parameters:
+        config = config_type()
+        apply_solver_parameters(config, request.solver_parameters)
+    return solve(
+        request.model_input,
+        time_limit_seconds=request.time_limit_seconds,
+        random_seed=request.random_seed,
+        parallel_solver_count=request.parallel_solver_count,
+        stop_at_first_feasible=request.stop_at_first_feasible,
+        full_assert=request.full_assert,
+        config=config,
+        **keywords,
+    )

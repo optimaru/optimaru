@@ -39,9 +39,9 @@ namespace vrp {
 // When a plan has groups, they are placed whole before the engine's
 // construction runs and a group operator joins the move mix
 // (vrp/group_moves.hpp), which carries a group between vehicles as one unit.
-// The two rules are scored by visitGroupCost and visitOrderCost, which belong
+// The two constraints are scored by visitGroupCost and visitOrderCost, which belong
 // to the constraint assembly, so solve(plan) hands a plan with groups to the
-// default assembly instead of scoring it on the four core rules.
+// default assembly instead of scoring it on the four core constraints.
 //
 // Unassigned visits: leaving a visit out of every route is modelled with
 // the plan's virtual unassigned pool (see VehicleRoutePlan). solve() fills the
@@ -223,7 +223,7 @@ public:
 
     // Solves in place: mutates plan.vehicles[*].visitIndices and
     // plan.unassignedVisitIndices, and stores the best score found in
-    // plan.score. Scored on the four core rules, unless the plan has visit
+    // plan.score. Scored on the four core constraints, unless the plan has visit
     // groups: then on the default constraint assembly (vrp/constraints.hpp),
     // every start on an assembly of its own (the factory overload below).
     void solve(VehicleRoutePlan& plan);
@@ -250,7 +250,7 @@ public:
     // is called once per start, on the calling thread and before any start
     // runs, so it may read state that is not thread-safe. on_new_best reports
     // the first start only, and a start that reaches the target stops the
-    // others, as on the core rules. With one start this is the overload above
+    // others, as on the core constraints. With one start this is the overload above
     // on the one calculator the factory makes.
     void solve(VehicleRoutePlan& plan, const CalculatorFactory& makeCalculator);
 
@@ -267,8 +267,8 @@ private:
 void checkVisitGroups(const VehicleRoutePlan& plan);
 
 // The score of a plan as it stands, the way solve(plan) scores it: on the
-// four core rules (ScoreCalculator::score), unless the plan has visit groups,
-// which those rules do not price: then on the default constraint assembly.
+// four core constraints (ScoreCalculator::score), unless the plan has visit groups,
+// which those constraints do not price: then on the default constraint assembly.
 // Refreshes the derived fields and stores the score in plan.score. Throws
 // std::invalid_argument for the groups and orders solve() refuses.
 Score calculateScore(VehicleRoutePlan& plan);

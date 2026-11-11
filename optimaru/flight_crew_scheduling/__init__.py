@@ -51,7 +51,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .models import FlightCrewScheduleModel, with_initial_solution
+from .models import FlightCrewScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
     "Airport",
@@ -68,6 +68,7 @@ __all__ = [
     "constraint_info",
     "list_constraints",
     "solve",
+    "solve_request",
     "with_initial_solution",
 ]
 

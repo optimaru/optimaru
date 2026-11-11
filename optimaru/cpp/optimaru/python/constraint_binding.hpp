@@ -319,7 +319,7 @@ inline Knobs read_knobs(const py::handle& item, const std::string& shown) {
 // its kDefaultWeight / kDefaultLevel, so None keeps them): the same checks
 // and the same rule (restate_knobs, level_guard.hpp; the exponent is always
 // applied) as apply_constraints, for code that cannot go through an assembly
-// (employee-scheduling's rule factory, which may add a rule several times).
+// (employee-scheduling's constraint factory, which may add a constraint several times).
 // Apply it to the OUTERMOST component — after wrapping in a ScopedUnit, which
 // copies the inner component's metadata.
 //
@@ -385,7 +385,7 @@ inline void apply_knobs(ConstraintMetadata& constraint, const py::handle& item,
 // parameters): that is what makes a copy a repeat whose raw cost is the
 // first instance's. A pick's domain parameters (params()) are not read here: a domain whose
 // constraints take parameters builds each pick's component itself and re-states its knobs with
-// apply_knobs (employee-scheduling's rule factory).
+// apply_knobs (employee-scheduling's constraint factory).
 template <typename Factory, typename = std::enable_if_t<std::is_invocable_v<Factory&>>>
 std::decay_t<std::invoke_result_t<Factory&>> apply_constraints(Factory&& defaults,
                                                                const py::object& constraints) {

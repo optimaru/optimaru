@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import Field, model_validator
 
-from .._models import StrictModel, apply_solver_parameters
+from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
 from .constraints import get_constraints
 
@@ -179,14 +179,10 @@ class PdpInput(StrictModel):
                     )
 
 
-class PdpRequest(StrictModel):
-    name: str | None = None
-    timelimit: float = Field(default=30.0, ge=0)
+class PdpRequest(SolveRequest):
+    """The pickup and delivery problem with the settings of one solve (see `SolveRequest` for those)."""
+
     model_input: PdpInput
-    random_seed: int = 0
-    num_workers: int = Field(default=1, ge=1)
-    stop_at_first_feasible: bool = False
-    solver_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class PdpStop(StrictModel):
@@ -351,9 +347,10 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
     """Solve a JSON-friendly request with the metaheuristic backend."""
     plan = to_plan(request.model_input, name=request.name or "plan")
     config = _core.SolverConfig()
-    config.spent_limit_seconds = request.timelimit
+    config.spent_limit_seconds = request.time_limit_seconds
     config.random_seed = request.random_seed
-    config.parallel_solver_count = request.num_workers
+    config.parallel_solver_count = request.parallel_solver_count
+    config.full_assert = request.full_assert
     apply_solver_parameters(config, request.solver_parameters)
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).

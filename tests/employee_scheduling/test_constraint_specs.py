@@ -3,7 +3,7 @@
 The specs carry the five knobs (weight / level / exponent / offset / clip) and
 the domain parameters; the defaults (level, weight, reward) live in the C++ components
 and are reported by `constraint_info()`. `get_constraints()` is the entry point
-every use case shares; the rule factory (`DecomposedCalculator`,
+every use case shares; the constraint factory (`DecomposedCalculator`,
 `constraint_costs`) may hold one constraint several times.
 """
 
@@ -190,7 +190,7 @@ def test_returned_list_is_a_fresh_copy():
 
 
 def test_a_rule_may_repeat_with_other_parameters_or_the_same():
-    """A rule may repeat, with other parameters or the same ones: every pick is an instance."""
+    """A constraint may repeat, with other parameters or the same ones: every pick is an instance."""
     picked = get_constraints([DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="OFF,OFF")])
     assert len(picked) == 2
     same = [DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="WORK,WORK")]
@@ -206,7 +206,7 @@ def test_a_rule_may_repeat_with_other_parameters_or_the_same():
 
 def test_constraint_info_reports_the_cpp_defaults():
     rows = es.constraint_info()
-    # The defaults first; then the rule-only units, then the rule-only globals.
+    # The defaults first; then the constraint-only units, then the constraint-only globals.
     rest = [name for name in NAMES if name not in DEFAULT_NAMES]
     assert [row.name for row in rows] == (
         DEFAULT_NAMES + [n for n in rest if n not in GLOBALS] + [n for n in rest if n in GLOBALS]
@@ -228,7 +228,7 @@ def test_the_documented_levels_match_the_engine():
 
 def test_the_factory_specs_rules_and_catalog_name_the_same_constraints():
     assert set(es.CONSTRAINT_NAMES) == {row.name for row in es.constraint_info()}
-    assert list(models.RULE_MODELS) == list(es.CONSTRAINT_NAMES)
+    assert list(models.CONSTRAINT_MODELS) == list(es.CONSTRAINT_NAMES)
     calculator = es.DecomposedCalculator()
     for name in es.CONSTRAINT_NAMES:
         calculator.add(name)  # every name builds, at its default parameters
@@ -262,7 +262,7 @@ def test_constraint_costs_defaults_to_the_eight_defaults():
     [pytest.param(spec, id=spec.name) for spec in SPEC_CLASSES],
 )
 def test_a_default_is_the_same_on_every_path(spec):
-    """The spec, the JSON rule model and add(name) build the same component."""
+    """The spec, the JSON constraint model and add(name) build the same component."""
     schedule = es.make_random_roster(days=21, shifts_per_day=2, employees=3, seed=5)
     for index, shift in enumerate(schedule.shifts):
         shift.employee_index = index % 2  # two people cover everything, the third rests
@@ -271,7 +271,7 @@ def test_a_default_is_the_same_on_every_path(spec):
     by_name = named.score(schedule)
 
     assert str(es.DecomposedCalculator([spec()]).score(schedule)) == str(by_name)
-    assert str(es.DecomposedCalculator([models.rule_model(spec)()]).score(schedule)) == str(by_name)
+    assert str(es.DecomposedCalculator([models.constraint_model(spec)()]).score(schedule)) == str(by_name)
 
 
 def test_rest_after_location_run_default_is_the_same_on_every_path():
@@ -286,8 +286,8 @@ def test_rest_after_location_run_default_is_the_same_on_every_path():
     by_name = named.score(schedule)
 
     assert by_name.hard == -1  # the day after the first stint is worked
-    rule = models.rule_model(RestAfterLocationRunCost)(location="Location B")
-    assert str(es.DecomposedCalculator([rule]).score(schedule)) == str(by_name)
+    constraint = models.constraint_model(RestAfterLocationRunCost)(location="Location B")
+    assert str(es.DecomposedCalculator([constraint]).score(schedule)) == str(by_name)
     assert str(es.DecomposedCalculator([RestAfterLocationRunCost(location="Location B")]).score(schedule)) == str(
         by_name
     )
@@ -500,7 +500,7 @@ def test_a_repeated_pick_by_hand():
     assert expected == (0, -115680.0)
     assert score(raw, REPEAT) == expected
     assert _engine(REPEAT) == expected
-    # A rule with domain parameters (here per_day and the scope) needs its own
+    # A constraint with domain parameters (here per_day and the scope) needs its own
     # "#2" entry: the default costs hold it once.
     with pytest.raises(ValueError, match="picked more often than the costs hold it"):
         score(es.constraint_costs(reference_schedule()), REPEAT)
@@ -589,7 +589,7 @@ def test_a_global_total_is_shaped_once():
 
 
 def test_a_scoped_rule_reports_and_charges_exactly_its_units():
-    """A worker-scoped rule evaluates its in-range employees only (ascending, each once)."""
+    """A worker-scoped constraint evaluates its in-range employees only (ascending, each once)."""
     pick = MinRestCost(level="soft", offset=5, clip=False, worker_indices=(2, 0, 2, 9, -1))
     raw = es.constraint_costs(reference_schedule(), [pick])
     (entry,) = raw.values()
@@ -657,7 +657,7 @@ def test_medium_is_refused_on_every_path(level):
             es.DecomposedCalculator(picks)
         with pytest.raises(ValueError, match="this use case has no medium level"):
             es.constraint_costs(reference_schedule(), picks)
-        default_level = [type(pick)(**pick.params()) for pick in picks]  # a rule needs its own "#2"
+        default_level = [type(pick)(**pick.params()) for pick in picks]  # a constraint needs its own "#2"
         with pytest.raises(ValueError, match="this use case has no medium level"):
             score(es.constraint_costs(reference_schedule(), default_level), picks)
     with pytest.raises(ValueError, match="this use case has no medium level"):

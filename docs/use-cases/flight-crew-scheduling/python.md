@@ -61,6 +61,23 @@ for a in result.flight_assignments:
 - Fine-grained settings go through `models.SolveConfig` (serializable) or `fc.SolverConfig`:
   `fc.solve(problem, config=SolveConfig(time_limit_seconds=10, parallel_solver_count=4))`.
 
+## JSON in, JSON out
+
+`solve_request` takes a pydantic request, `models.FlightCrewScheduleRequest`: the problem model as
+`model_input`, with the settings of the solve under the names of `solve`'s keywords
+(`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+returns the solved `FlightCrewScheduleModel`, as `solve(model, ...)` does, and leaves the request
+unchanged. `constraints=` is the selection `solve` takes.
+
+```python
+from optimaru.flight_crew_scheduling import solve_request
+from optimaru.flight_crew_scheduling.models import FlightCrewScheduleRequest
+
+request = FlightCrewScheduleRequest.model_validate_json(text)  # or FlightCrewScheduleRequest(model_input=model, time_limit_seconds=5.0)
+solved = solve_request(request)
+```
+
 ## Constraints
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost per employee (0 = no violation) |

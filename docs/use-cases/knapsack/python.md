@@ -76,3 +76,20 @@ returns the greedy construction, or a warm-start seed, unchanged.
 
 Note: `core.items[i]` returns a copy — write the selection in bulk with
 `core.set_assignment([...])`.
+
+## JSON in, JSON out
+
+`solve_request` takes a pydantic request, `models.KnapsackRequest`: the problem model as
+`model_input`, with the settings of the solve under the names of `solve`'s keywords
+(`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+returns the solved `KnapsackProblemModel`, as `solve(model, ...)` does, and leaves the request
+unchanged. `constraints=` is the selection `solve` takes.
+
+```python
+from optimaru.knapsack import solve_request
+from optimaru.knapsack.models import KnapsackRequest
+
+request = KnapsackRequest.model_validate_json(text)  # or KnapsackRequest(model_input=model, time_limit_seconds=5.0)
+solved = solve_request(request)
+```

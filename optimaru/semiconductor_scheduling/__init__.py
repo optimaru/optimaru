@@ -53,7 +53,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .models import AssignmentModel, SemiconductorScheduleModel, with_initial_solution
+from .models import AssignmentModel, SemiconductorScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
     "AcceptorType",
@@ -77,6 +77,7 @@ __all__ = [
     "constraint_items",
     "list_constraints",
     "solve",
+    "solve_request",
     "with_initial_solution",
 ]
 

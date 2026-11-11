@@ -47,7 +47,7 @@ from ._core import (
     list_constraints,
     plus_business_days,
 )
-from .models import MaintenanceScheduleModel, with_initial_solution
+from .models import MaintenanceScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -64,6 +64,7 @@ __all__ = [
     "list_constraints",
     "plus_business_days",
     "solve",
+    "solve_request",
     "with_initial_solution",
 ]
 

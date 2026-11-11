@@ -33,7 +33,10 @@ path); `constraints=` selects a plugin assembly instead (see `constraints.py`)::
         constraints=Assembly().add("teacher_gap_cost", weight=40).drop("teacher_workday_cost"),
     )
 
-Pydantic mirrors (for serialization) live in `optimaru.school_timetabling.models`.
+A pydantic request (`models.TimetableRequest`: the problem as `models.TimetableProblemModel`
+with the settings of one solve) goes to `solve_request`, which returns a
+`models.TimetableResultModel`. The pydantic mirrors of the engine classes (for
+serialization) live in `optimaru.school_timetabling.models` too.
 """
 
 import time
@@ -85,6 +88,7 @@ from .convert import (
     convert_solution,
     inject_solution,
 )
+from .models import solve_request
 
 #: The raw per-constraint costs of a `canon.Timetable` (the canonical domain):
 #: ``{name: {costs, weight, exponent, hard, global, level, reward,
@@ -133,6 +137,7 @@ __all__ = [
     "list_constraints",
     "quickstart",
     "solve",
+    "solve_request",
 ]
 
 # The soft constraint names == the fast path's ObjectiveWeights fields (the

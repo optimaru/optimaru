@@ -119,7 +119,7 @@ def solve(
 
     A plan with a group of two visits or more (`Visit.group_index`) is scored with the
     default constraints even when ``constraints`` is None: `visit_group_cost` and
-    `visit_order_cost` are among them, and they are not among the four core rules a
+    `visit_order_cost` are among them, and they are not among the four core constraints a
     plan is otherwise scored on. That is the whole default set, so the vehicle limits of
     such a plan are scored too. ``parallel_solver_count`` applies there and with
     ``constraints`` alike: every start scores on its own copy of the constraints.

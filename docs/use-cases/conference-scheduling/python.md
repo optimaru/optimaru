@@ -38,6 +38,23 @@ print(cs.constraint_costs(schedule)["content_conflict_cost"]["costs"])  # raw, b
 - Serialization is the pydantic v2 mirror in `optimaru.conference_scheduling.models`
   (`ConferenceScheduleModel.from_core / to_core`, `SolveConfig`).
 
+## JSON in, JSON out
+
+`solve_request` takes a pydantic request, `models.ConferenceScheduleRequest`: the problem model as
+`model_input`, with the settings of the solve under the names of `solve`'s keywords
+(`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+returns the solved `ConferenceScheduleModel`, as `solve(model, ...)` does, and leaves the request
+unchanged. `constraints=` is the selection `solve` takes.
+
+```python
+from optimaru.conference_scheduling import solve_request
+from optimaru.conference_scheduling.models import ConferenceScheduleRequest
+
+request = ConferenceScheduleRequest.model_validate_json(text)  # or ConferenceScheduleRequest(model_input=model, time_limit_seconds=5.0)
+solved = solve_request(request)
+```
+
 ## Score
 
 The score is the engine's
@@ -52,13 +69,13 @@ hard: `talk_type_incompatibility_cost` (100k/min, see below)
 `speaker_unavailability_cost` (100/min·speaker) `speaker_conflict_cost` (10/overlap min·shared speaker)
 `talk_prerequisite_talks_cost` (10/summed min) `talk_mutually_exclusive_talks_tags_cost`
 `consecutive_talks_pause_cost` `crowd_control_risk_cost` + 8 required/prohibited timeslot/room
-tag rules (`<talk|speaker>_<required|prohibited>_<timeslot|room>_tags_cost`, 1/tag·min)
+tag constraints (`<talk|speaker>_<required|prohibited>_<timeslot|room>_tags_cost`, 1/tag·min)
 
 soft: `theme_track_conflict_cost` `theme_track_room_change_cost` `sector_conflict_cost` (-10 each)
 `audience_type_diversity_cost` (+1, reward) `audience_type_theme_track_conflict_cost` (-1)
 `audience_level_diversity_cost` (+1, reward) `content_audience_level_flow_violation_cost` (-10)
 `content_conflict_cost` (-100) `language_diversity_cost` (+10, reward) `different_day_talks_cost` (-10)
-`popular_talks_room_size_cost` (-10) + 8 preferred/undesired tag rules
+`popular_talks_room_size_cost` (-10) + 8 preferred/undesired tag constraints
 (`<talk|speaker>_<preferred|undesired>_<timeslot|room>_tags_cost`, -20 each) +
 `speaker_makespan_cost` (-20)
 

@@ -1,6 +1,6 @@
 """Pydantic request/response models — JSON-friendly in/out for the solver.
 
-Defines a request carrying workers, shifts, and a discriminated list of rules,
+Defines a request carrying workers, shifts, and a discriminated list of constraints,
 plus a response with a per-worker schedule and violation report:
 
     from optimaru.employee_scheduling.constraints import MaxConsecutiveDaysCost, RequiredSkillCost
@@ -9,11 +9,11 @@ plus a response with a per-worker schedule and violation report:
     )
 
     request = ScheduleRequest(
-        timelimit=2,
+        time_limit_seconds=2,
         model_input=SchedulingInput(
             workers=[WorkerModel(id="Worker 01", skills=["Skill A"])],
             shifts=[ShiftModel(id="Shift 1", start=540, end=1020, required_skill="Skill A")],
-            rules=[RequiredSkillCost(), MaxConsecutiveDaysCost(value=6, weight=2)],
+            constraints=[RequiredSkillCost(), MaxConsecutiveDaysCost(value=6, weight=2)],
         ),
     )
     solution = solve_request(request)      # -> ScheduleSolution
@@ -21,19 +21,19 @@ plus a response with a per-worker schedule and violation report:
     print(solution.model_dump_json(indent=2))
 
 Everything round-trips through JSON (`ScheduleRequest.model_validate_json`,
-`solution.model_dump_json`), so this doubles as a service API contract. A rule
+`solution.model_dump_json`), so this doubles as a service API contract. A constraint
 in JSON is ``{"name": "max_consecutive_days_cost", "weight": 2, "value": 6}``:
 the spec's ``name``, its knobs (``weight`` / ``level`` / ``exponent`` /
 ``offset`` / ``clip``) and its domain parameters.
 
 There is ONE class per constraint: the spec in `optimaru.employee_scheduling.constraints`.
-The JSON rule models (`RULE_MODELS`, the `Rule` union; one generated pydantic
+The JSON constraint models (`CONSTRAINT_MODELS`, the `ConstraintModel` union; one generated pydantic
 model per spec, named ``<Spec>Model``, e.g. ``MaxConsecutiveDaysCostModel``)
 are generated from the specs' fields and bounds, so they cannot drift from
-them; `SchedulingInput.rules` accepts spec instances and JSON dicts alike (on
-construction and on assignment), and `rule.to_spec()` turns a validated rule
-back into its spec. A rule may appear several times (each entry is its own
-instance with its own knobs, and the instances add up); an empty rule list is
+them; `SchedulingInput.constraints` accepts spec instances and JSON dicts alike (on
+construction and on assignment), and `constraint.to_spec()` turns a validated constraint
+back into its spec. A constraint may appear several times (each entry is its own
+instance with its own knobs, and the instances add up); an empty constraint list is
 refused, as `get_constraints()` refuses it.
 
 Times are integer minutes from day 0, 00:00 (see `optimaru.employee_scheduling.minutes`);
@@ -51,6 +51,7 @@ from collections.abc import Callable, Mapping
 from typing import Annotated, Any, ClassVar, Literal, Union
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -59,16 +60,21 @@ from pydantic import (
     TypeAdapter,
     create_model,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
 from .._constraint import _check_literal_offset
-from .._models import StrictModel
+from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
 from . import constraints as _specs
 
 __all__ = [
+    "CONSTRAINT_MODELS",
     "RULE_MODELS",
+    "ConstraintModel",
+    "ConstraintModelBase",
+    "ConstraintTotal",
     "Rule",
     "RuleBase",
     "RuleTotal",
@@ -79,6 +85,8 @@ __all__ = [
     "ShiftModel",
     "SolverSettings",
     "WorkerModel",
+    "constraint_model",
+    "default_constraints",
     "default_rules",
     "rule_model",
     "solve_request",
@@ -102,7 +110,7 @@ class WorkerModel(StrictModel):
     desired_dates: list[int] = Field(default_factory=list, description="day indices")
     desired_shifts: list[tuple[int, str]] = Field(
         default_factory=list,
-        description="(day, location) location-specific work preferences (see the desired_shift_cost rule)",
+        description="(day, location) location-specific work preferences (see the desired_shift_cost constraint)",
     )
 
 
@@ -143,10 +151,10 @@ class ShiftModel(StrictModel):
 
 
 # ---------------------------------------------------------------------------
-# Rules: a discriminated union GENERATED from the constraint specs
+# Constraints: a discriminated union GENERATED from the constraint specs
 # ---------------------------------------------------------------------------
 # One JSON model per spec class (optimaru.employee_scheduling.constraints), with the spec's
-# own fields: the five knobs from RuleBase, the domain parameters (their
+# own fields: the five knobs from ConstraintModelBase, the domain parameters (their
 # bounds from the spec's `bounds`), and `name` as the discriminator. No second
 # field list to drift.
 
@@ -176,19 +184,19 @@ _Exponent = Annotated[float, Field(gt=0), BeforeValidator(_a_real_number)]
 _Offset = Annotated[float, Field(allow_inf_nan=False), BeforeValidator(_a_real_number)]
 
 
-class RuleBase(BaseModel):
-    """One rule as JSON: the spec's knobs and parameters; `to_spec()` is the spec.
+class ConstraintModelBase(BaseModel):
+    """One constraint as JSON: the spec's knobs and parameters; `to_spec()` is the spec.
 
     ``weight`` None = the component's default weight; ``level`` None = its
     default level, otherwise "hard" or "soft"; ``exponent`` > 0 shapes the cost;
     ``offset`` (finite, any sign) shifts that shaping and ``clip`` says what
     happens below the offset (True: only what lies beyond it counts; False:
-    the literal ``(cost - offset) ** exponent``). A rule is also a valid pick
+    the literal ``(cost - offset) ** exponent``). A constraint is also a valid pick
     for ``DecomposedCalculator`` (it carries ``name`` / ``weight`` / ``level`` /
     ``exponent`` / ``offset`` / ``clip`` and ``params()``). The knobs take the
     values the spec takes: ``weight: true`` or ``"2"`` is refused here as the
     spec refuses it. ``clip: false`` with a non-zero ``offset`` is refused on
-    hard (the rule's ``level``, or its default level), in the engine's words,
+    hard (the constraint's ``level``, or its default level), in the engine's words,
     because hard 0 must mean no violation. Unknown keys are refused.
     """
 
@@ -202,7 +210,7 @@ class RuleBase(BaseModel):
     offset: _Offset = Field(
         default=0.0,
         description=(
-            "shift of the shaping, per employee (a global rule: its total); 0 = none. "
+            "shift of the shaping, per employee (a global constraint: its total); 0 = none. "
             "clip=true counts only what lies beyond it, clip=false shapes cost - offset as it is"
         ),
     )
@@ -218,7 +226,7 @@ class RuleBase(BaseModel):
     spec_class: ClassVar[type]
 
     def to_spec(self) -> _specs.Constraint:
-        """The constraint spec this rule states."""
+        """The constraint spec this constraint states."""
         return self.spec_class(**{key: getattr(self, key) for key in type(self).model_fields if key != "name"})
 
     def params(self) -> dict[str, Any]:
@@ -228,7 +236,7 @@ class RuleBase(BaseModel):
     @model_validator(mode="after")
     def _spec_checks(self):
         # The spec's own checks (bounds) surface as a ValidationError, and so do
-        # the level rules the C++ component declares (constraint_info()).
+        # the level settings the C++ component declares (constraint_info()).
         spec = self.to_spec()
         row = _catalog()[spec.name]
         if spec.level == "hard" and row.reward:
@@ -244,7 +252,7 @@ class RuleBase(BaseModel):
         return self
 
 
-def _rule_model(spec_class: type) -> type[RuleBase]:
+def _constraint_model(spec_class: type) -> type[ConstraintModelBase]:
     hints = typing.get_type_hints(spec_class)
     params: dict[str, Any] = {}
     for spec_field in dataclasses.fields(spec_class):
@@ -259,7 +267,7 @@ def _rule_model(spec_class: type) -> type[RuleBase]:
             params[spec_field.name] = (annotation, spec_field.default)
     model = create_model(
         f"{spec_class.__name__}Model",
-        __base__=RuleBase,
+        __base__=ConstraintModelBase,
         __module__=__name__,
         name=(Literal[spec_class.name], spec_class.name),
         **params,
@@ -269,37 +277,39 @@ def _rule_model(spec_class: type) -> type[RuleBase]:
     return model
 
 
-#: {constraint name: its JSON rule model}, in factory order (= CONSTRAINT_NAMES).
-RULE_MODELS: dict[str, type[RuleBase]] = {spec.name: _rule_model(spec) for spec in _specs.SPEC_CLASSES}
+#: {constraint name: its JSON constraint model}, in factory order (= CONSTRAINT_NAMES).
+CONSTRAINT_MODELS: dict[str, type[ConstraintModelBase]] = {
+    spec.name: _constraint_model(spec) for spec in _specs.SPEC_CLASSES
+}
 # Each model is also a module attribute under its own name (<SpecClass>Model,
-# e.g. MaxConsecutiveDaysCostModel), so rules pickle (multi-start processes).
-# Build rules from the specs (or JSON) rather than naming these classes.
-globals().update({model.__name__: model for model in RULE_MODELS.values()})
+# e.g. MaxConsecutiveDaysCostModel), so constraints pickle (multi-start processes).
+# Build constraints from the specs (or JSON) rather than naming these classes.
+globals().update({model.__name__: model for model in CONSTRAINT_MODELS.values()})
 
-#: A rule as JSON: the union of every rule model, discriminated by ``name``.
-Rule = Annotated[Union[tuple(RULE_MODELS.values())], Field(discriminator="name")]
-_RULE_ADAPTER: TypeAdapter = TypeAdapter(Rule)
+#: A constraint as JSON: the union of every constraint model, discriminated by ``name``.
+ConstraintModel = Annotated[Union[tuple(CONSTRAINT_MODELS.values())], Field(discriminator="name")]
+_CONSTRAINT_ADAPTER: TypeAdapter = TypeAdapter(ConstraintModel)
 
 
-def rule_model(constraint: "str | type[_specs.Constraint]") -> type[RuleBase]:
-    """The JSON rule model of a constraint, by name or spec class."""
+def constraint_model(constraint: "str | type[_specs.Constraint]") -> type[ConstraintModelBase]:
+    """The JSON constraint model of a constraint, by name or spec class."""
     name = constraint if isinstance(constraint, str) else constraint.name
     try:
-        return RULE_MODELS[name]
+        return CONSTRAINT_MODELS[name]
     except KeyError:
-        raise ValueError(f"unknown constraint {name!r}; available: {', '.join(RULE_MODELS)}") from None
+        raise ValueError(f"unknown constraint {name!r}; available: {', '.join(CONSTRAINT_MODELS)}") from None
 
 
-def _as_rule_data(rule: Any) -> Any:
+def _as_constraint_data(constraint: Any) -> Any:
     """A spec instance -> its JSON form; anything else is left to pydantic."""
-    if isinstance(rule, _specs.Constraint):
-        return {"name": rule.name, **{knob: getattr(rule, knob) for knob in _KNOBS}, **rule.params()}
-    return rule
+    if isinstance(constraint, _specs.Constraint):
+        return {"name": constraint.name, **{knob: getattr(constraint, knob) for knob in _KNOBS}, **constraint.params()}
+    return constraint
 
 
-def default_rules() -> list[RuleBase]:
-    """The eight default rules at their default weights (equal to the built-in score)."""
-    return [RULE_MODELS[spec.name]() for spec in _specs.get_constraints()]
+def default_constraints() -> list[ConstraintModelBase]:
+    """The eight default constraints at their default weights (equal to the built-in score)."""
+    return [CONSTRAINT_MODELS[spec.name]() for spec in _specs.get_constraints()]
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +413,7 @@ class SolverSettings(StrictModel):
     # Multi-start: run this many independent solves (seed = random_seed + i) in
     # parallel processes and keep the best. The metaheuristic has real
     # run-to-run variance, so best-of-n is a cheap, reliable quality lift.
-    # 1 (default) = a single solve. `ScheduleRequest.num_workers` asks for the
+    # 1 (default) = a single solve. `ScheduleRequest.parallel_solver_count` asks for the
     # same thing; the larger of the two applies.
     multi_start: int = Field(default=1, ge=1)
 
@@ -470,29 +480,51 @@ class SolverSettings(StrictModel):
 
 
 class SchedulingInput(BaseModel):
-    # validate_assignment: `input.rules = [MaxConsecutiveDaysCost(...)]` after
+    # validate_assignment: `input.constraints = [MaxConsecutiveDaysCost(...)]` after
     # construction goes through the same validators as the constructor.
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+    model_config = ConfigDict(extra="forbid", validate_assignment=True, validate_by_name=True, validate_by_alias=True)
 
     workers: list[WorkerModel]
     shifts: list[ShiftModel]
-    # Constraint specs or their JSON form; a rule may repeat (each entry is its
+    # Constraint specs or their JSON form; a constraint may repeat (each entry is its
     # own instance), and the list may not be empty.
-    rules: list[Rule] = Field(default_factory=default_rules)
+    constraints: list[ConstraintModel] = Field(
+        default_factory=default_constraints,
+        validation_alias=AliasChoices("constraints", "rules"),
+        description="The constraints to score. Alias: rules.",
+    )
 
-    @field_validator("rules", mode="before")
-    @classmethod
-    def _specs_as_rules(cls, rules):
-        if isinstance(rules, (list, tuple)):
-            return [_as_rule_data(rule) for rule in rules]
-        return rules
+    def model_copy(self, *, update=None, deep: bool = False):
+        """`BaseModel.model_copy`, with ``rules`` in ``update`` read as ``constraints``; both
+        together are refused."""
+        if update and "rules" in update:
+            if "constraints" in update:
+                raise ValueError("constraints and rules are the same field: give one")
+            update = {("constraints" if name == "rules" else name): value for name, value in update.items()}
+        return super().model_copy(update=update, deep=deep)
 
-    @field_validator("rules")
+    @property
+    def rules(self) -> list:
+        """Alias of `constraints`, the name of earlier versions."""
+        return self.constraints
+
+    @rules.setter
+    def rules(self, value) -> None:
+        self.constraints = value
+
+    @field_validator("constraints", mode="before")
     @classmethod
-    def _a_selection(cls, rules):
-        # get_constraints()'s rules: an empty list is an error.
-        _specs.get_constraints([rule.to_spec() for rule in rules])
-        return rules
+    def _specs_as_constraints(cls, constraints):
+        if isinstance(constraints, (list, tuple)):
+            return [_as_constraint_data(constraint) for constraint in constraints]
+        return constraints
+
+    @field_validator("constraints")
+    @classmethod
+    def _a_selection(cls, constraints):
+        # As in get_constraints(): an empty list is an error.
+        _specs.get_constraints([constraint.to_spec() for constraint in constraints])
+        return constraints
 
     @model_validator(mode="after")
     def _unique_ids(self):
@@ -511,19 +543,61 @@ class SchedulingInput(BaseModel):
         return self
 
 
-class ScheduleRequest(StrictModel):
-    name: str | None = None
-    timelimit: float = Field(default=30.0, ge=0, description="seconds")
-    num_workers: int = Field(
-        default=1,
-        ge=1,
-        description=(
-            "Independent parallel starts, like `settings.multi_start`: the larger of the two "
-            "applies, they do not multiply. Each start gets the full `timelimit`."
-        ),
-    )
+class ScheduleRequest(SolveRequest):
+    """The scheduling problem with the settings of one solve (see `SolveRequest` for the shared ones).
+
+    ``parallel_solver_count`` (alias ``num_workers``) and ``settings.multi_start`` ask for the
+    same thing, independent starts in parallel processes: the larger of the two applies,
+    and each start gets the full ``time_limit_seconds``. ``settings`` holds the search
+    options of this use case. Its ``random_seed`` and ``stop_at_first_feasible`` are the
+    request's own fields under another name. When the request is built, one given at the
+    top level wins and one given only in ``settings`` is taken up, so both say the same.
+    After that, a value set at the top level is the one used; until one is set there,
+    a change to ``settings`` is. A request read back from its own JSON has the top-level
+    fields set, so there the top level is the one to change. A dump writes the value in
+    use to both places.
+
+    ``solver_parameters`` are applied after ``settings``, so a field named in both takes the
+    value in ``solver_parameters``. Two things come later still and win over it: the stop
+    target (``settings.best_score_limit``, or ``stop_at_first_feasible``) and the per-start
+    ``settings.portfolio`` overrides. The request keeps a synced copy of the ``settings`` it
+    was built with, so change ``request.settings``, not the object that was passed in.
+    """
+
     model_input: SchedulingInput
     settings: SolverSettings = Field(default_factory=SolverSettings)
+
+    @model_validator(mode="after")
+    def _one_seed_and_target(self):
+        given = self.model_fields_set
+        in_settings = self.settings.model_fields_set
+        updates = {}
+        for name in ("random_seed", "stop_at_first_feasible"):
+            if name not in given and name in in_settings:
+                object.__setattr__(self, name, getattr(self.settings, name))
+            updates[name] = getattr(self, name)
+        # Written past pydantic's __setattr__, as the fields above: syncing is not the caller
+        # setting `settings`, so it stays out of model_fields_set.
+        object.__setattr__(self, "settings", self.settings.model_copy(update=updates))
+        return self
+
+    @model_serializer(mode="wrap")
+    def _dump_one_seed_and_target(self, handler):
+        """A dump says the seed and the target this request solves with in both places, so the
+        request read back from it solves the same way."""
+        data = handler(self)
+        for name in ("random_seed", "stop_at_first_feasible"):
+            value = self._effective(name)
+            if name in data:
+                data[name] = value
+            if isinstance(data.get("settings"), dict) and name in data["settings"]:
+                data["settings"][name] = value
+        return data
+
+    def _effective(self, name: str):
+        """The seed or the target of this solve: the top-level field once it was given or set,
+        else what ``settings`` says, which may have been set after construction."""
+        return getattr(self, name) if name in self.model_fields_set else getattr(self.settings, name)
 
 
 class ShiftAssignmentModel(BaseModel):
@@ -534,12 +608,12 @@ class ShiftAssignmentModel(BaseModel):
     required_skill: str = ""
 
 
-class RuleTotal(BaseModel):
-    """Weighted cost of one rule instance in the final schedule (positive =
+class ConstraintTotal(BaseModel):
+    """Weighted cost of one constraint instance in the final schedule (positive =
     penalizing, negative = rewarding) — the score explanation. ``name`` is the
     constraint name (``"shift_coverage_cost"``); ``label`` tells the instances
-    of a parametrized rule apart (``"Shift coverage[Skill A 1..inf]"``; empty
-    for a rule without one)."""
+    of a parametrized constraint apart (``"Shift coverage[Skill A 1..inf]"``; empty
+    for a constraint without one)."""
 
     name: str
     label: str = ""
@@ -549,12 +623,23 @@ class RuleTotal(BaseModel):
 
 
 class ScheduleSolution(BaseModel):
+    model_config = ConfigDict(validate_by_name=True, validate_by_alias=True)
+
     schedule: dict[str, list[ShiftAssignmentModel]]  # worker id -> assignments
     unassigned: list[str] = Field(default_factory=list)  # shift ids
     score_hard: int
     score_soft: float
     feasible: bool
-    rule_totals: list[RuleTotal] = Field(default_factory=list)
+    constraint_totals: list[ConstraintTotal] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("constraint_totals", "rule_totals"),
+        description="Weighted cost of each constraint instance. Alias: rule_totals.",
+    )
+
+    @property
+    def rule_totals(self) -> list[ConstraintTotal]:
+        """Alias of `constraint_totals`, the name of earlier versions."""
+        return self.constraint_totals
 
 
 # ---------------------------------------------------------------------------
@@ -664,21 +749,21 @@ def with_initial_solution(
     return seeded
 
 
-def _rule_specs(rules: list) -> list[_specs.Constraint]:
-    """The specs of a rule list, also when items reached it without validation.
+def _constraint_specs(constraints: list) -> list[_specs.Constraint]:
+    """The specs of a constraint list, also when items reached it without validation.
 
     ``SchedulingInput`` validates on construction and on assignment, but an
-    in-place edit (``input.rules.append(spec)``) bypasses pydantic; a spec or
+    in-place edit (``input.constraints.append(spec)``) bypasses pydantic; a spec or
     a JSON dict found there is accepted (and checked) all the same.
     """
     specs = []
-    for rule in rules:
-        if isinstance(rule, RuleBase):
-            specs.append(rule.to_spec())
-        elif isinstance(rule, _specs.Constraint):
-            specs.append(rule)
+    for constraint in constraints:
+        if isinstance(constraint, ConstraintModelBase):
+            specs.append(constraint.to_spec())
+        elif isinstance(constraint, _specs.Constraint):
+            specs.append(constraint)
         else:
-            specs.append(_RULE_ADAPTER.validate_python(rule).to_spec())
+            specs.append(_CONSTRAINT_ADAPTER.validate_python(constraint).to_spec())
     return _specs.get_constraints(specs)
 
 
@@ -690,10 +775,10 @@ def _build_and_solve(request: ScheduleRequest, seed: int, overrides: dict | None
     different late_acceptance_size / ruin fraction). Applied last, so it wins."""
     model_input = request.model_input
     schedule = to_schedule(model_input)
-    calc = _core.DecomposedCalculator(_rule_specs(model_input.rules))
+    calc = _core.DecomposedCalculator(_constraint_specs(model_input.constraints))
 
     cfg = _core.SolverConfig()
-    cfg.spent_limit_seconds = request.timelimit
+    cfg.spent_limit_seconds = request.time_limit_seconds
     cfg.random_seed = seed
     cfg.guided_moves = request.settings.guided_moves
     cfg.employee_greedy_construction = request.settings.employee_greedy_construction
@@ -741,7 +826,9 @@ def _build_and_solve(request: ScheduleRequest, seed: int, overrides: dict | None
     cfg.two_opt_move_weight = request.settings.two_opt_move_weight
     cfg.or_opt_move_weight = request.settings.or_opt_move_weight
     cfg.tail_swap_move_weight = request.settings.tail_swap_move_weight
-    if request.settings.stop_at_first_feasible:
+    cfg.full_assert = request.full_assert
+    apply_solver_parameters(cfg, request.solver_parameters)
+    if request._effective("stop_at_first_feasible"):
         cfg.best_score_limit = (0, float("-inf"))
     if request.settings.best_score_limit is not None:
         cfg.best_score_limit = request.settings.best_score_limit
@@ -774,7 +861,7 @@ def _build_and_solve(request: ScheduleRequest, seed: int, overrides: dict | None
         score_hard=score.hard,
         score_soft=score.soft,
         feasible=score.is_feasible(),
-        rule_totals=[RuleTotal(**t) for t in calc.constraint_totals()],
+        constraint_totals=[ConstraintTotal(**t) for t in calc.constraint_totals()],
     )
 
 
@@ -820,14 +907,19 @@ def _solve_in_processes(jobs: list, max_workers: int) -> list[ScheduleSolution] 
 def solve_request(
     request: ScheduleRequest,
     *,
+    constraints=None,
     select: Callable[[list[ScheduleSolution]], ScheduleSolution] | None = None,
 ) -> ScheduleSolution:
     """Solve a pydantic request end-to-end and return the pydantic solution.
 
-    ``request.num_workers`` or ``settings.multi_start`` > 1 runs that many
+    ``constraints``, a list of constraint specs (see `optimaru.employee_scheduling.constraints`)
+    as ``solve`` takes it, replaces ``request.model_input.constraints`` for this solve; None scores
+    the request's own constraints. The request is not changed.
+
+    ``request.parallel_solver_count`` or ``settings.multi_start`` > 1 runs that many
     independent solves (the larger of the two; seeds ``random_seed + i``) in
     parallel processes and returns the best-scoring one. Each start gets the
-    full ``timelimit`` and at most one start per core runs at a time. The
+    full ``time_limit_seconds`` and at most one start per core runs at a time. The
     metaheuristic has real run-to-run variance, so best-of-n is a cheap,
     reliable quality lift (and uses the extra cores). 1 (default) is a single
     solve.
@@ -841,22 +933,33 @@ def solve_request(
 
     Where processes cannot be used (no fork, a daemonic process) or a worker
     dies, the starts run one after another, so the wall time can reach n times
-    ``timelimit``. An error raised by a start is not retried.
+    ``time_limit_seconds``. An error raised by a start is not retried.
 
     ``select`` lets the caller pick the best-of-n candidate itself (given the
     full list of solutions) instead of the built-in faithful-score key -- e.g.
     to rank candidates on an external objective the internal score only
     approximates. Ignored for a single start."""
-    n = max(request.num_workers, request.settings.multi_start)
+    if constraints is not None:
+        if isinstance(constraints, _core.DecomposedCalculator):
+            raise TypeError("solve_request takes constraints as a list of specs, not a DecomposedCalculator")
+        constraints = list(constraints)  # a generator is read once
+        if any(isinstance(constraint, str) for constraint in constraints):
+            raise TypeError("solve_request takes constraints as specs (or their JSON dicts), not as names")
+        # A copy with the one field replaced: assignment validates the new list only.
+        model_input = request.model_input.model_copy()
+        model_input.constraints = constraints
+        request = request.model_copy(update={"model_input": model_input})
+    n = max(request.parallel_solver_count, request.settings.multi_start)
     if n <= 1:
-        return _build_and_solve(request, request.settings.random_seed)
+        return _build_and_solve(request, request._effective("random_seed"))
 
     # Portfolio multi-start: start i uses seed random_seed+i AND per-start config
     # overrides portfolio[i % len] (diversifying late_acceptance_size / ruin
     # aggressiveness so the n starts explore complementary basins rather than
     # n seeds of one identical config). Empty portfolio => all identical.
     port = request.settings.portfolio
-    jobs = [(request, request.settings.random_seed + i, port[i % len(port)] if port else {}) for i in range(n)]
+    seed = request._effective("random_seed")
+    jobs = [(request, seed + i, port[i % len(port)] if port else {}) for i in range(n)]
     solutions = _solve_in_processes(jobs, min(n, os.cpu_count() or 1))
     if solutions is None:
         # Sequential best-of-n, so the feature always works, just without the
@@ -874,10 +977,19 @@ def solve_request(
     def _faithful_key(s: ScheduleSolution) -> tuple[int, float]:
         if div == 1.0:
             return (s.score_hard, s.score_soft)
-        cov = sum(t.cost for t in s.rule_totals if t.is_hard is False and t.name == "shift_coverage_cost")
-        # rule_totals cost is positive for penalties; score_soft is its negative.
+        cov = sum(t.cost for t in s.constraint_totals if t.is_hard is False and t.name == "shift_coverage_cost")
+        # constraint_totals cost is positive for penalties; score_soft is its negative.
         # Removing the boost inflation (cov -> cov/div) lifts the soft score by
         # the inflated excess cov*(1 - 1/div).
         return (s.score_hard, s.score_soft + cov * (1.0 - 1.0 / div))
 
     return max(solutions, key=_faithful_key)
+
+
+# The names of earlier versions, kept as aliases.
+Rule = ConstraintModel
+RuleBase = ConstraintModelBase
+RuleTotal = ConstraintTotal
+RULE_MODELS = CONSTRAINT_MODELS
+rule_model = constraint_model
+default_rules = default_constraints

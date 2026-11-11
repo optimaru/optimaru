@@ -44,7 +44,7 @@ namespace pdp {
 // takes a request only to where another request of its group rides). The rule is
 // scored by requestGroupCost, which belongs to the constraint assembly, so
 // solve(plan) hands a plan with groups to the default assembly instead of
-// scoring it on the seven core rules.
+// scoring it on the seven core constraints.
 //
 // All join the engine's adaptive selection alongside the built-ins, so their
 // weight is learned rather than fixed.
@@ -153,7 +153,7 @@ public:
 
     // Solves in place: mutates plan.vehicles[*].nodeIndices and
     // plan.unassignedNodeIndices, and stores the best score in plan.score.
-    // Scored on the seven core rules, unless the plan has request groups
+    // Scored on the seven core constraints, unless the plan has request groups
     // (PdpRoutePlan::hasRequestGroups): then on the default constraint assembly
     // (pdp/constraints.hpp), every start on an assembly of its own (the
     // factory overload below).
@@ -183,7 +183,7 @@ public:
     // is called once per start, on the calling thread and before any start
     // runs, so it may read state that is not thread-safe. on_new_best reports
     // the first start only, and a start that reaches the target stops the
-    // others, as on the core rules. With one start this is the overload above
+    // others, as on the core constraints. With one start this is the overload above
     // on the one calculator the factory makes.
     void solve(PdpRoutePlan& plan, const CalculatorFactory& makeCalculator);
 
@@ -192,8 +192,8 @@ private:
 };
 
 // The score of a plan as it stands, the way solve(plan) scores it: on the
-// seven core rules (ScoreCalculator::score), unless the plan has request
-// groups, which those rules do not price: then on the default constraint
+// seven core constraints (ScoreCalculator::score), unless the plan has request
+// groups, which those constraints do not price: then on the default constraint
 // assembly. Refreshes the derived fields and stores the score in plan.score.
 // Does not validate the plan: what solve() refuses (a required vehicle out of
 // range, a group bound to two vehicles) is scored as it stands.

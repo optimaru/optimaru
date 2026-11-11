@@ -42,7 +42,7 @@ from ._core import (
     list_constraints,
 )
 from .demo import demo_schedule
-from .models import LeagueScheduleModel, with_initial_solution
+from .models import LeagueScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -59,6 +59,7 @@ __all__ = [
     "demo_schedule",
     "list_constraints",
     "solve",
+    "solve_request",
     "with_initial_solution",
 ]
 

@@ -8,7 +8,7 @@ constraint specs (see `constraints.py`, one class per constraint):
 — or by name via `DecomposedCalculator().add("undesired_day_cost", weight=2.0)` /
 `default_calculator()`. `constraint_info()` lists all 30 constraints with their
 C++ default level and weight (the eight defaults first); `list_constraints()`
-the names the rule factory accepts. `solve(schedule, ...)` solves a schedule in
+the names the constraint factory accepts. `solve(schedule, ...)` solves a schedule in
 place and returns it; `make_random_roster`, `summary` and `to_dataframe` are
 pure-Python conveniences.
 
@@ -70,7 +70,7 @@ from .constraints import (
     WorkerPairingCost,
 )
 from .helpers import list_constraints, make_random_roster, summary, to_dataframe
-from .models import with_initial_solution
+from .models import solve_request, with_initial_solution
 
 __all__ = [
     "CONSTRAINT_NAMES",
@@ -123,6 +123,7 @@ __all__ = [
     "make_random_roster",
     "minutes",
     "solve",
+    "solve_request",
     "summary",
     "to_dataframe",
     "with_initial_solution",

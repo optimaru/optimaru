@@ -33,7 +33,7 @@ namespace ms {
 // which tracks where each assignment currently sits and folds the marginal of
 // one placement against all the others.
 //
-// The three attendance-conflict rules fold their same-meeting "self" term
+// The three attendance-conflict constraints fold their same-meeting "self" term
 // (a meeting whose attendee list lists someone twice conflicts with itself)
 // into the same marginal, so each rule stays exactly one component.
 //

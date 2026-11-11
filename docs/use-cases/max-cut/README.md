@@ -4,7 +4,7 @@ Weighted Max-Cut with fixed vertex sides, same-side and different-side pairs,
 side-size bounds and an optional balance term, on this repository's C++ engine
 (`optimaru/cpp/optimaru/`): split the vertices into two sides so that the total
 weight of the edges between the sides is as large as possible while every side
-rule holds. The base formulation is the standard weighted Max-Cut problem.
+constraint holds. The base formulation is the standard weighted Max-Cut problem.
 [`benchmarks/max-cut/cpsat`](../../../benchmarks/max-cut/cpsat) holds the exact
 CP-SAT reference.
 

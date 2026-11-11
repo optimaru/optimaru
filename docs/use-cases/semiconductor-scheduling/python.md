@@ -89,6 +89,23 @@ For finer control build `fab.SolverConfig()` and pass `config=`:
 | `ruin_recreate`, `ruin_recreate_*` | off | the engine's ALNS (a recreate decodes once per candidate value) |
 | `best_score_limit`, `full_assert`, `on_new_best` | | stop early, verify every move, `on_new_best(step, score)` |
 
+## JSON in, JSON out
+
+`solve_request` takes a pydantic request, `models.SemiconductorScheduleRequest`: the problem model as
+`model_input`, with the settings of the solve under the names of `solve`'s keywords
+(`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+returns the solved `SemiconductorScheduleModel`, as `solve(model, ...)` does, and leaves the request
+unchanged. `constraints=` is the selection `solve` takes.
+
+```python
+from optimaru.semiconductor_scheduling import solve_request
+from optimaru.semiconductor_scheduling.models import SemiconductorScheduleRequest
+
+request = SemiconductorScheduleRequest.model_validate_json(text)  # or SemiconductorScheduleRequest(model_input=model, time_limit_seconds=5.0)
+solved = solve_request(request)
+```
+
 ## Starting from an existing solution
 
 `fab.with_initial_solution(problem, solution)` returns a copy whose search starts from

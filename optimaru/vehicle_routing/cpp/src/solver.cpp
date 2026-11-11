@@ -242,7 +242,7 @@ void Solver::solve(VehicleRoutePlan& plan) {
     // order with a cycle.
     checkVisitGroups(plan);
     optimaru::check_config(config_);
-    // The four core rules do not price groups, and on them a split group
+    // The four core constraints do not price groups, and on them a split group
     // would end as a feasible plan. A plan with groups is scored with the
     // whole default assembly instead, every start on one of its own.
     if (plan.hasVisitGroups()) {

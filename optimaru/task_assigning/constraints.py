@@ -178,14 +178,14 @@ class MajorPriorityTaskEndTimeCost(Constraint):
 
 
 class MinorPriorityTaskEndTimeCost(Constraint):
-    """End time of MINOR tasks. Default: soft, weight 1 — the baseline of the three priority rules."""
+    """End time of MINOR tasks. Default: soft, weight 1 — the baseline of the three priority constraints."""
 
     name = "minor_priority_task_end_time_cost"
     label_en = "Minor task end times"
     label_ko = "일반 작업 종료 시각"
     description_en = (
         "The end time (minutes) of every MINOR-priority task, summed: the baseline the critical "
-        "and major rules weigh four and two times as heavily. One unit of cost is one minute; 0 "
+        "and major constraints weigh four and two times as heavily. One unit of cost is one minute; 0 "
         "means no MINOR task is assigned."
     )
     description_ko = (

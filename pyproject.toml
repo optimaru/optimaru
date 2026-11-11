@@ -39,8 +39,9 @@ classifiers = [
   "Typing :: Typed",
 ]
 # Every use case's models.py (the JSON request and response models) is pydantic, and importing a
-# use case imports its models (all but school_timetabling, whose solve() takes dicts).
-dependencies = ["pydantic>=2.5"]
+# use case imports its models. The request models read their earlier field names through
+# validate_by_name / validate_by_alias, which pydantic has from 2.11.
+dependencies = ["pydantic>=2.11"]
 
 [project.urls]
 Homepage = "https://optimaru.com"

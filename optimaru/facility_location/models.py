@@ -13,14 +13,16 @@ to store or transfer the engine shape as-is (debug dumps, regression snapshots,
 
 from pydantic import Field, model_validator
 
-from .._models import StrictModel, entities_by_id, require_same_order, solution_dict
+from .._models import SolveRequest, StrictModel, entities_by_id, require_same_order, solution_dict, solve_model_request
 from . import _core
 
 __all__ = [
     "ConsumerModel",
     "FacilityLocationProblemModel",
+    "FacilityLocationRequest",
     "FacilityModel",
     "LocationModel",
+    "solve_request",
     "with_initial_solution",
 ]
 
@@ -157,3 +159,21 @@ def with_initial_solution(problem, solution):
             raise ValueError(f"consumer {consumer.id!r}: facility {value!r} is out of range -1..{value_count - 1}")
         consumer.facility = value
     return seeded
+
+
+class FacilityLocationRequest(SolveRequest):
+    """The facility location problem with the settings of one solve (see `SolveRequest` for those)."""
+
+    model_input: FacilityLocationProblemModel
+
+
+def solve_request(request: FacilityLocationRequest, *, constraints=None) -> FacilityLocationProblemModel:
+    """Solve a pydantic request and return the solved problem model.
+
+    This is ``solve(request.model_input, ...)`` with the request's settings as the keywords
+    of the same names (see `SolveRequest`), and ``constraints`` the selection ``solve``
+    takes. The request is not changed.
+    """
+    from . import SolverConfig, solve
+
+    return solve_model_request(solve, SolverConfig, request, constraints=constraints)

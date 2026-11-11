@@ -587,7 +587,7 @@ void testGroupWithNoRoomWaits() {
 
     // The same through solve(plan), which has no calculator to be told about:
     // a plan with groups is scored with the default assembly there too. On the
-    // four core rules the three visits would be routed apart and look fine.
+    // four core constraints the three visits would be routed apart and look fine.
     VehicleRoutePlan core = buildRandomInstance(7, 2, /*seed=*/9);
     for (Vehicle& vehicle : core.vehicles) vehicle.maxStops = 2;
     for (int v : {0, 1, 2}) core.visits[static_cast<std::size_t>(v)].groupIndex = 0;
@@ -722,14 +722,14 @@ void testCalculateScore() {
           "a split group is priced and stored in plan.score (" + split.str() + ")");
     VehicleRoutePlan onCoreRules = plan;
     check(ScoreCalculator::score(onCoreRules).hard > split.hard,
-          "which the four core rules leave out (" + onCoreRules.score.str() + ")");
+          "which the four core constraints leave out (" + onCoreRules.score.str() + ")");
 
     // Without a group of two or more, it is the core score.
     VehicleRoutePlan free = buildRandomInstance(24, 3, /*seed=*/13);
     Solver(stepLimited(1000)).solve(free);
     VehicleRoutePlan again = free;
     check(calculateScore(free) == ScoreCalculator::score(again),
-          "a plan without groups scores on the four core rules");
+          "a plan without groups scores on the four core constraints");
 
     // And it refuses what solve() refuses.
     VehicleRoutePlan stranger = buildRandomInstance(6, 2, /*seed=*/3);

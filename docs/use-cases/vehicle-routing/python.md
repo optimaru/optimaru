@@ -84,7 +84,7 @@ from optimaru.vehicle_routing.models import (RoutePlanRequest, RoutingInput, Veh
                                 VisitModel, solve_request)
 
 request = RoutePlanRequest(
-    timelimit=2,
+    time_limit_seconds=2,
     model_input=RoutingInput(
         vehicles=[VehicleModel(id="V1", capacity=10, depot=(37.5665, 126.9780))],
         visits=[VisitModel(id="C1", location=(37.57, 126.982), demand=3,

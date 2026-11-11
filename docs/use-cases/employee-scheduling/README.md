@@ -42,13 +42,13 @@ from optimaru.employee_scheduling.demo import generate_demo_data
 from optimaru.employee_scheduling.models import solve_request
 
 request = generate_demo_data()                    # models.ScheduleRequest
-request.timelimit = 2.0
+request.time_limit_seconds = 2.0
 solution = solve_request(request)
 print(solution.score_hard, solution.score_soft)
 ```
 
-`solve_request` reads `timelimit`, the seed and search options in `settings`
-(`models.SolverSettings`), and the rule list in `model_input.rules`. The
+`solve_request` reads `time_limit_seconds`, the seed and search options in `settings`
+(`models.SolverSettings`), and the constraint list in `model_input.constraints`. The
 lower-level path takes a `optimaru.employee_scheduling.Solver`, a `SolverConfig` and a
 `DecomposedCalculator` built from `optimaru.employee_scheduling.constraints`. The C++ side
 builds and tests with:
@@ -60,12 +60,12 @@ ctest --test-dir build
 
 ## Constraints
 
-The rules (the eight defaults and the opt-in ones, with their default levels and
-weights) and the knob table are in [`python.md`](python.md#the-rules); the table
+The constraints (the eight defaults and the opt-in ones, with their default levels and
+weights) and the knob table are in [`python.md`](python.md#the-constraints); the table
 is not repeated here.
 
-A rule may be picked several times, with other options or knobs or with the
-same ones (every pick is its own instance, and the instances add up), and every rule
+A constraint may be picked several times, with other options or knobs or with the
+same ones (every pick is its own instance, and the instances add up), and every constraint
 takes the keyword knobs `offset` and `clip`, which shift the per-employee shaping
 (`UndesiredDayCost(offset=120)` counts only the minutes beyond two hours;
 `clip=False` shapes `cost - offset` as it is, and is refused with an offset on hard,

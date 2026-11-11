@@ -3,7 +3,7 @@
 You have a list of *shifts* (work slots: "Tuesday 09:00–17:00 at Location A,
 needs Skill A") and a list of *workers* (each with skills, days they cannot work,
 days they would rather not work, days they would like to work). This package
-decides **who works which shift** without breaking the rules, while keeping
+decides **who works which shift** without breaking the constraints, while keeping
 everyone as happy as possible.
 
 The search runs in C++: the domain wrapper in `optimaru/employee_scheduling/cpp` is built on the generic
@@ -41,12 +41,12 @@ es.solve(schedule, time_limit_seconds=1.0, random_seed=42)   # solves in place a
 
 for shift, who in zip(schedule.shifts, schedule.assignment()):
     print(shift.id, "→", schedule.employees[who].name)   # Shift 1 → Worker 01, Shift 2 → Worker 02
-print(schedule.score)                    # 0hard/-180soft; 0hard means no must-rule is broken
+print(schedule.score)                    # 0hard/-180soft; 0hard means no must-constraint is broken
 ```
 
 `es.solve` also takes `parallel_solver_count`, `stop_at_first_feasible`,
-`full_assert`, `on_new_best`, `constraints` (a list of rule specs or a
-`DecomposedCalculator`, see [The rules](#the-rules)) and a full `config`, an
+`full_assert`, `on_new_best`, `constraints` (a list of constraint specs or a
+`DecomposedCalculator`, see [The constraints](#the-constraints)) and a full `config`, an
 `es.SolverConfig` (see [Solver options](#solver-options)) whose fields the keywords
 override on a copy. `es.Solver(config).solve(schedule)` is the same solve one level
 down.
@@ -57,7 +57,7 @@ Three things to know about time:
   minute)` builds one, so `es.minutes(1, 9)` is day 1, 09:00. Times are never
   negative: day 0 is the first day of the problem, carried-in history included.
 - A **date is a day number**: `unavailable_dates={2}` means "cannot work day 2".
-- A shift has a `location`. Any rule that talks about a location reads this
+- A shift has a `location`. Any constraint that talks about a location reads this
   string, so it can equally hold a site, a team or a shift type.
 
 ## Understanding the score
@@ -65,11 +65,11 @@ Three things to know about time:
 Every schedule gets one score with two numbers, written `Hhard/Ssoft`, such as
 `-602hard/357.34soft`.
 
-**Two levels, strictly ordered.** `hard` counts broken **must**-rules, `soft` sums
-the **nice-to-have** rules. Scores compare hard first, with soft only as the
+**Two levels, strictly ordered.** `hard` counts broken **must**-constraints, `soft` sums
+the **nice-to-have** constraints. Scores compare hard first, with soft only as the
 tiebreaker: `0hard/-50000soft` beats `-1hard/+10000soft`.
 
-**Bigger is better, so violations are negative.** Each rule measures a raw amount
+**Bigger is better, so violations are negative.** Each constraint measures a raw amount
 `c` (shifts without the skill, overlap minutes, excess workdays) and contributes
 
 ```
@@ -84,7 +84,7 @@ why a good schedule can show a positive soft score. A reward is always soft:
 **Worked example.** `-602hard/357.34soft`, the fixed instance in
 `tests/employee_scheduling/_reference.py`:
 
-| rule (hard) | raw cost | | rule (soft) | raw cost |
+| constraint (hard) | raw cost | | constraint (soft) | raw cost |
 |---|---|---|---|---|
 | `required_skill_cost` | 1 | | `undesired_day_cost` (minutes) | 480 |
 | `employee_unavailability_cost` (minutes) | 480 | | `desired_day_cost` (minutes, reward) | −839 |
@@ -96,22 +96,22 @@ hard = −(1 + 480 + 120 + 1) = **−602**; soft = −(480 − 839 + 1.66) = **+
 `es.constraint_costs(schedule, constraints)` the raw per-employee costs.
 
 **Feasible means hard is 0.** The solver first drives hard to 0, then spends the
-rest of its budget raising soft. If hard ends below 0, the must-rules cannot all
-be met or the budget was too short; `constraint_totals()` shows which rule is stuck.
+rest of its budget raising soft. If hard ends below 0, the must-constraints cannot all
+be met or the budget was too short; `constraint_totals()` shows which constraint is stuck.
 
-- `hard` is always a whole number: each (employee, rule) hard contribution is
+- `hard` is always a whole number: each (employee, constraint) hard contribution is
   rounded, so fractional weights still give integer totals. `soft` may be
   fractional.
-- `weight` scales a rule linearly, `level` moves it between levels, and
+- `weight` scales a constraint linearly, `level` moves it between levels, and
   `exponent` bends it: with `exponent=2.0`, one employee with 4 violation units
   costs 16, while four employees with 1 unit each cost 4.
-- Units differ per rule (counts or minutes). Pick weights to convert them into one
+- Units differ per constraint (counts or minutes). Pick weights to convert them into one
   currency, such as `UndesiredDayCost(weight=1/60)` to count hours instead of minutes.
 
-## The rules
+## The constraints
 
-A schedule is judged by rules; you choose which apply and how much each matters.
-There is one class per rule in `optimaru.employee_scheduling.constraints`, named `<Subject>Cost`;
+A schedule is judged by constraints; you choose which apply and how much each matters.
+There is one class per constraint in `optimaru.employee_scheduling.constraints`, named `<Subject>Cost`;
 its `name` is the snake_case registry name (`RequiredSkillCost.name ==
 "required_skill_cost"`).
 
@@ -123,7 +123,7 @@ from optimaru.employee_scheduling import (
     UnassignedShiftsCost, UndesiredDayCost, make_random_roster,
 )
 
-rules = [
+constraints = [
     RequiredSkillCost(),                       # must: right skill for the shift
     EmployeeUnavailabilityCost(),              # must: never on unavailable days
     ShiftOverlapCost(),                        # must: no two shifts at once
@@ -141,56 +141,56 @@ rules = [
 config = SolverConfig()
 config.spent_limit_seconds = 1.0
 schedule = make_random_roster(days=5, shifts_per_day=4, employees=6, seed=1)
-calc = DecomposedCalculator(rules)
-Solver(config).solve(schedule, calc)       # search AND final score use these rules
+calc = DecomposedCalculator(constraints)
+Solver(config).solve(schedule, calc)       # search AND final score use these constraints
 ```
 
-Every rule takes the same five knobs, plus its own options:
+Every constraint takes the same five knobs, plus its own options:
 
 | knob | meaning |
 |---|---|
-| `weight=None` | how much one unit of violation hurts; `None` is the rule's default weight (1 for every rule here), `UndesiredDayCost(weight=2.0)` hurts twice as much |
-| `level=None` | `"hard"` (`Level.HARD`) makes it a must, `"soft"` (`Level.SOFT`) a nice-to-have, `None` keeps the rule's default level; a reward refuses `"hard"`, and `"medium"` is refused (this use case has no medium level) |
+| `weight=None` | how much one unit of violation hurts; `None` is the constraint's default weight (1 for every constraint here), `UndesiredDayCost(weight=2.0)` hurts twice as much |
+| `level=None` | `"hard"` (`Level.HARD`) makes it a must, `"soft"` (`Level.SOFT`) a nice-to-have, `None` keeps the constraint's default level; a reward refuses `"hard"`, and `"medium"` is refused (this use case has no medium level) |
 | `exponent=1.0` | `2.0` squares each person's violation, so one person suffering a lot is much worse than many suffering a little |
-| `offset=0.0` | (keyword) shifts that shaping per person (a global rule: its total); `UndesiredDayCost(offset=120)` counts only the undesired minutes beyond two hours |
-| `clip=True` | (keyword) `True` counts only what lies beyond the offset, `max(0, c - offset) ** exponent`; `False` shapes `c - offset` as it is, so everyone the rule evaluates below the offset lowers the penalty (a worker-scoped rule evaluates its workers only). With an offset, `False` is refused on hard (the rule's `level`, or its default), because hard 0 must mean no violation |
+| `offset=0.0` | (keyword) shifts that shaping per person (a global constraint: its total); `UndesiredDayCost(offset=120)` counts only the undesired minutes beyond two hours |
+| `clip=True` | (keyword) `True` counts only what lies beyond the offset, `max(0, c - offset) ** exponent`; `False` shapes `c - offset` as it is, so everyone the constraint evaluates below the offset lowers the penalty (a worker-scoped constraint evaluates its workers only). With an offset, `False` is refused on hard (the constraint's `level`, or its default), because hard 0 must mean no violation |
 
 The defaults are declared once, in the C++ components (`kDefaultWeight` /
 `kDefaultLevel`); `es.constraint_info()` reports them, one
 `ConstraintInfo(name, default_level, default_weight, level_flippable, reward,
-default_enabled)` per rule, the eight defaults first.
+default_enabled)` per constraint, the eight defaults first.
 
-A rule may be picked **several times**, with different options (two day patterns,
+A constraint may be picked **several times**, with different options (two day patterns,
 one cap per worker group), other knobs (`x**2 + x**3` is two picks, `exponent=2`
 and `exponent=3`) or the same ones (identical picks simply count twice): each
 instance is scored on its own, `constraint_totals()` tells them apart by `label`
 (`"Day pattern[A,OFF,B]"`), and `constraint_costs()` keys the second instance
 `"day_pattern_cost#2"`. An empty list is an error: `get_constraints()`,
-`SchedulingInput.rules`, `DecomposedCalculator(list)` and
+`SchedulingInput.constraints`, `DecomposedCalculator(list)` and
 `constraint_costs(schedule, list)` all refuse it. `DecomposedCalculator()` plus
 `add(...)` builds a calculator incrementally (`add` takes the same knobs,
 `offset` / `clip` as keywords).
 
-Every rule takes `offset` / `clip` (also in the JSON rule models:
+Every constraint takes `offset` / `clip` (also in the JSON constraint models:
 `{"name": "undesired_day_cost", "offset": 120, "clip": false}`); `offset=0` is the plain
 power shaping. `clip=False` with an offset is refused on hard, in a spec list, in `add()`
-and in a JSON rule alike: `ValueError: constraint 'required_skill_cost': clip=False with a
+and in a JSON constraint alike: `ValueError: constraint 'required_skill_cost': clip=False with a
 non-zero offset cannot be hard, because hard 0 must mean no violation; use clip=True (a
 threshold) or another level`. The level is `level`, in JSON too
 (`"level": "hard" | "soft"`), and each repeated pick carries its own, so
 `UndesiredDayCost()` plus `UndesiredDayCost(level="hard", offset=400)` makes the undesired
 minutes beyond 400 a must as well.
 
-**Scope.** Every per-employee rule also takes `worker_indices` / `shift_indices`
+**Scope.** Every per-employee constraint also takes `worker_indices` / `shift_indices`
 (engine indices; `None` = everyone): `MaxConsecutiveDaysCost(value=4,
 worker_indices=(0, 1))` applies to the first two employees only.
 `ShiftCoverageCost` scopes natively (an empty list there means everyone); the
-other global rules take no scope.
+other global constraints take no scope.
 
-### Rule catalog
+### Constraint catalog
 
 Default level and weight are what `constraint_info()` reports; the raw cost is
-per employee (per schedule for the global rules) and 0 means no violation.
+per employee (per schedule for the global constraints) and 0 means no violation.
 
 **The default eight** (`get_constraints()`; at their default weights they
 reproduce `calculate_score` exactly):
@@ -206,7 +206,7 @@ reproduce `calculate_score` exactly):
 | `desired_day_cost` | `DesiredDayCost` | soft (reward) | 1 | minus the minutes worked on a wished day (`per_day`: −1 per shift); raw ≤ 0 |
 | `shift_count_imbalance_cost` | `ShiftCountImbalanceCost` | soft | 1 | sqrt of the squared deviations of the shift counts (global) |
 
-**Opt-in rules** (not in the default set; `default_enabled=False`):
+**Opt-in constraints** (not in the default set; `default_enabled=False`):
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
 |---|---|---|---|---|
@@ -245,29 +245,29 @@ for total in calc.constraint_totals():
     print(total["name"], total["label"], total["cost"], total["level"])
 ```
 
-The same rules by name: `calc = DecomposedCalculator(); calc.add("day_pattern_cost",
+The same constraints by name: `calc = DecomposedCalculator(); calc.add("day_pattern_cost",
 pattern="Location A,OFF,Location B")` (weight, level, exponent, offset and clip as
 keyword arguments, `weight=None` = the default; adding a name again adds another
 instance). `es.list_constraints()` lists every name.
 
-### Rule models
+### Constraint models
 
-- Every rule is `<Subject>Cost` / `<subject>_cost` (Python name = C++ registry name in
-  snake_case); a parametrized rule's display name (`"Day pattern[...]"`) is the
+- Every constraint is `<Subject>Cost` / `<subject>_cost` (Python name = C++ registry name in
+  snake_case); a parametrized constraint's display name (`"Day pattern[...]"`) is the
   instance `label`.
-- One class per rule, the spec: the JSON models are generated from the specs
-  (`models.RULE_MODELS`, `models.rule_model(...)`) and named `<SpecClass>Model`;
-  `SchedulingInput.rules` takes specs or JSON (`"level": "hard" | "soft"`, `weight`
-  defaults to `null`, the rule's default). Unknown names and keys are refused.
-- `SchedulingInput.rules` validates on assignment too
-  (`model_input.rules = [MaxConsecutiveDaysCost(value=5)]`), and a rule model's
+- One class per constraint, the spec: the JSON models are generated from the specs
+  (`models.CONSTRAINT_MODELS`, `models.constraint_model(...)`) and named `<SpecClass>Model`;
+  `SchedulingInput.constraints` takes specs or JSON (`"level": "hard" | "soft"`, `weight`
+  defaults to `null`, the constraint's default). Unknown names and keys are refused.
+- `SchedulingInput.constraints` validates on assignment too
+  (`model_input.constraints = [MaxConsecutiveDaysCost(value=5)]`), and a constraint model's
   `weight` / `exponent` refuse a bool or a numeric string, as the spec does.
 - The per-employee specs declare the scope fields `worker_indices` /
   `shift_indices` before their domain parameters: build them with keyword
   arguments (`MaxConsecutiveDaysCost(value=5)`, not
   `MaxConsecutiveDaysCost(None, None, 1.0, 5)`).
 - The scope keys `worker_indices` / `shift_indices` are accepted only on the
-  per-employee rules and on `shift_coverage_cost`. The other global rules
+  per-employee constraints and on `shift_coverage_cost`. The other global constraints
   (`unassigned_shifts_cost`, `shift_count_imbalance_cost`, `shift_count_gap_cost`,
   `weekly_minutes_gap_cost`, `location_imbalance_cost`, `worker_pairing_cost`)
   refuse them, even as `null`.
@@ -281,33 +281,33 @@ instance). `es.list_constraints()` lists every name.
 
 `ShiftModel(pinned=True, worker="Worker 01")` fixes an assignment: the shift is
 scored like any other but never moved. Use it to carry in the last days of the
-previous planning period, so week-spanning rules see across the boundary, or for
+previous planning period, so week-spanning constraints see across the boundary, or for
 assignments that are already settled. A pinned shift requires `worker`. Number the
 days so the carried-in ones come first: day 0 is the first day of history.
 
-- **Per-shift rules** (required skill, availability, one shift per day, rest
+- **Per-shift constraints** (required skill, availability, one shift per day, rest
   between shifts): a pinned shift is settled history and is not re-judged.
-- **Pattern rules** (consecutive days, location runs, weekly rest, horizon counts):
+- **Pattern constraints** (consecutive days, location runs, weekly rest, horizon counts):
   pinned days are context. A violation lying entirely within pinned days is not
   penalized; one that involves a movable day is, with the pinned days counted.
-  Horizon-count rules exclude pinned days.
+  Horizon-count constraints exclude pinned days.
 - **The end of the horizon**: a run reaching the last day has an unknown future, so
-  a shortfall rule waives it while an excess rule still counts it.
+  a shortfall constraint waives it while an excess constraint still counts it.
 
 ## JSON in, JSON out
 
 ```python
 from optimaru.employee_scheduling.constraints import MaxConsecutiveDaysCost
 from optimaru.employee_scheduling.models import (
-    ScheduleRequest, SchedulingInput, ShiftModel, WorkerModel, default_rules, solve_request,
+    ScheduleRequest, SchedulingInput, ShiftModel, WorkerModel, default_constraints, solve_request,
 )
 
 request = ScheduleRequest(
-    timelimit=1,
+    time_limit_seconds=1,
     model_input=SchedulingInput(
         workers=[WorkerModel(id="Worker 01", skills=["Skill A"])],
         shifts=[ShiftModel(id="Shift 1", start=540, end=1020, required_skill="Skill A")],
-        rules=[*default_rules(), MaxConsecutiveDaysCost(value=6, weight=2)],
+        constraints=[*default_constraints(), MaxConsecutiveDaysCost(value=6, weight=2)],
     ),
 )
 solution = solve_request(request)
@@ -315,15 +315,15 @@ print(solution.schedule)                 # {"Worker 01": [ShiftAssignmentModel(.
 print(solution.model_dump_json())        # ready to send over the wire
 ```
 
-`ScheduleRequest.model_validate_json(...)` accepts the same JSON back: the rule
+`ScheduleRequest.model_validate_json(...)` accepts the same JSON back: the constraint
 list is a discriminated union generated from the specs, so
 `{"name": "max_consecutive_days_cost", "value": 6, "level": "soft"}` picks the right
-rule model, and `rule.to_spec()` is the `MaxConsecutiveDaysCost` it states.
-`solution.rule_totals` explains the score per rule instance (`name`, `label`,
+constraint model, and `constraint.to_spec()` is the `MaxConsecutiveDaysCost` it states.
+`solution.constraint_totals` explains the score per constraint instance (`name`, `label`,
 `cost`, `level`).
 
 `optimaru.employee_scheduling.demo.generate_demo_data(seed=7, workers=12, days=14)` builds a
-made-up request with skills, unavailable and preferred days, and rules that solve
+made-up request with skills, unavailable and preferred days, and constraints that solve
 to hard 0.
 
 ## Starting from an earlier solution
@@ -339,7 +339,7 @@ from optimaru.employee_scheduling.demo import generate_demo_data
 from optimaru.employee_scheduling.models import solve_request
 
 request = generate_demo_data()
-request.timelimit = 1.0
+request.time_limit_seconds = 1.0
 first = solve_request(request)
 
 # Keep Worker 01's shifts and let the solve place everything else again.
@@ -356,14 +356,14 @@ print(second.score_hard, second.score_soft)
   one is left alone by construction; a partial solution is therefore fine, and
   only the shifts it leaves out, or lists as `unassigned`, are constructed. Any
   earlier `worker` on such a shift is cleared.
-- Local search may still move a seeded shift. `timelimit=0` returns a complete seed
+- Local search may still move a seeded shift. `time_limit_seconds=0` returns a complete seed
   unchanged, and `pinned` fixes a shift for good. A pinned shift keeps its worker
   whatever the solution says about it.
 - `ValueError`, naming the worker or shift, for an unknown id, a shift assigned
   twice, or both assigned and unassigned, a malformed assignment, or a pinned shift
   the solution moves or unassigns.
 
-A seed that breaks a rule is not an error: it is a starting point, and the score
+A seed that breaks a constraint is not an error: it is a starting point, and the score
 says what it costs.
 
 ## Solver options
@@ -413,11 +413,11 @@ weights are generic sequence-shaped options and do not affect this domain.
 `es.calculate_score(schedule)` scores a fixed assignment without solving (the
 default eight at their default weights).
 
-## Adding a rule
+## Adding a constraint
 
-Every rule ships its own incremental evaluation: when the solver moves one shift
+Every constraint ships its own incremental evaluation: when the solver moves one shift
 between two employees, only the change is recomputed
-(`UnitConstraint::delta_cost`), and rules precompute lookup tables once per solve
+(`UnitConstraint::delta_cost`), and constraints precompute lookup tables once per solve
 (`UnitConstraint::on_reset`). See the use case's
 [README](README.md#extending) for the steps. Weights, level changes and
 exponents need no code.
@@ -428,8 +428,8 @@ exponents need no code.
 optimaru/employee_scheduling/
 ├── __init__.py       re-exports core + constraints + helpers
 ├── _core.pyi         type stub with full API docs
-├── constraints.py    constraint spec classes, one per rule (declarative assembly)
-├── models.py         pydantic request/response layer, rule models generated from the specs
+├── constraints.py    constraint spec classes, one per constraint (declarative assembly)
+├── models.py         pydantic request/response layer, constraint models generated from the specs
 ├── demo.py           generate_demo_data, a made-up sample request
 ├── helpers.py        pure-Python conveniences (list_constraints, make_random_roster, ...)
 └── cpp/              bindings.cpp (the _core module), optimaru/employee_scheduling/cpp/include/es/, src/

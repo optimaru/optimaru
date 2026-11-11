@@ -32,9 +32,9 @@ def make_request(instance: CvrpInstance, *, seconds: float, seed: int) -> RouteP
     depot = instance.coordinates[0]
     return RoutePlanRequest(
         name=instance.name,
-        timelimit=seconds,
+        time_limit_seconds=seconds,
         random_seed=seed,
-        num_workers=1,
+        parallel_solver_count=1,
         model_input=RoutingInput(
             vehicles=[
                 VehicleModel(

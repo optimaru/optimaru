@@ -13,16 +13,26 @@ snapshots, ...)::
 
 from pydantic import Field, model_validator
 
-from .._models import StrictModel, entities_by_id, require_same_order, solution_dict, valid_positions
+from .._models import (
+    SolveRequest,
+    StrictModel,
+    entities_by_id,
+    require_same_order,
+    solution_dict,
+    solve_model_request,
+    valid_positions,
+)
 from . import _core
 
 __all__ = [
     "ConferenceScheduleModel",
+    "ConferenceScheduleRequest",
     "RoomModel",
     "SolveConfig",
     "SpeakerModel",
     "TalkModel",
     "TimeslotModel",
+    "solve_request",
     "with_initial_solution",
 ]
 
@@ -330,3 +340,21 @@ def with_initial_solution(problem, solution):
         if not isinstance(value, int) or isinstance(value, bool) or not -1 <= value < value_count:
             raise ValueError(f"talk {talk.code!r}: slot_room {value!r} is out of range -1..{value_count - 1}")
     return seeded
+
+
+class ConferenceScheduleRequest(SolveRequest):
+    """The conference schedule with the settings of one solve (see `SolveRequest` for those)."""
+
+    model_input: ConferenceScheduleModel
+
+
+def solve_request(request: ConferenceScheduleRequest, *, constraints=None) -> ConferenceScheduleModel:
+    """Solve a pydantic request and return the solved problem model.
+
+    This is ``solve(request.model_input, ...)`` with the request's settings as the keywords
+    of the same names (see `SolveRequest`), and ``constraints`` the selection ``solve``
+    takes. The request is not changed.
+    """
+    from . import SolverConfig, solve
+
+    return solve_model_request(solve, SolverConfig, request, constraints=constraints)

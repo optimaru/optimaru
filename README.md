@@ -17,7 +17,9 @@ pip install optimaru
 
 One package with every use case as a subpackage — `optimaru.vehicle_routing`,
 `optimaru.school_timetabling`, … — compiled for Linux, macOS and Windows
-(Python 3.11+). No C++ toolchain is needed.
+(Python 3.11+, pydantic 2.11+). No C++ toolchain is needed. Every use case has
+two entry points: `solve(problem, ...)` for a problem built in Python, and
+`solve_request(request)` for a pydantic request (JSON in, JSON out).
 
 ```python
 from optimaru import vehicle_routing as vrp
