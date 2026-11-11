@@ -119,9 +119,9 @@ tightens.
 ### Late acceptance in stages
 
 A late acceptance history is a trade: a short one converges fast, a long one
-finds more and needs longer. In food packaging, knapsack, max-cut, quadratic
-assignment and sports league scheduling the search does not stay with one
-length. `late_acceptance_size` is the history of the first stage. Once that
+finds more and needs longer. In bed allocation, food packaging, knapsack,
+maintenance scheduling, max-cut, quadratic assignment and sports league
+scheduling the search does not stay with one length. `late_acceptance_size` is the history of the first stage. Once that
 stage has converged and no new best has come for a while, late acceptance
 starts over from the start's score with the history doubled, then doubled
 again, as long as the next stage still fits in the time limit (or the step
