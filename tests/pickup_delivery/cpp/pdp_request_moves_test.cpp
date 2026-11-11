@@ -1107,6 +1107,36 @@ void testParallelStartsOnTheAssembly() {
         refused = true;
     }
     check(refused, "a factory that makes nothing is refused");
+
+    // A config check_config refuses, on every path: nothing in the plan moves
+    // (the pair construction used to route the plan before the check).
+    for (const bool withGroups : {false, true}) {
+        PdpRoutePlan start = buildRandomInstance(18, 3, /*seed=*/13);
+        if (withGroups) groupInOrder(start, 3);
+        start.rebuildUnassignedPool();
+        Solver::Config bad = stepLimited(5, 1);
+        bad.tabu_tenure = -1;
+        int untouched = 0;
+        for (int path = 0; path < 2; ++path) {
+            PdpRoutePlan work = start;
+            bool thrown = false;
+            try {
+                if (path == 0) {
+                    Solver(bad).solve(work);
+                } else {
+                    Solver(bad).solve(work, defaults);
+                }
+            } catch (const std::invalid_argument&) {
+                thrown = true;
+            }
+            bool same = thrown && work.unassignedNodeIndices == start.unassignedNodeIndices;
+            for (std::size_t v = 0; same && v < work.vehicles.size(); ++v)
+                same = work.vehicles[v].nodeIndices == start.vehicles[v].nodeIndices;
+            if (same) ++untouched;
+        }
+        check(untouched == 2, std::string("a bad config is refused with the plan untouched (") +
+                                      (withGroups ? "grouped" : "no groups") + ")");
+    }
     std::printf("\n");
 }
 

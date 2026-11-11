@@ -68,8 +68,9 @@ mechanically, so there is no hand-maintained alias table — check them with
 `vrp.list_constraints()`. Module-level instance names use the same snake_case,
 so they match the strings `list_constraints()` prints.
 
-Two knobs do not apply on the plugin path: `parallel_solver_count` (a caller-owned
-calculator cannot be cloned into workers) and the driving-time-guided selection.
+`parallel_solver_count` applies on the plugin path: every start scores on its own copy
+of the picks (in C++, only the `Solver::solve` overload that takes one caller-owned
+calculator stays a single start). The driving-time-guided selection does not apply there.
 Details are in the comments of `cpp/include/vrp/solver.hpp`.
 """
 

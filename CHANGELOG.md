@@ -9,7 +9,8 @@
   starts, start *i* on `random_seed + i` and on its own copy of the constraints, and return
   the best, as a solve on the core rules does. With one start nothing changes. On generated
   grouped plans four starts end 0.8% to 2.4% shorter than one in the same 4 s (vehicle
-  routing, four classes) and 2.1% shorter (pickup and delivery), never longer. In C++,
+  routing, four classes) and 2.1% shorter (pickup and delivery), longer in none of the 25
+  pairs. In C++,
   `Solver::solve(plan, makeCalculator)` takes a factory that builds one calculator per
   start; the overload that takes a calculator stays a single start. Vehicle routing's
   `solve_request` leaves visit groups to the engine, as pickup and delivery's does since

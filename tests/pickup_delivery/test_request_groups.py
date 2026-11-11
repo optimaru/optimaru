@@ -474,7 +474,9 @@ def test_parallel_starts_return_the_best_single_start_on_the_constraint_path(pat
         assert score(seed, 3) == max(singles)
 
 
-def test_num_workers_runs_parallel_starts_for_a_grouped_request():
+def test_a_grouped_request_with_num_workers_solves():
+    # A smoke test of the path a request takes (solve_request, Solver.solve, the engine's own
+    # switch, three starts): a problem this small has one answer whatever the starts.
     deliveries = [request(name, group="g" if name in "ab" else None) for name in "abc"]
 
     def score(seed: int, workers: int) -> str:
@@ -488,7 +490,7 @@ def test_num_workers_runs_parallel_starts_for_a_grouped_request():
             )
         ).score
 
-    assert score(0, 3) == score(0, 1)  # a problem this small has one answer
+    assert score(0, 3) == score(0, 1)
     assert "0hard" in score(0, 3)
 
 

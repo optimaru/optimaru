@@ -323,9 +323,11 @@ PYBIND11_MODULE(_core, m) {
             // same picks. The picks are Python objects, read with the GIL held:
             // the first calculator is built before the solve releases the GIL
             // (so a bad pick raises with nothing started), the others by the
-            // factory, which takes the GIL back for the read. The solve itself
-            // runs without it, like solve() above (an on_new_best callback
-            // takes it back).
+            // factory, which takes the GIL back for the read. A calculator
+            // holds the values read from the picks and no Python reference, so
+            // it is used and destroyed without the GIL. The solve itself runs
+            // without it, like solve() above (an on_new_best callback takes
+            // it back).
             .def(
                     "solve_with_constraints",
                     [](Solver& solver, VehicleRoutePlan& plan, const py::object& constraints) {

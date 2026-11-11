@@ -335,7 +335,9 @@ void Solver::solve(VehicleRoutePlan& plan, const CalculatorFactory& makeCalculat
     // Refused before a calculator is made or a start runs.
     checkVisitGroups(plan);
     optimaru::check_config(config_);
-    const int starts = std::max(1, config_.parallel_solver_count);
+    // Nothing to search in an empty plan: one start scores it.
+    const bool empty = plan.visits.empty() || plan.vehicles.empty();
+    const int starts = empty ? 1 : std::max(1, config_.parallel_solver_count);
     std::vector<std::unique_ptr<optimaru::DecomposedObjective<VehicleRoutePlan>>> calculators;
     calculators.reserve(static_cast<std::size_t>(starts));
     for (int start = 0; start < starts; ++start) {
@@ -350,6 +352,10 @@ void Solver::solve(VehicleRoutePlan& plan, const CalculatorFactory& makeCalculat
                                          int start) {
         Solver(config).solve(candidate, *calculators[static_cast<std::size_t>(start)]);
     };
+    if (starts == 1) {
+        solveOne(config_, plan, 0);
+        return;
+    }
     optimaru::solve_parallel_starts(config_, plan, solveOne);
 }
 

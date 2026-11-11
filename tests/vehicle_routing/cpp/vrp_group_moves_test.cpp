@@ -663,6 +663,36 @@ void testParallelStartsOnTheAssembly() {
         refused = true;
     }
     check(refused, "a factory that makes nothing is refused");
+
+    // A config check_config refuses, on every path: nothing in the plan moves.
+    for (const bool withGroups : {false, true}) {
+        VehicleRoutePlan start = buildRandomInstance(24, 3, /*seed=*/13);
+        if (withGroups) groupInOrder(start, /*grouped=*/12, /*size=*/3, /*chained=*/true);
+        start.vehicles[0].visitIndices = {0, 1, 2};
+        start.rebuildUnassignedPool();
+        Solver::Config bad = stepLimited(100);
+        bad.tabu_tenure = -1;
+        int untouched = 0;
+        for (int path = 0; path < 2; ++path) {
+            VehicleRoutePlan work = start;
+            bool thrown = false;
+            try {
+                if (path == 0) {
+                    Solver(bad).solve(work);
+                } else {
+                    Solver(bad).solve(work, defaults);
+                }
+            } catch (const std::invalid_argument&) {
+                thrown = true;
+            }
+            if (thrown && work.unassignedVisitIndices == start.unassignedVisitIndices &&
+                work.vehicles[0].visitIndices == start.vehicles[0].visitIndices) {
+                ++untouched;
+            }
+        }
+        check(untouched == 2, std::string("a bad config is refused with the plan untouched (") +
+                                      (withGroups ? "grouped" : "no groups") + ")");
+    }
     std::printf("\n");
 }
 

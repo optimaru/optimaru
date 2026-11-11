@@ -514,7 +514,8 @@ def test_parallel_starts_return_the_best_single_start_on_the_constraint_path(pat
         return str(plan.score)
 
     def levels(text: str) -> tuple[int, ...]:
-        return tuple(int(part.rstrip("hardmediumsoft")) for part in text.split("/"))
+        hard, medium, soft = text.split("/")
+        return (int(hard.removesuffix("hard")), int(medium.removesuffix("medium")), int(soft.removesuffix("soft")))
 
     for seed in (0, 10):
         singles = [score(seed + start, 1) for start in range(3)]
@@ -536,10 +537,13 @@ def test_on_new_best_reports_from_parallel_starts_on_a_constraint_list():
         plan,
         config=config,
         constraints=[VisitGroupCost(), VisitOrderCost(), *get_constraints()[:4]],
-        on_new_best=lambda step, score: reported.append((step, score.hard)),
+        on_new_best=lambda step, score: reported.append((step, as_tuple(score))),
     )
 
-    assert reported and reported[-1][1] <= 0
+    # Only the first start reports, so the plan (the best of three) is at least as good as
+    # the last report.
+    assert reported and reported[-1][1][0] == 0
+    assert as_tuple(plan.score) >= reported[-1][1]
     assert [step for step, _ in reported] == sorted(step for step, _ in reported)
 
 
