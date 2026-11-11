@@ -1,4 +1,4 @@
-# max_cut (Python)
+# optimaru.max_cut (Python)
 
 The pybind11 package of the max-cut use case (`optimaru/max_cut/cpp`). Splits the vertices of a
 weighted graph into two sides — the side of each vertex (0 or 1) is the only

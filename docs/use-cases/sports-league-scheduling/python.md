@@ -1,4 +1,4 @@
-# optimaru.sports_league_scheduling — Sports League Scheduling (C++ engine + pybind11)
+# optimaru.sports_league_scheduling (Python)
 
 Sports league scheduling, derived from the Timefold Quickstarts `sports-league-scheduling` example
 (Apache-2.0; see the repository NOTICE): the C++ implementation

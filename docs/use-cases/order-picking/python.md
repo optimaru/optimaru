@@ -1,4 +1,4 @@
-# order_picking (Python)
+# optimaru.order_picking (Python)
 
 The Python package wrapping, with pybind11, the C++ implementation of the
 **order-picking** use case (`optimaru/order_picking/cpp`, on the generic engine `optimaru/cpp/optimaru/`).
@@ -13,6 +13,36 @@ Pick order items onto trolleys in a warehouse (5 shelf columns A-E x 3 rows, lef
 - **derived values**: `PickTask.trolley_index / previous_pick_task / next_pick_task`
   (the trolley carrying the pick and its neighbours in that trolley's list) — derived
   from the lists and kept current by `calculate_score` / `solve`.
+
+## Install and test
+
+```bash
+OPTIMARU_USE_CASES=order_picking uv sync      # builds only this use case's C++ extension
+uv run pytest -q tests/order_picking
+```
+
+## Usage
+
+```python
+from optimaru import order_picking as op
+
+solution = op.build_demo_data()   # the demo warehouse (deterministic, seed 37)
+op.solve(solution, time_limit_seconds=5.0, random_seed=0)
+print(solution.score)             # e.g. 0hard/-8652soft
+print(solution.routes())          # {trolley id: [pick task id, ...]}
+```
+
+JSON in/out is `optimaru.order_picking.models` (pydantic v2):
+
+```python
+from optimaru.order_picking.models import OrderPickingRequest, solve_request
+
+response = solve_request(OrderPickingRequest.model_validate(request_dict))
+print(response.feasible, response.distance_by_trolley)
+```
+
+`SolverConfig` adjusts the engine knobs (time budget, sequence move weights, ALNS, nearby, ScoreChecks::Full,
+`parallel_solver_count` multistart, ...) — see `_core.pyi`.
 
 ## Constraints
 
@@ -45,33 +75,3 @@ op.solve(solution, constraints=[TrolleyCapacityCost(), OrderSplitByTrolleyCost(w
 raw = op.constraint_costs(solution)
 score(raw, [DistanceFromPreviousPickTaskCost(), DistanceFromPreviousPickTaskCost(weight=0.1, exponent=2, offset=100)])
 ```
-
-## Install and test
-
-```bash
-OPTIMARU_USE_CASES=order_picking uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/order_picking
-```
-
-## Usage
-
-```python
-from optimaru import order_picking as op
-
-solution = op.build_demo_data()   # the demo warehouse (deterministic, seed 37)
-op.solve(solution, time_limit_seconds=5.0, random_seed=0)
-print(solution.score)             # e.g. 0hard/-8652soft
-print(solution.routes())          # {trolley id: [pick task id, ...]}
-```
-
-JSON in/out is `optimaru.order_picking.models` (pydantic v2):
-
-```python
-from optimaru.order_picking.models import OrderPickingRequest, solve_request
-
-response = solve_request(OrderPickingRequest.model_validate(request_dict))
-print(response.feasible, response.distance_by_trolley)
-```
-
-`SolverConfig` adjusts the engine knobs (time budget, sequence move weights, ALNS, nearby, ScoreChecks::Full,
-`parallel_solver_count` multistart, ...) — see `_core.pyi`.

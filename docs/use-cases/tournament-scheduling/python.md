@@ -1,9 +1,32 @@
-# tournament_scheduling
+# optimaru.tournament_scheduling (Python)
 
 Tournament scheduling, derived from the Timefold Quickstarts `tournament-scheduling` example
 (Apache-2.0; see the repository NOTICE), on the C++ engine in `optimaru/cpp/optimaru/`. Assigns teams to the daily
 match slots (`TeamAssignment`) — the C++ domain/calculators are in `optimaru/tournament_scheduling/cpp`; this package
 holds their pybind11 bindings (`optimaru.tournament_scheduling._core`) and the pydantic mirror.
+
+## Install and test
+
+```bash
+OPTIMARU_USE_CASES=tournament_scheduling uv sync   # builds only this use case's C++ extension
+uv run pytest -q tests/tournament_scheduling
+```
+
+## Usage
+
+```python
+from optimaru import tournament_scheduling as ts
+from optimaru.tournament_scheduling.models import demo_data
+
+schedule = demo_data()  # the demo instance: 7 teams, 18 days x 4 slots, 12 unavailable days
+result = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
+print(result.score_hard, result.score_soft)  # 0, -1.54919 (feasible, 6 teams x 12 assignments)
+```
+
+`solve` accepts both the pydantic model (`models.TournamentScheduleModel`) and `_core`
+objects. Pin an assignment with `TeamAssignmentModel.pinned=True`;
+to stop at the first feasible use
+`stop_at_first_feasible=True`.
 
 ## Constraints
 
@@ -68,27 +91,6 @@ global optimum, so the demo result is `0hard/-1.54919soft` (medium 0, soft 1.549
 team is left with 0 matches. This is not a calculator bug but the optimum of the
 objective as defined. If "every team plays" is a domain requirement, fix the constraints, not
 the solver (add a complement term or a hard minimum-assignments-per-team constraint).
-
-## Usage
-
-```bash
-OPTIMARU_USE_CASES=tournament_scheduling uv sync      # builds only this use case's C++ extension
-uv run pytest -q tests/tournament_scheduling
-```
-
-```python
-from optimaru import tournament_scheduling as ts
-from optimaru.tournament_scheduling.models import demo_data
-
-schedule = demo_data()  # the demo instance: 7 teams, 18 days x 4 slots, 12 unavailable days
-result = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
-print(result.score_hard, result.score_soft)  # 0, -1.54919 (feasible, 6 teams x 12 assignments)
-```
-
-`solve` accepts both the pydantic model (`models.TournamentScheduleModel`) and `_core`
-objects. Pin an assignment with `TeamAssignmentModel.pinned=True`;
-to stop at the first feasible use
-`stop_at_first_feasible=True`.
 
 ## C++ demo/tests
 

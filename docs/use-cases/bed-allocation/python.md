@@ -1,4 +1,4 @@
-# bed_allocation — bed allocation
+# optimaru.bed_allocation (Python)
 
 Hospital bed allocation (PAS), derived from the Timefold Quickstarts `bed-allocation` example
 (Apache-2.0; see the repository NOTICE): the pybind11 package of the `optimaru/bed_allocation/cpp` implementation

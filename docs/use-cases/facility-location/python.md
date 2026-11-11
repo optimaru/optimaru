@@ -1,4 +1,4 @@
-# facility_location (Python)
+# optimaru.facility_location (Python)
 
 The pybind11 package of the facility-location use case (C++ in `optimaru/facility_location/cpp`).
 Picks one facility per consumer — `Consumer.facility` is the only

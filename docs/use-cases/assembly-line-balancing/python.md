@@ -1,4 +1,4 @@
-# assembly_line_balancing (Python)
+# optimaru.assembly_line_balancing (Python)
 
 The pybind11 package of the assembly-line-balancing use case (`optimaru/assembly_line_balancing/cpp`). Puts every
 task on one station of a paced line — `Task.station` is the only decision variable

@@ -1,4 +1,4 @@
-# bin_packing (Python)
+# optimaru.bin_packing (Python)
 
 The pybind11 package of the bin-packing C++ use case (`optimaru/bin_packing/cpp`). Puts every item in
 one of n identical bins — `Item.bin` is the only decision variable (bin index, -1 =

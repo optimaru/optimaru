@@ -1,4 +1,4 @@
-# optimaru.project_job_scheduling — project job scheduling (multi-project RCPSP) Python package
+# optimaru.project_job_scheduling (Python)
 
 Multi-project / multi-mode RCPSP, derived from the Timefold Quickstarts
 `project-job-scheduling` example (Apache-2.0; see the repository NOTICE): pybind11 bindings of

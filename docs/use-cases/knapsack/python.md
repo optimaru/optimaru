@@ -1,4 +1,4 @@
-# knapsack (Python)
+# optimaru.knapsack (Python)
 
 The pybind11 package of the knapsack use case (`optimaru/knapsack/cpp`). Chooses the items to
 carry — `Item.selected` is the only decision variable (1 = selected, 0 = not).
