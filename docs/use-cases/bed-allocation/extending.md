@@ -32,7 +32,7 @@ There are two scoring paths, and they give the same score for the same plan
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/ba/constraints/` |
 | Rules | the twelve, at their defaults | the ones you list, with your knobs |
-| Steps per second | 12.9 million | 1.8 million |
+| Steps per second | 12.3 million | 1.6 million |
 | Parallel starts | `parallel_solver_count` | one start |
 
 The speeds are the demo instance (80 stays, 13 beds), 2 million steps, one thread
@@ -202,6 +202,11 @@ What the base gave you: `cost()` of a bed is the sum of `roomCost` over its stay
 and when a stay moves the engine calls `roomCost` once for the bed it leaves and
 once for the bed it joins. The rule is already incremental.
 
+The engine asks every rule in the picks, whatever its weight. `get_constraints()` now
+returns thirteen rules, the new one at weight 0, and solving with that list is slower
+than with the twelve (1.42 against 1.60 million steps per second) for the same score.
+Leave a rule out of the picks, as `others` does above, instead of passing it at weight 0.
+
 ## 3. Check it
 
 **A case worked out by hand**, in `tests/bed_allocation/cpp/ba_plugin_test.cpp`,
@@ -272,7 +277,8 @@ that it does.
 Three more things cut the cost of a rule that is already incremental.
 
 **Compute once per solve.** The facts never change during a solve, so a term that
-reads only facts can be a table. `on_reset()` runs once, when the solve starts:
+reads only facts can be a table. `on_reset()` runs when a solve starts and when it
+ends, not per move:
 
 ```cpp
     // One table per solve: roomCost() below is then an array read.
@@ -299,9 +305,10 @@ private:
     std::vector<double> table_;  // rooms x stays
 ```
 
-With the rule at weight 5 the assembly went from 1.57 to 1.65 million steps per
-second, and the solve ended on the same score, as it must. The gain is small here
-because the loop was short; a term that walks a list or a map gains more. Under
+With the rule at weight 5 the assembly went from 1.41 to 1.53 million steps per
+second, and the solve ended on the same score, as it must. That takes back most of
+what the rule cost: the twelve alone run at 1.60. A term that walks a list or a map
+gains more. Under
 `full_assert` the engine rebuilds on every step, so `on_reset()` runs every step
 there; 20,000 checked steps still take 0.4 seconds on the demo instance.
 
@@ -317,7 +324,7 @@ and a hard total is never rounded. Return `static_cast<double>` of an integer co
 
 Do this when the rule should be on in every solve (`kDefaultWeight > 0`). Then
 `ba.solve(plan)` must score it, and `ba.solve(plan)` scores with the monolithic
-calculators: 7 times the steps per second of the assembly, and the only path that
+calculators: nearly 8 times the steps per second of the assembly, and the only path that
 runs parallel starts.
 
 `ba_plugin_test` compares the default assembly with the monolithic calculators on
@@ -352,8 +359,8 @@ constexpr std::int64_t kUnusedEquipmentWeight = integralWeight<UnusedRoomEquipme
 
 That is all for a per-stay rule. `incremental_calculator.cpp` builds a table of
 `singleStayImpact()` per stay and room when a solve starts and reads it on every
-move, so the new term costs nothing per step: the default path ran at 13.0 million
-steps per second with the thirteenth rule in it.
+move, so the new term costs nothing per step: the default path ran at 12.2 million
+steps per second with the thirteenth rule in it, against 12.3 with twelve.
 
 A rule over pairs is more work. `bedConflictCost` and `mixedGenderRoomCost` are kept
 from per-night occupancy counters in `incremental_calculator.cpp` (`insert()` and
@@ -403,11 +410,17 @@ differ after a change, the two paths no longer score alike.
 
 | Measured on the demo instance | Steps per second |
 | --- | --- |
-| default path, twelve rules | 12.9 million |
-| assembly, twelve rules | 1.8 million |
-| assembly, twelve + the rule of step 2 | 1.57 million |
-| assembly, twelve + the rule with the table of step 4 | 1.65 million |
-| default path, thirteen rules (step 5) | 13.0 million |
+| default path, twelve rules | 12.3 million |
+| assembly, twelve rules | 1.60 million |
+| assembly, twelve + the rule of step 2 at weight 5 | 1.41 million |
+| assembly, twelve + the rule of step 2 at weight 0 (`get_constraints()`) | 1.42 million |
+| assembly, twelve + the rule with the table of step 4 at weight 5 | 1.53 million |
+| assembly, twelve + the rule with the table of step 4 at weight 0 | 1.55 million |
+| default path, thirteen rules (step 5) | 12.2 million |
+| assembly, thirteen rules (step 5) | 1.52 million |
+
+Each figure is the median of five runs, all taken in one session; a run moves by a few
+percent, and other work on the machine lowers every row together.
 
 **Quality at a fixed time.** A rule changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after:
