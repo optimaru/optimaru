@@ -63,9 +63,10 @@ bool pairIntact(const PdpRoutePlan& plan, const optimaru::OperatorContext<PdpRou
 // moves (pdp/request_moves.hpp) do. This move is here for the first two tiers.
 //
 // It moves one request, so a request of a group (Delivery::groupIndex) only
-// goes where the rest of its group rides: it is neither dropped alone nor
-// routed alone. Taking a whole group to another vehicle, or in from the pool,
-// is the request moves' work.
+// goes where another request of its group rides: it leaves the pool to join
+// them, never to ride alone, and it is dropped only when none of them rides.
+// Taking a whole group to another vehicle, or in from the pool, is the request
+// moves' work.
 class PairRelocateMove final : public optimaru::MoveOperator<PdpRoutePlan> {
 public:
     PairRelocateMove(double repairProbability, double assignmentProbability,
@@ -105,10 +106,12 @@ public:
         const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(deliveryIndex)];
         const int pickup = delivery.pickupNodeIndex;
         const int dropoff = delivery.dropoffNodeIndex;
-        // The one vehicle the request may ride, and whether it travels with
-        // other requests.
-        const int bound = boundVehicle(plan, ctx, deliveryIndex);
-        const bool grouped = groups_->sizeOf(groups_->leaderOf(deliveryIndex)) > 1;
+        // Whether the request travels with others, the vehicle one of them
+        // rides, and the one vehicle the request may ride.
+        const bool grouped = groups_->peersOf(deliveryIndex) > 0;
+        const int riding = grouped ? vehicleOfPeer(plan, ctx, deliveryIndex) : -1;
+        const int required = groups_->vehicleOf(deliveryIndex);
+        const int bound = required >= 0 ? required : riding;
 
         // Tier 2 vs 3: where does the request go?
         //
@@ -133,9 +136,10 @@ public:
             // insertion misses almost every feasible pickup/dropoff slot on
             // large PDPTW routes, so scan the pair slots and take the least
             // added travel among capacity/time-window-feasible candidates.
-            // The first request of a group to leave the pool would leave it
-            // alone: the request moves route the group whole.
-            if (grouped && bound < 0) return false;
+            // The first request of a group to leave the pool would ride
+            // alone, a required vehicle or not: the request moves route the
+            // group whole.
+            if (grouped && riding < 0) return false;
             timelines_.rebuild(plan);
             Blinker every;
             RequestInsertion insertion;
@@ -148,17 +152,16 @@ public:
             target = insertion.vehicle;
             greedyPickupPos = insertion.pickupPosition;
             greedyDropoffPos = insertion.dropoffPosition;
-        } else if (unit(rng) < assignmentProbability_ && (!grouped || bound < 0)) {
+        } else if (unit(rng) < assignmentProbability_ && (!grouped || riding < 0)) {
             // Not a request whose group rides on; one that rides alone while
             // the rest of its group waits may join them.
             target = pool;  // drop the request
         } else {
             // A bound request only moves along its own route, which is also
             // where a repair has to put it back.
-            const int required = bound;
             if (ctx.nearby.enabled()) {
-                pickupAnchor = required >= 0 ? routedNeighborIn(ctx, plan, pickup, required, rng)
-                                             : routedNeighbor(ctx, plan, pickup, pool, rng);
+                pickupAnchor = bound >= 0 ? routedNeighborIn(ctx, plan, pickup, bound, rng)
+                                          : routedNeighbor(ctx, plan, pickup, pool, rng);
                 if (pickupAnchor >= 0) {
                     target = ctx.element_list[pickupAnchor];
                     // A neighbour of the dropoff sitting in the SAME route is
@@ -168,9 +171,9 @@ public:
                 }
             }
             if (target < 0) {
-                target = required >= 0 ? required
-                                       : static_cast<int>(rng() %
-                                                          static_cast<std::uint64_t>(vehicleCount));
+                target = bound >= 0 ? bound
+                                    : static_cast<int>(rng() %
+                                                       static_cast<std::uint64_t>(vehicleCount));
             }
         }
 
@@ -305,12 +308,14 @@ private:
         ctx.editor.end_list_edit(listIndex);
     }
 
-    // The vehicle a request has to be on: its required vehicle (its own or
-    // its group's), else the one another request of its group rides, else -1.
-    int boundVehicle(const PdpRoutePlan& plan, const optimaru::OperatorContext<PdpRoutePlan>& ctx,
-                     int deliveryIndex) const {
-        const int required = groups_->vehicleOf(deliveryIndex);
-        if (required >= 0) return required;
+    // The vehicle another request of the request's group rides, or -1 when
+    // none of them is routed: the vehicle of a pinned one (it stays there),
+    // else of the first one found on a route.
+    int vehicleOfPeer(const PdpRoutePlan& plan, const optimaru::OperatorContext<PdpRoutePlan>& ctx,
+                      int deliveryIndex) const {
+        if (!groups_->pinned(deliveryIndex) && groups_->groupPinnedOn(deliveryIndex) >= 0) {
+            return groups_->groupPinnedOn(deliveryIndex);
+        }
         const int pool = Descriptor::unassigned_list(plan);
         for (int d = groups_->leaderOf(deliveryIndex); d >= 0; d = groups_->nextOf(d)) {
             if (d == deliveryIndex) continue;
@@ -480,9 +485,7 @@ public:
             const Delivery& da = plan.deliveries[static_cast<std::size_t>(a)];
             const Delivery& db = plan.deliveries[static_cast<std::size_t>(b)];
             // A group changes vehicle as one, in the request moves.
-            if (groups_->sizeOf(groups_->leaderOf(a)) > 1 ||
-                groups_->sizeOf(groups_->leaderOf(b)) > 1)
-                continue;
+            if (groups_->peersOf(a) > 0 || groups_->peersOf(b) > 0) continue;
             const int listA = ctx.element_list[da.pickupNodeIndex];
             const int listB = ctx.element_list[db.pickupNodeIndex];
             if (listA < 0 || listB < 0 || listA == listB || listA == pool || listB == pool ||

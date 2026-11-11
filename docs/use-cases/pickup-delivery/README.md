@@ -263,8 +263,9 @@ stops, which strands half a request.
 
 These work one request at a time, so with [request groups](#request-groups) they
 stay inside a group: the pair move takes a grouped request only to the vehicle
-the rest of its group rides and never drops or routes it alone, the exchange
-leaves grouped requests out, and the ruin takes a group whole.
+another request of its group rides (out of the pool to join them, never to ride
+alone) and drops it only when none of them rides, the exchange leaves grouped
+requests out, and the ruin takes a group whole.
 
 ### What they are worth
 

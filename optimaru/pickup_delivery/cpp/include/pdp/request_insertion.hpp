@@ -189,6 +189,14 @@ public:
         return pinnedOn_[static_cast<std::size_t>(deliveryIndex)];
     }
     bool pinned(int deliveryIndex) const { return pinnedOn(deliveryIndex) >= 0; }
+    // The other requests of the request's group, pinned ones included: 0 for
+    // a request that travels alone. (A unit leaves the pinned ones out, so its
+    // size does not say this.)
+    int peersOf(int deliveryIndex) const { return peers_[static_cast<std::size_t>(deliveryIndex)]; }
+    // The vehicle a pinned request of the request's group rides, or -1.
+    int groupPinnedOn(int deliveryIndex) const {
+        return groupPinnedOn_[static_cast<std::size_t>(deliveryIndex)];
+    }
 
 private:
     std::vector<int> leader_;
@@ -196,6 +204,8 @@ private:
     std::vector<int> size_;
     std::vector<int> vehicle_;
     std::vector<int> pinnedOn_;
+    std::vector<int> peers_;
+    std::vector<int> groupPinnedOn_;
     bool any_ = false;
 };
 

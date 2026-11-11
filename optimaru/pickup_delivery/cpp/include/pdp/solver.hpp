@@ -38,7 +38,8 @@ namespace pdp {
 //
 // Requests of one group (Delivery::groupIndex) ride one vehicle together or all
 // wait. Construction and the request moves place a group as one unit; the
-// operators that work one request at a time stay inside a group. The rule is
+// operators that work one request at a time stay inside a group (the pair move
+// takes a request only to where another request of its group rides). The rule is
 // scored by requestGroupCost, which belongs to the constraint assembly: the
 // solve(plan) overload scores the seven core rules only.
 //

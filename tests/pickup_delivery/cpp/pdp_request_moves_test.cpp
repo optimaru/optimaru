@@ -681,6 +681,12 @@ void testGroupsAreRead() {
     check(groups.leaderOf(2) == 2 && groups.leaderOf(4) == 2 && groups.sizeOf(2) == 2 &&
                   groups.vehicleOf(2) == 2 && groups.vehicleOf(4) == 2,
           "and the rest of its group is one unit bound to its vehicle");
+    check(groups.peersOf(0) == 2 && groups.peersOf(2) == 2 && groups.peersOf(4) == 2 &&
+                  groups.peersOf(1) == 0 && groups.peersOf(3) == 0,
+          "every request of the group has two peers, the pinned one included");
+    check(groups.groupPinnedOn(2) == 2 && groups.groupPinnedOn(4) == 2 &&
+                  groups.groupPinnedOn(3) == -1,
+          "and knows the vehicle its pinned peer rides");
 
     // Two requests of one group cannot be promised to two vehicles.
     PdpRoutePlan clash = buildRandomInstance(4, 2, /*seed=*/2);
@@ -990,6 +996,46 @@ void testStrayRequestRejoinsItsWaitingGroup() {
     std::printf("\n");
 }
 
+// A group bound to a vehicle by a required vehicle, all of it waiting: the pair
+// move does not take one request onto that vehicle alone. The group rule is
+// left out of the score here, so nothing would refuse such a move: if the pair
+// move made it, the request would ride.
+void testPairMoveDoesNotRouteABoundGroupInParts() {
+    std::printf("== Request groups: the pair move and a waiting bound group ==\n");
+    PdpRoutePlan plan = buildRandomInstance(6, 2, /*seed=*/7);
+    for (int d : {0, 1, 2}) plan.deliveries[static_cast<std::size_t>(d)].groupIndex = 0;
+    plan.deliveries[0].requiredVehicleIndex = 1;
+    for (int d : {3, 4, 5}) {
+        const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(d)];
+        plan.vehicles[0].nodeIndices.push_back(delivery.pickupNodeIndex);
+        plan.vehicles[0].nodeIndices.push_back(delivery.dropoffNodeIndex);
+    }
+    plan.rebuildUnassignedPool();
+
+    Solver::Config config;
+    config.time_limit = std::chrono::minutes(1);  // safety net: the step limit ends the solve
+    config.step_limit = 3000;
+    config.pair_construction_heuristic = false;
+    config.request_ruin_recreate = false;
+    config.bundle_moves = false;
+    config.pair_exchange_moves = false;
+    config.pair_ruin = false;
+    config.ruin_recreate = false;
+    // No engine move that carries a stop out of the pool: only the pair move could.
+    config.relocate_weight = 0.0;
+    config.list_swap_weight = 0.0;
+    config.or_opt_weight = 0.0;
+    config.tail_swap_weight = 0.0;
+    DecomposedCalculator calculator;
+    defaultConstraints().drop("requestGroupCost").into(calculator);
+    Solver(config).solve(plan, calculator);
+    const std::vector<int> on = vehicleOfRequests(plan);
+    check(on[0] < 0 && on[1] < 0 && on[2] < 0 && everyStopOnce(plan),
+          "the group still waits whole, though no rule in the score asked for it (" +
+                  plan.score.str() + ")");
+    std::printf("\n");
+}
+
 // A group no vehicle can take whole waits whole: its requests are not routed
 // one by one.
 void testGroupWithNoRoomWaits() {
@@ -1065,6 +1111,7 @@ int main() {
     testScatteredGroupIsMended();
     testGroupsFollowTheirVehicle();
     testStrayRequestRejoinsItsWaitingGroup();
+    testPairMoveDoesNotRouteABoundGroupInParts();
     testGroupWithNoRoomWaits();
     testRequestMovesMatter();
     std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures,
