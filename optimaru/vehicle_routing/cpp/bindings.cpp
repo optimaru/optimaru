@@ -189,10 +189,12 @@ PYBIND11_MODULE(_core, m) {
             });
 
     m.def(
-            "calculate_score", [](VehicleRoutePlan& plan) { return ScoreCalculator::score(plan); },
+            "calculate_score", [](VehicleRoutePlan& plan) { return calculateScore(plan); },
             py::arg("plan"),
             "Recompute the derived fields (vehicle_index, arrival_time) and the "
-            "hard / medium / soft score (also stores plan.score).");
+            "hard / medium / soft score (also stores plan.score). The score is the "
+            "one solve(plan) stores: the four core rules, or the default constraints "
+            "when the plan has a group of two or more visits.");
 
     // The acceptance criteria the engine offers.
     opy::bind_acceptor_type(m);

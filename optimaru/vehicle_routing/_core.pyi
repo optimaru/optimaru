@@ -156,7 +156,11 @@ class VehicleRoutePlan:
         """Recompute unassigned_visit_indices from the current routes."""
 
 def calculate_score(plan: VehicleRoutePlan) -> Score:
-    """Recompute the derived fields and the score (also stores plan.score)."""
+    """Recompute the derived fields and the score (also stores plan.score).
+
+    The score is the one solve(plan) stores: the four core rules, or the default
+    constraints when the plan has a group of two or more visits.
+    """
 
 class SolverConfig:
     def __init__(self) -> None: ...

@@ -166,6 +166,9 @@ The search moves a group as one unit. Before the engine's construction runs,
 each group is placed whole on the vehicle that takes all of its visits for the
 least added driving, every visit at its cheapest slot behind the ones it comes
 after (`constructGroups`); a group no vehicle takes is parked unassigned, whole.
+A group partly on a caller's `initial_route` is completed on that vehicle; when
+the rest does not fit there, it waits and the group starts split, for the search
+to mend.
 A domain move operator, `groupRuinRecreate` (`vrp/group_moves.hpp`), then takes a
 group out of its route, alone or with up to `group_ruin_max_visits` more visits
 (the groups and single visits of nearby stops, or other groups), and puts each
@@ -208,7 +211,10 @@ four core rules include neither of these two: `solve_request`, `vrp.solve(plan)`
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two visits or more (a visit alone in its group changes nothing). That is a solve on the
 constraint assembly, as when a vehicle limit is set: the whole default set is
-scored, and `num_workers` / `parallel_solver_count` have no effect. Both
+scored, and `num_workers` / `parallel_solver_count` have no effect.
+`calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same way,
+so it returns the score the solve stored and prices a split or reversed group
+on a plan built by hand. Both
 constraints are engine-only: the CP-SAT reference has no plugin for them and
 reads neither `group` nor `after`.
 

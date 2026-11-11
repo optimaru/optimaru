@@ -613,6 +613,54 @@ void testGroupsWithParallelStartsAskedFor() {
     std::printf("\n");
 }
 
+// calculateScore() reads a plan the way solve(plan) scores it. The four core
+// rules know neither groups nor order, so on them a split group looks fine.
+void testCalculateScore() {
+    std::printf("== Visit groups: calculateScore ==\n");
+    VehicleRoutePlan plan = buildRandomInstance(24, 3, /*seed=*/13);
+    groupInOrder(plan, /*grouped=*/12, /*size=*/3, /*chained=*/true);
+    Solver(stepLimited(3000)).solve(plan);
+    const Score solved = plan.score;
+    check(calculateScore(plan) == solved && plan.score == solved,
+          "a solved grouped plan scores as the solve left it (" + solved.str() + ")");
+
+    // One visit of a group of three moves to another vehicle.
+    const Places places = placesOf(plan);
+    int moved = -1;
+    for (int v = 0; v < 24 && moved < 0; ++v) {
+        if (plan.visits[static_cast<std::size_t>(v)].groupIndex >= 0) moved = v;
+    }
+    const int from = places.vehicle[static_cast<std::size_t>(moved)];
+    auto& source = plan.vehicles[static_cast<std::size_t>(from)].visitIndices;
+    source.erase(std::find(source.begin(), source.end(), moved));
+    plan.vehicles[static_cast<std::size_t>((from + 1) % 3)].visitIndices.push_back(moved);
+    const Score split = calculateScore(plan);
+    check(split.hard <= -1000 && !split.feasible() && plan.score == split,
+          "a split group is priced and stored in plan.score (" + split.str() + ")");
+    VehicleRoutePlan onCoreRules = plan;
+    check(ScoreCalculator::score(onCoreRules).hard > split.hard,
+          "which the four core rules leave out (" + onCoreRules.score.str() + ")");
+
+    // Without a group of two or more, it is the core score.
+    VehicleRoutePlan free = buildRandomInstance(24, 3, /*seed=*/13);
+    Solver(stepLimited(1000)).solve(free);
+    VehicleRoutePlan again = free;
+    check(calculateScore(free) == ScoreCalculator::score(again),
+          "a plan without groups scores on the four core rules");
+
+    // And it refuses what solve() refuses.
+    VehicleRoutePlan stranger = buildRandomInstance(6, 2, /*seed=*/3);
+    stranger.visits[0].afterVisitIndices = {1};
+    bool refused = false;
+    try {
+        calculateScore(stranger);
+    } catch (const std::invalid_argument&) {
+        refused = true;
+    }
+    check(refused, "an order outside a group is refused");
+    std::printf("\n");
+}
+
 // What the group operator is for. Step budgets, so the same seed gives the
 // same result on every machine: the plans are compared after equally many
 // moves.
@@ -661,6 +709,7 @@ int main() {
     testScatteredStartIsMended();
     testGroupWithNoRoomWaits();
     testGroupsWithParallelStartsAskedFor();
+    testCalculateScore();
     testGroupMovesMatter();
     std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures,
                 failures == 1 ? "" : "s");

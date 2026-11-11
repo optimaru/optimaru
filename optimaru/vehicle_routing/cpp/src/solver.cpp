@@ -93,9 +93,9 @@ std::shared_ptr<const VisitGroups> visitGroupsOf(const VehicleRoutePlan& plan) {
     return groups;
 }
 
-// The group operators both solve() overloads register (none for a plan
+// The group operators of a solve on a constraint assembly (none for a plan
 // without groups). They read the plan, never the calculator, so a caller's
-// constraint assembly keeps them.
+// assembly keeps them.
 void addGroupOperators(optimaru::Solver<VehicleRoutePlan>& engine, const Solver::Config& config,
                        const std::shared_ptr<const VisitGroups>& groups) {
     GroupMoveSettings moves;
@@ -246,7 +246,10 @@ void Solver::solve(VehicleRoutePlan& plan) {
         solve(plan, calculator);
         return;
     }
-    const std::shared_ptr<const VisitGroups> groups = visitGroupsOf(plan);
+    // No group of two visits or more from here on, so nothing below places or
+    // moves one. The check still refuses what a plan may not say: a group index
+    // below -1, a visit that comes after one outside its group.
+    checkVisitGroups(plan);
     // Start with an empty pool so the construction heuristic sees every
     // unrouted visit as uninitialized and places it by cheapest insertion.
     // The pool is one of the candidate lists, so "leave this visit
@@ -276,16 +279,10 @@ void Solver::solve(VehicleRoutePlan& plan) {
         return;
     }
 
-    // Groups go in whole before the engine places the other visits one by one;
-    // a group no vehicle takes is parked in the pool, where construction
-    // leaves it alone.
-    constructGroups(plan, *groups);
-
     optimaru::Settings engineConfig = buildEngineConfig(config_, plan);
     VehicleRoutingIncrementalScoreCalculator calculator;
     optimaru::Solver<VehicleRoutePlan> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    addGroupOperators(engine, config_, groups);
     engine.solve(plan, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
@@ -327,6 +324,20 @@ void Solver::solve(VehicleRoutePlan& plan,
     calculator.rebuild(plan);
     calculator.score();
     plan.score = levelScore(calculator);
+}
+
+Score calculateScore(VehicleRoutePlan& plan) {
+    checkVisitGroups(plan);
+    if (!plan.hasVisitGroups()) return ScoreCalculator::score(plan);
+    // As solve(plan) ends on a plan with groups: the derived fields, then the
+    // three levels of the default assembly.
+    ScoreCalculator::updateShadowVariables(plan);
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.rebuild(plan);
+    calculator.score();
+    plan.score = levelScore(calculator);
+    return plan.score;
 }
 
 }  // namespace vrp

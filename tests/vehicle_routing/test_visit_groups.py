@@ -331,6 +331,55 @@ def test_every_entry_point_scores_groups_on_a_plan_without_being_asked(entry):
     assert plan.score.medium == -20  # two visits of 10 service minutes each
 
 
+def as_tuple(score) -> tuple[int, int, int]:
+    return (score.hard, score.medium, score.soft)
+
+
+def test_calculate_score_reads_a_grouped_plan_as_the_solve_scored_it():
+    # No vehicle takes both visits of the group, so the solve leaves them waiting together.
+    vehicles = [vehicle("v", max_stops=1), vehicle("w", max_stops=1)]
+    plan = to_plan(two_ends([visit("a", "g"), visit("b", "g"), visit("c")], vehicles))
+    config = vrp.SolverConfig()
+    config.step_count_limit = 3000
+    vrp.solve(plan, config=config)
+    solved = as_tuple(plan.score)
+
+    assert as_tuple(vrp.calculate_score(plan)) == solved
+    assert as_tuple(plan.score) == solved
+
+
+@pytest.mark.parametrize(
+    ("routes", "hard"),
+    [
+        ((["a", "b"], []), 0),  # together, in order
+        ((["a"], ["b"]), -1000),  # split: one visit apart from its group
+        ((["b", "a"], []), -1000),  # together, the wrong way round
+        ((["b"], []), -1000),  # one riding while the other waits
+    ],
+)
+def test_calculate_score_prices_groups_and_order_on_a_plan_built_by_hand(routes, hard):
+    vehicles = [vehicle(name, route) for name, route in zip("vw", routes, strict=True)]
+    plan = to_plan(two_ends([visit("a", "g"), visit("b", "g", after=["a"])], vehicles))
+
+    score = vrp.calculate_score(plan)
+
+    assert score.hard == hard
+    assert as_tuple(plan.score) == as_tuple(score)
+    assert score.hard == -1000 * sum(
+        sum(vrp.constraint_costs(plan)[name]["costs"]) for name in ("visit_group_cost", "visit_order_cost")
+    )
+
+
+def test_calculate_score_refuses_an_order_the_solve_refuses():
+    plan = to_plan(two_ends([visit("a", "g"), visit("b", "g"), visit("c")]))
+    visits = plan.visits
+    visits[0].after_visit_indices = [2]
+    stranger = vrp.VehicleRoutePlan(plan.name, plan.locations, plan.vehicles, visits)
+
+    with pytest.raises(ValueError, match="visit a comes after visit c, which is not in its group"):
+        vrp.calculate_score(stranger)
+
+
 def test_a_constraint_list_without_the_group_rule_is_used_as_it_is():
     # The group starts on two vehicles and neither takes both visits. With the caller's own
     # list, which leaves `visit_group_cost` out, nothing in the score is wrong with that.

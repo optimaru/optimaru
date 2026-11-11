@@ -134,6 +134,9 @@ instances (see the benchmark) set it explicitly.
 
 - `ScoreCalculator::score` — the full recompute, and the readable
   statement of the constraints. Authoritative: `Solver::solve` finishes with it.
+  `calculateScore(plan)` (`vrp/solver.hpp`) is this call for a plan without
+  visit groups and the default constraint assembly for a plan with them, which
+  is how `Solver::solve(plan)` scores each.
 - `VehicleRoutingIncrementalScoreCalculator` — what the engine actually calls
   during search, maintaining per-route aggregates so a move costs
   O(route length) instead of O(instance).

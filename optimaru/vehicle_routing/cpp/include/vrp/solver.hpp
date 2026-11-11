@@ -242,6 +242,13 @@ private:
     Config config_;
 };
 
+// The score of a plan as it stands, the way solve(plan) scores it: on the
+// four core rules (ScoreCalculator::score), unless the plan has visit groups,
+// which those rules do not price: then on the default constraint assembly.
+// Refreshes the derived fields and stores the score in plan.score. Throws
+// std::invalid_argument for the groups and orders solve() refuses.
+Score calculateScore(VehicleRoutePlan& plan);
+
 }  // namespace vrp
 
 #endif  // VRP_SOLVER_HPP

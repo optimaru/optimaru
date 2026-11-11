@@ -16,7 +16,8 @@
   `group_ruin_max_visits`); it is registered only for a plan with groups, so a plan without
   them is solved exactly as before. Every entry point scores a grouped input on the
   constraint assembly (`solve_request`, `vrp.solve(plan)`, `Solver.solve(plan)`), on a
-  single start. Engine-only: the CP-SAT reference reads neither field.
+  single start, and `calculate_score(plan)` reads a grouped plan the same way (C++:
+  `vrp::calculateScore`). Engine-only: the CP-SAT reference reads neither field.
   `list_constraints()` and `constraint_info()` have two more rows.
 - **Every acceptance rule has its parameters.** Vehicle routing, quadratic assignment and
   semiconductor scheduling let `SolverConfig.acceptor_type` name seven rules, but each bound the
