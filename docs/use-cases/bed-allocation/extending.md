@@ -1,23 +1,23 @@
 # Bed allocation: adding a constraint, step by step
 
-Six steps, from a change that needs no build to a rule on the default fast path.
+Six steps, from a change that needs no build to a constraint on the default fast path.
 Each step is complete by itself, so stop at the first one that does what you need.
 The engine contracts behind the steps are in [Extending a use case](../../extending.md);
 the model and its twelve constraints are in the [guide](README.md).
 
 | Step | What you do | What it touches |
 | --- | --- | --- |
-| [1](#1-change-a-rule-that-exists) | Reweight, drop, re-level or shape a rule that exists | a Python call |
-| [2](#2-a-new-rule-from-one-function) | Add a rule, off by default | one header, two lines of C++, one Python class |
+| [1](#1-change-a-constraint-that-exists) | Reweight, drop, re-level or shape a constraint that exists | a Python call |
+| [2](#2-a-new-constraint-from-one-function) | Add a constraint, off by default | one header, two lines of C++, one Python class |
 | [3](#3-check-it) | Prove it right | one C++ test case, four counts in the tests |
 | [4](#4-make-it-cheaper-per-move) | Cut what it costs per move | the header |
 | [5](#5-put-it-on-the-default-path) | Turn it on by default | the monolithic calculator |
 | [6](#6-measure) | Show what it costs and what it buys | no code |
 
-The steps build one example: `unusedRoomEquipmentCost`, the nights a stay spends in
-a room times the equipment of that room the patient neither requires nor prefers.
-It keeps equipped rooms free for the patients who need them. Every snippet below
-was compiled and run against this repository.
+The steps build one example: `unusedRoomEquipmentCost`, the nights a stay spends in a room times the
+equipment of that room the patient neither requires nor prefers. It keeps equipped rooms free for
+the patients who need them. Every snippet below was compiled and run, and every figure measured, on
+optimaru 0.4.3; a later change to the solver moves the figures, not the steps.
 
 ## How a plan is scored
 
@@ -31,17 +31,17 @@ There are two scoring paths, and they give the same score for the same plan
 | | `ba.solve(plan)` | `ba.solve(plan, constraints=[...])` |
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/ba/constraints/` |
-| Rules | the twelve, at their defaults | the ones you list, with your knobs |
+| Constraints | the twelve, at their defaults | the ones you list, with your knobs |
 | Steps per second | 12.3 million | 1.6 million |
 | Parallel starts | `parallel_solver_count` | one start |
 
 The speeds are the demo instance (80 stays, 13 beds), 2 million steps, one thread
 of an Apple M4 Max; [step 6](#6-measure) has the script. Steps 1 to 4 work on the
-assembly. Step 5 moves a rule to the monolithic calculators.
+assembly. Step 5 moves a constraint to the monolithic calculators.
 
-## 1. Change a rule that exists
+## 1. Change a constraint that exists
 
-No build. Pass the rules you want, with the knobs that differ from the defaults:
+No build. Pass the constraints you want, with the knobs that differ from the defaults:
 
 ```python
 import optimaru.bed_allocation as ba
@@ -67,17 +67,17 @@ raw = ba.constraint_costs(result.to_core(), picks)  # raw cost of every rule, pe
 print(score(raw, picks))                            # the score those picks give this plan
 ```
 
-The knobs (`weight`, `level`, `exponent`, `offset`, `clip`) and picking a rule twice
+The knobs (`weight`, `level`, `exponent`, `offset`, `clip`) and picking a constraint twice
 are described in [`constraints.py`](../../../optimaru/bed_allocation/constraints.py).
-Stop here if the rule you need is one of the twelve.
+Stop here if the constraint you need is one of the twelve.
 
-## 2. A new rule from one function
+## 2. A new constraint from one function
 
-A rule is a component: a struct in its own header that returns a **raw cost**, a
+A constraint is a component: a struct in its own header that returns a **raw cost**, a
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-Ten of the twelve rules are a sum of one term per stay, and
+Ten of the twelve constraints are a sum of one term per stay, and
 [`constraints/common.hpp`](../../../optimaru/bed_allocation/cpp/include/ba/constraints/common.hpp)
 has a base for that. Pick the base by what the term reads:
 
@@ -136,9 +136,9 @@ lower-case first letter. Python derives `unused_room_equipment_cost` from it.
 
 The defaults live in these two constants and nowhere else; Python reads them through
 `ba.constraint_info()`. `kDefaultLevel` is `Hard`, `Medium` or `Soft`, and the weight is
-in units of that level. A medium rule states its weight in medium units
+in units of that level. A medium constraint states its weight in medium units
 (`unassignedStaysCost`: 1): the domain folds the medium level into the engine's score
-itself (`kMediumFold` in `domain.hpp`), so no weight carries the 10^9. A hard rule
+itself (`kMediumFold` in `domain.hpp`), so no weight carries the 10^9. A hard constraint
 returns whole numbers, because a hard contribution is rounded per bed.
 
 **2. The assembly**, `cpp/include/ba/constraints.hpp`: include the header, and add
@@ -148,7 +148,7 @@ one line at the end of `defaultConstraints()`:
     assembly.emplace<UnusedRoomEquipmentCost>();
 ```
 
-A rule has to be in `defaultConstraints()` for Python to see it. With
+A constraint has to be in `defaultConstraints()` for Python to see it. With
 `kDefaultWeight = 0.0` it is there and scores nothing until a caller gives it a
 weight, so no default solve changes and the monolithic calculators stay as they are.
 
@@ -173,7 +173,7 @@ class UnusedRoomEquipmentCost(Constraint):
 
 **4. Its default instance**, in the same file: `unused_room_equipment_cost =
 UnusedRoomEquipmentCost()` with the other instances, that instance in `_DEFAULTS`
-before `mixed_gender_room_cost` (the per-bed rules come first, the one global
+before `mixed_gender_room_cost` (the per-bed constraints come first, the one global
 last), and both names in `__all__`.
 
 Build and use it:
@@ -200,12 +200,12 @@ On the demo instance that sum is 135. A default solve of the same length
 
 What the base gave you: `cost()` of a bed is the sum of `roomCost` over its stays,
 and when a stay moves the engine calls `roomCost` once for the bed it leaves and
-once for the bed it joins. The rule is already incremental.
+once for the bed it joins. The constraint is already incremental.
 
-The engine asks every rule in the picks, whatever its weight. `get_constraints()` now
-returns thirteen rules, the new one at weight 0, and solving with that list is slower
+The engine asks every constraint in the picks, whatever its weight. `get_constraints()` now
+returns thirteen constraints, the new one at weight 0, and solving with that list is slower
 than with the twelve (1.42 against 1.60 million steps per second) for the same score.
-Leave a rule out of the picks, as `others` does above, instead of passing it at weight 0.
+Leave a constraint out of the picks, as `others` does above, instead of passing it at weight 0.
 
 ## 3. Check it
 
@@ -231,12 +231,12 @@ cmake -B build -DOPTIMARU_USE_CASES=bed_allocation && cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-**The counts.** A thirteenth rule fails four checks that count or list the catalog.
+**The counts.** A thirteenth constraint fails four checks that count or list the catalog.
 Update them:
 
 - `ba_plugin_test.cpp`: `constraint_totals().size() == 12`, and `rows.size() == 12` in
   `verifyCatalog()`. Add the new row there, before `mixedGenderRoomCost`. `rowIs()`
-  expects a rule that is on by default, so check the new row's fields directly
+  expects a constraint that is on by default, so check the new row's fields directly
   (`!rows[11].default_enabled`);
 - `tests/bed_allocation/test_constraint_specs.py`:
   `test_list_constraints_matches_the_spec_names` (the list), and
@@ -250,7 +250,7 @@ recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
 ba.solve(plan, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
 ```
 
-`ba_plugin_test` does the same for the default assembly, which now holds the rule:
+`ba_plugin_test` does the same for the default assembly, which now holds the constraint:
 3,000 random moves, incremental against full recompute.
 
 **The tables.** The constraint tables in [README.md](README.md) and
@@ -259,22 +259,22 @@ ba.solve(plan, time_limit_seconds=1, random_seed=1, constraints=picks, full_asse
 
 ## 4. Make it cheaper per move
 
-On the assembly a move costs, for every rule, one call for the bed a stay leaves
-and one for the bed it joins. What that call is depends on the rule:
+On the assembly a move costs, for every constraint, one call for the bed a stay leaves
+and one for the bed it joins. What that call is depends on the constraint:
 
-| The rule is | Use | Per move | Example to copy |
+| The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
 | a sum of per-stay terms | `PerStayConstraint` / `PerStayRoomConstraint` | one `stayCost` call | step 2 |
 | a sum over pairs of stays in one bed | `BaUnitConstraint` with `cost()`, `supports_delta()` and `delta_cost()` | one pass over the bed's other stays | [`bed_conflict_cost.hpp`](../../../optimaru/bed_allocation/cpp/include/ba/constraints/bed_conflict_cost.hpp) |
 | anything that spans beds (a room, a department, the whole plan) | `MemberChangeGlobalConstraint`: keep your own totals in `on_member_changed()` | what your update costs | [`mixed_gender_room_cost.hpp`](../../../optimaru/bed_allocation/cpp/include/ba/constraints/mixed_gender_room_cost.hpp) |
 
 A unit constraint with `cost()` alone is correct: the engine then recomputes the
-whole bed on every change, which for a rule over pairs is quadratic in the stays of
+whole bed on every change, which for a constraint over pairs is quadratic in the stays of
 the bed. `delta_cost()` returns what one stay adds given the others, and must equal
 `cost(with the stay) - cost(without it)` exactly. `full_assert` (step 3) checks
 that it does.
 
-Three more things cut the cost of a rule that is already incremental.
+Three more things cut the cost of a constraint that is already incremental.
 
 **Compute once per solve.** The facts never change during a solve, so a term that
 reads only facts can be a table. `on_reset()` runs when a solve starts and when it
@@ -305,24 +305,24 @@ private:
     std::vector<double> table_;  // rooms x stays
 ```
 
-With the rule at weight 5 the assembly went from 1.41 to 1.53 million steps per
+With the constraint at weight 5 the assembly went from 1.41 to 1.53 million steps per
 second, and the solve ended on the same score, as it must. That takes back most of
-what the rule cost: the twelve alone run at 1.60. A term that walks a list or a map
+what the constraint cost: the twelve alone run at 1.60. A term that walks a list or a map
 gains more. Under
 `full_assert` the engine rebuilds on every step, so `on_reset()` runs every step
 there; 20,000 checked steps still take 0.4 seconds on the demo instance.
 
-**Say which units the rule can charge.** `scoped_units()` returns the units the rule
+**Say which units the constraint can charge.** `scoped_units()` returns the units the constraint
 is ever non-zero for, and the engine skips it on the others.
 `PerStayRoomConstraint` already returns the real beds, so the "no bed" value is
 never asked.
 
-**Keep raw costs whole numbers.** Every rule here counts nights, so sums stay exact
+**Keep raw costs whole numbers.** Every constraint here counts nights, so sums stay exact
 and a hard total is never rounded. Return `static_cast<double>` of an integer count.
 
 ## 5. Put it on the default path
 
-Do this when the rule should be on in every solve (`kDefaultWeight > 0`). Then
+Do this when the constraint should be on in every solve (`kDefaultWeight > 0`). Then
 `ba.solve(plan)` must score it, and `ba.solve(plan)` scores with the monolithic
 calculators: nearly 8 times the steps per second of the assembly, and the only path that
 runs parallel starts.
@@ -357,17 +357,17 @@ constexpr std::int64_t kUnusedEquipmentWeight = integralWeight<UnusedRoomEquipme
     impact.soft += kUnusedEquipmentWeight * nights * unused;
 ```
 
-That is all for a per-stay rule. `incremental_calculator.cpp` builds a table of
+That is all for a per-stay constraint. `incremental_calculator.cpp` builds a table of
 `singleStayImpact()` per stay and room when a solve starts and reads it on every
 move, so the new term costs nothing per step: the default path ran at 12.2 million
-steps per second with the thirteenth rule in it, against 12.3 with twelve.
+steps per second with the thirteenth constraint in it, against 12.3 with twelve.
 
-A rule over pairs is more work. `bedConflictCost` and `mixedGenderRoomCost` are kept
+A constraint over pairs is more work. `bedConflictCost` and `mixedGenderRoomCost` are kept
 from per-night occupancy counters in `incremental_calculator.cpp` (`insert()` and
-`retract()`), and a new pair rule needs its own counters there, and its sum in
+`retract()`), and a new pair constraint needs its own counters there, and its sum in
 `ScoreCalculator::score()`.
 
-**3. What else moves.** A rule that is on by default changes every default score:
+**3. What else moves.** A constraint that is on by default changes every default score:
 
 - the catalog checks of step 3 again: the row's weight, and that it is on by default;
 - the hand-computed scores in `tests/bed_allocation/cpp/ba_test.cpp` (with the
@@ -377,7 +377,7 @@ from per-night occupancy counters in `incremental_calculator.cpp` (`insert()` an
   `constraints.py`, `__init__.py`, `_core.pyi` and `common.hpp`;
 - the CP-SAT model the benchmark compares against, `external_solver.bed_allocation`
   in [external-solver](https://github.com/optimaru/external-solver). Without the
-  same rule there, [`benchmarks/bed-allocation`](../../../benchmarks/bed-allocation)
+  same constraint there, [`benchmarks/bed-allocation`](../../../benchmarks/bed-allocation)
   no longer compares one objective;
 - the published results in `benchmarks/bed-allocation/README.md`, and `CHANGELOG.md`.
 
@@ -410,19 +410,19 @@ differ after a change, the two paths no longer score alike.
 
 | Measured on the demo instance | Steps per second |
 | --- | --- |
-| default path, twelve rules | 12.3 million |
-| assembly, twelve rules | 1.60 million |
-| assembly, twelve + the rule of step 2 at weight 5 | 1.41 million |
-| assembly, twelve + the rule of step 2 at weight 0 (`get_constraints()`) | 1.42 million |
-| assembly, twelve + the rule with the table of step 4 at weight 5 | 1.53 million |
-| assembly, twelve + the rule with the table of step 4 at weight 0 | 1.55 million |
-| default path, thirteen rules (step 5) | 12.2 million |
-| assembly, thirteen rules (step 5) | 1.52 million |
+| default path, twelve constraints | 12.3 million |
+| assembly, twelve constraints | 1.60 million |
+| assembly, twelve + the constraint of step 2 at weight 5 | 1.41 million |
+| assembly, twelve + the constraint of step 2 at weight 0 (`get_constraints()`) | 1.42 million |
+| assembly, twelve + the constraint with the table of step 4 at weight 5 | 1.53 million |
+| assembly, twelve + the constraint with the table of step 4 at weight 0 | 1.55 million |
+| default path, thirteen constraints (step 5) | 12.2 million |
+| assembly, thirteen constraints (step 5) | 1.52 million |
 
 Each figure is the median of five runs, all taken in one session; a run moves by a few
 percent, and other work on the machine lowers every row together.
 
-**Quality at a fixed time.** A rule changes what the search can reach, so compare
+**Quality at a fixed time.** A constraint changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after:
 
 ```sh
@@ -432,7 +432,7 @@ uv run --project benchmarks/bed-allocation/cpsat \
 ./build/bed_allocation/ba_quality_bench /tmp/ba/<name>.batxt 10 1    # seconds, seed
 ```
 
-`ba_quality_bench` runs the default path only, so it measures a rule after step 5.
+`ba_quality_bench` runs the default path only, so it measures a constraint after step 5.
 Build the tree before and after the change into two build directories and run the
 two binaries in turn on the same instances and seeds. The comments on `Solver::Config` in
 [`solver.hpp`](../../../optimaru/bed_allocation/cpp/include/ba/solver.hpp) show what
@@ -452,7 +452,7 @@ such a comparison reports. Against CP-SAT: `uv run bed-allocation-compare --seco
 | `docs/use-cases/bed-allocation/README.md`, `python.md` | | table row | | defaults |
 | `cpp/src/score_calculator.cpp` | | | | the term |
 | `tests/bed_allocation/cpp/ba_test.cpp` | | | | expected scores |
-| external-solver, `benchmarks/bed-allocation` | | | | the same rule, results |
+| external-solver, `benchmarks/bed-allocation` | | | | the same constraint, results |
 
 Moves and the construction heuristic are a different subject: see
 [Extending](README.md#extending) in the guide.

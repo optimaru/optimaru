@@ -55,6 +55,17 @@
   their comparison ladders. Rows where CP-SAT still has the better score: three knapsacks
   (by 1 to 3 in 17,000 to 170,000), the 120-vertex max-cut (2340 against 2341) and the
   6-team league.
+- **Docs: adding a constraint, step by step, in every use case.** Each use case has
+  `docs/use-cases/<slug>/extending.md` ("Adding a constraint" under its name on the docs
+  site). It takes one new constraint through that use case's own files in six steps: change
+  a constraint that exists from Python, write a new one as a component, check it, make it
+  cheaper per move, put it on the default fast path, measure. Every snippet was compiled and
+  every figure measured on 0.4.3, on the use case's demo or a generated instance; each guide
+  says how its two scoring paths differ (which constraints the default path scores, what a
+  step is, whether a pick at weight 0 is still computed, when `on_reset()` runs) instead of
+  repeating one text. The "Adding a hard or soft cost" list in each use case's README is
+  now a pointer to that guide, and `docs/extending.md` stays the reference for the
+  contracts. `tests/test_layout.py` requires the guide for every use case.
 
 ## 0.4.3
 

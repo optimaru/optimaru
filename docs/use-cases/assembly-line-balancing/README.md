@@ -217,31 +217,9 @@ LNS is a `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 before the engine starts (the engine only fills what is still unassigned). `alb_test`
 and the Python reference-parity tests pin its results.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/assembly_line_balancing/cpp/include/alb/constraints/`:
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint`
-   per station — `PerTaskConstraint` for a per-task term — or a member-change
-   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
-   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
-   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/assembly_line_balancing/cpp/include/alb/constraints.hpp` and add it to
-   `forEachDefaultConstraint()` if it belongs to the default set (that is also the
-   catalog order);
-3. for a default constraint, add the same raw cost to `score_calculator` (`RawCosts`) /
-   `incremental_calculator`, weighted by the component's `kDefaultWeight` —
-   `alb_plugin_test` checks they agree bit for bit — and a positive and a zero
-   hand-calculated case to `alb_test` / `alb_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/assembly_line_balancing/constraints.py`
-   (plus its module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model, `external_solver.assembly_line_balancing` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), with an exact encoding so its
-   `tests/assembly_line_balancing/test_constraint_parity.py` can pin assignments;
-   [`benchmarks/assembly-line-balancing/cpsat`](../../../benchmarks/assembly-line-balancing/cpsat)
-   runs it against this engine.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

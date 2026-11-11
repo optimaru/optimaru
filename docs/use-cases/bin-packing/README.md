@@ -246,31 +246,9 @@ engine runs (`optimaru/bin_packing/cpp/src/construction.cpp`: best fit over the 
 weight, around the seeded bins); the engine only fills what is still unassigned, so a
 different heuristic is a different `constructBins` order or rule.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/bin_packing/cpp/include/bp/constraints/` (currently `bin_capacity_cost`, `color_conflict_cost`,
-`item_conflict_cost`, `used_bins_cost`):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint`
-   per bin or a `GlobalConstraint`; positive raw cost = penalty, 0 = no violation)
-   declaring `static constexpr double kDefaultWeight` and
-   `static constexpr optimaru::Level kDefaultLevel`, an
-   `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/bin_packing/cpp/include/bp/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for a default constraint, add the same raw cost to `score_calculator` /
-   `incremental_calculator`, weighted by the component's `kDefaultWeight` —
-   `bp_plugin_test` checks they agree bit for bit — and a positive and a zero
-   hand-calculated case to `bp_test` / `bp_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/bin_packing/constraints.py` (plus its
-   module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model, `external_solver.bin_packing` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), and extend its pinned-assignment parity
-   test there, so both solvers keep one semantics;
-   [`benchmarks/bin-packing/cpsat`](../../../benchmarks/bin-packing/cpsat) runs it against this
-   engine.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

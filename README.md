@@ -70,9 +70,10 @@ recipes and the rules for a pull request;
 [`docs/extending.md`](docs/extending.md) is the full step-by-step guide. For a
 constraint, each use case also has a worked example in its own files,
 `docs/use-cases/<slug>/extending.md`
-([bed allocation's](docs/use-cases/bed-allocation/extending.md), for one): a rule
-picked from Python, then written as a component, tested, made cheaper per move and
-moved to the default fast path, with the steps per second measured at each stage.
+([bed allocation's](docs/use-cases/bed-allocation/extending.md), for one): a
+constraint changed from Python, then a new one written as a component, tested, made
+cheaper per move and moved to the default fast path, with the steps per second
+measured at each stage.
 
 ## Use cases
 

@@ -317,9 +317,9 @@ one); `step_count_limit = 0` means no limit, not zero steps.
 (a `MoveOperator` registered in the use case's `solver.cpp`), a ruin operator,
 changing the construction, and adding a hard or soft cost (a component under
 `constraints/`, the assembly, the fast default path, the Python spec, tests and
-docs). Each use case has `extending.md` next to its guide: one new rule taken
-through that use case's own files in six steps, from a rule picked in Python to
-the default fast path, with the steps per second measured on the way.
+docs). Each use case has `extending.md` next to its guide: one new constraint taken
+through that use case's own files in six steps, from a pick in Python to the
+default fast path, with the steps per second measured on the way.
 
 ## How the extensions are built
 
