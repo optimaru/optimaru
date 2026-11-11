@@ -41,6 +41,21 @@
   `bind_score()`, `bind_constraints()` and `bind_acceptor_type()`. Its two record-to-record
   gaps are now checked when set (finite and >= 0, a `ValueError` otherwise); nothing else
   changes in Python.
+- **Pickup and delivery: a grouped plan is scored the same by every entry point.** The C++
+  `Solver::solve(plan)`, and with it Python's `Solver(config).solve(plan)`, scored a plan with
+  request groups on the seven core rules, which leave `request_group_cost` out, so a split
+  group came back as feasible; only `pdp.solve(plan)` and `solve_request` switched to the
+  default constraints. The engine now switches itself (`PdpRoutePlan::hasRequestGroups()`),
+  on a single start, and `calculate_score(plan)` (C++: `pdp::calculateScore`) reads a grouped
+  plan the same way instead of overwriting its score with the core rules'. As in vehicle
+  routing, a request alone in its group changes nothing: such a plan stays on the core rules,
+  where 0.4.2 switched for any `group`. With `pair_construction_heuristic` off, a grouped plan
+  now starts as any other does there: the engine's construction places every stop, where
+  `pdp.solve(plan)` used to leave the caller's unassigned pool for the search to route.
+  `request_group_cost` answers the move previews since it counts with
+  `optimaru::GroupPlacement`, and answers them piecewise for a plan without groups; the
+  default set still applies every move, because its three request-coupling constraints do
+  not preview.
 - **Pickup and delivery notebook re-run on 0.4.2.** `examples/pickup-delivery.ipynb` is saved
   with outputs from optimaru 0.4.2: the same problem now ends at 5.2 hours of driving, where
   0.4.1 ended at 5.4. Its rounds of more search are 10,000 steps each (were 0.3 seconds),

@@ -1108,6 +1108,42 @@ void verifyRepeatsAndOffsets() {
               "repeated, shifted unit components: every preview served and equal to the "
               "applied score (FULL_ASSERT)");
     }
+    for (const bool grouped : {true, false}) {
+        // requestGroupCost answers previews (the other globals of the default
+        // set do not): with groups from the candidate members, without any
+        // through its piecewise answer of 0. Next to three unit components.
+        PdpRoutePlan plan = buildRandomInstance(12, 3, /*seed=*/19);
+        if (grouped) {
+            for (std::size_t d = 0; d < plan.deliveries.size(); ++d)
+                plan.deliveries[d].groupIndex = static_cast<int>(d / 3);
+        }
+        std::mt19937_64 layout(37);
+        randomizeRoutes(plan, layout, /*poolRate=*/0.15);
+        plan.rebuildUnassignedPool();
+        DecomposedCalculator calculator;
+        defaultConstraints()
+                .only({"vehicleCapacityCost", "maxEndTimeCost", "travelTimeCost",
+                       "requestGroupCost"})
+                .into(calculator);
+        optimaru::Editor<PdpRoutePlan> editor(plan, calculator, optimaru::ScoreChecks::Full);
+        editor.score();
+        optimaru::testing::PreviewParity parity;
+        bool corrupted = false;
+        try {
+            parity = optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/17,
+                                                           /*trials=*/3000);
+        } catch (const optimaru::ScoreMismatchError& error) {
+            corrupted = true;
+            std::printf("    %s\n", error.what());
+        }
+        std::printf("    %s: %d moves checked, %d previewed, %d declined\n",
+                    grouped ? "request groups" : "no groups", parity.checked, parity.previewed,
+                    parity.declined);
+        check(!corrupted && parity.all_equal() && parity.declined == 0 && parity.previewed > 1000,
+              std::string(grouped ? "requestGroupCost with groups"
+                                  : "requestGroupCost with nothing grouped") +
+                      ": every preview served and equal to the applied score (FULL_ASSERT)");
+    }
     {
         PdpRoutePlan plan = buildRandomInstance(14, 3, /*seed=*/9);
         plan.rebuildUnassignedPool();

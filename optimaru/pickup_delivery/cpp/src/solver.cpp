@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "pdp/constraints.hpp"
 #include "pdp/incremental_calculator.hpp"
 #include "pdp/request_insertion.hpp"
 #include "pdp/request_moves.hpp"
@@ -821,9 +822,24 @@ Score levelScoreOf(const optimaru::DecomposedObjective<PdpRoutePlan>& calculator
 }  // namespace
 
 void Solver::solve(PdpRoutePlan& plan) {
+    // Refused before anything in the plan is touched, the pool included.
     checkRequiredVehicles(plan);
     const std::shared_ptr<const RequestGroups> groups = requestGroupsOf(plan);
     checkRequestGroups(plan, *groups);
+    // The seven core rules do not price groups, and on them a split group
+    // would end as a feasible plan. A plan with groups is scored with the
+    // whole default assembly instead (single-start, like every solve on a
+    // caller's assembly).
+    if (plan.hasRequestGroups()) {
+        // The same pool handling as the core path below: without the pair
+        // construction, the engine's own construction places every stop.
+        if (!config_.pair_construction_heuristic || plan.vehicles.empty())
+            plan.unassignedNodeIndices.clear();
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        solve(plan, calculator);
+        return;
+    }
     // Empty pool so the construction heuristic places every stop itself.
     if (config_.pair_construction_heuristic && !plan.vehicles.empty())
         constructPairs(plan, config_.first_fit_decreasing, *groups);
@@ -896,6 +912,18 @@ void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePla
     ScoreCalculator::updateShadowVariables(plan);
     calculator.rebuild(plan);
     plan.score = levelScoreOf(calculator);
+}
+
+Score calculateScore(PdpRoutePlan& plan) {
+    if (!plan.hasRequestGroups()) return ScoreCalculator::score(plan);
+    // As solve(plan) ends on a plan with groups: the derived fields, then the
+    // three levels of the default assembly.
+    ScoreCalculator::updateShadowVariables(plan);
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.rebuild(plan);
+    plan.score = levelScoreOf(calculator);
+    return plan.score;
 }
 
 }  // namespace pdp

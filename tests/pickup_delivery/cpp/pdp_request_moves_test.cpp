@@ -1038,17 +1038,20 @@ void testPairMoveDoesNotRouteABoundGroupInParts() {
 
 // Parallel starts each build their own groups and operators on their copy of
 // the plan.
-void testGroupsWithParallelStarts() {
-    std::printf("== Request groups with parallel starts ==\n");
+// solve(plan) with parallel starts asked for: a grouped plan goes to the
+// default assembly, which is one start, and comes back whole.
+void testGroupsWithParallelStartsAskedFor() {
+    std::printf("== Request groups through solve(plan), parallel starts asked for ==\n");
     PdpRoutePlan plan = buildRandomInstance(18, 3, /*seed=*/13);
     groupInOrder(plan, 3);
     Solver::Config config;
     config.time_limit = std::chrono::minutes(1);  // safety net: the step limit ends the solve
-    config.step_limit = 1500;
+    config.step_limit = 3000;
     config.parallel_solver_count = 2;
     Solver(config).solve(plan);
-    check(everyStopOnce(plan) && plan.score.feasible() && plan.unassignedNodeIndices.empty(),
-          "two starts solve a grouped plan (" + plan.score.str() + ")");
+    check(everyStopOnce(plan) && plan.score.feasible() && plan.unassignedNodeIndices.empty() &&
+                  groupsWhole(plan),
+          "the grouped plan is solved whole (" + plan.score.str() + ")");
     std::printf("\n");
 }
 
@@ -1071,6 +1074,63 @@ void testGroupWithNoRoomWaits() {
           "the three requests of the group stay unassigned together (" + plan.score.str() + ")");
     check(plan.unassignedNodeIndices.size() == 6 && everyStopOnce(plan),
           "and the five other requests are routed");
+
+    // The same through solve(plan), which has no calculator to be told about:
+    // a plan with groups is scored with the default assembly there too. On the
+    // seven core rules the three requests would be routed apart and look fine.
+    PdpRoutePlan core = buildRandomInstance(8, 3, /*seed=*/9);
+    for (Vehicle& vehicle : core.vehicles) vehicle.maxStops = 4;
+    for (int d : {0, 1, 2}) core.deliveries[static_cast<std::size_t>(d)].groupIndex = 0;
+    // Without the score checks, which only verify and never steer the search:
+    // the same seed and step budget give the same plan.
+    config.score_checks = optimaru::ScoreChecks::Off;
+    Solver(config).solve(core);
+    const std::vector<int> coreOn = vehicleOfRequests(core);
+    check(core.score == plan.score && coreOn[0] < 0 && coreOn[1] < 0 && coreOn[2] < 0,
+          "solve(plan) scores a grouped plan with the default assembly (" + core.score.str() + ")");
+    std::printf("\n");
+}
+
+// calculateScore() reads a plan the way solve(plan) scores it. The seven core
+// rules do not know groups, so on them a split group looks fine.
+void testCalculateScore() {
+    std::printf("== Request groups: calculateScore ==\n");
+    PdpRoutePlan plan = buildRandomInstance(18, 3, /*seed=*/13);
+    groupInOrder(plan, 3);
+    Solver::Config config;
+    config.time_limit = std::chrono::minutes(1);
+    config.step_limit = 3000;
+    Solver(config).solve(plan);
+    const Score solved = plan.score;
+    check(calculateScore(plan) == solved && plan.score == solved,
+          "a solved grouped plan scores as the solve left it (" + solved.str() + ")");
+
+    // One request of a group moves to the end of another vehicle's route.
+    const std::vector<int> on = vehicleOfRequests(plan);
+    check(on[0] >= 0, "the first request rides after the solve");
+    const Delivery& moved = plan.deliveries[0];
+    auto& source = plan.vehicles[static_cast<std::size_t>(on[0])].nodeIndices;
+    source.erase(std::find(source.begin(), source.end(), moved.pickupNodeIndex));
+    source.erase(std::find(source.begin(), source.end(), moved.dropoffNodeIndex));
+    auto& target = plan.vehicles[static_cast<std::size_t>((on[0] + 1) % 3)].nodeIndices;
+    target.push_back(moved.pickupNodeIndex);
+    target.push_back(moved.dropoffNodeIndex);
+    const Score split = calculateScore(plan);
+    check(split.hard <= -1000 && !split.feasible() && plan.score == split,
+          "a split group is priced and stored in plan.score (" + split.str() + ")");
+    PdpRoutePlan onCoreRules = plan;
+    check(ScoreCalculator::score(onCoreRules).hard > split.hard,
+          "which the seven core rules leave out (" + onCoreRules.score.str() + ")");
+
+    // Without a group of two or more, it is the core score: a group of one
+    // changes nothing.
+    PdpRoutePlan free = buildRandomInstance(18, 3, /*seed=*/13);
+    free.deliveries[0].groupIndex = 0;
+    config.step_limit = 1000;
+    Solver(config).solve(free);
+    PdpRoutePlan again = free;
+    check(!free.hasRequestGroups() && calculateScore(free) == ScoreCalculator::score(again),
+          "a plan without groups scores on the seven core rules");
     std::printf("\n");
 }
 
@@ -1128,8 +1188,9 @@ int main() {
     testGroupsFollowTheirVehicle();
     testStrayRequestRejoinsItsWaitingGroup();
     testPairMoveDoesNotRouteABoundGroupInParts();
-    testGroupsWithParallelStarts();
+    testGroupsWithParallelStartsAskedFor();
     testGroupWithNoRoomWaits();
+    testCalculateScore();
     testRequestMovesMatter();
     std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASSED" : "FAILED", failures,
                 failures == 1 ? "" : "s");

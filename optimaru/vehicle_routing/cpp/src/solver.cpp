@@ -237,6 +237,10 @@ Score levelScore(const optimaru::DecomposedObjective<VehicleRoutePlan>& calculat
 }  // namespace
 
 void Solver::solve(VehicleRoutePlan& plan) {
+    // Refused before anything in the plan is touched, the pool included: a
+    // group index below -1, a visit that comes after one outside its group, an
+    // order with a cycle.
+    checkVisitGroups(plan);
     // The four core rules do not price groups, and on them a split group
     // would end as a feasible plan. A plan with groups is scored with the
     // whole default assembly instead (single-start, like every solve on a
@@ -249,9 +253,7 @@ void Solver::solve(VehicleRoutePlan& plan) {
         return;
     }
     // No group of two visits or more from here on, so nothing below places or
-    // moves one. The check still refuses what a plan may not say: a group index
-    // below -1, a visit that comes after one outside its group.
-    checkVisitGroups(plan);
+    // moves one.
     // Start with an empty pool so the construction heuristic sees every
     // unrouted visit as uninitialized and places it by cheapest insertion.
     // The pool is one of the candidate lists, so "leave this visit

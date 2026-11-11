@@ -81,7 +81,9 @@ print(plan.unassigned_delivery_ids())  # []
   acceptance by default); its parameters are listed under
   [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule).
 - `pdp.calculate_score(plan)` recomputes the derived fields and the score of the
-  routes as they are, and stores it in `plan.score`.
+  routes as they are, and stores it in `plan.score`. It is the score
+  `pdp.solve(plan)` stores: the seven core rules, or the default constraints when
+  two requests or more share a group.
 - `pdp.constraint_info()`, `pdp.list_constraints()` and
   `pdp.constraint_costs(plan, constraints=None)` report the catalog, the names
   and the raw per-unit costs; `optimaru.pickup_delivery.constraints.score(costs,

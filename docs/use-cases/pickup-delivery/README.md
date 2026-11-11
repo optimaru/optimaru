@@ -301,7 +301,10 @@ kick it is 0.7%. The Li & Lim results at 30 s are in
 ## Scoring: two implementations, checked against each other
 
 `ScoreCalculator::score` is the full recompute and the readable
-statement of the constraints. `PdpIncrementalScoreCalculator` is what the
+statement of the constraints (`calculateScore(plan)` in `pdp/solver.hpp` is this
+call for a plan without request groups, and the default constraint assembly for a
+plan with them, which is how `Solver::solve(plan)` scores each).
+`PdpIncrementalScoreCalculator` is what the
 engine calls during search: per-route terms (capacity peak, lateness, driving)
 are re-derived per touched route, while the coupling terms are maintained
 per *request*, since they read both stops of a request and those may sit in
@@ -382,14 +385,19 @@ Two requests of a group that are bound to different vehicles, each by its
 `required_vehicle` or by a pinned stop, are refused (`ValueError`): such a group
 could never be whole.
 
-`solve_request` scores groups whenever a request names one: it then solves on the
-constraint assembly, as it does when a vehicle limit is set. `pdp.solve(plan)`
-does the same for a plan with a `group_index` set. One level down,
-`Solver(config).solve(plan)` (the C++ `Solver::solve(plan)`) scores the seven
-core rules, which do not include this one: use `solve_with_constraints` there.
+Every entry point scores a grouped plan with the default constraints, since the
+seven core rules do not include this one: `solve_request`, `pdp.solve(plan)`,
+`Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
+group holds two requests or more (a request alone in its group changes nothing).
+That is a solve on the constraint assembly, as when a vehicle limit is set: the
+whole default set is scored, and `num_workers` / `parallel_solver_count` have no
+effect. `calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same
+way, so it returns the score the solve stored and prices a split group on a plan
+built by hand.
 With `pair_construction_heuristic` off the engine's own construction places
 stops one at a time and may start with a group split, which the search then has
-to mend. Like `required_vehicle_cost`
+to mend; through `solve(plan)` it starts from an empty pool, while a list passed
+as `constraints` leaves the stops the caller parked in the pool where they are. Like `required_vehicle_cost`
 and `pinned_stops_cost` the constraint is engine-only: the CP-SAT reference has
 no plugin for it and does not read `group`.
 

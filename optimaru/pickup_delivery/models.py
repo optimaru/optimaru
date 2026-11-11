@@ -369,8 +369,10 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
         or v.max_route_radius_meters
         or v.pinned_stops
         for v in request.model_input.vehicles
-    ) or any(d.required_vehicle or d.group for d in request.model_input.deliveries)
+    ) or any(d.required_vehicle for d in request.model_input.deliveries)
     if constraints is None and not has_route_policy:
+        # Request groups need no entry above: Solver.solve itself scores a plan with a group of
+        # two requests or more on the default constraints.
         solver.solve(plan)
     else:
         if constraints is None:

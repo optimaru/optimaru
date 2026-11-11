@@ -296,6 +296,22 @@ def test_the_engine_refuses_the_same_on_a_plan():
         vrp.solve(twice, time_limit_seconds=0.1)
 
 
+def test_a_refused_plan_keeps_its_unassigned_pool():
+    plan = to_plan(two_ends([visit("a", "g"), visit("b", "g"), visit("c")]))
+    visits = plan.visits
+    visits[0].after_visit_indices = [1]
+    visits[1].after_visit_indices = [0]
+    cycle = vrp.VehicleRoutePlan(plan.name, plan.locations, plan.vehicles, visits)
+    cycle.rebuild_unassigned_pool()
+    waiting = list(cycle.unassigned_visit_indices)
+
+    with pytest.raises(ValueError, match="the order of the visits has a cycle"):
+        vrp.Solver(vrp.SolverConfig()).solve(cycle)
+
+    assert len(waiting) == 3
+    assert list(cycle.unassigned_visit_indices) == waiting
+
+
 def test_an_empty_group_name_is_no_group():
     model_input = two_ends([visit("a", ""), visit("b", ""), visit("c")])
 
