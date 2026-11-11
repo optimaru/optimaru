@@ -270,7 +270,7 @@ class RequiredAndPreferredAttendanceConflictCost(Constraint):
 class PreferredAttendanceConflictCost(Constraint):
     """Overlapping grains of a person **preferred in both**. Default: medium, weight 1.
 
-    Regrettable rather than impossible, so it sits at medium: below the hard rules
+    Regrettable rather than impossible, so it sits at medium: below the hard constraints
     and above every soft convenience term. The weight is in medium units; the domain
     folds the medium level into the engine soft level as `medium * 1e6`."""
 
@@ -331,7 +331,7 @@ class MeetingOverlapCost(Constraint):
 class RoomChangeCost(Constraint):
     """Shared attendees whose next meeting starts within two grains in a different room. Default: soft, weight 1.
 
-    Unlike the three conflict rules, this is not about overlap — it fires
+    Unlike the three conflict constraints, this is not about overlap — it fires
     precisely when meetings do **not** overlap much (people have to pack up and walk)."""
 
     name = "room_change_cost"

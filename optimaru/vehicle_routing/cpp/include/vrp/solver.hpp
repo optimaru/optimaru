@@ -39,7 +39,7 @@ namespace vrp {
 // (vrp/group_moves.hpp), which carries a group between vehicles as one unit.
 // The two rules are scored by visitGroupCost and visitOrderCost, which belong
 // to the constraint assembly, so solve(plan) hands a plan with groups to the
-// default assembly instead of scoring it on the four core rules.
+// default assembly instead of scoring it on the four core constraints.
 //
 // Unassigned visits: leaving a visit out of every route is modelled with
 // the plan's virtual unassigned pool (see VehicleRoutePlan). solve() fills the
@@ -221,7 +221,7 @@ public:
 
     // Solves in place: mutates plan.vehicles[*].visitIndices and
     // plan.unassignedVisitIndices, and stores the best score found in
-    // plan.score. Scored on the four core rules, unless the plan has visit
+    // plan.score. Scored on the four core constraints, unless the plan has visit
     // groups: then on the default constraint assembly (vrp/constraints.hpp),
     // as the overload below would with addDefaultConstraints(), single-start.
     void solve(VehicleRoutePlan& plan);
@@ -251,7 +251,7 @@ private:
 void checkVisitGroups(const VehicleRoutePlan& plan);
 
 // The score of a plan as it stands, the way solve(plan) scores it: on the
-// four core rules (ScoreCalculator::score), unless the plan has visit groups,
+// four core constraints (ScoreCalculator::score), unless the plan has visit groups,
 // which those rules do not price: then on the default constraint assembly.
 // Refreshes the derived fields and stores the score in plan.score. Throws
 // std::invalid_argument for the groups and orders solve() refuses.

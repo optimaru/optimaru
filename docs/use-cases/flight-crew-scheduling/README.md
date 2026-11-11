@@ -78,7 +78,7 @@ Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `c
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every employee below the offset, an idle one included); `offset=0` is the plain shaping.
 Both apply per employee, not to the total. `clip=False` with an offset is refused on hard
-(the four crew rules by default), because hard 0 must mean no violation. Each pick is its
+(the four crew constraints by default), because hard 0 must mean no violation. Each pick is its
 own instance with its own knobs, and the instances add up:
 
 ```python

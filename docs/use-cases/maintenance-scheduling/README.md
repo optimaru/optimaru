@@ -79,21 +79,21 @@ global ones after them). Every constraint is flippable (`level="hard"` / `level=
 level), none is a reward and all six are scored by default (`default_enabled`);
 `maintenance_scheduling.constraint_info()` reports exactly this table from the C++
 components (`kDefaultLevel` / `kDefaultWeight`), and the CP-SAT benchmark reads the same
-rows. `exponent` shapes the date rules per cell and the two global conflict rules on their
+rows. `exponent` shapes the date constraints per cell and the two global conflict constraints on their
 single total. Unassigned jobs contribute nothing.
 
 The `_cost` suffix separates the constraint names from the job fields `min_start_date` /
 `max_end_date`. The defaults are declared once, in the C++ components.
 
 Besides `weight`, `level` and `exponent`, every constraint takes `offset` and `clip`
-(keyword-only), and may be picked several times. A raw cost `x` (per cell for the four date rules, the single
-total for the two conflict rules — the granularity of `exponent`) is shaped as
+(keyword-only), and may be picked several times. A raw cost `x` (per cell for the four date constraints, the single
+total for the two conflict constraints — the granularity of `exponent`) is shaped as
 `sign(x) * max(0, |x| - offset) ** exponent` (`clip=True`, the default) or
 `(x - offset) ** exponent`, sign-preserving (`clip=False`, which lowers the penalty of
 every cell below the offset, an empty one included: every crew on every start date);
-`offset=0` is the plain shaping. Both apply per cell (or to a conflict rule's one total),
+`offset=0` is the plain shaping. Both apply per cell (or to a conflict constraint's one total),
 not to the sum over the cells. `clip=False` with an offset is refused on hard (the two
-start/end date rules and `crew_conflict_cost` by default), because hard 0 must mean no
+start/end date constraints and `crew_conflict_cost` by default), because hard 0 must mean no
 violation. Each pick is its own instance with its own knobs, its level included, and the
 instances add up:
 

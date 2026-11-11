@@ -10,7 +10,7 @@
 //   (e) constraint_totals() explains exactly the reported score
 //   (f) a 2-second solve(plan, calculator) under ScoreChecks::Full
 //   (g) the pair move takes a misplaced bound request to its vehicle
-//   (h) pinned stops and bound requests hold when other hard rules are broken
+//   (h) pinned stops and bound requests hold when other hard constraints are broken
 //   (i) every component's raw cost by hand: one positive and one zero case
 //   (j) the catalog (info()) == each component's kDefaultWeight / kDefaultLevel
 //   (k) the medium level: fold, hard() / soft() / weight on

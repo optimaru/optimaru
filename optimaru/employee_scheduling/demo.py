@@ -16,7 +16,7 @@ from .models import (
     ShiftModel,
     SolverSettings,
     WorkerModel,
-    default_rules,
+    default_constraints,
 )
 
 __all__ = ["generate_demo_data"]
@@ -77,7 +77,7 @@ def generate_demo_data(seed: int = 7, workers: int = 12, days: int = 14) -> Sche
     """A `ScheduleRequest` for `workers` people over `days` days, nothing assigned.
 
     Half as many shifts as workers per day, with skills, unavailable days and
-    desired and undesired days drawn from `seed`. The rules are the defaults
+    desired and undesired days drawn from `seed`. The constraints are the defaults
     plus full coverage, caps on consecutive days and weekly hours, and a soft
     wish for a Skill A holder at every location each day. Solves to hard 0 at
     the default size.
@@ -94,8 +94,8 @@ def generate_demo_data(seed: int = 7, workers: int = 12, days: int = 14) -> Sche
         model_input=SchedulingInput(
             workers=[_worker(index, days, rng, unavailable_on, max_unavailable) for index in range(workers)],
             shifts=[shift for day in range(days) for shift in _shifts(day, max(1, workers // 2))],
-            rules=[
-                *default_rules(),
+            constraints=[
+                *default_constraints(),
                 UnassignedShiftsCost(),
                 MaxConsecutiveDaysCost(value=6),
                 MaxWeeklyMinutesCost(minutes=40 * 60),

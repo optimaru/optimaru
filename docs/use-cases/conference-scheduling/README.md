@@ -16,7 +16,7 @@ one composite assignment variable `slotRoom = timeslotIndex * roomCount + roomIn
   (`defaultConstraints()`).
 - `optimaru/conference_scheduling/` — pybind11 package `conference_scheduling`
   (`_core` extension + pydantic mirror + demo + pytest). For the score and the
-  talk-type compatibility rule (the `talk_type_incompatibility_cost` hard
+  talk-type compatibility constraint (the `talk_type_incompatibility_cost` hard
   constraint) see [python.md](python.md).
 
 ```sh

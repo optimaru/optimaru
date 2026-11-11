@@ -20,16 +20,16 @@ from optimaru.employee_scheduling.constraints import (
 )
 from optimaru.employee_scheduling.demo import generate_demo_data
 from optimaru.employee_scheduling.models import (
-    RULE_MODELS,
-    RuleTotal,
+    CONSTRAINT_MODELS,
+    ConstraintTotal,
     ScheduleRequest,
     ScheduleSolution,
     SchedulingInput,
     ShiftModel,
     SolverSettings,
     WorkerModel,
-    default_rules,
-    rule_model,
+    constraint_model,
+    default_constraints,
     solve_request,
     to_schedule,
 )
@@ -50,7 +50,7 @@ def _small_input(**kwargs):
 def test_solve_request_end_to_end():
     request = ScheduleRequest(
         timelimit=0.3,
-        model_input=_small_input(rules=default_rules() + [UnassignedShiftsCost()]),
+        model_input=_small_input(constraints=default_constraints() + [UnassignedShiftsCost()]),
         settings=SolverSettings(random_seed=7),
     )
     solution = solve_request(request)
@@ -58,7 +58,7 @@ def test_solve_request_end_to_end():
     assert not solution.unassigned
     assigned = [a.shift_id for lst in solution.schedule.values() for a in lst]
     assert sorted(assigned) == ["Shift 0", "Shift 1", "Shift 2", "Shift 3"]
-    assert {t.name for t in solution.rule_totals} >= {"required_skill_cost", "unassigned_shifts_cost"}
+    assert {t.name for t in solution.constraint_totals} >= {"required_skill_cost", "unassigned_shifts_cost"}
 
 
 def test_json_round_trip():
@@ -66,7 +66,7 @@ def test_json_round_trip():
         timelimit=0.2,
         num_workers=3,
         model_input=_small_input(
-            rules=[
+            constraints=[
                 RequiredSkillCost(weight=2),
                 MaxConsecutiveDaysCost(value=2, level="soft", weight=3),
                 AssignmentCost(cost_per_hour=10.0, shift_costs={"Worker 01": {"Shift 0": 5.0}}),
@@ -76,10 +76,10 @@ def test_json_round_trip():
     # The discriminated union must survive JSON serialization.
     clone = ScheduleRequest.model_validate_json(request.model_dump_json())
     assert clone.num_workers == 3
-    assert isinstance(clone.model_input.rules[1], rule_model(MaxConsecutiveDaysCost))
-    assert clone.model_input.rules[1].value == 2
-    assert clone.model_input.rules[1].level == "soft"
-    assert clone.model_input.rules[1].to_spec() == MaxConsecutiveDaysCost(value=2, level="soft", weight=3)
+    assert isinstance(clone.model_input.constraints[1], constraint_model(MaxConsecutiveDaysCost))
+    assert clone.model_input.constraints[1].value == 2
+    assert clone.model_input.constraints[1].level == "soft"
+    assert clone.model_input.constraints[1].to_spec() == MaxConsecutiveDaysCost(value=2, level="soft", weight=3)
 
     solution = solve_request(clone)
     round_tripped = ScheduleSolution.model_validate_json(solution.model_dump_json())
@@ -89,7 +89,7 @@ def test_json_round_trip():
 def test_solver_settings_expose_engine_knobs():
     request = ScheduleRequest(
         timelimit=0.2,
-        model_input=_small_input(rules=default_rules() + [UnassignedShiftsCost()]),
+        model_input=_small_input(constraints=default_constraints() + [UnassignedShiftsCost()]),
         settings=SolverSettings(
             random_seed=9,
             guided_moves=False,
@@ -155,13 +155,13 @@ def test_solver_settings_reject_invalid_ruin_options():
 
 
 def test_rules_flow_into_calculator_unchanged():
-    """A pydantic rule list is a valid constraint-spec list for the core, and so are its specs."""
+    """A pydantic constraint list is a valid constraint-spec list for the core, and so are its specs."""
     schedule = to_schedule(_small_input())
     for shift in schedule.shifts:
         shift.employee_index = 0
-    rule = rule_model("max_consecutive_days_cost")(value=2)
-    assert es.DecomposedCalculator([rule]).score(schedule).hard == -2  # 4-day run, 2 over the cap
-    assert es.DecomposedCalculator([rule.to_spec()]).score(schedule).hard == -2
+    constraint = constraint_model("max_consecutive_days_cost")(value=2)
+    assert es.DecomposedCalculator([constraint]).score(schedule).hard == -2  # 4-day run, 2 over the cap
+    assert es.DecomposedCalculator([constraint.to_spec()]).score(schedule).hard == -2
 
 
 def test_preassigned_unknown_worker_raises():
@@ -194,9 +194,9 @@ def test_a_day_range_outside_the_limit_fails_when_built(bounds):
     with pytest.raises(ValueError):
         WorkerDayCountInRangeCost(**bounds)
     with pytest.raises(ValueError):
-        rule_model(WorkerDayCountInRangeCost)(**bounds)
+        constraint_model(WorkerDayCountInRangeCost)(**bounds)
     assert WorkerDayCountInRangeCost(lo=0, hi=36525).hi == 36525
-    assert rule_model(WorkerDayCountInRangeCost)(lo=0, hi=36525).hi == 36525
+    assert constraint_model(WorkerDayCountInRangeCost)(lo=0, hi=36525).hi == 36525
 
 
 def test_a_pinned_shift_without_a_worker_fails_when_built():
@@ -332,8 +332,8 @@ def _candidate(score_hard, score_soft, coverage_cost=0.0, is_hard=False):
         score_hard=score_hard,
         score_soft=score_soft,
         feasible=score_hard == 0,
-        rule_totals=[
-            RuleTotal(
+        constraint_totals=[
+            ConstraintTotal(
                 name="shift_coverage_cost",
                 label="Shift coverage[any 1..inf]",
                 cost=coverage_cost,
@@ -375,34 +375,34 @@ def test_selection_leaves_a_hard_coverage_rule_alone(monkeypatch):
 def test_selection_finds_the_coverage_rule_by_its_engine_name():
     request = generate_demo_data(seed=3, workers=8, days=7)
     request.timelimit = 0.05
-    totals = solve_request(request).rule_totals
+    totals = solve_request(request).constraint_totals
     coverage = [total for total in totals if total.name == "shift_coverage_cost"]
     assert [total.label for total in coverage] == ["Shift coverage[Skill A 1..inf]"], totals
 
 
 # ---------------------------------------------------------------------------
-# The rule models are generated from the constraint specs
+# The constraint models are generated from the constraint specs
 # ---------------------------------------------------------------------------
 
 
 def test_there_is_one_rule_model_per_spec_in_factory_order():
-    assert list(RULE_MODELS) == [spec.name for spec in SPEC_CLASSES] == list(es.CONSTRAINT_NAMES)
+    assert list(CONSTRAINT_MODELS) == [spec.name for spec in SPEC_CLASSES] == list(es.CONSTRAINT_NAMES)
     for spec in SPEC_CLASSES:
-        model = rule_model(spec)
+        model = constraint_model(spec)
         assert model.spec_class is spec
-        assert model.__name__ == f"{spec.__name__}Model"  # no "Rule" suffix
+        assert model.__name__ == f"{spec.__name__}Model"  # no "ConstraintModel" suffix
         assert getattr(models, model.__name__) is model  # picklable by reference
         assert set(model.model_fields) == {"name", "weight", "level", "exponent", "offset", "clip", *spec().params()}
         assert model().to_spec() == spec()
 
 
 def test_default_rules_are_the_default_specs():
-    assert [rule.to_spec() for rule in default_rules()] == es.constraints.get_constraints()
+    assert [constraint.to_spec() for constraint in default_constraints()] == es.constraints.get_constraints()
 
 
 def test_spec_instances_and_json_dicts_are_both_rules():
-    (first,) = _small_input(rules=[MaxConsecutiveDaysCost(value=2)]).rules
-    (second,) = _small_input(rules=[{"name": "max_consecutive_days_cost", "value": 2}]).rules
+    (first,) = _small_input(constraints=[MaxConsecutiveDaysCost(value=2)]).constraints
+    (second,) = _small_input(constraints=[{"name": "max_consecutive_days_cost", "value": 2}]).constraints
     assert first == second
     assert first.to_spec() == MaxConsecutiveDaysCost(value=2)
 
@@ -410,17 +410,17 @@ def test_spec_instances_and_json_dicts_are_both_rules():
 def test_a_rule_may_repeat_with_other_parameters():
     request = ScheduleRequest(
         timelimit=0.05,
-        model_input=_small_input(rules=[DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="OFF,WORK")]),
+        model_input=_small_input(constraints=[DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="OFF,WORK")]),
     )
     solution = solve_request(request)
-    assert [(t.name, t.label, t.level) for t in solution.rule_totals] == [
+    assert [(t.name, t.label, t.level) for t in solution.constraint_totals] == [
         ("day_pattern_cost", "Day pattern[WORK,WORK]", "soft"),
         ("day_pattern_cost", "Day pattern[OFF,WORK]", "soft"),
     ]
 
 
 @pytest.mark.parametrize(
-    "rule",
+    "constraint",
     [
         {"name": "required_skill"},  # an unknown name
         {"name": "required_skill_cost", "policy": "hard"},  # an unknown field
@@ -464,30 +464,30 @@ def test_a_rule_may_repeat_with_other_parameters():
         "clip-str",
     ],
 )
-def test_a_bad_rule_fails_validation(rule):
+def test_a_bad_rule_fails_validation(constraint):
     with pytest.raises(ValidationError):
-        SchedulingInput.model_validate({**_small_input().model_dump(), "rules": [rule]})
+        SchedulingInput.model_validate({**_small_input().model_dump(), "constraints": [constraint]})
 
 
 def test_the_json_schema_carries_the_spec_bounds():
-    schema = rule_model(MaxConsecutiveDaysCost).model_json_schema()
+    schema = constraint_model(MaxConsecutiveDaysCost).model_json_schema()
     assert schema["properties"]["name"]["const"] == "max_consecutive_days_cost"
     assert schema["properties"]["value"]["minimum"] == 1
     assert schema["properties"]["weight"]["anyOf"][0]["minimum"] == 0
-    day_range = rule_model(WorkerDayCountInRangeCost).model_json_schema()["properties"]
+    day_range = constraint_model(WorkerDayCountInRangeCost).model_json_schema()["properties"]
     assert day_range["hi"]["minimum"] == -1 and day_range["hi"]["maximum"] == es.MAX_DAY
 
 
 def test_integral_json_knobs_stay_numbers():
     """weight 2 (a JSON integer) is a number, not a type error."""
-    rule = SchedulingInput.model_validate(
-        {**_small_input().model_dump(), "rules": [{"name": "required_skill_cost", "weight": 2, "exponent": 1}]}
-    ).rules[0]
-    assert rule.to_spec() == RequiredSkillCost(weight=2.0)
+    constraint = SchedulingInput.model_validate(
+        {**_small_input().model_dump(), "constraints": [{"name": "required_skill_cost", "weight": 2, "exponent": 1}]}
+    ).constraints[0]
+    assert constraint.to_spec() == RequiredSkillCost(weight=2.0)
 
 
 def test_no_generated_model_is_named_rule():
-    """The per-constraint JSON models end in "Model", never in "Rule"."""
+    """The per-constraint JSON models end in "Model", never in "ConstraintModel"."""
     assert not [name for name in dir(models) if name.endswith("CostRule")]
     with pytest.raises(ImportError):
         exec("from optimaru.employee_scheduling.models import AssignmentCostRule", {})
@@ -495,22 +495,25 @@ def test_no_generated_model_is_named_rule():
 
 
 def test_assigning_specs_to_rules_is_validated():
-    """input.rules = [specs] after construction goes through the validators (it skipped them)."""
+    """input.constraints = [specs] after construction goes through the validators (it skipped them)."""
     model_input = _small_input()
-    model_input.rules = [RequiredSkillCost(), MaxConsecutiveDaysCost(value=2)]
-    assert [rule.to_spec() for rule in model_input.rules] == [RequiredSkillCost(), MaxConsecutiveDaysCost(value=2)]
+    model_input.constraints = [RequiredSkillCost(), MaxConsecutiveDaysCost(value=2)]
+    assert [constraint.to_spec() for constraint in model_input.constraints] == [
+        RequiredSkillCost(),
+        MaxConsecutiveDaysCost(value=2),
+    ]
     solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
-    assert {total.name for total in solution.rule_totals} == {"required_skill_cost", "max_consecutive_days_cost"}
+    assert {total.name for total in solution.constraint_totals} == {"required_skill_cost", "max_consecutive_days_cost"}
     with pytest.raises(ValidationError):
-        model_input.rules = [{"name": "max_consecutive_days_cost", "value": 0}]
+        model_input.constraints = [{"name": "max_consecutive_days_cost", "value": 0}]
 
 
 def test_an_unvalidated_spec_in_rules_still_solves():
     """An in-place edit bypasses pydantic; the solve still takes a spec found there."""
     model_input = _small_input()
-    model_input.rules.append(MaxConsecutiveDaysCost(value=2))
+    model_input.constraints.append(MaxConsecutiveDaysCost(value=2))
     solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
-    assert "max_consecutive_days_cost" in {total.name for total in solution.rule_totals}
+    assert "max_consecutive_days_cost" in {total.name for total in solution.constraint_totals}
 
 
 def _all_on_the_first_worker():
@@ -521,13 +524,13 @@ def _all_on_the_first_worker():
 
 
 def test_an_empty_rule_list_is_refused():
-    """The get_constraints() rule holds for SchedulingInput.rules too."""
+    """The get_constraints() constraint holds for SchedulingInput.constraints too."""
     with pytest.raises(ValidationError, match="must not be empty"):
-        _small_input(rules=[])
+        _small_input(constraints=[])
 
 
 @pytest.mark.parametrize(
-    "rules",
+    "constraints",
     [
         [RequiredSkillCost(), RequiredSkillCost()],
         [MaxConsecutiveDaysCost(value=2), {"name": "max_consecutive_days_cost", "value": 2}],
@@ -535,24 +538,24 @@ def test_an_empty_rule_list_is_refused():
     ],
     ids=["same-twice", "spec-and-json-twice", "other-knobs"],
 )
-def test_a_repeated_rule_is_one_instance_per_entry(rules):
-    """The same rule may repeat with the same parameters: each entry is scored."""
-    model_input = _small_input(rules=rules)
-    assert len(model_input.rules) == 2
+def test_a_repeated_rule_is_one_instance_per_entry(constraints):
+    """The same constraint may repeat with the same parameters: each entry is scored."""
+    model_input = _small_input(constraints=constraints)
+    assert len(model_input.constraints) == 2
     solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
-    assert [total.name for total in solution.rule_totals] == [rules[0].name] * 2
+    assert [total.name for total in solution.constraint_totals] == [constraints[0].name] * 2
 
 
 def test_each_repeated_rule_keeps_its_own_level():
-    """A JSON rule repeats a spec rule on another level, with an offset: two instances, two levels."""
-    rules = [
+    """A JSON constraint repeats a spec constraint on another level, with an offset: two instances, two levels."""
+    constraints = [
         MaxConsecutiveDaysCost(value=2),
         {"name": "max_consecutive_days_cost", "value": 2, "level": "soft", "weight": 3, "offset": 1},
     ]
-    model_input = _small_input(rules=rules)
-    assert [rule.level for rule in model_input.rules] == [None, "soft"]
+    model_input = _small_input(constraints=constraints)
+    assert [constraint.level for constraint in model_input.constraints] == [None, "soft"]
     solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
-    assert [(total.name, total.level) for total in solution.rule_totals] == [
+    assert [(total.name, total.level) for total in solution.constraint_totals] == [
         ("max_consecutive_days_cost", "hard"),
         ("max_consecutive_days_cost", "soft"),
     ]
@@ -591,23 +594,23 @@ def test_a_list_and_a_tuple_scope_are_two_instances_of_the_same_rule():
 
 
 def test_offset_and_clip_round_trip_through_json():
-    """The knobs are rule fields (not domain parameters): spec -> JSON -> spec keeps them."""
+    """The knobs are constraint fields (not domain parameters): spec -> JSON -> spec keeps them."""
     spec = UndesiredDayCost(weight=0.5, exponent=2.0, offset=120, clip=False)
-    (rule,) = _small_input(rules=[spec]).rules
-    assert (rule.offset, rule.clip) == (120.0, False)
-    assert rule.to_spec() == spec
-    assert rule.params() == spec.params()
-    assert "offset" not in rule.params() and "clip" not in rule.params()
-    dumped = rule.model_dump(mode="json")
+    (constraint,) = _small_input(constraints=[spec]).constraints
+    assert (constraint.offset, constraint.clip) == (120.0, False)
+    assert constraint.to_spec() == spec
+    assert constraint.params() == spec.params()
+    assert "offset" not in constraint.params() and "clip" not in constraint.params()
+    dumped = constraint.model_dump(mode="json")
     assert dumped["offset"] == 120.0 and dumped["clip"] is False
-    again = SchedulingInput.model_validate({**_small_input().model_dump(), "rules": [dumped]})
-    assert again.rules[0].to_spec() == spec
-    defaults = rule_model(UndesiredDayCost)()
+    again = SchedulingInput.model_validate({**_small_input().model_dump(), "constraints": [dumped]})
+    assert again.constraints[0].to_spec() == spec
+    defaults = constraint_model(UndesiredDayCost)()
     assert (defaults.offset, defaults.clip) == (0.0, True)
 
 
 def test_the_json_schema_carries_the_offset_and_clip_knobs():
-    properties = rule_model(MaxConsecutiveDaysCost).model_json_schema()["properties"]
+    properties = constraint_model(MaxConsecutiveDaysCost).model_json_schema()["properties"]
     assert properties["offset"]["default"] == 0.0 and properties["offset"]["type"] == "number"
     assert properties["clip"]["default"] is True and properties["clip"]["type"] == "boolean"
 
@@ -630,7 +633,7 @@ def _validation_message(call):
 
 @pytest.mark.parametrize("offset", [120, -120])
 @pytest.mark.parametrize(
-    "rule",
+    "constraint",
     [
         lambda offset: {"name": "required_skill_cost", "offset": offset, "clip": False},  # default hard
         lambda offset: {"name": "undesired_day_cost", "level": "hard", "offset": offset, "clip": False},
@@ -638,32 +641,32 @@ def _validation_message(call):
     ],
     ids=["skill-default-hard", "undesired-moved-to-hard", "max-days-default-hard"],
 )
-def test_a_json_rule_refuses_the_literal_offset_on_hard(rule, offset):
-    """The JSON rule models refuse it when they are validated, in the engine's words: as a
-    rule model, inside a request, and from a spec instance."""
-    data = rule(offset)
+def test_a_json_rule_refuses_the_literal_offset_on_hard(constraint, offset):
+    """The JSON constraint models refuse it when they are validated, in the engine's words: as a
+    constraint model, inside a request, and from a spec instance."""
+    data = constraint(offset)
     message = HARD_REFUSAL.format(q=repr(data["name"]))
-    model = rule_model(data["name"])
+    model = constraint_model(data["name"])
     assert _validation_message(lambda: model.model_validate(data)) == message
-    payload = {**_small_input().model_dump(), "rules": [{"name": "required_skill_cost"}, data]}
+    payload = {**_small_input().model_dump(), "constraints": [{"name": "required_skill_cost"}, data]}
     assert _validation_message(lambda: SchedulingInput.model_validate(payload)) == message
     spec = model.spec_class(**{key: value for key, value in data.items() if key != "name"})
-    # The spec itself is accepted until it is scored; a rule list refuses it.
-    assert _validation_message(lambda: _small_input(rules=[spec])) == message
+    # The spec itself is accepted until it is scored; a constraint list refuses it.
+    assert _validation_message(lambda: _small_input(constraints=[spec])) == message
 
 
 @pytest.mark.parametrize("offset", [120, -120])
 def test_solve_request_refuses_a_literal_hard_rule_added_in_place(offset):
-    """An in-place edit of the rule list bypasses pydantic; the engine refuses the pick."""
-    request = ScheduleRequest(timelimit=0.05, model_input=_small_input(rules=default_rules()))
-    request.model_input.rules.append(RequiredSkillCost(offset=offset, clip=False))
+    """An in-place edit of the constraint list bypasses pydantic; the engine refuses the pick."""
+    request = ScheduleRequest(timelimit=0.05, model_input=_small_input(constraints=default_constraints()))
+    request.model_input.constraints.append(RequiredSkillCost(offset=offset, clip=False))
     with pytest.raises(ValueError) as refused:
         solve_request(request)
     assert str(refused.value) == HARD_REFUSAL.format(q="'required_skill_cost'")
 
 
 @pytest.mark.parametrize(
-    "rule",
+    "constraint",
     [
         {"name": "required_skill_cost", "level": "soft", "offset": 120, "clip": False},
         {"name": "required_skill_cost", "offset": 120},  # a threshold on hard
@@ -672,12 +675,12 @@ def test_solve_request_refuses_a_literal_hard_rule_added_in_place(offset):
     ],
     ids=["soft-literal", "hard-threshold", "hard-offset-0", "default-soft-literal"],
 )
-def test_the_allowed_literal_and_threshold_rules_solve(rule):
+def test_the_allowed_literal_and_threshold_rules_solve(constraint):
     request = ScheduleRequest(
         timelimit=0.05,
-        model_input=SchedulingInput.model_validate({**_small_input().model_dump(), "rules": [rule]}),
+        model_input=SchedulingInput.model_validate({**_small_input().model_dump(), "constraints": [constraint]}),
     )
     solution = solve_request(request)
-    (total,) = solution.rule_totals
-    assert total.name == rule["name"]
-    assert total.level == rule.get("level", "soft" if rule["name"] == "undesired_day_cost" else "hard")
+    (total,) = solution.constraint_totals
+    assert total.name == constraint["name"]
+    assert total.level == constraint.get("level", "soft" if constraint["name"] == "undesired_day_cost" else "hard")

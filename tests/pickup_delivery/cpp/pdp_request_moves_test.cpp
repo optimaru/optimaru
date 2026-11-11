@@ -1077,7 +1077,7 @@ void testGroupWithNoRoomWaits() {
 
     // The same through solve(plan), which has no calculator to be told about:
     // a plan with groups is scored with the default assembly there too. On the
-    // seven core rules the three requests would be routed apart and look fine.
+    // seven core constraints the three requests would be routed apart and look fine.
     PdpRoutePlan core = buildRandomInstance(8, 3, /*seed=*/9);
     for (Vehicle& vehicle : core.vehicles) vehicle.maxStops = 4;
     for (int d : {0, 1, 2}) core.deliveries[static_cast<std::size_t>(d)].groupIndex = 0;
@@ -1120,7 +1120,7 @@ void testCalculateScore() {
           "a split group is priced and stored in plan.score (" + split.str() + ")");
     PdpRoutePlan onCoreRules = plan;
     check(ScoreCalculator::score(onCoreRules).hard > split.hard,
-          "which the seven core rules leave out (" + onCoreRules.score.str() + ")");
+          "which the seven core constraints leave out (" + onCoreRules.score.str() + ")");
 
     // Without a group of two or more, it is the core score: a group of one
     // changes nothing.
@@ -1130,7 +1130,7 @@ void testCalculateScore() {
     Solver(config).solve(free);
     PdpRoutePlan again = free;
     check(!free.hasRequestGroups() && calculateScore(free) == ScoreCalculator::score(again),
-          "a plan without groups scores on the seven core rules");
+          "a plan without groups scores on the seven core constraints");
     std::printf("\n");
 }
 

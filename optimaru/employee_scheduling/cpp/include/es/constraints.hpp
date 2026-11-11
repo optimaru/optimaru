@@ -14,7 +14,7 @@
 // Including this header still gives the whole set, so nothing that used it has
 // to change. Adding a component is a file plus a line in catalogConstraints()
 // below (and in defaultConstraints() when it belongs to the default assembly),
-// plus its entry in the rule factory of optimaru/employee_scheduling/cpp/bindings.cpp.
+// plus its entry in the constraint factory of optimaru/employee_scheduling/cpp/bindings.cpp.
 
 #include "es/constraints/common.hpp"
 #include "es/constraints/assignment_constraint.hpp"
@@ -81,7 +81,7 @@ inline ConstraintAssembly defaultConstraints() {
 
 inline void addDefaultConstraints(DecomposedCalculator& calc) { defaultConstraints().into(calc); }
 
-// Every component the rule factory (optimaru/employee_scheduling/cpp/bindings.cpp
+// Every component the constraint factory (optimaru/employee_scheduling/cpp/bindings.cpp
 // addConstraintByName) can build, once each, at its default parameters and kDefaultWeight /
 // kDefaultLevel, in factory order (= CONSTRAINT_NAMES): the catalog behind
 // constraint_info() (optimaru::catalog_info(defaultConstraints(),

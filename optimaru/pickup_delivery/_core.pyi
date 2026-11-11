@@ -5,7 +5,7 @@ Times are integer seconds from a common day start. Each vehicle's ordered
 a stop in no route is unassigned and lands in `unassigned_node_indices`.
 
 Score (hard / medium / soft, lexicographic), at the default weights: hard =
-capacity peak + time-window lateness + the coupling rules (a request is
+capacity peak + time-window lateness + the coupling constraints (a request is
 routed whole, on one vehicle, pickup before dropoff); medium = -(service
 minutes of unrouted requests), folded into the engine's soft as
 medium * 10^9; soft = -(total driving seconds). The weights are the C++
@@ -174,7 +174,7 @@ class PdpRoutePlan:
 def calculate_score(plan: PdpRoutePlan) -> Score:
     """Recompute the derived fields and the score (also stores plan.score).
 
-    The score is the one solve(plan) stores: the seven core rules, or the default
+    The score is the one solve(plan) stores: the seven core constraints, or the default
     constraints when the plan has a group of two or more requests.
     """
 
@@ -318,9 +318,9 @@ class Solver:
     vehicle.node_indices, the unassigned pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: PdpRoutePlan) -> None:
-        """Solve on the seven core rules, or on the default constraints when two
-        requests or more share a group (request_group_cost is not a core rule; that
-        solve is a single start). The core rules do not include required_vehicle_cost,
+        """Solve on the seven core constraints, or on the default constraints when two
+        requests or more share a group (request_group_cost is not a core constraint; that
+        solve is a single start). The core constraints do not include required_vehicle_cost,
         pinned_stops_cost or the vehicle limits either: for a plan without groups
         that uses any of those, call solve_with_constraints."""
     def solve_with_constraints(self, plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
@@ -370,7 +370,7 @@ class ConstraintInfo(NamedTuple):
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order: the default level and
     weight of each constraint (unassigned_requests_cost is medium at weight 1 in
-    medium units; pinned_stops_cost hard at 1e12; the coupling rules,
+    medium units; pinned_stops_cost hard at 1e12; the coupling constraints,
     required_vehicle_cost and request_group_cost hard at 1000). All flippable, none
     a reward;
     default_enabled is False for the opt-in weight-0 objectives

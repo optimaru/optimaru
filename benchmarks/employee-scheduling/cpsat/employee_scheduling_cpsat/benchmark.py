@@ -3,10 +3,10 @@
 Deterministic comparison instances and the CLI entry point; the CP-SAT
 formulation is `external_solver.employee_scheduling`.
 
-`optimaru.employee_scheduling.constraint_costs` takes an engine schedule and the rule list,
+`optimaru.employee_scheduling.constraint_costs` takes an engine schedule and the constraint list,
 while the runner hands over a request, so `PACKAGE` names
 `external_solver.employee_scheduling`, whose `constraint_costs(request)` builds
-the engine's `DecomposedCalculator` from the request's rules. It is still the
+the engine's `DecomposedCalculator` from the request's constraints. It is still the
 engine's score.
 """
 
@@ -24,7 +24,7 @@ CPSAT_EXACT = False
 CPSAT_CAVEAT = (
     "unfairness is sqrt(ssd) rounded to 6 significant figures; the CP-SAT objective "
     "holds half the squared loads instead, so it can weigh balance against the other "
-    "soft rules differently from the engine, whose calculator scores both answers"
+    "soft constraints differently from the engine, whose calculator scores both answers"
 )
 
 

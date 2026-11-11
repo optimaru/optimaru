@@ -48,7 +48,7 @@ print(solution.score_hard, solution.score_soft)
 ```
 
 `solve_request` reads `time_limit_seconds`, the seed and search options in `settings`
-(`models.SolverSettings`), and the rule list in `model_input.rules`. The
+(`models.SolverSettings`), and the constraint list in `model_input.constraints`. The
 lower-level path takes a `optimaru.employee_scheduling.Solver`, a `SolverConfig` and a
 `DecomposedCalculator` built from `optimaru.employee_scheduling.constraints`. The C++ side
 builds and tests with:
@@ -60,12 +60,12 @@ ctest --test-dir build
 
 ## Constraints
 
-The rules (the eight defaults and the opt-in ones, with their default levels and
-weights) and the knob table are in [`python.md`](python.md#the-rules); the table
+The constraints (the eight defaults and the opt-in ones, with their default levels and
+weights) and the knob table are in [`python.md`](python.md#the-constraints); the table
 is not repeated here.
 
-A rule may be picked several times, with other options or knobs or with the
-same ones (every pick is its own instance, and the instances add up), and every rule
+A constraint may be picked several times, with other options or knobs or with the
+same ones (every pick is its own instance, and the instances add up), and every constraint
 takes the keyword knobs `offset` and `clip`, which shift the per-employee shaping
 (`UndesiredDayCost(offset=120)` counts only the minutes beyond two hours;
 `clip=False` shapes `cost - offset` as it is, and is refused with an offset on hard,
@@ -132,13 +132,13 @@ sit next to them):
    `score_calculator` / `incremental_calculator` (the `static_assert`s there read the
    components' `kDefaultWeight` / `kDefaultLevel`) — `es_demo` and `es_plugin_test` check
    they agree bit for bit;
-4. add its entry to the rule factory in `optimaru/employee_scheduling/cpp/bindings.cpp` (`factory()`: the Python
+4. add its entry to the constraint factory in `optimaru/employee_scheduling/cpp/bindings.cpp` (`factory()`: the Python
    name and a builder reading its parameters); `CONSTRAINT_NAMES` and the
    "available:" list follow from that table;
 5. add a spec class with the snake_case `name`, `label_en` / `label_ko` /
    `description_en` / `description_ko`, its parameters as dataclass fields and their
    `bounds` to `optimaru/employee_scheduling/constraints.py`, plus its module-level default
-   instance and its place in `SPEC_CLASSES`; the JSON rule model is generated from it.
+   instance and its place in `SPEC_CLASSES`; the JSON constraint model is generated from it.
    Add a hand-calculated positive and zero case to `tests/employee_scheduling/test_constraint_costs.py`;
 6. mirror it in the CP-SAT model, `external_solver.employee_scheduling` in
    [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the

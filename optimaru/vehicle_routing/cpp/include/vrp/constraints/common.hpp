@@ -19,7 +19,7 @@ namespace vrp {
 // The four core vehicle-routing constraints plus the optional route policies,
 // one small component each on the engine's DecomposedObjective -- an optional
 // assembly path NEXT TO ScoreCalculator::score, which stays the
-// default path for the four core rules.
+// default path for the four core constraints.
 //
 // Unit choice: with the sequence shape the calculator's unit is one list,
 // i.e. one vehicle; members are its visits IN ROUTE ORDER. Every rule but one

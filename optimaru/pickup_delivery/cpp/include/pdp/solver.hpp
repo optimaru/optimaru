@@ -42,7 +42,7 @@ namespace pdp {
 // takes a request only to where another request of its group rides). The rule is
 // scored by requestGroupCost, which belongs to the constraint assembly, so
 // solve(plan) hands a plan with groups to the default assembly instead of
-// scoring it on the seven core rules.
+// scoring it on the seven core constraints.
 //
 // All join the engine's adaptive selection alongside the built-ins, so their
 // weight is learned rather than fixed.
@@ -151,7 +151,7 @@ public:
 
     // Solves in place: mutates plan.vehicles[*].nodeIndices and
     // plan.unassignedNodeIndices, and stores the best score in plan.score.
-    // Scored on the seven core rules, unless the plan has request groups
+    // Scored on the seven core constraints, unless the plan has request groups
     // (PdpRoutePlan::hasRequestGroups): then on the default constraint assembly
     // (pdp/constraints.hpp), as the overload below would with
     // addDefaultConstraints(), single-start.
@@ -175,7 +175,7 @@ private:
 };
 
 // The score of a plan as it stands, the way solve(plan) scores it: on the
-// seven core rules (ScoreCalculator::score), unless the plan has request
+// seven core constraints (ScoreCalculator::score), unless the plan has request
 // groups, which those rules do not price: then on the default constraint
 // assembly. Refreshes the derived fields and stores the score in plan.score.
 // Does not validate the plan: what solve() refuses (a required vehicle out of

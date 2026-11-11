@@ -192,9 +192,9 @@ def constraint_costs(
     {key: {"costs": [...], "weight": float, "exponent": float, "offset": float,
     "clip": bool, "global": bool, "level": "hard" | "medium" | "soft",
     "reward": bool, "level_flippable": bool, "name": str, "label": str,
-    "default_weight": float, "default_level": str}}. The four date rules list one
+    "default_weight": float, "default_level": str}}. The four date constraints list one
     cost per (start date, crew) cell, an empty cell included; the two global conflict
-    rules one total. None = the default constraints; a pick list (as for solve) scores
+    constraints one total. None = the default constraints; a pick list (as for solve) scores
     exactly those picks, each entry carrying its pick's knobs, the k-th pick of a name
     keyed "<name>#<k>" from the second on.
     `optimaru.maintenance_scheduling.constraints.score()` takes these and produces a score."""

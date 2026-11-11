@@ -12,7 +12,7 @@ in `plan.unassigned_node_indices`).
 Score (hard / medium / soft, lexicographic), at the default weights:
 
 * **hard** — capacity peak along the route (`vehicle_capacity_cost`), time-window
-  lateness (`max_end_time_cost`), and the coupling rules (`paired_request_cost`,
+  lateness (`max_end_time_cost`), and the coupling constraints (`paired_request_cost`,
   `same_vehicle_cost`, `pickup_before_dropoff_cost`: a request is routed whole or
   not at all, on one vehicle, pickup before dropoff). 0 = feasible.
 * **medium** — service minutes of the requests left unrouted
@@ -111,7 +111,7 @@ def solve(
 
     A plan with request groups (two requests or more share a `Delivery.group_index`) is
     scored with the default constraints even when ``constraints`` is None:
-    `request_group_cost` is one of them, and it is not among the seven core rules a plan is
+    `request_group_cost` is one of them, and it is not among the seven core constraints a plan is
     otherwise scored on. That is the whole default set, so the vehicle limits, pinned stops
     and required vehicles of such a plan are scored too, on a single start. The engine
     does this itself, so `Solver(config).solve(plan)` and `calculate_score(plan)` read

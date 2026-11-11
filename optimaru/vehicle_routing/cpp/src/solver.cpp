@@ -241,7 +241,7 @@ void Solver::solve(VehicleRoutePlan& plan) {
     // group index below -1, a visit that comes after one outside its group, an
     // order with a cycle.
     checkVisitGroups(plan);
-    // The four core rules do not price groups, and on them a split group
+    // The four core constraints do not price groups, and on them a split group
     // would end as a feasible plan. A plan with groups is scored with the
     // whole default assembly instead (single-start, like every solve on a
     // caller's assembly).

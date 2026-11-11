@@ -153,7 +153,7 @@ def test_a_group_whose_start_vehicle_has_no_room_for_the_rest_is_moved_whole():
 
 def test_groups_of_one_do_not_change_how_a_plan_is_scored():
     # Every visit names its own group, as input that carries a group on every order does. Nothing
-    # is kept together, so the solve stays on the four core rules: the vehicles' `max_stops`,
+    # is kept together, so the solve stays on the four core constraints: the vehicles' `max_stops`,
     # which only the constraint assembly scores, does not hold a visit back.
     vehicles = [vehicle("v", max_stops=1), vehicle("w", max_stops=1)]
     plan = to_plan(two_ends([visit("a", "g1"), visit("b", "g2"), visit("c", "g3")], vehicles))
@@ -331,7 +331,7 @@ def test_to_plan_numbers_the_groups_in_input_order_and_resolves_after():
 @pytest.mark.parametrize("entry", ["solve", "Solver.solve"])
 def test_every_entry_point_scores_groups_on_a_plan_without_being_asked(entry):
     # No vehicle takes both visits of the group (one visit each), so it has to wait whole.
-    # Scored on the four core rules alone, routing the two apart would look feasible and better.
+    # Scored on the four core constraints alone, routing the two apart would look feasible and better.
     vehicles = [vehicle("v", max_stops=1), vehicle("w", max_stops=1)]
     plan = to_plan(two_ends([visit("a", "g"), visit("b", "g")], vehicles))
     config = vrp.SolverConfig()

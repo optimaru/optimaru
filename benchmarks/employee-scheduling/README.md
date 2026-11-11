@@ -2,7 +2,7 @@
 
 The [`employee-scheduling`](../../docs/use-cases/employee-scheduling) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `employee_scheduling_cpsat`). The CP-SAT model implements the
-same rules under the same names and units, so both answers are
+same constraints under the same names and units, so both answers are
 rescored by the engine's own score calculator; parity tests in external-solver
 (`tests/employee_scheduling/`) keep the two cost definitions identical.
 
@@ -27,7 +27,7 @@ the model and not a search result, so the ladder stops below it.
 <!-- results:start -->
 ## Results
 
-Every cell is the score of that solver's final solution under the use case's own rules, re-scored by its evaluator. Higher is better; ties are all bold.
+Every cell is the score of that solver's final solution under the use case's own constraints, re-scored by its evaluator. Higher is better; ties are all bold.
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
@@ -39,5 +39,5 @@ Every cell is the score of that solver's final solution under the use case's own
 | xlarge | 1120 shifts / 80 workers / 28 days | **0hard/76800soft** | -45242hard/70011.4542soft |
 
 Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
-Note: unfairness is sqrt(ssd) rounded to 6 significant figures; the CP-SAT objective holds half the squared loads instead, so it can weigh balance against the other soft rules differently from the engine, whose calculator scores both answers.
+Note: unfairness is sqrt(ssd) rounded to 6 significant figures; the CP-SAT objective holds half the squared loads instead, so it can weigh balance against the other soft constraints differently from the engine, whose calculator scores both answers.
 <!-- results:end -->

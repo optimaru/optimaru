@@ -32,7 +32,7 @@ Where a use case differs from the table:
   `st/canonical_constraints.hpp`, its constraints in subdirectories of
   `st/constraints/`, and its plugin tests in `st_canonical_plugin_test.cpp`.
 - Employee scheduling has `es_plugin_test.cpp` only, and a second catalog of
-  opt-in rules (see [step 3](#3-add-it-to-the-assembly) of adding a cost).
+  opt-in constraints (see [step 3](#3-add-it-to-the-assembly) of adding a cost).
 - Employee scheduling and school timetabling have no
   `Solver.solve_with_constraints`: their `Solver.solve(x, calculator)` takes the
   picks as a calculator. The package-level `solve(x, constraints=picks)` is the
@@ -347,12 +347,12 @@ off this assembly. You then choose between two kinds of constraint:
   caller gives it a weight, and `constraint_info()` reports it with
   `default_enabled=False`. Vehicle routing's `LatencyCost` and
   `RouteDurationCost` work this way. This is the right choice for most new
-  rules, and step 4 doesn't apply.
+  constraints, and step 4 doesn't apply.
 - **On by default** (`kDefaultWeight > 0`). This changes every default solve and
   the published scores. Do step 4.
 
-(Employee scheduling instead has a separate catalog of opt-in rules with
-parameters, built by the rule factory in its `bindings.cpp`. Its guide describes
+(Employee scheduling instead has a separate catalog of opt-in constraints with
+parameters, built by the constraint factory in its `bindings.cpp`. Its guide describes
 that variant.)
 
 ### 4. Default fast path (on-by-default costs only)
@@ -373,7 +373,7 @@ class MyRuleCost(Constraint):
     """What it measures. Default: soft, weight 1."""
 
     name = "my_rule_cost"
-    label_en = "My rule"
+    label_en = "My constraint"
     label_ko = "..."
     description_en = "What one unit of cost is; what 0 means."
     description_ko = "..."

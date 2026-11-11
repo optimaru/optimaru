@@ -42,7 +42,7 @@ Every spec takes five knobs:
                evaluate only their own stations (from ``max_stations`` on, and the
                stations some task forbids; ``constraint_costs()`` lists them as
                ``"units"``), so ``clip=False`` charges those and no other. With
-               an offset it is refused on hard (every rule but UsedStationsCost and
+               an offset it is refused on hard (every constraint but UsedStationsCost and
                WorkloadImbalanceCost by default), because hard 0 must mean no
                violation.
 

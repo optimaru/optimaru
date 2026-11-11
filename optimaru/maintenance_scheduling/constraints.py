@@ -32,8 +32,8 @@ Every spec takes five knobs:
                case has no medium level: ``level="medium"`` raises ValueError.
 - ``exponent`` sign-preserving power shaping: ``weight * sign(c) * |c| **
                exponent``. 2.0 = squared, so concentrated violations grow much
-               costlier. The four date rules shape per (start date, crew) cell; the
-               two global conflict rules shape their single total.
+               costlier. The four date constraints shape per (start date, crew) cell; the
+               two global conflict constraints shape their single total.
 - ``offset``   (keyword) shifts that shaping, at the same granularity; 0.0 = none.
 - ``clip``     (keyword) ``True`` (the default) counts only what lies beyond the
                offset, ``max(0, c - offset) ** exponent``; ``False`` shapes

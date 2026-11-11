@@ -66,7 +66,7 @@ Built globalOf(Args&&... args) {
     return built;
 }
 
-// The rule factory: Python name -> builder, in CONSTRAINT_NAMES order. ONE
+// The constraint factory: Python name -> builder, in CONSTRAINT_NAMES order. ONE
 // table: CONSTRAINT_NAMES, the "available:" list of an unknown name and the
 // lookup all read it, and es::catalogConstraints() holds the same components
 // (tests/test_constraint_specs.py checks the two agree). Each builder passes
@@ -507,7 +507,7 @@ PYBIND11_MODULE(_core, m) {
                                    "Number of structural delta groups compiled by "
                                    "the last reset/solve.");
 
-    // The names the rule factory accepts, in factory order: one table (see
+    // The names the constraint factory accepts, in factory order: one table (see
     // factory() above) also behind the "available:" list of an unknown name.
     m.attr("CONSTRAINT_NAMES") = py::tuple(py::cast(factoryNames()));
 

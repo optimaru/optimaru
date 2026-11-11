@@ -327,7 +327,7 @@ def test_an_empty_group_name_is_no_group():
 @pytest.mark.parametrize("entry", ["solve", "Solver.solve"])
 def test_every_entry_point_scores_groups_on_a_plan_without_being_asked(entry):
     # No vehicle takes both requests of the group (one request each), so it has to wait whole.
-    # Scored on the seven core rules alone, routing the two apart would look feasible and better.
+    # Scored on the seven core constraints alone, routing the two apart would look feasible and better.
     vehicles = [vehicle("v", max_stops=2), vehicle("w", max_stops=2)]
     plan = to_plan(two_ends([request("a", group="g"), request("b", group="g")], vehicles))
     config = pdp.SolverConfig()
@@ -380,7 +380,7 @@ def test_calculate_score_prices_a_split_group_on_a_plan_built_by_hand(routes, ha
 
 def test_groups_of_one_do_not_change_how_a_plan_is_scored():
     # Every request names its own group, as input that carries a group on every order does.
-    # Nothing is kept together, so the solve stays on the seven core rules: the vehicles'
+    # Nothing is kept together, so the solve stays on the seven core constraints: the vehicles'
     # `max_stops`, which only the constraint assembly scores, does not hold a request back.
     vehicles = [vehicle("v", max_stops=2), vehicle("w", max_stops=2)]
     alone = [request("a", group="g1"), request("b", group="g2"), request("c", group="g3")]
@@ -392,7 +392,7 @@ def test_groups_of_one_do_not_change_how_a_plan_is_scored():
 
     assert plan.unassigned_delivery_ids() == []
     assert plan.score.hard == 0
-    assert as_tuple(pdp.calculate_score(plan)) == as_tuple(plan.score)  # the core rules there too
+    assert as_tuple(pdp.calculate_score(plan)) == as_tuple(plan.score)  # the core constraints there too
 
     # With a second request in one of the groups the same call scores the default set: one
     # request per vehicle, and the group of two fits neither.

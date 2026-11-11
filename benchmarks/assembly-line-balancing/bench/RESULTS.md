@@ -3,7 +3,7 @@
 One engine process per instance; CP-SAT uses 8 workers. The solve budget
 excludes archive download and parsing. Every solution is rescored by the use
 case's evaluator (`constraint_costs()`), which must report zero hard cost
-(capacity, precedence and the other hard rules) before its station count is
+(capacity, precedence and the other hard constraints) before its station count is
 reported. The reference is the upper bound in the archive's own details
 workbook (`best_known` in the JSON): the optimum where the workbook's lower
 bound meets it, and otherwise the best solution its authors' solver found in

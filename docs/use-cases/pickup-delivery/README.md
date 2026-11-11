@@ -79,8 +79,8 @@ flippable onto any of the three levels (`level="hard"`, `"medium"` or `"soft"`, 
 `Level`), none is a reward, and every one at a weight above 0 is scored by default
 (`default_enabled`); the four opt-in objectives
 (weight 0) are measured but move no score until given a weight. The route-policy
-constraints cost 0 while their vehicle field is 0. The seven core rules
-(`vehicle_capacity_cost`, `max_end_time_cost`, the three coupling rules,
+constraints cost 0 while their vehicle field is 0. The seven core constraints
+(`vehicle_capacity_cost`, `max_end_time_cost`, the three coupling constraints,
 `unassigned_requests_cost`, `travel_time_cost`) are also the monolithic
 `ScoreCalculator`, which reads the same constants.
 
@@ -160,15 +160,15 @@ capacity over a day as long as it never carries too much at once. Two requests
 of 6 units each break a capacity of 10 when carried together and fit fine when
 carried in sequence — `pdp_test` asserts exactly that.
 
-The three coupling rules share one default weight,
+The three coupling constraints share one default weight,
 `ScoreCalculator::kCouplingPenalty` (1000; their `kDefaultWeight`). Any nonzero
 hard total already means infeasible, so that weight only shapes the gradient
 *within* the infeasible region; it is set well above a typical lateness so the
 search fixes broken pairs before polishing time windows. `required_vehicle_cost`
 and `request_group_cost` use the same weight. `pinned_stops_cost` uses `ScoreCalculator::kPinnedPenalty`
-(1e12), far above what the other hard rules total on real input, so no trade
+(1e12), far above what the other hard constraints total on real input, so no trade
 between them moves a pinned stop. If a result breaks a pin anyway, its `score`
-shows it in that unit. The CP-SAT reference enforces the three coupling rules
+shows it in that unit. The CP-SAT reference enforces the three coupling constraints
 structurally and refuses any level but hard (`level="medium"` or `"soft"`) or another
 weight for them; the engine keeps them flippable.
 
@@ -386,7 +386,7 @@ Two requests of a group that are bound to different vehicles, each by its
 could never be whole.
 
 Every entry point scores a grouped plan with the default constraints, since the
-seven core rules do not include this one: `solve_request`, `pdp.solve(plan)`,
+seven core constraints do not include this one: `solve_request`, `pdp.solve(plan)`,
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two requests or more (a request alone in its group changes nothing).
 That is a solve on the constraint assembly, as when a vehicle limit is set: the
@@ -465,7 +465,7 @@ enclosing-circle helpers in `route_geometry.hpp`):
    name `"<subject>Cost"` (the struct name with a lower-case first letter);
 2. include it in `optimaru/pickup_delivery/cpp/include/pdp/constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set;
-3. for one of the core rules, add the same raw cost to
+3. for one of the core constraints, add the same raw cost to
    `score_calculator` / `incremental_calculator`, weighted by the component's
    `kDefaultWeight` — `pdp_plugin_test` checks they agree bit for bit — and a positive and a
    zero hand-calculated case to `pdp_plugin_test` (`verifyRawCostsByHand`) and the catalog

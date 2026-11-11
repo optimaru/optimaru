@@ -230,7 +230,7 @@ component). Python reads them from `<package>.constraint_info()`, one
 `default_weight`, `level_flippable`, `reward` and `default_enabled`.
 
 - `list_constraints()` lists the default set. Employee-scheduling lists all 30
-  rules its factory accepts; its defaults are the `default_enabled` rows.
+  constraints its factory accepts; its defaults are the `default_enabled` rows.
 - `constraint_costs(solution, constraints=None)` reports every selected
   constraint's raw costs as `{key: {costs, weight, exponent, offset, clip,
   global, level, reward, level_flippable, name, label, default_weight,

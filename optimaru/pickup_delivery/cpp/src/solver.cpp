@@ -26,7 +26,7 @@ namespace {
 
 using Descriptor = optimaru::SolutionTraits<PdpRoutePlan>;
 
-// Whether a request's coupling rules currently hold, read from the engine's
+// Whether a request's coupling constraints currently hold, read from the engine's
 // live element index (O(1), no scoring).
 bool pairIntact(const PdpRoutePlan& plan, const optimaru::OperatorContext<PdpRoutePlan>& ctx,
                 const Delivery& delivery) {
@@ -826,7 +826,7 @@ void Solver::solve(PdpRoutePlan& plan) {
     checkRequiredVehicles(plan);
     const std::shared_ptr<const RequestGroups> groups = requestGroupsOf(plan);
     checkRequestGroups(plan, *groups);
-    // The seven core rules do not price groups, and on them a split group
+    // The seven core constraints do not price groups, and on them a split group
     // would end as a feasible plan. A plan with groups is scored with the
     // whole default assembly instead (single-start, like every solve on a
     // caller's assembly).

@@ -19,7 +19,7 @@ namespace pdp {
 // The PDPTW constraints, split into one small component each on the engine's
 // DecomposedObjective — an optional assembly path NEXT TO
 // ScoreCalculator::score and the monolithic incremental calculator,
-// which stay the tuned default path for the seven core rules.
+// which stay the tuned default path for the seven core constraints.
 //
 // Unit choice: with the sequence shape the calculator's unit is one list,
 // i.e. one vehicle; members are its nodes IN ROUTE ORDER. The solution
@@ -28,7 +28,7 @@ namespace pdp {
 // vehicles only (detail::PerVehicleConstraint); requiredVehicleCost and
 // squaredOrderAgeCost price the pool too and evaluate every list.
 //
-// The per-route rules run as UnitConstraints. The three coupling rules relate
+// The per-route rules run as UnitConstraints. The three coupling constraints relate
 // a request's pickup to its dropoff — which may sit in different routes, which
 // is the whole point of the rule — and unassignedRequestsCost counts requests
 // in no route at all, so those four are GlobalConstraints
@@ -59,7 +59,7 @@ namespace pdp {
 // folded into the engine's Score by the calculator as
 // `soft = medium * kMediumUnit + soft` (kMediumFold in domain.hpp), so a
 // medium weight is in medium units: weight 1 = one medium unit per minute.
-// The three coupling rules and requiredVehicleCost default to
+// The three coupling constraints and requiredVehicleCost default to
 // ScoreCalculator::kCouplingPenalty, which is far above a typical lateness so
 // the search repairs broken pairs before polishing time windows;
 // pinnedStopsCost defaults to ScoreCalculator::kPinnedPenalty. The opt-in

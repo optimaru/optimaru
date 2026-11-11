@@ -65,7 +65,7 @@ constraint is flippable onto any of the three levels (`level="hard"`, `"medium"`
 `"soft"`, or a `Level`), none is a reward, and every one at a weight above 0 is scored
 by default (`default_enabled`); the three opt-in objectives (weight 0) are measured
 but move no score until given a weight. The route-policy constraints cost 0 while their
-vehicle field is 0. The four core rules
+vehicle field is 0. The four core constraints
 (`vehicle_capacity_cost`, `max_end_time_cost`, `unassigned_visits_cost`,
 `travel_time_cost`) are also the monolithic `ScoreCalculator` and the incremental
 calculator, which read the same constants.
@@ -118,7 +118,7 @@ per-vehicle entries list the vehicles they evaluate as `"units"`.
 
 **Names.** Every constraint name ends in `_cost` (C++ struct, header file, registry
 name, Python spec class, module-level default instance and catalog name); in
-`vehicle_fixed_cost` that ending is the rule's own subject (the vehicle's fixed cost),
+`vehicle_fixed_cost` that ending is the constraint's own subject (the vehicle's fixed cost),
 not an added suffix. `max_end_time_cost` is the visit deadline and
 `vehicle_max_end_time_cost` the vehicle's own end bound. The model FIELDS keep their plain
 names (`max_travel_time`, `max_route_duration`, `max_end_time`, `max_stops`,
@@ -207,7 +207,7 @@ a 60 s solve ends within 2% of a 4 s one, while nine seeds end 3% and 6% apart
 (10 s), so another seed buys more than a longer run.
 
 Every entry point scores a grouped plan with the default constraints, since the
-four core rules include neither of these two: `solve_request`, `vrp.solve(plan)`,
+four core constraints include neither of these two: `solve_request`, `vrp.solve(plan)`,
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two visits or more (a visit alone in its group changes nothing). That is a solve on the
 constraint assembly, as when a vehicle limit is set: the whole default set is
@@ -263,7 +263,7 @@ shared prefix sums in `route_sums.hpp` and the enclosing-circle helpers in
    name `"<subject>Cost"` (the struct name with a lower-case first letter);
 2. include it in `optimaru/vehicle_routing/cpp/include/vrp/constraints.hpp` and `emplace` it in
    `defaultConstraints()` if it belongs to the default set;
-3. for one of the core rules, add the same raw cost to
+3. for one of the core constraints, add the same raw cost to
    `score_calculator` / `incremental_calculator`, weighted by the component's
    `kDefaultWeight` — `vrp_plugin_test` checks they agree bit for bit — and a positive and a
    zero hand-calculated case to `vrp_plugin_test` (`verifyRawCostsByHand`) and the catalog

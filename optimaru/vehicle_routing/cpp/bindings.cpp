@@ -193,7 +193,7 @@ PYBIND11_MODULE(_core, m) {
             py::arg("plan"),
             "Recompute the derived fields (vehicle_index, arrival_time) and the "
             "hard / medium / soft score (also stores plan.score). The score is the "
-            "one solve(plan) stores: the four core rules, or the default constraints "
+            "one solve(plan) stores: the four core constraints, or the default constraints "
             "when the plan has a group of two or more visits.");
 
     // The acceptance criteria the engine offers.

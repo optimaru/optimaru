@@ -67,7 +67,7 @@ flippable (`level="hard"` / `level="soft"`, or `Level.HARD` / `Level.SOFT`;
 `level="medium"` raises `ValueError`, the domain has no medium level), none is a reward
 and all ten are scored by default (`default_enabled`); `optimaru.sports_league_scheduling.constraint_info()`
 reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultWeight`).
-The consecutive rules charge the whole run length (a run of 4 costs 4).
+The consecutive constraints charge the whole run length (a run of 4 costs 4).
 
 `constraint_costs()` is the per-constraint surface. The CP-SAT reference reads its
 defaults from `constraint_info()`, so it cannot disagree with the engine on a default.

@@ -48,7 +48,7 @@ print(plan.unassigned_delivery_ids())  # []
   route is unassigned and lands in `plan.unassigned_node_indices`.
 - Score (hard, medium, soft; lexicographic), at the default weights: **hard** =
   capacity peak along the route (`vehicle_capacity_cost`) + time-window lateness
-  (`max_end_time_cost`) + the coupling rules (`paired_request_cost`,
+  (`max_end_time_cost`) + the coupling constraints (`paired_request_cost`,
   `same_vehicle_cost`, `pickup_before_dropoff_cost`) (0 = feasible), **medium** =
   −(service minutes of the requests left unrouted, `unassigned_requests_cost`;
   folded into the engine's soft as `medium * 10^9`), **soft** = −(total driving
@@ -82,7 +82,7 @@ print(plan.unassigned_delivery_ids())  # []
   [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule).
 - `pdp.calculate_score(plan)` recomputes the derived fields and the score of the
   routes as they are, and stores it in `plan.score`. It is the score
-  `pdp.solve(plan)` stores: the seven core rules, or the default constraints when
+  `pdp.solve(plan)` stores: the seven core constraints, or the default constraints when
   two requests or more share a group.
 - `pdp.constraint_info()`, `pdp.list_constraints()` and
   `pdp.constraint_costs(plan, constraints=None)` report the catalog, the names

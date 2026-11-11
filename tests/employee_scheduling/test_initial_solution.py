@@ -261,7 +261,7 @@ def test_repair_stops_at_the_time_limit_on_a_large_infeasible_roster():
 
 
 def test_a_fully_pinned_roster_comes_back_unchanged(request_):
-    """All on one worker, so moving any of them would improve the balance rule."""
+    """All on one worker, so moving any of them would improve the balance constraint."""
     worker = request_.model_input.workers[0].id
     for shift in request_.model_input.shifts:
         shift.worker, shift.pinned = worker, True
@@ -330,7 +330,7 @@ def test_the_inputs_are_not_mutated(request_):
     seeded = with_initial_solution(request_, solution)
     seeded.model_input.shifts[0].worker = None
     seeded.model_input.workers[0].skills.append("Skill Z")
-    seeded.model_input.rules.pop()
+    seeded.model_input.constraints.pop()
 
     assert request_.model_dump() == request_before
     assert solution.model_dump() == solution_before

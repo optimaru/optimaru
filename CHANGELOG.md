@@ -24,8 +24,18 @@
     at the top level like the others; `settings.random_seed` and
     `settings.stop_at_first_feasible` are the same fields under another name (a top-level
     value wins once it is given). Its `solve_request` takes `constraints=`, a list of specs
-    that replaces `model_input.rules` for the solve, and it reads `solver_parameters` and
-    `full_assert` too.
+    that replaces `model_input.constraints` for the solve, and it reads `solver_parameters`
+    and `full_assert` too.
+- **Constraints, not rules.** Employee scheduling called its constraints rules in its API and
+  guides; every use case now says constraints. `SchedulingInput.rules` is
+  `SchedulingInput.constraints`, `default_rules()` is `default_constraints()`, `Rule`,
+  `RuleBase` and `RULE_MODELS` are `ConstraintModel`, `ConstraintModelBase` and
+  `CONSTRAINT_MODELS`, `rule_model()` is `constraint_model()`, and `RuleTotal` /
+  `ScheduleSolution.rule_totals` are `ConstraintTotal` / `constraint_totals`. The earlier
+  names are kept as aliases: `rules` and `rule_totals` are read from JSON and as
+  attributes, and the old functions and classes are the new ones under a second name. A dump
+  uses the new names. The guides and docstrings of the other use cases say "core
+  constraints", "coupling constraints" and so on where they said rules for constraints.
 
 ## 0.4.3
 
