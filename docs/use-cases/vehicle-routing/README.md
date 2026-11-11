@@ -204,7 +204,11 @@ tied to one vehicle pull every route across town, so these plans drive 44% to
 102% more than the same visits left free. Groups whose visits lie near each
 other cost far less. A grouped plan also settles early: on two of these instances
 a 60 s solve ends within 2% of a 4 s one, while nine seeds end 3% and 6% apart
-(10 s), so another seed buys more than a longer run.
+(10 s), so another seed buys more than a longer run. `num_workers` /
+`parallel_solver_count` run such seeds side by side: with four starts the same
+4 s end 0.8% to 2.4% shorter on the four classes above (5 seeds each: shorter in
+17 of the 20 pairs and never longer, since the first start is the single-start
+solve).
 
 Every entry point scores a grouped plan with the default constraints, since the
 four core rules include neither of these two: `solve_request`, `vrp.solve(plan)`,
