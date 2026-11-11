@@ -29,7 +29,8 @@ def test_every_subpackage_is_a_use_case():
 
 def test_a_use_case_keeps_only_its_sources_under_cpp():
     """What the extension and the core library build from. The C++ tests are in
-    tests/<use case>/cpp/ and a C++ bench is in benchmarks/<slug>/cpp/."""
+    tests/<use case>/cpp/ and a C++ bench is in benchmarks/<slug>/cpp/. All four entries are
+    required: setup.py compiles cpp/bindings.cpp and cpp/src/*.cpp against cpp/include."""
     tracked = subprocess.run(["git", "ls-files", "optimaru"], cwd=ROOT, capture_output=True, text=True)
     if tracked.returncode != 0:
         pytest.skip("not a git checkout")

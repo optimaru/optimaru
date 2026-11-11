@@ -62,7 +62,8 @@
     `benchmarks/<slug>/cpp/<ns>_quality_bench.cpp` (bed allocation, conference scheduling,
     meeting scheduling, school timetabling; conference scheduling's file was
     `quality_bench.cpp`), next to the comparison it belongs to, as the C++ tests are under
-    `tests/<use case>/cpp/`. The targets and the binaries' paths under `build/` are the same.
+    `tests/<use case>/cpp/`. The bench targets and their binaries' paths under `build/` are
+    the same.
     A use case's `cpp/` holds only `CMakeLists.txt`, `bindings.cpp`, `include/` and `src/`.
   - School timetabling's C++ tests carry the use case's prefix like every other target:
     `st_canonical_test`, `st_canonical_plugin_test` (were `canonical_test`,
