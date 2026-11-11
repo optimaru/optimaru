@@ -17,6 +17,7 @@
 #include "ms/score_calculator.hpp"
 #include "ms/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
+#include "optimaru/python/score_binding.hpp"
 
 namespace py = pybind11;
 using namespace ms;
@@ -30,12 +31,7 @@ PYBIND11_MODULE(_core, m) {
     m.attr("MEDIUM_SCALE") = kMediumScale;
     m.attr("GRAIN_LENGTH_IN_MINUTES") = kGrainLengthInMinutes;
 
-    py::class_<Score>(m, "Score", py::module_local())
-            .def_readonly("hard", &Score::hard)
-            .def_readonly("soft", &Score::soft)
-            .def("is_feasible", &Score::feasible)
-            .def("__str__", &Score::str)
-            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
+    opy::bind_score<Score>(m);
 
     py::class_<Person>(m, "Person", py::module_local())
             .def(py::init([](std::string id, std::string fullName) {
@@ -222,35 +218,8 @@ PYBIND11_MODULE(_core, m) {
                     },
                     py::arg("schedule"), py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of an assembly on `schedule` — the input
-    // optimaru.meeting_scheduling.constraints.score() turns into a score. Scoring once
-    // is enough: re-pricing any assembly is pure Python arithmetic on these.
-    // None = the default assembly; a pick list scores exactly those picks
-    // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
-    // of a name keyed "<name>#<k>".
-    m.def(
-            "constraint_costs",
-            [](MeetingSchedule& schedule, const py::object& constraints) {
-                ScoreCalculator::prepare(schedule);
-                DecomposedCalculator calculator;
-                opy::apply_constraints([] { return defaultConstraints(); }, constraints)
-                        .into(calculator);
-                return opy::constraint_costs(calculator, schedule);
-            },
-            py::arg("schedule"), py::arg("constraints") = py::none(),
-            "Raw per-unit cost of every constraint, before weight/exponent/offset/"
-            "level (each entry also carries the domain's medium_fold).");
-
-    // The constraint names this domain scores, in default-assembly order —
-    // the keys of constraint_costs().
-    m.def(
-            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
-            "Constraint names available to optimaru.meeting_scheduling.constraints.");
-
-    // The constraint catalog, read off the same default assembly:
-    // constraint_info() -> [ConstraintInfo(name, default_level,
-    // default_weight, level_flippable, reward, default_enabled), ...] in
-    // list_constraints() order. The defaults live in the C++ components only
-    // (the two attendance-conflict mediums: weight 1 in medium units).
-    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    // constraint_costs(), list_constraints() and constraint_info(), off the
+    // default assembly.
+    opy::bind_constraints<MeetingSchedule>(
+            m, "schedule", [] { return defaultConstraints(); }, &ScoreCalculator::prepare);
 }

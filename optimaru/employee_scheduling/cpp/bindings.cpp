@@ -21,6 +21,7 @@
 #include "es/solver.hpp"
 #include "optimaru/optimaru.hpp"
 #include "optimaru/python/constraint_binding.hpp"
+#include "optimaru/python/score_binding.hpp"
 
 namespace py = pybind11;
 using namespace es;
@@ -341,12 +342,7 @@ PYBIND11_MODULE(_core, m) {
     m.attr("MINUTES_PER_DAY") = MINUTES_PER_DAY;
     m.attr("MAX_DAY") = MAX_DAY;
 
-    py::class_<Score>(m, "Score", py::module_local())
-            .def_readonly("hard", &Score::hard)
-            .def_readonly("soft", &Score::soft)
-            .def("is_feasible", &Score::feasible)
-            .def("__str__", &Score::str)
-            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
+    opy::bind_score<Score>(m);
 
     py::class_<Employee>(m, "Employee", py::module_local())
             .def(py::init([](std::string name, std::set<std::string> skills,

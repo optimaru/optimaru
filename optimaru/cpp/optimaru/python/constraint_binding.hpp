@@ -18,8 +18,9 @@
 //       [&] { return defaultConstraints(); }, constraints);   // or (problem)
 //   assembly.into(objective);
 //
-//   python::bind_constraint_info(m, [] { return defaultConstraints(); });
-//   // -> <pkg>.constraint_info() and <pkg>._core.ConstraintInfo
+//   python::bind_constraints<Solution>(m, "problem", [] { return defaultConstraints(); });
+//   // -> <pkg>._core.constraint_costs(), list_constraints(), constraint_info()
+//   //    and ConstraintInfo
 //
 // A domain whose factory builds components outside any assembly (a rule
 // list, employee-scheduling addConstraintByName) re-states each component's
@@ -554,6 +555,53 @@ void bind_constraint_info(py::module_& m, DefaultFactory default_assembly,
     detail::bind_info_rows(m, [default_assembly, catalog_assembly]() {
         return catalog_info(default_assembly(), catalog_assembly());
     });
+}
+
+// Binds the three module functions a use case exposes about its default
+// assembly:
+//
+//   constraint_costs(<argument>, constraints=None)
+//       the raw per-unit costs (constraint_costs above) of the default
+//       assembly on a solution, or of the picks: what
+//       <pkg>.constraints.score() turns into a score. Scoring once is enough,
+//       re-pricing an assembly is Python arithmetic on these. In a use case
+//       with a medium level every entry carries its "medium_fold".
+//   list_constraints()
+//       constraint_names() of the default assembly: the keys of the above.
+//   constraint_info()
+//       bind_constraint_info().
+//
+// The docstrings are the same in every use case; what is particular to one
+// (its units, its levels) is in its `_core.pyi`, which the API reference shows.
+//
+// `defaults` is a callable returning the default ConstraintAssembly<Solution>
+// and `argument` the keyword Python passes the solution by. `prepare(solution)`
+// runs before the costs are read, for a use case whose constraints read data
+// the solution caches (its ScoreCalculator::prepare):
+//
+//   opy::bind_constraints<KnapsackProblem>(m, "problem", [] { return defaultConstraints(); },
+//                                          &ScoreCalculator::prepare);
+template <typename Solution, typename Factory, typename Prepare>
+void bind_constraints(py::module_& m, const char* argument, Factory defaults, Prepare prepare) {
+    m.def(
+            "constraint_costs",
+            [defaults, prepare](Solution& solution, const py::object& constraints) {
+                prepare(solution);
+                DecomposedObjective<Solution> objective;
+                apply_constraints(defaults, constraints).into(objective);
+                return constraint_costs(objective, solution);
+            },
+            py::arg(argument), py::arg("constraints") = py::none(),
+            "Raw per-unit cost of every constraint, before weight/exponent/offset/level.");
+    m.def(
+            "list_constraints", [defaults] { return constraint_names(defaults()); },
+            "The constraint names of this use case, in default-assembly order.");
+    bind_constraint_info(m, defaults);
+}
+
+template <typename Solution, typename Factory>
+void bind_constraints(py::module_& m, const char* argument, Factory defaults) {
+    bind_constraints<Solution>(m, argument, defaults, [](Solution&) {});
 }
 
 }  // namespace python

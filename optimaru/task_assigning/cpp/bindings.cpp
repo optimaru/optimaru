@@ -272,34 +272,8 @@ PYBIND11_MODULE(_core, m) {
                     },
                     py::arg("solution"), py::arg("constraints") = py::none());
 
-    // The raw per-unit costs of an assembly on `solution` — the input
-    // optimaru.task_assigning.constraints.score() turns into a score. Scoring once is
-    // enough: re-pricing any assembly is pure Python arithmetic on these.
-    // Every entry carries the domain's medium fold ("medium_fold":
-    // {"kind": "below_hard", "unit": 1e9}), so score() folds like the engine.
-    // None = the default assembly; a pick list scores exactly those picks
-    // (apply_constraints), each entry carrying its pick's knobs, the k-th pick
-    // of a name keyed "<name>#<k>".
-    m.def(
-            "constraint_costs",
-            [](TaskAssigningSolution& solution, const py::object& constraints) {
-                DecomposedCalculator calculator;
-                opy::apply_constraints([] { return defaultConstraints(); }, constraints)
-                        .into(calculator);
-                return opy::constraint_costs(calculator, solution);
-            },
-            py::arg("solution"), py::arg("constraints") = py::none(),
-            "Raw per-unit cost of every constraint, before weight/exponent/offset/level.");
-
-    // The constraint names this domain scores, in default-assembly order —
-    // the same strings a score breakdown reports.
-    m.def(
-            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
-            "Constraint names available to optimaru.task_assigning.constraints.");
-
-    // The constraint catalog, read off the same default assembly:
-    // constraint_info() -> [ConstraintInfo(name, default_level,
-    // default_weight, level_flippable, reward, default_enabled), ...] in
-    // list_constraints() order. The defaults live in the C++ components only.
-    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
+    // constraint_costs(), list_constraints() and constraint_info(), off the
+    // default assembly.
+    opy::bind_constraints<TaskAssigningSolution>(m, "solution",
+                                                 [] { return defaultConstraints(); });
 }

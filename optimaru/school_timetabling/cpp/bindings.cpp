@@ -30,6 +30,7 @@
 #include "st/score_calculator.hpp"
 #include "st/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
+#include "optimaru/python/score_binding.hpp"
 
 namespace py = pybind11;
 namespace opy = optimaru::python;
@@ -518,12 +519,7 @@ PYBIND11_MODULE(_core, m) {
             "School timetabling — optimaru engine-backed C++ wrapper "
             "exposed to Python";
 
-    py::class_<Score>(m, "Score", py::module_local())
-            .def_readonly("hard", &Score::hard)
-            .def_readonly("soft", &Score::soft)
-            .def("is_feasible", &Score::feasible)
-            .def("__str__", &Score::str)
-            .def("__repr__", [](const Score& s) { return "<Score " + s.str() + ">"; });
+    opy::bind_score<Score>(m);
 
     py::class_<Timeslot>(m, "Timeslot", py::module_local())
             .def(py::init([](int day, int period) {

@@ -406,24 +406,11 @@ PYBIND11_MODULE(_core, m) {
                     },
                     py::arg("schedule"), py::arg("constraints") = py::none());
 
-    // The raw costs of an assembly on schedule.assignments: one entry per
-    // constraint (a global constraint reports its total as one element) —
-    // the input optimaru.semiconductor_scheduling.constraints.score() turns into a
-    // score. None = the default assembly; a pick list scores exactly those
-    // picks (apply_constraints), each entry carrying its pick's knobs, the
-    // k-th pick of a name keyed "<name>#<k>".
-    m.def(
-            "constraint_costs",
-            [](SemiconductorSchedule& schedule, const py::object& constraints) {
-                ScoreCalculator::prepare(schedule);
-                DecomposedCalculator calculator;
-                opy::apply_constraints([] { return defaultConstraints(); }, constraints)
-                        .into(calculator);
-                return opy::constraint_costs(calculator, schedule);
-            },
-            py::arg("schedule"), py::arg("constraints") = py::none(),
-            "Raw cost of every constraint on schedule.assignments, before "
-            "weight/exponent/offset/level.");
+    // constraint_costs(), list_constraints() and constraint_info(), off the
+    // default assembly. constraint_costs() reads schedule.assignments; a global
+    // constraint reports its total as one element.
+    opy::bind_constraints<SemiconductorSchedule>(
+            m, "schedule", [] { return defaultConstraints(); }, &ScoreCalculator::prepare);
 
     // The per-item lists (one item per lot, pair, machine, window, ...).
     m.def(
@@ -441,12 +428,6 @@ PYBIND11_MODULE(_core, m) {
             py::arg("schedule"),
             "Per-item raw costs of every constraint on schedule.assignments (one list per "
             "constraint).");
-
-    m.def(
-            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
-            "Constraint names available to optimaru.semiconductor_scheduling.constraints.");
-
-    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
 
     // --- the decoder, for tests and tools ---------------------------------
     m.def(
