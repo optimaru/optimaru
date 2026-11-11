@@ -64,8 +64,8 @@ def describe(problem: Roster) -> str:
 def solve_engine(problem: Roster, seconds: float, seed: int) -> None:
     from optimaru.employee_scheduling.models import solve_request, with_initial_solution
 
-    problem.timelimit = seconds
-    problem.settings.random_seed = seed
+    problem.time_limit_seconds = seconds
+    problem.random_seed = seed
     solution = solve_request(problem)
     problem.model_input = with_initial_solution(problem, solution).model_input
     problem.reported = (solution.score_hard, solution.score_soft)

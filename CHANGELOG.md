@@ -54,8 +54,11 @@
   `CONSTRAINT_MODELS`, `rule_model()` is `constraint_model()`, and `RuleTotal` /
   `ScheduleSolution.rule_totals` are `ConstraintTotal` / `constraint_totals`. The earlier
   names are kept as aliases: `rules` and `rule_totals` are read from JSON and as
-  attributes, and the old functions and classes are the new ones under a second name. A dump
-  uses the new names. The guides and docstrings of the other use cases say "core
+  attributes, and the old functions and classes are the new ones under a second name.
+  *Breaking for JSON consumers:* a dump writes the new names only, so code that reads
+  `rules` from a dumped input or `rule_totals` from a dumped solution must read
+  `constraints` and `constraint_totals`. The same holds for `timelimit` and `num_workers`
+  in a dumped request. The guides and docstrings of the other use cases say "core
   constraints", "coupling constraints" and so on where they said rules for constraints.
 
 ## 0.4.3

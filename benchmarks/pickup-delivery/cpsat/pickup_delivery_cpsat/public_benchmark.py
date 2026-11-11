@@ -263,9 +263,9 @@ def make_request(
     return (
         PdpRequest(
             name=instance.name,
-            timelimit=seconds,
+            time_limit_seconds=seconds,
             random_seed=seed,
-            num_workers=workers,
+            parallel_solver_count=workers,
             model_input=PdpInput(
                 vehicles=[
                     VehicleModel(

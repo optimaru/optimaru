@@ -562,7 +562,9 @@ class ScheduleRequest(SolveRequest):
             if name not in given and name in in_settings:
                 object.__setattr__(self, name, getattr(self.settings, name))
             updates[name] = getattr(self, name)
-        self.settings = self.settings.model_copy(update=updates)
+        # Written past pydantic's __setattr__, as the fields above: syncing is not the caller
+        # setting `settings`, so it stays out of model_fields_set.
+        object.__setattr__(self, "settings", self.settings.model_copy(update=updates))
         return self
 
     def _effective(self, name: str):
@@ -913,11 +915,12 @@ def solve_request(
     if constraints is not None:
         if isinstance(constraints, _core.DecomposedCalculator):
             raise TypeError("solve_request takes constraints as a list of specs, not a DecomposedCalculator")
+        constraints = list(constraints)  # a generator is read once
         if any(isinstance(constraint, str) for constraint in constraints):
             raise TypeError("solve_request takes constraints as specs (or their JSON dicts), not as names")
         # A copy with the one field replaced: assignment validates the new list only.
         model_input = request.model_input.model_copy()
-        model_input.constraints = list(constraints)
+        model_input.constraints = constraints
         request = request.model_copy(update={"model_input": model_input})
     n = max(request.parallel_solver_count, request.settings.multi_start)
     if n <= 1:
