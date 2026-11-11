@@ -13,26 +13,20 @@
   0.5.0 and asks for it; `examples/README.md` names that version. The four that build a
   request use the names of 0.5: `time_limit_seconds`, and in employee scheduling
   `default_constraints()`, `model_input.constraints` and `constraint_totals`. Thirteen of the
-  twenty-two print and draw exactly what they did on 0.4.3, max-cut among them. Three move
-  within the run-to-run noise of solves that stop on the clock, and no text quotes a number
-  that moved: conference scheduling, flight crew scheduling, and order picking's chart of
-  rounds. The other six are use cases whose search changed, and four of them had an
-  experiment that no longer showed its point. Knapsack compares its move sets at 20,000
-  steps each (were 2 seconds, in which flips alone now reach the best plan) with
-  `core_repack_moves` off beside the other moves, and its rounds are 2,000 steps (were
-  1,000). Bed allocation restarts its new admissions on seed 3 (on seed 7 the three step
-  budgets return one plan). Food packaging's rounds are 100,000 steps (were 50,000), and its
-  rush-order replans stop on a step limit (were 1.5 seconds). Maintenance scheduling's short
-  runs and restart rounds are 100,000 steps each (were 0.3 seconds), and its comparison of
-  ruin and recreate on and off is gone: over 8 and 12 seeds it makes no clear difference
-  there on 0.5.0. Quadratic assignment says that `late_acceptance_size` is the first stage's
-  memory, and sports league scheduling says of a restart what it said of every search.
-  One thing these re-runs showed about 0.5.0 itself, not fixed here: in the use cases that
-  search in stages, a solve that starts from an existing plan (`with_initial_solution`) can
-  return that plan unchanged where 0.4.3 improved it, and more often with a larger budget.
-  A food packaging restart that 0.4.3 improves on four seeds of four at every budget tried
-  is improved on none of the four at 200,000 steps or more, or at 1 and 5 seconds. The
-  restart experiments above use budgets at which they show their point on 0.5.0.
+  twenty-two print and draw exactly what they did on 0.4.3, and three move within the noise
+  of solves that stop on the clock. The other six are of use cases whose search changed, and
+  some of their experiments no longer showed their point; those now run on a step budget or
+  another seed: knapsack's comparison of move sets (20,000 steps each, `core_repack_moves`
+  off beside the other moves) and its restart rounds, bed allocation's new admissions, food
+  packaging's rounds and rush-order replan, maintenance scheduling's short runs and restart
+  rounds. Maintenance scheduling's comparison of ruin and recreate on and off is gone: over
+  8 and 12 seeds it makes no clear difference there on 0.5.0.
+- **Known in 0.5.0, found by those re-runs and not fixed here:** in the use cases that search
+  in stages, a solve that starts from an existing plan (`with_initial_solution`) can return
+  that plan unchanged where 0.4.3 improved it, and more often with a larger budget. A food
+  packaging restart that 0.4.3 improves on four seeds of four at every budget tried is
+  improved on none of the four at 200,000 steps or more, or at 1 and 5 seconds. Solves from
+  scratch are not affected.
 
 ## 0.5.0
 
