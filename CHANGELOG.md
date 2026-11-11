@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.3
 
 - **Vehicle routing: visit groups with a partial order.** Visits that share a `group`
   (`VisitModel.group`, a name; `Visit.group_index` on a plan) are one job: they ride one
