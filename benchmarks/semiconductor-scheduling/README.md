@@ -10,7 +10,7 @@ identical (formulation notes:
 
 ```sh
 cd benchmarks/semiconductor-scheduling/cpsat
-OPTIMARU_USE_CASES=semiconductor_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (semiconductor_scheduling only)
+OPTIMARU_USE_CASES=semiconductor_scheduling uv sync   # also builds this checkout's optimaru (semiconductor_scheduling only)
 uv run pytest -q                       # benchmark harness tests
 uv run semiconductor-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```

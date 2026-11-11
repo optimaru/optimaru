@@ -28,7 +28,7 @@ objective is built.
 
 ```sh
 cd benchmarks/assembly-line-balancing/cpsat
-OPTIMARU_USE_CASES=assembly_line_balancing uv sync --all-groups --all-extras   # also builds this checkout's optimaru (assembly_line_balancing only)
+OPTIMARU_USE_CASES=assembly_line_balancing uv sync   # also builds this checkout's optimaru (assembly_line_balancing only)
 uv run pytest -q tests     # comparison runner and SALBP parser (the model tests live in external-solver)
 uv run python -m assembly_line_balancing_cpsat.benchmark --seconds 10     # generated lines, no download
 cd .. && uv run --project cpsat python -m bench.run_bench --seconds 60   # the SALBP archive

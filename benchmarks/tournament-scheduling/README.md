@@ -17,7 +17,7 @@ pin both down: [`cpsat/README.md`](cpsat/README.md#constraints-and-parity-with-t
 
 ```sh
 cd benchmarks/tournament-scheduling/cpsat
-OPTIMARU_USE_CASES=tournament_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (tournament_scheduling only)
+OPTIMARU_USE_CASES=tournament_scheduling uv sync   # also builds this checkout's optimaru (tournament_scheduling only)
 uv run pytest -q                       # benchmark harness tests
 uv run tournament-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

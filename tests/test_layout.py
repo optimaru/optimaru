@@ -87,7 +87,8 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
     and CI does not notice, because it runs `python -m` from the project directory. The CP-SAT
     library is pinned by tag in every project that uses it (every use case but vehicle routing,
     compared with OR-Tools Routing, and school timetabling, which keeps its model here): one
-    tag, moved in all of them, and the links into the library follow it."""
+    tag, moved in all of them, and the links into the library follow it. pytest is in the `dev`
+    dependency group, which a plain `uv sync` installs (an extra or another group is not)."""
     slugs = {name.replace("_", "-") for name in USE_CASES}
     projects = {slug: ROOT / "benchmarks" / slug / "cpsat" / "pyproject.toml" for slug in slugs - {"vehicle-routing"}}
     projects["vehicle-routing"] = ROOT / "benchmarks" / "vehicle-routing" / "pyproject.toml"
@@ -96,6 +97,9 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
     for slug, project in sorted(projects.items()):
         data = tomllib.loads(project.read_text())
         assert "build-system" in data, f"{slug}: uv will not install the package or its [project.scripts]"
+        dev = data.get("dependency-groups", {}).get("dev", [])
+        assert any(entry.startswith("pytest") for entry in dev), f"{slug}: a plain uv sync installs no pytest"
+        assert "optional-dependencies" not in data["project"], f"{slug}: test tools go in [dependency-groups]"
         source = data.get("tool", {}).get("uv", {}).get("sources", {}).get("external-solver")
         if source is not None:
             assert set(source) == {"git", "tag"}, f"{slug}: external-solver is pinned by tag, not {source}"

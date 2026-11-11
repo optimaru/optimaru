@@ -32,7 +32,7 @@ when the objective is built.
 
 ```sh
 cd benchmarks/max-cut/cpsat
-OPTIMARU_USE_CASES=max_cut uv sync --all-groups --all-extras   # also builds this checkout's optimaru (max_cut only)
+OPTIMARU_USE_CASES=max_cut uv sync   # also builds this checkout's optimaru (max_cut only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run max-cut-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```

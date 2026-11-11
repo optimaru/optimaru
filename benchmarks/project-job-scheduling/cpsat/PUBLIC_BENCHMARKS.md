@@ -11,8 +11,8 @@ directly.
 
 ```bash
 cd benchmarks/project-job-scheduling/cpsat
-uv run project-job-public-bench --instance Pat1 --seconds 10 --workers 8
-uv run project-job-public-bench --all --seconds 30 --workers 8     # Pat1-Pat5
+uv run project-job-scheduling-public-bench --instance Pat1 --seconds 10 --workers 8
+uv run project-job-scheduling-public-bench --all --seconds 30 --workers 8     # Pat1-Pat5
 ```
 
 `--instance` repeats, `--all` runs the five instances, `--json` prints the

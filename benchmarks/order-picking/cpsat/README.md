@@ -1,4 +1,4 @@
-# order-picking-cpsat
+# Order picking CP-SAT
 
 CP-SAT alternative with independently selectable bucket, travel and order
 consolidation plugins.

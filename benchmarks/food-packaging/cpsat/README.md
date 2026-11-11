@@ -1,4 +1,4 @@
-# food-packaging-cpsat
+# Food packaging CP-SAT
 
 CP-SAT alternative for line sequencing, cleanup operators and due-date
 objectives. Constraint lists use replacement semantics.

@@ -1,4 +1,4 @@
-# Sports league CP-SAT
+# Sports league scheduling CP-SAT
 
 CP-SAT round assignment with team/day conflicts, four-or-more home/away runs,
 reverse fixtures, travel hops, workday-derby penalties, and lexicographic

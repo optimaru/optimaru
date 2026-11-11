@@ -1,4 +1,4 @@
-from flight_crew_cpsat import benchmark
+from flight_crew_scheduling_cpsat import benchmark
 
 
 def test_comparison_runner_owns_its_instances() -> None:

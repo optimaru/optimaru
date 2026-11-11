@@ -1,4 +1,4 @@
-# optimaru.employee_scheduling — employee shift scheduling
+# optimaru.employee_scheduling (Python)
 
 You have a list of *shifts* (work slots: "Tuesday 09:00–17:00 at Location A,
 needs Skill A") and a list of *workers* (each with skills, days they cannot work,

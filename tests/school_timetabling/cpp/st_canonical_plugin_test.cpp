@@ -138,7 +138,7 @@ void assembleExcept(DecomposedCalculator& calc, const ObjectiveWeights& w,
 }
 
 // -------------------------------------------------------------------------
-// Random feature-complete instance (same shape as canonical_test.cpp): team
+// Random feature-complete instance (same shape as st_canonical_test.cpp): team
 // teaching, blocks, room demand, period masks, tight teacher limits, all
 // soft weights on.
 // -------------------------------------------------------------------------
@@ -522,7 +522,7 @@ void verifyFullAssertSolve() {
 }
 
 // -------------------------------------------------------------------------
-// (f) CP-SAT-sample-scale demo school (the canonical_test (e) instance):
+// (f) CP-SAT-sample-scale demo school (the st_canonical_test (e) instance):
 // 5 days (7/7/7/7/6 periods = 34 slots), 6 classes x 34 weekly periods, 15
 // teachers, special rooms, art double periods, the merged tech group, team
 // teaching and pinned homeroom hours — solved on the plugin path.

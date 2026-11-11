@@ -1,4 +1,4 @@
-# Tournament Scheduling
+# Tournament scheduling
 
 Derived from the Timefold Quickstarts `tournament-scheduling` example (Apache-2.0), translated
 and modified; see the repository [NOTICE](../../../NOTICE).

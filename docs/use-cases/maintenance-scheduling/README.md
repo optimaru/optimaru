@@ -1,4 +1,4 @@
-# Maintenance Scheduling (C++ / Python)
+# Maintenance scheduling
 
 Derived from the Timefold Quickstarts `maintenance-scheduling` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)), with modifications:

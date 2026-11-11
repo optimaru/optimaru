@@ -30,7 +30,7 @@ Where a use case differs from the table:
 
 - School timetabling keeps `defaultConstraints()` in
   `st/canonical_constraints.hpp`, its constraints in subdirectories of
-  `st/constraints/`, and its plugin tests in `canonical_plugin_test.cpp`.
+  `st/constraints/`, and its plugin tests in `st_canonical_plugin_test.cpp`.
 - Employee scheduling has `es_plugin_test.cpp` only, and a second catalog of
   opt-in rules (see [step 3](#3-add-it-to-the-assembly) of adding a cost).
 - Employee scheduling and school timetabling have no

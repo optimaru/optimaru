@@ -2,7 +2,7 @@
 #
 #
 # Gates:
-#   1. C++ domain tests must pass (st_test + canonical_test, including the
+#   1. C++ domain tests must pass (st_test + st_canonical_test, including the
 #      incremental-vs-full and hot-set consistency checks).
 #   2. Score-calculator parity: the fixed cross-check instance must produce the
 #      same score on the C++ side and in the shared evaluator (evaluate.py).
@@ -83,10 +83,10 @@ jobs:
             -DOPTIMARU_ENGINE_TESTS=OFF -DOPTIMARU_USE_CASES=school_timetabling
           cmake --build build/st -j
 
-      - name: C++ test gates (st_test + canonical_test)
+      - name: C++ test gates (st_test + st_canonical_test)
         run: |
           ./build/st/school_timetabling/st_test
-          ./build/st/school_timetabling/canonical_test
+          ./build/st/school_timetabling/st_canonical_test
 
       - name: C++ cross-check score
         run: |

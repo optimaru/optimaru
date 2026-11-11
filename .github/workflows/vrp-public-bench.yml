@@ -68,7 +68,7 @@ jobs:
           key: vrp-public-bench-${{ runner.os }}
 
       - name: Install the benchmark project (builds the pybind extension)
-        run: uv sync --python 3.14 --extra dev
+        run: uv sync --python 3.14
         env:
           OPTIMARU_USE_CASES: vehicle_routing
           CC: ccache cc

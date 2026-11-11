@@ -2,7 +2,7 @@
 
 Both solvers get the same instances and wall-clock budget; both answers are
 rescored by the use case's own evaluator (`optimaru.sports_league_scheduling.constraint_costs`).
-Run: `uv run python -m sports_league_cpsat.benchmark --seconds 10`.
+Run: `uv run python -m sports_league_scheduling_cpsat.benchmark --seconds 10`.
 """
 
 from __future__ import annotations

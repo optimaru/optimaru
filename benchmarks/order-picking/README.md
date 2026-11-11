@@ -8,7 +8,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/order-picking/cpsat
-OPTIMARU_USE_CASES=order_picking uv sync --all-groups --all-extras   # also builds this checkout's optimaru (order_picking only)
+OPTIMARU_USE_CASES=order_picking uv sync   # also builds this checkout's optimaru (order_picking only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run order-picking-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

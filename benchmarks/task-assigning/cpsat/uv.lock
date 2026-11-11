@@ -49,11 +49,12 @@ version = "0.1.0"
 source = { editable = "../../cpsat-common" }
 
 [package.metadata]
-requires-dist = [
-    { name = "numpy", marker = "extra == 'dev'" },
-    { name = "pytest", marker = "extra == 'dev'" },
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "numpy" },
+    { name = "pytest" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "external-solver"

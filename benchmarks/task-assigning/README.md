@@ -8,7 +8,7 @@ rescored by the use case's own evaluator; external-solver's parity tests
 
 ```sh
 cd benchmarks/task-assigning/cpsat
-OPTIMARU_USE_CASES=task_assigning uv sync --all-groups --all-extras   # also builds this checkout's optimaru (task_assigning only)
+OPTIMARU_USE_CASES=task_assigning uv sync   # also builds this checkout's optimaru (task_assigning only)
 uv run pytest -q                       # benchmark harness tests
 uv run task-assigning-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

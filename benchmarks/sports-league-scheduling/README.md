@@ -1,16 +1,16 @@
 # Sports league scheduling benchmark
 
 The [`sports-league-scheduling`](../../docs/use-cases/sports-league-scheduling) use case against **OR-Tools CP-SAT**
-([`cpsat/`](cpsat), package `sports_league_cpsat`). The CP-SAT model implements the
+([`cpsat/`](cpsat), package `sports_league_scheduling_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
 rescored by the use case's own evaluator; external-solver's parity tests
 (`tests/sports_league_scheduling/test_solve.py`) keep the two cost definitions identical.
 
 ```sh
 cd benchmarks/sports-league-scheduling/cpsat
-OPTIMARU_USE_CASES=sports_league_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (sports_league_scheduling only)
+OPTIMARU_USE_CASES=sports_league_scheduling uv sync   # also builds this checkout's optimaru (sports_league_scheduling only)
 uv run pytest -q                       # benchmark harness tests
-uv run sports-league-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
+uv run sports-league-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```
 
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).

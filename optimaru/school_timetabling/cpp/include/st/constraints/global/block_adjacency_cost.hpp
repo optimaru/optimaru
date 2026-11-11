@@ -54,7 +54,7 @@ private:
         }
         // The missing-member charge lives in the shared helper, so this path,
         // the monolithic incremental calculator and computeBreakdown cannot
-        // drift apart — canonical_plugin_test (a)/(b) gate exactly that.
+        // drift apart — st_canonical_plugin_test (a)/(b) gate exactly that.
         const std::int64_t violation =
                 ScoreCalculator::blockViolation(scratch_, table.blockMembers[group].size());
         total_ += violation - violation_[group];

@@ -46,7 +46,7 @@ Requires [uv](https://docs.astral.sh/uv/).
 
 ```sh
 cd benchmarks/vehicle-routing
-uv sync --extra dev                          # builds the engine's pybind extension
+uv sync                                      # builds the engine's pybind extension
 
 # one Augerat instance, all backends
 uv run python -m vrp_benchmark --instance A-n32-k5 --seconds 10

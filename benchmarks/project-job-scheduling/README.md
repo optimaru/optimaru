@@ -4,17 +4,17 @@ Transcribes the Timefold Quickstarts `project-job-scheduling` example's
 demo data generator (Apache-2.0), with modifications; see the repository [NOTICE](../../NOTICE).
 
 The [`project-job-scheduling`](../../docs/use-cases/project-job-scheduling) use case against **OR-Tools CP-SAT**
-([`cpsat/`](cpsat), package `project_job_cpsat`). The CP-SAT model implements the
+([`cpsat/`](cpsat), package `project_job_scheduling_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units, so both answers are
 rescored by the use case's own evaluator; parity tests in external-solver
 (`tests/project_job_scheduling/`) keep the two cost definitions identical.
 
 ```sh
 cd benchmarks/project-job-scheduling/cpsat
-OPTIMARU_USE_CASES=project_job_scheduling uv sync --all-groups --all-extras   # also builds this checkout's optimaru (project_job_scheduling only)
+OPTIMARU_USE_CASES=project_job_scheduling uv sync   # also builds this checkout's optimaru (project_job_scheduling only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
-uv run project-job-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
-uv run project-job-public-bench --help              # RG30 RCPSP instances (Patterson format)
+uv run project-job-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
+uv run project-job-scheduling-public-bench --help              # RG30 RCPSP instances (Patterson format)
 ```
 
 Public-instance protocol and results: [`cpsat/PUBLIC_BENCHMARKS.md`](cpsat/PUBLIC_BENCHMARKS.md).

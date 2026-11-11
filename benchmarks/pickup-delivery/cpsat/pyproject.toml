@@ -8,7 +8,7 @@ dependencies = ["external-solver", "cpsat-plugins", "optimaru", "ortools>=9.10",
 [project.scripts]
 pickup-delivery-public-bench = "pickup_delivery_cpsat.public_benchmark:main"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["pytest"]
 
 [tool.setuptools]

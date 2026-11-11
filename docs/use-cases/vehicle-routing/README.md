@@ -1,4 +1,4 @@
-# Vehicle Routing
+# Vehicle routing
 
 Derived from the Timefold Quickstarts `vehicle-routing` example (Apache-2.0), translated
 and modified; see the repository [NOTICE](../../../NOTICE).

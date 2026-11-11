@@ -4,7 +4,7 @@ import zipfile
 
 import pytest
 
-from project_job_cpsat.public_benchmark import (
+from project_job_scheduling_cpsat.public_benchmark import (
     INSTANCE_SHA256,
     _verified,
     critical_path,
@@ -48,7 +48,7 @@ def _archive(files: dict[str, bytes]) -> bytes:
 def test_archive_is_checked_by_its_instance_files(monkeypatch) -> None:
     files = {f"rcpsp/instances/Pat{i}.rcp": f"instance {i}".encode() for i in range(1, 6)}
     pins = {name.rsplit("/", 1)[1][:-4]: hashlib.sha256(payload).hexdigest() for name, payload in files.items()}
-    monkeypatch.setattr("project_job_cpsat.public_benchmark.INSTANCE_SHA256", pins)
+    monkeypatch.setattr("project_job_scheduling_cpsat.public_benchmark.INSTANCE_SHA256", pins)
     # Other members (the vendor's sample programs, a further instance) and the zip's own
     # bytes do not matter.
     assert _verified(_archive(files | {"rcpsp/rcpsp.py": b"anything"}))

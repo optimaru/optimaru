@@ -1,4 +1,4 @@
-# Pickup and Delivery with Time Windows (PDPTW)
+# Pickup and delivery with time windows (PDPTW)
 
 Extends this repository's vehicle-routing translation, itself derived from the Timefold
 Quickstarts `vehicle-routing` example (Apache-2.0); see the repository [NOTICE](../../../NOTICE).

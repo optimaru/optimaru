@@ -1,4 +1,4 @@
-# Conference Scheduling
+# Conference scheduling
 
 Derived from the Timefold Quickstarts `conference-scheduling` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)),

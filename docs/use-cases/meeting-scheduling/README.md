@@ -1,4 +1,4 @@
-# Meeting Scheduling
+# Meeting scheduling
 
 Derived from the Timefold Quickstarts `meeting-scheduling` example (Apache-2.0), translated
 and modified; see the repository [NOTICE](../../../NOTICE).

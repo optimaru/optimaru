@@ -1,4 +1,4 @@
-# Bed Allocation
+# Bed allocation
 
 Derived from the Timefold Quickstarts `bed-allocation` example (Apache-2.0), translated
 and modified; see the repository [NOTICE](../../../NOTICE).

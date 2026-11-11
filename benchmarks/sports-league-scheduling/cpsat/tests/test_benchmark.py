@@ -1,6 +1,6 @@
 import sys
 
-from sports_league_cpsat import benchmark
+from sports_league_scheduling_cpsat import benchmark
 
 
 def test_external_solver_uses_the_engine_in_this_checkout():

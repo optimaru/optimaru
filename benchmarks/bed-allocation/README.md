@@ -11,7 +11,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/bed-allocation/cpsat
-OPTIMARU_USE_CASES=bed_allocation uv sync --all-groups --all-extras   # also builds this checkout's optimaru (bed_allocation only)
+OPTIMARU_USE_CASES=bed_allocation uv sync   # also builds this checkout's optimaru (bed_allocation only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run bed-allocation-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

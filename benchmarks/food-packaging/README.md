@@ -8,7 +8,7 @@ rescored by the use case's own evaluator; parity tests in external-solver
 
 ```sh
 cd benchmarks/food-packaging/cpsat
-OPTIMARU_USE_CASES=food_packaging uv sync --all-groups --all-extras   # also builds this checkout's optimaru (food_packaging only)
+OPTIMARU_USE_CASES=food_packaging uv sync   # also builds this checkout's optimaru (food_packaging only)
 uv run pytest -q                       # comparison smoke tests (model tests: external-solver)
 uv run food-packaging-compare --seconds 10 --workers 8   # engine vs CP-SAT (--markdown, --json)
 ```

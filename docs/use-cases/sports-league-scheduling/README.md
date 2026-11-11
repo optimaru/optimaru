@@ -1,4 +1,4 @@
-# Sports League Scheduling (C++ / Python)
+# Sports league scheduling
 
 Derived from the Timefold Quickstarts `sports-league-scheduling` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)), with modifications,
