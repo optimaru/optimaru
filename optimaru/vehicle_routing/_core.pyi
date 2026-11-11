@@ -183,7 +183,8 @@ class SolverConfig:
     simulated_annealing_starting_temperature: tuple[int, float]
     """SIMULATED_ANNEALING's (hard, soft) starting temperature, cooling to 0 over the solve.
     (0, 0), the default, = auto: hard 0, soft = simulated_annealing_temperature_fraction x
-    |start soft| (at least 1)."""
+    |start soft| (at least 1); the soft level alone, without the medium level of the
+    unassigned visits."""
     simulated_annealing_temperature_fraction: float
     """The auto temperature's fraction of the start's |soft| (0.01 by default; > 0)."""
     great_deluge_water_level_step: tuple[int, float]

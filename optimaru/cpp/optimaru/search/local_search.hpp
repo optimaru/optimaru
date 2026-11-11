@@ -14,6 +14,7 @@
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
+#include "optimaru/score/levels.hpp"
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/portable_random.hpp"
 #include "optimaru/ruin_recreate/removal_gain.hpp"
@@ -403,8 +404,9 @@ private:
                 const bool automatic =
                         c.start_temperature == Score{0, 0.0} && c.start_temperature_fraction > 0.0;
                 return std::make_unique<SimulatedAnnealing>(
-                        automatic ? automatic_start_temperature(initial_score,
-                                                                c.start_temperature_fraction)
+                        automatic ? automatic_start_temperature(
+                                            unfolded_soft<Solution>(initial_score),
+                                            c.start_temperature_fraction)
                                   : c.start_temperature);
             }
             case AcceptanceRule::GreatDeluge:

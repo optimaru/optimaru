@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -116,8 +117,8 @@ struct AcceptanceConfig {
     // SimulatedAnnealing: the starting temperature (hard, soft), cooling to 0
     // over the time limit (or the step limit, when that is further along).
     // (0, 0) is automatic: hard 0 and soft =
-    // simulated_annealing_temperature_fraction * |the start's soft score|, at
-    // least 1.
+    // simulated_annealing_temperature_fraction * |the start's soft level|, at
+    // least 1. A medium level folded into the engine's soft does not count.
     Score start_temperature{0, 0.0};
     double simulated_annealing_temperature_fraction = 0.01;
 
@@ -179,12 +180,30 @@ void check_config(const Config& config) {
         }
     }
     if constexpr (std::is_base_of_v<AcceptanceConfig, Config>) {
+        const auto finite_from = [](double value, double least, bool inclusive) {
+            return std::isfinite(value) && (inclusive ? value >= least : value > least);
+        };
+        const auto amount = [&finite_from](const Score& value) {
+            return value.hard >= 0 && finite_from(value.soft, 0.0, true);
+        };
         if (config.tabu_tenure < 0) throw std::invalid_argument("entity_tabu_size must be >= 0");
-        if (!(config.simulated_annealing_temperature_fraction > 0.0)) {
-            throw std::invalid_argument("simulated_annealing_temperature_fraction must be > 0");
+        if (!amount(config.start_temperature)) {
+            throw std::invalid_argument(
+                    "simulated_annealing_starting_temperature must be finite and >= 0");
+        }
+        if (!finite_from(config.simulated_annealing_temperature_fraction, 0.0, false)) {
+            throw std::invalid_argument(
+                    "simulated_annealing_temperature_fraction must be finite and > 0");
+        }
+        if (!amount(config.water_level_step)) {
+            throw std::invalid_argument("great_deluge_water_level_step must be finite and >= 0");
         }
         if (config.recount_interval <= 0) {
             throw std::invalid_argument("step_counting_hill_climbing_size must be positive");
+        }
+        if (!finite_from(config.record_to_record_start_gap, 0.0, true) ||
+            !finite_from(config.record_to_record_end_gap, 0.0, true)) {
+            throw std::invalid_argument("the record-to-record gaps must be finite and >= 0");
         }
     }
 }

@@ -3,18 +3,19 @@
 ## Unreleased
 
 - **Every acceptance rule has its parameters.** Vehicle routing, quadratic assignment and
-  semiconductor scheduling let `SolverConfig.acceptor_type` name seven rules, but each bound
-  the parameters of only some of them, so `GREAT_DELUGE` kept its water level at the start's
-  score, `STEP_COUNTING_HILL_CLIMBING` ran at a fixed size, and in vehicle routing
+  semiconductor scheduling let `SolverConfig.acceptor_type` name seven rules, but each bound the
+  parameters of only some of them, so `GREAT_DELUGE` kept its water level at the start's score,
+  `STEP_COUNTING_HILL_CLIMBING` ran at a fixed size, and in vehicle routing
   `SIMULATED_ANNEALING` started at temperature 0, which is hill climbing. The three now share
   one set of attributes with the same defaults: `entity_tabu_size` (7),
   `simulated_annealing_starting_temperature` ((0, 0) = automatic) and
   `simulated_annealing_temperature_fraction` (0.01), `great_deluge_water_level_step` ((0, 0)),
   `step_counting_hill_climbing_size` (400), `record_to_record_start_gap` (0.02) and
-  `record_to_record_end_gap` (0.0). Only one default search changes: simulated annealing in
-  vehicle routing, which now starts at 1% of the start's soft score. In C++ the fields are the
-  new `optimaru::AcceptanceConfig` base (`optimaru/solver_config.hpp`), the automatic
-  temperature is the engine's (`AcceptanceSettings::start_temperature_fraction`), and
+  `record_to_record_end_gap` (0.0), each checked when it is set. Only one default search
+  changes: simulated annealing in vehicle routing, which now starts at 1% of the start's soft
+  level (the driving time; the medium level of unassigned visits does not count). In C++ the
+  fields are the new `optimaru::AcceptanceConfig` base (`optimaru/solver_config.hpp`), the
+  automatic temperature is the engine's (`AcceptanceSettings::start_temperature_fraction`), and
   `optimaru::python::bind_acceptor_type()` binds the enum. Pickup and delivery follows.
 
 ## 0.4.2

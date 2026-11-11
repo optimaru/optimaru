@@ -48,9 +48,12 @@ private:
 
 // The starting temperature that stands in for (0, 0) when a fraction is
 // given: hard 0, so a hard-worse move is never taken, and that fraction of the
-// initial score's soft magnitude, at least 1.
-inline Score automatic_start_temperature(const Score& initial_score, double fraction) {
-    return {0, std::max(1.0, fraction * std::fabs(initial_score.soft))};
+// magnitude of the start's soft level, at least 1. The soft level is the
+// caller's to give without a medium level folded into it (unfolded_soft in
+// score/levels.hpp): a temperature sized from an unassigned penalty of 10^9
+// would accept every move.
+inline Score automatic_start_temperature(double soft_level, double fraction) {
+    return {0, std::max(1.0, fraction * std::fabs(soft_level))};
 }
 
 }  // namespace optimaru

@@ -95,7 +95,7 @@ attributes and their defaults are the same in each:
 | `LATE_ACCEPTANCE` | `late_acceptance_size` | 0 = the use case's automatic size |
 | `HILL_CLIMBING` | none | |
 | `ENTITY_TABU` | `entity_tabu_size`: steps a moved entity stays tabu | 7 |
-| `SIMULATED_ANNEALING` | `simulated_annealing_starting_temperature` (hard, soft), cooling to 0 over the solve; `simulated_annealing_temperature_fraction` | (0, 0) = automatic: hard 0, soft = the fraction (0.01) of the start's soft score, at least 1 |
+| `SIMULATED_ANNEALING` | `simulated_annealing_starting_temperature` (hard, soft), cooling to 0 over the solve; `simulated_annealing_temperature_fraction` | (0, 0) = automatic: hard 0, soft = the fraction (0.01) of the start's soft level, at least 1. The soft level alone: the medium level (unassigned visits in vehicle routing) does not count |
 | `GREAT_DELUGE` | `great_deluge_water_level_step` (hard, soft): how much the water level, which starts at the start's score, rises per step | (0, 0): the level stays at the start's score |
 | `STEP_COUNTING_HILL_CLIMBING` | `step_counting_hill_climbing_size`: the bar is reset to the current score every this many steps | 400 |
 | `RECORD_TO_RECORD_TRAVEL` | `record_to_record_start_gap`, `record_to_record_end_gap`: the gap below the best score that is still accepted, as a fraction of the start's soft score | 0.02, shrinking to 0.0 |

@@ -358,6 +358,16 @@ struct MediumFoldOf {
     static constexpr MediumFold value = MediumFold::none();
 };
 
+// The soft level of an engine score of `Solution`, without the medium level
+// an into_soft fold packed into it: the remainder of the fold unit. Exact for
+// what such a fold is for, whole-number levels of the same sign. With no
+// fold, or a below_hard one, the engine's soft is the soft level already.
+template <typename Solution>
+double unfolded_soft(const Score& score) {
+    constexpr MediumFold fold = MediumFoldOf<Solution>::value;
+    return fold.kind == MediumFold::Kind::IntoSoft ? std::fmod(score.soft, fold.unit) : score.soft;
+}
+
 }  // namespace optimaru
 
 #endif  // OPTIMARU_SCORE_LEVELS_HPP

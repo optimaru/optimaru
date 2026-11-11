@@ -47,7 +47,16 @@ struct TaskAssignment {
     std::vector<int> assignment;                 // decision variable; -1 = unassigned
 };
 
+// A solution type whose medium level folds into the engine's soft at 10^9
+// (only its fold is used, in testAcceptanceConfig).
+struct FoldedToy {};
+
 }  // namespace
+
+template <>
+struct optimaru::MediumFoldOf<FoldedToy> {
+    static constexpr optimaru::MediumFold value = optimaru::MediumFold::into_soft(1e9);
+};
 
 template <>
 struct optimaru::SolutionTraits<TaskAssignment> {
@@ -2083,10 +2092,33 @@ void testAcceptanceConfig() {
     }
     // The automatic starting temperature: hard 0, the fraction of the start's
     // soft magnitude, at least 1.
-    check(optimaru::automatic_start_temperature(Score{-3, -250.0}, 0.01) == Score{0, 2.5} &&
-                  optimaru::automatic_start_temperature(Score{0, 400.0}, 0.5) == Score{0, 200.0} &&
-                  optimaru::automatic_start_temperature(Score{0, -40.0}, 0.01) == Score{0, 1.0},
+    check(optimaru::automatic_start_temperature(-250.0, 0.01) == Score{0, 2.5} &&
+                  optimaru::automatic_start_temperature(400.0, 0.5) == Score{0, 200.0} &&
+                  optimaru::automatic_start_temperature(-40.0, 0.01) == Score{0, 1.0},
           "automatic_start_temperature");
+    // ... of the soft level alone: three unassigned units on a medium level
+    // folded at 10^9 must not set the temperature.
+    check(optimaru::unfolded_soft<FoldedToy>(Score{0, -3e9 - 250.0}) == -250.0 &&
+                  optimaru::unfolded_soft<FoldedToy>(Score{0, -250.0}) == -250.0 &&
+                  optimaru::unfolded_soft<TaskAssignment>(Score{0, -3e9 - 250.0}) == -3e9 - 250.0,
+          "unfolded_soft drops a medium level folded into the soft, and nothing else");
+    {
+        auto refused = [](AcceptingConfig config) {
+            try {
+                optimaru::check_config(config);
+            } catch (const std::invalid_argument&) {
+                return true;
+            }
+            return false;
+        };
+        AcceptingConfig temperature, fraction, step, gap;
+        temperature.start_temperature = {0, std::numeric_limits<double>::quiet_NaN()};
+        fraction.simulated_annealing_temperature_fraction = std::numeric_limits<double>::infinity();
+        step.water_level_step = {-1, 0.0};
+        gap.record_to_record_end_gap = -0.1;
+        check(refused(temperature) && refused(fraction) && refused(step) && refused(gap),
+              "check_config: what the Python setters refuse (not finite, negative)");
+    }
 }
 
 void testStallStepLimitAndRequestStop() {

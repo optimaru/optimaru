@@ -8,6 +8,8 @@ import pytest
 import optimaru.vehicle_routing as vrp
 from optimaru.vehicle_routing import models
 
+from .test_constraint_specs import _random_plan
+
 
 def test_request_solver_parameters_are_applied():
     config = vrp.SolverConfig()
@@ -297,8 +299,6 @@ def test_package_solve_reports_new_bests():
 
 
 def _new_bests(acceptor) -> list:
-    from .test_constraint_specs import _random_plan
-
     config = vrp.SolverConfig()
     config.step_count_limit = 4000
     config.random_seed = 5
@@ -309,6 +309,6 @@ def _new_bests(acceptor) -> list:
 
 
 def test_simulated_annealing_is_not_hill_climbing():
-    """Simulated annealing starts at the automatic temperature (1% of the start's soft score):
+    """Simulated annealing starts at the automatic temperature (1% of the start's soft level):
     at the engine's own (0, 0) it took no worsening move, which is hill climbing."""
     assert _new_bests(vrp.AcceptorType.SIMULATED_ANNEALING) != _new_bests(vrp.AcceptorType.HILL_CLIMBING)

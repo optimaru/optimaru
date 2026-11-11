@@ -115,8 +115,9 @@ struct AcceptanceSettings {
     // SimulatedAnnealing: the starting temperature, cooling to 0 over the
     // solve. (0, 0) with a start_temperature_fraction above 0 is automatic:
     // hard 0 (a hard-worse move is never taken) and soft = the fraction of
-    // the initial score's soft magnitude, at least 1. (0, 0) with a fraction
-    // of 0 accepts no worsening move at all.
+    // the magnitude of the start's soft level, at least 1 (the soft level
+    // alone: a medium level the domain folds into the engine's soft does not
+    // count). (0, 0) with a fraction of 0 accepts no worsening move at all.
     Score start_temperature{0, 0.0};
     double start_temperature_fraction = 0.0;
     // GreatDeluge: how much the water level rises per step.

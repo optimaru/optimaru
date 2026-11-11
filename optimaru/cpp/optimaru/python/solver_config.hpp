@@ -92,11 +92,18 @@ struct HasRuinRecreateRewards<Config,
 
 // A (hard, soft) amount an acceptance rule works with (a temperature, a water
 // level step): both finite and >= 0.
-inline Score step_score(const std::pair<std::int64_t, double>& value, const char* name) {
+inline Score non_negative_score(const std::pair<std::int64_t, double>& value, const char* name) {
     if (value.first < 0 || !(value.second >= 0.0) || !std::isfinite(value.second)) {
         throw pybind11::value_error(std::string(name) + " must be finite and >= 0");
     }
     return Score{value.first, value.second};
+}
+
+inline double non_negative_gap(double gap, const char* name) {
+    if (!(gap >= 0.0) || !std::isfinite(gap)) {
+        throw pybind11::value_error(std::string(name) + " must be finite and >= 0");
+    }
+    return gap;
 }
 
 }  // namespace detail
@@ -250,7 +257,7 @@ Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
                     return pybind11::make_tuple(c.start_temperature.hard, c.start_temperature.soft);
                 },
                 [](Config& c, std::pair<std::int64_t, double> temperature) {
-                    c.start_temperature = detail::step_score(
+                    c.start_temperature = detail::non_negative_score(
                             temperature, "simulated_annealing_starting_temperature");
                 });
         cls.def_property(
@@ -270,7 +277,8 @@ Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
                     return pybind11::make_tuple(c.water_level_step.hard, c.water_level_step.soft);
                 },
                 [](Config& c, std::pair<std::int64_t, double> step) {
-                    c.water_level_step = detail::step_score(step, "great_deluge_water_level_step");
+                    c.water_level_step =
+                            detail::non_negative_score(step, "great_deluge_water_level_step");
                 });
         cls.def_property(
                 "step_counting_hill_climbing_size",
@@ -282,8 +290,20 @@ Class& bind_solver_config(Class& cls, bool late_acceptance_auto = true) {
                     }
                     c.recount_interval = size;
                 });
-        cls.def_readwrite("record_to_record_start_gap", &Config::record_to_record_start_gap);
-        cls.def_readwrite("record_to_record_end_gap", &Config::record_to_record_end_gap);
+        cls.def_property(
+                "record_to_record_start_gap",
+                [](const Config& c) { return c.record_to_record_start_gap; },
+                [](Config& c, double gap) {
+                    c.record_to_record_start_gap =
+                            detail::non_negative_gap(gap, "record_to_record_start_gap");
+                });
+        cls.def_property(
+                "record_to_record_end_gap",
+                [](const Config& c) { return c.record_to_record_end_gap; },
+                [](Config& c, double gap) {
+                    c.record_to_record_end_gap =
+                            detail::non_negative_gap(gap, "record_to_record_end_gap");
+                });
     }
     return cls;
 }

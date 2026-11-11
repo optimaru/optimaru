@@ -118,6 +118,8 @@ def test_the_acceptance_rules_and_their_parameters(use_case):
         ("great_deluge_water_level_step", (0, -0.5), "great_deluge_water_level_step must be finite and >= 0"),
         ("great_deluge_water_level_step", (0, float("nan")), "great_deluge_water_level_step must be finite and >= 0"),
         ("step_counting_hill_climbing_size", 0, "step_counting_hill_climbing_size must be positive"),
+        ("record_to_record_start_gap", -0.1, "record_to_record_start_gap must be finite and >= 0"),
+        ("record_to_record_end_gap", float("nan"), "record_to_record_end_gap must be finite and >= 0"),
     ],
 )
 def test_the_acceptance_parameters_refuse_the_same_values_with_the_same_words(use_case, name, value, message):
