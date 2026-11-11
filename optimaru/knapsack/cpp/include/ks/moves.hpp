@@ -4,10 +4,10 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <numeric>
 #include <random>
 #include <vector>
 
+#include "ks/construction.hpp"
 #include "ks/domain.hpp"
 #include "optimaru/portable_random.hpp"
 #include "optimaru/search/operators.hpp"
@@ -47,31 +47,21 @@ namespace ks {
 // so Solver gates how often a step may draw it (custom_move_probability).
 class CoreRepackMove final : public optimaru::MoveOperator<KnapsackProblem> {
 public:
-    explicit CoreRepackMove(const KnapsackProblem& problem) {
-        const int n = problem.itemCount();
-        // The order of the greedy construction: descending value / weight,
-        // ties in item order.
-        std::vector<double> density(static_cast<std::size_t>(n));
-        for (int i = 0; i < n; ++i) {
-            density[i] = static_cast<double>(problem.items[i].value) /
-                         static_cast<double>(problem.items[i].weight);
-        }
-        order_.resize(static_cast<std::size_t>(n));
-        std::iota(order_.begin(), order_.end(), 0);
-        std::stable_sort(order_.begin(), order_.end(),
-                         [&density](int a, int b) { return density[a] > density[b]; });
+    explicit CoreRepackMove(const KnapsackProblem& problem) : order_(densityOrder(problem)) {
         // The first rank the capacity leaves out (the last rank when all fit).
         // Fixed for the solve, and on purpose blind to the selection and to
         // every rule but the capacity: where mandatory or forbidden items
         // move the real boundary, the window's jitter is all that follows it.
-        std::int64_t load = 0;
+        const int n = problem.itemCount();
+        std::int64_t room = problem.capacity;
         breakRank_ = std::max(0, n - 1);
         for (int rank = 0; rank < n; ++rank) {
-            load += problem.items[order_[rank]].weight;
-            if (load > problem.capacity) {
+            const std::int64_t weight = problem.items[order_[rank]].weight;
+            if (weight > room) {
                 breakRank_ = rank;
                 break;
             }
+            room -= weight;
         }
     }
 
@@ -83,11 +73,14 @@ public:
         const int n = static_cast<int>(order_.size());
         if (n < 2) return false;
 
-        std::int64_t load = 0;
+        // The capacity the selection leaves free. Counted down, so a sum of
+        // weights never overflows; over capacity is left to the built-in moves.
+        std::int64_t slack = problem.capacity;
         for (const Item& item : problem.items) {
-            if (item.isSelected()) load += item.weight;
+            if (!item.isSelected()) continue;
+            if (item.weight > slack) return false;
+            slack -= item.weight;
         }
-        if (load > problem.capacity) return false;  // the built-in moves repair that first
 
         int reach = 8 << optimaru::random_index(rng, 4);  // 8, 16, 32 or 64
         const int centre = breakRank_ - reach / 2 + optimaru::random_index(rng, reach + 1);
@@ -96,8 +89,8 @@ public:
             const int high = std::clamp(centre + reach, 0, n - 1);
             window_.assign(order_.begin() + low, order_.begin() + high + 1);
             // What the window may weigh: the slack plus what its selected
-            // items hold now.
-            std::int64_t room = problem.capacity - load;
+            // items hold now (at most the capacity, so no overflow).
+            std::int64_t room = slack;
             std::int64_t valueInPlace = 0;
             for (int item : window_) {
                 if (problem.items[item].isSelected()) {
@@ -105,7 +98,9 @@ public:
                     valueInPlace += problem.items[item].value;
                 }
             }
-            if (static_cast<std::int64_t>(window_.size()) * (room + 1) > kMaxCells) continue;
+            // The table has window x (room + 1) cells; divided, not
+            // multiplied, because a capacity may be near the int64 limit.
+            if (room >= kMaxCells / static_cast<std::int64_t>(window_.size())) continue;
             if (!repack(problem, room, valueInPlace)) return false;
             ctx.editor.begin_batch();
             for (int item : flipped_) ctx.editor.assign(item, flippedValue(problem, item));
@@ -149,7 +144,7 @@ private:
                     best_[at] = with;
                     taken_[k * loads + at] = 1;
                 }
-                if (at == 0) break;
+                if (at == 0) break;  // unsigned: only reachable with a zero weight
             }
         }
         if (best_[loads - 1] <= valueInPlace) return false;

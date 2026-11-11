@@ -7,6 +7,11 @@
 
 namespace ks {
 
+// The items by descending value / weight: the density as a double, equal
+// densities in item order (a stable sort). The order the greedy construction
+// takes them in, and the one CoreRepackMove's windows are cut from.
+std::vector<int> densityOrder(const KnapsackProblem& problem);
+
 // The greedy construction (the Python reference's `_greedy_selection`):
 // items in descending value / weight order — the density as a double, equal
 // densities in item order (a stable sort) — are taken while the selected

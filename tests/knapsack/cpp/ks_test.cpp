@@ -611,6 +611,23 @@ void verifyCoreRepackMove() {
         std::vector<int> entities;
         check(!move.apply(ctx, rng, entities) && entities.empty(),
               "a selection over capacity is declined");
+
+        // A capacity near the int64 limit with heavy items: the table bound
+        // is checked without overflow, and the move declines.
+        KnapsackProblem huge = plainKnapsack(40, 9);
+        for (Item& item : huge.items) item.weight *= 1'000'000'000'000;
+        huge.capacity = std::numeric_limits<std::int64_t>::max() - 1;
+        ScoreCalculator::prepare(huge);
+        constructSelection(huge);
+        KnapsackIncrementalScoreCalculator hugeCalculator;
+        optimaru::Editor<KnapsackProblem> hugeEditor(huge, hugeCalculator);
+        optimaru::OperatorContext<KnapsackProblem> hugeCtx{hugeEditor, nearby, noLists, noLists};
+        CoreRepackMove hugeMove(huge);
+        bool declined = true;
+        for (int draw = 0; draw < 50; ++draw) {
+            declined = declined && !hugeMove.apply(hugeCtx, rng, entities);
+        }
+        check(declined, "a table that would not fit is declined, whatever the capacity");
     }
     {
         // Plain knapsacks of 300 to 2,000 items under a step limit: with the
