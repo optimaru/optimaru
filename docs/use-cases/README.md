@@ -108,7 +108,9 @@ The default rule is late acceptance, and simulated annealing in semiconductor
 scheduling. In vehicle routing and pickup and delivery an amount you give
 yourself (a starting temperature, a water level step) is on the scale the
 search compares in, where the medium level counts 10^9 per unit: only the
-automatic temperature leaves the medium level out. A great deluge needs a step chosen for the instance: at (0, 0) it
+automatic temperature leaves the medium level out. The record-to-record gaps
+are fractions of that same scale, so a start that leaves work unassigned
+widens them. A great deluge needs a step chosen for the instance: at (0, 0) it
 takes every move that keeps the score at or above the start's and never
 tightens.
 

@@ -213,7 +213,9 @@ class SolverConfig:
     steps (400 by default; > 0)."""
     record_to_record_start_gap: float
     """RECORD_TO_RECORD_TRAVEL: the gap below the best score that is still accepted at the
-    start of the solve, as a fraction of the start's |soft| (0.02 by default; >= 0)."""
+    start of the solve, as a fraction of the start's |soft| (0.02 by default; >= 0). The
+    medium level is included here, at 10^9 per unit: a start that leaves work unassigned
+    widens the gap."""
     record_to_record_end_gap: float
     """RECORD_TO_RECORD_TRAVEL: the same gap at the end of the solve (0.0 by default; >= 0);
     the gap shrinks from the start gap to this one."""
