@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <set>
@@ -1976,6 +1977,58 @@ void testStallStepLimitAndRequestStop() {
     }
 }
 
+void testHardMediumSoftScore() {
+    std::printf("== HardMediumSoftScore ==\n");
+    using optimaru::HardMediumSoftScore;
+    using optimaru::kNoLevelFloor;
+    const optimaru::MediumFold fold = optimaru::MediumFold::into_soft(1e9);
+    const double inf = std::numeric_limits<double>::infinity();
+
+    check(HardMediumSoftScore{0, -1, 0} < HardMediumSoftScore{0, 0, -99} &&
+                  HardMediumSoftScore{-1, 0, 0} < HardMediumSoftScore{0, -99, -99} &&
+                  HardMediumSoftScore{0, 0, -2} < HardMediumSoftScore{0, 0, -1},
+          "hard dominates medium, medium dominates soft");
+    check(HardMediumSoftScore{0, -5, -7}.feasible() && !HardMediumSoftScore{-1, 0, 0}.feasible(),
+          "feasible when hard >= 0");
+    check(HardMediumSoftScore{-1, -20, -300}.str() == "-1hard/-20medium/-300soft", "str()");
+    check(HardMediumSoftScore{0, 0, 0} < HardMediumSoftScore::unreachable(),
+          "unreachable() is above the best score");
+
+    const HardMediumSoftScore score{-2, -3, -45};
+    const Score engine = optimaru::to_engine_score(fold, score);
+    check(engine == Score{-2, -3e9 - 45}, "to_engine_score folds medium into soft");
+    check(optimaru::from_engine_score(fold, engine) == score, "from_engine_score is its inverse");
+
+    const Score firstFeasible =
+            optimaru::to_engine_score_limit(fold, {0, kNoLevelFloor, kNoLevelFloor});
+    check(firstFeasible == Score{0, -inf}, "a limit with no floor compares the hard level only");
+    check(optimaru::to_engine_score(fold, {0, -9000000, -999999999}) >= firstFeasible &&
+                  !(optimaru::to_engine_score(fold, {-1, 0, 0}) >= firstFeasible),
+          "every feasible score reaches it, no infeasible one does");
+    check(optimaru::to_engine_score_limit(fold, {0, kNoLevelFloor, 0}).soft == -inf &&
+                  optimaru::to_engine_score_limit(fold, {0, 0, kNoLevelFloor}).soft == -inf,
+          "no floor on either lower level lifts the whole soft side");
+    check(optimaru::to_engine_score_limit(fold, score) == engine,
+          "any other limit folds like a score");
+
+    auto refused = [&engine](const optimaru::MediumFold& other) {
+        try {
+            optimaru::from_engine_score(other, engine);
+        } catch (const std::logic_error&) {
+            return true;
+        }
+        return false;
+    };
+    check(refused(optimaru::MediumFold::none()) &&
+                  refused(optimaru::MediumFold::below_hard(1000)) &&
+                  refused(optimaru::MediumFold::into_soft(1.5)) &&
+                  refused(optimaru::MediumFold::into_soft(1e19)),
+          "from_engine_score refuses a fold that is not into_soft with a whole-number unit");
+    const HardMediumSoftScore softOnly{0, 0, -7};
+    check(optimaru::from_engine_score(fold, optimaru::to_engine_score(fold, softOnly)) == softOnly,
+          "... and decodes a score with no medium part");
+}
+
 }  // namespace
 
 int main() {
@@ -1998,6 +2051,7 @@ int main() {
     testConstraintAssembly();
     testSolverConfig();
     testStallStepLimitAndRequestStop();
+    testHardMediumSoftScore();
 
     if (failures == 0) {
         std::printf("\nAll engine tests PASSED.\n");

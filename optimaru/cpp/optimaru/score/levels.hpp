@@ -194,6 +194,12 @@ inline std::int64_t round_score_level(double value, const char* level) {
     return std::llround(value);
 }
 
+// On a level of a use case's target score (Solver::Config::target_score): "no
+// floor on this level". The use case's conversion of a target to the engine
+// score turns it into a soft limit of -inf, so the levels above decide alone
+// (to_engine_score_limit in hard_medium_soft_score.hpp).
+inline constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
+
 // An exact hard-level sum that cannot wrap (rule 2): the true value is
 // lo + wraps * 2^64, so additions and the subtractions an incremental update
 // makes stay exact and reversible however large the total grows. Reads
@@ -280,8 +286,9 @@ inline std::int64_t fold_below_hard_saturating(const HardTotal& hard, double med
 //   constexpr std::int64_t kMediumUnit = 1000000000LL;
 //   constexpr optimaru::MediumFold kMediumFold =
 //       optimaru::MediumFold::into_soft(kMediumUnit);
+//   using Score = optimaru::HardMediumSoftScore;   // hard_medium_soft_score.hpp
 //   inline optimaru::Score toEngineScore(const Score& s) {
-//       return kMediumFold.to_engine(s.hard, s.medium, s.soft);
+//       return optimaru::to_engine_score(kMediumFold, s);
 //   }
 //   ...
 //   template <> struct optimaru::MediumFoldOf<vrp::VrpSolution> {

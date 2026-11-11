@@ -4,12 +4,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <limits>
 #include <string>
 #include <vector>
 
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"
+#include "optimaru/score/hard_medium_soft_score.hpp"
 #include "optimaru/score/levels.hpp"
 
 namespace vrp {
@@ -57,66 +57,25 @@ constexpr std::int64_t kMediumUnit = 1000000000LL;  // 10^9
 constexpr optimaru::MediumFold kMediumFold =
         optimaru::MediumFold::into_soft(static_cast<double>(kMediumUnit));
 
-struct Score {
-    std::int64_t hard = 0;
-    std::int64_t medium = 0;
-    std::int64_t soft = 0;
+using Score = optimaru::HardMediumSoftScore;
 
-    bool feasible() const { return hard >= 0; }
-
-    // Above every score: as a target, it is never reached.
-    static Score unreachable() {
-        return {std::numeric_limits<std::int64_t>::max(), std::numeric_limits<std::int64_t>::max(),
-                std::numeric_limits<std::int64_t>::max()};
-    }
-
-    // Lexicographic ordering. a < b means a is a *worse* solution than b.
-    bool operator<(const Score& o) const {
-        if (hard != o.hard) return hard < o.hard;
-        if (medium != o.medium) return medium < o.medium;
-        return soft < o.soft;
-    }
-    bool operator>(const Score& o) const { return o < *this; }
-    bool operator<=(const Score& o) const { return !(o < *this); }
-    bool operator>=(const Score& o) const { return !(*this < o); }
-    bool operator==(const Score& o) const {
-        return hard == o.hard && medium == o.medium && soft == o.soft;
-    }
-
-    std::string str() const {
-        return std::to_string(hard) + "hard/" + std::to_string(medium) + "medium/" +
-               std::to_string(soft) + "soft";
-    }
-};
+// On the medium or the soft level of Solver::Config::target_score: no floor on
+// the soft side, so only the hard level is compared. stop_at_first_feasible
+// passes (0, kNoLevelFloor, kNoLevelFloor).
+using optimaru::kNoLevelFloor;
 
 inline optimaru::Score toEngineScore(const Score& s) {
-    // soft + medium * 10^9: exact for the integral levels of this domain
-    // (|engine soft| < 2^53), i.e. the old `medium * kMediumUnit + soft`.
-    return kMediumFold.to_engine(s.hard, static_cast<double>(s.medium),
-                                 static_cast<double>(s.soft));
+    return optimaru::to_engine_score(kMediumFold, s);
 }
 
-// A best-score LIMIT (Solver::Config::target_score) in engine terms.
-// kNoLevelFloor (INT64_MIN) on the medium or the soft level means "no floor
-// on the soft side": the engine's soft limit becomes -inf, so only the hard
-// level is compared and no soft score, however low, can miss the stop.
-// stop_at_first_feasible passes (0, kNoLevelFloor, kNoLevelFloor). Through
-// toEngineScore the sentinel would fold into a finite engine soft that a
-// low enough soft score never reaches. Any other limit folds as a score.
-constexpr std::int64_t kNoLevelFloor = std::numeric_limits<std::int64_t>::min();
-
+// A best-score limit (Solver::Config::target_score) in engine terms.
 inline optimaru::Score toEngineScoreLimit(const Score& limit) {
-    if (limit.medium == kNoLevelFloor || limit.soft == kNoLevelFloor)
-        return {limit.hard, -std::numeric_limits<double>::infinity()};
-    return toEngineScore(limit);
+    return optimaru::to_engine_score_limit(kMediumFold, limit);
 }
 
-// Inverse of toEngineScore. Every constraint penalizes (medium and soft are
-// <= 0 and integral), so C++'s truncating division — which rounds toward zero
-// on both — decodes the two levels exactly.
+// Inverse of toEngineScore.
 inline Score fromEngineScore(const optimaru::Score& e) {
-    const auto combined = optimaru::round_score_level(e.soft, "soft");
-    return {e.hard, combined / kMediumUnit, combined % kMediumUnit};
+    return optimaru::from_engine_score(kMediumFold, e);
 }
 
 // ---------------------------------------------------------------------------

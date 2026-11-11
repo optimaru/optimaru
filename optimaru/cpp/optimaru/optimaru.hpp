@@ -19,6 +19,7 @@
 #include "optimaru/score/score.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/score/levels.hpp"
+#include "optimaru/score/hard_medium_soft_score.hpp"
 #include "optimaru/score/constraint_assembly.hpp"
 #include "optimaru/score/objective.hpp"
 #include "optimaru/model/editor.hpp"
