@@ -117,8 +117,8 @@ def solve(
         from optimaru.vehicle_routing.constraints import get_constraints
         vrp.solve(plan, constraints=get_constraints())
 
-    A plan that puts visits in groups (`Visit.group_index`) is scored with the default
-    constraints even when ``constraints`` is None: `visit_group_cost` and
+    A plan with a group of two visits or more (`Visit.group_index`) is scored with the
+    default constraints even when ``constraints`` is None: `visit_group_cost` and
     `visit_order_cost` are among them, and they are not among the four core rules a
     plan is otherwise scored on. That is the whole default set, so the vehicle limits of
     such a plan are scored too, and ``parallel_solver_count`` has no effect on it (as on

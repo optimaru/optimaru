@@ -29,7 +29,9 @@ namespace optimaru {
 //
 // A global constraint owns one and forwards reset(), on_unit_changed(), cost()
 // and preview_cost() to it. A change costs what the changed list held and
-// holds, not every grouped element, and a preview writes nothing.
+// holds, not every grouped element, and a preview writes nothing to the count.
+// It does use scratch of its own, so one instance serves one calculator: it is
+// not for concurrent calls.
 class GroupPlacement {
 public:
     // `group_of[element]` is the element's group, or -1 for none. A group of

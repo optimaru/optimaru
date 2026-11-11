@@ -136,6 +136,43 @@ def test_construction_puts_waiting_visits_where_their_group_already_rides(timeli
         assert vehicle_of(solution) == {"a": "v", "b": "v", "c": "v"}
 
 
+def test_a_group_whose_start_vehicle_has_no_room_for_the_rest_is_moved_whole():
+    # `a` starts on v, which takes one visit. Construction offers `b` and `c` to v only, so they
+    # wait; the search then takes the whole group to w.
+    vehicles = [vehicle("v", ["a"], max_stops=1), vehicle("w", max_stops=3)]
+    visits = [visit("a", "g"), visit("b", "g"), visit("c", "g")]
+    model_input = two_ends(visits, vehicles)
+
+    start = solve(model_input, timelimit=0)
+    assert vehicle_of(start) == {"a": "v"} and sorted(start.unassigned) == ["b", "c"]
+
+    solution = solve(model_input)
+    assert solution.feasible and not solution.unassigned
+    assert vehicle_of(solution) == {"a": "w", "b": "w", "c": "w"}
+
+
+def test_groups_of_one_do_not_change_how_a_plan_is_scored():
+    # Every visit names its own group, as input that carries a group on every order does. Nothing
+    # is kept together, so the solve stays on the four core rules: the vehicles' `max_stops`,
+    # which only the constraint assembly scores, does not hold a visit back.
+    vehicles = [vehicle("v", max_stops=1), vehicle("w", max_stops=1)]
+    plan = to_plan(two_ends([visit("a", "g1"), visit("b", "g2"), visit("c", "g3")], vehicles))
+    config = vrp.SolverConfig()
+    config.step_count_limit = 2000
+
+    vrp.solve(plan, config=config)
+
+    assert plan.unassigned_visit_ids() == []
+    assert costs(two_ends([visit("a", "g1"), visit("b", "g2"), visit("c", "g3")], vehicles), "visit_group_cost") == 0
+
+    # With a second visit in one of the groups the same call scores the default set: one visit
+    # per vehicle, and the group of two fits neither.
+    plan = to_plan(two_ends([visit("a", "g1"), visit("b", "g1"), visit("c", "g3")], vehicles))
+    vrp.solve(plan, config=config)
+
+    assert sorted(plan.unassigned_visit_ids()) == ["a", "b"]
+
+
 def test_the_search_mends_a_group_that_starts_split_and_out_of_order():
     vehicles = [vehicle("v", ["b", "a"]), vehicle("w", ["c"])]
     visits = [visit("a", "g"), visit("b", "g", after=["a"]), visit("c", "g", after=["b"])]

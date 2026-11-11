@@ -18,7 +18,9 @@ namespace vrp {
 // maxTravelTime, maxStops). Among the feasible slots the cheapest in added
 // driving time wins. A RouteTimeline keeps what makes one slot O(1): each
 // stop's departure and the latest arrival that still keeps the rest of the
-// route on time.
+// route on time. Everything else a plan may score (the route radius, the load
+// target, a fixed cost for an idle vehicle, a caller's own constraints) is
+// left to the objective, which judges what this search proposes.
 //
 // This is what the group operators (group_moves.hpp) and the construction of
 // groups place visits with: the visits of one group (Visit::groupIndex) go

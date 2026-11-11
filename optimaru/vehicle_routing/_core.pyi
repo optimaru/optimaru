@@ -284,8 +284,8 @@ class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: VehicleRoutePlan) -> None:
         """Solve on the four core rules, which do not include the vehicle limits: for a
-        plan that sets one, call solve_with_constraints. A plan with visit groups
-        (Visit.group_index) is the exception: it is scored with the default
+        plan that sets one, call solve_with_constraints. A plan with a group of two
+        visits or more (Visit.group_index) is the exception: it is scored with the default
         constraints, visit_group_cost and visit_order_cost among them, on a single
         start (parallel_solver_count has no effect on it)."""
     def solve_with_constraints(self, plan: VehicleRoutePlan, constraints: Iterable[Any] | None = ...) -> None:

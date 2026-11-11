@@ -293,6 +293,17 @@ def vehicle_metrics(plan: "_core.VehicleRoutePlan", routes: dict[str, list[Visit
     return metrics
 
 
+def _has_groups(model_input: RoutingInput) -> bool:
+    """Whether some group holds two visits or more (a visit alone in its group changes nothing)."""
+    seen: set[str] = set()
+    for visit in model_input.visits:
+        if visit.group:
+            if visit.group in seen:
+                return True
+            seen.add(visit.group)
+    return False
+
+
 def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSolution:
     """Solve a routing request end-to-end and return the pydantic solution."""
     plan = to_plan(request.model_input)
@@ -315,7 +326,7 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
         or v.fixed_cost
         or v.max_route_radius_meters
         for v in request.model_input.vehicles
-    ) or any(visit.group for visit in request.model_input.visits)
+    ) or _has_groups(request.model_input)
     if constraints is None and not has_route_policy:
         solver.solve(plan)
     else:

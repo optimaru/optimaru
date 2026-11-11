@@ -204,9 +204,9 @@ a 60 s solve ends within 2% of a 4 s one, while nine seeds end 3% and 6% apart
 (10 s), so another seed buys more than a longer run.
 
 Every entry point scores a grouped plan with the default constraints, since the
-four core rules include neither of these two: `solve_request` when a visit names
-a group, and `vrp.solve(plan)`, `Solver(config).solve(plan)` and the C++
-`Solver::solve(plan)` when a visit has a `group_index`. That is a solve on the
+four core rules include neither of these two: `solve_request`, `vrp.solve(plan)`,
+`Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
+group holds two visits or more (a visit alone in its group changes nothing). That is a solve on the
 constraint assembly, as when a vehicle limit is set: the whole default set is
 scored, and `num_workers` / `parallel_solver_count` have no effect. Both
 constraints are engine-only: the CP-SAT reference has no plugin for them and

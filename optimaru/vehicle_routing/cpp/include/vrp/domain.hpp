@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "optimaru/model/solution_traits.hpp"
@@ -203,11 +204,14 @@ struct VehicleRoutePlan {
         return drivingSeconds[fromLocation][toLocation];
     }
 
-    // Whether some visit is in a group (Visit::groupIndex). Such a plan is
-    // scored with the constraint assembly, which holds the two group rules.
+    // Whether some group (Visit::groupIndex) holds two visits or more. Such a
+    // plan is scored with the constraint assembly, which holds the two group
+    // rules; a visit alone in its group has nobody to be kept with, so groups
+    // of one change nothing.
     bool hasVisitGroups() const {
+        std::unordered_set<int> seen;
         for (const Visit& visit : visits) {
-            if (visit.groupIndex >= 0) return true;
+            if (visit.groupIndex >= 0 && !seen.insert(visit.groupIndex).second) return true;
         }
         return false;
     }
