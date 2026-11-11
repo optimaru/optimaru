@@ -5,17 +5,104 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
+#include "vrp/constraints.hpp"
+#include "vrp/group_moves.hpp"
 #include "vrp/incremental_calculator.hpp"
 #include "vrp/score_calculator.hpp"
+#include "vrp/visit_insertion.hpp"
 
 namespace vrp {
 
+// What a plan may say about groups and order (see solver.hpp). Anything else
+// could never be served, and the result would be hard-infeasible without a
+// word of why.
+void checkVisitGroups(const VehicleRoutePlan& plan) {
+    const int count = static_cast<int>(plan.visits.size());
+    std::vector<int> waitingFor(plan.visits.size(), 0);
+    std::vector<std::vector<int>> followers(plan.visits.size());
+    for (int v = 0; v < count; ++v) {
+        const Visit& visit = plan.visits[static_cast<std::size_t>(v)];
+        if (visit.groupIndex < -1) {
+            throw std::invalid_argument("visit " + visit.id + ": groupIndex " +
+                                        std::to_string(visit.groupIndex) + " is below -1");
+        }
+        for (int earlier : visit.afterVisitIndices) {
+            if (earlier < 0 || earlier >= count) {
+                throw std::invalid_argument("visit " + visit.id + ": afterVisitIndices holds " +
+                                            std::to_string(earlier) + ", out of range 0.." +
+                                            std::to_string(count - 1));
+            }
+            const Visit& other = plan.visits[static_cast<std::size_t>(earlier)];
+            if (earlier == v) {
+                throw std::invalid_argument("visit " + visit.id + " comes after itself");
+            }
+            if (visit.groupIndex < 0 || other.groupIndex != visit.groupIndex) {
+                throw std::invalid_argument("visit " + visit.id + " comes after visit " + other.id +
+                                            ", which is not in its group");
+            }
+            // Named twice, the pair would be counted twice by visitOrderCost.
+            if (std::count(visit.afterVisitIndices.begin(), visit.afterVisitIndices.end(),
+                           earlier) > 1) {
+                throw std::invalid_argument("visit " + visit.id + " names visit " + other.id +
+                                            " twice among the visits it comes after");
+            }
+            ++waitingFor[static_cast<std::size_t>(v)];
+            followers[static_cast<std::size_t>(earlier)].push_back(v);
+        }
+    }
+    // Every visit can be listed behind the ones it comes after, or there is a
+    // cycle.
+    std::vector<int> ready;
+    for (int v = 0; v < count; ++v) {
+        if (waitingFor[static_cast<std::size_t>(v)] == 0) ready.push_back(v);
+    }
+    int listed = 0;
+    while (!ready.empty()) {
+        const int v = ready.back();
+        ready.pop_back();
+        ++listed;
+        for (int follower : followers[static_cast<std::size_t>(v)]) {
+            if (--waitingFor[static_cast<std::size_t>(follower)] == 0) ready.push_back(follower);
+        }
+    }
+    if (listed < count) {
+        for (int v = 0; v < count; ++v) {
+            if (waitingFor[static_cast<std::size_t>(v)] > 0) {
+                throw std::invalid_argument("the order of the visits has a cycle through visit " +
+                                            plan.visits[static_cast<std::size_t>(v)].id);
+            }
+        }
+    }
+}
+
 namespace {
+
+// Which visits travel together, worked out once for the solve: construction
+// and the group operators read the same object.
+std::shared_ptr<const VisitGroups> visitGroupsOf(const VehicleRoutePlan& plan) {
+    checkVisitGroups(plan);
+    auto groups = std::make_shared<VisitGroups>();
+    groups->build(plan);
+    return groups;
+}
+
+// The group operators of a solve on a constraint assembly (none for a plan
+// without groups). They read the plan, never the calculator, so a caller's
+// assembly keeps them.
+void addGroupOperators(optimaru::Solver<VehicleRoutePlan>& engine, const Solver::Config& config,
+                       const std::shared_ptr<const VisitGroups>& groups) {
+    GroupMoveSettings moves;
+    moves.ruinRecreate = config.group_ruin_recreate;
+    moves.ruinMaxVisits = config.group_ruin_max_visits;
+    for (auto& move : makeGroupMoves(moves, groups)) engine.add_move_operator(std::move(move));
+}
 
 // Shared engine wiring for both solve() overloads: termination, late
 // acceptance, the sequence move mix, the ALNS knobs and the driving-time nearby
@@ -148,6 +235,21 @@ Score levelScore(const optimaru::DecomposedObjective<VehicleRoutePlan>& calculat
 }  // namespace
 
 void Solver::solve(VehicleRoutePlan& plan) {
+    // The four core rules do not price groups, and on them a split group
+    // would end as a feasible plan. A plan with groups is scored with the
+    // whole default assembly instead (single-start, like every solve on a
+    // caller's assembly).
+    if (plan.hasVisitGroups()) {
+        plan.unassignedVisitIndices.clear();
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        solve(plan, calculator);
+        return;
+    }
+    // No group of two visits or more from here on, so nothing below places or
+    // moves one. The check still refuses what a plan may not say: a group index
+    // below -1, a visit that comes after one outside its group.
+    checkVisitGroups(plan);
     // Start with an empty pool so the construction heuristic sees every
     // unrouted visit as uninitialized and places it by cheapest insertion.
     // The pool is one of the candidate lists, so "leave this visit
@@ -190,8 +292,10 @@ void Solver::solve(VehicleRoutePlan& plan) {
 
 void Solver::solve(VehicleRoutePlan& plan,
                    optimaru::DecomposedObjective<VehicleRoutePlan>& calculator) {
+    const std::shared_ptr<const VisitGroups> groups = visitGroupsOf(plan);
     optimaru::check_config(config_);
     if (!plan.visits.empty() && !plan.vehicles.empty()) {
+        constructGroups(plan, *groups);
         optimaru::Settings engineConfig = buildEngineConfig(config_, plan);
         if (config_.on_new_best) {
             // Report the same three levels as the final plan.score below. The
@@ -206,6 +310,7 @@ void Solver::solve(VehicleRoutePlan& plan,
         }
         optimaru::Solver<VehicleRoutePlan> engine(std::move(engineConfig));
         if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
+        addGroupOperators(engine, config_, groups);
         engine.solve(plan, calculator);
     }
 
@@ -219,6 +324,20 @@ void Solver::solve(VehicleRoutePlan& plan,
     calculator.rebuild(plan);
     calculator.score();
     plan.score = levelScore(calculator);
+}
+
+Score calculateScore(VehicleRoutePlan& plan) {
+    checkVisitGroups(plan);
+    if (!plan.hasVisitGroups()) return ScoreCalculator::score(plan);
+    // As solve(plan) ends on a plan with groups: the derived fields, then the
+    // three levels of the default assembly.
+    ScoreCalculator::updateShadowVariables(plan);
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    calculator.rebuild(plan);
+    calculator.score();
+    plan.score = levelScore(calculator);
+    return plan.score;
 }
 
 }  // namespace vrp

@@ -13,6 +13,23 @@
   the table the other fifteen have now, and declare pytest in a `dev` dependency group, so
   a plain `uv sync` installs it. `tests/test_layout.py` holds every benchmark project to a
   `[build-system]` table and to one external-solver tag.
+- **Vehicle routing: visit groups with a partial order.** Visits that share a `group`
+  (`VisitModel.group`, a name; `Visit.group_index` on a plan) are one job: they ride one
+  vehicle together, or all stay unassigned. `after` (`Visit.after_visit_indices`) lists the
+  visits of the same group served before a visit, a partial order on the group; an order
+  with a cycle or one that leaves the group is refused. Two new hard constraints at weight
+  1000 score it: `visit_group_cost` (the grouped visits not where most of their group is,
+  the same counting as pickup-delivery's `request_group_cost`, now the engine's
+  `optimaru::GroupPlacement`) and `visit_order_cost` (per vehicle, the pairs served the
+  wrong way round). Both answer the move previews. Groups are placed whole before the
+  engine's construction, and the use case's first domain move, `groupRuinRecreate`, carries
+  a group between vehicles as one unit (`SolverConfig.group_ruin_recreate`,
+  `group_ruin_max_visits`); it is registered only for a plan with groups, so a plan without
+  them is solved exactly as before. Every entry point scores a grouped input on the
+  constraint assembly (`solve_request`, `vrp.solve(plan)`, `Solver.solve(plan)`), on a
+  single start, and `calculate_score(plan)` reads a grouped plan the same way (C++:
+  `vrp::calculateScore`). Engine-only: the CP-SAT reference reads neither field.
+  `list_constraints()` and `constraint_info()` have two more rows.
 - **Every acceptance rule has its parameters.** Vehicle routing, quadratic assignment and
   semiconductor scheduling let `SolverConfig.acceptor_type` name seven rules, but each bound the
   parameters of only some of them, so `GREAT_DELUGE` kept its water level at the start's score,
@@ -28,6 +45,10 @@
   fields are the new `optimaru::AcceptanceConfig` base (`optimaru/solver_config.hpp`), the
   automatic temperature is the engine's (`AcceptanceSettings::start_temperature_fraction`), and
   `optimaru::python::bind_acceptor_type()` binds the enum. Pickup and delivery follows.
+- **Pickup and delivery notebook re-run on 0.4.2.** `examples/pickup-delivery.ipynb` is saved
+  with outputs from optimaru 0.4.2: the same problem now ends at 5.2 hours of driving, where
+  0.4.1 ended at 5.4. Its rounds of more search are 10,000 steps each (were 0.3 seconds),
+  because 0.4.2 settles within one 0.3-second round and both lines of the chart stayed flat.
 
 ## 0.4.2
 

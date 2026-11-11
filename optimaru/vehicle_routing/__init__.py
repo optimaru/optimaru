@@ -39,6 +39,12 @@ Score convention (hard / medium / soft), at the default weights:
   `min_capacity_utilization_cost`, `vehicle_fixed_cost` and the opt-in
   weight-0 objectives.
 
+Visits that share a `group` (`Visit.group_index`, `VisitModel.group`) are one job:
+they ride one vehicle together or all stay unassigned (`visit_group_cost`, hard),
+and `after` (`Visit.after_visit_indices`) puts a partial order on them
+(`visit_order_cost`, hard). A group operator moves a group between vehicles as one
+unit (`group_ruin_recreate`).
+
 Compared lexicographically: hard dominates medium dominates soft.
 `constraint_info()` lists every constraint with its default level and weight;
 `optimaru.vehicle_routing.constraints` picks and re-weights them.
@@ -110,6 +116,13 @@ def solve(
 
         from optimaru.vehicle_routing.constraints import get_constraints
         vrp.solve(plan, constraints=get_constraints())
+
+    A plan with a group of two visits or more (`Visit.group_index`) is scored with the
+    default constraints even when ``constraints`` is None: `visit_group_cost` and
+    `visit_order_cost` are among them, and they are not among the four core rules a
+    plan is otherwise scored on. That is the whole default set, so the vehicle limits of
+    such a plan are scored too, and ``parallel_solver_count`` has no effect on it (as on
+    every solve with ``constraints``).
 
     The score is on the result: ``plan.score``. `solve_request` is the same solve for
     a `models` request (JSON in, JSON out).

@@ -36,8 +36,14 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         target_link_libraries(constraint_level_test PRIVATE optimaru)
         target_compile_options(constraint_level_test PRIVATE -Wall -Wextra)
 
+        # The bookkeeping behind the routing use cases' group constraints.
+        add_executable(group_placement_test tests/engine/group_placement_test.cpp)
+        target_link_libraries(group_placement_test PRIVATE optimaru)
+        target_compile_options(group_placement_test PRIVATE -Wall -Wextra)
+
         add_test(NAME engine_test COMMAND engine_test)
         add_test(NAME constraint_level_test COMMAND constraint_level_test)
+        add_test(NAME group_placement_test COMMAND group_placement_test)
     endif()
 
     # Use cases: each optimaru/<use case>/cpp/ builds its core library, demo,

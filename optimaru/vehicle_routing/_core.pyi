@@ -64,6 +64,8 @@ class Visit:
         max_end_time: int,
         service_duration: int,
         unassigned_penalty_minutes: int = -1,
+        group_index: int = -1,
+        after_visit_indices: list[int] = ...,
     ) -> None: ...
     id: str
     name: str
@@ -73,6 +75,13 @@ class Visit:
     max_end_time: int
     service_duration: int
     unassigned_penalty_minutes: int
+    group_index: int
+    """The group this visit travels in; -1 == none. The visits that share a group
+    ride one vehicle together, or all wait (visit_group_cost)."""
+    after_visit_indices: list[int]
+    """Indices into VehicleRoutePlan.visits of the visits of its group this one is
+    served after on the route (visit_order_cost). Read the whole list and assign a
+    whole list: appending to the value read changes a copy."""
     def unassigned_penalty(self) -> int: ...
     @property
     def vehicle_index(self) -> int:
@@ -147,7 +156,11 @@ class VehicleRoutePlan:
         """Recompute unassigned_visit_indices from the current routes."""
 
 def calculate_score(plan: VehicleRoutePlan) -> Score:
-    """Recompute the derived fields and the score (also stores plan.score)."""
+    """Recompute the derived fields and the score (also stores plan.score).
+
+    The score is the one solve(plan) stores: the four core rules, or the default
+    constraints when the plan has a group of two or more visits.
+    """
 
 class SolverConfig:
     def __init__(self) -> None: ...
@@ -233,6 +246,13 @@ class SolverConfig:
     iterated_local_search_max_ruin: int
     iterated_local_search_max_segment: int
     iterated_local_search_max_evaluations: int
+    group_ruin_recreate: bool
+    """The group operator: takes a visit group out, alone or with a few more
+    visits, and puts each unit back whole at its cheapest feasible place. Only
+    registered for a plan with groups."""
+    group_ruin_max_visits: int
+    """The most visits the group operator takes out beside its first group (0 or
+    more)."""
     ruin_recreate_selection_type: OperatorSelectionType
     ruin_recreate_operator_decay: float
     ruin_recreate_rewards: list[float]
@@ -266,7 +286,12 @@ class Solver:
     (ALNS). Solves IN PLACE: fills vehicle.visit_indices, the unassigned
     pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
-    def solve(self, plan: VehicleRoutePlan) -> None: ...
+    def solve(self, plan: VehicleRoutePlan) -> None:
+        """Solve on the four core rules, which do not include the vehicle limits: for a
+        plan that sets one, call solve_with_constraints. A plan with a group of two
+        visits or more (Visit.group_index) is the exception: it is scored with the default
+        constraints, visit_group_cost and visit_order_cost among them, on a single
+        start (parallel_solver_count has no effect on it)."""
     def solve_with_constraints(self, plan: VehicleRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see optimaru.vehicle_routing.constraints). The given list replaces the default set;
@@ -275,8 +300,8 @@ class Solver:
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
-    the thirteen per-vehicle constraints (vehicle_capacity_cost ... vehicle_fixed_cost),
-    then the global unassigned_visits_cost.
+    the fourteen per-vehicle constraints (vehicle_capacity_cost ... vehicle_fixed_cost,
+    visit_order_cost), then the two globals (visit_group_cost, unassigned_visits_cost).
     The same names optimaru.vehicle_routing.constraints uses."""
 
 def constraint_costs(plan: VehicleRoutePlan, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
@@ -309,7 +334,8 @@ class ConstraintInfo(NamedTuple):
 def constraint_info() -> list[ConstraintInfo]:
     """The constraint catalog, in list_constraints() order: the default level and
     weight of each constraint (unassigned_visits_cost is medium at weight 1 in
-    medium units; the route policies hard at 1; travel_time_cost,
+    medium units; the route policies hard at 1; visit_group_cost and
+    visit_order_cost hard at 1000; travel_time_cost,
     min_capacity_utilization_cost and vehicle_fixed_cost soft at 1). All
     flippable, none a reward; default_enabled is False for the opt-in weight-0
     objectives (enclosing_circle_radius_cost, route_duration_cost, latency_cost)."""

@@ -51,9 +51,11 @@ VehicleRoutePlan buildRandomInstance(int visitCount, int vehicleCount, std::uint
         const bool isMorning = morning(rng);
         const Seconds minStart = isMorning ? hourMinute(8, 0) : hourMinute(13, 0);
         const Seconds maxEnd = isMorning ? hourMinute(12, 0) : hourMinute(18, 0);
+        // The fields past the service time keep their defaults (automatic
+        // unassigned penalty, no group, no order).
         plan.visits.push_back(Visit{std::to_string(i + 1), "visit" + std::to_string(i + 1),
                                     location, demand(rng), minStart, maxEnd,
-                                    serviceMinutes[service(rng)] * 60LL, -1, NULL_TIME});
+                                    serviceMinutes[service(rng)] * 60LL});
     }
     HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan);
     return plan;

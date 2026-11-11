@@ -57,6 +57,11 @@ acceptance by default); its parameters are listed under
   (`max_end_time_cost`) (0 = feasible), **medium** = −(penalty minutes of
   unassigned visits, `unassigned_visits_cost`; folded into the engine's soft as
   `medium * 10^9`), **soft** = −(total driving seconds, `travel_time_cost`).
+- Visits that share `Visit.group_index` are one job: they ride one vehicle
+  together or all stay unassigned, and `Visit.after_visit_indices` puts a
+  partial order on them (`visit_group_cost`, `visit_order_cost`, both hard;
+  `VisitModel.group` and `VisitModel.after` in the JSON layer). See
+  [Visit groups](README.md#visit-groups).
 - `vrp.constraint_info()` lists every constraint with its default level and
   weight (the C++ components' `kDefaultLevel` / `kDefaultWeight`);
   `optimaru.vehicle_routing.constraints` picks, re-weights and flips them for

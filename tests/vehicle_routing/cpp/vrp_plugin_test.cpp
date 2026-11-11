@@ -348,6 +348,28 @@ void verifyPreviews() {
         }
     }
     {
+        // Visit groups with an order inside them: the group global answers
+        // through its preview contract, the order component by re-costing the
+        // candidate route.
+        for (std::size_t v = 0; v < 24; ++v) {
+            plan.visits[v].groupIndex = static_cast<int>(v / 4);
+            if (v % 4 != 0) plan.visits[v].afterVisitIndices = {static_cast<int>(v) - 1};
+        }
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        optimaru::Editor<VehicleRoutePlan> editor(plan, calculator);
+        const optimaru::testing::PreviewParity parity = optimaru::testing::run_preview_parity(
+                editor, calculator, /*seed=*/8, /*trials=*/3000);
+        std::printf("    with groups: %d moves checked, %d previewed, %d declined\n",
+                    parity.checked, parity.previewed, parity.declined);
+        check(parity.all_equal() && parity.previewed > 1000 && parity.declined == 0,
+              "assembly with visit groups and an order: every preview equal to the applied score");
+        for (Visit& visit : plan.visits) {
+            visit.groupIndex = -1;
+            visit.afterVisitIndices.clear();
+        }
+    }
+    {
         DecomposedCalculator calculator;
         addDefaultConstraints(calculator);
         calculator.emplace<PreviewlessGlobal>();
@@ -412,7 +434,9 @@ void verifyPiecewiseByHand() {
               c->name + ": piecewise answer equals cost() of the written-out route");
         ++compared;
     }
-    check(compared == 3, "three summed unit components compared");
+    // The three summed components, and visitOrderCost: this plan states no
+    // order, so its answer is 0 for any candidate route.
+    check(compared == 4, "the three summed unit components and visitOrderCost compared");
     // The pool as a unit: every summed component costs it 0 from pieces too.
     for (const auto& c : constraints) {
         if (!c->supports_piecewise_preview()) continue;
@@ -420,13 +444,20 @@ void verifyPiecewiseByHand() {
         check(c->piecewise_cost(plan, pool, pieces, 5, piecewise) && piecewise == 0.0,
               c->name + ": the pool costs nothing");
     }
-    // The global: unrouted penalty with vehicle 0 holding the pieces.
+    // The globals. visitGroupCost: this plan groups nothing, so its answer is
+    // 0 whatever vehicle 0 holds. unassignedVisitsCost: the unrouted penalty
+    // with vehicle 0 holding the pieces.
     for (const auto& g : calculator.global_constraint_list()) {
         if (!g->supports_piecewise_preview()) continue;
         std::vector<int> members1 = plan.vehicles[1].visitIndices;
         const optimaru::PreviewedUnit changes[1] = {{0, &written, pieces, 5}};
         double piecewise = -1.0;
         const bool answered = g->piecewise_preview_cost(plan, changes, 1, piecewise);
+        if (g->name == "visitGroupCost") {
+            check(answered && piecewise == 0.0,
+                  g->name + ": a plan without groups answers 0 from pieces");
+            continue;
+        }
         std::int64_t expected = 0;
         for (const Visit& visit : plan.visits) expected += visit.unassignedPenalty();
         for (int v : written)
@@ -679,6 +710,68 @@ void verifyRawCostsByHand() {
                p.visits[3].unassignedPenaltyMinutes = 90;
            },
            {91.0}, keep, {0.0});
+    // Visits 0, 1 and 2 are one group: visit 2 rides vehicle 1 while the other
+    // two ride vehicle 0, so one of the three is apart. All on vehicle 0, or
+    // all waiting, the group is whole.
+    const auto grouped = [](VehicleRoutePlan& p) {
+        for (int v : {0, 1, 2}) p.visits[static_cast<std::size_t>(v)].groupIndex = 4;
+    };
+    byHand("visitGroupCost",
+           [&grouped](VehicleRoutePlan& p) {
+               grouped(p);
+               p.vehicles[0].visitIndices = {0, 1, 3};
+               p.vehicles[1].visitIndices = {2};
+           },
+           {1.0}, grouped, {0.0});
+    // Two of the group ride and one waits: one apart again. Spread over two
+    // vehicles and the pool: two apart.
+    byHand(
+            "visitGroupCost",
+            [&grouped](VehicleRoutePlan& p) {
+                grouped(p);
+                p.vehicles[0].visitIndices = {0, 1, 3};
+            },
+            {1.0},
+            [&grouped](VehicleRoutePlan& p) {
+                grouped(p);
+                p.vehicles[0].visitIndices = {3};  // the three wait together
+            },
+            {0.0});
+    byHand("visitGroupCost",
+           [&grouped](VehicleRoutePlan& p) {
+               grouped(p);
+               p.vehicles[0].visitIndices = {0, 3};
+               p.vehicles[1].visitIndices = {1};
+           },
+           {2.0}, grouped, {0.0});
+    // Visit 0 comes after visits 1 and 2 of its group. On the route 0 1 2 3
+    // it is served before both: two pairs the wrong way round. On 1 2 0 3
+    // none; with visit 2 on the other vehicle only the pair (1, 0) is on this
+    // route, and it is the wrong way round.
+    const auto ordered = [&grouped](VehicleRoutePlan& p) {
+        grouped(p);
+        p.visits[0].afterVisitIndices = {1, 2};
+    };
+    byHand(
+            "visitOrderCost", ordered, {2.0, 0.0, 0.0},
+            [&ordered](VehicleRoutePlan& p) {
+                ordered(p);
+                p.vehicles[0].visitIndices = {1, 2, 0, 3};
+            },
+            none);
+    byHand(
+            "visitOrderCost",
+            [&ordered](VehicleRoutePlan& p) {
+                ordered(p);
+                p.vehicles[0].visitIndices = {0, 1, 3};
+                p.vehicles[1].visitIndices = {2};
+            },
+            {1.0, 0.0, 0.0},
+            [&ordered](VehicleRoutePlan& p) {
+                ordered(p);
+                p.vehicles[0].visitIndices = {3};  // the group waits: no order to keep
+            },
+            none);
     std::printf("\n");
 }
 
@@ -698,9 +791,9 @@ void verifyCatalog() {
     std::printf("== (k) Catalog == component constants ==\n");
     using optimaru::Level;
     const auto rows = defaultConstraints().info();
-    check(rows.size() == 14, "14 catalog rows");
-    if (rows.size() != 14) return;
-    // Unit constraints first, then the global, in emplace order: the
+    check(rows.size() == 16, "16 catalog rows");
+    if (rows.size() != 16) return;
+    // Unit constraints first, then the globals, in emplace order: the
     // list_constraints() order.
     check(rowIs<VehicleCapacityCost>(rows[0], "vehicleCapacityCost", Level::Hard, 1.0, false) &&
                   rowIs<MaxEndTimeCost>(rows[1], "maxEndTimeCost", Level::Hard, 1.0, false) &&
@@ -721,7 +814,9 @@ void verifyCatalog() {
                                            false) &&
                   rowIs<LatencyCost>(rows[11], "latencyCost", Level::Soft, 0.0, false) &&
                   rowIs<VehicleFixedCost>(rows[12], "vehicleFixedCost", Level::Soft, 1.0, false) &&
-                  rowIs<UnassignedVisitsCost>(rows[13], "unassignedVisitsCost", Level::Medium, 1.0,
+                  rowIs<VisitOrderCost>(rows[13], "visitOrderCost", Level::Hard, 1000.0, false) &&
+                  rowIs<VisitGroupCost>(rows[14], "visitGroupCost", Level::Hard, 1000.0, true) &&
+                  rowIs<UnassignedVisitsCost>(rows[15], "unassignedVisitsCost", Level::Medium, 1.0,
                                               true),
           "info() == the components' kDefaultWeight / kDefaultLevel");
     std::printf("\n");
