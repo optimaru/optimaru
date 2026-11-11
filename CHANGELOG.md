@@ -17,6 +17,12 @@
   0.4.3. Both solvers refuse a bad `SolverConfig` before the plan is touched: the check ran
   after the unassigned pool was cleared, and in pickup and delivery after the pair
   construction.
+- **Notebooks.** Every notebook in `examples/` is saved with outputs from optimaru 0.4.3 and
+  asks for it; `examples/README.md` names one version again. Nineteen of the twenty-two show
+  what they showed before. Three move within the run-to-run noise of solves that stop on the
+  clock, and no text quotes a number that moved: conference scheduling and meeting scheduling
+  print slightly different scores, and order picking's chart of rounds takes another path
+  through its middle rounds to the same printed end.
 - **Benchmarks: the lock files record optimaru 0.4.3.** The benchmark projects install
   optimaru from this checkout, and their locks name its version: they still said 0.4.2 after
   the release, so the first `uv sync` rewrote them. Nothing else moves; the projects stay on
