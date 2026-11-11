@@ -42,12 +42,12 @@ from optimaru.employee_scheduling.demo import generate_demo_data
 from optimaru.employee_scheduling.models import solve_request
 
 request = generate_demo_data()                    # models.ScheduleRequest
-request.timelimit = 2.0
+request.time_limit_seconds = 2.0
 solution = solve_request(request)
 print(solution.score_hard, solution.score_soft)
 ```
 
-`solve_request` reads `timelimit`, the seed and search options in `settings`
+`solve_request` reads `time_limit_seconds`, the seed and search options in `settings`
 (`models.SolverSettings`), and the rule list in `model_input.rules`. The
 lower-level path takes a `optimaru.employee_scheduling.Solver`, a `SolverConfig` and a
 `DecomposedCalculator` built from `optimaru.employee_scheduling.constraints`. The C++ side

@@ -13,15 +13,25 @@ store or transfer the engine shape as-is (debug dumps, regression snapshots,
 
 from pydantic import Field, model_validator
 
-from .._models import SolveConfigBase, StrictModel, entities_by_id, require_same_order, solution_dict
+from .._models import (
+    SolveConfigBase,
+    SolveRequest,
+    StrictModel,
+    entities_by_id,
+    require_same_order,
+    solution_dict,
+    solve_model_request,
+)
 from . import _core
 
 __all__ = [
     "LeagueScheduleModel",
+    "LeagueScheduleRequest",
     "MatchModel",
     "RoundModel",
     "SolveConfig",
     "TeamModel",
+    "solve_request",
     "with_initial_solution",
 ]
 
@@ -151,3 +161,21 @@ def with_initial_solution(problem, solution):
             raise ValueError(f"match {match.id!r}: round {value!r} is out of range -1..{value_count - 1}")
         match.round = value
     return seeded
+
+
+class LeagueScheduleRequest(SolveRequest):
+    """The league schedule with the settings of one solve (see `SolveRequest` for those)."""
+
+    model_input: LeagueScheduleModel
+
+
+def solve_request(request: LeagueScheduleRequest, *, constraints=None) -> LeagueScheduleModel:
+    """Solve a pydantic request and return the solved problem model.
+
+    This is ``solve(request.model_input, ...)`` with the request's settings as the keywords
+    of the same names (see `SolveRequest`), and ``constraints`` the selection ``solve``
+    takes. The request is not changed.
+    """
+    from . import SolverConfig, solve
+
+    return solve_model_request(solve, SolverConfig, request, constraints=constraints)

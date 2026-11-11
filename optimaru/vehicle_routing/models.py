@@ -6,7 +6,7 @@ JSON-friendly in/out (snake_case fields, PascalCase classes):
                                     VehicleModel, VisitModel, solve_request)
 
     request = RoutePlanRequest(
-        timelimit=2,
+        time_limit_seconds=2,
         model_input=RoutingInput(
             vehicles=[VehicleModel(id="V1", capacity=10,
                                    depot=(37.5, 127.0))],
@@ -27,7 +27,7 @@ from typing import Any
 
 from pydantic import Field, model_validator
 
-from .._models import StrictModel, apply_solver_parameters
+from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
 from .constraints import get_constraints
 
@@ -163,14 +163,10 @@ class RoutingInput(StrictModel):
                 seen.add(visit_id)
 
 
-class RoutePlanRequest(StrictModel):
-    name: str | None = None
-    timelimit: float = Field(default=30.0, ge=0, description="seconds")
+class RoutePlanRequest(SolveRequest):
+    """The routing problem with the settings of one solve (see `SolveRequest` for those)."""
+
     model_input: RoutingInput
-    random_seed: int = 0
-    num_workers: int = Field(default=1, ge=1)
-    stop_at_first_feasible: bool = False
-    solver_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class VisitStop(StrictModel):
@@ -309,9 +305,10 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
     plan = to_plan(request.model_input)
 
     cfg = _core.SolverConfig()
-    cfg.spent_limit_seconds = request.timelimit
+    cfg.spent_limit_seconds = request.time_limit_seconds
     cfg.random_seed = request.random_seed
-    cfg.parallel_solver_count = request.num_workers
+    cfg.parallel_solver_count = request.parallel_solver_count
+    cfg.full_assert = request.full_assert
     apply_solver_parameters(cfg, request.solver_parameters)
     if request.stop_at_first_feasible:
         # Hard 0: -(2**63) on medium/soft is "no floor" (the engine compares hard only).

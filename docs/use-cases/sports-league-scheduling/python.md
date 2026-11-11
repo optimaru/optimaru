@@ -40,6 +40,23 @@ print(sum(sl.constraint_costs(schedule)["away_to_away_hop_cost"]["costs"]))  # r
 - Serialization is the pydantic v2 mirror in `optimaru.sports_league_scheduling.models`
   (`LeagueScheduleModel.from_core / to_core`, `SolveConfig`).
 
+## JSON in, JSON out
+
+`solve_request` takes a pydantic request, `models.LeagueScheduleRequest`: the problem model as
+`model_input`, with the settings of the solve under the names of `solve`'s keywords
+(`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+returns the solved `LeagueScheduleModel`, as `solve(model, ...)` does, and leaves the request
+unchanged. `constraints=` is the selection `solve` takes.
+
+```python
+from optimaru.sports_league_scheduling import solve_request
+from optimaru.sports_league_scheduling.models import LeagueScheduleRequest
+
+request = LeagueScheduleRequest.model_validate_json(text)  # or LeagueScheduleRequest(model_input=model, time_limit_seconds=5.0)
+solved = solve_request(request)
+```
+
 ## Score mapping
 
 This use case scores hard and soft only, so it maps identically onto the engine's

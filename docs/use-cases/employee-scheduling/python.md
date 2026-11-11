@@ -303,7 +303,7 @@ from optimaru.employee_scheduling.models import (
 )
 
 request = ScheduleRequest(
-    timelimit=1,
+    time_limit_seconds=1,
     model_input=SchedulingInput(
         workers=[WorkerModel(id="Worker 01", skills=["Skill A"])],
         shifts=[ShiftModel(id="Shift 1", start=540, end=1020, required_skill="Skill A")],
@@ -339,7 +339,7 @@ from optimaru.employee_scheduling.demo import generate_demo_data
 from optimaru.employee_scheduling.models import solve_request
 
 request = generate_demo_data()
-request.timelimit = 1.0
+request.time_limit_seconds = 1.0
 first = solve_request(request)
 
 # Keep Worker 01's shifts and let the solve place everything else again.
@@ -356,7 +356,7 @@ print(second.score_hard, second.score_soft)
   one is left alone by construction; a partial solution is therefore fine, and
   only the shifts it leaves out, or lists as `unassigned`, are constructed. Any
   earlier `worker` on such a shift is cleared.
-- Local search may still move a seeded shift. `timelimit=0` returns a complete seed
+- Local search may still move a seeded shift. `time_limit_seconds=0` returns a complete seed
   unchanged, and `pinned` fixes a shift for good. A pinned shift keeps its worker
   whatever the solution says about it.
 - `ValueError`, naming the worker or shift, for an unknown id, a shift assigned

@@ -47,7 +47,7 @@ from ._core import (
 from ._core import calculate_score as _calculate_score
 from ._core import constraint_costs as _constraint_costs
 from .constraints import score as _score
-from .models import KnapsackProblemModel, with_initial_solution
+from .models import KnapsackProblemModel, solve_request, with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -64,6 +64,7 @@ __all__ = [
     "constraint_info",
     "list_constraints",
     "solve",
+    "solve_request",
     "with_initial_solution",
 ]
 

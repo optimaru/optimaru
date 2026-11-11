@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+- **`solve` for a problem, `solve_request` for a pydantic request, in every use case.** The
+  pydantic path had two shapes: four use cases took a request through `models.solve_request`,
+  the others took their problem model through `solve`, and school timetabling took dicts.
+  Every use case now has both entry points, and the package exports both
+  (`optimaru.<use case>.solve_request` is `models.solve_request`).
+  - *New:* a request model in the other 18: `models.<Name>Request`, the problem model as
+    `model_input` with the settings of one solve, and `models.solve_request(request, *,
+    constraints=None)`, which returns what `solve` returns for that model. School
+    timetabling's `TimetableRequest` holds the problem as the new `TimetableProblemModel`
+    with `mode`, `weights` and `initial_solution`, and `solve_request` returns the new
+    `TimetableResultModel`; the package now imports its models with itself.
+  - *Renamed:* the settings of a request have the names of `solve`'s keywords in every use
+    case: `time_limit_seconds` (was `timelimit`), `random_seed`, `parallel_solver_count`
+    (was `num_workers`), `stop_at_first_feasible`, and the new `full_assert`, beside
+    `solver_parameters`. The shared base is `optimaru._models.SolveRequest`. `timelimit` and
+    `num_workers` are still accepted as aliases, in JSON, as keywords and as attributes; a
+    dump uses the new names. Code that passes the old names to `model_copy(update=...)`,
+    which does not read aliases, must use the new ones.
+  - *Employee scheduling:* `ScheduleRequest` has `random_seed` and `stop_at_first_feasible`
+    at the top level like the others; `settings.random_seed` and
+    `settings.stop_at_first_feasible` are the same fields under another name (a top-level
+    value wins once it is given). Its `solve_request` takes `constraints=`, a list of specs
+    that replaces `model_input.rules` for the solve, and it reads `solver_parameters` and
+    `full_assert` too.
+
 ## 0.4.3
 
 - **Vehicle routing: visit groups with a partial order.** Visits that share a `group`

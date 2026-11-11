@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from pydantic import Field, model_validator
 
-from .._models import SolveConfigBase, StrictModel, entities_by_id, solution_dict
+from .._models import SolveConfigBase, SolveRequest, StrictModel, entities_by_id, solution_dict, solve_model_request
 from . import _core
 
 __all__ = [
@@ -25,10 +25,12 @@ __all__ = [
     "EmployeeModel",
     "FlightAssignmentModel",
     "FlightCrewScheduleModel",
+    "FlightCrewScheduleRequest",
     "FlightModel",
     "SolveConfig",
     "datetime_to_minutes",
     "minutes_to_datetime",
+    "solve_request",
     "with_initial_solution",
 ]
 
@@ -255,3 +257,21 @@ def with_initial_solution(problem, solution):
         if employee is not None and (not isinstance(employee, str) or employee not in employee_ids):
             raise ValueError(f"flight assignment {assignment.id!r} has unknown employee {employee!r}")
     return seeded
+
+
+class FlightCrewScheduleRequest(SolveRequest):
+    """The flight crew schedule with the settings of one solve (see `SolveRequest` for those)."""
+
+    model_input: FlightCrewScheduleModel
+
+
+def solve_request(request: FlightCrewScheduleRequest, *, constraints=None) -> FlightCrewScheduleModel:
+    """Solve a pydantic request and return the solved problem model.
+
+    This is ``solve(request.model_input, ...)`` with the request's settings as the keywords
+    of the same names (see `SolveRequest`), and ``constraints`` the selection ``solve``
+    takes. The request is not changed.
+    """
+    from . import SolverConfig, solve
+
+    return solve_model_request(solve, SolverConfig, request, constraints=constraints)

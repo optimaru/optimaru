@@ -98,7 +98,7 @@ def solve_cpsat(problem: Any, seconds: float, seed: int, workers: int) -> Any:
     from external_solver.order_picking import solve_request
 
     request = _REQUESTS[id(problem)].model_copy(
-        update={"timelimit": seconds, "random_seed": seed, "num_workers": workers}
+        update={"time_limit_seconds": seconds, "random_seed": seed, "parallel_solver_count": workers}
     )
     response = solve_request(request)
     task_by_id = {task.id: index for index, task in enumerate(problem.pick_tasks)}

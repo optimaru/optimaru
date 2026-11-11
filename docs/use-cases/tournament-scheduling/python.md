@@ -28,6 +28,23 @@ objects. Pin an assignment with `TeamAssignmentModel.pinned=True`;
 to stop at the first feasible use
 `stop_at_first_feasible=True`.
 
+## JSON in, JSON out
+
+`solve_request` takes a pydantic request, `models.TournamentScheduleRequest`: the problem model as
+`model_input`, with the settings of the solve under the names of `solve`'s keywords
+(`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+returns the solved `TournamentScheduleModel`, as `solve(model, ...)` does, and leaves the request
+unchanged. `constraints=` is the selection `solve` takes.
+
+```python
+from optimaru.tournament_scheduling import solve_request
+from optimaru.tournament_scheduling.models import TournamentScheduleRequest
+
+request = TournamentScheduleRequest.model_validate_json(text)  # or TournamentScheduleRequest(model_input=model, time_limit_seconds=5.0)
+solved = solve_request(request)
+```
+
 ## Constraints
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |

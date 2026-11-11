@@ -144,7 +144,7 @@ from optimaru.pickup_delivery.models import (DeliveryModel, PdpInput, PdpRequest
                                              VehicleModel, solve_request)
 
 request = PdpRequest(
-    timelimit=2,
+    time_limit_seconds=2,
     model_input=PdpInput(
         vehicles=[VehicleModel(id="V1", capacity=10, home=(37.5665, 126.9780))],
         deliveries=[DeliveryModel(
@@ -159,8 +159,9 @@ print([stop.stop_id for stop in solution.routes["V1"]])   # ['R1-pickup', 'R1-dr
 print(solution.score, solution.feasible, solution.total_driving_seconds)   # 0hard/0medium/-93soft True 93
 ```
 
-- `PdpRequest` carries `timelimit` (seconds, default 30), `random_seed`,
-  `num_workers`, `stop_at_first_feasible` and `solver_parameters`, a dict of
+- `PdpRequest` carries `time_limit_seconds` (seconds, default 30; alias
+  `timelimit`), `random_seed`, `parallel_solver_count` (alias `num_workers`),
+  `stop_at_first_feasible`, `full_assert` and `solver_parameters`, a dict of
   further `SolverConfig` fields by name.
 - `PdpSolution` has `routes` (vehicle id to a list of `PdpStop` with `stop_id`,
   `delivery_id`, `pickup`, `arrival_time`), `unassigned`, `score`, `feasible`,

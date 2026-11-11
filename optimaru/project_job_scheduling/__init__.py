@@ -71,7 +71,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .models import ProjectJobScheduleModel, with_initial_solution
+from .models import ProjectJobScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
     "Allocation",
@@ -91,6 +91,7 @@ __all__ = [
     "constraint_info",
     "list_constraints",
     "solve",
+    "solve_request",
     "with_initial_solution",
 ]
 

@@ -43,7 +43,7 @@ from ._core import (
     prepare,
 )
 from .demo import demo_conference
-from .models import ConferenceScheduleModel, with_initial_solution
+from .models import ConferenceScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
     "ConferenceSchedule",
@@ -62,6 +62,7 @@ __all__ = [
     "list_constraints",
     "prepare",
     "solve",
+    "solve_request",
     "with_initial_solution",
 ]
 

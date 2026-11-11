@@ -50,7 +50,7 @@ from ._core import (
     list_constraints,
     update_shadow_variables,
 )
-from .models import with_initial_solution
+from .models import solve_request, with_initial_solution
 
 __all__ = [
     "ConstraintInfo",
@@ -71,6 +71,7 @@ __all__ = [
     "distance_to_travel",
     "list_constraints",
     "solve",
+    "solve_request",
     "update_shadow_variables",
     "with_initial_solution",
 ]

@@ -73,3 +73,20 @@ json_text = model.model_dump_json()
 Type stubs are in `optimaru/maintenance_scheduling/_core.pyi`; the high-level entry point is
 `maintenance_scheduling.solve()` (config/time_limit/seed/
 stop_at_first_feasible/on_new_best).
+
+## JSON in, JSON out
+
+`solve_request` takes a pydantic request, `models.MaintenanceScheduleRequest`: the problem model as
+`model_input`, with the settings of the solve under the names of `solve`'s keywords
+(`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+returns the solved `MaintenanceScheduleModel`, as `solve(model, ...)` does, and leaves the request
+unchanged. `constraints=` is the selection `solve` takes.
+
+```python
+from optimaru.maintenance_scheduling import solve_request
+from optimaru.maintenance_scheduling.models import MaintenanceScheduleRequest
+
+request = MaintenanceScheduleRequest.model_validate_json(text)  # or MaintenanceScheduleRequest(model_input=model, time_limit_seconds=5.0)
+solved = solve_request(request)
+```

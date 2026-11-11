@@ -70,7 +70,7 @@ from .constraints import (
     WorkerPairingCost,
 )
 from .helpers import list_constraints, make_random_roster, summary, to_dataframe
-from .models import with_initial_solution
+from .models import solve_request, with_initial_solution
 
 __all__ = [
     "CONSTRAINT_NAMES",
@@ -123,6 +123,7 @@ __all__ = [
     "make_random_roster",
     "minutes",
     "solve",
+    "solve_request",
     "summary",
     "to_dataframe",
     "with_initial_solution",

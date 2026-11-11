@@ -22,7 +22,7 @@ pinned, and when passed uninitialized the solver fixes them to (first mode, dela
 
 from pydantic import Field, model_validator
 
-from .._models import StrictModel, entities_by_id, solution_dict
+from .._models import SolveRequest, StrictModel, entities_by_id, solution_dict, solve_model_request
 from . import _core
 
 __all__ = [
@@ -31,9 +31,11 @@ __all__ = [
     "ExecutionModeModel",
     "JobModel",
     "ProjectJobScheduleModel",
+    "ProjectJobScheduleRequest",
     "ProjectModel",
     "ResourceModel",
     "ResourceRequirementModel",
+    "solve_request",
     "with_initial_solution",
 ]
 
@@ -369,3 +371,21 @@ def with_initial_solution(problem, solution):
                 f"allocation {allocation.id!r}: delay {delay!r} is out of range 0..{problem.delay_range_size - 1}"
             )
     return seeded
+
+
+class ProjectJobScheduleRequest(SolveRequest):
+    """The project job schedule with the settings of one solve (see `SolveRequest` for those)."""
+
+    model_input: ProjectJobScheduleModel
+
+
+def solve_request(request: ProjectJobScheduleRequest, *, constraints=None) -> ProjectJobScheduleModel:
+    """Solve a pydantic request and return the solved problem model.
+
+    This is ``solve(request.model_input, ...)`` with the request's settings as the keywords
+    of the same names (see `SolveRequest`), and ``constraints`` the selection ``solve``
+    takes. The request is not changed.
+    """
+    from . import SolverConfig, solve
+
+    return solve_model_request(solve, SolverConfig, request, constraints=constraints)

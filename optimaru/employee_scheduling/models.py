@@ -9,7 +9,7 @@ plus a response with a per-worker schedule and violation report:
     )
 
     request = ScheduleRequest(
-        timelimit=2,
+        time_limit_seconds=2,
         model_input=SchedulingInput(
             workers=[WorkerModel(id="Worker 01", skills=["Skill A"])],
             shifts=[ShiftModel(id="Shift 1", start=540, end=1020, required_skill="Skill A")],
@@ -63,7 +63,7 @@ from pydantic import (
 )
 
 from .._constraint import _check_literal_offset
-from .._models import StrictModel
+from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
 from . import constraints as _specs
 
@@ -403,7 +403,7 @@ class SolverSettings(StrictModel):
     # Multi-start: run this many independent solves (seed = random_seed + i) in
     # parallel processes and keep the best. The metaheuristic has real
     # run-to-run variance, so best-of-n is a cheap, reliable quality lift.
-    # 1 (default) = a single solve. `ScheduleRequest.num_workers` asks for the
+    # 1 (default) = a single solve. `ScheduleRequest.parallel_solver_count` asks for the
     # same thing; the larger of the two applies.
     multi_start: int = Field(default=1, ge=1)
 
@@ -511,19 +511,36 @@ class SchedulingInput(BaseModel):
         return self
 
 
-class ScheduleRequest(StrictModel):
-    name: str | None = None
-    timelimit: float = Field(default=30.0, ge=0, description="seconds")
-    num_workers: int = Field(
-        default=1,
-        ge=1,
-        description=(
-            "Independent parallel starts, like `settings.multi_start`: the larger of the two "
-            "applies, they do not multiply. Each start gets the full `timelimit`."
-        ),
-    )
+class ScheduleRequest(SolveRequest):
+    """The scheduling problem with the settings of one solve (see `SolveRequest` for the shared ones).
+
+    ``parallel_solver_count`` (alias ``num_workers``) and ``settings.multi_start`` ask for the
+    same thing, independent starts in parallel processes: the larger of the two applies,
+    and each start gets the full ``time_limit_seconds``. ``settings`` holds the search
+    options of this use case. Its ``random_seed`` and ``stop_at_first_feasible`` are the
+    request's own fields under another name: one given at the top level wins, one given
+    only in ``settings`` is taken up, and afterwards both say the same.
+    """
+
     model_input: SchedulingInput
     settings: SolverSettings = Field(default_factory=SolverSettings)
+
+    @model_validator(mode="after")
+    def _one_seed_and_target(self):
+        given = self.model_fields_set
+        in_settings = self.settings.model_fields_set
+        updates = {}
+        for name in ("random_seed", "stop_at_first_feasible"):
+            if name not in given and name in in_settings:
+                object.__setattr__(self, name, getattr(self.settings, name))
+            updates[name] = getattr(self, name)
+        self.settings = self.settings.model_copy(update=updates)
+        return self
+
+    def _effective(self, name: str):
+        """The seed or the target of this solve: the top-level field once it was given or set,
+        else what ``settings`` says, which may have been set after construction."""
+        return getattr(self, name) if name in self.model_fields_set else getattr(self.settings, name)
 
 
 class ShiftAssignmentModel(BaseModel):
@@ -693,7 +710,7 @@ def _build_and_solve(request: ScheduleRequest, seed: int, overrides: dict | None
     calc = _core.DecomposedCalculator(_rule_specs(model_input.rules))
 
     cfg = _core.SolverConfig()
-    cfg.spent_limit_seconds = request.timelimit
+    cfg.spent_limit_seconds = request.time_limit_seconds
     cfg.random_seed = seed
     cfg.guided_moves = request.settings.guided_moves
     cfg.employee_greedy_construction = request.settings.employee_greedy_construction
@@ -741,7 +758,9 @@ def _build_and_solve(request: ScheduleRequest, seed: int, overrides: dict | None
     cfg.two_opt_move_weight = request.settings.two_opt_move_weight
     cfg.or_opt_move_weight = request.settings.or_opt_move_weight
     cfg.tail_swap_move_weight = request.settings.tail_swap_move_weight
-    if request.settings.stop_at_first_feasible:
+    cfg.full_assert = request.full_assert
+    apply_solver_parameters(cfg, request.solver_parameters)
+    if request._effective("stop_at_first_feasible"):
         cfg.best_score_limit = (0, float("-inf"))
     if request.settings.best_score_limit is not None:
         cfg.best_score_limit = request.settings.best_score_limit
@@ -820,14 +839,19 @@ def _solve_in_processes(jobs: list, max_workers: int) -> list[ScheduleSolution] 
 def solve_request(
     request: ScheduleRequest,
     *,
+    constraints=None,
     select: Callable[[list[ScheduleSolution]], ScheduleSolution] | None = None,
 ) -> ScheduleSolution:
     """Solve a pydantic request end-to-end and return the pydantic solution.
 
-    ``request.num_workers`` or ``settings.multi_start`` > 1 runs that many
+    ``constraints``, a list of constraint specs (see `optimaru.employee_scheduling.constraints`)
+    as ``solve`` takes it, replaces ``request.model_input.rules`` for this solve; None scores
+    the request's own rules. The request is not changed.
+
+    ``request.parallel_solver_count`` or ``settings.multi_start`` > 1 runs that many
     independent solves (the larger of the two; seeds ``random_seed + i``) in
     parallel processes and returns the best-scoring one. Each start gets the
-    full ``timelimit`` and at most one start per core runs at a time. The
+    full ``time_limit_seconds`` and at most one start per core runs at a time. The
     metaheuristic has real run-to-run variance, so best-of-n is a cheap,
     reliable quality lift (and uses the extra cores). 1 (default) is a single
     solve.
@@ -841,22 +865,28 @@ def solve_request(
 
     Where processes cannot be used (no fork, a daemonic process) or a worker
     dies, the starts run one after another, so the wall time can reach n times
-    ``timelimit``. An error raised by a start is not retried.
+    ``time_limit_seconds``. An error raised by a start is not retried.
 
     ``select`` lets the caller pick the best-of-n candidate itself (given the
     full list of solutions) instead of the built-in faithful-score key -- e.g.
     to rank candidates on an external objective the internal score only
     approximates. Ignored for a single start."""
-    n = max(request.num_workers, request.settings.multi_start)
+    if constraints is not None:
+        if isinstance(constraints, _core.DecomposedCalculator):
+            raise TypeError("solve_request takes constraints as a list of specs, not a DecomposedCalculator")
+        rules = {**request.model_input.model_dump(), "rules": list(constraints)}
+        request = request.model_copy(update={"model_input": SchedulingInput.model_validate(rules)})
+    n = max(request.parallel_solver_count, request.settings.multi_start)
     if n <= 1:
-        return _build_and_solve(request, request.settings.random_seed)
+        return _build_and_solve(request, request._effective("random_seed"))
 
     # Portfolio multi-start: start i uses seed random_seed+i AND per-start config
     # overrides portfolio[i % len] (diversifying late_acceptance_size / ruin
     # aggressiveness so the n starts explore complementary basins rather than
     # n seeds of one identical config). Empty portfolio => all identical.
     port = request.settings.portfolio
-    jobs = [(request, request.settings.random_seed + i, port[i % len(port)] if port else {}) for i in range(n)]
+    seed = request._effective("random_seed")
+    jobs = [(request, seed + i, port[i % len(port)] if port else {}) for i in range(n)]
     solutions = _solve_in_processes(jobs, min(n, os.cpu_count() or 1))
     if solutions is None:
         # Sequential best-of-n, so the feature always works, just without the

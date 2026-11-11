@@ -16,13 +16,15 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
-from .._models import StrictModel
+from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
 __all__ = [
     "EdgeModel",
     "MaxCutProblemModel",
+    "MaxCutRequest",
     "VertexPairModel",
+    "solve_request",
     "with_initial_solution",
 ]
 
@@ -182,3 +184,21 @@ def with_initial_solution(problem, solution):
     seeded.cut_weight = seeded.score_hard = seeded.score_soft = None
     seeded.warm_start = True
     return seeded
+
+
+class MaxCutRequest(SolveRequest):
+    """The max-cut problem with the settings of one solve (see `SolveRequest` for those)."""
+
+    model_input: MaxCutProblemModel
+
+
+def solve_request(request: MaxCutRequest, *, constraints=None) -> MaxCutProblemModel:
+    """Solve a pydantic request and return the solved problem model.
+
+    This is ``solve(request.model_input, ...)`` with the request's settings as the keywords
+    of the same names (see `SolveRequest`), and ``constraints`` the selection ``solve``
+    takes. The request is not changed.
+    """
+    from . import SolverConfig, solve
+
+    return solve_model_request(solve, SolverConfig, request, constraints=constraints)

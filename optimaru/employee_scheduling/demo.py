@@ -89,7 +89,7 @@ def generate_demo_data(seed: int = 7, workers: int = 12, days: int = 14) -> Sche
     max_unavailable = max(1, workers // 4)
     return ScheduleRequest(
         name="Demo roster",
-        timelimit=5.0,
+        time_limit_seconds=5.0,
         settings=SolverSettings(random_seed=seed),
         model_input=SchedulingInput(
             workers=[_worker(index, days, rng, unavailable_on, max_unavailable) for index in range(workers)],

@@ -211,7 +211,7 @@ four core rules include neither of these two: `solve_request`, `vrp.solve(plan)`
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two visits or more (a visit alone in its group changes nothing). That is a solve on the
 constraint assembly, as when a vehicle limit is set: the whole default set is
-scored, and `num_workers` / `parallel_solver_count` have no effect.
+scored, and `parallel_solver_count` has no effect.
 `calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same way,
 so it returns the score the solve stored and prices a split or reversed group
 on a plan built by hand. Both
@@ -228,7 +228,7 @@ next_request = with_initial_solution(request, solution)  # or solution.model_dum
 better = solve_request(next_request)
 ```
 
-`with_initial_solution` returns a new request whose vehicles carry `initial_route`, a list of visit ids. The solve keeps those routes as its starting point and construction places only the visits in no route, so a partial solution works and the `unassigned` visits get another try. With `timelimit=0` a complete solution comes back as it went in. An unknown id or a visit routed twice raises `ValueError`.
+`with_initial_solution` returns a new request whose vehicles carry `initial_route`, a list of visit ids. The solve keeps those routes as its starting point and construction places only the visits in no route, so a partial solution works and the `unassigned` visits get another try. With `time_limit_seconds=0` a complete solution comes back as it went in. An unknown id or a visit routed twice raises `ValueError`.
 
 ## Extending
 

@@ -43,7 +43,7 @@ from ._core import (
     demo_data,
     list_constraints,
 )
-from .models import MeetingScheduleModel, with_initial_solution
+from .models import MeetingScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
     "GRAIN_LENGTH_IN_MINUTES",
@@ -64,6 +64,7 @@ __all__ = [
     "demo_data",
     "list_constraints",
     "solve",
+    "solve_request",
     "with_initial_solution",
 ]
 

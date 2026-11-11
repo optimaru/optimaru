@@ -50,6 +50,23 @@ pj.solve(core, time_limit_seconds=5.0, constraints=[*others, ProjectDelayCost(le
 score(raw), score(raw, [*others, ProjectDelayCost(weight=2)])        # re-priced in pure Python
 ```
 
+## JSON in, JSON out
+
+`solve_request` takes a pydantic request, `models.ProjectJobScheduleRequest`: the problem model as
+`model_input`, with the settings of the solve under the names of `solve`'s keywords
+(`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
+`full_assert`, and `solver_parameters` for further `SolverConfig` fields by name). It
+returns the solved `ProjectJobScheduleModel`, as `solve(model, ...)` does, and leaves the request
+unchanged. `constraints=` is the selection `solve` takes.
+
+```python
+from optimaru.project_job_scheduling import solve_request
+from optimaru.project_job_scheduling.models import ProjectJobScheduleRequest
+
+request = ProjectJobScheduleRequest.model_validate_json(text)  # or ProjectJobScheduleRequest(model_input=model, time_limit_seconds=5.0)
+solved = solve_request(request)
+```
+
 ## Domain
 
 - **Project** — `release_date` + `critical_path_duration`. Used only as the reference date
