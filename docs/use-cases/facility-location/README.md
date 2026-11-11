@@ -151,29 +151,9 @@ to the engine construction in `optimaru/facility_location/cpp/src/solver.cpp`; a
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/facility_location/cpp/include/fl/constraints/` (currently `facility_capacity_cost`, `facility_setup_cost`,
-`distance_from_facility_cost`):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
-   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
-   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
-   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/facility_location/cpp/include/fl/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator`, weighted by the component's
-   `kDefaultWeight` — `fl_plugin_test` checks they agree bit for bit — and a positive and a
-   zero hand-calculated case to `fl_test` / `fl_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/facility_location/constraints.py` (plus its
-   module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model, `external_solver.facility_location` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), so the benchmark in
-   [`benchmarks/facility-location/cpsat`](../../../benchmarks/facility-location/cpsat) stays like
-   for like.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

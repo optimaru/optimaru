@@ -125,36 +125,9 @@ to the engine construction in `optimaru/bed_allocation/cpp/src/solver.cpp`; a ru
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/bed_allocation/cpp/include/ba/constraints/` (currently `bed_conflict_cost`, `female_in_male_room_cost`,
-`male_in_female_room_cost`, `mixed_gender_room_cost`, `department_min_age_cost`,
-`department_max_age_cost`, `required_patient_equipment_cost`, `unassigned_stays_cost`,
-`preferred_max_room_capacity_cost`, `department_specialty_cost`,
-`department_specialty_priority_cost`, `preferred_patient_equipment_cost`, plus `common.hpp`):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
-   `GlobalConstraint`; the per-stay bases `PerStayConstraint` / `PerStayRoomConstraint` in
-   `common.hpp` cover a cost that is a sum of per-(stay, bed) terms; positive raw cost =
-   penalty, 0 = no violation) declaring `static constexpr double kDefaultWeight` and
-   `static constexpr optimaru::Level kDefaultLevel`, an
-   `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter). A medium
-   constraint declares `optimaru::Level::Medium` and a weight in medium units — the
-   domain's `kMediumFold` (`domain.hpp`) does the 10^9 folding;
-2. include it in `optimaru/bed_allocation/cpp/include/ba/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator`, weighted by the component's
-   `kDefaultWeight` — `ba_plugin_test` checks they agree bit for bit — and a positive and a
-   zero hand-calculated case to `ba_test` / `ba_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/bed_allocation/constraints.py` (plus its
-   module-level default instance); callers then pick, reweight or flip it:
-   `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model, `external_solver.bed_allocation` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), so the benchmark in
-   [`benchmarks/bed-allocation/cpsat`](../../../benchmarks/bed-allocation/cpsat) stays like
-   for like.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

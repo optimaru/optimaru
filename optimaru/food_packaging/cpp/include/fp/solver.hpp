@@ -66,7 +66,9 @@ public:
         std::int64_t stall_step_limit = 0;
 
         // Late-acceptance history length. 0 (the default) = auto:
-        // clamp(8 * unpinned job count, 400, 3200).
+        // clamp(8 * unpinned job count, 400, 3200). It is the first stage's
+        // length: the search restarts with a doubled history when it stalls
+        // (the engine's history_growth).
         std::size_t history_length = 0;
         std::uint64_t seed = 0;
 

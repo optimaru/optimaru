@@ -65,7 +65,7 @@ constraint is flippable onto any of the three levels (`level="hard"`, `"medium"`
 `"soft"`, or a `Level`), none is a reward, and every one at a weight above 0 is scored
 by default (`default_enabled`); the three opt-in objectives (weight 0) are measured
 but move no score until given a weight. The route-policy constraints cost 0 while their
-vehicle field is 0. The four core constraints
+vehicle field is 0. The four core rules
 (`vehicle_capacity_cost`, `max_end_time_cost`, `unassigned_visits_cost`,
 `travel_time_cost`) are also the monolithic `ScoreCalculator` and the incremental
 calculator, which read the same constants.
@@ -204,19 +204,20 @@ tied to one vehicle pull every route across town, so these plans drive 44% to
 102% more than the same visits left free. Groups whose visits lie near each
 other cost far less. A grouped plan also settles early: on two of these instances
 a 60 s solve ends within 2% of a 4 s one, while nine seeds end 3% and 6% apart
-(10 s), so another seed buys more than a longer run. `parallel_solver_count` runs such seeds side by side: with four starts the same
+(10 s), so another seed buys more than a longer run. `num_workers` /
+`parallel_solver_count` run such seeds side by side: with four starts the same
 4 s end 0.8% to 2.4% shorter on the four classes above (5 seeds each: shorter in
 17 of the 20 pairs and longer in none; under a step limit the first start is the
 single-start solve, so more starts cannot do worse, while under a time limit the
 starts share the machine's cores).
 
 Every entry point scores a grouped plan with the default constraints, since the
-four core constraints include neither of these two: `solve_request`, `vrp.solve(plan)`,
+four core rules include neither of these two: `solve_request`, `vrp.solve(plan)`,
 `Solver(config).solve(plan)` and the C++ `Solver::solve(plan)`, whenever some
 group holds two visits or more (a visit alone in its group changes nothing). That is a solve on the
 constraint assembly, as when a vehicle limit is set: the whole default set is
-scored. `parallel_solver_count` runs that many starts there as
-on the core constraints, each start on a set of its own.
+scored. `num_workers` / `parallel_solver_count` run that many starts there as
+on the core rules, each start on a set of its own.
 `calculate_score(plan)` (C++ `calculateScore`) reads such a plan the same way,
 so it returns the score the solve stored and prices a split or reversed group
 on a plan built by hand. Both
@@ -233,7 +234,7 @@ next_request = with_initial_solution(request, solution)  # or solution.model_dum
 better = solve_request(next_request)
 ```
 
-`with_initial_solution` returns a new request whose vehicles carry `initial_route`, a list of visit ids. The solve keeps those routes as its starting point and construction places only the visits in no route, so a partial solution works and the `unassigned` visits get another try. With `time_limit_seconds=0` a complete solution comes back as it went in. An unknown id or a visit routed twice raises `ValueError`.
+`with_initial_solution` returns a new request whose vehicles carry `initial_route`, a list of visit ids. The solve keeps those routes as its starting point and construction places only the visits in no route, so a partial solution works and the `unassigned` visits get another try. With `timelimit=0` a complete solution comes back as it went in. An unknown id or a visit routed twice raises `ValueError`.
 
 ## Extending
 
@@ -252,33 +253,9 @@ to the engine construction in `optimaru/vehicle_routing/cpp/src/solver.cpp`; a r
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/vehicle_routing/cpp/include/vrp/constraints/` (currently `vehicle_capacity_cost`, `max_end_time_cost`,
-`travel_time_cost`, `max_travel_time_cost`, `max_route_duration_cost`,
-`vehicle_max_end_time_cost`, `max_stops_cost`, `max_route_radius_cost`,
-`enclosing_circle_radius_cost`, `min_capacity_utilization_cost`, `route_duration_cost`,
-`latency_cost`, `vehicle_fixed_cost`, `visit_order_cost`, `visit_group_cost`,
-`unassigned_visits_cost`; plus `common.hpp`, the
-shared prefix sums in `route_sums.hpp` and the enclosing-circle helpers in
-`route_geometry.hpp`):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
-   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
-   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
-   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/vehicle_routing/cpp/include/vrp/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for one of the core constraints, add the same raw cost to
-   `score_calculator` / `incremental_calculator`, weighted by the component's
-   `kDefaultWeight` — `vrp_plugin_test` checks they agree bit for bit — and a positive and a
-   zero hand-calculated case to `vrp_plugin_test` (`verifyRawCostsByHand`) and the catalog
-   row to `verifyCatalog`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/vehicle_routing/constraints.py` (plus its
-   module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, level="hard")]`.
-
-The CVRP benchmark scores plain distance, so a new cost does not change it.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

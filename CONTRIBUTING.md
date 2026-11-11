@@ -56,7 +56,9 @@ it between hard, medium and soft per solve.
 5. **Document it**: the constraint tables in `docs/use-cases/<slug>/`.
 
 Full steps, including on-by-default costs and global constraints:
-[Adding a cost](docs/extending.md#adding-a-cost).
+[Adding a cost](docs/extending.md#adding-a-cost). The same steps on one worked
+example per use case, with that use case's base classes, tests and measurements:
+`docs/use-cases/<slug>/extending.md`.
 
 ## Add a move
 

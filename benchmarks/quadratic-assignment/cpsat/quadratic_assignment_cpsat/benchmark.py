@@ -91,6 +91,7 @@ def instances() -> dict[str, Callable[[], Any]]:
         "random14": lambda: _random(14, seed=3),
         "random16": lambda: _random(16, seed=4),
         "random20": lambda: _random(20, seed=5),
+        "random25": lambda: _random(25, seed=6),
     }
 
 

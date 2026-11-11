@@ -25,6 +25,10 @@ void configureEngine(const Solver::Config& config, LeagueSchedule& schedule,
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(32 * schedule.matches.size(), 400, 3200);
+    // Restart late acceptance with a doubled history when the search stalls
+    // (see AcceptanceSettings::history_growth): measured on every instance of
+    // benchmarks/sports-league-scheduling, none worse at 30 s on three seeds.
+    engineConfig.search.acceptance.history_growth = 2.0;
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
 

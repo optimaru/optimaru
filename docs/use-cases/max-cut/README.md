@@ -151,7 +151,8 @@ offsets; it rejects an exponent other than 1).
 
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
   `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
-  `parallel_solver_count`, `late_acceptance_size`, `full_assert`, `ruin_recreate*`,
+  `parallel_solver_count`, `late_acceptance_size` (the first stage's:
+  [late acceptance in stages](../README.md#late-acceptance-in-stages)), `full_assert`, `ruin_recreate*`,
   `change/swap_move_weight`, `descent_weight`, `best_score_limit`, `on_new_best`),
   set by attribute. Zero budget = `spent_limit_seconds = 0` (`step_count_limit = 0`
   means "no limit"); a bounded search = `step_count_limit = N`. Without a time limit a
@@ -251,37 +252,14 @@ overload. Under exact size bounds a move must keep the side sizes.
 every vertex a side before the engine starts (the alternating start); the
 Python reference-parity tests pin it.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/max_cut/cpp/include/mc/constraints/`:
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` — an
-   `McUnitConstraint` when the cost decomposes per side (`cost(problem, side,
-   members)`, plus `delta_cost` when it is a sum of per-member / per-pair terms) or a
-   `detail::MemberChangeConstraint` (a global told every join / leave) when it does
-   not; positive raw cost = penalty, 0 = no violation — declaring
-   `static constexpr double kDefaultWeight` and
-   `static constexpr optimaru::Level kDefaultLevel`, an
-   `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/max_cut/cpp/include/mc/constraints.hpp` and add it to `defaultConstraints()` if
-   it belongs to the default set (that is also the catalog order);
-3. for a default constraint, add the same raw cost to `score_calculator` /
-   `incremental_calculator`, weighted by the component's `kDefaultWeight` —
-   `mc_plugin_test` checks they agree bit for bit — and a positive and a zero
-   hand-calculated case to `mc_test` / `mc_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/max_cut/constraints.py` (plus its
-   module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model, `external_solver.max_cut` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), with an exact encoding so its
-   `tests/max_cut/test_constraint_parity.py` can pin partitions;
-   [`benchmarks/max-cut/cpsat`](../../../benchmarks/max-cut/cpsat) runs it against this engine.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 
 [`benchmarks/max-cut`](../../../benchmarks/max-cut) compares this use case with OR-Tools
 CP-SAT on the same instances, rescored by the same evaluator.
 
-Latest run (30 s per solver, 7 instances): best score by the engine on 5, CP-SAT on 4
+Latest run (30 s per solver, 8 instances): best score by the engine on 7, CP-SAT on 4
 (ties count for each). Full table: [benchmarks/max-cut/README.md](../../../benchmarks/max-cut/README.md#results).

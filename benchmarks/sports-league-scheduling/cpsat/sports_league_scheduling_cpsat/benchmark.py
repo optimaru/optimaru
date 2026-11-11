@@ -60,6 +60,7 @@ def instances() -> dict[str, Callable[[], Any]]:
         "teams6": lambda: _generate(6, seed=1),
         "teams8": lambda: _generate(8, seed=2),
         "teams10": lambda: _generate(10, seed=3),
+        "teams12": lambda: _generate(12, seed=5),
         # The demo league: 14 teams, 32 rounds, 182 matches.
         "demo": lambda: sports_league_scheduling.demo_schedule(),
         "teams18": lambda: _generate(18, seed=4),

@@ -171,31 +171,9 @@ to the engine construction in `optimaru/flight_crew_scheduling/cpp/src/solver.cp
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/flight_crew_scheduling/cpp/include/fcs/constraints/` (currently `required_skill_cost`, `flight_conflict_cost`,
-`transfer_between_two_flights_cost`, `employee_unavailability_cost`,
-`first_assignment_not_departing_from_home_cost`, `last_assignment_not_arriving_at_home_cost`):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
-   `GlobalConstraint`, or the domain's `PerAssignmentConstraint` / `ItineraryConstraint`;
-   positive raw cost = penalty, 0 = no violation) declaring
-   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
-   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/flight_crew_scheduling/cpp/include/fcs/constraints.hpp` and `emplace` it in
-   `defaultConstraints()` if it belongs to the default set;
-3. for a default constraint, add the same raw cost to
-   `score_calculator` / `incremental_calculator`, weighted by the component's
-   `kDefaultWeight` — `fcs_plugin_test` checks they agree bit for bit — and a positive and a
-   zero hand-calculated case to `fcs_test` / `fcs_plugin_test`;
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/flight_crew_scheduling/constraints.py` (plus its
-   module-level default instance); callers then pick, reweight or flip it:
-   `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
-5. mirror it in the CP-SAT model, `external_solver.flight_crew_scheduling` in
-   [external-solver](https://github.com/optimaru/external-solver) (a plugin subclassing the
-   spec; defaults come from `constraint_info()`), so the benchmark in
-   [`benchmarks/flight-crew-scheduling/cpsat`](../../../benchmarks/flight-crew-scheduling/cpsat)
-   stays like for like.
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

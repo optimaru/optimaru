@@ -8,6 +8,7 @@ one of them.
 
 from __future__ import annotations
 
+import ast
 import re
 import subprocess
 import tomllib
@@ -124,7 +125,72 @@ def test_every_use_case_has_a_guide_and_a_benchmark():
     for name in USE_CASES:
         slug = name.replace("_", "-")
         assert (ROOT / "docs" / "use-cases" / slug / "README.md").is_file(), slug
+        assert (ROOT / "docs" / "use-cases" / slug / "extending.md").is_file(), slug
         assert (ROOT / "benchmarks" / slug).is_dir(), slug
+
+
+_NUMBER_WORDS = (
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+    "seventeen eighteen nineteen twenty"
+).split()
+_TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50}
+
+
+def _number(text: str) -> int | None:
+    """`12`, `twelve` or `twenty-one` as a number."""
+    text = text.lower()
+    if text.isdigit():
+        return int(text)
+    if text in _NUMBER_WORDS:
+        return _NUMBER_WORDS.index(text)
+    tens, _, ones = text.partition("-")
+    if tens in _TENS and (not ones or ones in _NUMBER_WORDS[1:10]):
+        return _TENS[tens] + (_NUMBER_WORDS.index(ones) if ones else 0)
+    return None
+
+
+def _extending_guide(name: str) -> str:
+    return (ROOT / "docs" / "use-cases" / name.replace("_", "-") / "extending.md").read_text()
+
+
+def test_a_guide_states_the_number_of_constraints_its_use_case_has():
+    """The first paragraph of docs/use-cases/<slug>/extending.md says "the model and its N
+    constraints". N is what the specs module lists: `_DEFAULTS`, or employee scheduling's
+    `SPEC_CLASSES`, which also holds the ones that are off by default. Read off the source, so
+    it needs no compiled extension; a constraint added without the guide fails here."""
+    for name in sorted(USE_CASES):
+        opening = " ".join(" ".join(_extending_guide(name).split("\n")[:12]).split())
+        stated = re.search(r"the model and its ([\w-]+) constraints are in", opening)
+        assert stated, f"{name}: the guide's first paragraph does not say how many constraints the use case has"
+        catalog = "SPEC_CLASSES" if name == "employee_scheduling" else "_DEFAULTS"
+        listed = None
+        for node in ast.parse((ROOT / "optimaru" / name / "constraints.py").read_text()).body:
+            target = node.targets[0] if isinstance(node, ast.Assign) else getattr(node, "target", None)
+            if getattr(target, "id", None) == catalog and isinstance(node.value, (ast.Tuple, ast.List)):
+                listed = len(node.value.elts)
+        assert listed is not None, f"{name}: no {catalog} tuple in constraints.py"
+        assert _number(stated.group(1)) == listed, f"{name}: the guide says {stated.group(1)}, {catalog} lists {listed}"
+
+
+def test_the_tests_a_guide_names_exist():
+    """A guide names the checks a new constraint breaks, as `test_...` functions and as C++ test
+    targets (`<ns>_plugin_test`). A renamed one would send the reader to nothing."""
+    tracked = subprocess.run(["git", "ls-files", "*.py", "*CMakeLists.txt"], cwd=ROOT, capture_output=True, text=True)
+    if tracked.returncode != 0:
+        pytest.skip("not a git checkout")
+    functions, targets = set(), set()
+    for path in tracked.stdout.splitlines():
+        text = (ROOT / path).read_text()
+        if path.endswith(".py"):
+            functions.update(re.findall(r"^\s*def (test_\w+)", text, re.M))
+        else:
+            targets.update(re.findall(r"add_executable\((\w+)", text))
+    for name in sorted(USE_CASES):
+        guide = _extending_guide(name)
+        cited_functions = set(re.findall(r"`(test_\w+)`", guide))
+        cited_targets = set(re.findall(r"`(\w+_test)`", guide))
+        assert not cited_functions - functions, f"{name}: no such test: {sorted(cited_functions - functions)}"
+        assert not cited_targets - targets, f"{name}: no such C++ test target: {sorted(cited_targets - targets)}"
 
 
 def test_ruff_is_configured_in_one_place():

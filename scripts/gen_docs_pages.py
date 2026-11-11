@@ -57,7 +57,12 @@ for use_case in use_cases():
     guide = DOCS / "use-cases" / slug
     section = ("Use cases", title(slug))
     nav[(*section, "Guide")] = f"use-cases/{slug}/README.md"
-    for name, label in (("python.md", "Python"), ("cpp.md", "C++"), ("API_SPEC.md", "API spec")):
+    for name, label in (
+        ("python.md", "Python"),
+        ("cpp.md", "C++"),
+        ("API_SPEC.md", "API spec"),
+        ("extending.md", "Adding a constraint"),
+    ):
         if (guide / name).exists():
             nav[(*section, label)] = f"use-cases/{slug}/{name}"
     path = f"reference/{slug}.md"

@@ -74,40 +74,9 @@ to the engine construction in `optimaru/school_timetabling/cpp/src/canonical_sol
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.
 
-**Adding a hard or soft cost.** One file per constraint under
-`optimaru/school_timetabling/cpp/include/st/constraints/` (currently `class_gap_cost`, `global/block_adjacency_cost`,
-`global/course_max_periods_per_day_cost`, `global/fixed_slots_cost`,
-`global/parallel_groups_cost`, `global/unassigned_lessons_cost`, `slot/avoided_period_cost`,
-`slot/class_conflict_cost`, `slot/disallowed_slot_cost`, `slot/non_preferred_period_cost`,
-`slot/room_capacity_cost`, `slot/teacher_conflict_cost`, `teacher/teacher_free_day_cost`,
-`teacher/teacher_gap_cost`, `teacher/teacher_max_consecutive_periods_cost`,
-`teacher/teacher_max_periods_cost`, `teacher/teacher_workday_cost`; the helper bases
-`global/global_constraint.hpp`, `slot/slot_constraint.hpp`, `slot/slot_delta_group.hpp`,
-`teacher/teacher_mask_hub.hpp`):
-1. add `constraints/<subject>_cost.hpp` with `struct <Subject>Cost` (a `UnitConstraint` or
-   `GlobalConstraint`; positive raw cost = penalty, 0 = no violation) declaring
-   `static constexpr double kDefaultWeight` and `static constexpr optimaru::Level kDefaultLevel`,
-   an `explicit <Subject>Cost(double weight = kDefaultWeight)` constructor and the registry
-   name `"<subject>Cost"` (the struct name with a lower-case first letter);
-2. include it in `optimaru/school_timetabling/cpp/include/st/canonical_constraints.hpp` and add it to
-   `detail::buildDefaultSet()` (whose order is the catalog order) if it belongs to the
-   default set;
-3. for a default constraint, add the same raw cost to `canonical_score_calculator`
-   (a `Breakdown` member named like the registry name) / `canonical_incremental_calculator`,
-   weighted by the component's `kDefaultWeight` (a soft one also gets an `ObjectiveWeights`
-   field) — `st_canonical_plugin_test` checks they agree bit for bit — and a positive and a zero
-   hand-calculated case to `st_canonical_plugin_test` (h);
-4. add a `Constraint` spec with the snake_case `name` and `label_en` / `label_ko` /
-   `description_en` / `description_ko` to `optimaru/school_timetabling/constraints.py` (plus its
-   module-level default instance and its place in `_DEFAULTS`); callers then pick, reweight
-   or flip it: `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
-5. mirror it in the CP-SAT model in
-   [`benchmarks/school-timetabling/cpsat`](../../../benchmarks/school-timetabling/cpsat) (a
-   plugin subclassing the spec in `teacher_scheduling/solver/registry.py`; defaults come from
-   `constraint_info()`) so the benchmark stays like for like.
-
-The constraint table (names, defaults, raw costs) is in
-[[`python.md`](python.md)](python.md#constraints).
+**Adding a hard or soft cost.** [Adding a constraint, step by step](extending.md) takes one new
+constraint through this use case's files in six steps: changed from Python, written as a
+component, tested, made cheaper per move, moved to the default fast path and measured.
 
 ## Benchmark
 

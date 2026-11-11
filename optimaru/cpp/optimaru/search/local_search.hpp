@@ -5,6 +5,7 @@
 #define OPTIMARU_SEARCH_LOCAL_SEARCH_HPP
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -220,10 +221,22 @@ public:
         std::int64_t last_best_step = 0;
         std::int64_t ema_best_gap = 0;
         bool force_time_check = false;
+        // Late acceptance in stages of growing history
+        // (AcceptanceSettings::history_growth).
+        HistoryStages stages(config_, acceptor_factory_ != nullptr, current_score, stop.progress());
 
         while (!stop.should_stop(step, best_score, force_time_check)) {
             force_time_check = false;
-            if (lns.enabled && steps_since_best_or_lns >= std::max(lns_trigger, 8 * ema_best_gap)) {
+            std::int64_t patience = std::max(lns_trigger, 8 * ema_best_gap);
+            // A stage has converged only when a whole history has gone by
+            // without an improving move.
+            if (stages.enabled()) patience = std::max(patience, stages.min_patience());
+            // Stalled: the next stage if one is due, else a kick, else wait.
+            const bool stalled = steps_since_best_or_lns >= patience;
+            if (stalled && stages.enabled() && stages.on_converged(stop.progress(), !lns.enabled)) {
+                acceptor = stages.start_next(stop.progress());
+                steps_since_best_or_lns = 0;
+            } else if (stalled && lns.enabled) {
                 current_score = lns_iteration(editor, current_score, best_score, *ruin_selector,
                                               ruins, operator_context, rng);
                 force_time_check = true;
@@ -232,9 +245,16 @@ public:
                 // the following small moves re-polish the kicked solution
                 // instead of instantly rejecting it (best is snapshotted, so
                 // a bad kick can never worsen the returned solution).
-                acceptor = make_acceptor(current_score);
+                // (In stages: with the history of the stage the search is in.)
+                acceptor = stages.enabled() ? stages.acceptor(current_score)
+                                            : make_acceptor(current_score);
                 steps_since_best_or_lns = 0;
                 lns_trigger = std::min(lns_trigger * 2, lns_trigger_cap);
+            } else if (stalled && stages.enabled()) {
+                // No kicks, and the next stage is not due: wait and ask again.
+                // (Once a stage no longer fits in the budget none will: the
+                // search goes on with the history it has.)
+                steps_since_best_or_lns = 0;
             } else {
                 // A built-in strategy plugin if one is drawn; otherwise a
                 // caller's operator or the ordinary move mix (op == nullptr),
@@ -282,6 +302,14 @@ public:
                     const MoveOutcome outcome =
                             classify(candidate_score, current_score, best_score, accepted);
                     if (accepted) {
+                        // In stages, stagnation counts from the last improving
+                        // move: a stage starts far below the best. (Strictly
+                        // improving, on the score as it is compared: a use case
+                        // whose soft level carries rounding noise would see
+                        // sideways moves as improving here and never stall.)
+                        if (stages.enabled() && candidate_score > current_score) {
+                            steps_since_best_or_lns = -1;
+                        }
                         current_score = candidate_score;
                         acceptor->on_accepted(entities, entity_count);
                         if (previewed) apply_previewed(editor, move);
@@ -318,6 +346,7 @@ public:
                 best_score = current_score;
                 Snapshot::capture(best, solution);  // reuses the snapshot's storage
                 stop.on_improvement(step);
+                stages.on_new_best(stop.progress());
                 steps_since_best_or_lns = 0;
                 lns_trigger = lns.unimproved_step_trigger;
                 const std::int64_t gap = step - last_best_step;
@@ -335,6 +364,77 @@ public:
     }
 
 private:
+    // Late acceptance in stages of growing history: see
+    // AcceptanceSettings::history_growth. Times are fractions of the solve
+    // (StopCondition::progress()).
+    class HistoryStages {
+    public:
+        HistoryStages(const Settings& config, bool custom_acceptor, const Score& start_score,
+                      double now)
+            : growth_(config.search.acceptance.history_growth),
+              enabled_(growth_ > 1.0 && !custom_acceptor &&
+                       config.search.acceptance.rule == AcceptanceRule::LateAcceptance),
+              history_(std::clamp<std::size_t>(config.search.acceptance.history_length, 1,
+                                               kMaxHistory)),
+              start_score_(start_score),
+              stage_start_(now),
+              last_best_(now) {}
+
+        bool enabled() const { return enabled_; }
+        std::int64_t min_patience() const { return 2 * static_cast<std::int64_t>(history_); }
+
+        // Tells the stages that the search has converged, and returns whether
+        // the next stage starts now. It records how long the stage that just
+        // ended took (the first call: a stage of the configured length).
+        bool on_converged(double now, bool no_kicks) {
+            if (stage_cost_ < 0.0 || in_stage_) stage_cost_ = now - stage_start_;
+            in_stage_ = false;
+            const double next_cost = stage_cost_ * static_cast<double>(next_history()) /
+                                     static_cast<double>(history_);
+            const bool stalled = no_kicks || now - last_best_ >= 0.5 * next_cost;
+            return stalled && now + next_cost <= 1.0;
+        }
+
+        std::unique_ptr<Acceptor> start_next(double now) {
+            history_ = next_history();
+            stage_start_ = now;
+            in_stage_ = true;
+            return acceptor(start_score_);
+        }
+
+        std::unique_ptr<Acceptor> acceptor(const Score& initial) const {
+            return std::make_unique<LateAcceptance>(history_, initial);
+        }
+
+        void on_new_best(double now) { last_best_ = now; }
+
+    private:
+        // A history holds one Score per step it remembers, so its length is
+        // memory: a long budget on a small instance would otherwise double it
+        // without end. At the cap a stage restarts with the same length, an
+        // independent run of the search.
+        static constexpr std::size_t kMaxHistory = std::size_t{1} << 20;
+
+        // Always longer than the current one below the cap, also for a factor
+        // close to 1 on a short history.
+        std::size_t next_history() const {
+            const double grown = std::ceil(static_cast<double>(history_) * growth_);
+            const std::size_t next = grown >= static_cast<double>(kMaxHistory)
+                                             ? kMaxHistory
+                                             : static_cast<std::size_t>(grown);
+            return std::min(kMaxHistory, std::max(history_ + 1, next));
+        }
+
+        double growth_;
+        bool enabled_;
+        std::size_t history_;
+        Score start_score_;
+        double stage_start_;
+        double stage_cost_ = -1.0;
+        double last_best_;
+        bool in_stage_ = false;
+    };
+
     // A built-in strategy plugin and the probability a step draws it.
     struct WeightedStrategy {
         double weight;

@@ -69,14 +69,20 @@ Both plug into a use case without touching the engine.
 
 [`CONTRIBUTING.md`](CONTRIBUTING.md) has the setup, the short version of both
 recipes and the rules for a pull request;
-[`docs/extending.md`](docs/extending.md) is the full step-by-step guide.
+[`docs/extending.md`](docs/extending.md) is the full step-by-step guide. For a
+constraint, each use case also has a worked example in its own files,
+`docs/use-cases/<slug>/extending.md`
+([bed allocation's](docs/use-cases/bed-allocation/extending.md), for one): a
+constraint changed from Python, then a new one written as a component, tested, made
+cheaper per move and moved to the default fast path, with the steps per second
+measured at each stage.
 
 ## Use cases
 
 [`docs/use-cases/README.md`](docs/use-cases/README.md) lists all 22 use cases
 and the constraint contract they share. Each use case's guide in
-`docs/use-cases/<slug>/` has a short usage example and the extending steps with
-its own file names.
+`docs/use-cases/<slug>/` has a short usage example, and `extending.md` beside it
+adds a constraint step by step in that use case's files.
 
 Routing and logistics: vehicle routing (CVRPTW), pickup & delivery (PDPTW),
 order picking, facility location. Scheduling: employee shifts, flight crew,
@@ -137,6 +143,8 @@ instance sets (Li & Lim, RG30, Falkenauer, QAPLIB, SALBP).
   sequences.
 - **Acceptors**: hill climbing, late acceptance, entity tabu, simulated
   annealing, great deluge, step counting hill climbing, record-to-record travel.
+  Late acceptance can run in stages of growing history
+  (`AcceptanceSettings::history_growth`), which fits its length to the budget.
 - **Limits** (`Limits`): wall time, stall time, steps, stall steps, target
   score; the first one reached ends the solve.
 - **Moves**: change / swap (assignment); relocate / swap / 2-opt / Or-opt /

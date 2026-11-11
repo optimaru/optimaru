@@ -11,6 +11,7 @@ def test_comparison_runner_owns_its_instances() -> None:
         "random14",
         "random16",
         "random20",
+        "random25",
     ]
     assert callable(benchmark.solve_engine)
     assert callable(benchmark.solve_cpsat)

@@ -49,6 +49,7 @@ def instances() -> dict[str, Callable[[], Any]]:
         "g200": lambda: _build(200, 0.05, seed=2),
         "g400": lambda: _build(400, 0.03, seed=5),
         "g800": lambda: _build(800, 0.015, seed=6),
+        "g1600": lambda: _build(1600, 0.0075, seed=7),
     }
 
 
