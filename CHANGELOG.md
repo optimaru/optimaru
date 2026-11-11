@@ -25,8 +25,8 @@
   in stages, a solve that starts from an existing plan (`with_initial_solution`) can return
   that plan unchanged where 0.4.3 improved it, and more often with a larger budget. A food
   packaging restart that 0.4.3 improves on four seeds of four at every budget tried is
-  improved on none of the four at 200,000 steps or more, or at 1 and 5 seconds. Solves from
-  scratch are not affected.
+  improved on none of the four at 200,000 steps or more, or at 1 and 5 seconds. The
+  comparisons in `benchmarks/` are of solves from scratch and do not show it.
 
 ## 0.5.0
 
