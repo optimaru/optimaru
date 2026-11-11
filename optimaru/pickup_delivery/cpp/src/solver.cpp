@@ -722,15 +722,12 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
     }
 
     auto& acceptor = engineConfig.search.acceptance;
-    acceptor.rule = config.rule;
     acceptor.history_length =
             config.history_length != 0
                     ? config.history_length
                     : (plan.nodes.size() > 60
                                ? 5
                                : std::clamp<std::size_t>(4 * plan.nodes.size(), 200, 1600));
-    acceptor.rrt_start_gap = config.record_to_record_start_gap;
-    acceptor.rrt_end_gap = config.record_to_record_end_gap;
 
     auto& moves = engineConfig.search.moves;
     moves.relocate_weight = config.relocate_weight;

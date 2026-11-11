@@ -213,15 +213,7 @@ PYBIND11_MODULE(_core, m) {
           py::arg("vehicle_count"), py::arg("seed") = 0,
           "A randomly generated PDPTW instance, for demos and benchmarks.");
 
-    py::enum_<optimaru::AcceptanceRule>(m, "AcceptorType", py::module_local())
-            .value("HILL_CLIMBING", optimaru::AcceptanceRule::HillClimbing)
-            .value("LATE_ACCEPTANCE", optimaru::AcceptanceRule::LateAcceptance)
-            .value("ENTITY_TABU", optimaru::AcceptanceRule::EntityTabu)
-            .value("SIMULATED_ANNEALING", optimaru::AcceptanceRule::SimulatedAnnealing)
-            .value("GREAT_DELUGE", optimaru::AcceptanceRule::GreatDeluge)
-            .value("STEP_COUNTING_HILL_CLIMBING",
-                   optimaru::AcceptanceRule::StepCountingHillClimbing)
-            .value("RECORD_TO_RECORD_TRAVEL", optimaru::AcceptanceRule::RecordToRecordTravel);
+    opy::bind_acceptor_type(m);
 
     py::enum_<optimaru::SelectionScheme>(m, "OperatorSelectionType", py::module_local())
             .value("ROULETTE_WHEEL", optimaru::SelectionScheme::RouletteWheel)
@@ -246,11 +238,6 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("first_fit_decreasing", &Solver::Config::first_fit_decreasing)
             .def_readwrite("pair_construction_heuristic",
                            &Solver::Config::pair_construction_heuristic)
-            // --- acceptance ---
-            .def_readwrite("acceptor_type", &Solver::Config::rule)
-            .def_readwrite("record_to_record_start_gap",
-                           &Solver::Config::record_to_record_start_gap)
-            .def_readwrite("record_to_record_end_gap", &Solver::Config::record_to_record_end_gap)
             // --- move mix ---
             .def_readwrite("relocate_move_weight", &Solver::Config::relocate_weight)
             .def_readwrite("list_swap_move_weight", &Solver::Config::list_swap_weight)
