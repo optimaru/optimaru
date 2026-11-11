@@ -15,8 +15,9 @@ uv run meeting-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT 
 
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 
-The engine runs single-threaded; CP-SAT gets `--workers` search
-workers and its time includes model construction.
+The engine runs single-threaded. CP-SAT gets `--workers` search workers;
+its budget starts once its model is built, and the time the runner reports
+for it includes building the model.
 
 <!-- results:start -->
 ## Results
@@ -25,9 +26,9 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
-| small | 8 meetings / 2 meeting rooms / 2 days / 10 people | **0hard/0medium/-336soft** | 0hard/0medium/-344soft |
+| small | 8 meetings / 2 meeting rooms / 2 days / 10 people | **0hard/0medium/-336soft** | **0hard/0medium/-336soft** |
 | medium | 16 meetings / 3 meeting rooms / 3 days / 16 people | **0hard/0medium/-1564soft** | — (no solution in time) |
-| demo | 24 meetings / 3 meeting rooms / 4 days / 20 people | **0hard/0medium/-3049soft** | — (no solution in time) |
+| demo | 24 meetings / 3 meeting rooms / 4 days / 20 people | **0hard/0medium/-3035soft** | — (no solution in time) |
 | large | 48 meetings / 5 meeting rooms / 5 days / 40 people | **0hard/-36medium/-15283soft** | — (no solution in time) |
 | xlarge | 96 meetings / 8 meeting rooms / 6 days / 60 people | **0hard/-71medium/-40183soft** | — (no solution in time) |
 

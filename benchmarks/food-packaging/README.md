@@ -15,15 +15,20 @@ uv run food-packaging-compare --seconds 10 --workers 8   # engine vs CP-SAT (--m
 
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 
-The engine runs single-threaded; CP-SAT gets `--workers` search
-workers and its time includes model construction.
+The engine runs single-threaded. CP-SAT gets `--workers` search workers;
+its budget starts once its model is built, and the time the runner reports
+for it includes building the model.
 
-The ladder has no 4-line plant. The CP-SAT model of this use case is solved one
-score level at a time, and on that plant a 30 s run ends without a solution
-after the first level's 10 s, although that level succeeds in about 17 s. Such
-a row would show the time split and not the solver, so it is left out; on the
-demo plant the first level finds nothing in 30 s either, and that row stays
-([how a CP-SAT run is timed](../README.md#how-a-cp-sat-run-is-timed)).
+The CP-SAT model of this use case is solved one score level at a time, hard
+first, within the one budget
+([how a CP-SAT run is timed](../README.md#how-a-cp-sat-run-is-timed)). On the
+4-line plant the hard level finds its first solution, the empty plan, after
+about 16 s, past its 10 s share of the budget, and the medium level, which
+places the jobs, finds nothing better in its share (about 5 s: half of what is
+left once the hard level's solution has been written into the model as a
+hint): CP-SAT's answer there leaves every job unassigned (`-12914medium` is
+the 12,914 minutes of the 60 jobs, and `0soft` an empty plan). On the demo
+plant the hard level finds no solution in its 30 s.
 
 <!-- results:start -->
 ## Results
@@ -32,8 +37,9 @@ Every cell is the score of that solver's final solution under the use case's own
 
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
-| lines2 | 2 lines / 20 jobs | **0hard/0medium/-11010632soft** | 0hard/0medium/-11108353soft |
-| lines3 | 3 lines / 40 jobs | **0hard/0medium/-26950083soft** | 0hard/-6896medium/-1163193soft |
+| lines2 | 2 lines / 20 jobs | **0hard/0medium/-11010632soft** | 0hard/0medium/-11087381soft |
+| lines3 | 3 lines / 40 jobs | **0hard/0medium/-26950083soft** | 0hard/-6786medium/-2419682soft |
+| lines4 | 4 lines / 60 jobs | **0hard/0medium/-46746570soft** | 0hard/-12914medium/0soft |
 | demo | 5 lines / 100 jobs | **0hard/0medium/-96495547soft** | — (no solution in time) |
 | lines8 | 8 lines / 200 jobs | **0hard/0medium/-234142881soft** | — (no solution in time) |
 | lines10 | 10 lines / 300 jobs | **0hard/0medium/-425491369soft** | — (no solution in time) |

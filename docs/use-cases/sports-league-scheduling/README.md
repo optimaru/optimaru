@@ -164,7 +164,7 @@ solver's `solve` before the engine runs — the engine only fills what is still 
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=[..., MyRuleCost(weight=5, level="hard")]`;
 5. mirror it in the CP-SAT model in external-solver's
-   [`external_solver.sports_league_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/sports_league_scheduling/constraints.py)
+   [`external_solver.sports_league_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.2/src/external_solver/sports_league_scheduling/constraints.py)
    (a plugin subclassing the spec; defaults come from `constraint_info()`) so the
    benchmark stays like for like.
 

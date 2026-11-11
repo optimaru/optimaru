@@ -40,12 +40,7 @@ def instances() -> dict[str, Callable[[], Any]]:
     return {
         "lines2": _plant(2, 20),
         "lines3": _plant(3, 40),
-        # No `_plant(4, 60)`: the reference model solves this use case one score level at
-        # a time, a third of the budget each, and ends without a solution when the first
-        # level finds none in its share. On that plant the first level takes about 17 s,
-        # so a 30 s run ends after 10 s with nothing: a row that would show the split,
-        # not the solver. (On the demo plant the first level finds nothing in 30 s either.)
-        #
+        "lines4": _plant(4, 60),
         # The demo plant: `generate_demo_data()` with its own defaults.
         "demo": _plant(5, 100),
         "lines8": _plant(8, 200),

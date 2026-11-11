@@ -80,8 +80,8 @@
   only they needed (`openpyxl`, `pydantic-settings`). The model, its constraints and the three
   benchmark tracks are unchanged.
 - **More instances in every engine-vs-CP-SAT comparison.** Each of the 17
-  comparisons on generated or demo instances now runs a ladder of four to
-  seven instances of growing size, 97 in all (was 38), and every results
+  comparisons on generated or demo instances now runs a ladder of five to
+  seven instances of growing size, 99 in all (was 38), and every results
   block is measured again. The smallest rungs are ones both solvers finish;
   on the largest the exact model often returns nothing within the budget,
   and the tables say so. `benchmarks/README.md` now states how a CP-SAT run
@@ -91,7 +91,16 @@
     league scheduling and task assigning had only their demo data. Their
     `benchmark.py` has a seeded generator in the shape of that data, and the
     demo instance stays as one rung. Food packaging runs its demo generator at
-    five sizes.
+    six sizes.
+  - The benchmark projects pin external-solver `v0.2.2` (was `v0.1.0`; the
+    models are the same). Its level-by-level solve used to end without a
+    solution when the first level found none in its share of the budget (10 s
+    of 30 s with three levels); the first level now keeps the time that is
+    left. Two rungs whose whole result was that early end, the 4-line plant of
+    food packaging and the 240-task instance of task assigning, are back in
+    their ladders, and the five comparisons that use the level-by-level solve
+    (conference scheduling, food packaging, meeting scheduling, task assigning,
+    tournament scheduling) were measured on that release.
   - The comparison runner takes `--solver engine` or `--solver cp-sat`, so the
     single-threaded engine runs and the CP-SAT runs can be measured side by
     side. The publisher joins the two files (`compare/<slug>.engine.json`,

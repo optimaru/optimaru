@@ -83,7 +83,8 @@ levels (`("hard", "medium", "soft")`): the soft[1]-over-soft[2] order is carried
 `squared_makespan_cost`'s default weight 10^7 on the one soft level, as in the engine, and
 a pick moved to soft lands on the soft level there too. The folded CP-SAT objective does
 not fit one int64 for the demo, so CP-SAT optimizes the three levels one after another
-(cpsat-common's staged solve).
+(`ObjectiveBuilder.solve` in external-solver; how the levels share the time limit is in
+[how a CP-SAT run is timed](../../../benchmarks/README.md#how-a-cp-sat-run-is-timed)).
 
 Every constraint takes the knobs `weight`, `level`, `exponent`, `offset` and `clip`
 (`offset` and `clip` keyword-only), and may be picked several times. A raw cost `x` (per employee for the five unit constraints, on
@@ -158,7 +159,7 @@ walk and the priority-family base):
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in external-solver's
-   [`external_solver.task_assigning.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/task_assigning/constraints.py) (a plugin
+   [`external_solver.task_assigning.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.2/src/external_solver/task_assigning/constraints.py) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
    for like.
 

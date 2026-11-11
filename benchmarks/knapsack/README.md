@@ -3,7 +3,7 @@
 The [`knapsack`](../../docs/use-cases/knapsack) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `knapsack_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units — one external-solver
-`ConstraintPlugin` per constraint ([`external_solver.knapsack.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/knapsack/constraints.py)), each a
+`ConstraintPlugin` per constraint ([`external_solver.knapsack.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.2/src/external_solver/knapsack/constraints.py)), each a
 subclass of the domain spec with its defaults read from
 `knapsack.constraint_info()` — so both answers are rescored by the use case's
 own evaluator. External-solver's `tests/knapsack/test_constraint_parity.py` pins every selection of
@@ -31,8 +31,9 @@ uv run pytest -q                       # comparison smoke tests (model tests: ex
 uv run knapsack-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
 
-The engine runs single-threaded; CP-SAT gets `--workers` search workers and
-its time includes model construction.
+The engine runs single-threaded. CP-SAT gets `--workers` search workers;
+its budget starts once its model is built, and the time the runner reports
+for it includes building the model.
 
 <!-- results:start -->
 ## Results

@@ -3,7 +3,7 @@
 The [`max-cut`](../../docs/use-cases/max-cut) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `max_cut_cpsat`). The CP-SAT model implements the
 same constraints under the same names and units — one external-solver
-`ConstraintPlugin` per constraint ([`external_solver.max_cut.constraints`](https://github.com/optimaru/external-solver/blob/v0.1.0/src/external_solver/max_cut/constraints.py)), each a
+`ConstraintPlugin` per constraint ([`external_solver.max_cut.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.2/src/external_solver/max_cut/constraints.py)), each a
 subclass of the domain spec with its defaults read from
 `max_cut.constraint_info()` — so both answers are rescored by the use case's
 own evaluator. The model has one bool per vertex (its side) and one per edge
@@ -37,8 +37,9 @@ uv run pytest -q                       # comparison smoke tests (model tests: ex
 uv run max-cut-compare --seconds 10 --workers 8   # engine vs CP-SAT table (--markdown, --json)
 ```
 
-The engine runs single-threaded; CP-SAT gets `--workers` search workers and
-its time includes model construction.
+The engine runs single-threaded. CP-SAT gets `--workers` search workers;
+its budget starts once its model is built, and the time the runner reports
+for it includes building the model.
 
 <!-- results:start -->
 ## Results
