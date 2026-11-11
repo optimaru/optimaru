@@ -81,8 +81,8 @@
     solution when the first level found none in its share of the budget (10 s
     of 30 s with three levels); the first level now keeps the time that is
     left. Two rungs whose whole result was that early end, the 4-line plant of
-    food packaging and the 240-task instance of task assigning, are in their
-    ladders, and the five comparisons solved level by level (conference
+    food packaging and the 240-task instance of task assigning, are back in
+    their ladders, and the five comparisons solved level by level (conference
     scheduling, food packaging, meeting scheduling, task assigning, tournament
     scheduling) were measured on that release.
   - The comparison runner takes `--solver engine` or `--solver cp-sat`, so the
