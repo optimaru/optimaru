@@ -18,7 +18,7 @@ C++ namespace `<ns>` (such as `vrp`):
 | One file per constraint | `optimaru/<uc>/cpp/include/<ns>/constraints/<subject>_cost.hpp` |
 | The default constraint set | `optimaru/<uc>/cpp/include/<ns>/constraints.hpp` (`defaultConstraints()`) |
 | The fast default-path calculators | `optimaru/<uc>/cpp/src/score_calculator.cpp`, `incremental_calculator.cpp` |
-| The Python module `optimaru.<uc>._core` | `optimaru/<uc>/cpp/bindings.cpp`, stubs in `optimaru/<uc>/_core.pyi` |
+| The Python module `optimaru.<uc>._core` | `optimaru/<uc>/cpp/bindings.cpp`, stubs in `optimaru/<uc>/_core.pyi`. The parts every use case binds come from the engine's helpers: `opy::bind_score<Score>(m)`, `opy::bind_solver_config(...)` and `opy::bind_constraints<Solution>(...)` for `constraint_costs()`, `list_constraints()` and `constraint_info()` |
 | Constraint specs for Python | `optimaru/<uc>/constraints.py` |
 | Python models (`to_core()` / `from_core()`) | `optimaru/<uc>/models.py` |
 | What the use cases' Python shares | `optimaru/_constraint.py` (the constraint-spec base), `optimaru/_solve.py` (the steps of `solve()`), `optimaru/_models.py` (the model base and helpers) |

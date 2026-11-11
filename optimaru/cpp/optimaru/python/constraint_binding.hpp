@@ -592,7 +592,8 @@ void bind_constraints(py::module_& m, const char* argument, Factory defaults, Pr
                 return constraint_costs(objective, solution);
             },
             py::arg(argument), py::arg("constraints") = py::none(),
-            "Raw per-unit cost of every constraint, before weight/exponent/offset/level.");
+            "Raw costs of every constraint (one per unit, or one total for a global "
+            "constraint), before weight/exponent/offset/level.");
     m.def(
             "list_constraints", [defaults] { return constraint_names(defaults()); },
             "The constraint names of this use case, in default-assembly order.");

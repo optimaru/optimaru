@@ -34,6 +34,26 @@ NO_MODELS_ON_IMPORT = {"school_timetabling"}
 NO_SCORE_ON_THE_RESULT = {"school_timetabling"}
 
 
+# The levels of each use case's compiled Score class, most important first. Two levels where a
+# use case is not named: the engine's Score.
+SCORE_LEVELS = {
+    "bed_allocation": ["hard", "medium", "soft"],
+    "food_packaging": ["hard", "medium", "soft"],
+    "pickup_delivery": ["hard", "medium", "soft"],
+    "project_job_scheduling": ["hard", "medium", "soft"],
+    "task_assigning": ["hard", "soft0", "soft1", "soft2"],
+    "vehicle_routing": ["hard", "medium", "soft"],
+}
+
+
+@pytest.mark.parametrize("use_case", optimaru.__all__)
+def test_the_score_class_has_the_levels_of_the_use_case(use_case):
+    score = use_case_module(use_case).Score
+    levels = [name for name in ("hard", "medium", "soft", "soft0", "soft1", "soft2") if hasattr(score, name)]
+    assert levels == SCORE_LEVELS.get(use_case, ["hard", "soft"])
+    assert callable(score.is_feasible)
+
+
 @pytest.mark.parametrize("use_case", optimaru.__all__)
 def test_solve_takes_the_shared_keywords(use_case):
     module = use_case_module(use_case)
