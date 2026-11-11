@@ -8,7 +8,7 @@ dependencies = ["external-solver", "optimaru", "cpsat-plugins>=0.1.0", "ortools>
 [project.scripts]
 conference-scheduling-compare = "conference_scheduling_cpsat.benchmark:main"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["pytest"]
 
 [tool.setuptools]
@@ -23,6 +23,10 @@ testpaths = ["tests"]
 override-dependencies = ["optimaru"]
 
 [tool.uv.sources]
-external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.2.2" }
+external-solver = { git = "https://github.com/optimaru/external-solver", tag = "v0.2.3" }
 optimaru = { path = "../../..", editable = true }
 cpsat-plugins = { path = "../../cpsat-common", editable = true }
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

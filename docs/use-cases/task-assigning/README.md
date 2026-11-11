@@ -159,7 +159,7 @@ walk and the priority-family base):
    module-level default instance); callers then pick, reweight or flip it:
    `constraints=get_constraints([..., MyRuleCost(weight=5, level="hard")])`;
 5. mirror it in the CP-SAT model in external-solver's
-   [`external_solver.task_assigning.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.2/src/external_solver/task_assigning/constraints.py) (a plugin
+   [`external_solver.task_assigning.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/task_assigning/constraints.py) (a plugin
    subclassing the spec; defaults come from `constraint_info()`) so the benchmark stays like
    for like.
 

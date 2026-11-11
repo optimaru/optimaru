@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Benchmarks: the projects pin external-solver `v0.2.3`.** That release lists the engine's
+  new `request_group_cost` among the pickup-delivery constraints the CP-SAT model has no
+  plugin for (selecting it there is an unknown-constraint error, as with
+  `required_vehicle_cost`); its models are those of `v0.2.2`, so no published result moves.
+  The benchmark projects' lock files record optimaru 0.4.2. Six of the projects (conference
+  scheduling, food packaging, meeting scheduling, order picking, sports league scheduling,
+  task assigning) had no `[build-system]` table, so uv did not install them and the commands
+  their READMEs give (`uv run <slug>-compare`, `uv run pytest -q`) did not run; they are
+  packaged like the other fifteen now, with pytest in the `dev` dependency group.
 - **Every acceptance rule has its parameters.** Vehicle routing, quadratic assignment and
   semiconductor scheduling let `SolverConfig.acceptor_type` name seven rules, but each bound the
   parameters of only some of them, so `GREAT_DELUGE` kept its water level at the start's score,

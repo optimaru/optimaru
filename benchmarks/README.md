@@ -112,9 +112,9 @@ starts with the first level and keeps running between levels, while each
 level's solution is written into the model as the next level's hint. A row
 that this split shapes stays in its table, with a note beside it (the 4-line
 plant of food packaging), and is not left out.
-(Before external-solver `v0.2.2`, which the benchmark projects pin, a first
-level without a solution ended the run at its share; two rungs were left out
-of the ladders for that reason, and both are back.)
+(Before external-solver `v0.2.2` a first level without a solution ended the
+run at its share; two rungs were left out of the ladders for that reason, and
+both are back.)
 
 The `<slug>-compare` commands in the READMEs use `--seconds 10` for a quick
 check, and the public-instance runners show their own budgets. Every results

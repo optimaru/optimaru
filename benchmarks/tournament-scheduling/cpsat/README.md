@@ -8,9 +8,9 @@ by the shared engine evaluator.
 ## Constraints and parity with the engine
 
 The `test_*` names below are in external-solver's
-[`tests/tournament_scheduling/test_solve.py`](https://github.com/optimaru/external-solver/blob/v0.2.2/tests/tournament_scheduling/test_solve.py).
+[`tests/tournament_scheduling/test_solve.py`](https://github.com/optimaru/external-solver/blob/v0.2.3/tests/tournament_scheduling/test_solve.py).
 
-One plugin per engine constraint ([`external_solver.tournament_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.2/src/external_solver/tournament_scheduling/constraints.py)),
+One plugin per engine constraint ([`external_solver.tournament_scheduling.constraints`](https://github.com/optimaru/external-solver/blob/v0.2.3/src/external_solver/tournament_scheduling/constraints.py)),
 each a subclass of the domain spec with only `build()`. Default levels and
 weights are not restated here: external-solver reads them from
 `tournament_scheduling.constraint_info()`, so they are the C++ components'
