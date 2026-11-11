@@ -22,7 +22,9 @@ public:
     //   history_length 0  clamp(32 * matchCount, 400, 3200) — every bench
     //                     instance from the 182-match demo up wants the 3200
     //                     ceiling, and the small-instance multiplier only
-    //                     matters below ~100 matches
+    //                     matters below ~100 matches. It is the first stage's
+    //                     length: the search restarts with a doubled history
+    //                     when it stalls (the engine's history_growth)
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Assignment move mix. Weights are relative; 0 disables a move.
         double change_weight = 0.75;

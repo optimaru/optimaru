@@ -24,7 +24,7 @@ taken as the result.
 | [food-packaging](food-packaging) | OR-Tools CP-SAT | the demo plant at 5 sizes |
 | [knapsack](knapsack) | OR-Tools CP-SAT | generated, 50 to 5000 items |
 | [maintenance-scheduling](maintenance-scheduling) | OR-Tools CP-SAT | the two demo instances + generated |
-| [max-cut](max-cut) | OR-Tools CP-SAT | generated, 30 to 800 vertices |
+| [max-cut](max-cut) | OR-Tools CP-SAT | generated, 30 to 1600 vertices |
 | [meeting-scheduling](meeting-scheduling) | OR-Tools CP-SAT | the demo instance + generated |
 | [order-picking](order-picking) | OR-Tools CP-SAT | generated, 5 sizes |
 | [semiconductor-scheduling](semiconductor-scheduling) | OR-Tools CP-SAT | generated, 6 to 48 lots |
@@ -157,6 +157,13 @@ on 18. The engine's own result does move elsewhere: by a few percent on the
 larger semiconductor instances (see that README), and on the 400-request
 synthetic pickup-delivery instance it did with the stop-granular search those
 days measured (54 vehicles one day, 55 the other; the request-level search
-that replaced it returned the same plan in two runs on 2026-11-11). Read a
-small margin in any table as noise.
+that replaced it returned the same plan in two runs on 2026-11-11). Food
+packaging, knapsack, max-cut, quadratic assignment and sports league
+scheduling search in stages of growing late acceptance history, and which
+stage a solve reaches under a time limit depends on the clock: of their 35
+instances, measured twice on 2026-11-11, the engine's score was the same on 32
+(the 10-line plant of food packaging moved by 0.01%, the 400-vertex max-cut by
+0.1%, the 18-team league by 5%), and all 33 QAPLIB results were the same.
+Their tables are of the second run, the CP-SAT lane beside the engine's as
+before. Read a small margin in any table as noise.
 

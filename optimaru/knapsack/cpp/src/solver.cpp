@@ -30,6 +30,10 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackPr
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * problem.items.size(), 400, 3200);
+    // Restart late acceptance with a doubled history when the search stalls
+    // (see AcceptanceSettings::history_growth): measured on every instance of
+    // benchmarks/knapsack at 30 s on three seeds, one run of 21 worse (by 1 in 17,470).
+    engineConfig.search.acceptance.history_growth = 2.0;
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
     engineConfig.search.descent_weight = config.descent_weight;

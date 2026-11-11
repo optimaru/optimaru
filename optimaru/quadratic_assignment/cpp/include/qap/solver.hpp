@@ -31,7 +31,10 @@ public:
     // knobs (see above). Here:
     //   time_limit 0           the solve returns its start (the identity, or
     //                          the seed) unchanged
-    //   history_length 0       clamp(8 * facility count, 400, 3200)
+    //   history_length 0       clamp(8 * facility count, 400, 3200). It is
+    //                          the first stage's length: late acceptance
+    //                          restarts with a doubled history when it stalls
+    //                          (the engine's history_growth)
     //   parallel_solver_count  the engine's multi-start; ignored by the
     //                          constraint-assembly overload
     // The acceptance rule and its parameters are the shared AcceptanceConfig

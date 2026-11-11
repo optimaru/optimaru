@@ -231,6 +231,47 @@ void testAcceptors(const Score& separableOptimum, const Score& optimum) {
     }
 }
 
+void testHistoryGrowth(const Score& separableOptimum) {
+    std::printf("== late acceptance: history growth ==\n");
+    // Stages restart the acceptor; whatever they do, the solve must return its
+    // best solution with a consistent score, the same one for the same seed.
+    // The step limit is the only binding criterion (the stages are timed on
+    // the solve's progress, which a step limit drives), so the run is the
+    // same on every machine.
+    const auto run = [](bool kicks, optimaru::ScoreChecks checks, std::int64_t steps) {
+        TaskAssignment s = buildSeparableInstance();
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::minutes(10);
+        config.limits.step_limit = steps;
+        config.search.acceptance.history_length = 1;
+        config.search.acceptance.history_growth = 2.0;
+        config.search.ruin_recreate.enabled = kicks;
+        config.search.ruin_recreate.unimproved_step_trigger = 200;
+        config.score_checks = checks;
+        config.seed = 7;
+        TaskAssignmentCalculator calculator;
+        const Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
+        return std::make_pair(result, s.assignment);
+    };
+    for (bool kicks : {false, true}) {
+        const auto [result, assignment] = run(kicks, optimaru::ScoreChecks::Off, 200000);
+        TaskAssignment s = buildSeparableInstance();
+        s.assignment = assignment;
+        const std::string mode = kicks ? " (with kicks)" : " (no kicks)";
+        check(result == separableOptimum && fullScore(s) == separableOptimum,
+              "history growth reaches the separable optimum" + mode);
+        check(run(kicks, optimaru::ScoreChecks::Off, 200000).second == assignment,
+              "history growth is deterministic for a seed" + mode);
+    }
+    bool threw = false;
+    try {
+        run(true, optimaru::ScoreChecks::Full, 5000);
+    } catch (const optimaru::ScoreMismatchError&) {
+        threw = true;
+    }
+    check(!threw, "history growth passes ScoreChecks::Full");
+}
+
 void testTerminations(const Score& optimum) {
     std::printf("== assignment: terminations ==\n");
     using Clock = std::chrono::steady_clock;
@@ -975,6 +1016,59 @@ void testNearbyAndLnsOnRandomTsp() {
 // Engine breadth: expanded moves, limits
 // ===========================================================================
 namespace {
+
+// The stages at work. With a history of one entry and no kicks, late
+// acceptance is a hill climber that stops at the first tour no single move
+// improves; nothing else in this configuration can leave it. The same search
+// with history_growth restarts with longer and longer histories, so a shorter
+// tour under the same step limit means stages started and found it. A factor
+// close to 1 must still lengthen a one-entry history.
+void testHistoryGrowthOnRandomTsp() {
+    std::printf("== late acceptance: history growth on random TSP (100 cities) ==\n");
+    auto solveWith = [&](double growth) {
+        TspSolution s = buildRandomTsp(1, 100);
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::minutes(10);  // the step limit binds
+        config.limits.step_limit = 600000;
+        config.seed = 11;
+        config.search.acceptance.history_length = 1;
+        config.search.acceptance.history_growth = growth;
+        TspCalculator calculator;
+        Score result = optimaru::Solver<TspSolution>(config).solve(s, calculator);
+        return -result.soft;  // tour length
+    };
+    const double fixed = solveWith(0.0);
+    const double doubled = solveWith(2.0);
+    const double slow = solveWith(1.2);
+    std::printf("    history 1: tour = %.3f, growth 2: %.3f, growth 1.2: %.3f\n", fixed, doubled,
+                slow);
+    check(doubled < fixed - 1e-9, "a doubled history per stage finds a shorter tour");
+    check(slow < fixed - 1e-9, "a factor of 1.2 still lengthens a one-entry history");
+    check(solveWith(1.0) == fixed, "a factor of 1 is off: the same tour as without");
+
+    // Stages are late acceptance's: another rule, or a caller's acceptor,
+    // searches the same with and without the factor.
+    auto solveOther = [&](double growth, bool factory) {
+        TspSolution s = buildRandomTsp(1, 100);
+        optimaru::Settings config;
+        config.limits.time_limit = std::chrono::minutes(10);
+        config.limits.step_limit = 200000;
+        config.seed = 11;
+        config.search.acceptance.rule = optimaru::AcceptanceRule::StepCountingHillClimbing;
+        config.search.acceptance.history_growth = growth;
+        optimaru::Solver<TspSolution> solver(config);
+        if (factory) {
+            solver.set_acceptor_factory([](const Score& initial) {
+                return std::make_unique<optimaru::LateAcceptance>(50, initial);
+            });
+        }
+        TspCalculator calculator;
+        return -solver.solve(s, calculator).soft;
+    };
+    check(solveOther(2.0, false) == solveOther(0.0, false),
+          "another acceptance rule ignores the factor");
+    check(solveOther(2.0, true) == solveOther(0.0, true), "a custom acceptor ignores the factor");
+}
 
 void testExpandedMoves() {
     std::printf("== Moves: Or-opt + tail swap (2-opt*) ==\n");
@@ -2225,7 +2319,9 @@ int main() {
     testRouletteWheelSelector();
     testCustomMoveProbability();
     testLnsEscapesLocalOptimum(optimum);
+    testHistoryGrowth(separableOptimum);
     testNearbyAndLnsOnRandomTsp();
+    testHistoryGrowthOnRandomTsp();
     testExpandedMoves();
     testDecomposedDeltaCalculator();
     testMemberChangeGlobalConstraint();

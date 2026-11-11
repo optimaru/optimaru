@@ -116,6 +116,30 @@ widens them. A great deluge needs a step chosen for the instance: at (0, 0) it
 takes every move that keeps the score at or above the start's and never
 tightens.
 
+### Late acceptance in stages
+
+A late acceptance history is a trade: a short one converges fast, a long one
+finds more and needs longer. In food packaging, knapsack, max-cut, quadratic
+assignment and sports league scheduling the search does not stay with one
+length. `late_acceptance_size` is the history of the first stage. Once that
+stage has converged and no new best has come for a while, late acceptance
+starts over from the start's score with the history doubled, then doubled
+again, as long as the next stage still fits in the time limit (or the step
+limit; a stage is taken to last twice as long as the one before). The best
+solution is kept throughout, so a solve is never worse for a later stage, and
+a small instance uses a budget that one short history would leave idle. A
+history stops growing at 2^20 entries (16 MB per start); from there a stage
+starts over with that length. A stage walks below the best for a while and
+does not know the `unimproved_*` limits: one shorter than a stage ends the
+solve inside it, with the best solution so far. A warm start from a solved
+solution has no worse score to start over from, so its stages change little.
+
+Whether a stage fits is judged on how far the solve is: the larger of the time
+used over the time limit and the steps used over the step limit. So with a
+time limit, which stage a solve reaches depends on the clock. A seeded,
+step-limited solve repeats as long as the step fraction is the larger one;
+give it a time limit generous enough for the steps.
+
 ## Constraints: names and knobs
 
 Every constraint is one named component, `<Subject>Cost` in C++ and Python and

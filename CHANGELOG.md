@@ -27,6 +27,34 @@
   optimaru from this checkout, and their locks name its version: they still said 0.4.2 after
   the release, so the first `uv sync` rewrote them. Nothing else moves; the projects stay on
   external-solver `v0.2.3`, which needs no change for 0.4.3.
+- **Late acceptance in stages of growing history.** A late acceptance history is a trade
+  between converging fast and finding more, and the use cases set one short length (400 to
+  3,200 steps), so a small instance converged within a fraction of a second and the kicks
+  alone had the rest of the budget: quadratic assignment, which has no kicks, did nothing
+  for the last 29.9 of 30 seconds on 14 facilities. The engine's new
+  `AcceptanceSettings::history_growth` (C++; off by default) restarts late acceptance from
+  the start's score with the history that many times longer once the search has converged
+  and found no new best for half as long as the next stage would take, as long as that
+  stage fits in the budget; the best solution is kept as always. It is on, at 2, in **food
+  packaging, knapsack, max-cut, quadratic assignment and sports league scheduling**, where
+  `late_acceptance_size` is now the first stage's length. Measured on every instance of
+  their five benchmark ladders at 30 s over three seeds: 62 runs better, 33 equal, 1 worse
+  (a knapsack by 1 in 17,470). In the published tables sports league scheduling has 7 to
+  13% less travel, quadratic assignment ties CP-SAT up to 16 facilities (it was behind at
+  14 and 16), and the mean gap to the best known values of the 28 QAPLIB instances with a
+  reference goes from 2.22% to 0.22%, 18 of them at the best known value. Every other use
+  case searches exactly as before. In the five, the ruin & recreate kicks fire differently
+  from the first step on: stagnation counts from the last improving move, and a kick waits
+  at least two histories. With a time limit, the stage a solve reaches depends on the
+  clock; a solve whose step limit ends it before the clock matters repeats for a seed. A
+  stage does not know the `unimproved_*` limits: one shorter than a stage ends the solve
+  inside it, with the best solution so far. A history stops growing at 2^20 entries (16 MB
+  per start).
+- **Benchmarks: three more rungs, five tables and QAPLIB measured again.** `random25`
+  (quadratic assignment), `g1600` (max-cut) and `teams12` (sports league scheduling) join
+  their comparison ladders. Rows where CP-SAT still has the better score: three knapsacks
+  (by 1 to 3 in 17,000 to 170,000), the 120-vertex max-cut (2340 against 2341) and the
+  6-team league.
 
 ## 0.4.3
 

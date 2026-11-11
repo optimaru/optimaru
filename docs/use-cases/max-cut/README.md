@@ -151,7 +151,8 @@ offsets; it rejects an exponent other than 1).
 
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
   `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
-  `parallel_solver_count`, `late_acceptance_size`, `full_assert`, `ruin_recreate*`,
+  `parallel_solver_count`, `late_acceptance_size` (the first stage's:
+  [late acceptance in stages](../README.md#late-acceptance-in-stages)), `full_assert`, `ruin_recreate*`,
   `change/swap_move_weight`, `descent_weight`, `best_score_limit`, `on_new_best`),
   set by attribute. Zero budget = `spent_limit_seconds = 0` (`step_count_limit = 0`
   means "no limit"); a bounded search = `step_count_limit = N`. Without a time limit a
@@ -283,5 +284,5 @@ Python reference-parity tests pin it.
 [`benchmarks/max-cut`](../../../benchmarks/max-cut) compares this use case with OR-Tools
 CP-SAT on the same instances, rescored by the same evaluator.
 
-Latest run (30 s per solver, 7 instances): best score by the engine on 5, CP-SAT on 4
+Latest run (30 s per solver, 8 instances): best score by the engine on 7, CP-SAT on 4
 (ties count for each). Full table: [benchmarks/max-cut/README.md](../../../benchmarks/max-cut/README.md#results).

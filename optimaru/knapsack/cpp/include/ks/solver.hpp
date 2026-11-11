@@ -21,7 +21,10 @@ class Solver {
 public:
     // The limits, the seed, the parallel starts, the callback and the ruin &
     // recreate knobs are the shared ones of optimaru/solver_config.hpp. Here:
-    //   history_length 0       clamp(8 * item count, 400, 3200)
+    //   history_length 0       clamp(8 * item count, 400, 3200). It is the
+    //                          first stage's length: the search restarts with
+    //                          a doubled history when it stalls (the engine's
+    //                          history_growth)
     //   parallel_solver_count  the engine's multi-start; ignored by the
     //                          constraint-assembly overload
     //   ruin_recreate          a batch of items is dropped to undecided and the

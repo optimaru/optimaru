@@ -2,6 +2,7 @@
 
 import itertools
 import json
+import random
 import time
 from pathlib import Path
 
@@ -108,6 +109,36 @@ def test_a_step_limit_reproduces_the_same_solve():
     qap.solve(second, config=steps(2000, seed=11))
     assert first.assignment() == second.assignment()
     assert (first.score.hard, first.score.soft) == (second.score.hard, second.score.soft)
+
+
+def test_late_acceptance_goes_on_in_stages_after_it_converges():
+    """One history of 400 entries converges within some ten thousand swaps on 14 facilities, and
+    swaps alone never leave that layout (no ruin and recreate here). The default search starts
+    over with a doubled history each time it converges, so a long solve still finds new bests
+    long after: on at least one of five seeds (a seed whose first stage is already at the
+    optimum has nothing left to find)."""
+    rng = random.Random(3)
+    size = 14
+    flows = [[0] * size for _ in range(size)]
+    distances = [[0] * size for _ in range(size)]
+    for a in range(size):
+        for b in range(a + 1, size):
+            flows[a][b] = flows[b][a] = rng.randint(0, 9)
+            distances[a][b] = distances[b][a] = rng.randint(1, 9)
+    problem = QuadraticAssignmentProblemModel(
+        facilities=[f"F{i}" for i in range(size)],
+        locations=[f"L{i}" for i in range(size)],
+        flows=flows,
+        distances=distances,
+    )
+    last_new_best = []
+    for seed in range(1, 6):
+        best_steps = []
+        config = steps(2_000_000, seed)
+        config.spent_limit_seconds = 600.0  # the step limit binds
+        qap.solve(problem, config=config, on_new_best=lambda step, score, seen=best_steps: seen.append(step))
+        last_new_best.append(best_steps[-1])
+    assert max(last_new_best) > 100_000, last_new_best
 
 
 def test_keyword_arguments_override_the_config():

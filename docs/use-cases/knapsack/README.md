@@ -128,7 +128,8 @@ rejects an exponent other than 1).
 
 - **`SolverConfig`** is the engine's (the other C++ packages' knobs:
   `spent_limit_seconds`, `step_count_limit`, `unimproved_*`, `random_seed`,
-  `parallel_solver_count`, `late_acceptance_size`, `full_assert`, `ruin_recreate*`,
+  `parallel_solver_count`, `late_acceptance_size` (the first stage's:
+  [late acceptance in stages](../README.md#late-acceptance-in-stages)), `full_assert`, `ruin_recreate*`,
   `change/swap_move_weight`, `descent_weight`, `nearby_probability` /
   `nearby_size`, `best_score_limit`, `on_new_best`), set by attribute. Zero budget =
   `spent_limit_seconds = 0` (`step_count_limit = 0` means "no limit"); a bounded search =
@@ -253,5 +254,5 @@ Python reference-parity tests pin its results (and `with_initial_solution` uses 
 [`benchmarks/knapsack`](../../../benchmarks/knapsack) compares this use case with OR-Tools
 CP-SAT on the same instances, rescored by the same evaluator.
 
-Latest run (30 s per solver, 7 instances): best score by the engine on 3, CP-SAT on 7
+Latest run (30 s per solver, 7 instances): best score by the engine on 4, CP-SAT on 7
 (ties count for each). Full table: [benchmarks/knapsack/README.md](../../../benchmarks/knapsack/README.md#results).
