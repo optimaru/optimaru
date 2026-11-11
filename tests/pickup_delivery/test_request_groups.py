@@ -297,7 +297,8 @@ def test_an_empty_group_name_is_no_group():
     assert vehicle_of(solution) == {"a": "v", "b": "w", "c": "w"}
 
 
-def test_solve_scores_groups_on_a_plan_without_being_asked():
+@pytest.mark.parametrize("entry", ["solve", "Solver.solve"])
+def test_every_entry_point_scores_groups_on_a_plan_without_being_asked(entry):
     # No vehicle takes both requests of the group (one request each), so it has to wait whole.
     # Scored on the seven core rules alone, routing the two apart would look feasible and better.
     vehicles = [vehicle("v", max_stops=2), vehicle("w", max_stops=2)]
@@ -305,11 +306,72 @@ def test_solve_scores_groups_on_a_plan_without_being_asked():
     config = pdp.SolverConfig()
     config.step_count_limit = 3000
 
-    pdp.solve(plan, config=config)
+    if entry == "solve":
+        pdp.solve(plan, config=config)
+    else:
+        pdp.Solver(config).solve(plan)
 
     assert plan.score.is_feasible()
     assert sorted(plan.unassigned_delivery_ids()) == ["a", "b"]
     assert plan.score.medium == -4  # two requests of 2 service minutes each
+
+
+def as_tuple(score) -> tuple[int, int, int]:
+    return (score.hard, score.medium, score.soft)
+
+
+def test_calculate_score_reads_a_grouped_plan_as_the_solve_scored_it():
+    vehicles = [vehicle("v", max_stops=2), vehicle("w", max_stops=2)]
+    plan = to_plan(two_ends([request("a", group="g"), request("b", group="g"), request("c")], vehicles))
+    config = pdp.SolverConfig()
+    config.step_count_limit = 3000
+    pdp.solve(plan, config=config)
+    solved = as_tuple(plan.score)
+
+    assert as_tuple(pdp.calculate_score(plan)) == solved
+    assert as_tuple(plan.score) == solved
+
+
+@pytest.mark.parametrize(
+    ("routes", "hard"),
+    [
+        ((["ap", "ad", "bp", "bd"], []), 0),  # together
+        ((["ap", "ad"], ["bp", "bd"]), -1000),  # split: one request apart from its group
+        ((["bp", "bd"], []), -1000),  # one riding while the other waits
+    ],
+)
+def test_calculate_score_prices_a_split_group_on_a_plan_built_by_hand(routes, hard):
+    vehicles = [vehicle(name, route) for name, route in zip("vw", routes, strict=True)]
+    plan = to_plan(two_ends([request("a", group="g"), request("b", group="g")], vehicles))
+
+    score = pdp.calculate_score(plan)
+
+    assert score.hard == hard
+    assert as_tuple(plan.score) == as_tuple(score)
+    assert score.hard == -1000 * sum(pdp.constraint_costs(plan)["request_group_cost"]["costs"])
+
+
+def test_groups_of_one_do_not_change_how_a_plan_is_scored():
+    # Every request names its own group, as input that carries a group on every order does.
+    # Nothing is kept together, so the solve stays on the seven core rules: the vehicles'
+    # `max_stops`, which only the constraint assembly scores, does not hold a request back.
+    vehicles = [vehicle("v", max_stops=2), vehicle("w", max_stops=2)]
+    alone = [request("a", group="g1"), request("b", group="g2"), request("c", group="g3")]
+    plan = to_plan(two_ends(alone, vehicles))
+    config = pdp.SolverConfig()
+    config.step_count_limit = 2000
+
+    pdp.solve(plan, config=config)
+
+    assert plan.unassigned_delivery_ids() == []
+    assert apart(two_ends(alone, vehicles)) == 0
+
+    # With a second request in one of the groups the same call scores the default set: one
+    # request per vehicle, and the group of two fits neither.
+    plan = to_plan(two_ends([request("a", group="g1"), request("b", group="g1"), request("c", group="g3")], vehicles))
+    pdp.solve(plan, config=config)
+
+    assert sorted(plan.unassigned_delivery_ids()) == ["a", "b"]
 
 
 def test_a_constraint_list_without_the_group_rule_is_used_as_it_is():

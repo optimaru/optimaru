@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "optimaru/model/solution_traits.hpp"
@@ -188,6 +189,16 @@ struct PdpRoutePlan {
         const Node& node = nodes[static_cast<std::size_t>(nodeIndex)];
         const Delivery& delivery = deliveries[static_cast<std::size_t>(node.deliveryIndex)];
         return node.pickup ? delivery.dropoffNodeIndex : delivery.pickupNodeIndex;
+    }
+
+    // Whether some group (Delivery::groupIndex) holds two requests or more. A
+    // request alone in its group changes nothing.
+    bool hasRequestGroups() const {
+        std::unordered_set<int> seen;
+        for (const Delivery& delivery : deliveries) {
+            if (delivery.groupIndex >= 0 && !seen.insert(delivery.groupIndex).second) return true;
+        }
+        return false;
     }
 
     void rebuildUnassignedPool() {

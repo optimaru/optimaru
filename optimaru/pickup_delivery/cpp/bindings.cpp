@@ -204,10 +204,12 @@ PYBIND11_MODULE(_core, m) {
             });
 
     m.def(
-            "calculate_score", [](PdpRoutePlan& plan) { return ScoreCalculator::score(plan); },
+            "calculate_score", [](PdpRoutePlan& plan) { return calculateScore(plan); },
             py::arg("plan"),
             "Recompute the derived fields (vehicle_index, arrival_time) and the "
-            "hard / medium / soft score (also stores plan.score).");
+            "hard / medium / soft score (also stores plan.score). The score is the "
+            "one solve(plan) stores: the seven core rules, or the default constraints "
+            "when the plan has a group of two or more requests.");
 
     m.def("build_random_instance", &buildRandomInstance, py::arg("request_count"),
           py::arg("vehicle_count"), py::arg("seed") = 0,
@@ -307,7 +309,14 @@ PYBIND11_MODULE(_core, m) {
                     "solve",
                     [](Solver& solver, PdpRoutePlan& plan) {
                         solver.solve(plan);
-                        ScoreCalculator::score(plan);
+                        // A plan with groups was scored with the default
+                        // constraints (Solver::solve); the core score would
+                        // leave the group rule out of plan.score.
+                        if (plan.hasRequestGroups()) {
+                            ScoreCalculator::updateShadowVariables(plan);
+                        } else {
+                            ScoreCalculator::score(plan);
+                        }
                     },
                     py::arg("plan"),
                     // Released for the solve: with parallel_solver_count > 1 the

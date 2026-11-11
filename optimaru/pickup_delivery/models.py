@@ -347,6 +347,17 @@ def vehicle_metrics(plan: _core.PdpRoutePlan, routes: dict[str, list[PdpStop]]) 
     return metrics
 
 
+def _has_groups(model_input: PdpInput) -> bool:
+    """Whether some group holds two requests or more (a request alone in its group changes nothing)."""
+    seen: set[str] = set()
+    for delivery in model_input.deliveries:
+        if delivery.group:
+            if delivery.group in seen:
+                return True
+            seen.add(delivery.group)
+    return False
+
+
 def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
     """Solve a JSON-friendly request with the metaheuristic backend."""
     plan = to_plan(request.model_input, name=request.name or "plan")
@@ -369,7 +380,8 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
         or v.max_route_radius_meters
         or v.pinned_stops
         for v in request.model_input.vehicles
-    ) or any(d.required_vehicle or d.group for d in request.model_input.deliveries)
+    ) or any(d.required_vehicle for d in request.model_input.deliveries)
+    has_route_policy = has_route_policy or _has_groups(request.model_input)
     if constraints is None and not has_route_policy:
         solver.solve(plan)
     else:

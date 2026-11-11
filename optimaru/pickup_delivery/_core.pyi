@@ -172,7 +172,11 @@ class PdpRoutePlan:
         """Recompute unassigned_node_indices from the current routes."""
 
 def calculate_score(plan: PdpRoutePlan) -> Score:
-    """Recompute the derived fields and the score (also stores plan.score)."""
+    """Recompute the derived fields and the score (also stores plan.score).
+
+    The score is the one solve(plan) stores: the seven core rules, or the default
+    constraints when the plan has a group of two or more requests.
+    """
 
 def build_random_instance(request_count: int, vehicle_count: int, seed: int = 0) -> PdpRoutePlan:
     """A randomly generated PDPTW instance, for demos and benchmarks."""
@@ -314,10 +318,11 @@ class Solver:
     vehicle.node_indices, the unassigned pool, the derived fields and plan.score."""
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: PdpRoutePlan) -> None:
-        """Solve on the seven core rules. They do not include request_group_cost,
-        required_vehicle_cost, pinned_stops_cost or the vehicle limits: for a plan
-        that uses any of those, call solve_with_constraints (or optimaru.pickup_delivery.solve,
-        which picks the default constraints for a plan with groups)."""
+        """Solve on the seven core rules, or on the default constraints when two
+        requests or more share a group (request_group_cost is not a core rule; that
+        solve is a single start). The core rules do not include required_vehicle_cost,
+        pinned_stops_cost or the vehicle limits either: for a plan that uses any of
+        those, call solve_with_constraints."""
     def solve_with_constraints(self, plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see optimaru.pickup_delivery.constraints). The given list replaces the default set;
