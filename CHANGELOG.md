@@ -43,8 +43,8 @@
   from a given plan finds exactly what a build without stages finds, new best by new best;
   and the 46 instances solved from the construction end on the same score as in 0.5.0 at
   300,000 and at 3 million steps, so the benchmark tables stand. The notebooks' restart
-  experiments, moved to step budgets for 0.5.0 (the entry above), run on this as they did on
-  0.4.3.
+  experiments were moved to step budgets for 0.5.0 (the entry above) and have not been run
+  again on this.
 
 ## 0.5.0
 
