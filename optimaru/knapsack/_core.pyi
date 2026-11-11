@@ -20,7 +20,7 @@ class Score:
     @property
     def soft(self) -> float: ...
     def is_feasible(self) -> bool:
-        """True iff hard >= 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Resource:
     """Problem fact: one additional capacity dimension (a resource_capacities entry)."""

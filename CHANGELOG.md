@@ -38,8 +38,9 @@
   attributes above (it had `acceptor_type` and the two record-to-record gaps), so simulated
   annealing no longer starts at temperature 0 there either: it starts at 1% of the start's
   driving time. In C++ its `Score` is the engine's `HardMediumSoftScore`, and its bindings use
-  `bind_score()`, `bind_constraints()` and `bind_acceptor_type()`. Nothing else changes in
-  Python.
+  `bind_score()`, `bind_constraints()` and `bind_acceptor_type()`. Its two record-to-record
+  gaps are now checked when set (finite and >= 0, a `ValueError` otherwise); nothing else
+  changes in Python.
 - **Pickup and delivery notebook re-run on 0.4.2.** `examples/pickup-delivery.ipynb` is saved
   with outputs from optimaru 0.4.2: the same problem now ends at 5.2 hours of driving, where
   0.4.1 ended at 5.4. Its rounds of more search are 10,000 steps each (were 0.3 seconds),

@@ -69,7 +69,7 @@ class Score:
     @property
     def soft(self) -> float: ...
     def is_feasible(self) -> bool:
-        """True when hard == 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Timeslot:
     """Problem fact: one (weekday, period) cell. day 0 = Monday; period is

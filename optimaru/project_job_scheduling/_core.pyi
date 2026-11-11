@@ -47,7 +47,7 @@ class Score:
     @property
     def soft(self) -> int: ...
     def is_feasible(self) -> bool:
-        """True if hard >= 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class JobType(Enum):
     SOURCE = ...

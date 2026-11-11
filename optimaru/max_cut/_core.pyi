@@ -21,7 +21,7 @@ class Score:
     @property
     def soft(self) -> float: ...
     def is_feasible(self) -> bool:
-        """True iff hard >= 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Edge:
     """Problem fact: an undirected weighted edge between two vertex indices. A

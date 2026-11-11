@@ -104,10 +104,11 @@ void addGroupOperators(optimaru::Solver<VehicleRoutePlan>& engine, const Solver:
     for (auto& move : makeGroupMoves(moves, groups)) engine.add_move_operator(std::move(move));
 }
 
-// Shared engine wiring for both solve() overloads: termination, late
-// acceptance, the sequence move mix, the ALNS knobs and the driving-time nearby
-// selection (all pure problem-fact lookups, so they apply to the plugin path
-// too).
+// Shared engine wiring for both solve() overloads: what settings_from() takes
+// off the Config's bases (the limits, the acceptance rule, the ALNS knobs),
+// then the automatic late-acceptance size, the sequence move mix and the
+// driving-time nearby selection (all pure problem-fact lookups, so they apply
+// to the plugin path too).
 optimaru::Settings buildEngineConfig(const Solver::Config& config, const VehicleRoutePlan& plan) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     engineConfig.parallel_starts = 1;

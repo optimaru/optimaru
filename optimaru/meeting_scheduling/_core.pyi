@@ -48,7 +48,7 @@ class Score:
     @property
     def soft(self) -> float: ...
     def is_feasible(self) -> bool:
-        """True if hard == 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Person:
     """An attendee (fixed input). Referenced by index into the people list."""

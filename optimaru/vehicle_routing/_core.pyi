@@ -42,7 +42,7 @@ class Score:
     @property
     def soft(self) -> int: ...
     def is_feasible(self) -> bool:
-        """True iff hard == 0."""
+        """True when hard >= 0: no hard constraint is violated."""
 
 class Location:
     def __init__(self, latitude: float, longitude: float) -> None: ...
@@ -189,8 +189,8 @@ class SolverConfig:
     # --- acceptance ---
     acceptor_type: AcceptorType
     late_acceptance_size: int
-    """0 = auto: clamp(60000 // len(visits), 100, 400) — shorter for larger
-    instances, keeping the acceptance horizon roughly constant in wall-time."""
+    """LATE_ACCEPTANCE: 0 = auto: clamp(60000 // len(visits), 100, 400) — shorter for
+    larger instances, keeping the acceptance horizon roughly constant in wall-time."""
     entity_tabu_size: int
     """ENTITY_TABU: for how many steps a moved entity stays tabu (7 by default; >= 0)."""
     simulated_annealing_starting_temperature: tuple[int, float]
