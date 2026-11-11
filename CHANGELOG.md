@@ -9,6 +9,18 @@
   read), and its employee scheduling plugins say constraint where they said rule
   (`SchedulePlugin` was `RulePlugin`); the runners and the READMEs here use the new names.
   No table changes: the CP-SAT models are unchanged since `v0.2.3`.
+- **Bin packing: `TradeMove` and a fill tie-break.** `used_bins_cost` counts bins, so every
+  packing with the same number of bins has the same score, and the search wandered from one
+  to the next: on Falkenauer's triplets it ended one bin above the best known count. Two
+  additions, both on by default. `TradeMove` (`bp/moves.hpp`, `SolverConfig.trade_moves`)
+  trades up to two items of one bin for up to two of another so that the fuller of the two
+  bins gets fuller, or, when no trade does that, so that both keep their loads with other
+  items. And late acceptance takes a step that keeps the score when it does not lower the sum
+  of the squared bin loads, and otherwise one time in eight (`bp/fill_late_acceptance.hpp`,
+  `SolverConfig.fill_tie_break`). That sum is not part of the score: the score, the limits
+  and `on_new_best` are as they were. On the 24 sampled Falkenauer instances (two seeds,
+  10 s) no run ends above the capacity bound, which is the best known count of each; 39 of
+  the 48 did. A seed's result in bin packing differs from 0.5.0.
 
 ## 0.5.0
 
