@@ -9,16 +9,16 @@ the model and its four constraints are in the [guide](README.md).
 | --- | --- | --- |
 | [1](#1-change-a-constraint-that-exists) | Reweight, drop, re-level or shape a constraint that exists | a Python call |
 | [2](#2-a-new-constraint-from-one-function) | Add a constraint, off by default | one header, two lines of C++, one Python class |
-| [3](#3-check-it) | Prove it right | two C++ test cases, six checks that count or list the catalog |
+| [3](#3-check-it) | Prove it right | two C++ test cases, two raw-cost checks, six checks that count or list the catalog |
 | [4](#4-make-it-cheaper-per-move) | Cut what it costs per move | the header |
 | [5](#5-put-it-on-the-default-path) | Turn it on by default | the monolithic calculators |
 | [6](#6-measure) | Show what it costs and what it buys | no code |
 
 The steps build one example: `nonRenewableResourceUsageCost`, what the chosen execution modes take
 from the non-renewable resources in total, within capacity or not. It makes the solver prefer modes
-that spend less stock. Every snippet below was compiled and run, and every figure measured, on
-optimaru 0.4.3; a later change to the solver moves the figures, not the steps. Paths that start with
-`cpp/` are under `optimaru/project_job_scheduling/`.
+that spend less stock. Paths that start with `cpp/` are under `optimaru/project_job_scheduling/`.
+Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3; a later
+change to the solver moves the figures, not the steps.
 
 ## How a schedule is scored
 
@@ -40,15 +40,17 @@ There are two scoring paths, and they give the same score for the same schedule
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/pjs/constraints/` |
 | Constraints | the four, at their defaults | the ones you list, with your knobs |
-| Steps per second | 4.5 million | 1.6 million |
+| Steps per second | 4.6 million | 1.6 million |
 | Parallel starts | `parallel_solver_count` | one start |
 
-The speeds are the demo instance (24 jobs, 2 projects, 7 resources), 2 million steps,
-one thread of an Apple M4 Max; [step 6](#6-measure) has the script. The gap grows with
-the instance: on the benchmark's `medium` instance (72 jobs) the two ran at 3.1 and
-0.65 million. On a move the monolithic calculators update only the dates that shift,
-and every component of the assembly recomputes its total from the whole schedule.
-Steps 1 to 4 work on the assembly. Step 5 moves a constraint to the monolithic calculators.
+Both speeds are for the four constraints of the release, before step 2 adds a fifth: the
+demo instance (24 jobs, 2 projects, 7 resources), 2 million steps, one thread of an Apple
+M4 Max. [Step 6](#6-measure) has the script, and says what its assembly line measures
+after each step. The gap grows with the instance: on the benchmark's `medium` instance
+(72 jobs) the two ran at 3.2 and 0.65 million. On a move the monolithic calculators update
+only the dates that shift, and every component of the assembly recomputes its total from
+the whole schedule. Steps 1 to 4 work on the assembly. Step 5 moves a constraint to the
+monolithic calculators.
 
 ## 1. Change a constraint that exists
 
@@ -66,7 +68,7 @@ from optimaru.project_job_scheduling.demo import generate_demo_data
 schedule = generate_demo_data()
 changed = {"renewable_resource_capacity_cost", "project_delay_cost", "makespan_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     RenewableResourceCapacityCost(weight=10),                           # heavier (default 1)
     ProjectDelayCost(level="soft"),                                     # medium by default
 ]                                                                       # makespan_cost: dropped
@@ -78,7 +80,7 @@ To try weights without solving again, score a finished schedule with other picks
 ```python
 from optimaru.project_job_scheduling.constraints import score
 
-raw = pj.constraint_costs(result.to_core(), picks)  # the raw total of every rule
+raw = pj.constraint_costs(result.to_core(), picks)  # the raw total of every constraint
 print(score(raw, picks))                            # (hard, medium * 10**9 + soft) under those picks
 ```
 
@@ -208,7 +210,7 @@ uv sync                                    # rebuilds optimaru.project_job_sched
 ```python
 from optimaru.project_job_scheduling.constraints import NonRenewableResourceUsageCost
 
-others = [rule for rule in get_constraints() if rule.name != "non_renewable_resource_usage_cost"]
+others = [spec for spec in get_constraints() if spec.name != "non_renewable_resource_usage_cost"]
 picks = [*others, NonRenewableResourceUsageCost(weight=1)]
 config = pj.SolverConfig()
 config.step_count_limit = 2_000_000
@@ -221,9 +223,16 @@ On the demo instance that total is 17, with a makespan of 10 days. A default sol
 the same length (`constraints=None`) leaves it at 44, with a makespan of 7: at weight 1
 the constraint gives three days for 27 units of stock.
 
-What the base gave you: any change marks the constraint stale, and `evaluate()` runs once
-per score, over the whole schedule. That is correct from the first build, and it is the
-cost that step 4 removes.
+What the base gave you: any change marks the constraint stale, and once per score the base
+derives the date chain and runs `evaluate()`, both over the whole schedule. That is correct
+from the first build, and it is the cost that step 4 removes.
+
+The assembly asks every constraint in the picks for its total at every score, whatever its
+weight. `get_constraints()` now returns five constraints, the new one at weight 0, and
+solving with that list is slower than with the four (1.31 against 1.56 million steps per
+second) for the same score: at weight 0 `evaluate()` still ran 272,574 times in a solve of
+200,000 steps. Leave a constraint out of the picks, as `others` does above, instead of
+passing it at weight 0.
 
 ## 3. Check it
 
@@ -279,7 +288,8 @@ pj.solve(schedule, time_limit_seconds=1, random_seed=1, constraints=picks, full_
 While the default weight is 0, this solve is the only check of what the constraint keeps
 between moves. `pjs_plugin_test` walks 1,500 random moves on the default assembly, but
 a constraint at weight 0 adds 0 to both sides of every comparison: with the update of step 4
-made wrong on purpose, both C++ tests still passed and the solve above failed.
+made wrong on purpose (a leave not subtracted), both C++ tests and the Python tests still
+passed, and the solve above failed.
 
 **The tables.** The constraint tables in [README.md](README.md) and
 [python.md](python.md) must equal `pj.constraint_info()`; add the row. The notebook
@@ -303,15 +313,21 @@ Two changes, measured with the constraint at weight 1 (million steps per second)
 
 | The constraint as | demo | `medium` |
 | --- | --- | --- |
-| step 2: `evaluate()` over the whole schedule | 1.35 | 0.51 |
-| the same, with `bool needsDates() const override { return false; }` | 1.43 | 0.55 |
-| a member-change global, below | 1.50 | 0.62 |
-| the four constraints without it, for reference | 1.55 | 0.65 |
+| step 2: `evaluate()` over the whole schedule | 1.32 | 0.51 |
+| the same, with `bool needsDates() const override { return false; }` | 1.40 | 0.55 |
+| a member-change global, below | 1.60 | 0.63 |
+| the four constraints without it, for reference | 1.56 | 0.65 |
+
+At weight 0, where the search takes the same moves as with the four alone, the three read
+1.31, 1.41 and 1.54 on the demo and 0.53, 0.57 and 0.65 on `medium`. The four alone read
+1.56 when these runs began and 1.59 when they ended, so the member-change global is level
+with them within the noise: kept this way, the fifth constraint costs nothing that shows.
 
 **Keep the total from joins and leaves.** The engine tells a member-change global
 which allocation left which value and which it joined. The constraint keeps one integer
 and a table of what every allocation takes in each of its mode slots. The base becomes
-`optimaru::MemberChangeGlobalConstraint<ProjectJobSchedule>`, and `evaluate()` gives way to:
+`optimaru::MemberChangeGlobalConstraint<ProjectJobSchedule>`, in the struct and in the
+constructor, and `evaluate()` gives way to:
 
 ```cpp
     // A unit is one value of the composite variable (delay x mode slot), its
@@ -370,7 +386,7 @@ return `static_cast<double>` of an integer count.
 
 Do this when the constraint should be on in every solve (`kDefaultWeight > 0`). Then
 `pj.solve(schedule)` must score it, and `pj.solve(schedule)` scores with the monolithic
-calculators: 2.9 times the steps per second of the assembly on the demo, 4.8 times on
+calculators: 2.9 times the steps per second of the assembly on the demo, 4.9 times on
 `medium`, and the only path that runs parallel starts.
 
 `pjs_plugin_test` compares the default assembly with the monolithic calculators on
@@ -382,9 +398,9 @@ It must be a whole number on every level, because the monolithic calculators add
 `int64`.
 
 **2. The term**, in `cpp/src/score_calculator.cpp`. Include the header, read the weight
-off the component, add it and the level to the two `static_assert`s, sum the term in
-the loop of `ScoreCalculator::score()` that fills `nonRenewableUsage`, and add it to
-the soft level:
+off the component, add it and the level to the two `static_assert`s, sum the term into a
+new local `std::int64_t nonRenewableTotal` in the loop of `ScoreCalculator::score()` that
+fills `nonRenewableUsage`, and add it to the soft level:
 
 ```cpp
 constexpr auto kNonRenewableUsageWeight =
@@ -409,9 +425,10 @@ set to 0 in `rebuild()`), and `score()` adds it to the soft level:
         nonRenewableTotal_ += sign * req.requirement;
 ```
 
-That is all for a constraint that reads only modes. The default path ran at 4.42 million
-steps per second with the fifth constraint in it, against 4.46 without (`medium`: 3.15
-against 3.11): no difference. A constraint that reads dates has to follow the propagation in
+That is all for a constraint that reads only modes. The default path ran at 4.76 million
+steps per second with the fifth constraint in it; without it, it read 4.57 before and 4.71
+after, in the same runs (`medium`: 3.29, against 3.18 and 3.22). The term costs nothing
+that shows. A constraint that reads dates has to follow the propagation in
 `after_assign()`: `applyRenewable()` and `setRecordedDates()` are where the totals that
 depend on dates are kept.
 
@@ -425,13 +442,15 @@ depend on dates are kept.
   (soft -2 becomes -16) and eight checks of `verifyMediumLevel()` on the same schedule;
   in `tests/project_job_scheduling/cpp/pjs_test.cpp`, the two
   `nonRenewableResourceCapacityCost` cases (soft 0 becomes -13); in `test_constraints.py`,
-  `test_non_renewable_resource_capacity_cost`. The parity checks pass;
+  `test_non_renewable_resource_capacity_cost`. The parity checks pass. `pjs_test` verifies
+  every constraint by hand on the monolithic score, so give the new one a positive and a
+  zero case there;
 - the tables and the "four" in [README.md](README.md), [python.md](python.md),
   `constraints.py`, `__init__.py`, `_core.pyi`, `common.hpp` and `bindings.cpp`, and the
   list of constraints in `score_calculator.hpp`;
 - the CP-SAT model the benchmark compares against, `external_solver.project_job_scheduling`
   in [external-solver](https://github.com/optimaru/external-solver): one plugin per constraint,
-  which subclasses the spec of step 2. Without it,
+  which subclasses the spec of step 2 and adds `build()`. Without it,
   [`benchmarks/project-job-scheduling`](../../../benchmarks/project-job-scheduling)
   no longer compares one objective. Then its published results, and `CHANGELOG.md`.
 
@@ -463,19 +482,29 @@ Both lines end on the same score: same seed, same steps, same scoring. If they d
 after a change, the two paths no longer score alike. A step is what `step_count_limit`
 counts; the moves that polish a ruin-and-recreate kick are not counted, on either path.
 
+The second line solves with `get_constraints()`, so it follows the tree it runs on: the
+four constraints as released, the four and the new one at weight 0 from step 2 on, and
+five scored constraints after step 5.
+
 | Measured, median of three runs (million steps per second) | demo | `medium` |
 | --- | --- | --- |
-| default path, four constraints | 4.46 | 3.11 |
-| assembly, four constraints | 1.55 | 0.65 |
-| assembly, four + the constraint of step 2 at weight 1 | 1.35 | 0.51 |
-| assembly, four + the constraint of step 4 | 1.50 | 0.62 |
-| default path, five constraints (step 5) | 4.42 | 3.15 |
-| assembly, five constraints (step 5) | 1.53 | 0.63 |
+| default path, four constraints | 4.57 | 3.18 |
+| assembly, four constraints | 1.56 | 0.65 |
+| assembly, four + the constraint of step 2 at weight 1 | 1.32 | 0.51 |
+| assembly, four + the constraint of step 2 at weight 0 (`get_constraints()`) | 1.31 | 0.53 |
+| assembly, four + the constraint of step 4 at weight 1 | 1.60 | 0.63 |
+| assembly, four + the constraint of step 4 at weight 0 (`get_constraints()`) | 1.54 | 0.65 |
+| default path, five constraints (step 5) | 4.76 | 3.29 |
+| assembly, five constraints (step 5) | 1.62 | 0.65 |
 
 `medium` is the instance of that name in the CP-SAT comparison (72 jobs, 4 projects,
 13 resources), built by `instances()` in
 `benchmarks/project-job-scheduling/cpsat/project_job_scheduling_cpsat/benchmark.py`.
-Two runs of one build differed by up to 3%.
+All rows were taken one after another in one session, on a machine that was not idle.
+The default path, which steps 2 to 4 leave alone, read between 4.5 and 4.7 on the demo
+from one of those builds to the next (`medium`: 2.9 to 3.2), and the four on the assembly
+read 1.59 when measured again at the end. So read a difference of a few percent as noise;
+the gap between the two paths and the cost of the step-2 constraint are well outside it.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after:
@@ -504,7 +533,7 @@ default path, so they show a constraint after step 5.
 | `tests/project_job_scheduling/cpp/pjs_plugin_test.cpp` | | cases, counts | | the row, expected scores |
 | `tests/project_job_scheduling/test_constraint_specs.py`, `test_constraints.py` | | lists | | the row, expected scores |
 | `docs/use-cases/project-job-scheduling/README.md`, `python.md` | | table row | | defaults |
-| `cpp/src/score_calculator.cpp` | | | | the term |
+| `cpp/src/score_calculator.cpp`, `cpp/include/pjs/score_calculator.hpp` | | | | the term, the list in the comment |
 | `cpp/src/incremental_calculator.cpp`, `cpp/include/pjs/incremental_calculator.hpp` | | | | the total |
 | `tests/project_job_scheduling/cpp/pjs_test.cpp` | | | | expected scores |
 | external-solver, `benchmarks/project-job-scheduling` | | | | the same constraint, results |

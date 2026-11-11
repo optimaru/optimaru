@@ -59,7 +59,7 @@ problem = KnapsackProblemModel(capacity=sum(item.weight for item in items) // 3,
 
 changed = {"knapsack_capacity_cost", "selected_value_cost", "item_dependency_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     SelectedValueCost(weight=2),                                       # heavier (default 1)
     KnapsackCapacityCost(level="soft", weight=50),                     # hard by default
 ]                                                                      # item_dependency_cost: dropped
@@ -71,7 +71,7 @@ To try weights without solving again, score a finished selection with other pick
 ```python
 from optimaru.knapsack.constraints import score
 
-raw = knapsack.constraint_costs(result, picks)  # raw total of every rule
+raw = knapsack.constraint_costs(result, picks)  # raw total of every constraint
 print(score(raw, picks))                        # the score those picks give this selection
 ```
 
@@ -213,7 +213,7 @@ uv sync                                    # rebuilds optimaru.knapsack._core
 ```python
 from optimaru.knapsack.constraints import UnusedCapacityCost
 
-others = [rule for rule in get_constraints() if rule.name != "unused_capacity_cost"]
+others = [spec for spec in get_constraints() if spec.name != "unused_capacity_cost"]
 picks = [*others, UnusedCapacityCost(weight=10)]
 config = knapsack.SolverConfig()
 config.step_count_limit = 2_000_000
@@ -286,8 +286,9 @@ Python tests, and they list more than a count. Update them:
 Then add cases that pick the constraint, at a weight and on the hard level
 (`test_levels_by_hand_on_both_paths` in `test_constraint_specs.py`).
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
+score stale:
 
 ```python
 knapsack.solve(problem, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)

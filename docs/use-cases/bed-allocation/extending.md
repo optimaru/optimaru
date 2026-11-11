@@ -51,7 +51,7 @@ from optimaru.bed_allocation.demo import generate_demo_data
 plan = generate_demo_data()
 changed = {"department_specialty_cost", "unassigned_stays_cost", "department_max_age_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     DepartmentSpecialtyCost(weight=40),                                # heavier (default 10)
     UnassignedStaysCost(level="hard"),                                 # medium by default
 ]                                                                      # department_max_age_cost: dropped
@@ -63,7 +63,7 @@ To try weights without solving again, score a finished plan with other picks:
 ```python
 from optimaru.bed_allocation.constraints import score
 
-raw = ba.constraint_costs(result.to_core(), picks)  # raw cost of every rule, per bed
+raw = ba.constraint_costs(result.to_core(), picks)  # raw cost of every constraint, per bed
 print(score(raw, picks))                            # the score those picks give this plan
 ```
 
@@ -186,7 +186,7 @@ uv sync                                    # rebuilds optimaru.bed_allocation._c
 ```python
 from optimaru.bed_allocation.constraints import UnusedRoomEquipmentCost
 
-others = [rule for rule in get_constraints() if rule.name != "unused_room_equipment_cost"]
+others = [spec for spec in get_constraints() if spec.name != "unused_room_equipment_cost"]
 picks = [*others, UnusedRoomEquipmentCost(weight=5)]
 config = ba.SolverConfig()
 config.step_count_limit = 2_000_000
@@ -243,8 +243,9 @@ Update them:
   `test_constraint_info_reports_the_cpp_defaults` (`EXPECTED_INFO`, and its assertion
   that every row is on by default).
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
+score stale:
 
 ```python
 ba.solve(plan, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)

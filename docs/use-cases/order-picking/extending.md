@@ -70,7 +70,7 @@ from optimaru.order_picking.constraints import OrderSplitByTrolleyCost, TrolleyC
 solution = op.build_demo_data(trolleys_count=10, orders_count=24)
 changed = {"order_split_by_trolley_cost", "trolley_capacity_cost", "distance_from_last_pick_task_to_path_origin_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     OrderSplitByTrolleyCost(weight=100),                               # lighter (default 1000)
     TrolleyCapacityCost(level="soft", weight=5000),                    # hard by default
 ]                                                                      # the walk back: dropped
@@ -82,7 +82,7 @@ To try weights without solving again, score a finished plan with other picks:
 ```python
 from optimaru.order_picking.constraints import score
 
-raw = op.constraint_costs(solution, picks)  # raw cost of every rule, per trolley
+raw = op.constraint_costs(solution, picks)  # raw cost of every constraint, per trolley
 print(score(raw, picks))                    # the (hard, soft) those picks give this plan
 ```
 
@@ -211,7 +211,7 @@ uv sync --reinstall-package optimaru       # rebuilds optimaru.order_picking._co
 ```python
 from optimaru.order_picking.constraints import OrderRevisitCost
 
-others = [rule for rule in get_constraints() if rule.name != "order_revisit_cost"]
+others = [spec for spec in get_constraints() if spec.name != "order_revisit_cost"]
 picks = [*others, OrderRevisitCost(weight=10)]
 solution = op.build_demo_data(trolleys_count=10, orders_count=24)
 config = op.SolverConfig()
@@ -275,9 +275,9 @@ tests. Update them:
   `test_default_instance_carries_no_overrides` (the module-level instances, so the new
   one is imported there) and `test_constraint_info_reports_the_cpp_defaults`.
 
-**Incremental against full.** Solve with every score checked against a full
-recompute, and every preview of a move against the score after the move. It throws
-`ScoreMismatchError` if they differ:
+**Incremental against full.** Solve with every score checked against a full recompute, and every
+preview of a move against the score after the move. It raises `RuntimeError` ("Score corruption:
+...", the engine's `ScoreMismatchError`) if they differ:
 
 ```python
 op.solve(solution, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)

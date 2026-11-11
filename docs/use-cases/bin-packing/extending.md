@@ -64,7 +64,7 @@ demo = json.loads(Path("tests/bin_packing/fixtures/web_demo.json").read_text())
 problem = BinPackingProblemModel.model_validate(demo).to_core()  # 20 items, capacity 100
 changed = {"color_conflict_cost", "used_bins_cost", "item_conflict_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     UsedBinsCost(weight=10),                                           # heavier (default 1)
     ColorConflictCost(level="soft"),                                   # hard by default
 ]                                                                      # item_conflict_cost: dropped
@@ -76,7 +76,7 @@ To try weights without solving again, score a finished packing with other picks:
 ```python
 from optimaru.bin_packing.constraints import score
 
-raw = bp.constraint_costs(problem, picks)  # raw cost of every rule, per bin
+raw = bp.constraint_costs(problem, picks)  # raw cost of every constraint, per bin
 print(score(raw, picks))                   # the score those picks give this packing
 ```
 
@@ -207,7 +207,7 @@ uv sync                                    # rebuilds optimaru.bin_packing._core
 ```python
 from optimaru.bin_packing.constraints import LoadBalanceCost
 
-others = [rule for rule in get_constraints() if rule.name != "load_balance_cost"]
+others = [spec for spec in get_constraints() if spec.name != "load_balance_cost"]
 picks = [*others, LoadBalanceCost(weight=1)]
 config = bp.SolverConfig()
 config.step_count_limit = 200_000
@@ -276,8 +276,9 @@ there, written independently: its name in `REFERENCE_NAMES` and `ENGINE_NAME`, i
 entry in `constraint_costs()` with a default weight of 0, and its spec in `SPEC_OF`
 of the parity test.
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
+score stale:
 
 ```python
 bp.solve(problem, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
@@ -489,7 +490,8 @@ bins at the same budget over several seeds, before and after:
 
 ```sh
 cd benchmarks/bin-packing
-OPTIMARU_USE_CASES=bin_packing uv sync --project cpsat
+export OPTIMARU_USE_CASES=bin_packing      # keep it set: uv rebuilds when it changes
+uv sync --project cpsat
 uv run --project cpsat python -m bench.quality --seconds 2 --seeds 1,2,3    # bins per seed
 uv run --project cpsat python -m bin_packing_cpsat.benchmark --seconds 1 --workers 2 --cpsat-grace 20
 ```

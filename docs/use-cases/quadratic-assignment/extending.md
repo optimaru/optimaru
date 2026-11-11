@@ -37,18 +37,19 @@ There are two scoring paths, and they give the same score for the same assignmen
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/qap/constraints/` |
 | Constraints | the five, at their defaults | the ones you list, with your knobs |
-| Steps per second | @@DEFAULT@@ million | @@ASSEMBLY@@ million |
+| Steps per second | 3.7 million | 2.9 million |
 | Parallel starts | `parallel_solver_count` | one start |
 
-The speeds are an instance of 40 facilities from the generator of the benchmark,
-5 million steps, one thread of an Apple M4 Max; [step 6](#6-measure) has the
-script. Steps 1 to 4 work on the assembly. Step 5 moves a constraint to the monolithic
-calculators.
+The speeds are the instance of step 1 (40 facilities from the generator of the
+benchmark, with demands and capacities added), 5 million steps, one thread of an Apple
+M4 Max; [step 6](#6-measure) has the script. Steps 1 to 4 work on the assembly. Step 5
+moves a constraint to the monolithic calculators.
 
 ## 1. Change a constraint that exists
 
 No build. Pass the constraints you want, with the knobs that differ from the defaults.
-The benchmark's instances have no demands and no capacities, so this one adds them:
+The generated instances of the benchmark have no demands and no capacities, so this one
+adds them:
 
 ```python
 import random
@@ -80,7 +81,7 @@ problem = QuadraticAssignmentProblemModel(
 
 changed = {"flow_distance_cost", "forbidden_assignments_cost", "assignment_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     FlowDistanceCost(weight=2),                                        # heavier (default 1)
     ForbiddenAssignmentsCost(level="soft", weight=500),                # hard by default
 ]                                                                      # assignment_cost: dropped
@@ -92,7 +93,7 @@ To try weights without solving again, score a finished assignment with other pic
 ```python
 from optimaru.quadratic_assignment.constraints import score
 
-raw = qap.constraint_costs(result, picks)  # raw cost of every rule, per location or as one total
+raw = qap.constraint_costs(result, picks)  # raw cost of every constraint, per location or as one total
 print(score(raw, picks))                   # the score those picks give this assignment
 ```
 
@@ -165,8 +166,9 @@ The name passed to the base, `"unusedLocationCapacityCost"`, is the struct name 
 a lower-case first letter. Python derives `unused_location_capacity_cost` from it.
 `on_reset()` checks that `ScoreCalculator::prepare()` ran: `hasCapacity`, `capacityOf`
 and `demandOf` are the flat caches it builds, and every solve runs it first. `cost()`
-loops over the members because a location holds two facilities in the middle of a
-swap, and none in a partial assignment a caller wrote.
+loops over the members because it must be right for any state a caller writes: a
+location left empty, or two facilities on one. The solver asks it when a swap is
+complete, so there it sees one facility.
 
 The defaults live in these two constants and nowhere else; Python reads them through
 `qap.constraint_info()`. `kDefaultLevel` is `Hard` or `Soft`: this domain has no
@@ -225,7 +227,7 @@ uv sync                                    # rebuilds optimaru.quadratic_assignm
 ```python
 from optimaru.quadratic_assignment.constraints import UnusedLocationCapacityCost
 
-others = [rule for rule in get_constraints() if rule.name != "unused_location_capacity_cost"]
+others = [spec for spec in get_constraints() if spec.name != "unused_location_capacity_cost"]
 picks = [*others, UnusedLocationCapacityCost(weight=20)]
 config = qap.SolverConfig()
 config.step_count_limit = 2_000_000
@@ -237,11 +239,12 @@ print(sum(raw["unused_location_capacity_cost"]["costs"]), raw["flow_distance_cos
 
 On the instance above that prints `36.0 [29484.0]`. A default solve of the same
 length (`constraints=None`) leaves 95 of capacity unused at a flow cost of 28,968.
-The lowest the instance allows is 24.
+The lowest the instance allows is 28: its pin keeps F39, a demand of 2, on L0.
 
-What the base gave you: the engine calls `cost()` for a location whenever a facility
-joins or leaves it, and keeps the result. In a complete assignment that is one
-facility and one comparison, so the constraint is cheap from the start.
+What the base gave you: after a swap the engine calls `cost()` once for each of the
+two locations it touched, and keeps the results. A refused swap puts the old results
+back without another call. Each call is one facility and one comparison, so the
+constraint is cheap from the start.
 
 ## 3. Check it
 
@@ -301,11 +304,16 @@ Python tests, and they list more than a count. Update them:
           ],
   ```
 
+- `tests/quadratic_assignment/test_reference_parity.py`, its own list of the spec
+  classes, `SPECS`. No test fails without the new class there, but
+  `test_every_constraint_shapes_like_the_oracle` then leaves the constraint out.
+
 Then add cases that pick the constraint, at a weight and on the hard level
 (`test_levels_by_hand_on_both_paths` in `test_constraint_specs.py`).
 
 **Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+recompute. It raises `RuntimeError` ("Score corruption: incremental score ... != full
+recompute ...") if a move leaves the score stale:
 
 ```python
 qap.solve(problem, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
@@ -314,7 +322,8 @@ qap.solve(problem, time_limit_seconds=1, random_seed=1, constraints=picks, full_
 Give the constraint a weight for this: at weight 0 a stale cost scores the same.
 
 **The tables and the CP-SAT model.** The constraint table in [README.md](README.md)
-must equal `qap.constraint_info()`; add the row. [python.md](python.md),
+must equal `qap.constraint_info()`; add the row, and the header to the component files
+its C++ section lists. [python.md](python.md),
 `__init__.py` and `_core.pyi` describe the score in words, and the notebook
 `examples/quadratic-assignment.ipynb` prints the constraint list. The benchmark
 compares against `external_solver.quadratic_assignment` in
@@ -322,7 +331,8 @@ compares against `external_solver.quadratic_assignment` in
 constraint, a subclass of the Python spec with its defaults from `constraint_info()`.
 Its `tests/quadratic_assignment/test_constraint_parity.py` runs over
 `list_constraints()` and pins permutations to compare each raw cost, so it fails for
-a constraint without a plugin, opt-in or not. Mirror the constraint there with an exact encoding.
+a constraint without a plugin, opt-in or not. Mirror the constraint there with an exact
+encoding.
 
 ## 4. Make it cheaper per move
 
@@ -336,9 +346,10 @@ facilities leave and join. What that costs depends on the constraint:
 | a sum of one number per facility over the whole assignment | `QapMemberChangeGlobalConstraint` with one `int64` total | one addition per join or leave | [`assignment_cost.hpp`](../../../optimaru/quadratic_assignment/cpp/include/qap/constraints/assignment_cost.hpp) |
 | a sum over pairs of facilities | the same, with its own copy of the locations | every facility, four times | [`flow_distance_cost.hpp`](../../../optimaru/quadratic_assignment/cpp/include/qap/constraints/flow_distance_cost.hpp) |
 
-The example is the second row. A clamp has no `delta_cost()`: it must equal
-`cost(with the facility) - cost(without it)` exactly, and a clamp does not add up
-that way. `cost()` is one facility and one comparison already. The time of a swap
+The example is the second row, and it stays without `delta_cost()`. A delta must equal
+`cost(with the facility) - cost(without it)` exactly. For a clamp that depends on the
+other facilities of the location, so the delta would add them up as `cost()` does and
+save nothing. `cost()` is one facility and one comparison already. The time of a swap
 goes to the last row: flow times distance walks all 40 facilities for each of the
 four joins and leaves.
 
@@ -359,11 +370,20 @@ private:
     const std::vector<int>* scope_ = nullptr;
 ```
 
-Half of the locations of the instance have a capacity. With the scope the assembly
-went from @@W0_BEFORE@@ to @@W0_AFTER@@ million steps per second with the constraint at
-weight 0, and from @@W20_BEFORE@@ to @@W20_AFTER@@ at weight 20, and the solve of
-step 2 printed the same line as before, as it must. The gain is small because the
-constraint was cheap.
+Half of the locations of the instance have a capacity, so the scope halves the calls:
+in 1 million steps of the solve of step 2 the engine called `cost()` 2.0 million times
+without it and 1.0 million times with it. The solve printed the same line as before,
+as it must. With the scope switched off and on inside one build (an environment
+variable read in `on_reset()`, the median of five runs each), the assembly went from
+2.71 to 2.86 million steps per second with the constraint at weight 0, and from 2.73
+to 2.86 at weight 20. Measure a small change that way. The builds of step 2 and step 4
+ran at 2.72 and 2.71 at weight 0, and at 2.71 and 2.72 at weight 20: a rebuild alone
+moves a figure by as much as the scope gains ([step 6](#6-measure)).
+
+The constraint costs the same at weight 0 as at weight 20. The engine keeps the cost of
+every constraint in the picks, whatever its weight, and `get_constraints()` lists the
+opt-in constraint. Leave it out of the picks when you do not use it, as `others` does
+in step 2: the five alone ran at 2.94 in the build with the switch.
 
 The scope is also part of what the constraint means, so settle it when you add the constraint:
 
@@ -371,9 +391,9 @@ The scope is also part of what the constraint means, so settle it when you add t
   list them and change with the scope: the scoped entries in
   `verifyRepeatsAndOffsets()`, and
   `test_the_scoped_side_constraints_report_their_units`.
-- A pick with `clip=False` charges every location the constraint evaluates, a raw cost of
-  0 included. Without a scope that is every location; with it, the locations that
-  have a capacity.
+- A pick with an `offset` and `clip=False` shapes every location the constraint
+  evaluates, a raw cost of 0 included. Without a scope that is every location; with
+  it, the locations that have a capacity.
 
 **Keep raw costs whole numbers.** Demands and capacities are `int64`, so the costs
 stay exact. Return `static_cast<double>` of the integer result.
@@ -382,12 +402,14 @@ stay exact. Return `static_cast<double>` of the integer result.
 
 Do this when the constraint should be on in every solve (`kDefaultWeight > 0`). Then
 `qap.solve(problem)` must score it, and it scores with the monolithic calculators:
-@@RATIO@@ times the steps per second of the assembly, and the only path that runs
+1.3 times the steps per second of the assembly, and the only path that runs
 parallel starts. `qap_plugin_test` compares the default assembly with them on random
 assignments, so it fails from the moment the weight is not 0 until both sides agree.
 
 **1. The weight.** In the component: `static constexpr double kDefaultWeight = 1.0;`.
-It must be a whole number, because the monolithic calculators add in `int64`.
+It must be a whole number, because the monolithic calculators add in `int64`. The
+comment above the struct and the Python spec (its docstring and the last sentence of
+both descriptions) say weight 0; change them with it.
 
 **2. The term**, in four files. `RawCosts` in `cpp/include/qap/score_calculator.hpp`
 holds the raw total of every constraint. Add the field, after `locationCapacityCost`:
@@ -416,10 +438,11 @@ summed already, and the term in `score()`:
 ```
 
 The incremental calculator keeps one running total per constraint, and retracts and
-inserts a facility's terms when it moves. Add the member `unused_` and the helper
+inserts a facility's terms when it moves. Declare the member `unused_` and the helper
 `capacitySlack()` in `cpp/include/qap/incremental_calculator.hpp`. In
-`cpp/src/incremental_calculator.cpp`: the same include and weight, the start value
-in `rebuild()`, the total in `rawCosts()`, the same term in `score()`, and in both
+`cpp/src/incremental_calculator.cpp`: the same include and weight, `capacitySlack()`
+(`capacityPenalty()` with the subtraction turned around), the start value in
+`rebuild()`, the total in `rawCosts()`, the same term in `score()`, and in both
 `insert()` and `retract()` the two lines around the change of the load:
 
 ```cpp
@@ -436,16 +459,19 @@ in `rebuild()`, the total in `rawCosts()`, the same term in `score()`, and in bo
     unused_ += capacitySlack(location);
 ```
 
-The default path ran at @@DEFAULT5@@ million steps per second with the sixth constraint in
-it.
+The default path ran at 3.55 million steps per second with the sixth constraint in
+it. That is inside what it ran at with five in the builds before, 3.54 to 3.71
+([step 6](#6-measure)): the term costs less than a rebuild moves the figure.
 
 **3. The parity checks.** The `expected` totals in `qap_plugin_test.cpp` now read
 `raw.unusedLocationCapacityCost`, and the row in `verifyCatalog()` has the weight 1.
 `perConstraint()`, `kConstraintNames` and the count of the walk in
 `tests/quadratic_assignment/cpp/qap_test.cpp` get the sixth entry: that walk compares
-the incremental calculator with the full recompute, total by total. The Python
-reference gets the weight in `REFERENCE_DEFAULTS`, and
-`test_constraint_info_reports_the_cpp_defaults` the row.
+the incremental calculator with the full recompute, total by total. `qap_test.cpp`
+also has a positive and a zero case by hand for each of the five totals, in
+`verifyConstraintsByHand()`; add the pair for the sixth. The Python reference gets the
+weight in `REFERENCE_DEFAULTS`, and `test_constraint_info_reports_the_cpp_defaults`
+the row.
 
 **4. What else moves.** With that done the parity checks pass on both sides, and
 every check that states a score at the defaults fails:
@@ -455,10 +481,13 @@ every check that states a score at the defaults fails:
   of 10;
 - `qap_plugin_test`: 12 checks, the scores it works out by hand on the same instance
   (dropped components, overrides, exponents);
-- Python: 7 cases, in `test_constraint_specs.py` (5) and `test_solve.py` (2);
-- the table and the counts in [README.md](README.md) and [python.md](python.md), and
-  the constraint lists and counts in the comments of `common.hpp`, `constraints.hpp`,
-  `score_calculator.hpp` and `incremental_calculator.hpp` and in the docstrings of
+- Python: 7 cases, in `test_constraint_specs.py` (5) and `test_solve.py` (2). One of
+  them is `score_soft == -total_cost`: the model's `total_cost` stays the flow cost
+  plus the direct cost;
+- the table and the counts in [README.md](README.md), the score in
+  [python.md](python.md), and the constraint lists and counts in the comments of
+  `common.hpp`, `constraints.hpp`, `domain.hpp`, `score_calculator.hpp`,
+  `incremental_calculator.hpp` and `bindings.cpp` and in the docstrings of
   `constraints.py`, `__init__.py` and `_core.pyi`;
 - the CP-SAT model: without the constraint at the same weight in
   `external_solver.quadratic_assignment`,
@@ -488,7 +517,24 @@ for label, picked in (("default path", None), ("assembly", get_constraints())):
 Both lines end on the same score: same seed, same steps, same scoring. If they
 differ after a change, the two paths no longer score alike.
 
-@@TABLE@@
+| Measured on the instance of step 1, median of three runs | Steps per second |
+| --- | --- |
+| default path, five constraints | 3.71 million |
+| assembly, five constraints | 2.86 million |
+| assembly, five + the constraint of step 2 at weight 0 | 2.72 million |
+| assembly, five + the constraint of step 2 at weight 20 | 2.71 million |
+| assembly, five + the constraint with the scope (step 4) at weight 0 | 2.71 million |
+| assembly, five + the constraint with the scope at weight 20 | 2.72 million |
+| default path, six constraints (step 5) | 3.55 million |
+| assembly, six constraints (step 5) | 2.72 million |
+
+Each state of the tree is its own build of the extension, and a build moves the figures
+of code it did not change: the default path, which steps 2 to 4 leave as it is, ran at
+3.71, 3.58 and 3.54 in the builds of the unchanged tree, of step 2 and of step 4. That
+is as much as the scope of step 4 gains, so the table does not show it. A figure also
+moves by about 2 percent from one run to the next, and other work on the machine, which
+there was when these were taken, lowers every row together. The two default-path rows
+are not the same work either: with the constraint on, the solve makes other moves.
 
 **What it buys.** A constraint changes what the search can reach, so compare the results
 at the same budget over several seeds, with and without it:
@@ -503,7 +549,11 @@ for seed in range(1, 6):
         print(seed, sum(raw["unused_location_capacity_cost"]["costs"]), raw["flow_distance_cost"]["costs"])
 ```
 
-@@SEEDS@@
+Each line is the unused capacity and the flow cost, without the constraint and then
+with it at weight 20. On the instance the five solves without the constraint leave 95,
+70, 71, 64 and 68 of capacity unused; with it they leave 36, 41, 40, 36 and 33. The
+flow cost is 188 to 516 higher on four seeds and 72 lower on one. A step limit makes
+the lines repeatable.
 
 Against CP-SAT at a fixed time: `uv run quadratic-assignment-compare --seconds 10
 --workers 8` in `benchmarks/quadratic-assignment/cpsat`
@@ -518,10 +568,11 @@ capacities, so this constraint is 0 on them.
 | --- | --- | --- | --- | --- |
 | `cpp/include/qap/constraints/<subject>_cost.hpp` | new | | scope | weight |
 | `cpp/include/qap/constraints.hpp` | include, `emplace` | | | |
-| `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
+| `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | the spec's text, counts |
 | `tests/quadratic_assignment/cpp/qap_plugin_test.cpp` | | case, totals, counts | scoped entries | totals, row |
 | `tests/quadratic_assignment/test_constraint_specs.py` | | lists, cases | `units` | row, expected scores |
 | `tests/quadratic_assignment/reference_quadratic_assignment.py` | | the constraint | | weight |
+| `tests/quadratic_assignment/test_reference_parity.py` | | `SPECS` | | |
 | `docs/use-cases/quadratic-assignment/README.md`, `python.md` | | table row | | defaults |
 | `cpp/include/qap/score_calculator.hpp`, `incremental_calculator.hpp` | | | | the fields |
 | `cpp/src/score_calculator.cpp`, `incremental_calculator.cpp` | | | | the term |

@@ -52,7 +52,7 @@ from optimaru.task_assigning.demo import generate_demo_data
 solution = generate_demo_data()
 changed = {"critical_priority_task_end_time_cost", "unassigned_tasks_cost", "minor_priority_task_end_time_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     CriticalPriorityTaskEndTimeCost(weight=8),                          # heavier (default 4)
     UnassignedTasksCost(level="hard"),                                  # medium by default
 ]                                                                       # minor_priority_task_end_time_cost: dropped
@@ -64,7 +64,7 @@ To try weights without solving again, score a finished solution with other picks
 ```python
 from optimaru.task_assigning.constraints import score
 
-raw = ta.constraint_costs(result.to_core(), picks)  # raw cost of every rule, per employee
+raw = ta.constraint_costs(result.to_core(), picks)  # raw cost of every constraint, per employee
 print(score(raw, picks))                            # the score those picks give this solution
 ```
 
@@ -191,7 +191,7 @@ uv sync                                    # rebuilds optimaru.task_assigning._c
 ```python
 from optimaru.task_assigning.constraints import CustomerSwitchCost
 
-others = [rule for rule in get_constraints() if rule.name != "customer_switch_cost"]
+others = [spec for spec in get_constraints() if spec.name != "customer_switch_cost"]
 picks = [*others, CustomerSwitchCost(weight=200)]
 config = ta.SolverConfig()
 config.step_count_limit = 2_000_000
@@ -254,8 +254,9 @@ Update them:
   `test_module_level_instances_keep_every_default` (the instances) and
   `test_constraint_info_reports_the_cpp_defaults` (the rows).
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
+score stale:
 
 ```python
 ta.solve(solution, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)

@@ -75,7 +75,7 @@ from optimaru.school_timetabling.constraints import Assembly, ClassGapCost, Teac
 problem = generate("S")  # a TimetableProblem dict (API_SPEC.md): 6 classes, 204 lessons
 changed = {"class_gap_cost", "teacher_max_periods_cost", "teacher_workday_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     ClassGapCost(weight=40),                                           # heavier (default 10)
     TeacherMaxPeriodsCost(level="soft", weight=50),                    # hard by default
 ]                                                                      # teacher_workday_cost: dropped
@@ -96,7 +96,7 @@ from optimaru.school_timetabling.constraints import score
 
 converted = st.convert_problem(problem)
 st.inject_solution(converted, result["lessons"])            # the result back on a canon.Timetable
-raw = st.constraint_costs(converted.table, picks)          # raw cost of every rule, per slot or total
+raw = st.constraint_costs(converted.table, picks)          # raw cost of every constraint, per slot or total
 print(score(raw, picks))                                   # the score those picks give this timetable
 ```
 
@@ -260,7 +260,7 @@ from optimaru.school_timetabling import canon
 from optimaru.school_timetabling.constraints import SpecialRoomLastPeriodCost
 
 problem = generate("M")
-others = [rule for rule in get_constraints() if rule.name != "special_room_last_period_cost"]
+others = [spec for spec in get_constraints() if spec.name != "special_room_last_period_cost"]
 picks = [*others, SpecialRoomLastPeriodCost(weight=20)]
 config = canon.SolverConfig()
 config.step_count_limit = 2_000_000

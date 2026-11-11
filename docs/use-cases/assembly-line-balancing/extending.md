@@ -33,7 +33,7 @@ There are two scoring paths, and they give the same score for the same line
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/alb/constraints/` |
 | Constraints | the nine that are on by default | the ones you list, with your knobs |
-| Steps per second | 10.7 million | 4.9 million for the same nine, 1.8 million for `get_constraints()` |
+| Steps per second | 10.7 million | 4.9 million for the same nine, 1.9 million for `get_constraints()` |
 | Parallel starts | `parallel_solver_count` | one start |
 
 The speeds are a generated line of 100 tasks (the "large" line of the benchmark), 2
@@ -41,7 +41,7 @@ million steps, one thread of an Apple M4 Max; [step 6](#6-measure) has the scrip
 `get_constraints()` returns all ten constraints of the catalog, the opt-in
 `workload_imbalance_cost` at weight 0 among them. The assembly evaluates every constraint
 it is given, whatever its weight, and that one keeps an ordered set of the station
-loads: it alone takes the assembly from 4.9 to 1.8 million steps per second. Steps 1
+loads: it alone takes the assembly from 4.9 to 1.9 million steps per second. Steps 1
 to 4 work on the assembly. Step 5 moves a constraint to the monolithic calculators.
 
 ## 1. Change a constraint that exists
@@ -60,7 +60,7 @@ demo = json.loads(Path("tests/assembly_line_balancing/fixtures/web_demo.json").r
 line = AssemblyLineBalancingProblemModel.model_validate(demo)  # 12 tasks, cycle time 12
 changed = {"used_stations_cost", "fixed_task_stations_cost", "different_station_pairs_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     UsedStationsCost(weight=10),                                       # heavier (default 1)
     FixedTaskStationsCost(level="soft"),                               # hard by default
 ]                                                                      # different_station_pairs_cost: dropped
@@ -72,7 +72,7 @@ To try weights without solving again, score a finished line with other picks:
 ```python
 from optimaru.assembly_line_balancing.constraints import score
 
-raw = alb.constraint_costs(result, picks)  # raw cost of every rule, per station
+raw = alb.constraint_costs(result, picks)  # raw cost of every constraint, per station
 print(score(raw, picks))                   # the score those picks give this line
 ```
 
@@ -179,11 +179,12 @@ class LateWorkCost(Constraint):
 
 **4. Its default instance**, in the same file: `late_work_cost = LateWorkCost()`
 with the other instances, that instance in `_DEFAULTS` before
-`workload_imbalance_cost` (the order of step 2), and both names in `__all__`.
+`workload_imbalance_cost` (the catalog order of edit 2), and both names in `__all__`, which
+stays sorted (`ruff check` refuses it otherwise).
 
-Build and use it. The web demo is too small to show the constraint (a default solve
-already ends on the line the constraint asks for), so this is the 100-task line of the
-benchmark:
+Build and use it. The web demo is too small to show the constraint (four seeded default
+solves of five already end on the total the constraint asks for), so this is the 100-task
+line of the benchmark:
 
 ```sh
 export OPTIMARU_USE_CASES=assembly_line_balancing
@@ -211,7 +212,7 @@ def generated_line(task_count=100, cycle_time=120, seed=2):
     return alb.AssemblyLineBalancingProblem(cycle_time, tasks, arcs)
 
 
-others = [rule for rule in get_constraints() if rule.name != "late_work_cost"]
+others = [spec for spec in get_constraints() if spec.name != "late_work_cost"]
 picks = [*others, LateWorkCost(weight=0.01)]  # a small weight: the station count stays the first concern
 config = alb.SolverConfig()
 config.step_count_limit = 2_000_000
@@ -234,17 +235,18 @@ leaves and once for the station it joins. The constraint is already incremental.
 
 **The raw total in the monolithic calculators.** Here they report the raw total of
 every constraint of the catalog, on or off, in `RawCosts`
-(`cpp/include/alb/score_calculator.hpp`), and both C++ tests compare the assembly
-with it name by name. So an opt-in constraint gets its total there too, unweighted: a
-field `lateWorkCost` in `RawCosts`, one line in the loop over the tasks of
-`ScoreCalculator::rawCosts()`,
+(`cpp/include/alb/score_calculator.hpp`). `alb_plugin_test` compares the assembly with
+it name by name, and `alb_test` the incremental calculator with the full recompute. So
+an opt-in constraint gets its total there too, unweighted: a field `lateWorkCost` in
+`RawCosts`, one line in the loop over the tasks of `ScoreCalculator::rawCosts()`,
 
 ```cpp
         raw.lateWorkCost += task.duration * s;
 ```
 
 and, in `rawCosts()` of `cpp/src/incremental_calculator.cpp`, a scan. The default
-path keeps nothing per move for a constraint it does not score:
+path keeps nothing per move for a constraint it does not score (`workloadImbalanceCost`,
+the other opt-in constraint, is read from the station loads in the same function):
 
 ```cpp
     // lateWorkCost is opt-in (default weight 0) and not in the score: it is
@@ -285,12 +287,13 @@ assigned).
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=assembly_line_balancing && cmake --build build -j
-ctest --test-dir build --output-on-failure        # alb_test and alb_plugin_test
+ctest --test-dir build --output-on-failure        # alb_test, alb_plugin_test, the engine tests
 uv run pytest -q tests/assembly_line_balancing tests/test_constraints_contract.py
 ```
 
-**The counts.** An eleventh constraint fails three checks of `alb_plugin_test` and 142
-Python tests that count or list the catalog. Update them:
+**The counts.** After step 2 alone, an eleventh constraint fails three checks of
+`alb_plugin_test` and 142 Python tests: 7 that count or list the catalog, and 135 of
+`test_reference_parity.py` (the reference scorer, below). Update them:
 
 - `alb_fixtures.hpp`: `kNames` and `namedTotals()`, the names and the `RawCosts`
   fields the two C++ tests compare by;
@@ -307,13 +310,17 @@ Python tests that count or list the catalog. Update them:
 
 **The reference scorer.** `tests/assembly_line_balancing/reference_assembly_line_balancing.py`
 is a second implementation in plain Python, and `test_reference_parity.py` compares
-every constraint's total with it on samples and random lines. Add the constraint there, written
-independently: its name in `REFERENCE_NAMES` and `ENGINE_NAME`, `(False, 0.0)` in
+every constraint's total with it on samples and random lines. Add the constraint there,
+written independently: its name in `REFERENCE_NAMES` and `ENGINE_NAME`, `(False, 0.0)` in
 `REFERENCE_DEFAULTS`, its list in `constraint_costs()`, and its total in
-`test_fixture_h_matches_the_hand_calculation`.
+`test_fixture_h_matches_the_hand_calculation`. The reference scores unassigned tasks too,
+so count a task at station -1 as 0 work: `duration * max(0, station)`. With a plain
+`duration * station`, `test_the_unassigned_web_demo_scores_zero` fails once the
+constraint has a weight (step 5).
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) (a `RuntimeError` in
+Python) if a move leaves the score stale:
 
 ```python
 alb.solve(generated_line(), time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
@@ -322,8 +329,14 @@ alb.solve(generated_line(), time_limit_seconds=1, random_seed=1, constraints=pic
 `alb_plugin_test` does the same for the default assembly, which now holds the constraint:
 3,000 random moves, every constraint's raw total against a fresh assembly after each.
 
-**The tables.** The constraint tables in [README.md](README.md) and
-[python.md](python.md) must equal `alb.constraint_info()`; add the row. The notebook
+**The tables.** The constraint table in [README.md](README.md) must equal
+`alb.constraint_info()`; add the row. The catalog is also written out in prose and
+comments, and a new constraint makes them stale: the lists in `_core.pyi`, in the
+docstring of `constraints.py` and above `forEachDefaultConstraint()` in `constraints.hpp`,
+"The ten assembly-line-balancing constraints" and "the four per-task terms" in
+`constraints/common.hpp`, "the six per-station constraints" and the header list of the
+C++ section in README.md, the same count in `benchmarks/assembly-line-balancing/README.md`,
+and the opt-in objective named in [python.md](python.md). The notebook
 `examples/assembly-line-balancing.ipynb` prints the constraint list.
 
 ## 4. Make it cheaper per move
@@ -340,25 +353,30 @@ and one for the station it joins. What that call is depends on the constraint:
 
 A unit constraint with `cost()` alone is correct: the engine then recomputes the
 whole station on every change. `delta_cost()` returns what one task adds given the
-others, and must equal `cost(with the task) - cost(without it)` exactly;
-`full_assert` (step 3) checks that it does.
+others, and must equal `cost(with the task) - cost(without it)` exactly. `full_assert`
+(step 3) catches a delta that moves the score. One that is off by the same amount on
+the station a task leaves and on the station it joins cancels in the total and shows
+only when the pick has an `exponent` other than 1, so check a new delta with
+`exponent=2` on the pick as well.
 
 The example is already as cheap as a constraint gets here: `PerTaskConstraint` answers the
 delta with one `taskCost` call, and `taskCost` is one multiplication. There is
-nothing to change, so this step has no patch. Measured on the same search (the nine
-default constraints, and the constraint added at weight 0 so that no move is judged differently):
+nothing to change, so this step changes no code. Measured on the same search (the nine
+default constraints, and one constraint added at weight 0 so that no move is judged
+differently):
 
 | Assembly | Steps per second |
 | --- | --- |
-| the nine default constraints | 4.8 million |
-| + `lateWorkCost` as in step 2 | 4.5 million |
-| + `lateWorkCost` written on `AlbUnitConstraint` with `cost()` alone | 4.3 million |
-| + `workloadImbalanceCost` at weight 0 | 1.9 million |
+| the nine default constraints | 4.92 million |
+| + `lateWorkCost` as in step 2 | 4.55 million |
+| + `lateWorkCost` written on `AlbUnitConstraint` with `cost()` alone | 4.50 million |
+| + `workloadImbalanceCost` at weight 0 | 1.90 million |
 
-A station holds six tasks here, so the pass of `cost()` is short and the delta buys
-little. The last line is what a global with a costly update does to every move: that
-constraint erases and inserts in an ordered set per change. Three more things cut the cost
-of a constraint.
+A station holds six tasks here, so the pass of `cost()` is short, and on this line the
+delta buys nothing that shows: five alternating rounds of the second and third line gave
+4.48 and 4.53 million, inside the spread of a run. The last line is what a global with a
+costly update does to every move: that constraint erases and inserts in an ordered set
+per change. Three more things cut the cost of a constraint.
 
 **Leave an unused constraint out of the picks.** The assembly evaluates a pick at weight
 0 like any other. `get_constraints()` returns every constraint of the catalog; filter it
@@ -373,14 +391,15 @@ as `units`.
 
 **Read prepared lookups.** `ScoreCalculator::prepare()` derives what several constraints
 and the monolithic calculators read (`arcsOut`, `pairsOf`, `forbiddenSorted`, ...)
-once per solve. A term that searches a fact list belongs there or in `on_reset()`.
+before the search starts, not per move. A term that searches a fact list belongs there
+or in `on_reset()`.
 
 ## 5. Put it on the default path
 
 Do this when the constraint should be on in every solve (`kDefaultWeight > 0`). Then
 `alb.solve(line)` must score it, and `alb.solve(line)` scores with the monolithic
-calculators: twice the steps per second of the assembly, and the only path that
-runs parallel starts.
+calculators: more than twice the steps per second of the assembly, and the only path
+that runs parallel starts.
 
 `alb_plugin_test` compares the default assembly with the monolithic calculators on
 random assignments, so it fails from the moment the weight is not 0 until both sides
@@ -397,10 +416,10 @@ to weigh it, and to keep it per move.
 `weightOf<LateWorkCost>() * raw.lateWorkCost` to the soft sum of
 `ScoreCalculator::score()`.
 
-`cpp/src/incremental_calculator.cpp` and its header: a total `lateWork_`, set to 0
-in `rebuild()`, returned by `rawCosts()` in place of the scan of step 3, weighed in
-`score()`, and kept in `addTaskTerms()`, which the calculator calls once for the
-station a task leaves and once for the station it joins:
+`cpp/src/incremental_calculator.cpp` and its header: include the component's header,
+and add a total `lateWork_`, set to 0 in `rebuild()`, returned by `rawCosts()` in place
+of the scan of step 3, weighed in `score()`, and kept in `addTaskTerms()`, which the
+calculator calls once for the station a task leaves and once for the station it joins:
 
 ```cpp
     lateWork_ += sign * t.duration * station;
@@ -410,14 +429,17 @@ That is all for a per-task constraint. The default path ran at 9.3 million steps
 second with the tenth constraint on, against 10.7 million with nine; the two searches take
 different moves, so the difference is not all scoring.
 
-A constraint over arcs, pairs or groups is more work: `taskPrecedenceCost`,
-`differentStationPairsCost` and `sameStationGroupsCost` are kept from the mirrored
-stations in `reversedArcsOf()`, `pairsWith()` and `updateGroups()`, and a new constraint
-of that kind needs its own function next to them in `insert()` and `retract()`.
+A constraint over arcs, pairs or groups is more work: `taskPrecedenceCost` and
+`differentStationPairsCost` are kept from the mirrored stations of the other tasks in
+`reversedArcsOf()` and `pairsWith()`, `sameStationGroupsCost` from a tally per group in
+`updateGroups()`, and a new constraint of that kind needs its own function next to them
+in `insert()` and `retract()`.
 
-**3. The reference scorer.** Its default for the constraint becomes `(False, 1.0)`. With
-that, both C++ tests and the reference agree with the monolithic calculators again;
-what still fails is hand-computed (below).
+**3. The reference scorer.** Its default for the constraint becomes `(False, 1.0)`; left
+at 0, its default score differs from the engine's and 102 more tests of
+`test_reference_parity.py` fail. With that, the assembly, the two monolithic calculators
+and the reference agree on every score and raw total again; what still fails is
+hand-computed (below).
 
 **4. What else moves.** A constraint that is on by default changes every default score:
 
@@ -430,11 +452,11 @@ what still fails is hand-computed (below).
 - the solutions themselves. At weight 1 a unit of late work counts as much as a
   station. On the 100-task line four seeds of five still ended on 17 stations and
   one on 20 (2 million steps). A default that must never cost a station weighs
-  `usedStationsCost` up with it: with that constraint at 1,000, seeds 1 to 3 all kept 17;
-- the tables, the lists and the counts ("ten", "the six per-station constraints")
-  in [README.md](README.md), [python.md](python.md), `constraints.py`, `__init__.py`,
-  `_core.pyi`, `domain.hpp`, `score_calculator.hpp`, `incremental_calculator.hpp`,
-  `constraints.hpp` and `constraints/common.hpp`;
+  `usedStationsCost` up with it: with that constraint at 1,000, seeds 1 to 5 all kept 17;
+- the defaults and the score formula (`soft = -(stations used)`) wherever they are
+  written out: [README.md](README.md), [python.md](python.md), `constraints.py`,
+  `__init__.py`, `_core.pyi`, `domain.hpp`, `score_calculator.hpp`,
+  `incremental_calculator.hpp` and `constraints.hpp`;
 - the CP-SAT model the benchmark compares against,
   `external_solver.assembly_line_balancing` in
   [external-solver](https://github.com/optimaru/external-solver): a plugin that
@@ -442,9 +464,11 @@ what still fails is hand-computed (below).
   encoding, and its place in `REGISTRY`. That repository's
   `tests/assembly_line_balancing/test_constraint_parity.py` pins assignments in
   CP-SAT and compares every name of `list_constraints()` with the engine's raw
-  cost, so it asks for the plugin from step 2 on. Without the same constraint there,
+  cost, and the model refuses a spec it has no plugin for (`unknown constraint`), so
+  that test asks for the plugin from step 2 on. Without the plugin
   [`benchmarks/assembly-line-balancing`](../../../benchmarks/assembly-line-balancing)
-  no longer compares one objective;
+  still runs, but CP-SAT minimizes the objective without the constraint while both
+  answers are scored with it: it no longer compares one objective;
 - the published results in `benchmarks/assembly-line-balancing/README.md` and
   `bench/RESULTS.md`, and `CHANGELOG.md`.
 
@@ -457,7 +481,7 @@ line of step 2 (`generated_line()` is the function defined there):
 import time
 
 catalog = {row.name: row for row in alb.constraint_info()}
-enabled = [rule for rule in get_constraints() if catalog[rule.name].default_enabled]
+enabled = [spec for spec in get_constraints() if catalog[spec.name].default_enabled]
 steps = 2_000_000
 for label, picked in (("default path", None), ("assembly", enabled), ("get_constraints()", get_constraints())):
     line = generated_line()
@@ -478,44 +502,53 @@ differ after a change, the two paths no longer score alike.
 | --- | --- |
 | default path, nine constraints | 10.7 million |
 | assembly, the same nine | 4.9 million |
-| assembly, `get_constraints()` (the workload constraint at weight 0 with them) | 1.8 million |
+| assembly, `get_constraints()` (the workload constraint at weight 0 with them) | 1.9 million |
 | assembly, nine + the constraint of step 2 at weight 0.01 | 3.9 million |
 | default path, ten constraints (step 5) | 9.3 million |
+| assembly, the same ten (step 5) | 4.1 million |
 
-Each figure is the median of three runs. A constraint with a weight changes which moves
-are taken, so the last two lines are other searches than the first two; the table
-of step 4 has what the constraint costs on the same search.
+Each figure is the median of three runs, all taken in one session; a run moves by a few
+percent, and other work on the machine lowers every row together. A constraint with a
+weight changes which moves are taken, so the last three lines are other searches than
+the first three; the table of step 4 has what the constraint costs on the same search.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
-stations at the same budget over several seeds, before and after:
+the result at the same budget over several seeds, before and after:
 
 ```sh
 cd benchmarks/assembly-line-balancing/cpsat
-OPTIMARU_USE_CASES=assembly_line_balancing uv sync
+export OPTIMARU_USE_CASES=assembly_line_balancing   # without it, uv run rebuilds every use case
+uv sync
 uv run python -m assembly_line_balancing_cpsat.benchmark --solver engine --seconds 10 --seed 1
 uv run python -m assembly_line_balancing_cpsat.benchmark --seconds 10      # against CP-SAT
 ```
 
-Both commands solve on the default path, so they measure a constraint after step 5; the
-generated lines are the "small", "medium" and "large" of the benchmark. The public
-archive runs through `python -m bench.run_bench`
-([README](../../../benchmarks/assembly-line-balancing/README.md)).
+Both commands solve on the default path, so they measure a constraint after step 5, on
+the "small", "medium" and "large" generated lines of the benchmark. They print the score
+at the default constraints: the station count before step 5, stations plus late work
+after it. To compare stations across the change, read `stations_used()` as the snippet
+of step 2 does. The public archive runs through `python -m bench.run_bench`
+([README](../../../benchmarks/assembly-line-balancing/README.md)), which reports the
+stations used.
 
 ## What each step touched
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
 | `cpp/include/alb/constraints/<subject>_cost.hpp` | new | | | weight |
-| `cpp/include/alb/constraints.hpp` | include, `visit` | | | |
-| `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | docstring, counts in the text |
+| `cpp/include/alb/constraints.hpp` | include, `visit` | the list in its comment | | the default in that list |
+| `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | lists in the docstring | | defaults in the docstrings |
 | `cpp/include/alb/score_calculator.hpp`, `cpp/src/score_calculator.cpp` | | `RawCosts`, the raw total | | the weight in `score()` |
 | `cpp/src/incremental_calculator.cpp`, its header | | the raw total, scanned | | kept per move, weighed |
 | `tests/assembly_line_balancing/cpp/alb_fixtures.hpp` | | names, totals | | |
 | `tests/assembly_line_balancing/cpp/alb_plugin_test.cpp`, `alb_test.cpp` | | cases, counts | | expected scores |
 | `tests/assembly_line_balancing/test_constraint_specs.py`, `test_assembly_line_balancing.py` | | lists | | expected scores |
-| `tests/assembly_line_balancing/reference_assembly_line_balancing.py`, `test_reference_parity.py` | | the constraint, weight 0 | | weight |
-| `docs/use-cases/assembly-line-balancing/README.md`, `python.md` | | table row | | defaults |
-| external-solver, `benchmarks/assembly-line-balancing` | | | | the same constraint, results |
+| `tests/assembly_line_balancing/test_solve.py` | | | | expected scores |
+| `tests/assembly_line_balancing/reference_assembly_line_balancing.py`, `test_reference_parity.py` | | the constraint, weight 0 | | weight, expected score |
+| `cpp/include/alb/constraints/common.hpp`, `_core.pyi` | | counts and lists in the comments | | |
+| `__init__.py`, `_core.pyi`, `cpp/include/alb/domain.hpp` | | | | the score formula |
+| `docs/use-cases/assembly-line-balancing/README.md`, `python.md` | | table row, counts | | defaults |
+| external-solver, `benchmarks/assembly-line-balancing` | | the count in its README | | the same constraint, results |
 
 Moves and the construction heuristic are a different subject: see
 [Extending](README.md#extending) in the guide.

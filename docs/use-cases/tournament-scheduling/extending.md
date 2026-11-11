@@ -67,7 +67,7 @@ from optimaru.tournament_scheduling.models import demo_data
 schedule = demo_data()
 changed = {"confrontation_count_imbalance_cost", "team_unavailability_cost", "assignment_count_imbalance_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     ConfrontationCountImbalanceCost(weight=10),                         # heavier (default 1)
     TeamUnavailabilityCost(level="soft"),                               # hard by default
 ]                                                                       # assignment_count_imbalance_cost: dropped
@@ -79,7 +79,7 @@ To try weights without solving again, score a finished schedule with other picks
 ```python
 from optimaru.tournament_scheduling.constraints import score
 
-raw = ts.constraint_costs(result.to_core(), picks)  # raw cost of every rule, per team or one total
+raw = ts.constraint_costs(result.to_core(), picks)  # raw cost of every constraint, per team or one total
 print(score(raw, picks))                            # the score those picks give this schedule
 ```
 
@@ -212,7 +212,7 @@ uv sync                                    # rebuilds optimaru.tournament_schedu
 ```python
 from optimaru.tournament_scheduling.constraints import ConsecutiveDaysCost
 
-others = [rule for rule in get_constraints() if rule.name != "consecutive_days_cost"]
+others = [spec for spec in get_constraints() if spec.name != "consecutive_days_cost"]
 picks = [*others, ConsecutiveDaysCost(weight=1)]
 for picked in (picks, others, None):
     config = ts.SolverConfig()
@@ -576,7 +576,8 @@ quality bench for this use case; the comparison runs from Python, on the default
 
 ```sh
 cd benchmarks/tournament-scheduling/cpsat
-OPTIMARU_USE_CASES=tournament_scheduling uv sync
+export OPTIMARU_USE_CASES=tournament_scheduling    # keep it set: uv rebuilds when it changes
+uv sync
 uv run tournament-scheduling-compare --seconds 10 --workers 8
 ```
 

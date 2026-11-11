@@ -64,7 +64,7 @@ problem = MaxCutProblemModel(vertices=vertices, edges=edges)
 
 changed = {"cut_weight_cost", "partition_imbalance_cost", "partition_size_bounds_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     CutWeightCost(weight=2),                                           # heavier (default 1)
     PartitionImbalanceCost(weight=1, level="hard"),                    # soft and off by default
 ]                                                                      # partition_size_bounds_cost: dropped
@@ -76,7 +76,7 @@ To try weights without solving again, score a finished partition with other pick
 ```python
 from optimaru.max_cut.constraints import score
 
-raw = max_cut.constraint_costs(result, picks)  # raw cost of every rule, per side or as one total
+raw = max_cut.constraint_costs(result, picks)  # raw cost of every constraint, per side or as one total
 print(score(raw, picks))                       # the score those picks give this partition
 ```
 
@@ -202,7 +202,7 @@ uv sync                                    # rebuilds optimaru.max_cut._core
 ```python
 from optimaru.max_cut.constraints import UncutEdgesCost
 
-others = [rule for rule in get_constraints() if rule.name != "uncut_edges_cost"]
+others = [spec for spec in get_constraints() if spec.name != "uncut_edges_cost"]
 picks = [*others, UncutEdgesCost(weight=2)]
 config = max_cut.SolverConfig()
 config.step_count_limit = 500_000
@@ -277,8 +277,9 @@ Python tests, and they list more than a count. Update them:
 Then add cases that pick the constraint, at a weight and on the hard level
 (`test_levels_by_hand_on_both_paths` in `test_constraint_specs.py`).
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
+score stale:
 
 ```python
 max_cut.solve(problem, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)

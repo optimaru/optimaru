@@ -52,7 +52,7 @@ from optimaru.food_packaging.constraints import AfterIdealEndTimeCost, Unassigne
 schedule = fp.generate_demo_data()
 changed = {"after_ideal_end_time_cost", "unassigned_jobs_cost", "operator_cleaning_conflict_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     AfterIdealEndTimeCost(weight=3),                                    # heavier (default 1)
     UnassignedJobsCost(level="hard"),                                   # medium by default
 ]                                                                       # operator_cleaning_conflict_cost: dropped
@@ -64,7 +64,7 @@ To try weights without solving again, score a finished schedule with other picks
 ```python
 from optimaru.food_packaging.constraints import score
 
-raw = fp.constraint_costs(schedule, picks)  # raw cost of every rule, per line
+raw = fp.constraint_costs(schedule, picks)  # raw cost of every constraint, per line
 print(score(raw, picks))                    # the score those picks give this schedule
 ```
 
@@ -199,7 +199,7 @@ uv sync                                    # rebuilds optimaru.food_packaging._c
 ```python
 from optimaru.food_packaging.constraints import BeforeIdealEndTimeCost
 
-others = [rule for rule in get_constraints() if rule.name != "before_ideal_end_time_cost"]
+others = [spec for spec in get_constraints() if spec.name != "before_ideal_end_time_cost"]
 picks = [*others, BeforeIdealEndTimeCost(weight=1000)]
 config = fp.SolverConfig()
 config.step_count_limit = 500_000
@@ -263,8 +263,9 @@ Update them:
   `test_weight_none_means_the_component_default` read. The first of the two also
   asserts that every row is on by default.
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
+score stale:
 
 ```python
 schedule = fp.generate_demo_data()

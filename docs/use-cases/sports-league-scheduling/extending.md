@@ -69,7 +69,7 @@ changed = {
     "away_to_end_hop_cost",
 }
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     WorkdayClassicMatchesCost(weight=5000),                             # heavier (default 1000)
     RepeatMatchOnNextDayCost(level="soft", weight=500),                 # hard by default
     AwayToAwayHopCost(exponent=2, weight=0.001),                        # the total, squared
@@ -84,7 +84,7 @@ To try weights without solving again, score a finished schedule with other picks
 ```python
 from optimaru.sports_league_scheduling.constraints import score
 
-raw = sl.constraint_costs(schedule, picks)  # raw cost of every rule: per round, or one total
+raw = sl.constraint_costs(schedule, picks)  # raw cost of every constraint: per round, or one total
 print(score(raw, picks))                    # the score those picks give this schedule
 ```
 
@@ -207,7 +207,7 @@ uv sync                                    # rebuilds optimaru.sports_league_sch
 ```python
 from optimaru.sports_league_scheduling.constraints import WorkdayAwayTripCost
 
-others = [rule for rule in get_constraints() if rule.name != "workday_away_trip_cost"]
+others = [spec for spec in get_constraints() if spec.name != "workday_away_trip_cost"]
 picks = [*others, WorkdayAwayTripCost(weight=1)]
 config = sl.SolverConfig()
 config.step_count_limit = 5_000_000

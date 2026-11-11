@@ -87,7 +87,7 @@ def make_plan(visit_count=100, vehicle_count=10, seed=1):
 plan = make_plan()
 changed = {"max_end_time_cost", "route_duration_cost", "vehicle_fixed_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     MaxEndTimeCost(level="soft", weight=600),                          # hard by default
     RouteDurationCost(weight=0.5),                                     # off by default (weight 0)
 ]                                                                      # vehicle_fixed_cost: dropped
@@ -99,7 +99,7 @@ To try weights without solving again, score a finished plan with other picks:
 ```python
 from optimaru.vehicle_routing.constraints import score
 
-raw = vrp.constraint_costs(plan, picks)  # raw cost of every rule, per vehicle
+raw = vrp.constraint_costs(plan, picks)  # raw cost of every constraint, per vehicle
 print(score(raw, picks))                 # the (hard, soft) those picks give this plan, medium folded in
 ```
 
@@ -227,7 +227,7 @@ uv sync                                    # rebuilds optimaru.vehicle_routing._
 ```python
 from optimaru.vehicle_routing.constraints import WaitingTimeCost
 
-others = [rule for rule in get_constraints() if rule.name != "waiting_time_cost"]
+others = [spec for spec in get_constraints() if spec.name != "waiting_time_cost"]
 picks = [*others, WaitingTimeCost(weight=0.1)]
 plan = make_plan()
 config = vrp.SolverConfig()
@@ -284,9 +284,9 @@ Python tests. Update them:
   `test_weight_none_means_the_component_default` read. A constraint at weight 0 also joins
   the classes of `test_the_weight_zero_objectives_are_opt_in`.
 
-**Incremental against full.** Solve with every score checked against a full
-recompute, and every preview of a move against the score after the move. It throws
-`ScoreMismatchError` if they differ:
+**Incremental against full.** Solve with every score checked against a full recompute, and every
+preview of a move against the score after the move. It raises `RuntimeError` ("Score corruption:
+...", the engine's `ScoreMismatchError`) if they differ:
 
 ```python
 vrp.solve(make_plan(), time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)

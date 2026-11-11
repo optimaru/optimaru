@@ -76,7 +76,7 @@ picks = [
     FacilityCapacityCost(level="soft", weight=1000),     # hard by default
     FacilitySetupCost(weight=3),                         # heavier (default 2)
     DistanceFromFacilityCost(exponent=2, weight=0.001),  # squared per facility (default 6, linear)
-]                                                        # a rule you leave out is not scored
+]                                                        # a constraint you leave out is not scored
 fl.solve(problem, time_limit_seconds=10, constraints=picks)
 ```
 
@@ -87,7 +87,7 @@ To try weights without solving again, score a finished assignment with other pic
 ```python
 from optimaru.facility_location.constraints import score
 
-raw = fl.constraint_costs(problem, picks)  # raw cost of every rule, per facility
+raw = fl.constraint_costs(problem, picks)  # raw cost of every constraint, per facility
 print(score(raw, picks))                   # the score those picks give this assignment
 ```
 
@@ -206,7 +206,7 @@ uv sync                                    # rebuilds optimaru.facility_location
 ```python
 from optimaru.facility_location.constraints import DemandDistanceCost, get_constraints
 
-others = [rule for rule in get_constraints() if rule.name != "demand_distance_cost"]
+others = [spec for spec in get_constraints() if spec.name != "demand_distance_cost"]
 picks = [*others, DemandDistanceCost(weight=1)]
 config = fl.SolverConfig()
 config.step_count_limit = 4_000_000

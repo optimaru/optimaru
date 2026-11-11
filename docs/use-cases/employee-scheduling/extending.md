@@ -68,10 +68,10 @@ from optimaru.employee_scheduling.models import to_schedule
 schedule = to_schedule(generate_demo_data().model_input)
 changed = {"undesired_day_cost", "min_rest_cost", "max_one_shift_per_day_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     UndesiredDayCost(weight=3, per_day=True),                          # heavier, one per shift
     MinRestCost(min_gap_minutes=720, level="soft"),                    # 12 hours, and soft
-    MaxConsecutiveDaysCost(value=5),                                   # an opt-in rule, picked
+    MaxConsecutiveDaysCost(value=5),                                   # an opt-in constraint, picked
 ]                                                                      # max_one_shift_per_day_cost: dropped
 es.solve(schedule, time_limit_seconds=10, constraints=picks)          # solved in place and returned
 ```
@@ -81,7 +81,7 @@ To try weights without solving again, score a finished schedule with other picks
 ```python
 from optimaru.employee_scheduling.constraints import score
 
-raw = es.constraint_costs(schedule, picks)  # raw cost of every rule, per employee
+raw = es.constraint_costs(schedule, picks)  # raw cost of every constraint, per employee
 print(score(raw, picks))                    # the score those picks give this schedule
 ```
 

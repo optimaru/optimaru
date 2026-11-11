@@ -72,7 +72,7 @@ from optimaru.pickup_delivery.constraints import LatencyCost, MaxEndTimeCost, ge
 plan = pdp.build_random_instance(request_count=100, vehicle_count=10, seed=7)
 changed = {"max_end_time_cost", "latency_cost", "vehicle_fixed_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     MaxEndTimeCost(level="soft", weight=600),                          # hard by default
     LatencyCost(weight=0.01),                                          # off by default (weight 0)
 ]                                                                      # vehicle_fixed_cost: dropped
@@ -84,7 +84,7 @@ To try weights without solving again, score a finished plan with other picks:
 ```python
 from optimaru.pickup_delivery.constraints import score
 
-raw = pdp.constraint_costs(plan, picks)  # raw cost of every rule, per vehicle
+raw = pdp.constraint_costs(plan, picks)  # raw cost of every constraint, per vehicle
 print(score(raw, picks))                 # the (hard, soft) those picks give this plan, medium folded in
 ```
 
@@ -241,7 +241,7 @@ uv sync --reinstall-package optimaru       # rebuilds optimaru.pickup_delivery._
 ```python
 from optimaru.pickup_delivery.constraints import RideTimeCost
 
-others = [rule for rule in get_constraints() if rule.name != "ride_time_cost"]
+others = [spec for spec in get_constraints() if spec.name != "ride_time_cost"]
 picks = [*others, RideTimeCost(weight=0.1)]
 plan = pdp.build_random_instance(request_count=100, vehicle_count=10, seed=7)
 config = pdp.SolverConfig()
@@ -300,8 +300,9 @@ Python tests. Update them:
   `test_constraint_info_reports_the_cpp_defaults` and
   `test_weight_none_means_the_component_default` read.
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
+score stale:
 
 ```python
 pdp.solve(plan, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)

@@ -56,7 +56,7 @@ from optimaru.maintenance_scheduling.constraints import AfterIdealEndDateCost, T
 schedule = mnt.generate_demo_data("LARGE", 20_454)  # a fixed Monday; the default is next Monday
 changed = {"after_ideal_end_date_cost", "tag_conflict_cost", "before_ideal_end_date_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     AfterIdealEndDateCost(weight=10_000),                               # lighter (default 1,000,000)
     TagConflictCost(level="hard"),                                      # soft by default
 ]                                                                       # before_ideal_end_date_cost: dropped
@@ -68,7 +68,7 @@ To try weights without solving again, score a finished schedule with other picks
 ```python
 from optimaru.maintenance_scheduling.constraints import score
 
-raw = mnt.constraint_costs(result, picks)  # raw cost of every rule, per cell or one total
+raw = mnt.constraint_costs(result, picks)  # raw cost of every constraint, per cell or one total
 print(score(raw, picks))                   # the score those picks give this schedule
 ```
 
@@ -194,7 +194,7 @@ uv sync                                    # rebuilds optimaru.maintenance_sched
 ```python
 from optimaru.maintenance_scheduling.constraints import WeekendSpanCost
 
-others = [rule for rule in get_constraints() if rule.name != "weekend_span_cost"]
+others = [spec for spec in get_constraints() if spec.name != "weekend_span_cost"]
 picks = [*others, WeekendSpanCost(weight=10)]
 config = mnt.SolverConfig()
 config.step_count_limit = 2_000_000
@@ -258,8 +258,9 @@ One more check does not fail but stops checking what it says.
 the new constraint fifth in `_DEFAULTS` they lose `crew_conflict_cost`. List the six by name
 there.
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
+score stale:
 
 ```python
 mnt.solve(schedule, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)

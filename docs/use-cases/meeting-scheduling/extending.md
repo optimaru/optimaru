@@ -57,7 +57,7 @@ from optimaru.meeting_scheduling.constraints import MeetingOverlapCost, RoomChan
 schedule = ms.demo_data()
 changed = {"meeting_overlap_cost", "room_change_cost", "larger_room_capacity_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     MeetingOverlapCost(weight=40),                                      # heavier (default 10)
     RoomChangeCost(level="medium"),                                     # soft by default
 ]                                                                       # larger_room_capacity_cost: dropped
@@ -69,7 +69,7 @@ To try weights without solving again, score a finished schedule with other picks
 ```python
 from optimaru.meeting_scheduling.constraints import score
 
-raw = ms.constraint_costs(schedule, picks)  # raw cost of every rule: per cell, or one total
+raw = ms.constraint_costs(schedule, picks)  # raw cost of every constraint: per cell, or one total
 print(score(raw, picks))                    # the score those picks give this schedule
 ```
 
@@ -193,7 +193,7 @@ uv sync                                    # rebuilds optimaru.meeting_schedulin
 ```python
 from optimaru.meeting_scheduling.constraints import LateStartCost
 
-others = [rule for rule in get_constraints() if rule.name != "late_start_cost"]
+others = [spec for spec in get_constraints() if spec.name != "late_start_cost"]
 picks = [*others, LateStartCost(weight=5)]
 config = ms.SolverConfig()
 config.step_count_limit = 2_000_000
@@ -254,8 +254,9 @@ Python tests. Update them:
   `test_the_attendance_clash_raw_costs`, which lists every non-zero raw cost of a hand
   schedule: there the constraint reads 2 in cell 5.
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
+score stale:
 
 ```python
 ms.solve(schedule, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)

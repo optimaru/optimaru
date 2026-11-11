@@ -60,7 +60,7 @@ from optimaru.conference_scheduling.constraints import ContentConflictCost, Spea
 schedule = cs.demo_conference()
 changed = {"content_conflict_cost", "speaker_makespan_cost", "language_diversity_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     ContentConflictCost(weight=500),                                    # heavier (default 100)
     SpeakerMakespanCost(level="hard"),                                  # soft by default
 ]                                                                       # language_diversity_cost: dropped
@@ -72,7 +72,7 @@ To try weights without solving again, score a finished schedule with other picks
 ```python
 from optimaru.conference_scheduling.constraints import score
 
-raw = cs.constraint_costs(schedule, picks)  # raw cost of every rule, one total each
+raw = cs.constraint_costs(schedule, picks)  # raw cost of every constraint, one total each
 print(score(raw, picks))                    # the score those picks give this schedule
 ```
 
@@ -207,7 +207,7 @@ uv sync                                    # rebuilds optimaru.conference_schedu
 ```python
 from optimaru.conference_scheduling.constraints import RoomOverflowCost
 
-others = [rule for rule in get_constraints() if rule.name != "room_overflow_cost"]
+others = [spec for spec in get_constraints() if spec.name != "room_overflow_cost"]
 picks = [*others, RoomOverflowCost(weight=1)]
 config = cs.SolverConfig()
 config.step_count_limit = 200_000
@@ -280,8 +280,9 @@ Update them:
   `test_module_level_instances_keep_every_default` and
   `test_constraint_info_reports_the_cpp_defaults`.
 
-**Incremental against full.** Solve with every score checked against a full
-recompute. It throws `ScoreMismatchError` if a move leaves the score stale:
+**Incremental against full.** Solve with every score checked against a full recompute. It raises
+`RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
+score stale:
 
 ```python
 cs.solve(schedule, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)

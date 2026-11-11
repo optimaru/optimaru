@@ -81,7 +81,7 @@ from optimaru.flight_crew_scheduling.constraints import EmployeeUnavailabilityCo
 schedule = generate_schedule()
 changed = {"required_skill_cost", "employee_unavailability_cost", "transfer_between_two_flights_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     RequiredSkillCost(weight=500),                                      # heavier (default 100)
     EmployeeUnavailabilityCost(level="soft"),                           # hard by default
 ]                                                                       # transfer_between_two_flights_cost: dropped
@@ -93,7 +93,7 @@ To try weights without solving again, score a finished schedule with other picks
 ```python
 from optimaru.flight_crew_scheduling.constraints import score
 
-raw = fc.constraint_costs(result, picks)  # raw cost of every rule, per crew member
+raw = fc.constraint_costs(result, picks)  # raw cost of every constraint, per crew member
 print(score(raw, picks))                  # the score those picks give this schedule
 ```
 
@@ -218,7 +218,7 @@ uv sync                                    # rebuilds optimaru.flight_crew_sched
 ```python
 from optimaru.flight_crew_scheduling.constraints import UnavailabilityBufferCost
 
-others = [rule for rule in get_constraints() if rule.name != "unavailability_buffer_cost"]
+others = [spec for spec in get_constraints() if spec.name != "unavailability_buffer_cost"]
 picks = [*others, UnavailabilityBufferCost(weight=100)]
 config = fc.SolverConfig()
 config.step_count_limit = 2_000_000

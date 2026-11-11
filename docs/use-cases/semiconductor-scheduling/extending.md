@@ -66,7 +66,7 @@ from optimaru.semiconductor_scheduling.models import SemiconductorScheduleModel
 problem = SemiconductorScheduleModel.model_validate_json(open("tests/semiconductor_scheduling/fixtures/web_demo.json").read())
 changed = {"weighted_tardiness_cost", "max_queue_time_cost", "machine_load_imbalance_cost"}
 picks = [
-    *[rule for rule in get_constraints() if rule.name not in changed],  # the others as they are
+    *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
     WeightedTardinessCost(weight=40),                                  # heavier (default 10)
     MaxQueueTimeCost(level="soft"),                                    # hard by default
 ]                                                                      # machine_load_imbalance_cost: dropped
@@ -78,7 +78,7 @@ To try weights without solving again, score a finished schedule with other picks
 ```python
 from optimaru.semiconductor_scheduling.constraints import score
 
-raw = fab.constraint_costs(result, picks)  # raw total of every rule
+raw = fab.constraint_costs(result, picks)  # raw total of every constraint
 print(score(raw, picks))                   # the score those picks give this schedule
 print(fab.constraint_items(result)["weighted_tardiness_cost"])  # one item per completed lot
 ```
@@ -238,7 +238,7 @@ uv sync                                    # rebuilds optimaru.semiconductor_sch
 from optimaru.semiconductor_scheduling.constraints import LateLotsCost
 
 problem = lots24()  # the benchmark instance, built by the script of step 6
-others = [rule for rule in get_constraints() if rule.name != "late_lots_cost"]
+others = [spec for spec in get_constraints() if spec.name != "late_lots_cost"]
 picks = [*others, LateLotsCost(weight=50)]
 config = fab.SolverConfig()
 config.step_count_limit = 500_000
@@ -324,12 +324,11 @@ tests/test_constraints_contract.py`.
 
 **Incremental against full.** Two checks, and they catch different mistakes:
 
-- `fab_test` and `fab_plugin_test` (b) walk random moves and compare every term of the
-  evaluator with `rawCostsOf()` of the decoded schedule. A formula missing from one of
-  the two callers, or called differently, fails here. (b) also requires every term to be
-  non-zero somewhere on the walk.
-- A solve with every score checked against a rebuild. It throws `ScoreMismatchError`
-  if a move leaves a unit stale:
+- `fab_test` and `fab_plugin_test` (b) walk random moves and compare every term of the evaluator
+  with `rawCostsOf()` of the decoded schedule. A formula missing from one of the two callers, or
+  called differently, fails here. (b) also requires every term to be non-zero somewhere on the walk.
+  - A solve with every score checked against a rebuild. It raises `RuntimeError` ("Score corruption:
+  ...", the engine's `ScoreMismatchError`) if a move leaves a unit stale:
 
   ```python
   fab.solve(problem, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
