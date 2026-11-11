@@ -160,7 +160,7 @@ PYBIND11_MODULE(_core, m) {
             // Assignment best-improvement descent strategy weight. 0 = off.
             .def_readwrite("descent_weight", &Solver::Config::descent_weight)
             // Gate on how often a step may draw a macro move (EmptyBinMove,
-            // RepackMove). 1 = engine default (unrestricted).
+            // RepackMove, TradeMove). 1 = engine default (unrestricted).
             .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             // EmptyBinMove: the domain macro move that empties one light bin in a
             // single step (see cpp/include/bp/moves.hpp).
@@ -177,6 +177,12 @@ PYBIND11_MODULE(_core, m) {
             // light bins and re-place their items best fit decreasing without a
             // capacity, colour or conflict clash (cpp/include/bp/moves.hpp).
             .def_readwrite("repack_moves", &Solver::Config::repack_moves)
+            // TradeMove: a trade of up to two items a side between two bins that
+            // leaves the fuller one fuller (cpp/include/bp/moves.hpp).
+            .def_readwrite("trade_moves", &Solver::Config::trade_moves)
+            // Steps that keep the score: taken when the bins get no less full,
+            // else one time in eight (cpp/include/bp/fill_late_acceptance.hpp).
+            .def_readwrite("fill_tie_break", &Solver::Config::fill_tie_break)
             .def_property(
                     "repack_partner_bins",
                     [](const Solver::Config& c) { return c.repack_partner_bins; },

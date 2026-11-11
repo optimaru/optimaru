@@ -28,7 +28,16 @@
 //       every raw total equal a full recompute after each apply and each
 //       undo (no calculator reset in between), an undo restores the
 //       assignment exactly, RepackMove never adds a hard violation, and the
-//       same walk passes under a ScoreChecks::Full editor
+//       same walk passes under a ScoreChecks::Full editor; TradeMove closes
+//       a bin, fills one, trades between two full bins and finds no trade
+//       where there is none, and never adds a hard violation on a plain
+//       instance
+//   (k) FillLateAcceptance (bp/fill_late_acceptance.hpp): a step that keeps
+//       the score is taken when the fill does not fall and about one time
+//       in eight when it does, a refusal leaves the acceptor's copy as it
+//       was, a step that changes the score follows late acceptance, an
+//       unreported change is caught up with after n steps, and a capacity
+//       of 2^40 stays within the int64
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -44,6 +53,7 @@
 
 #include "bp/construction.hpp"
 #include "bp/domain.hpp"
+#include "bp/fill_late_acceptance.hpp"
 #include "bp/incremental_calculator.hpp"
 #include "bp/moves.hpp"
 #include "bp/score_calculator.hpp"
@@ -97,6 +107,21 @@ BinPackingProblem abcd(const std::vector<int>& bins) {
 }
 
 std::vector<int> binsOf(const BinPackingProblem& p) { return p.assignment(); }
+
+// The packing whatever its bins are called: the weights in each non-empty
+// bin, sorted, and the bins sorted.
+std::vector<std::vector<std::int64_t>> packingOf(const BinPackingProblem& p) {
+    std::vector<std::vector<std::int64_t>> bins(p.items.size());
+    for (const Item& item : p.items) {
+        if (item.bin >= 0) bins[static_cast<std::size_t>(item.bin)].push_back(item.weight);
+    }
+    bins.erase(std::remove_if(bins.begin(), bins.end(),
+                              [](const std::vector<std::int64_t>& bin) { return bin.empty(); }),
+               bins.end());
+    for (std::vector<std::int64_t>& bin : bins) std::sort(bin.begin(), bin.end());
+    std::sort(bins.begin(), bins.end());
+    return bins;
+}
 
 // -------------------------------------------------------------------------
 // (a) hand-calculated positive and zero cases
@@ -700,6 +725,85 @@ void verifyMacroMovesByHand() {
                       binsOf(e) == std::vector<int>{1, 1, 1, 2} && director2.score().hard == -1,
               "EmptyBinMove on the same state: A next to its partner B -> -1hard");
     }
+    // TradeMove, C = 10. Which of the two bins comes first is drawn, so each
+    // case is tried from several draws and has to end the same way.
+    struct TradeCase {
+        const char* label;
+        std::vector<Item> items;
+        bool trades;
+        std::vector<std::vector<std::int64_t>> packing;  // expected, when it trades
+        Score score;                                     // expected, when it trades
+    };
+    const std::vector<TradeCase> cases = {
+            // A4 | B3 C3: everything fits one bin, the trade that fills a bin most.
+            {"closes a bin: A4 | B3 C3 -> one bin of 10",
+             {makeItem("A", 4, 0), makeItem("B", 3, 1), makeItem("C", 3, 1)},
+             true,
+             {{3, 3, 4}},
+             Score{0, -1.0}},
+            // A4 B1 | C6 D3 (5 and 9): B to the second bin, or A for C and D,
+            // both leave 4 and 10.
+            {"fills a bin: A4 B1 | C6 D3 -> loads 4 and 10",
+             {makeItem("A", 4, 0), makeItem("B", 1, 0), makeItem("C", 6, 1), makeItem("D", 3, 1)},
+             true,
+             {},  // two packings; the loads are checked below
+             Score{0, -2.0}},
+            // Two full bins: A4 for E2 F2, or B3 C3 for D6, the same packing.
+            {"two full bins trade: A4 B3 C3 | D6 E2 F2 -> A4 D6 | B3 C3 E2 F2",
+             {makeItem("A", 4, 0), makeItem("B", 3, 0), makeItem("C", 3, 0), makeItem("D", 6, 1),
+              makeItem("E", 2, 1), makeItem("F", 2, 1)},
+             true,
+             {{2, 2, 3, 3}, {4, 6}},
+             Score{0, -2.0}},
+            // Two full bins of the same weights: every trade is the same packing.
+            {"no trade: A5 B5 | C5 D5",
+             {makeItem("A", 5, 0), makeItem("B", 5, 0), makeItem("C", 5, 1), makeItem("D", 5, 1)},
+             false,
+             {},
+             Score{0, -2.0}},
+            // Every item in one bin: no second bin.
+            {"no trade: one bin",
+             {makeItem("A", 5, 0), makeItem("B", 5, 0)},
+             false,
+             {},
+             Score{0, -1.0}},
+    };
+    for (const TradeCase& tradeCase : cases) {
+        bool ok = true;
+        for (std::uint64_t seed = 1; seed <= 12; ++seed) {
+            BinPackingProblem p;
+            p.binCapacity = 10;
+            p.items = tradeCase.items;
+            ScoreCalculator::prepare(p);
+            const std::vector<int> before = binsOf(p);
+            BinPackingIncrementalScoreCalculator calc;
+            optimaru::Editor<BinPackingProblem> editor(p, calc);
+            const Score beforeScore = editor.score();
+            MoveDriver driver(editor);
+            std::mt19937_64 rng(seed);
+            TradeMove trade(3);
+            const bool traded = trade.apply(driver.ctx, rng, driver.entities);
+            ok = ok && traded == tradeCase.trades;
+            if (!traded) {
+                ok = ok && binsOf(p) == before;
+                continue;
+            }
+            ok = ok && sameScore(editor.score(), tradeCase.score);
+            if (tradeCase.packing.empty()) {
+                std::vector<std::int64_t> loads = p.binLoads();
+                std::sort(loads.begin(), loads.end());
+                loads.erase(loads.begin(),
+                            std::find_if(loads.begin(), loads.end(),
+                                         [](std::int64_t load) { return load > 0; }));
+                ok = ok && loads == std::vector<std::int64_t>{4, 10};
+            } else {
+                ok = ok && packingOf(p) == tradeCase.packing;
+            }
+            trade.undo_last(driver.ctx);
+            ok = ok && binsOf(p) == before && sameScore(editor.score(), beforeScore);
+        }
+        check(ok, std::string("TradeMove ") + tradeCase.label + ", from 12 draws; undo restores");
+    }
 }
 
 // Random walk: ordinary change moves (to reach infeasible and lopsided
@@ -709,8 +813,8 @@ void verifyMacroMovesByHand() {
 // score itself (a ScoreMismatchError fails the walk).
 template <typename Move>
 void walkMacroMove(Move& move, const std::string& label, optimaru::ScoreChecks mode,
-                   bool requireHardNoWorse) {
-    BinPackingProblem p = randomInstance(40, 41, 5, 30);
+                   bool requireHardNoWorse, int colors = 5, int conflicts = 30) {
+    BinPackingProblem p = randomInstance(40, 41, colors, conflicts);
     BinPackingIncrementalScoreCalculator calc;
     optimaru::Editor<BinPackingProblem> editor(p, calc, mode);
     MoveDriver driver(editor);
@@ -799,6 +903,114 @@ void verifyMacroMoves() {
         walkMacroMove(repack, "RepackMove(3, 2)" + tag, mode, true);
         RepackMove alone(1, 0);
         walkMacroMove(alone, "RepackMove(1, 0)" + tag, mode, true);
+        TradeMove trade(3);
+        walkMacroMove(trade, "TradeMove" + tag, mode, false);
+        // Without colours and conflicts the capacity is the only hard
+        // constraint, and a trade keeps both bins within it.
+        TradeMove plain(3);
+        walkMacroMove(plain, "TradeMove, plain instance" + tag, mode, true, 0, 0);
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
+// (k) fill late acceptance
+// -------------------------------------------------------------------------
+// C = 10: bin 0 = A4 B1, bin 1 = C6 D3. Fill 5^2 + 9^2 = 106.
+BinPackingProblem fiveAndNine() {
+    BinPackingProblem p;
+    p.binCapacity = 10;
+    p.items = {makeItem("A", 4, 0), makeItem("B", 1, 0), makeItem("C", 6, 1), makeItem("D", 3, 1)};
+    return p;
+}
+
+void verifyFillLateAcceptance() {
+    std::printf("== (k) fill late acceptance ==\n");
+    const Score two{0, -2.0};
+    const int b = 1;
+    const int d = 3;
+    std::mt19937_64 rng(3);
+    {
+        BinPackingProblem p = fiveAndNine();
+        FillLateAcceptance acceptor(4, two, p);
+        check(acceptor.fill() == 106, "the fill of loads 5 and 9 is 106");
+
+        // B joins bin 1: loads 4 and 10, fill 116.
+        p.items[b].bin = 1;
+        check(acceptor.accepts(two, two, two, &b, 1, 0.0, rng) && acceptor.fill() == 116,
+              "a step that keeps the score and raises the fill is taken");
+        acceptor.on_step_end(two);
+
+        // D joins bin 0: loads 7 and 7, fill 98. Taken one time in eight; the
+        // way back raises the fill and is always taken.
+        int taken = 0;
+        bool consistent = true;
+        for (int trial = 0; trial < 4000; ++trial) {
+            p.items[d].bin = 0;
+            if (acceptor.accepts(two, two, two, &d, 1, 0.0, rng)) {
+                ++taken;
+                consistent = consistent && acceptor.fill() == 98;
+                acceptor.on_step_end(two);
+                p.items[d].bin = 1;
+                consistent = consistent && acceptor.accepts(two, two, two, &d, 1, 0.0, rng);
+            } else {
+                p.items[d].bin = 1;  // the engine undoes a refused move
+            }
+            consistent = consistent && acceptor.fill() == 116;
+            acceptor.on_step_end(two);
+        }
+        check(taken > 350 && taken < 650,
+              "a step that keeps the score and lowers the fill is taken about one time in 8 (" +
+                      std::to_string(taken) + " of 4000)");
+        check(consistent, "a refusal leaves the acceptor's copy as it was; the way back is taken");
+    }
+    {
+        // D joins bin 0: loads 8 and 6 (fill 100, lower) at a better score.
+        BinPackingProblem p = fiveAndNine();
+        FillLateAcceptance acceptor(4, two, p);
+        p.items[d].bin = 0;
+        check(acceptor.accepts(Score{0, -1.0}, two, two, &d, 1, 0.0, rng) && acceptor.fill() == 100,
+              "a better score is taken although the fill falls");
+    }
+    {
+        // Loads 4 and 10 (fill 116, higher) at a worse score: late acceptance
+        // decides, by the score its history holds.
+        BinPackingProblem p = fiveAndNine();
+        FillLateAcceptance strict(4, two, p);
+        p.items[b].bin = 1;
+        check(!strict.accepts(Score{0, -3.0}, two, two, &b, 1, 0.0, rng) && strict.fill() == 106,
+              "a worse score is refused although the fill rises, with a history at the current "
+              "score");
+        FillLateAcceptance late(4, Score{0, -3.0}, p);
+        check(late.accepts(Score{0, -3.0}, two, two, &b, 1, 0.0, rng),
+              "the same step is taken with a history at that worse score");
+    }
+    {
+        // A change the acceptor is not told about: the copy catches up when
+        // it is rebuilt, n = 4 steps after the last rebuild.
+        BinPackingProblem p = fiveAndNine();
+        FillLateAcceptance acceptor(4, two, p);
+        p.items[b].bin = 1;
+        for (int step = 0; step < 3; ++step) acceptor.on_step_end(two);
+        const bool stale = acceptor.fill() == 106;
+        acceptor.on_step_end(two);
+        check(stale && acceptor.fill() == 116,
+              "an unreported change is caught up with after n steps (106, then 116)");
+    }
+    {
+        // Capacity 2^40, three items: loads count in units of 2^10, so that
+        // n * (capacity / unit)^2 = 3 * 2^60 stays below 2^62.
+        BinPackingProblem p;
+        p.binCapacity = std::int64_t{1} << 40;
+        p.items = {makeItem("A", std::int64_t{1} << 39, 0), makeItem("B", std::int64_t{1} << 39, 1),
+                   makeItem("C", std::int64_t{1} << 38, 2)};
+        FillLateAcceptance acceptor(4, Score{0, -3.0}, p);
+        const std::int64_t apart = acceptor.fill();
+        p.items[b].bin = 0;  // A and B fill one bin
+        const bool taken = acceptor.accepts(two, Score{0, -3.0}, two, &b, 1, 0.0, rng);
+        check(apart == (std::int64_t{1} << 59) + (std::int64_t{1} << 56) && taken &&
+                      acceptor.fill() == (std::int64_t{1} << 60) + (std::int64_t{1} << 56),
+              "capacity 2^40: the fill counts loads in units of 2^10 and stays in the int64");
     }
     std::printf("\n");
 }
@@ -816,6 +1028,7 @@ int main() {
     verifyCompaction();
     verifyChecks();
     verifyMacroMoves();
+    verifyFillLateAcceptance();
     if (failures != 0) {
         std::printf("%d check(s) FAILED\n", failures);
         return 1;

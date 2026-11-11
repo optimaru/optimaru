@@ -13,8 +13,10 @@ namespace bp {
 // Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/:
 // the domain construction (best-fit decreasing, bp/construction.hpp), then
 // optimaru::Solver<BinPackingProblem> with late acceptance over the built-in
-// change/swap moves, the domain's EmptyBinMove and RepackMove
-// (bp/moves.hpp) and the engine's adaptive ruin-and-recreate (ALNS).
+// change/swap moves, the domain's EmptyBinMove, RepackMove and TradeMove
+// (bp/moves.hpp), ties between equal scores decided by how full the bins are
+// (bp/fill_late_acceptance.hpp) and the engine's adaptive ruin-and-recreate
+// (ALNS).
 class Solver {
 public:
     // The limits, the seed, the parallel starts, the callback and the ruin &
@@ -52,7 +54,7 @@ public:
         double descent_weight = 0.0;
 
         // Upper gate on how often a step may draw one of the domain's macro
-        // moves (EmptyBinMove, RepackMove) instead of the ordinary mix; the
+        // moves (EmptyBinMove, RepackMove, TradeMove) instead of the ordinary mix; the
         // adaptive selector still chooses inside the gate. 1 = unrestricted
         // (engine default).
         double custom_move_probability = 1.0;
@@ -61,8 +63,9 @@ public:
         // bp/moves.hpp). usedBinsCost is a step function no single-item move
         // can cross, so without it the search rarely closes a bin.
         bool empty_bin_moves = true;
-        // Both macro moves empty one of this many lightest non-empty bins
-        // (drawn uniformly; 1 = always the lightest).
+        // EmptyBinMove and RepackMove empty one of this many lightest
+        // non-empty bins (drawn uniformly; 1 = always the lightest), and
+        // TradeMove takes its first bin from them every second time.
         int empty_bin_candidates = 3;
 
         // RepackMove (bp/moves.hpp): empty a light bin together with 1 to
@@ -73,6 +76,25 @@ public:
         // bins. repack_partner_bins 0 = the source bin alone.
         bool repack_moves = true;
         int repack_partner_bins = 2;
+
+        // TradeMove (bp/moves.hpp): trade up to two items of one bin for up
+        // to two of another so that the fuller of the two gets fuller, or,
+        // when no trade does that, so that the two keep their loads with
+        // other items. usedBinsCost counts bins only, so this is the move
+        // that works towards closing a bin while the score stands still.
+        bool trade_moves = true;
+
+        // Late acceptance takes a step that keeps the score when it does not
+        // lower the sum of the squared bin loads, and otherwise one time in
+        // eight (bp/fill_late_acceptance.hpp); false = it takes every such
+        // step, as plain late acceptance does. Runs that end above the
+        // capacity bound on Falkenauer's 24 sampled instances, two seeds
+        // each, 10 s (benchmarks/bin-packing, 2026-11-12):
+        //   both on               0 of 48
+        //   trade_moves only      7 (249 and 501 items, triplets)
+        //   fill_tie_break only  40
+        //   both off             39
+        bool fill_tie_break = true;
     };
 
     Solver() = default;

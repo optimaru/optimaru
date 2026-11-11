@@ -109,14 +109,15 @@ class SolverConfig:
     """Assignment-shape best-improvement descent strategy weight. 0 = off."""
     custom_move_probability: float
     """Gate on how often a step may draw one of the macro moves (EmptyBinMove,
-    RepackMove); 1 = unrestricted."""
+    RepackMove, TradeMove); 1 = unrestricted."""
     empty_bin_moves: bool
     """Enable the bin-emptying macro move: it moves every item of one light bin
     into the other bins in a single step, the only way past the bins-used step
     function. It checks the capacity only."""
     empty_bin_candidates: int
-    """Both macro moves empty one of this many lightest bins (1 = always the
-    lightest)."""
+    """EmptyBinMove and RepackMove empty one of this many lightest bins (1 =
+    always the lightest); TradeMove takes its first bin from them every second
+    time."""
     repack_moves: bool
     """Enable RepackMove: empty one light bin together with 1 to
     repack_partner_bins other light bins and put their items back best fit
@@ -125,6 +126,16 @@ class SolverConfig:
     repack_partner_bins: int
     """Most partner bins RepackMove empties with its source (2; 0 = the source
     alone). ValueError below 0."""
+    trade_moves: bool
+    """Enable TradeMove: trade up to two items of one bin for up to two of
+    another so that the fuller of the two bins gets fuller, or, when no trade
+    does that, so that both keep their loads with other items. The bins-used
+    score does not change until a bin is empty; this move works towards that."""
+    fill_tie_break: bool
+    """A step that keeps the score is taken when it does not lower the sum of
+    the squared bin loads, and otherwise one time in eight. False: every such
+    step is taken, as plain late acceptance does. The score itself, the limits
+    and on_new_best are the same either way."""
     best_score_limit: tuple[int, float]
     """(hard, soft): stop early once bestScore >= this. (0, -inf) stops at
     the first feasible solution."""

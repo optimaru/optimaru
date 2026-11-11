@@ -68,8 +68,8 @@ print(problem.assignment(), problem.bins_used(), problem.bin_loads())
 For finer control build `bp.SolverConfig()` and set attributes (time budget
 `spent_limit_seconds`, `step_count_limit`, `parallel_solver_count`, the ALNS knobs, the
 move mix, the bin-emptying macro moves `empty_bin_moves` / `empty_bin_candidates` and
-`repack_moves` / `repack_partner_bins` (see the use case README's
-[Search](README.md#search)), `best_score_limit`, the
+`repack_moves` / `repack_partner_bins`, `trade_moves` and `fill_tie_break` (see the use
+case README's [Search](README.md#search)), `best_score_limit`, the
 `on_new_best(step, score)` callback, `full_assert`, ...), then call
 `bp.Solver(cfg).solve(problem)` or `bp.solve(problem, config=cfg)`. Zero budget is
 `spent_limit_seconds = 0`, a fixed number of steps is `step_count_limit`.

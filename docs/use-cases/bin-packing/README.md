@@ -72,7 +72,8 @@ is a reward and all four are scored by default (`default_enabled`);
 - **`SolverConfig`** has the engine knobs (`spent_limit_seconds`, `step_count_limit`,
   `unimproved_*`, `parallel_solver_count`, `late_acceptance_size`, `ruin_recreate_*`,
   move weights, `value_recommender_probability`, `empty_bin_moves`,
-  `empty_bin_candidates`, `repack_moves`, `repack_partner_bins`, `best_score_limit`,
+  `empty_bin_candidates`, `repack_moves`, `repack_partner_bins`, `trade_moves`,
+  `fill_tie_break`, `best_score_limit`,
   `on_new_best`, `full_assert`) set as attributes (`SolverConfig()` takes no arguments).
   Zero budget is `spent_limit_seconds = 0`; a fixed number of steps is
   `step_count_limit = N`. `on_new_best` is called as `on_new_best(step, score)`.
@@ -141,8 +142,10 @@ monolithic calculator. The CP-SAT reference takes integral offsets.
 - `incremental_calculator` — before/after hooks, O(1) plus the moved item's conflict
   partners per move
 - `construction` — best-fit decreasing around a seed, compaction
-- `optimaru/bin_packing/cpp/include/bp/moves.hpp` — the domain's macro moves, `EmptyBinMove` and `RepackMove`
-  (header-only, so the tests drive them directly)
+- `optimaru/bin_packing/cpp/include/bp/moves.hpp` — the domain's macro moves, `EmptyBinMove`, `RepackMove`
+  and `TradeMove` (header-only, so the tests drive them directly)
+- `optimaru/bin_packing/cpp/include/bp/fill_late_acceptance.hpp` — late acceptance with the rule for a
+  step that keeps the score (`fill_tie_break`)
 - `solver` — engine wrapper (construction + Late Acceptance + the macro moves + adaptive
   ruin & recreate, parallel starts)
 - `optimaru/bin_packing/cpp/src/main.cpp` — demo on the web sample (20 items, colours, conflicts; 8 bins)
@@ -163,7 +166,10 @@ the macro moves: hand cases (`RepackMove` empties a bin `EmptyBinMove` can only 
 into a clash, with and without a partner bin) and a walk of thousands of applied and
 undone moves, incremental == full after each apply and each undo, an undo restoring
 the assignment exactly, `RepackMove` never adding a hard violation, once plain and once
-under a ScoreChecks::Full editor.
+under a ScoreChecks::Full editor; `TradeMove` by hand (it closes a bin, fills one, trades
+between two full bins, finds no trade where there is none) and on the same walk; and
+`FillLateAcceptance` (which steps it takes, its copy of the loads after a refusal and
+after a change it was not told about, a capacity of 2^40).
 `bp_plugin_test`: plugin assembly == monolith (score and per-constraint totals),
 plugin incremental == full (every unit cost after every move, for the defaults and
 with exponents != 1 and fractional hard weights), partial assemblies, overrides
@@ -173,8 +179,8 @@ raw costs by hand, the catalog, and the macro-move walk on the plugin path.
 ## Search
 
 Best-fit decreasing builds the start; late acceptance then works on it with the
-engine's change / swap moves, its adaptive ruin-and-recreate kicks, and two macro
-moves of the domain (`optimaru/bin_packing/cpp/include/bp/moves.hpp`). Both exist because
+engine's change / swap moves, its adaptive ruin-and-recreate kicks, and three macro
+moves of the domain (`optimaru/bin_packing/cpp/include/bp/moves.hpp`). They exist because
 `used_bins_cost` is a step function: a bin only stops costing when its last item
 leaves, which no single change can show the acceptor.
 
@@ -188,23 +194,52 @@ leaves, which no single change can show the acceptor.
   (or, if it clashes there too, a new bin). So the move either saves a bin or
   reshuffles the light bins at an equal score. It adds no hard violation as long as
   every item fits the capacity on its own and some bin is free.
+- **`TradeMove`** (`trade_moves`) trades none, one or two items of one bin for none,
+  one or two of another. Of the trades with up to 16 other bins that keep both bins
+  within the capacity and leave the fuller of the two no less full, it makes the one
+  that raises the two bins' sum of squared loads most; when no trade raises it, one
+  after which both hold what they held, in other items. That second kind is how an item gets out of a full bin and to the bin
+  that needs it. It checks the capacity only.
 
-On instances with colours or conflicts `RepackMove` is what closes bins. Without it,
-emptying a bin into the others nearly always breaks a colour or a conflict and late
-acceptance turns the move down: the search reaches feasibility by opening bins and
-then keeps them. Seeds 1-3, one thread, 120 items of weight 10..60 on capacity 100,
-about 40% in one of 4 colours, 10 conflicts
+**A step that keeps the score** (`fill_tie_break`). Every packing with the same number
+of bins has the same score, and plain late acceptance takes every step from one to the
+next, so the change and swap moves undo what `TradeMove` gains. With `fill_tie_break`
+(the default) such a step is taken when it does not lower the *fill*, the sum of the
+squared bin loads, and otherwise one time in eight
+(`optimaru/bin_packing/cpp/include/bp/fill_late_acceptance.hpp`). The fill is not part
+of the score: the score, `best_score_limit`, the unimproved limits and `on_new_best` see
+the number of bins alone. A step that changes the score is judged as before.
+
+What the two add, on Falkenauer's instances
+([`benchmarks/bin-packing`](../../../benchmarks/bin-packing/README.md): three instances
+of each of the eight classes, two seeds, 10 s, one thread), as runs that end above the
+capacity bound ceil(total weight / capacity), which is the best known bin count of all 24:
+
+| `trade_moves` | `fill_tie_break` | runs above the bound, of 48 | where |
+| --- | --- | ---: | --- |
+| on | on | 0 | |
+| on | off | 7 | the triplets of 249 items (1 of 6 runs) and of 501 (6 of 6) |
+| off | on | 40 | every class |
+| off | off | 39 | every class; this is the search of 0.5.0 |
+
+On instances with colours or conflicts `EmptyBinMove` alone leaves the search one to
+three bins above the bound: emptying a bin into the others nearly always breaks a colour
+or a conflict and late acceptance turns the move down. `RepackMove` and `TradeMove` each
+close those bins. Seeds 1-3, one thread, 2 s (at 10 s one run differs: g11 with all three
+off, 44 bins), 120 items of weight 10..60 on capacity 100, about 40% in one of 4 colours,
+10 conflicts
 ([`benchmarks/bin-packing/bench/quality.py`](../../../benchmarks/bin-packing/bench/quality.py)),
 bins used:
 
-| instance (weight lower bound) | without `RepackMove` at 2 s / 10 s | with `RepackMove` at 2 s / 10 s |
-| --- | --- | --- |
-| sq1 (43) | 46, 45, 46 / 45, 45, 46 | 43, 43, 43 / 43, 43, 43 |
-| g11 (42) | 45, 44, 44 / 45, 44, 44 | 42, 42, 42 / 42, 42, 42 |
-| g22 (44) | 46, 45, 46 / 46, 45, 46 | 44, 44, 44 / 44, 44, 44 |
-| g33 (42) | 44, 44, 43 / 44, 44, 43 | 42, 42, 42 / 42, 42, 42 |
+| instance (weight lower bound) | `repack_moves` off | `trade_moves` and `fill_tie_break` off | all three off | default |
+| --- | --- | --- | --- | --- |
+| sq1 (43) | 43, 43, 43 | 43, 43, 43 | 45, 45, 45 | 43, 43, 43 |
+| g11 (42) | 42, 42, 42 | 42, 42, 42 | 45, 45, 45 | 42, 42, 42 |
+| g22 (44) | 44, 44, 44 | 44, 44, 44 | 45, 45, 46 | 44, 44, 44 |
+| g33 (42) | 42, 42, 42 | 42, 42, 42 | 44, 44, 43 | 42, 42, 42 |
 
-The full table is in [`benchmarks/bin-packing`](../../../benchmarks/bin-packing/README.md).
+The full table is in [`benchmarks/bin-packing`](../../../benchmarks/bin-packing/README.md);
+`RepackMove` is what gets its 120-item triplet instance from 41 bins to 40.
 
 ## Starting from an existing solution
 
@@ -234,8 +269,9 @@ engine is `optimaru/bin_packing/cpp/include/bp/solver.hpp` + `optimaru/bin_packi
 
 **Adding a move.** The engine already mixes change / swap moves (weights in
 `Solver::Config`; `value_recommender_probability` biases change moves toward bins in
-use). `EmptyBinMove` (moves every item of a light bin into the other bins in one step)
-and `RepackMove` (re-places the items of a few light bins without a clash) are defined
+use). `EmptyBinMove` (moves every item of a light bin into the other bins in one step),
+`RepackMove` (re-places the items of a few light bins without a clash) and `TradeMove`
+(trades items between two bins so that one gets fuller) are defined
 in `optimaru/bin_packing/cpp/include/bp/moves.hpp` and registered in `optimaru/bin_packing/cpp/src/solver.cpp` (`runEngine`) —
 use them as the template, and give a new move a walk in `bp_test` (j). A new move is an `optimaru::MoveOperator<…>` registered with
 `engine.add_move_operator(...)` next to the engine construction in `optimaru/bin_packing/cpp/src/solver.cpp`;

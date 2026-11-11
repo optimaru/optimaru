@@ -22,8 +22,8 @@
 //       (n entries per unit constraint, one for usedBinsCost)
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the knob guards
-//   (j) the macro moves (bp/moves.hpp) on the plugin path: EmptyBinMove and
-//       RepackMove driven through the engine's move protocol (apply, score,
+//   (j) the macro moves (bp/moves.hpp) on the plugin path: EmptyBinMove,
+//       RepackMove and TradeMove driven through the engine's move protocol (apply, score,
 //       keep or roll back) on the default and the shaped assembly; after
 //       every apply and every undo the score and every unit cost equal a
 //       fresh assembly's
@@ -657,6 +657,8 @@ void verifyMacroMoves() {
         walkMacroMove(empty, "EmptyBinMove", shaped);
         RepackMove repack(3, 2);
         walkMacroMove(repack, "RepackMove(3, 2)", shaped);
+        TradeMove trade(3);
+        walkMacroMove(trade, "TradeMove", shaped);
     }
     std::printf("\n");
 }

@@ -47,6 +47,24 @@
     the benchmark tables stand.
   - The notebooks' restart experiments were moved to step budgets for 0.5.0 (the entry
     above) and have not been run again on this.
+- **Bin packing: `TradeMove` and a fill tie-break.** `used_bins_cost` counts bins, so every
+  packing with the same number of bins has the same score, and the search wandered from one
+  to the next: on Falkenauer's triplets it ended one bin above the best known count. Two
+  additions, both on by default. `TradeMove` (`bp/moves.hpp`, `SolverConfig.trade_moves`)
+  trades up to two items of one bin for up to two of another so that the fuller of the two
+  bins gets fuller, or, when no trade does that, so that both keep their loads with other
+  items. And late acceptance takes a step that keeps the score when it does not lower the sum
+  of the squared bin loads, and otherwise one time in eight (`bp/fill_late_acceptance.hpp`,
+  `SolverConfig.fill_tie_break`). That sum is not part of the score: the score, the limits
+  and `on_new_best` are as they were. On the 24 sampled Falkenauer instances (two seeds,
+  10 s) no run ends above the capacity bound, which is the best known count of each; 39 of
+  the 48 did. A seed's result in bin packing differs from 0.5.0.
+- **Benchmarks: the bin packing table measured again.** With the two additions above the
+  engine uses the best known number of bins on all 24 Falkenauer instances of the table (6
+  before), one bin fewer than the file's count on u120_19, and CP-SAT is ahead on none (on
+  the six triplet instances of 60 and 120 items before). The table of generated instances
+  in `benchmarks/bin-packing` is measured again as well, with each part of the search
+  switched off in turn.
 
 ## 0.5.0
 
