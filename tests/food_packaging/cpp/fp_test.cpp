@@ -388,13 +388,14 @@ void verifyPinnedSolve() {
             PackagingSchedule fresh = buildRandomInstance(/*jobCount*/ 20, /*seed*/ 21);
             for (Line& line : fresh.lines) line.jobs.clear();
             fresh.unassignedJobs.clear();
-            fresh.lines[0].jobs.push_back(0);  // pinned first on line 0; job 1 is pinned to no line
+            fresh.lines[0].jobs.push_back(0);  // job 0 is pinned first on line 0
             return fresh;
         };
         PackagingSchedule fresh = pinnedOnly();
-        ScoreCalculator::prepare(fresh);
-        check(optimaru::nothing_placed(fresh),
-              "only the pinned jobs on a line and in the pool: nothing is placed");
+        ScoreCalculator::prepare(fresh);  // parks job 1, pinned to no line, in the pool
+        const bool parkedPinned = fresh.unassignedJobs == std::vector<int>{1};
+        check(parkedPinned && optimaru::nothing_placed(fresh),
+              "only the pinned jobs, one on a line and one in the pool: nothing is placed");
         PackagingSchedule started = pinnedOnly();
         started.lines[1].jobs.push_back(2);
         ScoreCalculator::prepare(started);

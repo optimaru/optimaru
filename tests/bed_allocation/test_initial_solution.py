@@ -157,7 +157,8 @@ def test_a_restart_from_a_plan_finds_the_same_under_a_larger_budget():
     after a million (-10).
 
     The comparison holds as long as nothing in a solve from a given plan is timed on its
-    budget. A failure here is not a flaky run: it means some part of the search is.
+    budget. A failure here is not a flaky run: it means some part of the search is (#110 is
+    how that looked in 0.5.0).
     """
     problem = BedPlanModel.model_validate_json((FIXTURES / "restart_problem.json").read_text())
     plan = BedPlanModel.model_validate_json((FIXTURES / "restart_plan.json").read_text())
@@ -168,7 +169,8 @@ def test_a_restart_from_a_plan_finds_the_same_under_a_larger_budget():
         config.random_seed = 9
         config.step_count_limit = steps
         config.on_new_best = lambda step, score: seen.append((step, score.hard, score.medium, score.soft))
-        out = ba.solve(ba.with_initial_solution(problem, plan), config=config)
+        # A time limit far above what the steps take, so that the step limit alone decides.
+        out = ba.solve(ba.with_initial_solution(problem, plan), time_limit_seconds=600.0, config=config)
         return seen, (out.score_hard, out.score_medium, out.score_soft)
 
     short, short_score = restart(1_000_000)
