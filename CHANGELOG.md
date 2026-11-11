@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
+
+**Upgrading from 0.4.** Two things can break a caller; the entries below have the details.
+pydantic 2.11 or newer is required (was 2.5). And JSON written by the models uses the new
+names only: `time_limit_seconds` and `parallel_solver_count` in a request (were `timelimit`
+and `num_workers`), `constraints` and `constraint_totals` in employee scheduling (were
+`rules` and `rule_totals`). The earlier names are still read, in JSON, as keywords and as
+attributes, so what a caller sends keeps working. Seven use cases search differently, so
+a seed's result there differs from 0.4.3: bed allocation, food packaging, knapsack,
+maintenance scheduling, max-cut, quadratic assignment and sports league scheduling.
 
 - **Vehicle routing and pickup and delivery: parallel starts on a solve with constraints.**
   `parallel_solver_count` (also a request's field; `num_workers` is its earlier name) had no effect when a plan was scored
