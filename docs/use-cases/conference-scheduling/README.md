@@ -36,7 +36,7 @@ uv run pytest -q tests/conference_scheduling
 ```python
 from optimaru import conference_scheduling as cs
 
-schedule = cs.demo_conference()
+schedule = cs.generate_demo_data()
 cs.solve(schedule, time_limit_seconds=5.0, random_seed=42)   # solves in place
 print(schedule.score)
 ```
@@ -194,7 +194,7 @@ hard-then-soft comparison. The measurements are from 2026-08. The raw campaign l
 ```python
 from optimaru.conference_scheduling.models import ConferenceScheduleModel
 
-problem = ConferenceScheduleModel.from_core(cs.demo_conference())
+problem = ConferenceScheduleModel.from_core(cs.generate_demo_data())
 solved = ConferenceScheduleModel.from_core(schedule)            # `schedule` solved above
 restart = cs.with_initial_solution(problem, solved).to_core()
 cs.solve(restart, time_limit_seconds=5.0, random_seed=43)

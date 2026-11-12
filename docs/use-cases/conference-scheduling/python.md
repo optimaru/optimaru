@@ -19,7 +19,7 @@ uv run pytest -q tests/conference_scheduling
 ```python
 from optimaru import conference_scheduling as cs
 
-schedule = cs.demo_conference()  # the demo instance (15 talks / 6 slots / 5 rooms)
+schedule = cs.generate_demo_data()  # the demo instance (15 talks / 6 slots / 5 rooms)
 cs.solve(schedule, time_limit_seconds=10.0, random_seed=42)
 print(schedule.score)  # e.g. 0hard/-57990soft
 print(cs.constraint_costs(schedule)["content_conflict_cost"]["costs"])  # raw, before the weight
@@ -128,6 +128,7 @@ cells by `compatible_value_probability` (default 0.9).
 
 ## Demo data
 
-`demo_conference()` builds the demo conference, with
+`generate_demo_data()` builds the demo conference, with
 its tags drawn from a seeded `random.Random` (the same instance on every run): 2 Lab + 13 Breakout talks, 6 timeslots in a day,
-5 rooms, 12 speakers. A 10 s solve reaches hard 0.
+5 rooms, 12 speakers. A 10 s solve reaches hard 0. Its name before 0.5.1, `demo_conference()`, still works
+(an alias of the same function).

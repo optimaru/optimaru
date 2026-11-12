@@ -8,7 +8,7 @@ and solve changes it and `score` in place::
 
     import optimaru.conference_scheduling as cs
 
-    schedule = cs.demo_conference()
+    schedule = cs.generate_demo_data()
     cs.solve(schedule, time_limit_seconds=10.0, random_seed=42)
     print(schedule.score, schedule.assignment())
 
@@ -42,7 +42,7 @@ from ._core import (
     list_constraints,
     prepare,
 )
-from .demo import demo_conference
+from .demo import demo_conference, generate_demo_data  # demo_conference: the name before 0.5.1
 from .models import ConferenceScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
@@ -58,7 +58,7 @@ __all__ = [
     "calculate_score",
     "constraint_costs",
     "constraint_info",
-    "demo_conference",
+    "generate_demo_data",
     "list_constraints",
     "prepare",
     "solve",

@@ -7,7 +7,7 @@ import random
 
 from ._core import ConferenceSchedule, Room, Speaker, Talk, Timeslot
 
-__all__ = ["demo_conference"]
+__all__ = ["generate_demo_data"]
 
 LAB = 0
 BREAKOUT = 1
@@ -23,7 +23,7 @@ def _pick(rng: random.Random, n: int) -> int:
     return int(rng.random() * n)
 
 
-def demo_conference() -> ConferenceSchedule:
+def generate_demo_data() -> ConferenceSchedule:
     """The demo instance: 15 talks / 6 timeslots / 5 rooms."""
     rng = random.Random(0)
 
@@ -120,3 +120,6 @@ def demo_conference() -> ConferenceSchedule:
         speakers=speakers,
         talks=talks,
     )
+
+
+demo_conference = generate_demo_data  # the name before 0.5.1

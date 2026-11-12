@@ -4,7 +4,7 @@ import optimaru.conference_scheduling as cs
 
 
 def test_demo_data_shape():
-    schedule = cs.demo_conference()
+    schedule = cs.generate_demo_data()
     assert schedule.talk_count() == 15
     assert schedule.timeslot_count() == 6
     assert schedule.room_count() == 5
@@ -20,7 +20,7 @@ def test_demo_data_shape():
 
 
 def test_demo_solve_feasible():
-    schedule = cs.demo_conference()
+    schedule = cs.generate_demo_data()
     best = []
     cs.solve(
         schedule,
@@ -44,7 +44,7 @@ def test_demo_solve_feasible():
 
 
 def test_pinned_talk_survives_solve():
-    schedule = cs.demo_conference()
+    schedule = cs.generate_demo_data()
     pinned_value = schedule.slot_room_of(0, 4)  # S01 (Lab) -> T1 x Room E
     talks = schedule.talks
     talks[0].slot_room = pinned_value
@@ -60,7 +60,7 @@ def test_solve_config_mirror():
     from optimaru.conference_scheduling.models import SolveConfig
 
     cfg = SolveConfig(time_limit_seconds=1.0, random_seed=7, stop_at_first_feasible=True)
-    schedule = cs.demo_conference()
+    schedule = cs.generate_demo_data()
     cs.solve(schedule, config=cfg)
     assert schedule.score.hard == 0
 
@@ -70,7 +70,7 @@ def test_parallel_solver_count_workers():
     engine's own multi-start (each start drives its restart_segments budget itself). Checks
     that each start's solve ends normally and the best is adopted."""
     for workers in (2, 4):
-        schedule = cs.demo_conference()
+        schedule = cs.generate_demo_data()
         cs.solve(
             schedule,
             time_limit_seconds=2.0,
@@ -91,7 +91,7 @@ def test_on_new_best_fires_on_the_constraints_path():
     for picks in (get_constraints(), [RoomConflictCost(), SpeakerConflictCost(weight=3)]):
         calls = []
         cs.solve(
-            cs.demo_conference(),
+            cs.generate_demo_data(),
             time_limit_seconds=0.5,
             random_seed=1,
             constraints=picks,
@@ -113,7 +113,7 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
     started = time.monotonic()
     with pytest.raises(RuntimeError, match="boom"):
         cs.solve(
-            cs.demo_conference(),
+            cs.generate_demo_data(),
             time_limit_seconds=30.0,
             parallel_solver_count=4,
             on_new_best=boom,
@@ -135,7 +135,7 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     try:
         started = time.monotonic()
         with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
-            cs.solve(cs.demo_conference(), time_limit_seconds=30.0, parallel_solver_count=4)
+            cs.solve(cs.generate_demo_data(), time_limit_seconds=30.0, parallel_solver_count=4)
         assert time.monotonic() - started < 10.0
     finally:
         _core._fail_worker_thread_start(-1)
@@ -164,7 +164,7 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     seen = []
     started = time.monotonic()
     package.solve(
-        cs.demo_conference(),
+        cs.generate_demo_data(),
         time_limit_seconds=30.0,
         random_seed=1,
         stop_at_first_feasible=True,

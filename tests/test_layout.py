@@ -169,6 +169,89 @@ def test_every_use_case_has_a_guide_and_a_benchmark():
         assert (ROOT / "benchmarks" / slug).is_dir(), slug
 
 
+DEMO_FUNCTION = "generate_demo_data"
+
+# The names the demo functions had before 0.5.1. Each stays an alias of `generate_demo_data` in
+# the modules that had it (tests/test_demo_data_names.py checks they are the same object).
+FORMER_DEMO_NAMES = {
+    "conference_scheduling": "demo_conference",
+    "meeting_scheduling": "demo_data",
+    "order_picking": "build_demo_data",
+    "sports_league_scheduling": "demo_schedule",
+    "tournament_scheduling": "demo_data",
+}
+
+_DEMO_LIKE = re.compile(r"^(?!_)[a-z0-9_]*(demo|sample|example)[a-z0-9_]*$")
+
+
+def _python_names(path: Path) -> tuple[dict[str, str | None], list[str] | None]:
+    """The public top-level names a module or stub defines or imports, each with the name it is an
+    alias of (`old = new`) or None, and its `__all__` (None when it has none)."""
+    names: dict[str, str | None] = {}
+    listed = None
+    for node in ast.parse(path.read_text()).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names[node.name] = None
+        elif isinstance(node, ast.ImportFrom):
+            names.update((alias.asname or alias.name, None) for alias in node.names)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if len(targets) != 1 or not isinstance(targets[0], ast.Name):
+                continue
+            if targets[0].id == "__all__":
+                listed = [element.value for element in node.value.elts]
+            else:
+                names[targets[0].id] = node.value.id if isinstance(node.value, ast.Name) else None
+    return names, listed
+
+
+def _binding_names(path: Path) -> dict[str, str | None]:
+    """The functions a bindings.cpp registers (`m.def("name"`) and its aliases
+    (`m.attr("old") = m.attr("new")`)."""
+    text = path.read_text()
+    names: dict[str, str | None] = dict.fromkeys(re.findall(r'm\.def\(\s*"(\w+)"', text))
+    names.update(re.findall(r'm\.attr\("(\w+)"\)\s*=\s*m\.attr\("(\w+)"\)', text))
+    return names
+
+
+def test_a_demo_instance_is_offered_as_generate_demo_data():
+    """Every public function of a use case that builds its demo (or sample, or example) instance
+    is called `generate_demo_data`, in the package, its `demo`, `models` and `_core` modules and in
+    what the bindings register. The one other name allowed is the use case's name before 0.5.1, as
+    a plain alias of `generate_demo_data` next to it, left out of `__all__`. Read off the source, so
+    it needs no compiled extension."""
+    offering = set()
+    for name in sorted(USE_CASES):
+        package = ROOT / "optimaru" / name
+        former = FORMER_DEMO_NAMES.get(name)
+        modules = {
+            path.name: _python_names(path)
+            for path in (package / file for file in ("__init__.py", "demo.py", "models.py", "_core.pyi"))
+            if path.is_file()
+        }
+        modules["cpp/bindings.cpp"] = (_binding_names(package / "cpp" / "bindings.cpp"), None)
+        for module, (names, listed) in modules.items():
+            demo_names = {n for n in names if _DEMO_LIKE.match(n)}
+            if DEMO_FUNCTION in demo_names:
+                offering.add(name)
+            strays = demo_names - {DEMO_FUNCTION, former}
+            assert not strays, (
+                f"{name}/{module}: {sorted(strays)} looks like the function that builds a demo instance, which is "
+                f"called {DEMO_FUNCTION} in every use case. Rename it; if it is something else (a helper that only "
+                f"has demo, sample or example in its name), narrow _DEMO_LIKE instead."
+            )
+            if former in demo_names:
+                assert DEMO_FUNCTION in names, f"{name}/{module}: {former} without {DEMO_FUNCTION}"
+                assert names[former] in (None, DEMO_FUNCTION), f"{name}/{module}: {former} = {names[former]}"
+                if names[former] is None:  # imported: it must be imported next to the new name
+                    assert module == "__init__.py", f"{name}/{module}: {former} is not an alias of {DEMO_FUNCTION}"
+            if listed is not None:
+                assert former not in listed, f"{name}/{module}: __all__ lists the former name {former}"
+                if DEMO_FUNCTION in names:
+                    assert DEMO_FUNCTION in listed, f"{name}/{module}: __all__ does not list {DEMO_FUNCTION}"
+    assert set(FORMER_DEMO_NAMES) <= offering, f"aliases without a demo function: {set(FORMER_DEMO_NAMES) - offering}"
+
+
 _NUMBER_WORDS = (
     "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
     "seventeen eighteen nineteen twenty"
