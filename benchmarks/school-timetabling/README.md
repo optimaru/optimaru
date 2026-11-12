@@ -17,16 +17,17 @@ uv run school-timetabling-compare --help
 
 The helper modules also run on their own, as
 `uv run python -m school_timetabling_cpsat.<module>` (`evaluate`, `cpsat_quickstart`,
-`gen_canonical`). The runner and the generator write to `out/` in the working directory
-(`--out-dir`).
+`gen_quickstart`, `gen_canonical`). The runner and the generators write to `out/` in the
+working directory (`--out-dir`).
 
 | File (`cpsat/school_timetabling_cpsat/`) | Role |
 | --- | --- |
 | `benchmark.py` | `school-timetabling-compare`: orchestration (track 1 by default, `--track2` for the canonical track, `--track3` for partial timetabling) |
 | `evaluate.py` | Track-1 shared evaluator: recomputes the quickstart model's six-constraint score from a solution (checked against each solver's self-report); its per-term keys are the `*_cost` names below, each holding the raw cost (the reward `teacher_time_efficiency_cost` is <= 0) |
 | `cpsat_quickstart.py` | Track-1 CP-SAT solver (six constraints: hard as constraints, the three soft ones as the objective) |
+| `gen_quickstart.py` | Track-1 generator: the S/M/L schools (seeded) and the fixed cross-check instance, each written as `<name>.json` (for the two modules above) and `<name>.sttxt` (the same data as plain tokens, for the C++ bench) |
 | `gen_canonical.py` | Track-2 generator of S/M/L canonical `TimetableProblem`s (blocks / parallel sections / team teaching / unavailability, with a load check) |
-| `../cpp/st_quality_bench.cpp` | Track-1 C++ side: builds instances, dumps JSON, solves, cross-check mode |
+| `../cpp/st_quality_bench.cpp` | Track-1 C++ side: reads a `.sttxt` instance, solves it and dumps the solution; cross-check mode. It generates nothing |
 
 ## Track 1: the quickstart model's six constraints
 
@@ -37,9 +38,11 @@ The shared logic is the six constraints of the quickstart model (`mode="quicksta
 gets empty data (`teacherUnavailable`) in these
 instances, so it contributes 0.
 
-Size presets (classes / teachers / rooms — same as `st_quality_bench.cpp`):
+Size presets (classes / teachers / rooms — `PRESETS` in `gen_quickstart.py`):
 `S: 6/12/7 (204 lessons)`, `M: 12/20/13 (408 lessons)`, `L: 24/40/25 (816 lessons)`.
-The grid is 5 days × 8 periods = 40 slots.
+The grid is 5 days × 8 periods = 40 slots. `gen_quickstart.py` draws each school from
+`random.Random(seed)` alone, so a seed is the same school on every platform; `--seed`
+(default 1) draws the school and seeds both solvers.
 
 ```sh
 # cross-check gate → S/M 10 s each → rescoring → Markdown table
@@ -47,8 +50,19 @@ uv run school-timetabling-compare --sizes S,M --seconds 10
 ```
 
 The result is `out/RESULTS_track1.md`. The cross-check gate passes only when
-the C++ score of the fixed instance matches `evaluate.py`
-(`CROSSCHECK_SCORE=-3hard/-3soft`).
+the C++ score of `gen_quickstart.py`'s fixed instance matches `evaluate.py`
+(`CROSSCHECK_SCORE=-3hard/-3soft`); the two scores are also written to
+`out/crosscheck.txt`.
+
+To run the C++ side alone (a tuning sweep), write the instances once and pass a file:
+
+```sh
+uv run python -m school_timetabling_cpsat.gen_quickstart --sizes S,M,L --seed 1 --out-dir out
+../../../build/school_timetabling/st_quality_bench out/instance_L.sttxt 1 10   # instance, seed, seconds
+```
+
+`--school CLASSES TEACHERS ROOMS` (repeatable) writes a school of any other shape, as
+`instance_<classes>x<teachers>x<rooms>`; `--sizes ""` leaves the presets out.
 
 ## Track 2: full canonical constraints, C++ canonical vs CP-SAT
 
@@ -100,7 +114,8 @@ How to read it:
   `ST_BENCH_NEARBY_PROB` / `ST_BENCH_LA_SIZE`). **Unset, the solver defaults
   apply** — CI and the published tables always run without them. They change
   search knobs only, never the scoring semantics.
-- Both solvers get the same instance JSON and the same wall-clock budget.
+- Both solvers get the same instance (one dict, written as JSON for CP-SAT and as tokens
+  for C++) and the same wall-clock budget.
 - C++ runs single-threaded, CP-SAT as an 8-worker portfolio by default (`--workers`).
 - moves/s: C++ is estimated from the improvement trajectory (one move per
   step); CP-SAT has none.

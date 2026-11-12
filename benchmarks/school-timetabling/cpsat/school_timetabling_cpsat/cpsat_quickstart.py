@@ -1,6 +1,6 @@
 """Track-1 CP-SAT solver: solves the quickstart model's six constraints with OR-Tools CP-SAT.
 
-Reads the instance JSON dumped by the C++ `st_quality_bench` and looks for a
+Reads the instance JSON written by `gen_quickstart` and looks for a
 lesson → (timeslot, room) assignment. The score scale is the quickstart model's six
 constraints, shared by both solvers:
 
@@ -178,7 +178,7 @@ def solve_instance(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("instance", help="instance JSON dumped by st_quality_bench")
+    parser.add_argument("instance", help="instance JSON written by gen_quickstart")
     parser.add_argument("seconds", type=float)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--workers", type=int, default=8)

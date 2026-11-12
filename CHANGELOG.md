@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- **Benchmarks: every instance is generated in Python.** The C++ quality benches read
+  instance files and generate nothing; no solver, constraint or published comparison table
+  changes.
+  - School timetabling, track 1: `school_timetabling_cpsat/gen_quickstart.py` generates the
+    S/M/L schools and the fixed cross-check instance, and writes each as JSON (CP-SAT, the
+    evaluator) and as a token file (`.sttxt`, the C++ bench). `st_quality_bench` is now
+    `st_quality_bench <instance.sttxt> <seed> <seconds> [parallel_solver_count]` and
+    `st_quality_bench crosscheck <crosscheck.sttxt>`; `school-timetabling-compare` writes the
+    instances itself, as before from `--seed`. The bench used to build them with
+    `std::shuffle`, which gives another school per standard library; the Python generator
+    draws from `random.Random(seed)` alone. The presets are the same, the schools are new
+    ones: `RESULTS.md` has a track-1 table on them (the engine's S 175 / M 350 / L 666 soft
+    at 30 s) and says which instances each older table is of. Track 2 and track 3 already
+    generated in Python and are unchanged, as is the homepage's table (track 2).
+  - Conference scheduling and meeting scheduling: `cs_quality_bench` and `ms_quality_bench`
+    take a dumped instance of the CP-SAT comparison (`<instance.cstxt|.mstxt> <seed>
+    <seconds> [knobs]`) in the place of `demo` and `scaled:N`, whose generators are gone
+    (they are in the `v0.5.0` tag). `benchmarks/<slug>/dump_instances.py` writes the
+    instances, as bed allocation's does, so a tuning run and the comparison solve the same
+    problems. A budget of 0 seconds scores a fixed assignment, and the dump script prints the
+    use case's own score of it: the two were equal on all ten instances.
+  - The guides keep the tuning history measured on `scaled:N` and say where those instances
+    came from. Each has a new table of the as-move default against `asMove=0` on the
+    comparison's instances: it wins on the smaller ones and not on the largest two of either
+    use case (meeting scheduling's `xlarge`: a mean objective 17.5% worse over 12 seeds).
+    No default changes with this.
+  - `tests/test_layout.py` holds a C++ bench to reading a file that a Python writer names.
+
 - **Benchmarks: external-solver `v0.3.0`.** The benchmark projects pin the external-solver
   release that follows optimaru 0.5, the links into its sources point at that tag, and
   their lock files record optimaru 0.5.0. In `v0.3.0` the worker count of a CP-SAT `solve`

@@ -1,14 +1,18 @@
 // Quality-benchmark driver for the C++ conference-scheduling solver.
 //
-// Solves either (a) the demo instance (an exact copy of the generator in
-// optimaru/conference_scheduling/cpp/src/main.cpp, random draws included) or
-// (b) a deterministic scaled instance in the demo's shape (single-typed
-// slots/rooms, so the talkTypeIncompatibilityCost hard constraint dominates
-// exactly like in the demo) for a fixed wall-clock budget, then prints the
-// best-score trajectory, the per-constraint breakdown and an
-// st_quality_bench-style moves/s estimate.
+// Solves a dumped comparison instance (benchmarks/conference-scheduling/dump_instances.py
+// writes the instances of the conference-scheduling-compare harness, the demo
+// conference among them, as <name>.cstxt; the format is in that script's
+// docstring) for a fixed wall-clock budget, then prints the best-score
+// trajectory, the per-constraint breakdown and an st_quality_bench-style
+// moves/s estimate. The bench has no generator: every instance comes from
+// Python, so a tuning run and the CP-SAT comparison solve the same problems.
 //
-// Usage: cs_quality_bench <demo|scaled:<talks>> <seed> <seconds> [key=value..]
+// Usage: cs_quality_bench <instance.cstxt> <seed> <seconds> [key=value..]
+//   seconds 0: no solve. Scores the fixed assignment talk i -> slotRoom
+//   (7 * i) % slotRoomCount (a pinned talk keeps its place) and prints
+//   "CS_BENCH_CROSSCHECK hard=... soft=...", which must equal the score
+//   dump_instances.py printed for that instance.
 // Knobs (bench-only overrides of Solver::Config, for A/B sweeps):
 //   compatProb= la= change= swap= alnsTrigger= alnsPolish= minRuin= maxRuin=
 //   max_ruin_count= decay= segments= asMove= as_move_max_ruin= descent=
@@ -18,234 +22,131 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <random>
+#include <fstream>
+#include <iomanip>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "cs/domain.hpp"
 #include "cs/score_calculator.hpp"
 #include "cs/solver.hpp"
-#include "optimaru/portable_random.hpp"
 
 using namespace cs;
 
 namespace {
 
-// Seeded, platform-independent draws (see optimaru/portable_random.hpp).
-using DemoRandom = optimaru::PortableRandom;
-
-constexpr int LAB = 0;
-constexpr int BREAKOUT = 1;
-
-const std::vector<std::string> THEME_TAGS = {"Optimization", "AI", "Cloud"};
-const std::vector<std::string> SECTOR_TAGS = {"Green", "Blue", "Orange"};
-const std::vector<std::string> AUDIENCE_TAGS = {"Programmers", "Analysts", "Managers"};
-const std::vector<std::string> CONTENT_TAGS = {"Optimization", "Constraints", "Metaheuristics",
-                                               "Kubernetes"};
-
-int speakerIndex(const ConferenceSchedule& c, const std::string& name) {
-    for (int k = 0; k < static_cast<int>(c.speakers.size()); ++k) {
-        if (c.speakers[k].name == name) return k;
-    }
-    std::fprintf(stderr, "unknown speaker %s\n", name.c_str());
-    std::abort();
+// ---------------------------------------------------------------------------
+// Instance file (dump_instances.py). Strings are std::quoted; a list is its
+// length and then its items.
+// ---------------------------------------------------------------------------
+std::string readString(std::istream& in) {
+    std::string text;
+    in >> std::quoted(text);
+    return text;
 }
 
-ConferenceSchedule buildDemoConference() {
-    ConferenceSchedule c;
-    c.name = "Conference";
-    c.talkTypes = {"Lab", "Breakout"};
-
-    auto slot = [](const char* id, int startH, int startM, int endH, int endM, int talkType,
-                   std::vector<std::string> tags) {
-        Timeslot t;
-        t.id = id;
-        t.startMinute = startH * 60 + startM;
-        t.endMinute = endH * 60 + endM;
-        t.talkTypes = {talkType};
-        t.tags = std::move(tags);
-        return t;
-    };
-    c.timeslots = {
-            slot("T1", 10, 15, 12, 15, LAB, {}),
-            slot("T2", 10, 15, 11, 0, BREAKOUT, {}),
-            slot("T3", 11, 30, 12, 15, BREAKOUT, {}),
-            slot("T4", 13, 0, 15, 0, LAB, {"After lunch"}),
-            slot("T5", 15, 30, 16, 15, BREAKOUT, {}),
-            slot("T6", 16, 30, 17, 15, BREAKOUT, {}),
-    };
-
-    auto room = [](const char* id, const char* name, int capacity, int talkType,
-                   std::vector<std::string> tags) {
-        Room r;
-        r.id = id;
-        r.name = name;
-        r.capacity = capacity;
-        r.talkTypes = {talkType};
-        r.tags = std::move(tags);
-        return r;
-    };
-    c.rooms = {
-            room("R1", "Room A", 60, BREAKOUT, {"Recorded"}),
-            room("R2", "Room B", 240, BREAKOUT, {}),
-            room("R3", "Room C", 630, BREAKOUT, {"Recorded", "Large"}),
-            room("R4", "Room D", 70, BREAKOUT, {"Recorded"}),
-            room("R5", "Room E (LAB)", 490, LAB, {"Recorded"}),
-    };
-
-    const std::vector<std::string> speakerNames = {
-            "Amy Cole", "Beth Fox", "Carl Green", "Dan Jones", "Elsa King", "Flo Li",
-            "Gus Poe",  "Hugo Rye", "Ivy Smith",  "Jay Watt",  "Amy Fox",   "Beth Green"};
-    for (int k = 0; k < static_cast<int>(speakerNames.size()); ++k) {
-        Speaker s;
-        s.id = std::to_string(k + 1);
-        s.name = speakerNames[k];
-        c.speakers.push_back(std::move(s));
-    }
-    c.speakers.back().undesiredTimeslotTags = {"After lunch"};  // Beth Green
-
-    DemoRandom random(0);
-    auto addTalk = [&](const char* code, const char* title, int talkType,
-                       std::vector<std::string> speakers, int audienceLevel, int favoriteCount,
-                       int crowdControlRisk) {
-        Talk t;
-        t.code = code;
-        t.title = title;
-        t.talkType = talkType;
-        for (const std::string& name : speakers) t.speakers.push_back(speakerIndex(c, name));
-        t.themeTrackTags = {THEME_TAGS[random.next_int(3)]};
-        t.sectorTags = {SECTOR_TAGS[random.next_int(3)]};
-        t.audienceTypes = {AUDIENCE_TAGS[random.next_int(3)]};
-        t.audienceLevel = audienceLevel;
-        t.contentTags = {CONTENT_TAGS[random.next_int(4)]};
-        t.language = "en";
-        t.favoriteCount = favoriteCount;
-        t.crowdControlRisk = crowdControlRisk;
-        c.talks.push_back(std::move(t));
-    };
-    addTalk("S01", "Talk One", LAB, {"Amy Cole", "Beth Fox"}, 2, 551, 1);
-    addTalk("S02", "Talk Two", LAB, {"Carl Green"}, 3, 528, 0);
-    c.talks[0].undesiredRoomTags = {"Recorded"};  // S01
-    addTalk("S03", "Talk Three", BREAKOUT, {"Dan Jones"}, 3, 497, 0);
-    addTalk("S04", "Talk Four", BREAKOUT, {"Elsa King", "Flo Li"}, 1, 560, 0);
-    addTalk("S05", "Talk Five", BREAKOUT, {"Gus Poe", "Hugo Rye"}, 1, 957, 0);
-    addTalk("S06", "Talk Six", BREAKOUT, {"Ivy Smith"}, 1, 957, 0);
-    c.talks[4].prerequisiteTalks = {1};  // S05 requires S02
-    addTalk("S07", "Talk Seven", BREAKOUT, {"Jay Watt"}, 3, 568, 0);
-    addTalk("S08", "Talk Eight", BREAKOUT, {"Amy Fox"}, 3, 183, 0);
-    addTalk("S09", "Talk Nine", BREAKOUT, {"Beth Green", "Amy Cole"}, 3, 619, 0);
-    addTalk("S10", "Talk Ten", BREAKOUT, {"Beth Fox", "Carl Green"}, 3, 603, 1);
-    addTalk("S11", "Talk Eleven", BREAKOUT, {"Dan Jones", "Elsa King"}, 1, 39, 0);
-    addTalk("S12", "Talk Twelve", BREAKOUT, {"Flo Li", "Gus Poe"}, 3, 977, 0);
-    c.talks[10].mutuallyExclusiveTalksTags = {CONTENT_TAGS[random.next_int(4)]};  // S11
-    addTalk("S13", "Talk Thirteen", BREAKOUT, {"Hugo Rye"}, 3, 494, 0);
-    addTalk("S14", "Talk Fourteen", BREAKOUT, {"Ivy Smith"}, 3, 500, 0);
-    addTalk("S15", "Talk Fifteen", BREAKOUT, {"Jay Watt"}, 2, 658, 0);
-    c.talks[10].requiredRoomTags = {"Recorded"};  // S11
-
-    return c;
+std::vector<int> readInts(std::istream& in) {
+    std::size_t count = 0;
+    in >> count;
+    std::vector<int> values(in ? count : 0);
+    for (int& value : values) in >> value;
+    return values;
 }
 
-// ---------------------------------------------------------------------------
-// Scaled instance: the demo's shape (each slot and each room admits exactly
-// one talk type, so type-compatible cells are scarce) at 2-4x the demo's
-// size, with the full constraint surface (prereqs, mutex tags, crowd risk,
-// speaker unavailability, required/preferred tags) deterministically drawn.
-// Same instance for every solver seed: the generator seed is fixed.
-// ---------------------------------------------------------------------------
-ConferenceSchedule buildScaledConference(int talkCount) {
-    std::mt19937_64 rng(9001);
+std::vector<std::string> readStrings(std::istream& in) {
+    std::size_t count = 0;
+    in >> count;
+    std::vector<std::string> values(in ? count : 0);
+    for (std::string& value : values) value = readString(in);
+    return values;
+}
+
+std::size_t readSection(std::istream& in, const char* name) {
+    std::string section;
+    std::size_t count = 0;
+    in >> section >> count;
+    if (!in || section != name) throw std::runtime_error(std::string("expected ") + name);
+    return count;
+}
+
+// The eight preference tag sets Talk and Speaker share, in the file's order.
+template <typename T>
+void readPreferenceTags(std::istream& in, T& owner) {
+    owner.requiredTimeslotTags = readStrings(in);
+    owner.preferredTimeslotTags = readStrings(in);
+    owner.prohibitedTimeslotTags = readStrings(in);
+    owner.undesiredTimeslotTags = readStrings(in);
+    owner.requiredRoomTags = readStrings(in);
+    owner.preferredRoomTags = readStrings(in);
+    owner.prohibitedRoomTags = readStrings(in);
+    owner.undesiredRoomTags = readStrings(in);
+}
+
+ConferenceSchedule loadConference(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) throw std::runtime_error("cannot open " + path);
+    std::string token;
+    in >> token;
+    if (token != "CS1") throw std::runtime_error("bad magic in " + path);
+
     ConferenceSchedule c;
-    c.name = "Scaled-" + std::to_string(talkCount);
-    c.talkTypes = {"Lab", "Breakout"};
+    in >> token;
+    if (token != "name") throw std::runtime_error("expected name");
+    c.name = readString(in);
+    in >> token >> c.minimumConsecutiveTalksPauseInMinutes;
+    if (token != "minimumConsecutiveTalksPauseInMinutes")
+        throw std::runtime_error("expected minimumConsecutiveTalksPauseInMinutes");
+    in >> token;
+    if (token != "talkTypes") throw std::runtime_error("expected talkTypes");
+    c.talkTypes = readStrings(in);
 
-    const std::vector<std::string> slotTags = {"After lunch", "Morning"};
-    const std::vector<std::string> roomTags = {"Recorded", "Large"};
-    const std::vector<std::string> languages = {"en", "de"};
-
-    // Two days; per day 2 long LAB slots and 5 shorter BREAKOUT slots
-    // (overlapping the labs, so room/speaker conflicts have teeth).
-    for (int d = 0; d < 2; ++d) {
-        const std::int64_t base = d * 1440;
-        auto slot = [&](const char* suffix, int startMin, int endMin, int talkType,
-                        std::vector<std::string> tags) {
-            Timeslot t;
-            t.id = "D" + std::to_string(d + 1) + suffix;
-            t.startMinute = base + startMin;
-            t.endMinute = base + endMin;
-            t.talkTypes = {talkType};
-            t.tags = std::move(tags);
-            c.timeslots.push_back(std::move(t));
-        };
-        slot("L1", 10 * 60 + 15, 12 * 60 + 15, LAB, {});
-        slot("L2", 13 * 60, 15 * 60, LAB, {"After lunch"});
-        slot("B1", 10 * 60 + 15, 11 * 60, BREAKOUT, {"Morning"});
-        slot("B2", 11 * 60 + 30, 12 * 60 + 15, BREAKOUT, {"Morning"});
-        slot("B3", 13 * 60, 13 * 60 + 45, BREAKOUT, {"After lunch"});
-        slot("B4", 15 * 60 + 30, 16 * 60 + 15, BREAKOUT, {});
-        slot("B5", 16 * 60 + 30, 17 * 60 + 15, BREAKOUT, {});
+    c.timeslots.resize(readSection(in, "timeslots"));
+    for (Timeslot& slot : c.timeslots) {
+        slot.id = readString(in);
+        in >> slot.startMinute >> slot.endMinute;
+        slot.talkTypes = readInts(in);
+        slot.tags = readStrings(in);
     }
 
-    auto room = [&](std::string name, int capacity, int talkType, std::vector<std::string> tags) {
-        Room r;
-        r.id = "R" + std::to_string(c.rooms.size() + 1);
-        r.name = std::move(name);
-        r.capacity = capacity;
-        r.talkTypes = {talkType};
-        r.tags = std::move(tags);
-        c.rooms.push_back(std::move(r));
-    };
-    room("Lab X", 490, LAB, {"Recorded"});
-    room("Lab Y", 350, LAB, {});
-    room("Hall A", 60, BREAKOUT, {"Recorded"});
-    room("Hall B", 240, BREAKOUT, {});
-    room("Hall C", 630, BREAKOUT, {"Recorded", "Large"});
-    room("Hall D", 70, BREAKOUT, {"Recorded"});
-    room("Hall E", 120, BREAKOUT, {});
-    room("Hall F", 300, BREAKOUT, {"Large"});
-    room("Hall G", 90, BREAKOUT, {});
-    // A couple of room outages (hard).
-    c.rooms[3].unavailableTimeslots = {4};   // Hall B down in D1B3
-    c.rooms[6].unavailableTimeslots = {11};  // Hall E down in D2B2
-
-    const int speakerCount = 24;
-    for (int k = 0; k < speakerCount; ++k) {
-        Speaker s;
-        s.id = std::to_string(k + 1);
-        s.name = "Speaker " + std::to_string(k + 1);
-        if (rng() % 4 == 0) s.unavailableTimeslots = {static_cast<int>(rng() % c.timeslots.size())};
-        if (rng() % 4 == 0) s.undesiredTimeslotTags = {slotTags[rng() % slotTags.size()]};
-        if (rng() % 5 == 0) s.preferredRoomTags = {roomTags[rng() % roomTags.size()]};
-        c.speakers.push_back(std::move(s));
+    c.rooms.resize(readSection(in, "rooms"));
+    for (Room& room : c.rooms) {
+        room.id = readString(in);
+        room.name = readString(in);
+        in >> room.capacity;
+        room.talkTypes = readInts(in);
+        room.unavailableTimeslots = readInts(in);
+        room.tags = readStrings(in);
     }
 
-    const int labTalks = std::max(1, talkCount / 7);
-    for (int i = 0; i < talkCount; ++i) {
-        Talk t;
-        t.code = "S" + std::to_string(i + 1);
-        t.title = "Talk " + std::to_string(i + 1);
-        t.talkType = i < labTalks ? LAB : BREAKOUT;
-        t.speakers = {static_cast<int>(rng() % speakerCount)};
-        if (rng() % 3 == 0) {
-            const int other = static_cast<int>(rng() % speakerCount);
-            if (other != t.speakers[0]) t.speakers.push_back(other);
-        }
-        t.themeTrackTags = {THEME_TAGS[rng() % THEME_TAGS.size()]};
-        t.sectorTags = {SECTOR_TAGS[rng() % SECTOR_TAGS.size()]};
-        t.audienceTypes = {AUDIENCE_TAGS[rng() % AUDIENCE_TAGS.size()]};
-        t.audienceLevel = 1 + static_cast<int>(rng() % 3);
-        t.contentTags = {CONTENT_TAGS[rng() % CONTENT_TAGS.size()]};
-        t.language = languages[rng() % languages.size()];
-        t.favoriteCount = static_cast<int>(rng() % 1000);
-        t.crowdControlRisk = (rng() % 5 == 0) ? 1 : 0;
-        if (rng() % 5 == 0)
-            t.mutuallyExclusiveTalksTags = {CONTENT_TAGS[rng() % CONTENT_TAGS.size()]};
-        if (i > labTalks && rng() % 5 == 0) t.prerequisiteTalks = {static_cast<int>(rng() % i)};
-        if (rng() % 6 == 0) t.undesiredRoomTags = {roomTags[rng() % roomTags.size()]};
-        if (rng() % 6 == 0) t.preferredTimeslotTags = {slotTags[rng() % slotTags.size()]};
-        if (rng() % 8 == 0) t.requiredRoomTags = {"Recorded"};
-        c.talks.push_back(std::move(t));
+    c.speakers.resize(readSection(in, "speakers"));
+    for (Speaker& speaker : c.speakers) {
+        speaker.id = readString(in);
+        speaker.name = readString(in);
+        speaker.unavailableTimeslots = readInts(in);
+        readPreferenceTags(in, speaker);
     }
+
+    c.talks.resize(readSection(in, "talks"));
+    for (Talk& talk : c.talks) {
+        talk.code = readString(in);
+        talk.title = readString(in);
+        in >> talk.talkType;
+        talk.speakers = readInts(in);
+        talk.themeTrackTags = readStrings(in);
+        talk.sectorTags = readStrings(in);
+        talk.audienceTypes = readStrings(in);
+        in >> talk.audienceLevel;
+        talk.contentTags = readStrings(in);
+        talk.language = readString(in);
+        readPreferenceTags(in, talk);
+        talk.mutuallyExclusiveTalksTags = readStrings(in);
+        talk.prerequisiteTalks = readInts(in);
+        int pinned = 0;
+        in >> talk.favoriteCount >> talk.crowdControlRisk >> talk.slotRoom >> pinned;
+        talk.pinned = pinned != 0;
+    }
+    if (!in) throw std::runtime_error("truncated instance file " + path);
     return c;
 }
 
@@ -300,27 +201,33 @@ void printBreakdown(const Breakdown& b) {
     }
 }
 
-}  // namespace
-
-int main(int argc, char** argv) {
+int run(int argc, char** argv) {
     if (argc < 4) {
         std::fprintf(stderr,
-                     "usage: cs_quality_bench <demo|scaled:<talks>> <seed> "
+                     "usage: cs_quality_bench <instance.cstxt> <seed> "
                      "<seconds> [key=value ...]\n");
         return 2;
     }
-    const std::string instanceArg = argv[1];
+    const std::string path = argv[1];
     const std::uint64_t seed = std::strtoull(argv[2], nullptr, 10);
     const int seconds = std::atoi(argv[3]);
 
-    ConferenceSchedule conference;
-    if (instanceArg == "demo") {
-        conference = buildDemoConference();
-    } else if (instanceArg.rfind("scaled:", 0) == 0) {
-        conference = buildScaledConference(std::atoi(instanceArg.c_str() + 7));
-    } else {
-        std::fprintf(stderr, "unknown instance %s\n", instanceArg.c_str());
-        return 2;
+    ConferenceSchedule conference = loadConference(path);
+
+    // seconds 0: no solve. Scores a fixed assignment so the dumped instance
+    // can be checked against the Python scorer (dump_instances.py prints the
+    // same score).
+    if (seconds <= 0) {
+        for (int i = 0; i < conference.talkCount(); ++i) {
+            Talk& talk = conference.talks[i];
+            if (!talk.pinned) talk.slotRoom = (7 * i) % conference.slotRoomCount();
+        }
+        const Breakdown fixed = ScoreCalculator::computeBreakdown(conference);
+        printBreakdown(fixed);
+        const Score score = ScoreCalculator::score(conference);
+        std::printf("CS_BENCH_CROSSCHECK hard=%lld soft=%.0f\n", static_cast<long long>(score.hard),
+                    score.soft);
+        return 0;
     }
 
     Solver::Config config;
@@ -372,9 +279,9 @@ int main(int argc, char** argv) {
     }
 
     std::printf(
-            "CS_BENCH instance name=%s talks=%zu timeslots=%zu rooms=%zu "
+            "CS_BENCH instance file=%s talks=%zu timeslots=%zu rooms=%zu "
             "speakers=%zu seed=%llu budget=%ds\n",
-            conference.name.c_str(), conference.talks.size(), conference.timeslots.size(),
+            path.c_str(), conference.talks.size(), conference.timeslots.size(),
             conference.rooms.size(), conference.speakers.size(),
             static_cast<unsigned long long>(seed), seconds);
 
@@ -409,4 +316,15 @@ int main(int argc, char** argv) {
             static_cast<long long>(conference.score.hard), conference.score.soft,
             conference.score.feasible() ? "true" : "false", feasibleMs, movesPerSec);
     return 0;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    try {
+        return run(argc, argv);
+    } catch (const std::exception& error) {
+        std::fprintf(stderr, "cs_quality_bench: %s\n", error.what());
+        return 1;
+    }
 }

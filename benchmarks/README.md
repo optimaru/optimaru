@@ -66,7 +66,14 @@ Four use cases (bed allocation, conference scheduling, meeting scheduling, schoo
 timetabling) also have an engine-only C++ bench for tuning runs,
 `benchmarks/<slug>/cpp/<ns>_quality_bench.cpp`. The use case's `CMakeLists.txt` builds it
 (`cmake --build build --target <ns>_quality_bench`, binary in `build/<use case>/`); its
-arguments are in the comment at the top of the file.
+arguments are in the comment at the top of the file. A C++ bench generates no data: every
+instance is built in Python and written to a plain token file the bench reads, so a tuning
+run solves the problems the comparison solves and an instance is the same on every
+platform. `benchmarks/<slug>/dump_instances.py` writes the comparison's instances for bed
+allocation, conference scheduling and meeting scheduling (the file format is in its
+docstring, and it prints the score of a fixed assignment that the bench reproduces with a
+budget of 0 seconds); school timetabling's track-1 generator,
+`school_timetabling_cpsat/gen_quickstart.py`, writes its own.
 
 A CP-SAT constraint is a plugin that subclasses the use case's own constraint
 spec (`<Subject>Cost`), so both solvers take the same selection: the same

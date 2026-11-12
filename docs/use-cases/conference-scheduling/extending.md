@@ -18,8 +18,8 @@ The steps build one example: `roomOverflowCost`, for every talk the people who m
 favorite beyond the seats of its room, times the minutes of its timeslot. It keeps a popular talk
 out of a room that cannot hold its audience. (The existing `popularTalksRoomSizeCost` only compares
 talks with each other.) Every snippet below was compiled and run, and every figure measured, on
-optimaru 0.4.3, and the `idle_at_weight_zero()` override of step 4 on 0.5.1; a later change to
-the solver moves the figures, not the steps.
+optimaru 0.4.3, and the `idle_at_weight_zero()` override of step 4 and the quality-bench
+commands of step 6 on 0.5.1; a later change to the solver moves the figures, not the steps.
 
 ## How a schedule is scored
 
@@ -533,15 +533,18 @@ does.
 scores at the same budget over several seeds, before and after:
 
 ```sh
+uv run --project benchmarks/conference-scheduling/cpsat \
+    python benchmarks/conference-scheduling/dump_instances.py /tmp/cs    # the comparison instances
 cmake --build build --target cs_quality_bench
-./build/conference_scheduling/cs_quality_bench scaled:60 1 10     # instance, seed, seconds
+./build/conference_scheduling/cs_quality_bench /tmp/cs/days3.cstxt 1 10     # instance, seed, seconds
 ```
 
 `cs_quality_bench` runs the default path only, so it measures a constraint after step 5.
 It prints the final hard and soft score, every non-zero `Breakdown` member and a
-moves-per-second estimate; `scaled:N` is a conference of N talks in 14 timeslots and
-9 rooms. Build the tree before and after the change into two build directories and
-run the two binaries in turn on the same instances and seeds.
+moves-per-second estimate. It generates nothing: `dump_instances.py` writes the instances of
+the CP-SAT comparison, the demo conference and `days2` to `days5` (`days3` is 70 talks in 18
+timeslots and 8 rooms). Build the tree before and after the change into two build
+directories and run the two binaries in turn on the same instances and seeds.
 [Quality benchmark and solver defaults](README.md#quality-benchmark-and-solver-defaults)
 shows what such a comparison reports. Against CP-SAT:
 `uv run conference-scheduling-compare --seconds 10 --workers 8` in

@@ -141,6 +141,12 @@ The default search settings were tuned with `benchmarks/meeting-scheduling/cpp/m
 (monolithic incremental fast path, 10 s / single thread, 6-12 seeds interleaved
 A/B; absolute values are from one Apple Silicon macOS machine and vary per machine).
 The objective is `medium penalty × 1e6 + raw soft` (given hard 0; lower is better).
+The bench generates nothing now: it solves the instances of the CP-SAT comparison, which
+`benchmarks/meeting-scheduling/dump_instances.py` writes (`ms_quality_bench <instance.mstxt>
+<seed> <seconds> [knobs]`). Up to 0.5.0 it drew its own, and the tuning below was measured
+on those: `scaled:N` is an instance of N meetings in the demo's shape (the generator is in
+`ms_quality_bench.cpp` at the tag `v0.5.0`; it used `std::shuffle`, so an instance was
+another one per standard library).
 
 Adopted defaults (full history in the comments of `optimaru/meeting_scheduling/cpp/include/ms/solver.hpp`):
 
@@ -163,3 +169,23 @@ Mean of seeds 101..106 in the 2026-08-18 round (10 s):
 Measured and rejected (the do-not-retry list is also in the `solver.hpp` comments): as-move
 ruin 6/24, fixed LA 3200/12800, polish 2000/15000, change/swap 0.85/0.15,
 dayFit 0.9, smaller kick ruin (0.05-0.15).
+
+On the comparison's instances, which the bench solves now, the default
+`ruin_recreate_as_move_weight = 2e-4` against `asMove=0` (2026-11-12, one 4-vCPU x86-64 Linux
+cloud machine, three runs at a time, 10 s per run; mean objective, hard 0 in every run):
+
+| Instance | `asMove=0` | Default (2e-4) | Δ | Seeds | Per-seed win-loss-draw |
+| --- | --- | --- | --- | --- | --- |
+| small (8 meetings, 160 cells) | 356 | **341** | −4.3% | 1-6 | 6-0-0 |
+| medium (16 meetings, 360 cells) | 1,574 | **1,568** | −0.4% | 1-6 | 5-1-0 |
+| demo (24 meetings, 480 cells) | 3,047 | 3,046 | −0.1% (neutral) | 1-6 | 3-2-1 |
+| large (48 meetings, 1000 cells) | **38,347,048** | 40,762,940 | +6.3% | 1-12 | 5-7-0 |
+| xlarge (96 meetings, 1920 cells) | **114,624,415** | 134,707,602 | +17.5% | 1-12 | 4-8-0 |
+
+The move helps on the three instances that reach medium 0 and does not on `large` and
+`xlarge`, where the medium penalty is still falling when the budget ends (a mean of 38 and
+115 without the move, 41 and 135 with it); on the bench's former `scaled:48` and `scaled:96`
+it won. The two rungs are other instances than those were (five and six days where the
+scaled ones had four, fewer rooms, another draw of attendees), and the runs were made on a
+cloud machine, not on the machine the defaults were tuned on. The default is unchanged: it
+needs a sweep on these instances before it moves.

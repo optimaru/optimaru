@@ -141,6 +141,26 @@ def test_a_comparison_runner_is_named_after_its_use_case():
     assert not (ROOT / "benchmarks" / "school-timetabling" / "pyproject.toml").exists()
 
 
+def test_a_cpp_bench_generates_no_data():
+    """Benchmark instances are built in Python (the comparison's `benchmark.py`, school
+    timetabling's `gen_quickstart.py`) and written to a token file the C++ bench reads: by
+    `benchmarks/<slug>/dump_instances.py`, or by the generator itself. A bench that drew or
+    assembled its own instances would solve other problems than the comparison does, and
+    `std::shuffle` and the `std::` distributions give another instance per standard library."""
+    benches = sorted((ROOT / "benchmarks").glob("*/cpp/*_quality_bench.cpp"))
+    assert len(benches) == 4
+    for bench in benches:
+        text = bench.read_text()
+        for banned in ("<random>", "portable_random.hpp", "demo_data.hpp"):
+            assert banned not in text, f"{bench.relative_to(ROOT)} includes {banned}: generate the data in Python"
+        assert "std::ifstream" in text, bench
+        slug = bench.parents[1].name
+        package = ROOT / "benchmarks" / slug / "cpsat" / f"{slug.replace('-', '_')}_cpsat"
+        writers = [ROOT / "benchmarks" / slug / "dump_instances.py", package / "gen_quickstart.py"]
+        naming = [path for path in writers if path.is_file() and bench.name in path.read_text()]
+        assert naming, f"no Python writer names {bench.name}"
+
+
 def test_a_public_benchmark_runner_is_a_module_of_its_comparison_package():
     """A runner on a public instance archive is `<use case>_cpsat/public_benchmark.py`, run as
     `uv run <slug>-public-bench` from `benchmarks/<slug>/cpsat`; no loose `bench/` package

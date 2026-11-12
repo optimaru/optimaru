@@ -133,13 +133,19 @@ soft beyond ten minutes. This use case has no medium level: `level="medium"` rai
 
 ## Quality benchmark and solver defaults
 
-`benchmarks/conference-scheduling/cpp/cs_quality_bench.cpp` (`cs_quality_bench <demo|scaled:N> <seed> <seconds>
-[knobs]`) solves demo-like scaled instances (a fixed 14 slots x 9 rooms = 126 cells,
-variable talk count) on a fixed wall-clock budget and prints the final `hard/soft`, the
-trajectory, the per-constraint breakdown and a moves/s estimate. N >= ~63 is structurally
-infeasible (lab talks > lab cells), so hard is the primary metric there; 45/60 are
-feasible, so soft is the metric. Engine figures use the monolithic incremental
+`benchmarks/conference-scheduling/cpp/cs_quality_bench.cpp` (`cs_quality_bench <instance.cstxt> <seed> <seconds>
+[knobs]`) solves one instance on a fixed wall-clock budget and prints the final `hard/soft`,
+the trajectory, the per-constraint breakdown and a moves/s estimate. It generates nothing:
+`benchmarks/conference-scheduling/dump_instances.py` writes the instances of the CP-SAT
+comparison (the demo conference and the generator's `days2` to `days5`), so a tuning run
+solves the problems the comparison solves. Engine figures use the monolithic incremental
 calculator (fast path), the same convention as school-timetabling.
+
+The defaults were tuned up to 0.5.0, when the bench drew its own instances: `scaled:N`
+below is a demo-like conference of N talks on a fixed 14 slots x 9 rooms = 126 cells (the
+generator is in `cs_quality_bench.cpp` at the tag `v0.5.0`). N >= ~63 is structurally
+infeasible (lab talks > lab cells), so hard is the primary metric there; 45/60 are
+feasible, so soft is the metric.
 
 Measurements (one Apple Silicon macOS machine, 10 s per run, mean of seeds 1-6,
 interleaved A/B — absolute values depend on the machine):
@@ -186,6 +192,23 @@ Knobs that were measured but stay off by default (bench key = config field):
 
 Protocol: 6-seed interleaved A/B; per-seed win/loss is a lexicographic
 hard-then-soft comparison. The measurements are from 2026-08. The raw campaign logs are not checked in.
+
+On the comparison's instances, which the bench solves now, the automatic
+`ruin_recreate_as_move_weight` against `asMove=0` (2026-11-12, one 4-vCPU x86-64 Linux cloud
+machine, three runs at a time, 10 s per run; mean soft, hard 0 in every run):
+
+| Instance | `asMove=0` | Default (automatic) | Seeds | Per-seed win-loss-draw |
+| --- | --- | --- | --- | --- |
+| demo (15 talks, 30 cells) | -59415 | **-57990** (+2.4%) | 1-6 | 4-0-2 |
+| days2 (30 talks, 60 cells) | -291675 | **-288718** (+1.0%) | 1-6 | 5-1-0 |
+| days3 (70 talks, 144 cells) | -2118845 | **-2113640** (+0.2%) | 1-6 | 4-2-0 |
+| days4 (118 talks, 240 cells) | **-5393152** | -5396882 (-0.07%) | 1-12 | 5-7-0 |
+| days5 (190 talks, 390 cells) | **-15022492** | -15048010 (-0.17%) | 1-12 | 3-9-0 |
+
+The rule holds up to `days3` and is no gain on the two largest conferences, whose grids
+(240 and 390 cells) are beyond the 126 cells it was tuned on. The default is unchanged: these
+are runs of one cloud machine, not of the machine the defaults were tuned on, and a rule for
+larger grids needs its own sweep.
 
 ## Starting from an existing solution
 

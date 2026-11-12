@@ -15,6 +15,18 @@ uv run meeting-scheduling-compare --seconds 10 --workers 8   # engine vs CP-SAT 
 
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
 
+`dump_instances.py` writes the comparison instances for the engine-only
+C++ bench ([`cpp/ms_quality_bench.cpp`](cpp/ms_quality_bench.cpp)), which has no
+generator of its own:
+
+```sh
+# from the repository root
+uv run --project benchmarks/meeting-scheduling/cpsat \
+    python benchmarks/meeting-scheduling/dump_instances.py /tmp/ms     # <name>.mstxt, one per instance
+cmake --build build --target ms_quality_bench
+./build/meeting_scheduling/ms_quality_bench /tmp/ms/<name>.mstxt 1 10    # seed, seconds
+```
+
 The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports
 for it includes building the model.

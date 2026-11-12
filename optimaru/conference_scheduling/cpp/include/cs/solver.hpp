@@ -54,7 +54,8 @@ public:
         // ~ 0.2. Negative (the default) = auto: 0.2 / slotRoomCount, the
         // budget-share value, which this domain's quality bench confirmed
         // (10s, 6 seeds: soft +0.9-1.4% on every scaled size, 6-0 wins on
-        // scaled:45, no regressions — see benchmarks/school-timetabling/RESULTS.md). 0 disables.
+        // scaled:45, no regressions — see benchmarks/school-timetabling/RESULTS.md;
+        // scaled:N was an instance of the generator the bench had up to 0.5.0). 0 disables.
         double ruin_recreate_as_move_weight = -1.0;
         int ruin_recreate_as_move_max_ruin = 12;
 
