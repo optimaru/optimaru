@@ -130,7 +130,7 @@ def instances() -> dict[str, Callable[[], Any]]:
 
     return {
         # The demo conference: one day, 15 talks.
-        "demo": lambda: conference_scheduling.demo_conference(),
+        "demo": lambda: conference_scheduling.generate_demo_data(),
         "days2": lambda: _generate(2, 4, 1, seed=1),
         "days3": lambda: _generate(3, 6, 2, seed=2),
         "days4": lambda: _generate(4, 8, 2, seed=3),

@@ -6,11 +6,11 @@ import time
 import pytest
 
 import optimaru.meeting_scheduling as ms
-from optimaru.meeting_scheduling.models import MeetingScheduleModel, demo_data
+from optimaru.meeting_scheduling.models import MeetingScheduleModel, generate_demo_data
 
 
 def test_demo_solve_reaches_feasible():
-    model = demo_data()
+    model = generate_demo_data()
     result = ms.solve(model, time_limit_seconds=10.0, random_seed=42, stop_at_first_feasible=True)
     assert isinstance(result, MeetingScheduleModel)
     assert result.score_hard == 0  # feasible
@@ -21,7 +21,7 @@ def test_demo_solve_reaches_feasible():
 
 
 def test_solve_core_in_place():
-    core = ms.demo_data()
+    core = ms.generate_demo_data()
     result = ms.solve(core, time_limit_seconds=5.0, random_seed=1, stop_at_first_feasible=True)
     assert result is core
     assert core.score.is_feasible()
@@ -29,7 +29,7 @@ def test_solve_core_in_place():
 
 
 def test_pinned_assignment_kept():
-    core = ms.demo_data()
+    core = ms.generate_demo_data()
     pinned_value = core.grain_room_of(0, 2)  # first grain, Room 3
     assignments = core.meeting_assignments  # copy
     assignments[0].grain_room = pinned_value
@@ -44,7 +44,7 @@ def test_pinned_assignment_kept():
 def test_stop_at_first_feasible_and_callback():
     events = []
     result = ms.solve(
-        demo_data(),
+        generate_demo_data(),
         time_limit_seconds=10.0,
         random_seed=3,
         stop_at_first_feasible=True,
@@ -60,7 +60,7 @@ def test_a_zero_soft_score_is_positive_zero():
 
     import optimaru.meeting_scheduling as _pkg
 
-    score = _pkg.calculate_score(_pkg.demo_data())
+    score = _pkg.calculate_score(_pkg.generate_demo_data())
     assert score.soft == 0.0
     assert math.copysign(1.0, score.soft) == 1.0
     assert "-0soft" not in repr(score)
@@ -88,7 +88,7 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     seen = []
     started = time.monotonic()
     package.solve(
-        ms.demo_data(),
+        ms.generate_demo_data(),
         time_limit_seconds=30.0,
         random_seed=1,
         stop_at_first_feasible=True,
@@ -106,7 +106,7 @@ def _step_limited_score(seed, starts, **solve_arguments):
     config.step_count_limit = 2000
     config.random_seed = seed
     config.parallel_solver_count = starts
-    solved = ms.solve(ms.demo_data(), config=config, **solve_arguments)
+    solved = ms.solve(ms.generate_demo_data(), config=config, **solve_arguments)
     return (solved.score.hard, solved.score.soft)
 
 
@@ -142,7 +142,7 @@ def test_a_raising_on_new_best_raises_from_a_multi_start_solve():
     process, and the other starts stop at once instead of running out their 30 s budget."""
     started = time.monotonic()
     with pytest.raises(RuntimeError, match="boom"):
-        ms.solve(ms.demo_data(), time_limit_seconds=30.0, parallel_solver_count=4, on_new_best=_boom)
+        ms.solve(ms.generate_demo_data(), time_limit_seconds=30.0, parallel_solver_count=4, on_new_best=_boom)
     assert time.monotonic() - started < 10.0
 
 
@@ -156,7 +156,7 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     try:
         started = time.monotonic()
         with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
-            ms.solve(ms.demo_data(), time_limit_seconds=30.0, parallel_solver_count=4)
+            ms.solve(ms.generate_demo_data(), time_limit_seconds=30.0, parallel_solver_count=4)
         assert time.monotonic() - started < 10.0
     finally:
         _core._fail_worker_thread_start(-1)

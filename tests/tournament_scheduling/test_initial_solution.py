@@ -3,7 +3,7 @@
 import pytest
 
 import optimaru.tournament_scheduling as ts
-from optimaru.tournament_scheduling.models import TournamentScheduleModel, demo_data
+from optimaru.tournament_scheduling.models import TournamentScheduleModel, generate_demo_data
 
 
 def _teams(model):
@@ -32,7 +32,7 @@ def test_exported_from_the_package():
 
 
 def test_complete_seed_skips_construction():
-    problem = demo_data()
+    problem = generate_demo_data()
     seed = _non_greedy_seed(problem)
     result = _construct(ts.with_initial_solution(problem, seed))
     assert _teams(result) == _teams(seed)
@@ -41,7 +41,7 @@ def test_complete_seed_skips_construction():
 
 @pytest.mark.parametrize("as_json", [False, True])
 def test_solved_result_feeds_back(as_json):
-    problem = demo_data()
+    problem = generate_demo_data()
     solved = ts.solve(problem, time_limit_seconds=0.3, random_seed=1)
     solution = solved.model_dump(mode="json") if as_json else solved
     result = _construct(ts.with_initial_solution(problem, solution))
@@ -51,7 +51,7 @@ def test_solved_result_feeds_back(as_json):
 
 
 def test_partial_seed_keeps_its_part_and_fills_the_rest():
-    problem = demo_data()
+    problem = generate_demo_data()
     seed = _non_greedy_seed(problem)
     solution = seed.model_dump(mode="json")
     solution["team_assignments"] = solution["team_assignments"][:30]
@@ -66,7 +66,7 @@ def test_partial_seed_keeps_its_part_and_fills_the_rest():
 
 
 def test_assignments_are_matched_by_id_and_prior_values_are_replaced():
-    solved = _non_greedy_seed(demo_data())
+    solved = _non_greedy_seed(generate_demo_data())
     last = solved.team_assignments[-1]
     seeded = ts.with_initial_solution(solved, {"team_assignments": [{"id": last.id, "team": last.team}]})
     assert _teams(seeded) == {a.id: last.team if a.id == last.id else None for a in solved.team_assignments}
@@ -76,11 +76,11 @@ def test_assignments_are_matched_by_id_and_prior_values_are_replaced():
 @pytest.mark.parametrize("assignment_id", [10_000, "0", None])
 def test_unknown_assignment_raises_naming_it(assignment_id):
     with pytest.raises(ValueError, match=repr(assignment_id)):
-        ts.with_initial_solution(demo_data(), {"team_assignments": [{"id": assignment_id}]})
+        ts.with_initial_solution(generate_demo_data(), {"team_assignments": [{"id": assignment_id}]})
 
 
 def test_highest_value_is_accepted():
-    problem = demo_data()
+    problem = generate_demo_data()
     last_team = len(problem.teams) - 1
     seeded = ts.with_initial_solution(problem, {"team_assignments": [{"id": 0, "team": last_team}]})
     assert seeded.team_assignments[0].team == last_team
@@ -88,13 +88,13 @@ def test_highest_value_is_accepted():
 
 @pytest.mark.parametrize("offset", [0, 1, 1000])
 def test_value_past_the_end_raises_naming_the_assignment(offset):
-    problem = demo_data()
+    problem = generate_demo_data()
     with pytest.raises(ValueError, match="team assignment 5"):
         ts.with_initial_solution(problem, {"team_assignments": [{"id": 5, "team": len(problem.teams) + offset}]})
 
 
 def test_value_past_the_end_on_a_model_raises():
-    problem = demo_data()
+    problem = generate_demo_data()
     seed = _construct(problem)
     seed.team_assignments[3].team = len(problem.teams)
     with pytest.raises(ValueError, match=f"team assignment {seed.team_assignments[3].id}"):
@@ -104,23 +104,23 @@ def test_value_past_the_end_on_a_model_raises():
 @pytest.mark.parametrize("value", [-1, -2, "1", 1.0, True])
 def test_value_of_the_wrong_kind_raises_naming_the_assignment(value):
     with pytest.raises(ValueError, match="team assignment 5"):
-        ts.with_initial_solution(demo_data(), {"team_assignments": [{"id": 5, "team": value}]})
+        ts.with_initial_solution(generate_demo_data(), {"team_assignments": [{"id": 5, "team": value}]})
 
 
 def test_repeated_assignment_raises():
     with pytest.raises(ValueError, match="repeats an id"):
-        ts.with_initial_solution(demo_data(), {"team_assignments": [{"id": 5}, {"id": 5}]})
+        ts.with_initial_solution(generate_demo_data(), {"team_assignments": [{"id": 5}, {"id": 5}]})
 
 
 def test_repeated_id_on_the_problem_raises():
-    problem = demo_data()
+    problem = generate_demo_data()
     problem.team_assignments[1].id = problem.team_assignments[0].id
     with pytest.raises(ValueError, match="repeats an id"):
         ts.with_initial_solution(problem, {"team_assignments": []})
 
 
 def test_index_over_a_different_team_order_raises():
-    problem = demo_data()
+    problem = generate_demo_data()
     solution = _construct(problem).model_dump(mode="json")
     solution["teams"].reverse()
     with pytest.raises(ValueError, match="teams"):
@@ -132,11 +132,11 @@ def test_index_over_a_different_team_order_raises():
 )
 def test_malformed_solution_raises(solution):
     with pytest.raises(ValueError):
-        ts.with_initial_solution(demo_data(), solution)
+        ts.with_initial_solution(generate_demo_data(), solution)
 
 
 def test_inputs_are_not_mutated():
-    problem = _construct(demo_data())
+    problem = _construct(generate_demo_data())
     seed = _non_greedy_seed(problem)
     problem_before, seed_before = problem.model_dump(), seed.model_dump()
     seeded = ts.with_initial_solution(problem, seed)
@@ -146,7 +146,7 @@ def test_inputs_are_not_mutated():
 
 
 def test_pinned_assignment_keeps_its_team_whatever_the_solution_says():
-    problem = demo_data()
+    problem = generate_demo_data()
     seed = _non_greedy_seed(problem)
     pinned_team = (seed.team_assignments[0].team + 1) % len(problem.teams)
     problem.team_assignments[0].team = pinned_team
@@ -162,14 +162,14 @@ def test_pinned_assignment_keeps_its_team_whatever_the_solution_says():
 
 
 def test_pinned_flag_comes_from_the_problem():
-    problem = demo_data()
+    problem = generate_demo_data()
     solution = _construct(problem).model_dump(mode="json")
     solution["team_assignments"][0]["pinned"] = True
     assert ts.with_initial_solution(problem, solution).team_assignments[0].pinned is False
 
 
 def test_out_of_range_pinned_value_on_the_problem_raises():
-    problem = demo_data()
+    problem = generate_demo_data()
     problem.team_assignments[0].team = len(problem.teams)
     problem.team_assignments[0].pinned = True
     with pytest.raises(ValueError, match=f"team assignment {problem.team_assignments[0].id}"):
@@ -177,7 +177,7 @@ def test_out_of_range_pinned_value_on_the_problem_raises():
 
 
 def test_seeded_solve_is_not_worse_than_the_seed():
-    problem = demo_data()
+    problem = generate_demo_data()
     seeded = ts.with_initial_solution(problem, _non_greedy_seed(problem))
     start = _construct(seeded)
     assert _score(ts.solve(seeded, time_limit_seconds=0.3, random_seed=1)) >= _score(start)

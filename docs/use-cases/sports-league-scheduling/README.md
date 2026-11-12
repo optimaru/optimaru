@@ -28,7 +28,7 @@ uv run pytest -q tests/sports_league_scheduling
 ```python
 from optimaru import sports_league_scheduling as sl
 
-schedule = sl.demo_schedule()
+schedule = sl.generate_demo_data()
 sl.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(schedule.score)
 ```
@@ -114,7 +114,7 @@ OPTIMARU_USE_CASES=sports_league_scheduling uv sync && uv run pytest -q tests/sp
 ```python
 from optimaru.sports_league_scheduling.models import LeagueScheduleModel
 
-problem = LeagueScheduleModel.from_core(sl.demo_schedule())
+problem = LeagueScheduleModel.from_core(sl.generate_demo_data())
 solved = LeagueScheduleModel.from_core(schedule)                # `schedule` solved above
 restart = sl.with_initial_solution(problem, solved).to_core()
 sl.solve(restart, time_limit_seconds=5.0, random_seed=43)

@@ -24,7 +24,7 @@ SMALL_PROBLEMS = {
     "assembly_line_balancing": _call(".assembly_line_balancing.test_solve", "salbp"),
     "bed_allocation": _core(_call("optimaru.bed_allocation.demo", "generate_demo_data")),
     "bin_packing": _call(".bin_packing.test_solve", "web_demo"),
-    "conference_scheduling": _call("optimaru.conference_scheduling", "demo_conference"),
+    "conference_scheduling": _call("optimaru.conference_scheduling", "generate_demo_data"),
     "employee_scheduling": _call(
         "optimaru.employee_scheduling", "make_random_roster", days=8, shifts_per_day=6, employees=9, seed=23
     ),
@@ -34,8 +34,8 @@ SMALL_PROBLEMS = {
     "knapsack": _call(".knapsack.test_solve", "demo"),
     "maintenance_scheduling": _call("optimaru.maintenance_scheduling", "generate_demo_data", "SMALL", 18659),
     "max_cut": _call(".max_cut.test_solve", "demo"),
-    "meeting_scheduling": _call("optimaru.meeting_scheduling", "demo_data"),
-    "order_picking": _call("optimaru.order_picking", "build_demo_data"),
+    "meeting_scheduling": _call("optimaru.meeting_scheduling", "generate_demo_data"),
+    "order_picking": _call("optimaru.order_picking", "generate_demo_data"),
     "pickup_delivery": _call(
         "optimaru.pickup_delivery", "build_random_instance", request_count=8, vehicle_count=3, seed=7
     ),
@@ -45,9 +45,9 @@ SMALL_PROBLEMS = {
     "semiconductor_scheduling": _call(
         ".semiconductor_scheduling.test_semiconductor_scheduling", "_fab_problem", with_assignments=False
     ),
-    "sports_league_scheduling": _call("optimaru.sports_league_scheduling", "demo_schedule"),
+    "sports_league_scheduling": _call("optimaru.sports_league_scheduling", "generate_demo_data"),
     "task_assigning": _core(_call("optimaru.task_assigning.demo", "generate_demo_data")),
-    "tournament_scheduling": _core(_call("optimaru.tournament_scheduling.models", "demo_data")),
+    "tournament_scheduling": _core(_call("optimaru.tournament_scheduling.models", "generate_demo_data")),
     "vehicle_routing": _call(".vehicle_routing.test_routing", "small_plan"),
 }
 

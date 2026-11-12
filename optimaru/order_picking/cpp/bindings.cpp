@@ -177,10 +177,11 @@ PYBIND11_MODULE(_core, m) {
 
     // constraint_costs() is the only per-constraint surface.
 
-    m.def("build_demo_data", &buildDemoData, py::arg("trolleys_count") = 5,
+    m.def("generate_demo_data", &buildDemoData, py::arg("trolleys_count") = 5,
           py::arg("bucket_count") = 4, py::arg("bucket_capacity") = 60 * 40 * 20,
           py::arg("orders_count") = 8, py::arg("random_seed") = 37,
           "The demo warehouse (deterministic for a given random_seed).");
+    m.attr("build_demo_data") = m.attr("generate_demo_data");  // the name before 0.5.1
 
     optimaru::python::bind_solver_config(
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))

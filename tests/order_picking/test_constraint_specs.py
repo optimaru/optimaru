@@ -27,7 +27,7 @@ from optimaru.order_picking.constraints import (
 
 
 def build_solution():
-    return op.build_demo_data()
+    return op.generate_demo_data()
 
 
 def solve(constraints=None):
