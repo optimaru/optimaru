@@ -172,10 +172,12 @@
   - Demo, 1 million seeded steps: with the default constraints picked, medium 0 (soft
     -1.54919), from medium 1.19523; with `team_count_moves` off, medium 1.19523 on both paths.
   - The default path is unchanged: the same final score and the same number of new bests
-    from the same seed and steps (demo and the 800-slot `xlarge` instance), and 2.33 million steps per second on `xlarge` before and after (medians of three seeded
-    runs at 4 million steps, interleaved).
-  - The assembly pays for the move as the default path does: 1.20 million steps per second on `xlarge`, from 1.73, and a better end after 1 million
-    seeded steps (soft -6.97615, from -9.31891, which the default path also reaches) on `xlarge`.
+    from the same seed and steps (demo and the 800-slot `xlarge` instance), and 2.33 million
+    steps per second on `xlarge` before and after (medians of three seeded runs at 4 million
+    steps, interleaved).
+  - The assembly pays for the move as the default path does: 1.20 million steps per second
+    on `xlarge`, from 1.73, and a better end after 1 million seeded steps (soft -6.97615,
+    from -9.31891, which the default path also reaches).
   - A seed's result with `constraints=` differs from 0.5.0.
 
 ## 0.5.0
