@@ -551,7 +551,8 @@ uv sync
 uv run school-timetabling-compare --track2 --sizes S,M,L --seconds 10     # out/RESULTS_track2.md
 ```
 
-The C++ quality bench `benchmarks/school-timetabling/cpp/st_quality_bench.cpp` and
+The C++ quality bench `benchmarks/school-timetabling/cpp/st_quality_bench.cpp` (which solves
+the instance files `school_timetabling_cpsat/gen_quickstart.py` writes) and
 `school-timetabling-compare` without a flag are track 1: they run the quickstart domain and say
 nothing about a canonical constraint. Partial timetabling is track 3 (`--track3`); see the
 [benchmark README](../../../benchmarks/school-timetabling/README.md).

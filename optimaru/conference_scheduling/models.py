@@ -266,7 +266,8 @@ class SolveConfig(StrictModel):
     # Probability of a best-improvement descent over one nearby pair (default 0 = off).
     descent_weight: float = Field(default=0.0, ge=0)
     # Probability of picking move targets among talks with hard violations (0 = off).
-    # Measured to help only around scaled:120, so off by default — see the README.
+    # Measured to help only around scaled:120 (a 120-talk instance of the quality bench's
+    # former generator), so off by default — see the README.
     hot_talk_probability: float = Field(default=0.0, ge=0, le=1)
 
     change_move_weight: float = Field(default=0.75, ge=0)

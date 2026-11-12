@@ -18,8 +18,9 @@ add_executable(cs_test ${OPTIMARU_TESTS_DIR}/conference_scheduling/cpp/cs_test.c
 target_link_libraries(cs_test PRIVATE cs_core)
 target_compile_options(cs_test PRIVATE -Wall -Wextra)
 
-# Solution-quality benchmark (benchmarks/conference-scheduling/cpp/cs_quality_bench.cpp): demo + scaled
-# instances, best-score trajectory, per-constraint breakdown, moves/s.
+# Solution-quality benchmark (benchmarks/conference-scheduling/cpp/cs_quality_bench.cpp) over the
+# dumped comparison instances (benchmarks/conference-scheduling/dump_instances.py): best-score
+# trajectory, per-constraint breakdown, moves/s.
 add_executable(cs_quality_bench ${OPTIMARU_BENCHMARKS_DIR}/conference-scheduling/cpp/cs_quality_bench.cpp)
 target_link_libraries(cs_quality_bench PRIVATE cs_core)
 target_compile_options(cs_quality_bench PRIVATE -Wall -Wextra)

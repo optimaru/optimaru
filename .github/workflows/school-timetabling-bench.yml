@@ -4,11 +4,12 @@
 # Gates:
 #   1. C++ domain tests must pass (st_test + st_canonical_test, including the
 #      incremental-vs-full and hot-set consistency checks).
-#   2. Score-calculator parity: the fixed cross-check instance must produce the
-#      same score on the C++ side and in the shared evaluator (school_timetabling_cpsat.evaluate).
+#   2. Score-calculator parity: the fixed cross-check instance
+#      (school_timetabling_cpsat.gen_quickstart) must produce the same score on the C++ side
+#      and in the shared evaluator (school_timetabling_cpsat.evaluate). Track 1 runs it first.
 # Report (not a gate), published to the job summary:
-#   Track 1 — the quickstart model's six constraints, identical instances solved by
-#     this repo's C++ engine and OR-Tools CP-SAT;
+#   Track 1 — the quickstart model's six constraints, identical instances (generated in
+#     Python by gen_quickstart) solved by this repo's C++ engine and OR-Tools CP-SAT;
 #     every solution is re-scored by the shared evaluator
 #     (benchmarks/school-timetabling/cpsat/school_timetabling_cpsat/evaluate.py).
 #   Track 2 — the canonical full-constraint model (H1~H10 + S1~S6), the C++
@@ -82,7 +83,7 @@ jobs:
         with:
           key: st-bench-${{ runner.os }}
 
-      - name: Build C++ (tests, cross-check, quality bench)
+      - name: Build C++ (tests, quality bench)
         run: |
           cmake -B build/st -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DOPTIMARU_ENGINE_TESTS=OFF -DOPTIMARU_USE_CASES=school_timetabling
@@ -92,11 +93,6 @@ jobs:
         run: |
           ./build/st/school_timetabling/st_test
           ./build/st/school_timetabling/st_canonical_test
-
-      - name: C++ cross-check score
-        run: |
-          mkdir -p "$QBENCH_DIR"
-          ./build/st/school_timetabling/st_quality_bench crosscheck "$QBENCH_DIR/crosscheck.json" | tee cpp_crosscheck.txt
 
       - name: Install uv (with package cache)
         uses: astral-sh/setup-uv@v5
@@ -118,9 +114,9 @@ jobs:
           CXX: ccache c++
 
       - name: Track 1 — quickstart six constraints (C++ / CP-SAT)
-        # Re-runs the cross-check parity gate internally, then solves the
-        # S/M/L instances with both solvers and re-scores every solution
-        # with the shared evaluator.
+        # Runs the cross-check parity gate first (scores in $QBENCH_DIR/crosscheck.txt),
+        # then generates the S/M/L instances, solves them with both solvers and
+        # re-scores every solution with the shared evaluator.
         working-directory: benchmarks/school-timetabling/cpsat
         run: |
           uv run school-timetabling-compare --sizes S,M,L --seconds "$SECONDS_BUDGET" \
@@ -144,8 +140,11 @@ jobs:
           {
             echo "# school-timetabling quality bench (${SECONDS_BUDGET}s per instance per solver)"
             echo ""
-            echo "Cross-check parity: $(grep -o 'CROSSCHECK_SCORE=.*' cpp_crosscheck.txt)" \
-              "(C++ / evaluate.py)"
+            echo "Cross-check parity (C++ / evaluate.py):"
+            echo ""
+            echo '```'
+            cat "$QBENCH_DIR/crosscheck.txt"
+            echo '```'
             echo ""
             cat "$QBENCH_DIR/RESULTS_track1.md"
             echo ""
@@ -159,6 +158,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: st-bench-results
-          path: |
-            qbench/
-            cpp_crosscheck.txt
+          path: qbench/
