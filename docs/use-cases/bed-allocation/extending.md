@@ -17,7 +17,8 @@ the model and its twelve constraints are in the [guide](README.md).
 The steps build one example: `unusedRoomEquipmentCost`, the nights a stay spends in a room times the
 equipment of that room the patient neither requires nor prefers. It keeps equipped rooms free for
 the patients who need them. Every snippet below was compiled and run, and every figure measured, on
-optimaru 0.4.3; a later change to the solver moves the figures, not the steps.
+optimaru 0.4.3, except the speeds with the constraint at weight 0 (step 2 and the row in
+step 6), measured on 0.5.1; a later change to the solver moves the figures, not the steps.
 
 ## How a plan is scored
 
@@ -202,10 +203,11 @@ What the base gave you: `cost()` of a bed is the sum of `roomCost` over its stay
 and when a stay moves the engine calls `roomCost` once for the bed it leaves and
 once for the bed it joins. The constraint is already incremental.
 
-The engine asks every constraint in the picks, whatever its weight. `get_constraints()` now
-returns thirteen constraints, the new one at weight 0, and solving with that list is slower
-than with the twelve (1.42 against 1.60 million steps per second) for the same score.
-Leave a constraint out of the picks, as `others` does above, instead of passing it at weight 0.
+A constraint at weight 0 costs a move nothing. The engine leaves it out of every move and
+computes it only when a solve starts and ends, and when `ba.constraint_costs()` reports it.
+`get_constraints()` now returns thirteen constraints, the new one at weight 0, and solving with
+that list runs as fast as with the twelve (1.60 against 1.62 million steps per second) and
+ends on the same score.
 
 ## 3. Check it
 
@@ -425,13 +427,13 @@ differ after a change, the two paths no longer score alike.
 | default path, twelve constraints | 12.3 million |
 | assembly, twelve constraints | 1.60 million |
 | assembly, twelve + the constraint of step 2 at weight 5 | 1.41 million |
-| assembly, twelve + the constraint of step 2 at weight 0 (`get_constraints()`) | 1.42 million |
+| assembly, twelve + the constraint of step 2 at weight 0 (`get_constraints()`) | 1.60 million |
 | assembly, twelve + the constraint with the table of step 4 at weight 5 | 1.53 million |
-| assembly, twelve + the constraint with the table of step 4 at weight 0 | 1.55 million |
 | default path, thirteen constraints (step 5) | 12.2 million |
 | assembly, thirteen constraints (step 5) | 1.52 million |
 
-Each figure is the median of five runs, all taken in one session; a run moves by a few
+Each figure is the median of five runs, all taken in one session (the weight-0 row: the
+median of three, in a later session that put the twelve at 1.62); a run moves by a few
 percent, and other work on the machine lowers every row together.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
