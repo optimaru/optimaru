@@ -95,7 +95,7 @@ ignore = ["E731", "E741"]
 # This file configures ruff for the whole repository, benchmark projects included. Naming
 # their packages here sorts an import the same way from any directory and any environment.
 known-first-party = [
-  "optimaru", "cpsat_plugins", "*_cpsat", "teacher_scheduling", "vrp_benchmark", "bench",
+  "optimaru", "cpsat_plugins", "*_cpsat", "teacher_scheduling", "vrp_benchmark",
   "cpsat_quickstart", "dump_instances", "evaluate", "gen_canonical", "run_bench",
 ]
 

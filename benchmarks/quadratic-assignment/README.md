@@ -64,18 +64,19 @@ for it includes building the model.
 
 ## QAPLIB harness
 
-`bench/run_bench.py` downloads the QAPLIB instance and solution archives on
-demand, checksum-verified ([`bench/data.py`](bench/data.py)), and rescores every answer with
+`quadratic-assignment-public-bench` ([`public_benchmark.py`](cpsat/quadratic_assignment_cpsat/public_benchmark.py))
+downloads the QAPLIB instance and solution archives on demand, checksum-verified
+([`public_benchmark_data.py`](cpsat/quadratic_assignment_cpsat/public_benchmark_data.py)), and rescores every answer with
 `quadratic_assignment.constraint_costs` (`flow_distance_cost`).
 
 ```sh
-cd benchmarks/quadratic-assignment
-OPTIMARU_USE_CASES=quadratic_assignment uv sync --project cpsat   # also builds this checkout's optimaru (quadratic_assignment only)
-uv run --project cpsat pytest -q cpsat/tests
-uv run --project cpsat python -m bench.run_bench --seconds 60
+cd benchmarks/quadratic-assignment/cpsat
+OPTIMARU_USE_CASES=quadratic_assignment uv sync   # also builds this checkout's optimaru (quadratic_assignment only)
+uv run pytest -q
+uv run quadratic-assignment-public-bench --seconds 60
 ```
 
-Recorded results: [`bench/RESULTS.md`](bench/RESULTS.md).
+Public-instance protocol and results: [`cpsat/PUBLIC_BENCHMARKS.md`](cpsat/PUBLIC_BENCHMARKS.md).
 
 <!-- results:start -->
 ## Results

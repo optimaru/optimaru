@@ -97,6 +97,18 @@
 - **Benchmarks: the facility location table measured again.** The engine has CP-SAT's score
   on the four instances up to 200 consumers (on two before) and is 0.02% and 0.29% behind on
   the two larger ones (1.4% to 3.3% behind on four before).
+- **Benchmarks: every public-instance runner has one form.** Pickup & delivery and
+  project-job scheduling ran theirs as a command of the comparison package, while bin
+  packing, quadratic assignment and assembly-line balancing kept a loose `bench/` package
+  beside the project, run as `uv run --project cpsat python -m bench.run_bench`. Those three
+  now follow the first two: `<use case>_cpsat/public_benchmark.py` (helpers in
+  `public_benchmark_data.py`) with the command `<slug>-public-bench`, run with `uv run` from
+  `benchmarks/<slug>/cpsat`; `bench/RESULTS.md` is `cpsat/PUBLIC_BENCHMARKS.md`, downloads
+  are cached in the package's ignored `.cache/`, and bin packing's search-quality check is
+  `bin-packing-quality-bench` (`bin_packing_cpsat/quality_bench.py`). Flags, output and
+  `--json` are unchanged; the tests are `cpsat/tests/test_public_benchmark.py` and need no
+  network. `tests/test_layout.py` checks that no `benchmarks/<slug>/bench/` package is left
+  and that every `public_benchmark.py` has its `<slug>-public-bench` entry.
 
 ## 0.5.0
 

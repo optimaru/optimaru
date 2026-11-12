@@ -52,6 +52,15 @@ that check, the comparison runner (`run_cli`) and the results file of the
 public-instance runners (`write_results`). To pick up a new external-solver release,
 bump the `tag` in each project's `[tool.uv.sources]` and run `uv lock`.
 
+The five use cases that also run on public instance sets (pickup & delivery,
+project-job scheduling, bin packing, quadratic assignment, assembly-line
+balancing) have the runner in the same package, `<use case>_cpsat/public_benchmark.py`,
+run as `uv run <slug>-public-bench` from `benchmarks/<slug>/cpsat`. It downloads its
+archive on demand, checks it against pinned SHA-256 checksums and caches it in the
+package's `.cache/` (ignored by git); `--json` prints the results for the publisher.
+Its protocol and results are in `cpsat/PUBLIC_BENCHMARKS.md` (bin packing's in its
+README).
+
 Four use cases (bed allocation, conference scheduling, meeting scheduling, school
 timetabling) also have an engine-only C++ bench for tuning runs,
 `benchmarks/<slug>/cpp/<ns>_quality_bench.cpp`. The use case's `CMakeLists.txt` builds it
@@ -124,7 +133,7 @@ both are back.)
 
 The `<slug>-compare` commands in the READMEs use `--seconds 10` for a quick
 check, and the public-instance runners show their own budgets. Every results
-block and `RESULTS.md` states the budget it was measured with (30 s per solver
+block, `RESULTS.md` and `PUBLIC_BENCHMARKS.md` states the budget it was measured with (30 s per solver
 and instance for most); pass that `--seconds` to reproduce it.
 
 ## Publishing results

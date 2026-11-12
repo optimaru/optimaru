@@ -17,10 +17,10 @@ whose file is missing keeps its README text and its homepage entry.
 - ``pdp-li-lim.json``, ``pdp-synthetic.json``: ``pickup-delivery-public-bench --json``
   (the lists of several runs concatenated);
 - ``rcpsp.json``: ``project-job-scheduling-public-bench --all --json``;
-- ``bpp.json``: bin-packing ``python -m bench.run_bench --json``;
-- ``qaplib.json``: quadratic-assignment ``python -m bench.run_bench --all --json``;
-- ``salbp-<data set>.json``: assembly-line-balancing
-  ``python -m bench.run_bench --dataset <data set> --json``;
+- ``bpp.json``: ``bin-packing-public-bench --json``;
+- ``qaplib.json``: ``quadratic-assignment-public-bench --all --json``;
+- ``salbp-<data set>.json``:
+  ``assembly-line-balancing-public-bench --dataset <data set> --json``;
 - ``extra.json``: the numbers the school-timetabling harness prints as text, copied by
   hand: ``{"timetabling": {"date": "2026-11-04", "seconds": 30, "rows": [{"instance": "S",
   "size": "6 classes / 15 teachers / 72 courses", "engine": 231, "ortools": 320}, ...]}}``
@@ -898,7 +898,7 @@ def rcpsp_dataset(results: list[dict], seconds: float) -> dict:
 def bpp_dataset(results: list[dict], seconds: float) -> dict:
     rows = _count_rows(results, "bins", lambda result: f"{result['items']} items")
     # `--sample-per-class N` picks N evenly spread instances of the twenty a Falkenauer class has.
-    # The same rounding as `sample_per_class` in benchmarks/bin-packing/bench/run_bench.py: if the two
+    # The same rounding as `sample_per_class` in benchmarks/bin-packing/cpsat/bin_packing_cpsat/public_benchmark.py: if the two
     # ever differ, the command below falls back to naming every instance, which is still correct.
     numbers = _shared_numbers([result["instance"] for result in results]) or []
     count = len(numbers)
@@ -913,8 +913,8 @@ def bpp_dataset(results: list[dict], seconds: float) -> dict:
         "bin-packing",
         "public",
         "cp-sat",
-        "bin-packing",
-        f"uv run --project cpsat python -m bench.run_bench {selection} --seconds {seconds:g}",
+        "bin-packing/cpsat",
+        f"uv run bin-packing-public-bench {selection} --seconds {seconds:g}",
         [_section("instances", "bins", rows)],
     )
 
@@ -939,8 +939,8 @@ def qaplib_dataset(results: list[dict], seconds: float) -> dict:
         "quadratic-assignment",
         "public",
         "cp-sat",
-        "quadratic-assignment",
-        f"uv run --project cpsat python -m bench.run_bench --all --seconds {seconds:g}",
+        "quadratic-assignment/cpsat",
+        f"uv run quadratic-assignment-public-bench --all --seconds {seconds:g}",
         [_section("instances", "gap", rows, solvers=("engine",), unit="%")],
     )
 
@@ -957,8 +957,8 @@ def salbp_dataset(sets: dict[str, list[dict]], seconds: float) -> dict:
         "assembly-line-balancing",
         "public",
         "cp-sat",
-        "assembly-line-balancing",
-        f"uv run --project cpsat python -m bench.run_bench --dataset {name} {picked} --seconds {seconds:g}",
+        "assembly-line-balancing/cpsat",
+        f"uv run assembly-line-balancing-public-bench --dataset {name} {picked} --seconds {seconds:g}",
         [_section("instances", "stations", rows)],
     )
 
@@ -1244,7 +1244,7 @@ def main() -> None:
         datasets["qaplib"] = qaplib_dataset(qaplib, args.seconds)
         body = qaplib_block(qaplib, args)
         _replace_block(BENCHMARKS / "quadratic-assignment" / "README.md", "## QAPLIB\n\n" + body, "qaplib")
-        _replace_block(BENCHMARKS / "quadratic-assignment" / "bench" / "RESULTS.md", body)
+        _replace_block(BENCHMARKS / "quadratic-assignment" / "cpsat" / "PUBLIC_BENCHMARKS.md", body)
 
     salbp = {name: _load(args.results, f"salbp-{name}.json") for name, _ in SALBP_SETS}
     salbp = {name: results for name, results in salbp.items() if results}
@@ -1255,7 +1255,8 @@ def main() -> None:
         block = salbp_block(salbp, args)
         _replace_block(BENCHMARKS / "assembly-line-balancing" / "README.md", block)
         _replace_block(
-            BENCHMARKS / "assembly-line-balancing" / "bench" / "RESULTS.md", block.removeprefix("## Results\n\n")
+            BENCHMARKS / "assembly-line-balancing" / "cpsat" / "PUBLIC_BENCHMARKS.md",
+            block.removeprefix("## Results\n\n"),
         )
 
     extra = _load(args.results, "extra.json") or {}

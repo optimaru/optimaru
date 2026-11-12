@@ -1,3 +1,5 @@
+"""Run the engine (and optionally CP-SAT) on QAPLIB instances with 30 to 50 facilities (downloaded on demand)."""
+
 from __future__ import annotations
 
 import argparse
@@ -5,8 +7,9 @@ import json
 import time
 from pathlib import Path
 
-from bench.data import apply_permutation, load_suite
 from optimaru import quadratic_assignment
+
+from .public_benchmark_data import apply_permutation, load_suite
 
 DEFAULT_INSTANCES = ("nug30", "lipa30a", "tai30a")
 
@@ -75,8 +78,6 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
 
 def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
     from external_solver import quadratic_assignment as cpsat
-
-    import quadratic_assignment_cpsat  # noqa: F401 - points external_solver at the checkout engine
 
     started = time.perf_counter()
     try:

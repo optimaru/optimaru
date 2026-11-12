@@ -229,7 +229,7 @@ or a conflict and late acceptance turns the move down. `RepackMove` and `TradeMo
 close those bins. Seeds 1-3, one thread, 2 s (at 10 s one run differs: g11 with all three
 off, 44 bins), 120 items of weight 10..60 on capacity 100, about 40% in one of 4 colours,
 10 conflicts
-([`benchmarks/bin-packing/bench/quality.py`](../../../benchmarks/bin-packing/bench/quality.py)),
+([`benchmarks/bin-packing/cpsat/bin_packing_cpsat/quality_bench.py`](../../../benchmarks/bin-packing/cpsat/bin_packing_cpsat/quality_bench.py)),
 bins used:
 
 | instance (weight lower bound) | `repack_moves` off | `trade_moves` and `fill_tie_break` off | all three off | default |
@@ -290,5 +290,5 @@ component, tested, made cheaper per move, moved to the default fast path and mea
 ## Benchmark
 
 [`benchmarks/bin-packing`](../../../benchmarks/bin-packing) compares this use case with
-OR-Tools CP-SAT on Falkenauer's public uniform and triplet instances (`bench/run_bench.py`) and on generated
+OR-Tools CP-SAT on Falkenauer's public uniform and triplet instances (`bin-packing-public-bench`) and on generated
 ones (`python -m bin_packing_cpsat.benchmark`).

@@ -121,6 +121,26 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
     assert not stale, f"links into external-solver that are not on {tag}: {stale}"
 
 
+def test_a_public_benchmark_runner_is_a_module_of_its_comparison_package():
+    """A runner on a public instance archive is `<use case>_cpsat/public_benchmark.py`, run as
+    `uv run <slug>-public-bench` from `benchmarks/<slug>/cpsat`; no loose `bench/` package
+    beside the project (vehicle-routing's `bench/` is its ignored output directory)."""
+    loose = sorted(
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "benchmarks").glob("*/bench")
+        if path.parent.name != "vehicle-routing"
+    )
+    assert not loose, f"move these into their comparison package: {loose}"
+    runners = sorted((ROOT / "benchmarks").glob("*/cpsat/*/public_benchmark.py"))
+    assert runners
+    for runner in runners:
+        project = runner.parents[1]
+        slug = project.parent.name
+        scripts = tomllib.loads((project / "pyproject.toml").read_text())["project"].get("scripts", {})
+        entry = f"{runner.parent.name}.public_benchmark:main"
+        assert scripts.get(f"{slug}-public-bench") == entry, f"{slug}: no `{slug}-public-bench = {entry!r}`"
+
+
 def test_every_use_case_has_a_guide_and_a_benchmark():
     for name in USE_CASES:
         slug = name.replace("_", "-")

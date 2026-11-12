@@ -1,16 +1,18 @@
 import io
-import sys
 import tarfile
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-import bench.data
-from bench.data import QapReference, apply_permutation, parse_qap_data, parse_qap_solution
-from bench.run_bench import REFERENCE_ERRATA, reference_objective
 from optimaru.quadratic_assignment import constraint_costs
+from quadratic_assignment_cpsat import public_benchmark_data
+from quadratic_assignment_cpsat.public_benchmark import REFERENCE_ERRATA, reference_objective
+from quadratic_assignment_cpsat.public_benchmark_data import (
+    QapReference,
+    apply_permutation,
+    parse_qap_data,
+    parse_qap_solution,
+)
 
 
 def test_qaplib_parsers_and_reference_rescore() -> None:
@@ -45,22 +47,22 @@ def _tar_gz(path: Path, members: dict[str, str]) -> Path:
 def test_load_suite_reports_missing_suite_instances(tmp_path, monkeypatch) -> None:
     data = _tar_gz(tmp_path / "data.tar.gz", {"nug30.dat": "2 0 3 3 0 0 5 5 0"})
     solutions = _tar_gz(tmp_path / "soln.tar.gz", {"nug30.sln": "2 30 1 2"})
-    monkeypatch.setattr(bench.data, "download_archives", lambda _: (data, solutions))
+    monkeypatch.setattr(public_benchmark_data, "download_archives", lambda _: (data, solutions))
 
     with pytest.raises(ValueError, match="QAPLIB archive lacks esc32a"):
-        bench.data.load_suite(tmp_path)
+        public_benchmark_data.load_suite(tmp_path)
 
 
 def test_load_suite_keeps_only_the_suite(tmp_path, monkeypatch) -> None:
-    members = {f"{name}.dat": "2 0 3 3 0 0 5 5 0" for name in bench.data.SUITE}
+    members = {f"{name}.dat": "2 0 3 3 0 0 5 5 0" for name in public_benchmark_data.SUITE}
     members["chr12a.dat"] = "2 0 1 1 0 0 1 1 0"
     data = _tar_gz(tmp_path / "data.tar.gz", members)
     solutions = _tar_gz(tmp_path / "soln.tar.gz", {"nug30.sln": "2 30 1 2"})
-    monkeypatch.setattr(bench.data, "download_archives", lambda _: (data, solutions))
+    monkeypatch.setattr(public_benchmark_data, "download_archives", lambda _: (data, solutions))
 
-    suite = bench.data.load_suite(tmp_path)
+    suite = public_benchmark_data.load_suite(tmp_path)
 
-    assert list(suite) == list(bench.data.SUITE)
+    assert list(suite) == list(public_benchmark_data.SUITE)
     assert suite["nug30"][1].objective == 30
     assert suite["tai30a"][1] is None
 

@@ -2,19 +2,19 @@
 
 The [`bin-packing`](../../docs/use-cases/bin-packing) use case against **OR-Tools CP-SAT**
 ([`cpsat/`](cpsat), package `bin_packing_cpsat`) on Falkenauer's uniform (u) and triplet (t)
-instances from OR-Library, downloaded on demand and checksum-verified ([`bench/data.py`](bench/data.py)). Both answers are rescored by
+instances from OR-Library, downloaded on demand and checksum-verified ([`public_benchmark_data.py`](cpsat/bin_packing_cpsat/public_benchmark_data.py)). Both answers are rescored by
 the use case's own evaluator (the C++ `constraint_costs`).
 
 ```sh
-cd benchmarks/bin-packing
-OPTIMARU_USE_CASES=bin_packing uv sync --project cpsat   # also builds this checkout's optimaru (bin_packing only)
-uv run --project cpsat pytest -q cpsat/tests
-uv run --project cpsat python -m bench.run_bench --seconds 60
-uv run --project cpsat python -m bench.run_bench --sample-per-class 3 --seconds 30   # instances 00, 10 and 19 of each class
+cd benchmarks/bin-packing/cpsat
+OPTIMARU_USE_CASES=bin_packing uv sync   # also builds this checkout's optimaru (bin_packing only)
+uv run pytest -q
+uv run bin-packing-public-bench --seconds 60
+uv run bin-packing-public-bench --sample-per-class 3 --seconds 30   # instances 00, 10 and 19 of each class
 # offline: generated instances, the shared engine-vs-CP-SAT runner
-uv run --project cpsat python -m bin_packing_cpsat.benchmark --seconds 1 --workers 2 --cpsat-grace 20
+uv run python -m bin_packing_cpsat.benchmark --seconds 1 --workers 2 --cpsat-grace 20
 # offline: search quality against a recorded baseline on generated coloured instances (exit 1 = regression)
-uv run --project cpsat python -m bench.quality --seconds 2 --seeds 1,2,3 --check
+uv run bin-packing-quality-bench --seconds 2 --seeds 1,2,3 --check
 ```
 
 The CP-SAT plugins ([`external_solver.bin_packing.constraints`](https://github.com/optimaru/external-solver/blob/v0.3.0/src/external_solver/bin_packing/constraints.py)) subclass the use case's
@@ -81,7 +81,7 @@ checks the capacity only, so emptying a bin broke a colour or a conflict and lat
 turned the move down. `RepackMove` closed that gap; `TradeMove` and the fill tie-break, which
 came later, closed the one left on the plain instances (see the use case's
 [Search](../../docs/use-cases/bin-packing/README.md#search)).
-[`bench/quality.py`](bench/quality.py) generates every instance below
+`bin-packing-quality-bench` ([`quality_bench.py`](cpsat/bin_packing_cpsat/quality_bench.py)) generates every instance below
 (`--extra` for those after the first four pairs); `--check` fails when a run on the
 review's four coloured instances uses more bins than the recorded baseline (the most bins
 the annealing used over seeds 1-3: sq1 44, g11 43, g22 45, g33 43), or any run ends
