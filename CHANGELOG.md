@@ -51,6 +51,21 @@
   `list_constraints()` in the tracked tests, docs, package sources, benchmarks, notebooks
   and the root README.
 
+- **Notebooks on 0.5.1.** Every notebook in `examples/` is saved with outputs from optimaru
+  0.5.1 and asks for it; `examples/README.md` names that version. Facility location's next
+  steps name `swap_facility_moves`, and bin packing's description of its search names the
+  trade move. Eleven of the twenty-two print and draw exactly what they did on 0.5.0. Bin
+  packing and facility location print new numbers from their new moves: bin packing's rush
+  drums are now repaired by the search, as its text says. With warm starts fixed (#110) the
+  restart experiments moved for 0.5.0 were run again. Food packaging's rounds go back to
+  50,000 steps, where they show their point and print what they printed on 0.4.3; sports
+  league scheduling's new-seed restarts climb again, and its text no longer says that a
+  restart stalls at once. The others keep the step budgets that make their cells repeat
+  (knapsack's rounds and move sets, food packaging's rush-order replan, maintenance
+  scheduling's runs, rounds and urgent-job replan); bed allocation's new admissions keep
+  seed 3, since seed 7 returns one plan at every budget, and drop the 3,000,000-step
+  restart, which returned the 100,000-step plan.
+
 ## 0.5.1
 
 **From 0.5.0.** One fix first: in the seven use cases that search in stages, a solve that
