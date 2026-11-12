@@ -569,8 +569,8 @@ def rcpsp_block(results: list[dict], args: argparse.Namespace, synthetic: list[d
         lines += [
             "",
             f"**Generated instances of the same shape** (`--synthetic N`, {seeded} {_listed(map(str, seeds))}):",
-            "four renewable resources, activities of 1 to 10 time units that follow up to three of the six",
-            "activities before them.",
+            "four renewable resources of capacity 10, activities of 1 to 10 time units that each use three",
+            "of them, and a wide, shallow precedence network (a layer per eight activities).",
             "",
             *_rcpsp_table(synthetic),
         ]
@@ -1064,8 +1064,8 @@ def timetabling_dataset(results: list[dict], seconds: float, workers: int = 8) -
         cells, _ = _timetabling_cells(result)
         rows.append(
             {
-                "instance": f"{result['classes']} classes",
-                "size": f"{result['teachers']} teachers / {result['courses']} courses",
+                "instance": result["instance"],
+                "size": f"{result['classes']} classes / {result['teachers']} teachers / {result['courses']} courses",
                 "cells": cells,
                 "best": _lowest(cells),
             }

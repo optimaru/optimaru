@@ -479,8 +479,8 @@ def test_school_timetabling_rows_come_from_the_track_2_results() -> None:
     assert dataset["command"] == "uv run school-timetabling-compare --track2 --sizes 3,6,9,12 --seconds 30 --workers 8"
     rows = dataset["sections"][0]["rows"]
     assert [(row["instance"], row["size"]) for row in rows][:2] == [
-        ("3 classes", "12 teachers / 33 courses"),
-        ("6 classes", "24 teachers / 66 courses"),
+        ("canonical_3", "3 classes / 12 teachers / 33 courses"),
+        ("canonical_6", "6 classes / 24 teachers / 66 courses"),
     ]
     assert [row["best"] for row in rows] == [["ortools"], ["engine"], ["engine"], ["engine"]]
     assert rows[2]["cells"]["ortools"] == {"value": None, "status": "no solution"}

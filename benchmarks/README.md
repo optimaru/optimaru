@@ -11,26 +11,26 @@ taken as the result.
 | --- | --- | --- |
 | [vehicle-routing](vehicle-routing) | OR-Tools Routing | CVRPLIB Set X (100), Augerat Set A (27) |
 | [school-timetabling](school-timetabling) | OR-Tools CP-SAT | generated schools, 3 to 60 classes (20) |
-| [pickup-delivery](pickup-delivery) | OR-Tools CP-SAT | Li & Lim PDPTW, 100 customers (56) + generated |
-| [project-job-scheduling](project-job-scheduling) | OR-Tools CP-SAT | RG30 RCPSP Pat1–Pat5 (Patterson format) + generated |
+| [pickup-delivery](pickup-delivery) | OR-Tools CP-SAT | Li & Lim PDPTW, 100 customers (56) + generated, 10 to 400 requests (21) |
+| [project-job-scheduling](project-job-scheduling) | OR-Tools CP-SAT | RG30 RCPSP Pat1–Pat5 (Patterson format) and generated instances of that shape (20) + a generated ladder, 5 sizes (20) |
 | [bin-packing](bin-packing) | OR-Tools CP-SAT | Falkenauer u/t (OR-Library), three per class |
-| [quadratic-assignment](quadratic-assignment) | OR-Tools CP-SAT | QAPLIB, 30–50 facilities (33, engine only) + generated |
+| [quadratic-assignment](quadratic-assignment) | OR-Tools CP-SAT | QAPLIB, 30–50 facilities (33, engine only) + generated, 6 to 25 facilities (20) |
 | [assembly-line-balancing](assembly-line-balancing) | OR-Tools CP-SAT | SALBP-1 (Otto et al.), five per data set |
-| [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated, 6 sizes |
-| [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | the demo conference + generated, 2 to 5 days |
-| [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated), 6 sizes |
-| [facility-location](facility-location) | OR-Tools CP-SAT | generated, 6 sizes |
-| [flight-crew-scheduling](flight-crew-scheduling) | OR-Tools CP-SAT | generated, 6 sizes |
-| [food-packaging](food-packaging) | OR-Tools CP-SAT | the demo plant at 5 sizes |
-| [knapsack](knapsack) | OR-Tools CP-SAT | generated, 50 to 5000 items |
-| [maintenance-scheduling](maintenance-scheduling) | OR-Tools CP-SAT | the two demo instances + generated |
-| [max-cut](max-cut) | OR-Tools CP-SAT | generated, 30 to 1600 vertices |
-| [meeting-scheduling](meeting-scheduling) | OR-Tools CP-SAT | the demo instance + generated |
-| [order-picking](order-picking) | OR-Tools CP-SAT | generated, 5 sizes |
-| [semiconductor-scheduling](semiconductor-scheduling) | OR-Tools CP-SAT | generated, 6 to 48 lots |
-| [sports-league-scheduling](sports-league-scheduling) | OR-Tools CP-SAT | the demo league + generated, 6 to 18 teams |
-| [task-assigning](task-assigning) | OR-Tools CP-SAT | the demo instance + generated |
-| [tournament-scheduling](tournament-scheduling) | OR-Tools CP-SAT | generated, 6 sizes |
+| [bed-allocation](bed-allocation) | OR-Tools CP-SAT | generated, 5 sizes (20) |
+| [conference-scheduling](conference-scheduling) | OR-Tools CP-SAT | the demo conference + generated, 2 to 5 days (20) |
+| [employee-scheduling](employee-scheduling) | OR-Tools CP-SAT | seeded demo (generated), 5 sizes (20) |
+| [facility-location](facility-location) | OR-Tools CP-SAT | generated, 5 sizes (20) |
+| [flight-crew-scheduling](flight-crew-scheduling) | OR-Tools CP-SAT | generated, 5 sizes (20) |
+| [food-packaging](food-packaging) | OR-Tools CP-SAT | the demo plant at 20 sizes |
+| [knapsack](knapsack) | OR-Tools CP-SAT | generated, 50 to 5000 items (20) |
+| [maintenance-scheduling](maintenance-scheduling) | OR-Tools CP-SAT | the two demo instances + generated, 4 sizes (20) |
+| [max-cut](max-cut) | OR-Tools CP-SAT | generated, 30 to 1600 vertices (20) |
+| [meeting-scheduling](meeting-scheduling) | OR-Tools CP-SAT | the demo instance + generated, 4 sizes (20) |
+| [order-picking](order-picking) | OR-Tools CP-SAT | generated, 5 sizes (20) |
+| [semiconductor-scheduling](semiconductor-scheduling) | OR-Tools CP-SAT | generated, 6 to 48 lots (20) |
+| [sports-league-scheduling](sports-league-scheduling) | OR-Tools CP-SAT | the demo league + generated, 6 to 18 teams (20) |
+| [task-assigning](task-assigning) | OR-Tools CP-SAT | the demo instance + generated, 4 sizes (20) |
+| [tournament-scheduling](tournament-scheduling) | OR-Tools CP-SAT | generated, 6 sizes (20) |
 
 The CP-SAT models come from
 [external-solver](https://github.com/optimaru/external-solver), installed from
@@ -88,11 +88,16 @@ limits, including the plugins that refuse an offset.
 
 ## Instances of the generated comparisons
 
-Every comparison runs a ladder of instances of growing size. The smallest are
-ones both solvers finish; on the largest the exact model often returns nothing
-within the budget, which the results show as "no solution in time". Where a
-use case ships a demo instance it is one rung, and the others come from a
-seeded generator in its `benchmark.py`. `--instance NAME` (repeatable) picks rungs,
+Every comparison runs a ladder of 20 instances of growing size. The smallest
+are ones both solvers finish; on the largest the exact model often returns
+nothing within the budget, which the results show as "no solution in time".
+Where a use case ships a demo instance it is one rung, and the others come
+from a seeded generator in its `benchmark.py`. Most ladders have a few sizes
+with several instances each, drawn with different seeds of the generator: the
+first instance of a size has the size's name (`medium`) and the others are
+numbered from 2 (`medium-2`, `medium-3`); `cpsat_plugins.benchmark.seeded`
+builds a ladder from such a list. Food packaging's generator has no seed, so
+its ladder is 20 plants of different sizes. `--instance NAME` (repeatable) picks rungs,
 and `--solver engine` or `--solver cp-sat` runs one solver only, which lets
 the single-threaded engine runs and the CP-SAT runs be measured side by side.
 The publisher joins the JSON of the two runs (`compare/<slug>.engine.json` and
