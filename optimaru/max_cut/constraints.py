@@ -13,7 +13,11 @@ A constraint list reads one way: one class call per constraint::
     )
 
     problem = max_cut.solve(problem, constraints=get_constraints())                       # defaults as-is
-    problem = max_cut.solve(problem, constraints=[PartitionImbalanceCost(weight=2) if spec.name == "partition_imbalance_cost" else spec for spec in get_constraints()])
+    picks = [
+        PartitionImbalanceCost(weight=2) if spec.name == "partition_imbalance_cost" else spec
+        for spec in get_constraints()
+    ]
+    problem = max_cut.solve(problem, constraints=picks)                     # one default changed
     problem = max_cut.solve(problem, constraints=[PartitionSizeBoundsCost(), CutWeightCost()])   # picked
 
 Only listed constraints are scored — leave one out and its term disappears from the
@@ -212,7 +216,11 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored. To change just one default, list the others as they are::
 
-        get_constraints([PartitionImbalanceCost(weight=2) if spec.name == "partition_imbalance_cost" else spec for spec in get_constraints()])
+        picks = [
+            PartitionImbalanceCost(weight=2) if spec.name == "partition_imbalance_cost" else spec
+            for spec in get_constraints()
+        ]
+        get_constraints(picks)
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
     that came out empty) raises ValueError; a constraint named several times is

@@ -336,7 +336,7 @@ def test_the_tests_a_guide_names_exist():
         assert not cited_targets - targets, f"{name}: no such C++ test target: {sorted(cited_targets - targets)}"
 
 
-_POSITIONAL_PICK = re.compile(r"(get|list)_constraints\(\)\[")
+_POSITIONAL_PICK = re.compile(r"(get|list)_constraints\(\)\s*\[")
 
 
 def test_picks_select_defaults_by_name_not_by_position():

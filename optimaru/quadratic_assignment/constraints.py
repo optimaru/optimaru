@@ -13,7 +13,11 @@ A constraint list reads one way: one class call per constraint::
     )
 
     problem = qap.solve(problem, constraints=get_constraints())                        # defaults as-is
-    problem = qap.solve(problem, constraints=[FlowDistanceCost(weight=2) if spec.name == "flow_distance_cost" else spec for spec in get_constraints()])
+    picks = [
+        FlowDistanceCost(weight=2) if spec.name == "flow_distance_cost" else spec
+        for spec in get_constraints()
+    ]
+    problem = qap.solve(problem, constraints=picks)                     # one default changed
     problem = qap.solve(problem, constraints=[PinnedAssignmentsCost(), FlowDistanceCost()])   # picked
 
 Only listed constraints are scored — leave one out and its term disappears from the
@@ -196,7 +200,11 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored. To change just one default, list the others as they are::
 
-        get_constraints([FlowDistanceCost(weight=2) if spec.name == "flow_distance_cost" else spec for spec in get_constraints()])
+        picks = [
+            FlowDistanceCost(weight=2) if spec.name == "flow_distance_cost" else spec
+            for spec in get_constraints()
+        ]
+        get_constraints(picks)
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
     that came out empty) raises ValueError; a constraint named several times is

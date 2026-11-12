@@ -163,14 +163,20 @@ def test_constraint_info_reports_the_cpp_defaults():
     ]
 
 
+# The unit constraints (one raw cost per unit); every other constraint is a global (one total).
+UNIT_CONSTRAINTS = {
+    "overtime_cost",
+    "room_capacity_cost",
+    "day_crossing_cost",
+    "meeting_end_time_cost",
+    "larger_room_capacity_cost",
+}
+
+
 def test_constraint_info_matches_the_raw_cost_metadata():
     """constraint_costs() reports the same defaults (weight, level) for every constraint,
     and every entry carries the domain's medium fold (1e6 into soft)."""
     raw = ms.constraint_costs(build_schedule())
-    # A unit constraint reports one raw cost per unit, a global one a single total.
-    units = max(len(entry["costs"]) for entry in raw.values())
-    assert units > 1
-    unit_names = {name for name, entry in raw.items() if len(entry["costs"]) == units}
     for row in ms.constraint_info():
         entry = raw[row.name]
         assert (entry["weight"], entry["level"]) == (
@@ -178,7 +184,7 @@ def test_constraint_info_matches_the_raw_cost_metadata():
             row.default_level,
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
-        assert entry["global"] == (row.name not in unit_names)
+        assert entry["global"] == (row.name not in UNIT_CONSTRAINTS)
         assert (entry["name"], entry["label"]) == (row.name, "")  # one instance per name, no label
         assert entry["medium_fold"] == {"kind": "into_soft", "unit": ms.MEDIUM_SCALE}
     assert ms.MEDIUM_SCALE == 1e6
