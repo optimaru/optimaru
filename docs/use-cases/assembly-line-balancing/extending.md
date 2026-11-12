@@ -17,7 +17,8 @@ the model and its ten constraints are in the [guide](README.md).
 The steps build one example: `lateWorkCost`, each task's duration times the index of its station. It
 pulls the work towards the first stations and closes the empty stations a default solve leaves
 inside the line. Every snippet below was compiled and run, and every figure measured, on optimaru
-0.4.3; a later change to the solver moves the figures, not the steps.
+0.4.3, the steps per second on 0.5.1; a later change to the solver moves the figures, not the
+steps.
 
 ## How a line is scored
 
@@ -33,16 +34,17 @@ There are two scoring paths, and they give the same score for the same line
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/alb/constraints/` |
 | Constraints | the nine that are on by default | the ones you list, with your knobs |
-| Steps per second | 10.7 million | 4.9 million for the same nine, 1.9 million for `get_constraints()` |
+| Steps per second | 10.5 million | 4.8 million for the same nine, 4.9 million for `get_constraints()` |
 | Parallel starts | `parallel_solver_count` | one start |
 
 The speeds are a generated line of 100 tasks (the "large" line of the benchmark), 2
 million steps, one thread of an Apple M4 Max; [step 6](#6-measure) has the script.
 `get_constraints()` returns all ten constraints of the catalog, the opt-in
-`workload_imbalance_cost` at weight 0 among them. The assembly evaluates every constraint
-it is given, whatever its weight, and that one keeps an ordered set of the station
-loads: it alone takes the assembly from 4.9 to 1.9 million steps per second. Steps 1
-to 4 work on the assembly. Step 5 moves a constraint to the monolithic calculators.
+`workload_imbalance_cost` at weight 0 among them. A constraint at weight 0 costs a move
+nothing, so `get_constraints()` runs at the speed of the nine; picked with a weight, that
+one keeps an ordered set of the station loads and costs more than the nine together
+([step 4](#4-make-it-cheaper-per-move)). Steps 1 to 4 work on the assembly. Step 5 moves a
+constraint to the monolithic calculators.
 
 ## 1. Change a constraint that exists
 
@@ -359,28 +361,45 @@ the station a task leaves and on the station it joins cancels in the total and s
 only when the pick has an `exponent` other than 1, so check a new delta with
 `exponent=2` on the pick as well.
 
-The example is already as cheap as a constraint gets here: `PerTaskConstraint` answers the
-delta with one `taskCost` call, and `taskCost` is one multiplication. There is
-nothing to change, so this step changes no code. Measured on the same search (the nine
-default constraints, and one constraint added at weight 0 so that no move is judged
-differently):
+The example is already cheap: `PerTaskConstraint` answers the delta with one `taskCost`
+call, and `taskCost` is one multiplication. There is nothing to change, so this step
+changes no code. Measured on the nine default constraints, with one constraint added at
+weight 0.01 (the weight of the solve of step 2) or at weight 0:
 
 | Assembly | Steps per second |
 | --- | --- |
-| the nine default constraints | 4.92 million |
-| + `lateWorkCost` as in step 2 | 4.55 million |
-| + `lateWorkCost` written on `AlbUnitConstraint` with `cost()` alone | 4.50 million |
-| + `workloadImbalanceCost` at weight 0 | 1.90 million |
+| the nine default constraints | 4.81 million |
+| + `lateWorkCost` as in step 2 | 3.80 million |
+| + `lateWorkCost` written on `AlbUnitConstraint` with `cost()` alone | 4.04 million |
+| + `workloadImbalanceCost` | 1.35 million |
+| + `lateWorkCost` at weight 0 | 4.84 million |
+| + `workloadImbalanceCost` at weight 0 | 4.88 million |
 
-A station holds six tasks here, so the pass of `cost()` is short, and on this line the
-delta buys nothing that shows: five alternating rounds of the second and third line gave
-4.48 and 4.53 million, inside the spread of a run. The last line is what a global with a
-costly update does to every move: that constraint erases and inserts in an ordered set
-per change. Three more things cut the cost of a constraint.
+At weight 0.01 the second and third line end on different scores (-168.46 and -168.88
+soft), so they take other moves, and most of the gap between them is that. At a weight
+that every sum holds exactly, 2^-7, the two make the same moves and end on the same
+score: five alternating rounds gave 4.10 million with the delta and 4.15 million with
+`cost()` alone. A station holds six tasks here, so the pass of `cost()` is short, and on
+this line the delta buys nothing. The fourth line is what a global with a costly update
+does to every move: that constraint erases and inserts in an ordered set per change. The
+last two lines are the speed of the nine: at weight 0 neither constraint is asked on a
+move. Three more things cut the cost of a constraint.
 
-**Leave an unused constraint out of the picks.** The assembly evaluates a pick at weight
-0 like any other. `get_constraints()` returns every constraint of the catalog; filter it
-by `default_enabled` of `alb.constraint_info()` to get the constraints that are on.
+**A constraint at weight 0 costs a move nothing.** The assembly asks a unit constraint
+at weight 0 only when a solve starts and when `constraint_costs()` reports it, so
+`get_constraints()`, which holds the opt-in constraints at weight 0, runs at the speed of
+the constraints that are on. A global at weight 0 is still sent every change, because a
+global may keep something besides its own cost. `workloadImbalanceCost` declares that it
+does not:
+
+```cpp
+    bool idle_at_weight_zero() const override { return true; }
+```
+
+A global may declare it when nothing but its own `cost()` reads what it keeps and
+`reset()` rebuilds all of it. At weight 0 it is then sent no change, and it is reset
+before `constraint_costs()` reports its raw cost. The example is a unit constraint and
+needs nothing.
 
 **Say which units the constraint can charge.** `scoped_units()` returns the stations the constraint
 is ever non-zero for, and the engine skips it on the others.
@@ -426,7 +445,7 @@ calculator calls once for the station a task leaves and once for the station it 
 ```
 
 That is all for a per-task constraint. The default path ran at 9.3 million steps per
-second with the tenth constraint on, against 10.7 million with nine; the two searches take
+second with the tenth constraint on, against 10.5 million with nine; the two searches take
 different moves, so the difference is not all scoring.
 
 A constraint over arcs, pairs or groups is more work: `taskPrecedenceCost` and
@@ -500,17 +519,18 @@ differ after a change, the two paths no longer score alike.
 
 | Measured on the 100-task line, 2 million steps | Steps per second |
 | --- | --- |
-| default path, nine constraints | 10.7 million |
-| assembly, the same nine | 4.9 million |
-| assembly, `get_constraints()` (the workload constraint at weight 0 with them) | 1.9 million |
-| assembly, nine + the constraint of step 2 at weight 0.01 | 3.9 million |
+| default path, nine constraints | 10.5 million |
+| assembly, the same nine | 4.8 million |
+| assembly, `get_constraints()` (the workload constraint at weight 0 with them) | 4.9 million |
+| assembly, nine + the constraint of step 2 at weight 0.01 | 3.8 million |
 | default path, ten constraints (step 5) | 9.3 million |
-| assembly, the same ten (step 5) | 4.1 million |
+| assembly, the same ten (step 5) | 3.9 million |
 
 Each figure is the median of three runs, all taken in one session; a run moves by a few
 percent, and other work on the machine lowers every row together. A constraint with a
 weight changes which moves are taken, so the last three lines are other searches than
-the first three; the table of step 4 has what the constraint costs on the same search.
+the first three. The third line is the search of the second: a constraint at weight 0
+judges no move differently and costs a move nothing.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 the result at the same budget over several seeds, before and after:
