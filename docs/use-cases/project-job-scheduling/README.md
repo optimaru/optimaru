@@ -125,7 +125,8 @@ scored above `makespan_cost`, and a project that is not late loses nothing by wa
 one that is.
 
 A rebuilt schedule is within every renewable capacity, with two exceptions: a delay that
-reaches the end of `delay_range_size`, and a pinned allocation, which keeps its delay and
+reaches the end of `delay_range_size` (an allocation that fits nowhere before it waits there; a
+range shorter than the schedule needs takes much of the move's effect away), and a pinned allocation, which keeps its delay and
 takes its resources where that puts it. Non-renewable capacities depend on the modes alone
 and are left to the score. The move makes a few passes over the schedule where a built-in
 move changes one value, so `custom_move_probability` (0.2) caps how often a step draws it;

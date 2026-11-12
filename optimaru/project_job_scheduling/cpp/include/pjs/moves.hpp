@@ -102,25 +102,25 @@ public:
             if (!Traits::is_pinned(schedule, a)) movable_.push_back(a);
         }
         if (movable_.size() < 2) return false;
-        if (position_.size() != static_cast<std::size_t>(count)) {
-            position_.resize(count);
-            for (int i = 0; i < count; ++i) position_[schedule.topologicalOrder[i]] = i;
-        }
+        // Rebuilt on every move (O(n), small beside the sort): an operator applied to another
+        // schedule of the same size must not tie-break with the first one's order.
+        position_.resize(count);
+        for (int i = 0; i < count; ++i) position_[schedule.topologicalOrder[i]] = i;
         key_.resize(count);
         for (int a = 0; a < count; ++a) key_[a] = 2 * static_cast<std::int64_t>(start_[a]);
         // The projects that end after their critical path go first.
         bool anyLate = false;
         if (schedule.projects.size() > 1) {
-            late_project_.assign(schedule.projects.size(), 0);
+            lateProject_.assign(schedule.projects.size(), 0);
             for (int a = 0; a < count; ++a) {
                 if (schedule.jobTypeOf(a) != JobType::SINK) continue;
                 if (end_[a] > schedule.projectCriticalPathEndDateOf(a)) {
-                    late_project_[schedule.jobs[schedule.allocations[a].job].project] = 1;
+                    lateProject_[schedule.jobs[schedule.allocations[a].job].project] = 1;
                     anyLate = true;
                 }
             }
             for (int a = 0; a < count; ++a) {
-                if (late_project_[schedule.jobs[schedule.allocations[a].job].project])
+                if (lateProject_[schedule.jobs[schedule.allocations[a].job].project])
                     key_[a] -= kUrgent;
             }
         }
@@ -136,7 +136,7 @@ public:
         int at = static_cast<int>(rng() % static_cast<std::uint64_t>(size));
         if (anyLate && (rng() & 1u) != 0) {
             for (int attempt = 0; attempt < kLateTries; ++attempt) {
-                if (late_project_[schedule.jobs[schedule.allocations[movable_[at]].job].project])
+                if (lateProject_[schedule.jobs[schedule.allocations[movable_[at]].job].project])
                     break;
                 at = static_cast<int>(rng() % static_cast<std::uint64_t>(size));
             }
@@ -312,6 +312,11 @@ private:
         if (static_cast<int>(usage_.size()) != resourceCount) usage_.assign(resourceCount, {});
         for (std::vector<int>& days : usage_) std::fill(days.begin(), days.end(), 0);
         late_.resize(count);
+        // Every successor comes before its predecessors here: a successor starts no earlier
+        // than its predecessor ends (a delay is never negative), so it ends no earlier either,
+        // and on equal ends the later topological position goes first. Its late_ start is
+        // therefore written when a predecessor reads it, and `limit - duration` is never
+        // before the predecessor's current start.
         for (int a : byEnd_) {
             const ExecutionMode& mode = schedule.executionModeOf(a, value_[a]);
             int start = start_[a];
@@ -421,7 +426,7 @@ private:
     std::vector<int> planned_;             // per allocation: its value after the move
     std::vector<int> byEnd_;               // the allocations, the last end first
     std::vector<char> seen_;               // per allocation: in the group that moves
-    std::vector<char> late_project_;       // per project: ends after its critical path
+    std::vector<char> lateProject_;        // per project: ends after its critical path
     std::vector<int> stack_;               // the walk over the precedence graph
     std::vector<int> late_;                // per allocation: its start pushed to the right
     std::vector<std::pair<int, int>> changed_;  // (allocation, value before), for the undo

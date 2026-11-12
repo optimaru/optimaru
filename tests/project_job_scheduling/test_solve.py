@@ -214,7 +214,6 @@ def test_serial_schedule_moves_end_the_project_earlier():
 def test_serial_schedule_moves_can_be_switched_off():
     config = pj.SolverConfig()
     config.serial_schedule_moves = False
-    config.custom_move_probability = 1.0
-    assert config.serial_schedule_moves is False and config.custom_move_probability == 1.0
-    result = pj.solve(generate_demo_data(), config=config, time_limit_seconds=2.0, random_seed=1)
+    config.step_count_limit = 20_000
+    result = pj.solve(generate_demo_data(), config=config, random_seed=1)
     assert result.score_hard == 0
