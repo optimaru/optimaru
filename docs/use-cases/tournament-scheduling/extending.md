@@ -576,8 +576,8 @@ moves. If the two differ after a change, the two paths no longer score or search
 
 The machine was shared while these ran (at most two measurements at a time); a figure
 moved by up to 8% between repeats, never the order of the rows. `TeamCountMove` walks every
-slot each time it is drawn, so it costs the assembly about as much as the default path
-(1.72 against 1.20 million on the assembly, 3.12 against 2.33 on the default path), and it
+slot each time it is drawn, so it takes a similar share of the steps on both paths (1.72
+against 1.20 million on the assembly, 3.12 against 2.33 on the default path), and it
 buys a better end: after 1 million seeded steps both paths end on soft -6.97615 with it and
 on -9.31891 without.
 

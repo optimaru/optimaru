@@ -529,7 +529,8 @@ std::unique_ptr<TeamCountMove<Counts>> makeTeamCountMove(const TournamentSchedul
 // day's occupancy counted off the working solution instead of read from the
 // monolithic calculator. The engine edits that solution in place, so the
 // hint always sees the current schedule, whatever move changed it last.
-// O(slots that day + teams) per call.
+// O(slots that day + teams) per call. It keeps one scratch vector, so one
+// hint serves one search thread: this path runs a single start.
 std::function<int(std::mt19937_64&, int)> solutionValueHint(const TournamentSchedule& schedule) {
     struct State {
         const TournamentSchedule* solution;
