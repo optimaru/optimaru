@@ -16,6 +16,8 @@ from optimaru.bin_packing.constraints import (
 )
 from optimaru.bin_packing.models import BinPackingProblemModel
 
+from .._picks import replace_default
+
 WEB_DEMO = Path(__file__).parent / "fixtures" / "web_demo.json"
 
 
@@ -76,7 +78,7 @@ def test_step_count_limit_makes_the_search_deterministic():
 
 def test_constraints_path_scores_with_the_picks():
     problem = web_demo()
-    picks = [*get_constraints()[:3], UsedBinsCost(weight=5)]
+    picks = replace_default(get_constraints(), "used_bins_cost", UsedBinsCost(weight=5))
     config = bp.SolverConfig()
     config.step_count_limit = 2000
     config.random_seed = 2

@@ -27,7 +27,8 @@ and `constraints`:
 from optimaru.bin_packing.constraints import UsedBinsCost, get_constraints, score
 
 bp.constraint_info()                    # the catalog: name, default level / weight, flags
-bp.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:3], UsedBinsCost(weight=2)])
+picks = [UsedBinsCost(weight=2) if spec.name == "used_bins_cost" else spec for spec in get_constraints()]
+bp.solve(problem, time_limit_seconds=1.0, constraints=picks)
 raw = bp.constraint_costs(problem)      # raw per-bin costs, re-priced in pure Python
 score(raw), score(raw, [UsedBinsCost(exponent=2.0)])
 score(raw, [UsedBinsCost(), UsedBinsCost(weight=100, offset=10)])   # a repeat, shifted

@@ -1,28 +1,34 @@
 // Quality-benchmark driver for the C++ meeting-scheduling use case.
 //
-// Solves either (a) the demo instance (ms/demo_data.hpp, unchanged) or (b) a
-// deterministic scaled instance in the demo's shape (same duration mix, same
-// attendee-count distribution, meetings/people/rooms scaled together so the
-// occupancy density stays comparable) for a fixed wall-clock budget, then
-// prints the best-score trajectory, the per-constraint breakdown and a
-// trajectory-based moves/s estimate (the st_quality_bench convention).
+// Solves a dumped comparison instance (benchmarks/meeting-scheduling/dump_instances.py
+// writes the instances of the meeting-scheduling-compare harness, the demo
+// data among them, as <name>.mstxt; the format is in that script's docstring)
+// for a fixed wall-clock budget, then prints the per-constraint breakdown and
+// a trajectory-based moves/s estimate (the st_quality_bench convention). The
+// bench has no generator: every instance comes from Python, so a tuning run
+// and the CP-SAT comparison solve the same problems.
 //
-// Usage: ms_quality_bench <demo|scaled:<meetings>> <seed> <seconds> [k=v ...]
+// Usage: ms_quality_bench <instance.mstxt> <seed> <seconds> [k=v ...]
+//        ms_quality_bench crosscheck <instance.mstxt>
+//   crosscheck: no solve. Scores the fixed assignment i -> grainRoom
+//   (7 * i) % grainRoomCount (a pinned assignment keeps its place) and prints
+//   "MS_BENCH_CROSSCHECK hard=... soft=...", which must equal the score
+//   dump_instances.py printed for that instance (its --check runs this).
 // Knobs (bench-only overrides of Solver::Config, for A/B sweeps):
 //   la= change= swap= alnsTrigger= alnsPolish= minRuin= maxRuin=
-//   max_ruin_count= decay= dayFit= asMove= asMoveRuin=
+//   maxRuinCount= decay= dayFit= asMove= asMoveRuin=
 
-#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <random>
+#include <fstream>
+#include <iomanip>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
-#include "ms/demo_data.hpp"
 #include "ms/domain.hpp"
 #include "ms/score_calculator.hpp"
 #include "ms/solver.hpp"
@@ -32,98 +38,108 @@ using namespace ms;
 namespace {
 
 // ---------------------------------------------------------------------------
-// Scaled instance: the demo's shape at 2x / 4x. meetings, people and rooms all
-// scale by the same factor over the demo's 24 / 20 / 3, on the same 4-day x 40
-// grain calendar, so grain-room occupancy density and per-person conflict
-// density stay in the demo's range. Duration mix (8/12/16 grains in thirds)
-// and the required/preferred attendee-count share tables are the demo's.
-// The generator seed is fixed, so every solver seed sees the same instance.
+// Instance file (dump_instances.py). Strings are std::quoted; a list of ints
+// is its length and then its items.
 // ---------------------------------------------------------------------------
-MeetingSchedule buildScaledSchedule(int meetingCount) {
-    std::mt19937_64 rng(9001);
+// A whole non-negative number, or an error that names the argument.
+long long parseCount(const char* text, const char* name) {
+    char* end = nullptr;
+    const long long value = std::strtoll(text, &end, 10);
+    if (end == text || *end != '\0' || value < 0)
+        throw std::runtime_error(std::string(name) + " must be a whole number, got '" + text + "'");
+    return value;
+}
+
+void checkIndex(long long value, long long count, const char* what) {
+    if (value < 0 || value >= count)
+        throw std::runtime_error(std::string(what) + " " + std::to_string(value) +
+                                 " is out of range 0.." + std::to_string(count - 1));
+}
+
+std::string readString(std::istream& in) {
+    std::string text;
+    in >> std::quoted(text);
+    return text;
+}
+
+std::vector<int> readInts(std::istream& in) {
+    std::size_t count = 0;
+    in >> count;
+    std::vector<int> values(in ? count : 0);
+    for (int& value : values) in >> value;
+    return values;
+}
+
+std::size_t readSection(std::istream& in, const char* name) {
+    std::string section;
+    std::size_t count = 0;
+    in >> section >> count;
+    if (!in || section != name) throw std::runtime_error(std::string("expected ") + name);
+    return count;
+}
+
+MeetingSchedule loadSchedule(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) throw std::runtime_error("cannot open " + path);
+    std::string magic;
+    in >> magic;
+    if (magic != "MS1") throw std::runtime_error("bad magic in " + path);
+
     MeetingSchedule schedule;
-
-    const double factor = static_cast<double>(meetingCount) / 24.0;
-    const int personCount = std::max(4, static_cast<int>(20.0 * factor + 0.5));
-    const int roomCount = std::max(2, static_cast<int>(3.0 * factor + 0.5));
-
-    for (int i = 0; i < personCount; ++i) {
-        schedule.people.push_back({std::to_string(i), "Person " + std::to_string(i)});
+    schedule.people.resize(readSection(in, "people"));
+    for (Person& person : schedule.people) {
+        person.id = readString(in);
+        person.fullName = readString(in);
     }
 
-    constexpr int kFirstDayOfYear = 200;
-    int count = 0;
-    for (int day = 0; day < 4; ++day) {
-        for (int minute = 8 * 60; minute <= 17 * 60 + 45; minute += 15) {
-            ++count;
-            schedule.timeGrains.push_back(
-                    {std::to_string(count), count, kFirstDayOfYear + day, minute});
-        }
+    schedule.timeGrains.resize(readSection(in, "timeGrains"));
+    for (TimeGrain& grain : schedule.timeGrains) {
+        grain.id = readString(in);
+        in >> grain.grainIndex >> grain.dayOfYear >> grain.startingMinuteOfDay;
     }
 
-    // Room capacities cycle the demo's 30 / 20 / 16 seats.
-    const int capacities[] = {30, 20, 16};
-    for (int r = 0; r < roomCount; ++r) {
-        schedule.rooms.push_back(
-                {"R" + std::to_string(r + 1), "Room " + std::to_string(r + 1), capacities[r % 3]});
+    schedule.rooms.resize(readSection(in, "rooms"));
+    for (Room& room : schedule.rooms) {
+        room.id = readString(in);
+        room.name = readString(in);
+        in >> room.capacity;
     }
 
-    // Durations: thirds of 8 / 12 / 16 grains (leftovers 8), like the demo.
-    std::vector<int> durations(meetingCount, 8);
-    const int third = static_cast<int>(0.33 * meetingCount);
-    for (int i = 0; i < third; ++i) durations[third + i] = 12;
-    for (int i = 0; i < third; ++i) durations[2 * third + i] = 16;
-    std::shuffle(durations.begin(), durations.end(), rng);
-
-    // Attendee counts: the demo's share tables, clamped to the person count.
-    const std::pair<double, int> requiredShares[] = {{0.36, 2}, {0.08, 3}, {0.02, 4}, {0.08, 5},
-                                                     {0.10, 6}, {0.05, 7}, {0.05, 8}, {0.05, 10}};
-    const std::pair<double, int> preferredShares[] = {{0.06, 1}, {0.20, 2}, {0.18, 3}, {0.06, 4},
-                                                      {0.04, 5}, {0.04, 6}, {0.04, 7}, {0.04, 8},
-                                                      {0.08, 9}, {0.04, 10}};
-    std::vector<int> requiredCounts;
-    std::vector<int> preferredCounts;
-    for (const auto& [share, size] : requiredShares) {
-        const int n = static_cast<int>(share * meetingCount);
-        for (int i = 0; i < n; ++i) requiredCounts.push_back(size);
+    schedule.meetings.resize(readSection(in, "meetings"));
+    for (Meeting& meeting : schedule.meetings) {
+        meeting.id = readString(in);
+        meeting.topic = readString(in);
+        in >> meeting.durationInGrains;
+        meeting.requiredAttendees = readInts(in);
+        meeting.preferredAttendees = readInts(in);
+        int entireGroup = 0;
+        in >> entireGroup;
+        meeting.entireGroupMeeting = entireGroup != 0;
     }
-    for (const auto& [share, size] : preferredShares) {
-        const int n = static_cast<int>(share * meetingCount);
-        for (int i = 0; i < n; ++i) preferredCounts.push_back(size);
+
+    schedule.meetingAssignments.resize(readSection(in, "meetingAssignments"));
+    for (MeetingAssignment& assignment : schedule.meetingAssignments) {
+        assignment.id = readString(in);
+        int pinned = 0;
+        in >> assignment.meeting >> assignment.grainRoom >> pinned;
+        assignment.pinned = pinned != 0;
     }
-    requiredCounts.resize(meetingCount, 2);
-    preferredCounts.resize(meetingCount, 0);
-    std::shuffle(requiredCounts.begin(), requiredCounts.end(), rng);
-    std::shuffle(preferredCounts.begin(), preferredCounts.end(), rng);
+    if (!in) throw std::runtime_error("truncated instance file " + path);
 
-    for (int i = 0; i < meetingCount; ++i) {
-        Meeting meeting;
-        meeting.id = std::to_string(i);
-        meeting.topic = "Meeting " + std::to_string(i);
-        meeting.durationInGrains = durations[i];
-        std::vector<int> taken;
-        const int required = std::min(requiredCounts[i], personCount - 1);
-        const int preferred = std::min(preferredCounts[i], personCount - 1 - required);
-        while (static_cast<int>(meeting.requiredAttendees.size()) < required) {
-            const int person = static_cast<int>(rng() % personCount);
-            if (std::find(taken.begin(), taken.end(), person) == taken.end()) {
-                taken.push_back(person);
-                meeting.requiredAttendees.push_back(person);
-            }
-        }
-        while (static_cast<int>(meeting.preferredAttendees.size()) < preferred) {
-            const int person = static_cast<int>(rng() % personCount);
-            if (std::find(taken.begin(), taken.end(), person) == taken.end()) {
-                taken.push_back(person);
-                meeting.preferredAttendees.push_back(person);
-            }
-        }
-        schedule.meetings.push_back(std::move(meeting));
-
-        MeetingAssignment assignment;
-        assignment.id = std::to_string(i);
-        assignment.meeting = i;
-        schedule.meetingAssignments.push_back(std::move(assignment));
+    // The file is read without the Python model's checks: refuse an index
+    // that points outside its table before the scorer reads through it.
+    const int personCount = static_cast<int>(schedule.people.size());
+    const int meetingCount = static_cast<int>(schedule.meetings.size());
+    for (const Meeting& meeting : schedule.meetings) {
+        for (int person : meeting.requiredAttendees)
+            checkIndex(person, personCount, "required attendee");
+        for (int person : meeting.preferredAttendees)
+            checkIndex(person, personCount, "preferred attendee");
+    }
+    for (const MeetingAssignment& assignment : schedule.meetingAssignments) {
+        checkIndex(assignment.meeting, meetingCount, "assignment meeting");
+        if (assignment.grainRoom != -1)
+            checkIndex(assignment.grainRoom, schedule.grainRoomCount(), "grainRoom");
     }
     return schedule;
 }
@@ -155,29 +171,39 @@ void printBreakdown(const Breakdown& b) {
     }
 }
 
-}  // namespace
-
-int main(int argc, char** argv) {
-    if (argc < 4) {
+int run(int argc, char** argv) {
+    const bool crosscheck = argc == 3 && std::string(argv[1]) == "crosscheck";
+    if (!crosscheck && argc < 4) {
         std::fprintf(stderr,
-                     "usage: ms_quality_bench <demo|scaled:<meetings>> <seed> "
-                     "<seconds> [key=value ...]\n");
+                     "usage: ms_quality_bench <instance.mstxt> <seed> "
+                     "<seconds> [key=value ...]\n"
+                     "       ms_quality_bench crosscheck <instance.mstxt>\n");
         return 2;
     }
-    const std::string instanceArg = argv[1];
-    const std::uint64_t seed = std::strtoull(argv[2], nullptr, 10);
-    const int seconds = std::atoi(argv[3]);
 
-    MeetingSchedule schedule;
-    std::string instanceName = instanceArg;
-    if (instanceArg == "demo") {
-        schedule = buildDemoData();
-    } else if (instanceArg.rfind("scaled:", 0) == 0) {
-        schedule = buildScaledSchedule(std::atoi(instanceArg.c_str() + 7));
-    } else {
-        std::fprintf(stderr, "unknown instance %s\n", instanceArg.c_str());
-        return 2;
+    // crosscheck: no solve. Scores a fixed assignment so the dumped instance
+    // can be checked against the Python scorer (dump_instances.py prints the
+    // same score).
+    if (crosscheck) {
+        MeetingSchedule schedule = loadSchedule(argv[2]);
+        if (schedule.grainRoomCount() == 0) throw std::runtime_error("no time grains or no rooms");
+        const int assignmentCount = static_cast<int>(schedule.meetingAssignments.size());
+        for (int i = 0; i < assignmentCount; ++i) {
+            MeetingAssignment& assignment = schedule.meetingAssignments[i];
+            if (!assignment.pinned) assignment.grainRoom = (7 * i) % schedule.grainRoomCount();
+        }
+        printBreakdown(ScoreCalculator::computeBreakdown(schedule));
+        const Score score = ScoreCalculator::score(schedule);
+        std::printf("MS_BENCH_CROSSCHECK hard=%lld soft=%.0f\n", static_cast<long long>(score.hard),
+                    score.soft);
+        return 0;
     }
+
+    const std::string path = argv[1];
+    const std::uint64_t seed = static_cast<std::uint64_t>(parseCount(argv[2], "seed"));
+    const int seconds = static_cast<int>(parseCount(argv[3], "seconds"));
+    if (seconds == 0) throw std::runtime_error("seconds must be at least 1");
+    MeetingSchedule schedule = loadSchedule(path);
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
@@ -222,9 +248,9 @@ int main(int argc, char** argv) {
     }
 
     std::printf(
-            "MS_BENCH instance name=%s meetings=%zu people=%zu grains=%zu "
+            "MS_BENCH instance file=%s meetings=%zu people=%zu grains=%zu "
             "rooms=%zu seed=%llu budget=%ds\n",
-            instanceName.c_str(), schedule.meetings.size(), schedule.people.size(),
+            path.c_str(), schedule.meetings.size(), schedule.people.size(),
             schedule.timeGrains.size(), schedule.rooms.size(),
             static_cast<unsigned long long>(seed), seconds);
 
@@ -257,4 +283,15 @@ int main(int argc, char** argv) {
             static_cast<long long>(breakdown.softTotal()),
             schedule.score.feasible() ? "true" : "false", feasibleMs, movesPerSec);
     return 0;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    try {
+        return run(argc, argv);
+    } catch (const std::exception& error) {
+        std::fprintf(stderr, "ms_quality_bench: %s\n", error.what());
+        return 1;
+    }
 }

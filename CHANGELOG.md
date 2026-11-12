@@ -14,6 +14,54 @@
   3) and writes its results as JSON (`--out`), which `scripts/publish_benchmarks.py` reads as
   `timetabling.json` in place of numbers copied by hand. The Li & Lim head-to-head table adds
   the first 15 requests of each instance.
+- **Benchmarks: every instance is generated in Python.** The C++ quality benches read
+  instance files and generate nothing; no solver, constraint or published comparison table
+  changes.
+  - School timetabling, track 1: `school_timetabling_cpsat/gen_quickstart.py` generates the
+    S/M/L schools and the fixed cross-check instance, and writes each as JSON (CP-SAT, the
+    evaluator) and as a token file (`.sttxt`, the C++ bench). `st_quality_bench` is now
+    `st_quality_bench <instance.sttxt> <seed> <seconds> [parallel_solver_count]` and
+    `st_quality_bench crosscheck <crosscheck.sttxt>`; `school-timetabling-compare` writes the
+    instances itself, as before from `--seed`. The bench used to build them with
+    `std::shuffle`, which gives another school per standard library; the Python generator
+    draws from `random.Random(seed)` alone. The presets are the same, the schools are new
+    ones: `RESULTS.md` has a track-1 table on them (the engine's S 175 / M 350 / L 666 soft
+    at 30 s) and says which instances each older table is of. Track 2 and track 3 already
+    generated in Python and are unchanged, as is the homepage's table (track 2).
+  - Conference scheduling and meeting scheduling: `cs_quality_bench` and `ms_quality_bench`
+    take a dumped instance of the CP-SAT comparison (`<instance.cstxt|.mstxt> <seed>
+    <seconds> [knobs]`) in the place of `demo` and `scaled:N`, whose generators are gone
+    (0.5.1 is the last release with them; they are also in the `v0.5.0` tag). `benchmarks/<slug>/dump_instances.py` writes the
+    instances, as bed allocation's does, so a tuning run and the comparison solve the same
+    problems. `<ns>_quality_bench crosscheck <file>` scores a fixed assignment, and the dump
+    script prints the use case's own score of it: `--check <bench>` compares the two, and
+    every constraint's raw cost, on every instance, and CI's `benchmark-cpsat` job runs it.
+  - The three readers refuse an index outside its table, and a seed or a budget that is not
+    a whole number.
+  - The guides keep the tuning history measured on `scaled:N` and say where those instances
+    came from. Each has a new table of the as-move default against `asMove=0` on the
+    comparison's instances: it wins on the smaller ones and not on the largest two of either
+    use case (meeting scheduling's `xlarge`: a mean objective 17.5% worse over 12 seeds).
+    No default changes with this.
+  - `tests/test_layout.py` holds a C++ bench to reading a file that a Python writer names.
+- **Tests and docs pick the defaults by name, not by position, in every use case.** Lists
+  such as `[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)]` or `[:3]`, `[:9]`,
+  `[1:]` meant "every default, with this one replaced"; a constraint added to the catalog,
+  as the extending guides teach, would have been silently dropped or would have displaced
+  another pick (#117 fixed maintenance scheduling). The tests of 16 use cases, the snippets
+  in the READMEs and `python.md` of seven, the docstrings of five packages and a CP-SAT
+  parity test now select by name in catalog order: the docs with the plain comprehension
+  (`[X(...) if spec.name == "x_cost" else spec for spec in get_constraints()]`), the tests
+  with `tests/_picks.py` (`replace_default`, `without`, `only`), which fails on a name that
+  matches no pick or several. Meeting scheduling's and tournament scheduling's raw-cost
+  metadata tests took their unit constraints as the first five or two of
+  `list_constraints()`; they now name them (`UNIT_CONSTRAINTS`), and their guides say to
+  add a new unit constraint's name there instead of editing a slice. The five
+  extending guides that explained a slice (and employee scheduling's, which named one in a
+  test) no longer do. No expected score changed: the picks are the same lists.
+  `tests/test_layout.py` fails on an index or slice of `get_constraints()`, `constraint_info()` or
+  `list_constraints()` in the tracked tests, docs, package sources, benchmarks, notebooks
+  and the root README.
 
 ## 0.5.1
 

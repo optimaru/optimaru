@@ -476,7 +476,7 @@ several employees has no place in these tables: it needs its own state in
   `-602hard/351.34169soft` (six spare skills in that roster):
   `test_get_constraints_reproduces_the_builtin_score`,
   `test_weight_none_scores_like_the_explicit_default_weights`,
-  `test_offset_zero_reproduces_the_plain_scores` (it slices the first eight picks), and in
+  `test_offset_zero_reproduces_the_plain_scores` (its offset-0 copy of every default), and in
   `test_scheduling.py` `test_reference_score_is_the_hand_computed_one` and
   `test_default_assembly_reproduces_builtin_score`. `es_demo` passes: in its hand cases the
   worker holds only the skill the shifts need, or none;

@@ -18,7 +18,8 @@ The steps build one example: `lateStartCost`, for every meeting the time grains 
 grain of the day it starts on and its starting grain. It fills the mornings first and keeps the
 afternoons free. (The existing `meetingEndTimeCost` fills the first days of the calendar instead.)
 Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3, except
-the two speeds of the weight-0 paragraph in step 4, measured on 0.5.1; a later change to the
+the two speeds of the weight-0 paragraph in step 4, measured on 0.5.1 (the quality-bench
+commands of step 6 are those of the development version after it); a later change to the
 solver moves the figures, not the steps.
 
 ## How a schedule is scored
@@ -249,8 +250,8 @@ Python tests. Update them:
   `test_list_constraints_matches_the_spec_names`,
   `test_module_level_instances_keep_every_default` and
   `test_constraint_info_reports_the_cpp_defaults` (the row is
-  `("soft", 0.0, True, False, False)`); `unit_names = ms.list_constraints()[:5]` in
-  `test_constraint_info_matches_the_raw_cost_metadata` (six unit constraints now); the
+  `("soft", 0.0, True, False, False)`); the name in `UNIT_CONSTRAINTS`, the set that
+  `test_constraint_info_matches_the_raw_cost_metadata` checks the `global` flag against; the
   weights written out in `test_weight_none_means_the_component_default`; and
   `test_the_attendance_clash_raw_costs`, which lists every non-zero raw cost of a hand
   schedule: there the constraint reads 2 in cell 5.
@@ -482,15 +483,18 @@ differ after a change, the two paths no longer score alike.
 scores at the same budget over several seeds, before and after:
 
 ```sh
+uv run --project benchmarks/meeting-scheduling/cpsat \
+    python benchmarks/meeting-scheduling/dump_instances.py /tmp/ms    # the comparison instances
 cmake --build build --target ms_quality_bench
-./build/meeting_scheduling/ms_quality_bench scaled:48 1 10     # instance, seed, seconds
+./build/meeting_scheduling/ms_quality_bench /tmp/ms/large.mstxt 1 10     # instance, seed, seconds
 ```
 
 `ms_quality_bench` runs the default path only, so it measures a constraint after step 5.
 It prints the final hard, medium and soft totals, every non-zero `Breakdown` member
-and a moves-per-second estimate; `scaled:N` is an instance of N meetings in the demo's
-shape, `demo` the demo. Build the tree before and after the change into two build
-directories and run the two binaries in turn on the same instances and seeds.
+and a moves-per-second estimate. It generates nothing: `dump_instances.py` writes the
+instances of the CP-SAT comparison, `small`, `medium`, `demo` (the demo data), `large`
+(48 meetings, 5 rooms, 5 days) and `xlarge`. Build the tree before and after the change into
+two build directories and run the two binaries in turn on the same instances and seeds.
 [Solver defaults and quality bench](python.md#solver-defaults-and-quality-bench) shows
 what such a comparison reports. Against CP-SAT:
 `uv run meeting-scheduling-compare --seconds 10 --workers 8` in

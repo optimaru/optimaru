@@ -1,10 +1,11 @@
 """Orchestrates the school-timetabling benchmark.
 
-Track 1 (the quickstart model's six constraints, default): the same instances are solved by
+Track 1 (the quickstart model's six constraints, default): gen_quickstart.py generates the
+instances, and the same instances are solved by
   (1) this repository's C++ engine (`st_quality_bench`),
   (2) OR-Tools CP-SAT (`cpsat_quickstart.py`),
 and compared in a Markdown table (hard/soft, first-feasible time, moves/s).
-Cross-check gate first: the C++ score of a fixed instance must match
+Cross-check gate first: the C++ score of gen_quickstart's fixed instance must match
 evaluate.py before the benchmark proceeds. Every solution is rescored with
 evaluate.py and compared with its self-report.
 
@@ -38,22 +39,33 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from . import gen_quickstart
 from .evaluate import assignment_from_solution, format_score, load_json, score_assignment
 
 # The repository root (this file is benchmarks/school-timetabling/cpsat/school_timetabling_cpsat/benchmark.py).
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
-# Track-1 size presets: (classes, teachers, rooms). Same as documented in st_quality_bench.cpp.
-PRESETS: dict[str, tuple[int, int, int]] = {
-    "S": (6, 12, 7),
-    "M": (12, 20, 13),
-    "L": (24, 40, 25),
-}
+# Track-1 size presets: (classes, teachers, rooms).
+PRESETS = gen_quickstart.PRESETS
 
 
 def _run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     print(f"$ {' '.join(str(c) for c in cmd)}", flush=True)
     return subprocess.run([str(c) for c in cmd], check=True, text=True, **kwargs)
+
+
+def _run_bench(cmd: list, pattern: str, **kwargs) -> tuple[subprocess.CompletedProcess, re.Match]:
+    """Runs the C++ bench and returns its output with the first match of ``pattern``; on a
+    non-zero exit or a missing line, stops with what the bench wrote to stderr (its readers
+    say which index or line of the instance file is wrong)."""
+    print(f"$ {' '.join(str(c) for c in cmd)}", flush=True)
+    proc = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, **kwargs)
+    found = re.search(pattern, proc.stdout)
+    if proc.returncode != 0 or found is None:
+        raise SystemExit(
+            f"{cmd[0]} failed (exit {proc.returncode}, no line matching {pattern!r}):\n{proc.stderr or proc.stdout}"
+        )
+    return proc, found
 
 
 def ensure_cpp_bin(explicit: str | None) -> Path:
@@ -73,18 +85,22 @@ def ensure_cpp_bin(explicit: str | None) -> Path:
 
 
 def crosscheck_gate(cpp_bin: Path, out_dir: Path) -> None:
-    """Parity gate between the C++ score calculator and evaluate.py."""
-    crosscheck_json = out_dir / "crosscheck.json"
-    proc = _run([cpp_bin, "crosscheck", crosscheck_json], capture_output=True)
-    cpp_score = re.search(r"CROSSCHECK_SCORE=\S+", proc.stdout).group(0)
+    """Parity gate between the C++ score calculator and evaluate.py: both score the fixed
+    assignment of gen_quickstart's cross-check instance. The two scores go to
+    ``<out_dir>/crosscheck.txt`` as well."""
+    instance = gen_quickstart.crosscheck()
+    crosscheck_text = gen_quickstart.write(instance, out_dir / "crosscheck.json")
+    _, found = _run_bench([cpp_bin, "crosscheck", crosscheck_text], r"CROSSCHECK_SCORE=\S+")
+    cpp_score = found.group(0)
     print(f"C++ : {cpp_score}")
 
-    # Rescore the dumped fixed assignment with evaluate.py.
-    instance = load_json(crosscheck_json)
     eval_score = format_score(score_assignment(instance, [(l["timeslot"], l["room"]) for l in instance["lessons"]]))
+    print(f"eval: CROSSCHECK_SCORE={eval_score}")
+    (out_dir / "crosscheck.txt").write_text(
+        f"C++ : {cpp_score}\neval: CROSSCHECK_SCORE={eval_score}\n", encoding="utf-8"
+    )
     if cpp_score != f"CROSSCHECK_SCORE={eval_score}":
         raise SystemExit(f"evaluate.py disagrees: {eval_score}")
-    print(f"eval: CROSSCHECK_SCORE={eval_score}")
     print("cross-check gate: OK")
 
 
@@ -92,12 +108,12 @@ def crosscheck_gate(cpp_bin: Path, out_dir: Path) -> None:
 
 
 def run_cpp(cpp_bin: Path, size: str, seed: int, seconds: int, out_dir: Path) -> dict:
-    classes, teachers, rooms = PRESETS[size]
-    instance = out_dir / f"instance_{size}.json"
-    proc = _run(
-        [cpp_bin, classes, teachers, rooms, seed, seconds, instance], capture_output=True, timeout=seconds + 120
+    instance = out_dir / f"instance_{size}.sttxt"
+    proc, final = _run_bench(
+        [cpp_bin, instance, seed, seconds],
+        r"QBENCH_CPP_FINAL score=(\S+) feasible=\S+ moves_per_sec=(\d+)",
+        timeout=seconds + 120,
     )
-    final = re.search(r"QBENCH_CPP_FINAL score=(\S+) feasible=\S+ moves_per_sec=(\d+)", proc.stdout)
     feasible = re.search(r"QBENCH_CPP first_feasible t=(\d+)ms", proc.stdout)
     return {
         "score": final.group(1),
@@ -155,6 +171,8 @@ def track1(args) -> None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     sizes = [s.strip().upper() for s in args.sizes.split(",")]
+    if unknown := [size for size in sizes if size not in PRESETS]:
+        raise SystemExit(f"--sizes: unknown preset(s) {unknown}; track 1 has {sorted(PRESETS)}")
     cpp_bin = ensure_cpp_bin(args.cpp_bin)
 
     print("\n== cross-check gate ==")
@@ -162,6 +180,8 @@ def track1(args) -> None:
 
     rows: dict[tuple[str, str], dict] = {}
     for size in sizes:
+        # The seed draws the school and seeds both solvers.
+        gen_quickstart.write(gen_quickstart.generate(*PRESETS[size], args.seed), out_dir / f"instance_{size}.json")
         print(f"\n== C++ engine: instance_{size} ({args.seconds}s) ==")
         rows[size, "cpp"] = run_cpp(cpp_bin, size, args.seed, args.seconds, out_dir)
         print(f"== CP-SAT: instance_{size} ({args.seconds}s, workers={args.workers}) ==")

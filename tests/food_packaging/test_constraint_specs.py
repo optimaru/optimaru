@@ -29,6 +29,8 @@ from optimaru.food_packaging.constraints import (
     unassigned_jobs_cost,
 )
 
+from .._picks import replace_default
+
 MEDIUM_UNIT = 10_000_000_000  # the domain's medium fold (into soft): 10^10, never 10^9
 BIG = 1_000_000_000
 PA_S, PB = 0, 2  # products of the hand schedules (A small, B)
@@ -500,7 +502,7 @@ def test_the_per_line_constraints_evaluate_the_lines_and_not_the_pool():
 
 def test_offset_zero_reproduces_the_plain_scores():
     """offset 0 is the plain shaping in both modes, so a selection scores the same with offset 0."""
-    plain = [*get_constraints()[:-1], UnassignedJobsCost(exponent=2)]
+    plain = replace_default(get_constraints(), "unassigned_jobs_cost", UnassignedJobsCost(exponent=2))
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
     assert score(raw, shifted) == score(raw, plain)

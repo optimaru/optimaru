@@ -32,6 +32,8 @@ from optimaru.school_timetabling.constraints import (
     score,
 )
 
+from .._picks import replace_default
+
 NAMES = [
     "unassigned_lessons_cost",
     "class_conflict_cost",
@@ -489,7 +491,7 @@ def test_offset_zero_reproduces_the_plain_scores(problem):
     converted = st.convert_problem(problem)
     st.inject_solution(converted, st.solve(problem, time_limit_seconds=1.0, random_seed=3)["lessons"])
     table = converted.table
-    plain = [*get_constraints()[:9], TeacherGapCost(exponent=2), *get_constraints()[10:]]
+    plain = replace_default(get_constraints(), "teacher_gap_cost", TeacherGapCost(exponent=2))
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw = canon.constraint_costs(table)
     assert score(raw, shifted) == score(raw, plain)

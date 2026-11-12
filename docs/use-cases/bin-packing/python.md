@@ -21,7 +21,8 @@ from optimaru.bin_packing.constraints import UsedBinsCost, get_constraints, scor
 bp.constraint_info()
 # [ConstraintInfo(name='bin_capacity_cost', default_level='hard', default_weight=1.0,
 #                 level_flippable=True, reward=False, default_enabled=True), ...]
-bp.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:3], UsedBinsCost(weight=2)])
+picks = [UsedBinsCost(weight=2) if spec.name == "used_bins_cost" else spec for spec in get_constraints()]
+bp.solve(problem, time_limit_seconds=1.0, constraints=picks)
 raw = bp.constraint_costs(problem)   # raw per-bin costs (used_bins_cost: [count])
 score(raw), score(raw, [UsedBinsCost(exponent=2.0)])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip

@@ -38,6 +38,8 @@ from optimaru.project_job_scheduling.models import (
     ResourceRequirementModel,
 )
 
+from .._picks import replace_default
+
 MEDIUM_UNIT = 1_000_000_000  # the domain's medium fold (into soft): 10^9
 
 
@@ -529,7 +531,7 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
 
 def test_offset_zero_reproduces_the_plain_scores():
     """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
-    plain = [*get_constraints()[:-1], MakespanCost(exponent=2)]
+    plain = replace_default(get_constraints(), "makespan_cost", MakespanCost(exponent=2))
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
     assert score(raw, shifted) == score(raw, plain)

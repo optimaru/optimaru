@@ -22,6 +22,8 @@ from optimaru.school_timetabling.constraints import (
     list_constraints,
 )
 
+from .._picks import replace_default
+
 # The soft components' default weights (the same baseline as test_solve.py).
 DEFAULT_WEIGHTS = {
     "teacher_gap_cost": 20,
@@ -217,7 +219,9 @@ def test_relaxed_unassigned_lessons_do_not_unassign_what_fits(problem):
     """
     result = st.solve(
         problem,
-        constraints=[*st.get_constraints()[1:], UnassignedLessonsCost(level="soft", weight=10_000)],
+        constraints=replace_default(
+            st.get_constraints(), "unassigned_lessons_cost", UnassignedLessonsCost(level="soft", weight=10_000)
+        ),
         time_limit_seconds=10.0,
         random_seed=7,
     )

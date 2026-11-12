@@ -21,24 +21,30 @@ all three tables; the tables below cover tracks 1 and 2.
   teacher_time_efficiency_cost / class_subject_repeat_cost (soft). The
   model's seventh term, teacher_unavailability_cost, gets empty
   data in these instances, so it contributes 0 (fairness).
-- **Instances**: `benchmarks/school-timetabling/cpp/st_quality_bench.cpp`
-  generates them deterministically and dumps JSON; both solvers read the
-  same file. 5 days × 8 periods = 40 slots, a 34-period weekly curriculum per
-  class. Presets (classes / teachers / rooms): `S: 6/12/7 (204 lessons)`,
-  `M: 12/20/13 (408 lessons)`, `L: 24/40/25 (816 lessons)`.
+- **Instances**: `gen_quickstart.py` (in `cpsat/school_timetabling_cpsat/`)
+  generates them from `random.Random(seed)` and writes each one twice, as
+  JSON for CP-SAT and the evaluator and as a token file for the C++ bench;
+  both solvers get the same data. 5 days × 8 periods = 40 slots, a 34-period
+  weekly curriculum per class. Presets (classes / teachers / rooms):
+  `S: 6/12/7 (204 lessons)`, `M: 12/20/13 (408 lessons)`,
+  `L: 24/40/25 (816 lessons)`. Until 2026-11-12 the C++ bench generated the
+  instances itself, with `std::shuffle`, whose result depends on the standard
+  library: the same presets and seed were another school on macOS than on
+  Linux, and are another one again now. Every track-1 table below says which
+  instances it was measured on.
 - **Participants**: (1) this repository's C++ engine (`st_quality_bench`),
   (2) OR-Tools CP-SAT
   (`cpsat_quickstart.py` — the three hard constraints as constraints, the three
   soft ones as the objective).
 - **Fairness rules**:
-  - Both solvers get the same instance JSON and the same wall-clock
+  - Both solvers get the same instance and the same wall-clock
     budget (10 s by default).
   - C++ runs single-threaded, CP-SAT as an 8-worker portfolio (adjustable
     with `--workers`; same budget, different CPU use — stated in the table
     footnotes).
 - **Cross-check gate**: a fixed instance + fixed assignment in which all six
-  constraints contribute something non-zero is rescored by C++
-  (`st_quality_bench crosscheck`) and the shared evaluator (`evaluate.py`);
+  constraints contribute something non-zero (`gen_quickstart.crosscheck()`) is
+  scored by C++ (`st_quality_bench crosscheck`) and the shared evaluator (`evaluate.py`);
   the two must be **identical**
   (`CROSSCHECK_SCORE=-3hard/-3soft`) before the benchmark proceeds.
 - **Rescoring**: every solution of both solvers is rescored with the
@@ -74,6 +80,38 @@ all three tables; the tables below cover tracks 1 and 2.
   solve of S, M and L), so it does not represent these numbers — the benchmark
   and CI always use the fast path. See the plugin section of
   [`docs/use-cases/school-timetabling/python.md`](../../docs/use-cases/school-timetabling/python.md).
+
+## Track 1 on the Python-generated instances (2026-11-12)
+
+The instances of `gen_quickstart.py`, seed 1 — the ones the harness and CI
+solve now. Environment: one 4-vCPU x86-64 Linux cloud machine (Intel Xeon,
+2.1 GHz), **30 s** per instance per solver, seed 1, one run. CP-SAT is
+OR-Tools 9.15. The cross-check gate passed. Soft: higher is better; every
+rescore == self-report.
+
+| instance | solver | final (rescored) | first feasible | moves/s |
+| --- | --- | --- | --- | --- |
+| S: 6 classes/12 teachers/7 rooms | **cpp** | **0hard/175soft** | 1 ms | 8,478,047 |
+| S | cpsat (8 workers) | 0hard/-20soft | 6992 ms | n/a |
+| S | cpsat (4 workers) | 0hard/124soft | 4640 ms | n/a |
+| M: 12 classes/20 teachers/13 rooms | **cpp** | **0hard/350soft** | 5 ms | 8,834,942 |
+| M | cpsat (8 workers) | 0hard/-489soft | 20252 ms | n/a |
+| M | cpsat (4 workers) | 0hard/-1387soft | 11730 ms | n/a |
+| L: 24 classes/40 teachers/25 rooms | **cpp** | **0hard/666soft** | 20 ms | 6,207,261 |
+| L | cpsat (8 workers) | n/a (no feasible solution within 30 s, UNKNOWN) | n/a | n/a |
+| L | cpsat (4 workers) | n/a (no feasible solution within 30 s, UNKNOWN) | n/a | n/a |
+
+- The harness ran twice, once with `--workers 8` (the default of every table
+  here) and once with `--workers 4`, the machine's core count: eight workers
+  share four cores on this machine. The cpp rows are of the first run; the
+  second run's cpp scores were the same (175 / 350 / 666).
+- This machine evaluates about half as many moves per second as the Mac of
+  the tables below (8.5M against 16.4M on S) and has a quarter of its cores,
+  which costs CP-SAT more than it costs the single-threaded engine. Do not
+  read these rows against the tables below: those are of other instances
+  (the C++ bench's former generator) and another machine.
+- Reproduce: `uv run school-timetabling-compare --sizes S,M,L --seconds 30`
+  (`--workers 4` for the second set of rows).
 
 ## Track 2 on the 20-school ladder
 
@@ -115,7 +153,8 @@ Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and inst
 
 Environment: one Apple M4 Max Mac (16 cores), **30 s** per instance per
 solver, seed 1, one run. CP-SAT is OR-Tools 9.15 (8 workers). The
-cross-check gate passed.
+cross-check gate passed. Track 1 is of the instances the C++ bench generated
+until 2026-11-12 (libc++ `std::shuffle`); track 2's instances are unchanged.
 
 ### Track 1 (soft: higher is better; every rescore == self-report)
 
@@ -147,7 +186,9 @@ refers to.
 Environment: Apple Silicon macOS, 10 s per instance per solver, seed 1, one
 run. CP-SAT is OR-Tools 9.15 (8 workers). Absolute values depend on the
 machine (CI runs on ubuntu-latest, 4 vCPUs), and a single seed is indicative
-only.
+only. Track 1 here, and every track-1 figure of the tuning history below, is
+of the instances the C++ bench generated until 2026-11-12, as built on
+macOS.
 
 ### Track 1 (soft: higher is better; every rescore == self-report)
 
@@ -293,7 +334,7 @@ cmake -B build/st -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_ENGINE_TESTS=OFF -DOPTIM
 cmake --build build/st -j
 ./build/st/school_timetabling/st_test && ./build/st/school_timetabling/st_canonical_test
 
-# 1) Track 1: cross-check gate → C++ vs CP-SAT → rescoring → table (out/RESULTS_track1.md)
+# 1) Track 1: cross-check gate → instances → C++ vs CP-SAT → rescoring → table (out/RESULTS_track1.md)
 cd benchmarks/school-timetabling/cpsat
 export OPTIMARU_USE_CASES=school_timetabling   # keep it set: uv rebuilds the extension when it changes
 uv sync                                        # the project, with this checkout's optimaru built in place
@@ -311,7 +352,7 @@ uv run school-timetabling-compare --track3 --sizes S,M,L --seconds 10
 
 [`school-timetabling-bench.yml`](../../.github/workflows/school-timetabling-bench.yml)
 runs exactly that order: ccache build → `st_test`/`st_canonical_test` gate →
-C++/evaluator cross-check gate → track 1 → track 2 → track 3 →
+track 1 (C++/evaluator cross-check gate first) → track 2 → track 3 →
 all three tables published in the job summary (+ instance/solution JSON uploaded as
 artifacts).
 

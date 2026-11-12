@@ -26,6 +26,8 @@ from optimaru.tournament_scheduling.constraints import (
 )
 from optimaru.tournament_scheduling.models import generate_demo_data
 
+from .._picks import replace_default
+
 MEDIUM = "assignment_count_imbalance_cost"
 
 
@@ -143,11 +145,14 @@ def test_constraint_info_reports_the_cpp_defaults():
     ]
 
 
+# The unit constraints (one raw cost per unit); every other constraint is a global (one total).
+UNIT_CONSTRAINTS = {"team_conflict_cost", "team_unavailability_cost"}
+
+
 def test_constraint_info_matches_the_raw_cost_metadata():
     """constraint_costs() reports the same defaults (weight, level) for every constraint,
     and every entry carries the domain's medium fold (1e6 into soft)."""
     raw = ts.constraint_costs(build_schedule())
-    unit_names = ts.list_constraints()[:2]
     for row in ts.constraint_info():
         entry = raw[row.name]
         assert (entry["weight"], entry["level"]) == (
@@ -155,7 +160,7 @@ def test_constraint_info_matches_the_raw_cost_metadata():
             row.default_level,
         )
         assert (entry["level_flippable"], entry["reward"]) == (True, False)
-        assert entry["global"] == (row.name not in unit_names)
+        assert entry["global"] == (row.name not in UNIT_CONSTRAINTS)
         assert (entry["name"], entry["label"]) == (row.name, "")  # one instance per name, no label
         assert entry["medium_fold"] == {"kind": "into_soft", "unit": ts.MEDIUM_SCALE}
     assert ts.MEDIUM_SCALE == 1e6
@@ -524,7 +529,9 @@ def test_only_the_scoped_constraint_reports_units():
 
 def test_offset_zero_is_the_plain_shaping():
     """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
-    plain = [*get_constraints()[:-1], ConfrontationCountImbalanceCost(exponent=2)]
+    plain = replace_default(
+        get_constraints(), "confrontation_count_imbalance_cost", ConfrontationCountImbalanceCost(exponent=2)
+    )
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
     assert score(raw, shifted) == score(raw, plain)

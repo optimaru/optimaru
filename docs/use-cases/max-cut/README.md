@@ -43,7 +43,10 @@ max_cut.constraint_info()     # [ConstraintInfo(name='fixed_partition_cost', def
 problem = max_cut.solve(
     problem,
     time_limit_seconds=1.0,
-    constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()],
+    constraints=[
+        PartitionImbalanceCost(weight=2) if spec.name == "partition_imbalance_cost" else spec
+        for spec in get_constraints()
+    ],
 )
 raw = max_cut.constraint_costs(problem)             # raw costs, re-priced in pure Python:
 score(raw), score(raw, [PartitionSizeBoundsCost(level="soft"), CutWeightCost()])
@@ -130,10 +133,9 @@ with its own knobs, its level included, and the instances add up:
 
 ```python
 problem = max_cut.solve(problem, constraints=[
-    *get_constraints()[:4],
+    *(spec for spec in get_constraints() if spec.name != "partition_imbalance_cost"),
     PartitionImbalanceCost(weight=1),                          # |n0 - n1|
     PartitionImbalanceCost(weight=5, exponent=2, offset=2),    # + 5 x (imbalance beyond 2)^2
-    CutWeightCost(),
 ])
 ```
 

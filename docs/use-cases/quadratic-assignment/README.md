@@ -42,9 +42,11 @@ print(core.assignment(), core.total_cost())                          # per locat
 from optimaru.quadratic_assignment.constraints import FlowDistanceCost, PinnedAssignmentsCost, get_constraints, score
 
 qap.constraint_info()      # [ConstraintInfo(name='pinned_assignments_cost', default_level='hard', ...), ...]
-problem = qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
+picks = [FlowDistanceCost(weight=2) if spec.name == "flow_distance_cost" else spec for spec in get_constraints()]
+problem = qap.solve(problem, time_limit_seconds=1.0, constraints=picks)
 raw = qap.constraint_costs(problem)                  # raw costs, re-priced in pure Python:
-score(raw), score(raw, [PinnedAssignmentsCost(level="soft"), *get_constraints()[1:]])
+score(raw), score(raw, [PinnedAssignmentsCost(level="soft") if spec.name == "pinned_assignments_cost" else spec
+                        for spec in get_constraints()])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip
 # shift the shaping (clip=True: only the flow cost beyond 20 counts for the second pick).
 score(raw, [FlowDistanceCost(), FlowDistanceCost(weight=10, offset=20)])
@@ -122,7 +124,7 @@ own knobs, its level included, and the instances add up:
 
 ```python
 problem = qap.solve(problem, constraints=[
-    *get_constraints()[:-1],
+    *(spec for spec in get_constraints() if spec.name != "flow_distance_cost"),
     FlowDistanceCost(),                           # the flow cost
     FlowDistanceCost(weight=10, offset=1000),     # + 10 x (what exceeds a budget of 1000)
 ])
