@@ -1,14 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.5.1
+
+**From 0.5.0.** One fix first: in the seven use cases that search in stages, a solve that
+starts from a given solution (`with_initial_solution`, a request's `initial_solution`)
+searches as in 0.4.3 again; 0.5.0 could return the given solution unchanged (#110). What
+else changes a result: bin packing and facility location have new moves, so a seed's
+result there differs from 0.5.0; tournament scheduling searches a solve with
+`constraints=` as it searches the default one, so a seed's result with `constraints=`
+differs; and in employee scheduling the default solve no longer judges a pinned shift on
+the four per-shift constraints, as the docs and the solve with `constraints=` already had
+it, so a schedule whose pinned shift breaks one of them scores 0 there where it scored
+`-1hard`. What changes without changing a result: a solve with constraints is faster where
+some of them are at weight 0, with the same scores for a seed and a step limit; school
+timetabling solves with a new soft constraint that has no weight field, where it raised;
+and every demo instance is `generate_demo_data()`, with the five earlier names kept as
+aliases. The entries on notebooks, benchmarks, tests and guides are about the repository,
+not the wheel.
 
 - **Benchmarks: external-solver `v0.3.0`.** The benchmark projects pin the external-solver
-  release that follows optimaru 0.5, the links into its sources point at that tag, and
-  their lock files record optimaru 0.5.0. In `v0.3.0` the worker count of a CP-SAT `solve`
-  is `parallel_solver_count`, the name of the engine's keyword (`num_workers` is still
-  read), and its employee scheduling plugins say constraint where they said rule
-  (`SchedulePlugin` was `RulePlugin`); the runners and the READMEs here use the new names.
-  No table changes: the CP-SAT models are unchanged since `v0.2.3`.
+  release that follows optimaru 0.5, the links into its sources point at that tag, and their
+  lock files record the version of this checkout (0.5.1 with this release). In `v0.3.0` the
+  worker count of a CP-SAT `solve` is `parallel_solver_count`, the name of the engine's
+  keyword (`num_workers` is still read), and its employee scheduling plugins say constraint
+  where they said rule (`SchedulePlugin` was `RulePlugin`); the runners and the READMEs here
+  use the new names. No table changes: the CP-SAT models are unchanged since `v0.2.3`.
 - **Notebooks on 0.5.0.** Every notebook in `examples/` is saved with outputs from optimaru
   0.5.0 and asks for it; `examples/README.md` names that version. The four that build a request
   use the names of 0.5: `time_limit_seconds`, and in employee scheduling
