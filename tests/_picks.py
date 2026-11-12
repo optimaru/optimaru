@@ -26,6 +26,7 @@ def without(specs, name: str):
 
 def only(specs, *names: str):
     """The picks with these names, one each, in the order of ``specs``."""
+    assert len(set(names)) == len(names), f"a name is given twice: {names}"
     for name in names:
         _assert_one(specs, name)
     return [spec for spec in specs if spec.name in names]

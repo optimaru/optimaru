@@ -343,7 +343,8 @@ def test_picks_select_defaults_by_name_not_by_position():
     """A slice or an index of the default list or the catalog names ("every default but the
     last", "the first five are unit constraints") silently picks another constraint once one is
     added to the catalog, which the extending guides teach. Tests, docs and docstrings select by
-    name: ``[X() if spec.name == "x" else spec for spec in get_constraints()]``."""
+    name: ``[X() if spec.name == "x" else spec for spec in get_constraints()]``. It checks one line
+    at a time for the direct form; a slice of a variable that holds the defaults is not seen."""
     tracked = subprocess.run(
         [
             "git",

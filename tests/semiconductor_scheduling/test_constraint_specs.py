@@ -48,7 +48,7 @@ NAMES = [
     "cycle_time_cost",
     "makespan_cost",
 ]
-# The constraints that are hard by default (the first 14 of the catalog).
+# The constraints whose default level is hard.
 HARD_BY_DEFAULT = {row.name for row in fab.constraint_info() if row.default_level == "hard"}
 
 
