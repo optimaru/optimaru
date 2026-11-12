@@ -17,7 +17,8 @@ the model and its six constraints are in the [guide](README.md).
 The steps build one example: `uncutEdgesCost`, the number of edges a side keeps inside, whatever
 their weight. The cut weight values the heavy edges; this constraint counts every edge that is left
 uncut the same. Every snippet below was compiled and run, and every figure measured, on optimaru
-0.4.3; a later change to the solver moves the figures, not the steps.
+0.4.3, except the rows with the constraint at weight 0 and the five constraints they are compared
+with, on 0.5.1; a later change to the solver moves the figures, not the steps.
 
 ## How a partition is scored
 
@@ -217,7 +218,9 @@ of 9,603.
 
 What the base gave you: the engine calls `cost()` for a side whenever a vertex joins
 or leaves it, and keeps the result. That is correct, and slow: the function walks
-every edge of the graph. Step 4 makes it incremental.
+every edge of the graph. Step 4 makes it incremental. At weight 0 the engine does not
+call it on a move at all: it costs the constraint when the solve starts, and again when
+`max_cut.constraint_costs()` reports it.
 
 ## 3. Check it
 
@@ -285,8 +288,9 @@ score stale:
 max_cut.solve(problem, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
 ```
 
-Give the constraint a weight for this: at weight 0 a stale cost scores the same. The walk
-of `mc_plugin_test` compares raw costs, so it does not depend on the weight.
+Give the constraint a weight for this: at weight 0 the engine does not ask it on a move,
+so there is nothing to check. The walk of `mc_plugin_test` compares raw costs, so it does
+not depend on the weight.
 
 **The tables and the CP-SAT model.** The constraint table in [README.md](README.md)
 must equal `max_cut.constraint_info()`; add the row. [python.md](python.md),
@@ -335,11 +339,14 @@ and must equal `cost(with the vertex) - cost(without it)` exactly. `full_assert`
 
 With the constraint at weight 2 the assembly went from 0.24 to 3.42 million steps per
 second, and the solve of step 2 printed the same line as before, as it must.
-At weight 0 it went from 0.23 to 3.58 million: the engine keeps the cost of every
-constraint in the picks, whatever its weight, and `get_constraints()` lists the opt-in
-constraints too. So a constraint without `delta_cost()` slows every solve that lists it. On a
-random 200-vertex instance of the test fixtures, 1 million steps called `cost()` 2.2
-million times without the delta, and `delta_cost()` 5.0 million times with it.
+At weight 0 the constraint costs a move nothing, with `delta_cost()` or without: the
+engine leaves a unit constraint at weight 0 out of the moves. With it at weight 0 the
+assembly ran at 3.76 million in the build of step 2 and 3.76 in the build of step 4,
+where the five that score by default ran at 3.71 and 3.73. So a solve with
+`get_constraints()`, which lists the opt-in constraints at weight 0, pays nothing for
+them: it ran at 3.76 in the build of step 4. On a random 200-vertex instance of the test
+fixtures, 1 million steps called `cost()` 2.2 million times without the delta, and
+`delta_cost()` 5.0 million times with it.
 
 Three things made the delta short, and they hold for any constraint here.
 
@@ -470,15 +477,17 @@ differ after a change, the two paths no longer score alike.
 | --- | --- |
 | default path, six constraints | 6.8 million |
 | assembly, the five constraints that score by default | 4.06 million |
-| assembly, those + the constraint of step 2 at weight 0 | 0.23 million |
+| assembly, those + the constraint of step 2 at weight 0 (those, 3.71) | 3.76 million |
 | assembly, those + the constraint of step 2 at weight 2 | 0.24 million |
-| assembly, those + the constraint with `delta_cost()` (step 4) at weight 0 | 3.58 million |
+| assembly, those + the constraint with `delta_cost()` (step 4) at weight 0 (those, 3.73) | 3.76 million |
 | assembly, those + the constraint with `delta_cost()` at weight 2 | 3.42 million |
 | default path, seven constraints (step 5) | 8.35 million |
 | assembly, the six constraints that score by default (step 5) | 3.75 million |
 
 The two default-path rows are not the same work: with the constraint on, the solve makes
-other moves.
+other moves. The two rows at weight 0 were taken on 0.5.1, each next to the five alone in
+the same build (in brackets): at weight 0 the constraint costs a move nothing, so they are
+the speed of the assembly without it.
 
 **What it buys.** A constraint changes what the search can reach, so compare the results
 at the same budget over several seeds, with and without it:
