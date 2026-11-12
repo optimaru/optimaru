@@ -10,7 +10,7 @@ taken as the result.
 | Benchmark | Compared against | Instances |
 | --- | --- | --- |
 | [vehicle-routing](vehicle-routing) | OR-Tools Routing | CVRPLIB Set X (100), Augerat Set A (27) |
-| [school-timetabling](school-timetabling) | OR-Tools CP-SAT | generated S/M/L schools |
+| [school-timetabling](school-timetabling) | OR-Tools CP-SAT | generated schools, 3 to 60 classes (20) |
 | [pickup-delivery](pickup-delivery) | OR-Tools CP-SAT | Li & Lim PDPTW, 100 customers (56) + generated |
 | [project-job-scheduling](project-job-scheduling) | OR-Tools CP-SAT | RG30 RCPSP Pat1–Pat5 (Patterson format) + generated |
 | [bin-packing](bin-packing) | OR-Tools CP-SAT | Falkenauer u/t (OR-Library), three per class |

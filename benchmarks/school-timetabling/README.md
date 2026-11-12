@@ -25,7 +25,7 @@ The helper modules also run on their own, as
 | `benchmark.py` | `school-timetabling-compare`: orchestration (track 1 by default, `--track2` for the canonical track, `--track3` for partial timetabling) |
 | `evaluate.py` | Track-1 shared evaluator: recomputes the quickstart model's six-constraint score from a solution (checked against each solver's self-report); its per-term keys are the `*_cost` names below, each holding the raw cost (the reward `teacher_time_efficiency_cost` is <= 0) |
 | `cpsat_quickstart.py` | Track-1 CP-SAT solver (six constraints: hard as constraints, the three soft ones as the objective) |
-| `gen_canonical.py` | Track-2 generator of S/M/L canonical `TimetableProblem`s (blocks / parallel sections / team teaching / unavailability, with a load check) |
+| `gen_canonical.py` | Track-2 generator of canonical `TimetableProblem`s (blocks / parallel sections / team teaching / unavailability, with a load check): the presets S/M/L, any class count that is a multiple of 3, and `ladder`, the 20 schools of 3 to 60 classes |
 | `../cpp/st_quality_bench.cpp` | Track-1 C++ side: builds instances, dumps JSON, solves, cross-check mode |
 
 ## Track 1: the quickstart model's six constraints
@@ -60,10 +60,20 @@ cpsat's `validate.py`.
 
 ```sh
 uv run school-timetabling-compare --track2 --sizes S,M,L --seconds 10
+uv run school-timetabling-compare --track2 --sizes ladder --seconds 30 --out out/track2.json
 ```
 
 The result is `out/RESULTS_track2.md` (status / hard-violation count / penalty
-at the default weights).
+at the default weights). `--sizes` takes the presets S, M and L (6, 12 and 24
+classes), a class count that is a multiple of 3, and `ladder`: the 20 schools
+of 3 to 60 classes in steps of 3, the ones of the published table in
+[`RESULTS.md`](RESULTS.md). `--out FILE` also writes the results as JSON, one
+entry per school, rewritten after every school;
+[`scripts/publish_benchmarks.py`](../../scripts/publish_benchmarks.py) reads
+it as `timetabling.json`. A CP-SAT run that ends without a timetable has no
+violation count and no penalty. The `wall` column is the time of the whole
+call for both solvers, so CP-SAT's includes building its model, which its
+time limit does not.
 
 ## Track 3: partial timetabling (unassigned lessons allowed)
 

@@ -53,8 +53,10 @@ all three tables; the tables below cover tracks 1 and 2.
   placements). Same as the
   [`API_SPEC.md`](../../docs/use-cases/school-timetabling/API_SPEC.md) contract.
 - **Instances**: `gen_canonical.py` generates S (6 classes / 15 teachers / 72
-  courses), M (12 / 23 / 138) and L (24 / 42 / 270). Class periods total == 34
-  slots, with a teacher-load check and pydantic validation.
+  courses), M (12 / 23 / 138) and L (24 / 42 / 270), and a school of any class
+  count that is a multiple of 3; `--sizes ladder` is the 20 schools of 3 to 60
+  classes. Class periods total == 34 slots, with a teacher-load check and
+  pydantic validation.
 - **Participants**: (1) the C++ canonical solver (`optimaru.school_timetabling.solve`,
   single-threaded), (2) the CP-SAT reference (`teacher_scheduling.solve` in
   `cpsat/`, 8 workers). Same time limit, same seed argument.
@@ -72,6 +74,15 @@ all three tables; the tables below cover tracks 1 and 2.
   solve of S, M and L), so it does not represent these numbers — the benchmark
   and CI always use the fast path. See the plugin section of
   [`docs/use-cases/school-timetabling/python.md`](../../docs/use-cases/school-timetabling/python.md).
+
+## Track 2 on the 20-school ladder
+
+`--sizes ladder` runs track 2 on 20 generated schools, from 3 to 60 classes in steps of 3 (the S,
+M and L schools are its 6-, 12- and 24-class rungs). `scripts/publish_benchmarks.py` writes this
+table from the JSON of `--out`.
+
+<!-- results:start -->
+<!-- results:end -->
 
 ## Latest measurement (local, 2026-11-04)
 

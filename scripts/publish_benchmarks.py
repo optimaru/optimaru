@@ -21,9 +21,7 @@ whose file is missing keeps its README text and its homepage entry.
 - ``qaplib.json``: ``quadratic-assignment-public-bench --all --json``;
 - ``salbp-<data set>.json``:
   ``assembly-line-balancing-public-bench --dataset <data set> --json``;
-- ``extra.json``: the numbers ``school-timetabling-compare --track2`` prints as text, copied by
-  hand: ``{"timetabling": {"date": "2026-11-04", "seconds": 30, "rows": [{"instance": "S",
-  "size": "6 classes / 15 teachers / 72 courses", "engine": 231, "ortools": 320}, ...]}}``
+- ``timetabling.json``: ``school-timetabling-compare --track2 --sizes ladder --out FILE``
   (track 2 weighted penalties).
 
 ``--seconds`` and ``--workers`` are what the harnesses were run with: the tables state
@@ -963,26 +961,71 @@ def salbp_dataset(sets: dict[str, list[dict]], seconds: float) -> dict:
     )
 
 
-def timetabling_dataset(extra: dict) -> dict:
+def _timetabling_cells(result: dict) -> tuple[dict[str, dict], dict[str, str]]:
+    """Cells of a track-2 school: the weighted penalty of a timetable that meets every hard rule."""
+    runs = _runs(result)
+    cells, texts = {}, {}
+    for solver, key in SOLVERS.items():
+        run = runs.get(solver)
+        if run is not None and run["status"].startswith("error"):
+            raise SystemExit(f"{result['instance']}: a run cannot be published: {run['status']}")
+        if run is None:
+            cells[key], texts[key] = {"value": None, "status": "not run"}, "not run"
+        elif run["penalty"] is None:
+            cells[key], texts[key] = {"value": None, "status": "no solution"}, "no solution in time"
+        elif run["hard_violations"]:
+            count = run["hard_violations"]
+            cells[key] = {"value": None, "status": "infeasible"}
+            texts[key] = f"infeasible ({count} hard violation{'s' if count > 1 else ''})"
+        else:
+            cells[key], texts[key] = {"value": run["penalty"]}, _number(run["penalty"])
+    return cells, texts
+
+
+def timetabling_block(results: list[dict], args: argparse.Namespace) -> str:
+    lines = [
+        "Weighted penalty of each solver's timetable at the default weights, rescored by `validate.py`;",
+        "a timetable that breaks a hard rule has no penalty here. Lower is better; the best value is bold.",
+        "",
+        "| Classes | Teachers | Courses | engine | CP-SAT |",
+        "| ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for result in results:
+        cells, texts = _timetabling_cells(result)
+        texts = _bold(cells, texts)
+        lines.append(
+            f"| {result['classes']} | {result['teachers']} | {result['courses']} | "
+            f"{texts['engine']} | {texts['ortools']} |"
+        )
+    lines += ["", _footer(args, _seed(results, 1))]
+    return "\n".join(lines)
+
+
+def timetabling_dataset(results: list[dict], seconds: float, workers: int = 8) -> dict:
     rows = []
-    for row in extra["rows"]:
-        cells = {
-            name: {"value": row[name]} if row.get(name) is not None else {"value": None, "status": "no solution"}
-            for name in ("engine", "ortools")
-        }
-        rows.append({"instance": row["instance"], "size": row["size"], "cells": cells, "best": _lowest(cells)})
-    dataset = _dataset(
+    for result in results:
+        cells, _ = _timetabling_cells(result)
+        rows.append(
+            {
+                "instance": f"{result['classes']} classes",
+                "size": f"{result['teachers']} teachers / {result['courses']} courses",
+                "cells": cells,
+                "best": _lowest(cells),
+            }
+        )
+    # `--sizes ladder` is the class counts 3, 6, ..., 60 (`LADDER` in gen_canonical.py): if the two
+    # ever differ, the command below names every class count, which is still correct.
+    classes = [result["classes"] for result in results]
+    sizes = "ladder" if classes == list(range(3, 61, 3)) else ",".join(str(count) for count in classes)
+    return _dataset(
         "school-timetabling",
         "school-timetabling",
         "generated",
         "cp-sat",
         "school-timetabling/cpsat",
-        f"uv run school-timetabling-compare --track2 --sizes S,M,L --seconds {extra['seconds']:g}",
-        [_section("instances", "penalty", rows, chart=rows)],
+        f"uv run school-timetabling-compare --track2 --sizes {sizes} --seconds {seconds:g} --workers {workers}",
+        [_section("instances", "penalty", rows)],
     )
-    dataset["date"] = extra["date"]
-    dataset["seconds"] = extra["seconds"]
-    return dataset
 
 
 #: Order of the data sets on the homepage: public instance sets first.
@@ -1259,9 +1302,11 @@ def main() -> None:
             block.removeprefix("## Results\n\n"),
         )
 
-    extra = _load(args.results, "extra.json") or {}
-    if extra.get("timetabling"):
-        datasets["school-timetabling"] = timetabling_dataset(extra["timetabling"])
+    timetabling = _load(args.results, "timetabling.json")
+    if timetabling:
+        _check_protocol("school-timetabling (track 2)", timetabling, args)
+        datasets["school-timetabling"] = timetabling_dataset(timetabling, args.seconds, args.workers)
+        _replace_block(BENCHMARKS / "school-timetabling" / "RESULTS.md", timetabling_block(timetabling, args))
 
     for dataset in datasets.values():
         dataset.setdefault("date", args.date)

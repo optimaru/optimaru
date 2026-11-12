@@ -446,3 +446,58 @@ def test_a_comparison_without_a_run_of_each_solver_is_refused(tmp_path) -> None:
     # A failed instance has no runs to count; it is reported as failed, as before.
     failed = [{"case": "knapsack", "instance": "demo", "error": "Traceback"}]
     assert publish.load_compared(_files(tmp_path / "failed", knapsack=failed)) == {"knapsack": failed}
+
+
+def _school(classes, engine, cpsat, **changes):
+    def run(solver, outcome):
+        status, violations, penalty = outcome
+        return {"solver": solver, "status": status, "hard_violations": violations, "penalty": penalty, "seconds": 30.0}
+
+    result = {"instance": f"canonical_{classes}", "classes": classes, "teachers": 4 * classes, "rooms": classes}
+    result |= {"courses": 11 * classes, "budget": 30.0, "seed": 1, "workers": 8}
+    result["runs"] = [run("cp-sat", cpsat), run("engine", engine)]
+    return result | changes
+
+
+def test_school_timetabling_rows_come_from_the_track_2_results() -> None:
+    results = [
+        _school(3, ("FEASIBLE", 0, 120), ("OPTIMAL", 0, 118)),
+        _school(6, ("FEASIBLE", 0, 231), ("FEASIBLE", 0, 320)),
+        _school(9, ("FEASIBLE", 0, 500), ("UNKNOWN", None, None)),
+        _school(12, ("FEASIBLE", 0, 1151), ("FEASIBLE", 2, 900)),
+    ]
+    block = publish.timetabling_block(results, ARGS)
+    assert "| 3 | 12 | 33 | 120 | **118** |" in block
+    assert "| 6 | 24 | 66 | **231** | 320 |" in block
+    assert "| 9 | 36 | 99 | **500** | no solution in time |" in block
+    # A timetable that breaks a hard rule has no penalty to compare, whatever its preferences cost.
+    assert "| 12 | 48 | 132 | **1,151** | infeasible (2 hard violations) |" in block
+    assert "seed 1." in block
+
+    dataset = publish.timetabling_dataset(results, 30)
+    assert dataset["code"] == "school-timetabling/cpsat"
+    assert dataset["command"] == "uv run school-timetabling-compare --track2 --sizes 3,6,9,12 --seconds 30 --workers 8"
+    rows = dataset["sections"][0]["rows"]
+    assert [(row["instance"], row["size"]) for row in rows][:2] == [
+        ("3 classes", "12 teachers / 33 courses"),
+        ("6 classes", "24 teachers / 66 courses"),
+    ]
+    assert [row["best"] for row in rows] == [["ortools"], ["engine"], ["engine"], ["engine"]]
+    assert rows[2]["cells"]["ortools"] == {"value": None, "status": "no solution"}
+    assert rows[3]["cells"]["ortools"] == {"value": None, "status": "infeasible"}
+
+    # The 20 schools of the runner's ladder are named as it names them.
+    ladder = [_school(classes, ("FEASIBLE", 0, 1), ("FEASIBLE", 0, 1)) for classes in range(3, 61, 3)]
+    assert "--sizes ladder --seconds 30" in publish.timetabling_dataset(ladder, 30)["command"]
+
+    # A solver without a run is "not run"; a run that failed is not published.
+    alone = _school(3, ("FEASIBLE", 0, 120), ("FEASIBLE", 0, 118))
+    alone["runs"] = [run for run in alone["runs"] if run["solver"] == "cp-sat"]
+    cells, texts = publish._timetabling_cells(alone)
+    assert cells["engine"] == {"value": None, "status": "not run"} and texts["engine"] == "not run"
+    with pytest.raises(SystemExit, match="canonical_3: a run cannot be published: error: boom"):
+        publish._timetabling_cells(_school(3, ("error: boom", None, None), ("FEASIBLE", 0, 118)))
+    with pytest.raises(SystemExit, match="10 s, not --seconds 30"):
+        publish._check_protocol(
+            "school-timetabling (track 2)", [_school(3, ("FEASIBLE", 0, 1), ("FEASIBLE", 0, 1), budget=10.0)], ARGS
+        )
