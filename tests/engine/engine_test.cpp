@@ -1896,6 +1896,35 @@ struct TaCountedBalance final : optimaru::MemberChangeGlobalConstraint<TaskAssig
     long changes = 0;
 };
 
+// The same balance without the member-change fast path: the objective sends
+// it on_unit_changed, at a batch end for the units a batch touched.
+struct TaCountedUnitBalance final : optimaru::GlobalConstraint<TaskAssignment> {
+    explicit TaCountedUnitBalance(double weight)
+        : GlobalConstraint("idle unit balance", weight, optimaru::Level::Soft) {}
+    void reset(const TaskAssignment&,
+               const std::vector<std::vector<int>>& members_per_unit) override {
+        ++resets;
+        counts.clear();
+        for (const auto& m : members_per_unit) counts.push_back(static_cast<long>(m.size()));
+    }
+    void on_unit_changed(const TaskAssignment&, int unit,
+                         const std::vector<int>& members) override {
+        ++changes;
+        counts[unit] = static_cast<long>(members.size());
+    }
+    double cost() const override {
+        ++costCalls;
+        double c = 0;
+        for (long n : counts) c += static_cast<double>(n) * static_cast<double>(n);
+        return c;
+    }
+    bool idle_at_weight_zero() const override { return true; }
+    std::vector<long> counts;
+    long resets = 0;
+    long changes = 0;
+    mutable long costCalls = 0;
+};
+
 void testWeightZeroIsLeftOutOfTheMoves() {
     std::printf("== DecomposedObjective: weight 0 is left out of the moves ==\n");
     TaskAssignment s = buildTaskInstance();
@@ -1907,6 +1936,7 @@ void testWeightZeroIsLeftOutOfTheMoves() {
         TaCountedCost<false>* recost = nullptr;
         TaCountedBalance* idle = nullptr;
         TaCountedBalance* notified = nullptr;
+        TaCountedUnitBalance* idleUnit = nullptr;
     };
     // Three weighted constraints (a delta, a full re-cost, a global), alone
     // or with four picks at weight 0 placed between them.
@@ -1926,10 +1956,13 @@ void testWeightZeroIsLeftOutOfTheMoves() {
         if (withZeros) {
             auto idle = std::make_unique<TaCountedBalance>("idle balance", 0.0, true);
             auto notified = std::make_unique<TaCountedBalance>("notified balance", 0.0, false);
+            auto idleUnit = std::make_unique<TaCountedUnitBalance>(0.0);
             a.idle = idle.get();
             a.notified = notified.get();
+            a.idleUnit = idleUnit.get();
             a.calc->add(std::move(idle));
             a.calc->add(std::move(notified));
+            a.calc->add(std::move(idleUnit));
         }
         a.calc->emplace<TaBalance>(0.25);
         a.calc->rebuild(s);
@@ -1988,8 +2021,10 @@ void testWeightZeroIsLeftOutOfTheMoves() {
     check(zeros.delta->deltaCalls == 0 && zeros.delta->costCalls == deltaCostsAtReset &&
                   zeros.recost->deltaCalls == 0 && zeros.recost->costCalls == recostCostsAtReset,
           "no move asks a unit constraint at weight 0, with the delta contract or without");
-    check(zeros.idle->changes == 0 && zeros.idle->resets == 1,
-          "... nor a global that is idle at weight 0");
+    check(zeros.idle->changes == 0 && zeros.idle->resets == 1 && zeros.idleUnit->changes == 0 &&
+                  zeros.idleUnit->resets == 1 && zeros.idleUnit->costCalls == 0,
+          "... nor a global that is idle at weight 0, on the member-change path or the unit one, "
+          "and no score asks its cost()");
     check(zeros.notified->changes > 0,
           "... while a global at weight 0 that is not idle is sent every change");
 
@@ -2005,7 +2040,8 @@ void testWeightZeroIsLeftOutOfTheMoves() {
     }
     check(costsEqual, "constraint_costs() reports the raw costs of the current assignment");
     check(zeros.delta->costCalls > deltaCostsAtReset &&
-                  zeros.recost->costCalls > recostCostsAtReset && zeros.idle->resets == 2,
+                  zeros.recost->costCalls > recostCostsAtReset && zeros.idle->resets == 2 &&
+                  zeros.idleUnit->resets == 2,
           "... by costing there what the moves left out");
     const auto totals = zeros.calc->constraint_totals();
     const auto freshTotals = fresh.calc->constraint_totals();

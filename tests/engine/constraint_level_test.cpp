@@ -3022,7 +3022,7 @@ void testReportedKnobsAreSampledAtReset() {
 // Returns what differed, or "".
 template <typename S>
 std::string weightZeroWalk(const std::function<optimaru::ConstraintAssembly<S>(bool)>& build,
-                           unsigned seed) {
+                           unsigned seed, bool everyRawExact = false) {
     S a = assignmentA<S>();
     S b = assignmentA<S>();
     optimaru::DecomposedObjective<S> zeros, plain;
@@ -3088,8 +3088,11 @@ std::string weightZeroWalk(const std::function<optimaru::ConstraintAssembly<S>(b
     const auto reported = zeros.constraint_costs(), expected = fresh.constraint_costs();
     int off = 0;
     for (std::size_t i = 0; i < reported.size(); ++i) {
-        if (reported[i].weight != 0.0) continue;
-        ++off;
+        // A weighted constraint on the delta path reports what its deltas
+        // added up to, which for real-valued loads can differ from a fresh
+        // cost() in the last bit: compared only where it is exact.
+        if (reported[i].weight != 0.0 && !everyRawExact) continue;
+        if (reported[i].weight == 0.0) ++off;
         if (reported[i].unit_costs != expected[i].unit_costs ||
             reported[i].scoped != expected[i].scoped || reported[i].units != expected[i].units) {
             return "constraint_costs() of '" + reported[i].name + "' is not a fresh reset's";
@@ -3170,9 +3173,10 @@ void testWeightZeroBesideTheOthers() {
                     assembly.emplace_instance<Grouped>(2.0);
                     return assembly;
                 },
-                37);
+                37, /*everyRawExact=*/true);
         check(problem.empty(),
-              "a member at weight 0 of a group with integral deltas (the direct hard fold)" +
+              "a member at weight 0 of a group with integral deltas (the direct hard fold), "
+              "whose weighted members report their raw costs after the moves too" +
                       (problem.empty() ? std::string() : " (" + problem + ")"));
     }
     std::printf("\n");

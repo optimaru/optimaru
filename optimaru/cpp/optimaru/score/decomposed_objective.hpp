@@ -515,9 +515,11 @@ struct GlobalConstraint : ConstraintMetadata {
     // its own cost (aggregates that a move source or another component
     // reads). Return true when nothing but this global's own cost() reads
     // what it keeps and reset() rebuilds all of it from (solution, members):
-    // the objective then sends it no change while its weight is 0, does not
-    // ask its cost() for a score, and resets it on the current members before
-    // constraint_costs() reports its raw cost. A unit constraint needs no
+    // the objective then sends it no change while its weight is 0 (no global
+    // at weight 0 is asked its cost() for a score) and resets it on the current members before
+    // constraint_costs() reports its raw cost. That reset can come at any
+    // point between two changes, inside an open batch or trial too, and must
+    // leave nothing behind that a later change relies on. A unit constraint needs no
     // such answer: its cost() is a function of (solution, unit, members), so
     // the objective leaves every unit constraint at weight 0 out of its moves
     // (compile_unit_dispatch).
@@ -1078,12 +1080,15 @@ public:
     //
     // A unit constraint at weight 0 and a global that is idle at weight 0 are
     // left out of the moves, so after a move their cells and aggregates are
-    // those of the last reset. Their raw costs are computed here instead, on
-    // the current members: cost() per evaluated unit, and a reset() of the
-    // global (its own aggregates only, which is why a const report may do
-    // it). Right after a reset nothing is recomputed; after a move every
-    // report computes them again. Because of that reset this is not a call
-    // for another thread to make while a solve runs on this objective.
+    // those of the last reset; and a member of a group with integral deltas
+    // on the direct hard fold (kGroupedHardInt) keeps its hard cell current
+    // but not its raw one. Their raw costs are computed here instead, on the
+    // current members: cost() per evaluated unit, and a reset() of the global
+    // (its own aggregates only, which is why a const report may do it). So
+    // the report describes the current solution for every constraint. Right
+    // after a reset nothing is recomputed; after a move every report
+    // computes them again. Because of that reset this is not a call for
+    // another thread to make while a solve runs on this objective.
     struct ConstraintCosts {
         std::string name;
         double weight;  // the weight in effect (sampled at the last reset)
@@ -1114,8 +1119,10 @@ public:
             const UnitConstraint<Solution>& constraint = *unit_constraints_[c];
             const SampledKnobs knobs = unit_knobs(c);
             std::vector<double> costs;
+            // c < unit_knobs_.size(): sampled at the last reset, so the cells
+            // below exist (a constraint added since has none yet).
             if (moved_since_reset_ && solution_ != nullptr && c < unit_knobs_.size() &&
-                knobs.weight == 0.0) {
+                (knobs.weight == 0.0 || (grouped_delta_[c] && direct_grouped_hard_delta_[c]))) {
                 costs.assign(static_cast<std::size_t>(unit_count_), 0.0);
                 if (const std::vector<int>* scope = constraint.scoped_units()) {
                     for (int u : *scope) {
@@ -1281,7 +1288,9 @@ private:
     Totals totals_with_globals() const {
         Totals totals{hard_units_, medium_units_, soft_units_};
         for (const GlobalScoreEntry& entry : global_score_) {
-            if (entry.idle) continue;  // weight 0, and its aggregates are not kept current
+            // Weight 0 adds an exact 0, and an idle global's aggregates are
+            // not even current: not asked.
+            if (entry.weight == 0.0) continue;
             accumulate(entry, global_contribution(entry, entry.constraint->cost()), totals.hard,
                        totals.medium, totals.soft);
         }
@@ -2052,7 +2061,7 @@ private:
         bool piecewise;  // supports_piecewise_preview(), sampled at reset
         double offset;
         bool clip;
-        bool idle;  // weight 0 and idle_at_weight_zero(): not notified, cost() not asked
+        bool idle;  // weight 0 and idle_at_weight_zero(): not notified, reset for a report
     };
 
     // One global's shaped, weighted total (the knobs sampled at reset).
