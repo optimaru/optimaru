@@ -43,8 +43,8 @@
   with `tests/_picks.py` (`replace_default`, `without`, `only`), which fails on a name that
   matches no pick or several. Meeting scheduling's and tournament scheduling's raw-cost
   metadata tests took their unit constraints as the first five or two of
-  `list_constraints()`; they now tell them from the raw costs (one per unit against a
-  single total), and their guides no longer ask for that slice to be edited. The five
+  `list_constraints()`; they now name them (`UNIT_CONSTRAINTS`), and their guides say to
+  add a new unit constraint's name there instead of editing a slice. The five
   extending guides that explained a slice (and employee scheduling's, which named one in a
   test) no longer do. No expected score changed: the picks are the same lists.
   `tests/test_layout.py` fails on an index or slice of `get_constraints()` or
