@@ -73,6 +73,15 @@ def test_the_track1_generator_builds_a_school(size):
     assert gen_quickstart.generate(classes, teachers, rooms, seed=2) != instance
 
 
+@pytest.mark.parametrize(
+    ("shape", "message"),
+    [((12, 20, 5), "more than the 200 cells"), ((30, 10, 30), "more than the 40-slot week"), ((0, 12, 7), "one class")],
+)
+def test_the_track1_generator_refuses_a_school_that_cannot_be_timetabled(shape, message):
+    with pytest.raises(ValueError, match=message):
+        gen_quickstart.generate(*shape, seed=1)
+
+
 def test_the_track1_cross_check_instance_scores_minus_three_twice():
     instance = gen_quickstart.crosscheck()
     fixed = [(lesson["timeslot"], lesson["room"]) for lesson in instance["lessons"]]

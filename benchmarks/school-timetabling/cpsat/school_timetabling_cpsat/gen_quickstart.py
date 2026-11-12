@@ -4,8 +4,9 @@ An instance is a 5 days x 8 periods week (40 timeslots), a fixed 34-period weekl
 per class and one teacher per (class, subject). Subject ``s`` is taught by the teacher pool
 ``{t : t % len(CURRICULUM) == s}``; the classes are shuffled with the seed and dealt
 round-robin over the pool, so the heaviest teacher carries ``ceil(classes / pool) * hours``
-periods, under the 40-slot week at every preset: the instances are feasible and tight on
-rooms. ``teacherUnavailable`` is not part of the format, so the model's seventh term,
+periods. ``generate`` refuses a school in which that exceeds the 40-slot week or the lessons
+exceed the cells (40 x rooms), so every school it writes leaves each teacher and class a
+conflict-free week in principle; the presets are tight on rooms (73-82% of the cells). ``teacherUnavailable`` is not part of the format, so the model's seventh term,
 teacher_unavailability_cost, contributes 0.
 
 Every draw comes from ``random.Random(seed)``, so a seed is the same school on every
@@ -85,6 +86,20 @@ def generate(classes: int, teachers: int, rooms: int, seed: int) -> dict:
         raise ValueError(f"need at least one class and one room, got {classes} and {rooms}")
     if teachers < len(CURRICULUM):
         raise ValueError(f"need at least {len(CURRICULUM)} teachers (one per subject), got {teachers}")
+    week = DAYS * PERIODS_PER_DAY
+    lessons_per_class = sum(hours for _, hours in CURRICULUM)
+    if classes * lessons_per_class > week * rooms:
+        raise ValueError(
+            f"{classes} classes need {classes * lessons_per_class} lessons, more than the {week * rooms} cells of "
+            f"{rooms} rooms"
+        )
+    for subject_index, (subject, hours) in enumerate(CURRICULUM):
+        pool = len(range(subject_index, teachers, len(CURRICULUM)))
+        if -(-classes // pool) * hours > week:
+            raise ValueError(
+                f"{subject}: {pool} teacher(s) for {classes} classes carry {-(-classes // pool) * hours} periods, "
+                f"more than the {week}-slot week"
+            )
     rng = random.Random(seed)
     groups = [f"C{index + 1:02d}" for index in range(classes)]
 
@@ -189,7 +204,10 @@ def main() -> int:
     schools = [(size, PRESETS[size]) for size in sizes]
     schools += [("x".join(str(n) for n in shape), tuple(shape)) for shape in args.school]
     for name, (classes, teachers, rooms) in schools:
-        instance = generate(classes, teachers, rooms, args.seed)
+        try:
+            instance = generate(classes, teachers, rooms, args.seed)
+        except ValueError as error:
+            parser.error(f"--school {classes} {teachers} {rooms}: {error}")
         path = out_dir / f"instance_{name}.json"
         text_path = write(instance, path)
         print(

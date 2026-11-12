@@ -51,6 +51,20 @@ def _run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run([str(c) for c in cmd], check=True, text=True, **kwargs)
 
 
+def _run_bench(cmd: list, pattern: str, **kwargs) -> tuple[subprocess.CompletedProcess, re.Match]:
+    """Runs the C++ bench and returns its output with the first match of ``pattern``; on a
+    non-zero exit or a missing line, stops with what the bench wrote to stderr (its readers
+    say which index or line of the instance file is wrong)."""
+    print(f"$ {' '.join(str(c) for c in cmd)}", flush=True)
+    proc = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, **kwargs)
+    found = re.search(pattern, proc.stdout)
+    if proc.returncode != 0 or found is None:
+        raise SystemExit(
+            f"{cmd[0]} failed (exit {proc.returncode}, no line matching {pattern!r}):\n{proc.stderr or proc.stdout}"
+        )
+    return proc, found
+
+
 def ensure_cpp_bin(explicit: str | None) -> Path:
     """Finds the st_quality_bench binary or builds it with cmake."""
     if explicit:
@@ -73,10 +87,7 @@ def crosscheck_gate(cpp_bin: Path, out_dir: Path) -> None:
     ``<out_dir>/crosscheck.txt`` as well."""
     instance = gen_quickstart.crosscheck()
     crosscheck_text = gen_quickstart.write(instance, out_dir / "crosscheck.json")
-    proc = _run([cpp_bin, "crosscheck", crosscheck_text], capture_output=True)
-    found = re.search(r"CROSSCHECK_SCORE=\S+", proc.stdout)
-    if found is None:
-        raise SystemExit(f"{cpp_bin} crosscheck printed no CROSSCHECK_SCORE:\n{proc.stdout}{proc.stderr}")
+    _, found = _run_bench([cpp_bin, "crosscheck", crosscheck_text], r"CROSSCHECK_SCORE=\S+")
     cpp_score = found.group(0)
     print(f"C++ : {cpp_score}")
 
@@ -95,8 +106,11 @@ def crosscheck_gate(cpp_bin: Path, out_dir: Path) -> None:
 
 def run_cpp(cpp_bin: Path, size: str, seed: int, seconds: int, out_dir: Path) -> dict:
     instance = out_dir / f"instance_{size}.sttxt"
-    proc = _run([cpp_bin, instance, seed, seconds], capture_output=True, timeout=seconds + 120)
-    final = re.search(r"QBENCH_CPP_FINAL score=(\S+) feasible=\S+ moves_per_sec=(\d+)", proc.stdout)
+    proc, final = _run_bench(
+        [cpp_bin, instance, seed, seconds],
+        r"QBENCH_CPP_FINAL score=(\S+) feasible=\S+ moves_per_sec=(\d+)",
+        timeout=seconds + 120,
+    )
     feasible = re.search(r"QBENCH_CPP first_feasible t=(\d+)ms", proc.stdout)
     return {
         "score": final.group(1),
