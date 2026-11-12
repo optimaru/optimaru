@@ -82,8 +82,12 @@ from .constraints import (
     spec_named,
 )
 from .convert import (
+    _DEFAULTS,
+    _SOFT_DEFAULTS,
     ConvertedProblem,
     OccupancyGroup,
+    _fast_path_weights,
+    _soft_weights,
     convert_problem,
     convert_solution,
     inject_solution,
@@ -140,15 +144,6 @@ __all__ = [
     "solve_request",
 ]
 
-# The soft constraint names == the fast path's ObjectiveWeights fields (the
-# objective_value rescoring weights): the soft rows of the catalog.
-_SOFT_NAMES = tuple(row.name for row in constraint_info() if row.default_level == "soft")
-_DEFAULT_WEIGHTS = {row.name: row.default_weight for row in constraint_info()}
-
-
-def _weights_of(weights: "canon.ObjectiveWeights") -> dict[str, float]:
-    return {name: getattr(weights, name) for name in _SOFT_NAMES}
-
 
 def _picks_of(constraints) -> list[Constraint]:
     """`solve(constraints=...)`'s argument as a list of specs.
@@ -164,8 +159,8 @@ def _picks_of(constraints) -> list[Constraint]:
 
 
 def _assemble_plugin(constraints):
-    """Assembly of the plugin path: (DecomposedCalculator, ObjectiveWeights for
-    rescoring, unassigned-penalty weight).
+    """Assembly of the plugin path: (DecomposedCalculator, soft weights for
+    rescoring keyed by constraint name, unassigned-penalty weight).
 
     Each pick's ``weight=None`` is its component's default weight (the C++
     kDefaultWeight, `constraint_info()`), the same as on the fast path. The
@@ -177,7 +172,8 @@ def _assemble_plugin(constraints):
     raw penalties: like a pick's exponent, an offset / clip shapes the search
     score only; `constraints.score(canon.constraint_costs(table, picks), picks)`
     is the exact score of the selection. They are plain numbers — no integer
-    requirement.
+    requirement, and no `ObjectiveWeights` field needed: a soft constraint that
+    is not on the default path yet is weighed like any other.
 
     The third value is a float only for an assembly that demotes every
     instance of `unassigned_lessons_cost` to soft (the sum of their effective
@@ -187,10 +183,10 @@ def _assemble_plugin(constraints):
     """
     picks = _picks_of(constraints)
     calculator = canon.DecomposedCalculator(picks)  # the C++ knob checks
-    report = dict.fromkeys(_SOFT_NAMES, 0.0)  # soft terms missing from the selection are 0
+    report = dict.fromkeys(_SOFT_DEFAULTS, 0.0)  # soft terms missing from the selection are 0
     unassigned_weight: float | None = 0.0  # without the constraint, unassigned lessons are free
     for spec in picks:
-        weight = _DEFAULT_WEIGHTS[spec.name] if spec.weight is None else float(spec.weight)
+        weight = _DEFAULTS[spec.name] if spec.weight is None else float(spec.weight)
         if spec.name in report:
             report[spec.name] += weight  # a repeated soft pick: the instances add up
         if spec.name == UnassignedLessonsCost.name:
@@ -200,7 +196,7 @@ def _assemble_plugin(constraints):
                 unassigned_weight = None
             elif unassigned_weight is not None:
                 unassigned_weight += weight
-    return calculator, canon.ObjectiveWeights(**report), unassigned_weight
+    return calculator, report, unassigned_weight
 
 
 def _resolve_config(config, *, canonical: bool):
@@ -267,7 +263,9 @@ def solve(
     the soft constraint names (a subset of teacher_gap_cost /
     teacher_workday_cost / teacher_free_day_cost / class_gap_cost /
     avoided_period_cost / non_preferred_period_cost; omitted keys keep the
-    component defaults 20/3/30/10/5/1). It becomes ``config.weights``
+    component defaults 20/3/30/10/5/1; a soft constraint without a
+    `canon.ObjectiveWeights` field is not scored on this path, so a weight for
+    it other than its default raises ValueError). It becomes ``config.weights``
     (`canon.ObjectiveWeights`, which rejects a bool, a non-finite or a negative
     weight). Canonical mode only. Next to ``constraints`` it must equal the
     defaults, like ``config.weights`` — a selection carries its own weights.
@@ -332,13 +330,10 @@ def solve(
         on_new_best=on_new_best,
     )
     if weights is not None:
-        unknown = sorted(set(weights) - set(_SOFT_NAMES))
-        if unknown:
-            raise ValueError(f"unknown soft weight(s) {unknown}; the weights are keyed by {list(_SOFT_NAMES)}")
-        cfg.weights = canon.ObjectiveWeights(**weights)
+        cfg.weights = _fast_path_weights(weights)
     # weights= / config.weights at the defaults (e.g. a full default dict) are harmless next to a
     # selection; anything else would be silently ignored, so it raises.
-    if constraints is not None and canonical and _weights_of(cfg.weights) != _weights_of(canon.ObjectiveWeights()):
+    if constraints is not None and canonical and _soft_weights(cfg.weights) != _soft_weights():
         raise ValueError(
             "weights / config.weights apply to the default fast path only; with constraints=, give each pick its weight"
         )

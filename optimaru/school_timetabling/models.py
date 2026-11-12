@@ -16,7 +16,7 @@ from typing import Any, Literal
 from pydantic import Field, create_model, model_validator
 
 from .._models import SolveConfigBase, SolveRequest, StrictModel, apply_solver_parameters
-from . import _core
+from . import _core, convert
 from .constraints import default_weights, soft_specs
 
 __all__ = [
@@ -132,11 +132,11 @@ class _ObjectiveWeightsBase(StrictModel):
     """Body of `ObjectiveWeightsModel`. The fields are generated from the constraint catalog."""
 
     def to_core(self) -> "_core.canon.ObjectiveWeights":
-        # The monolithic fast path's ObjectiveWeights is a fixed struct, so only the
-        # terms it knows are passed. The plugin path skips this mirror and uses the
-        # components' weights directly, so a soft term only in the catalog still works there.
-        known = set(_core.canon.ObjectiveWeights().__dir__())
-        return _core.canon.ObjectiveWeights(**{k: v for k, v in self.model_dump().items() if k in known})
+        # The monolithic fast path's ObjectiveWeights has a field for the soft terms it
+        # scores. A term only in the catalog (not on the default path yet) is dropped at its
+        # default weight and refused at any other, the same rule as solve(weights=); the
+        # plugin path skips this mirror and weighs such a term at its pick's weight.
+        return convert._fast_path_weights(self.model_dump())
 
 
 #: Soft-weight mirror of the fast path. **The fields are not written by hand** —

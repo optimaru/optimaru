@@ -179,6 +179,25 @@
     on `xlarge`, from 1.73, and a better end after 1 million seeded steps (soft -6.97615,
     from -9.31891, which the default path also reaches).
   - A seed's result with `constraints=` differs from 0.5.0.
+- **School timetabling: a new soft constraint no longer needs a fast-path weight field to
+  solve.** Python read every soft constraint's weight off `canon.ObjectiveWeights` by name,
+  on both paths, so a soft component added to the catalog made every `st.solve()` raise
+  `AttributeError` until it had a field there (C++ struct, binding, stub), which the guide
+  made part of its first step. Now a solve with `constraints=` weighs it at the pick's
+  weight, and the default path, whose monolithic calculators do not score it yet, reports it
+  in `penalties` and weighs it at its component default in `objective_value`, as the field
+  will; `weights=` and `models.ObjectiveWeightsModel` refuse any other value for it (after
+  the usual checks: a bool, NaN or a negative weight raises as anywhere else). A constraint
+  with a field is read as before, and a field the catalog does not know fails the import. The example of
+  `docs/use-cases/school-timetabling/extending.md` adds the field in step 5, with the
+  monolithic terms; its steps 2 to 5 were applied, built and tested again.
+- **School timetabling docs: the speed of a solve with `constraints=` as measured.** The
+  python guide said the assembly runs at 35–55% of the monolith's move throughput (track 2
+  at 10 s), and a fixed-step run on 0.4.3 had shown about 25%. Seeded single-thread solves
+  of the track-2 schools (S and M 2 million steps, L 4 million, seeds 1 to 3) give a median
+  of 46% on S, 62% on M and 37% on L, and 25% to 71% for one seed: the rate of both paths
+  moves with the search. The python guide, the extending guide's step 5 and the track-2
+  notes in `benchmarks/school-timetabling/RESULTS.md` now say so.
 
 ## 0.5.0
 
