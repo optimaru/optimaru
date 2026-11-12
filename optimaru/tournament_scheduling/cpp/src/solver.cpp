@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <random>
 #include <utility>
@@ -18,6 +19,84 @@ namespace ts {
 namespace {
 
 using Calculator = TournamentSchedulingIncrementalScoreCalculator;
+
+// The counts TeamCountMove steers by, read off the monolithic calculator's
+// live aggregates (the default path): nothing to keep in step, every read
+// O(1).
+class CalculatorCounts {
+public:
+    static constexpr bool kOwned = false;
+
+    explicit CalculatorCounts(const Calculator* calculator) : calculator_(calculator) {}
+
+    void sync(const TournamentSchedule& /*solution*/) {}
+    const std::vector<std::int64_t>& teamLoads() const { return calculator_->teamLoads(); }
+    int loadedTeamCount() const { return calculator_->loadedTeamCount(); }
+    int cellCount(int team, int day) const { return calculator_->cellCount(team, day); }
+    int penaltyCount(int team, int day) const { return calculator_->penaltyCount(team, day); }
+
+private:
+    const Calculator* calculator_;
+};
+
+// The same counts kept by their owner (the picked-constraints path, whose
+// assembly exposes no such aggregates). The unavailability-fact counts are
+// problem data, counted once; the loads, the loaded-team count and the
+// occupancy are recounted from a solution by sync() and follow the owner's
+// own assignments through moved(). They are defined as in the monolithic
+// calculator: an unassigned slot (team -1) counts nowhere, and a team is
+// loaded when it holds at least one slot.
+class OwnedCounts {
+public:
+    static constexpr bool kOwned = true;
+
+    explicit OwnedCounts(const TournamentSchedule& schedule)
+        : dayCount_(schedule.dayCount()),
+          teamLoad_(static_cast<std::size_t>(schedule.teamCount()), 0),
+          cellCnt_(static_cast<std::size_t>(schedule.teamCount()) * dayCount_, 0),
+          penaltyCnt_(cellCnt_.size(), 0) {
+        for (const UnavailabilityPenalty& penalty : schedule.unavailabilityPenalties) {
+            ++penaltyCnt_[cellOffset(penalty.team, penalty.day)];
+        }
+    }
+
+    void sync(const TournamentSchedule& solution) {
+        std::fill(teamLoad_.begin(), teamLoad_.end(), 0);
+        std::fill(cellCnt_.begin(), cellCnt_.end(), 0);
+        loaded_ = 0;
+        for (const TeamAssignment& assignment : solution.teamAssignments) {
+            moved(-1, assignment.team, assignment.day);
+        }
+    }
+
+    // One slot on `day` went from team `from` to team `to` (either may be -1).
+    void moved(int from, int to, int day) {
+        if (from >= 0) {
+            --cellCnt_[cellOffset(from, day)];
+            if (--teamLoad_[from] == 0) --loaded_;
+        }
+        if (to >= 0) {
+            ++cellCnt_[cellOffset(to, day)];
+            if (teamLoad_[to]++ == 0) ++loaded_;
+        }
+    }
+
+    const std::vector<std::int64_t>& teamLoads() const { return teamLoad_; }
+    int loadedTeamCount() const { return loaded_; }
+    int cellCount(int team, int day) const { return cellCnt_[cellOffset(team, day)]; }
+    int penaltyCount(int team, int day) const { return penaltyCnt_[cellOffset(team, day)]; }
+
+private:
+    std::size_t cellOffset(int team, int day) const {
+        return static_cast<std::size_t>(team) * dayCount_ + day;
+    }
+
+    int dayCount_;
+    std::vector<std::int64_t> teamLoad_;
+    std::vector<int> cellCnt_;
+    std::vector<int> penaltyCnt_;
+    int loaded_ = 0;
+};
 
 // ---------------------------------------------------------------------------
 // TeamCountMove — the domain macro move (adopted on the quality bench)
@@ -53,12 +132,24 @@ using Calculator = TournamentSchedulingIncrementalScoreCalculator;
 // builtin-equivalent random change move, so the engine's adaptive roulette
 // keeps getting outcome feedback for it (an operator that reports "no move"
 // is rewarded by nothing and would keep its selection weight forever).
+//
+// The operator steers by four counts: the per-team loads, the loaded-team
+// count, and the per-(team, day) occupancy and unavailability-fact counts.
+// `Counts` supplies them. On the default path CalculatorCounts forwards to
+// the monolithic calculator's live aggregates (O(1) reads, nothing kept). On
+// the picked-constraints path the assembly exposes no such aggregates, so
+// OwnedCounts keeps its own copy: recounted from the working solution at the
+// start of every apply() and updated at every assignment the operator makes,
+// which is exactly when the monolithic calculator updates its aggregates (it
+// ignores begin_batch/end_batch). Both give the same answers at every read,
+// so both paths propose the same reshapes from the same state and rng.
+template <typename Counts>
 class TeamCountMove final : public optimaru::MoveOperator<TournamentSchedule> {
 public:
-    TeamCountMove(const Calculator* calculator, std::vector<double> idealPenalty,
-                  std::vector<int> targetOrder, std::vector<char> drainable,
-                  std::vector<int> penaltyDays, std::vector<std::vector<int>> assignmentsOfDay)
-        : calculator_(calculator),
+    TeamCountMove(Counts counts, std::vector<double> idealPenalty, std::vector<int> targetOrder,
+                  std::vector<char> drainable, std::vector<int> penaltyDays,
+                  std::vector<std::vector<int>> assignmentsOfDay)
+        : counts_(std::move(counts)),
           idealPenalty_(std::move(idealPenalty)),
           targetOrder_(std::move(targetOrder)),
           drainable_(std::move(drainable)),
@@ -74,7 +165,8 @@ public:
     bool apply(optimaru::OperatorContext<TournamentSchedule>& ctx, std::mt19937_64& rng,
                std::vector<int>& entities) override {
         touched_.clear();
-        const int loaded = calculator_->loadedTeamCount();
+        counts_.sync(ctx.editor.solution());
+        const int loaded = counts_.loadedTeamCount();
 
         // Targets worth trying: loaded-team counts whose theoretical optimum
         // beats the current count's. Ordered best-first; the pick is
@@ -106,7 +198,7 @@ public:
             if (replacement < 0) continue;
             touched_.emplace_back(i, assignment.team);
             entities.push_back(i);
-            ctx.editor.assign(i, replacement);
+            assign(ctx, i, replacement);
         }
         ctx.editor.end_batch();
         clearDrainSet();
@@ -131,7 +223,7 @@ private:
     // forever.
     bool selectDrainSet(int count, std::mt19937_64& rng) {
         if (count <= 0) return false;
-        const std::vector<std::int64_t>& loads = calculator_->teamLoads();
+        const std::vector<std::int64_t>& loads = counts_.teamLoads();
         pool_.clear();
         for (std::size_t t = 0; t < loads.size(); ++t) {
             if (loads[t] > 0 && drainable_[t]) pool_.push_back(static_cast<int>(t));
@@ -151,7 +243,7 @@ private:
             int available = 0;
             for (std::size_t t = 0; t < loads.size(); ++t) {
                 if (loads[t] > 0 &&
-                    calculator_->penaltyCount(static_cast<int>(t), static_cast<int>(d)) == 0)
+                    counts_.penaltyCount(static_cast<int>(t), static_cast<int>(d)) == 0)
                     ++available;
             }
             slack_[d] = available - static_cast<int>(assignmentsOfDay_[d].size());
@@ -163,7 +255,7 @@ private:
                 const int team = pool_[i];
                 int cost = 0;
                 for (std::size_t d = 0; d < assignmentsOfDay_.size(); ++d) {
-                    if (calculator_->penaltyCount(team, static_cast<int>(d)) == 0)
+                    if (counts_.penaltyCount(team, static_cast<int>(d)) == 0)
                         cost += slack_[d] <= 0 ? 1000 : 1;
                 }
                 if (best < 0 || cost < bestCost ||
@@ -176,7 +268,7 @@ private:
                       pool_[static_cast<std::size_t>(best)]);
             const int drained = pool_[static_cast<std::size_t>(picked)];
             for (std::size_t d = 0; d < assignmentsOfDay_.size(); ++d) {
-                if (calculator_->penaltyCount(drained, static_cast<int>(d)) == 0) --slack_[d];
+                if (counts_.penaltyCount(drained, static_cast<int>(d)) == 0) --slack_[d];
             }
         }
         return markDrainSet(count);
@@ -200,12 +292,12 @@ private:
     bool applyGrow(optimaru::OperatorContext<TournamentSchedule>& ctx, std::mt19937_64& rng,
                    std::vector<int>& entities, int target) {
         TournamentSchedule& schedule = ctx.editor.solution();
-        const std::vector<std::int64_t>& loads = calculator_->teamLoads();
+        const std::vector<std::int64_t>& loads = counts_.teamLoads();
         pool_.clear();
         for (std::size_t t = 0; t < loads.size(); ++t) {
             if (loads[t] == 0) pool_.push_back(static_cast<int>(t));
         }
-        const int need = target - calculator_->loadedTeamCount();
+        const int need = target - counts_.loadedTeamCount();
         if (need <= 0 || static_cast<int>(pool_.size()) < need) return false;
         std::shuffle(pool_.begin(), pool_.end(), rng);
         if ((rng() & 1U) == 0U) {
@@ -222,8 +314,7 @@ private:
             std::int64_t taken = 0;
             for (int day : dayOrder_) {
                 if (taken >= fairShare) break;
-                if (calculator_->cellCount(team, day) != 0 ||
-                    calculator_->penaltyCount(team, day) != 0)
+                if (counts_.cellCount(team, day) != 0 || counts_.penaltyCount(team, day) != 0)
                     continue;
                 int donor = -1;
                 std::int64_t donorLoad = fairShare;
@@ -238,7 +329,7 @@ private:
                 if (donor < 0) continue;
                 touched_.emplace_back(donor, schedule.teamAssignments[donor].team);
                 entities.push_back(donor);
-                ctx.editor.assign(donor, team);
+                assign(ctx, donor, team);
                 ++taken;
             }
         }
@@ -252,7 +343,7 @@ private:
     // a drain is completed and judged by the acceptor rather than left
     // half-done.
     int bestReplacement(int team, int day, std::mt19937_64& rng) const {
-        const std::vector<std::int64_t>& loads = calculator_->teamLoads();
+        const std::vector<std::int64_t>& loads = counts_.teamLoads();
         const int teamCount = static_cast<int>(loads.size());
         int best = -1;
         int relaxed = -1;
@@ -262,8 +353,8 @@ private:
         std::uint64_t relaxedTies = 0;
         for (int u = 0; u < teamCount; ++u) {
             if (u == team || inDrainSet_[u] || loads[u] == 0) continue;
-            if (calculator_->cellCount(u, day) != 0) continue;
-            if (calculator_->penaltyCount(u, day) == 0) {
+            if (counts_.cellCount(u, day) != 0) continue;
+            if (counts_.penaltyCount(u, day) == 0) {
                 if (best < 0 || loads[u] < bestLoad) {
                     best = u;
                     bestLoad = loads[u];
@@ -306,11 +397,28 @@ private:
         if (oldTeam >= 0 && v >= oldTeam) ++v;
         touched_.emplace_back(e, oldTeam);
         entities.push_back(e);
-        ctx.editor.assign(e, v);
+        assign(ctx, e, v);
         return true;
     }
 
-    const Calculator* calculator_;
+    // Every assignment the operator makes goes through here, so owned counts
+    // follow it within the batch (bestReplacement() and applyGrow() read
+    // them between assignments). undo_last() bypasses it: the counts are
+    // recounted at the next apply() anyway.
+    void assign(optimaru::OperatorContext<TournamentSchedule>& ctx, int assignmentIndex, int team) {
+        if constexpr (Counts::kOwned) {
+            const TeamAssignment& assignment =
+                    ctx.editor.solution().teamAssignments[assignmentIndex];
+            const int previous = assignment.team;
+            const int day = assignment.day;
+            ctx.editor.assign(assignmentIndex, team);
+            counts_.moved(previous, team, day);
+        } else {
+            ctx.editor.assign(assignmentIndex, team);
+        }
+    }
+
+    Counts counts_;
     std::vector<double> idealPenalty_;  // loaded-team count -> best possible
     std::vector<int> targetOrder_;      // counts, best ideal first
     std::vector<char> drainable_;       // team holds no pinned assignment
@@ -362,8 +470,9 @@ void configureEngine(const Solver::Config& config, const TournamentSchedule& sch
 // Builds the macro-move operator for this instance, or nullptr when reshaping
 // can never pay off (no room below the team count, or every team pinned in
 // place).
-std::unique_ptr<TeamCountMove> makeTeamCountMove(const TournamentSchedule& schedule,
-                                                 const Calculator* calculator) {
+template <typename Counts>
+std::unique_ptr<TeamCountMove<Counts>> makeTeamCountMove(const TournamentSchedule& schedule,
+                                                         Counts counts) {
     const int teamCount = schedule.teamCount();
     const int dayCount = schedule.dayCount();
     const std::int64_t assignmentCount = static_cast<std::int64_t>(schedule.teamAssignments.size());
@@ -408,9 +517,60 @@ std::unique_ptr<TeamCountMove> makeTeamCountMove(const TournamentSchedule& sched
         ++penaltyDays[penalty.team];
     }
 
-    return std::make_unique<TeamCountMove>(calculator, std::move(idealPenalty),
-                                           std::move(targetOrder), std::move(drainable),
-                                           std::move(penaltyDays), std::move(assignmentsOfDay));
+    return std::make_unique<TeamCountMove<Counts>>(
+            std::move(counts), std::move(idealPenalty), std::move(targetOrder),
+            std::move(drainable), std::move(penaltyDays), std::move(assignmentsOfDay));
+}
+
+// Guided change values for the picked-constraints path: the pick of the
+// default path's hint (in Solver::solve below: uniform among the teams
+// neither playing that day nor unavailable on it, drawn in the same order
+// with the same rng calls, so the same team from the same state), with the
+// day's occupancy counted off the working solution instead of read from the
+// monolithic calculator. The engine edits that solution in place, so the
+// hint always sees the current schedule, whatever move changed it last.
+// O(slots that day + teams) per call. It keeps one scratch vector, so one
+// hint serves one search thread: this path runs a single start.
+std::function<int(std::mt19937_64&, int)> solutionValueHint(const TournamentSchedule& schedule) {
+    struct State {
+        const TournamentSchedule* solution;
+        int teamCount;
+        std::vector<std::vector<int>> assignmentsOfDay;
+        std::vector<char> unavailable;  // (day, team) -> any UnavailabilityPenalty fact
+        std::vector<char> playing;      // team -> holds a slot on the day asked about
+    };
+    auto state = std::make_shared<State>();
+    state->solution = &schedule;
+    state->teamCount = schedule.teamCount();
+    state->assignmentsOfDay.resize(static_cast<std::size_t>(schedule.dayCount()));
+    for (int i = 0; i < static_cast<int>(schedule.teamAssignments.size()); ++i)
+        state->assignmentsOfDay[schedule.teamAssignments[i].day].push_back(i);
+    state->unavailable.assign(static_cast<std::size_t>(schedule.dayCount()) * state->teamCount, 0);
+    for (const UnavailabilityPenalty& penalty : schedule.unavailabilityPenalties)
+        state->unavailable[static_cast<std::size_t>(penalty.day) * state->teamCount +
+                           penalty.team] = 1;
+    state->playing.assign(static_cast<std::size_t>(state->teamCount), 0);
+
+    return [state](std::mt19937_64& rng, int entityIndex) -> int {
+        State& st = *state;
+        const std::vector<TeamAssignment>& slots = st.solution->teamAssignments;
+        const int day = slots[entityIndex].day;
+        const std::vector<int>& ofDay = st.assignmentsOfDay[day];
+        for (int a : ofDay) {
+            if (slots[a].team >= 0) st.playing[slots[a].team] = 1;
+        }
+        const char* unavailable = &st.unavailable[static_cast<std::size_t>(day) * st.teamCount];
+        int picked = -1;
+        std::uint32_t seen = 0;
+        for (int u = 0; u < st.teamCount; ++u) {
+            if (st.playing[u] != 0 || unavailable[u] != 0) continue;
+            if (rng() % ++seen == 0) picked = u;
+        }
+        for (int a : ofDay) {
+            if (slots[a].team >= 0) st.playing[slots[a].team] = 0;
+        }
+        return picked;
+    };
 }
 
 }  // namespace
@@ -471,7 +631,7 @@ void Solver::solve(TournamentSchedule& schedule) {
     optimaru::Solver<TournamentSchedule> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
     if (config_.team_count_moves) {
-        std::unique_ptr<TeamCountMove> teamCount = makeTeamCountMove(schedule, &calculator);
+        auto teamCount = makeTeamCountMove(schedule, CalculatorCounts(&calculator));
         if (teamCount) engine.add_move_operator(std::move(teamCount));
     }
     engine.solve(schedule, calculator);
@@ -484,13 +644,19 @@ void Solver::solve(TournamentSchedule& schedule,
                    optimaru::DecomposedObjective<TournamentSchedule>& calculator) {
     optimaru::check_config(config_);
     if (!schedule.teamAssignments.empty() && schedule.teamCount() != 0) {
-        // No TeamCountMove here: that operator reads the monolithic
-        // calculator's live aggregates, which a caller-assembled plugin does
-        // not expose. The built-in move mix plus the ALNS kicks remain.
+        // The same search as the default path. The assembly exposes no
+        // live counts, so TeamCountMove keeps its own (OwnedCounts) and the
+        // guided change values count the day's teams off the working
+        // solution, which the engine edits in place.
         optimaru::Settings engineConfig;
         configureEngine(config_, schedule, engineConfig);
+        if (config_.value_hint) engineConfig.search.value_hint = solutionValueHint(schedule);
         optimaru::Solver<TournamentSchedule> engine(std::move(engineConfig));
         if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
+        if (config_.team_count_moves) {
+            auto teamCount = makeTeamCountMove(schedule, OwnedCounts(schedule));
+            if (teamCount) engine.add_move_operator(std::move(teamCount));
+        }
         engine.solve(schedule, calculator);
     }
 

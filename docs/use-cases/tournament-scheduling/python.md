@@ -117,6 +117,6 @@ the solver (add a complement term or a hard minimum-assignments-per-team constra
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=tournament_scheduling && cmake --build build -j4
 ./build/tournament_scheduling/ts_test    # hand-computed constraint cases + 3000 random moves incremental==full + ScoreChecks::Full solve
-./build/tournament_scheduling/ts_plugin_test  # default assembly == monolith, raw costs by hand, catalog, medium knobs
+./build/tournament_scheduling/ts_plugin_test  # default assembly == monolith, raw costs by hand, catalog, medium knobs, TeamCountMove on the assembly
 ./build/tournament_scheduling/ts_demo 10 # the demo instance, 10 s solve, asserts feasible (0hard)
 ```
