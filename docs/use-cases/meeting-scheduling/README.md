@@ -15,7 +15,7 @@ uv run pytest -q tests/meeting_scheduling
 ```python
 from optimaru import meeting_scheduling as ms
 
-schedule = ms.demo_data()
+schedule = ms.generate_demo_data()
 result = ms.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score.hard, result.score.soft)
 ```
@@ -84,12 +84,12 @@ ctest --test-dir build
 
 ## Starting from an existing solution
 
-`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is the model a solve returned or that model as a JSON dict. It works on the pydantic model, so use `models.demo_data`; `ms.demo_data` is the engine object:
+`with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is the model a solve returned or that model as a JSON dict. It works on the pydantic model, so use `models.generate_demo_data`; `ms.generate_demo_data` is the engine object:
 
 ```python
-from optimaru.meeting_scheduling.models import demo_data
+from optimaru.meeting_scheduling.models import generate_demo_data
 
-problem = demo_data()
+problem = generate_demo_data()
 solved = ms.solve(problem, time_limit_seconds=5.0, random_seed=42)
 seeded = ms.with_initial_solution(problem, solved.model_dump(mode="json"))
 result = ms.solve(seeded, time_limit_seconds=5.0, random_seed=43)

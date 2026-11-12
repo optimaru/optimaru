@@ -8,7 +8,7 @@ in place::
 
     import optimaru.sports_league_scheduling as sl
 
-    schedule = sl.demo_schedule()
+    schedule = sl.generate_demo_data()
     sl.solve(schedule, time_limit_seconds=10.0, random_seed=42,
              stop_at_first_feasible=True)
     print(schedule.score, schedule.assignment())
@@ -41,7 +41,7 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .demo import demo_schedule
+from .demo import demo_schedule, generate_demo_data  # demo_schedule: the name before 0.5.1
 from .models import LeagueScheduleModel, solve_request, with_initial_solution
 
 __all__ = [
@@ -56,7 +56,7 @@ __all__ = [
     "calculate_score",
     "constraint_costs",
     "constraint_info",
-    "demo_schedule",
+    "generate_demo_data",
     "list_constraints",
     "solve",
     "solve_request",

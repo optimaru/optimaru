@@ -3,11 +3,11 @@
 import pytest
 
 import optimaru.tournament_scheduling as ts
-from optimaru.tournament_scheduling.models import demo_data
+from optimaru.tournament_scheduling.models import generate_demo_data
 
 
 def _reversed_values(pin):
-    schedule = demo_data().to_core()
+    schedule = generate_demo_data().to_core()
     ts.solve(schedule, time_limit_seconds=0.1, random_seed=1)
     values = [assignment.team for assignment in schedule.team_assignments][::-1]
     for index, assignment in enumerate(schedule.team_assignments):

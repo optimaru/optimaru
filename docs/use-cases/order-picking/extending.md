@@ -42,7 +42,7 @@ moves):
 | Moves | the built-in list moves and `OrderConsolidateMove` | the built-in list moves |
 | Parallel starts | `parallel_solver_count` | one start |
 
-The speeds are the demo warehouse made larger, `op.build_demo_data(trolleys_count=10,
+The speeds are the demo warehouse made larger, `op.generate_demo_data(trolleys_count=10,
 orders_count=24)` (24 orders, 304 picks, 10 trolleys of 4 buckets), 3 million steps,
 one thread of an Apple M4 Max; [step 6](#6-measure) has the script. Steps 1 to 4 work
 on the assembly. Step 5 moves a constraint to the monolithic calculators. The two paths do
@@ -67,7 +67,7 @@ No build. Pass the constraints you want, with the knobs that differ from the def
 import optimaru.order_picking as op
 from optimaru.order_picking.constraints import OrderSplitByTrolleyCost, TrolleyCapacityCost, get_constraints
 
-solution = op.build_demo_data(trolleys_count=10, orders_count=24)
+solution = op.generate_demo_data(trolleys_count=10, orders_count=24)
 changed = {"order_split_by_trolley_cost", "trolley_capacity_cost", "distance_from_last_pick_task_to_path_origin_cost"}
 picks = [
     *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
@@ -213,7 +213,7 @@ from optimaru.order_picking.constraints import OrderRevisitCost
 
 others = [spec for spec in get_constraints() if spec.name != "order_revisit_cost"]
 picks = [*others, OrderRevisitCost(weight=10)]
-solution = op.build_demo_data(trolleys_count=10, orders_count=24)
+solution = op.generate_demo_data(trolleys_count=10, orders_count=24)
 config = op.SolverConfig()
 config.step_count_limit = 3_000_000
 config.random_seed = 1
@@ -479,7 +479,7 @@ from optimaru.order_picking.constraints import get_constraints
 
 steps = 3_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
-    solution = op.build_demo_data(trolleys_count=10, orders_count=24)  # solve() works in place
+    solution = op.generate_demo_data(trolleys_count=10, orders_count=24)  # solve() works in place
     config = op.SolverConfig()
     config.step_count_limit = steps
     config.spent_limit_seconds = 600
@@ -513,7 +513,7 @@ totals the constraint trades against each other.
 
 ```python
 for seed in range(1, 6):
-    solution = op.build_demo_data(trolleys_count=10, orders_count=24)
+    solution = op.generate_demo_data(trolleys_count=10, orders_count=24)
     op.solve(solution, time_limit_seconds=10, random_seed=seed, constraints=picks)
     raw = op.constraint_costs(solution, picks)
     print(seed, solution.score, sum(raw["order_revisit_cost"]["costs"]))

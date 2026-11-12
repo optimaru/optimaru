@@ -7,7 +7,7 @@ from optimaru.sports_league_scheduling.models import LeagueScheduleModel
 
 
 def _problem():
-    return LeagueScheduleModel.from_core(sl.demo_schedule())
+    return LeagueScheduleModel.from_core(sl.generate_demo_data())
 
 
 def _rounds(model):

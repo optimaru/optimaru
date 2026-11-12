@@ -8,9 +8,9 @@ models/_core docs). ``constraint_info()`` lists each constraint's default level 
 ``constraint_costs(schedule)`` gives the raw per-constraint costs::
 
     import optimaru.tournament_scheduling as ts
-    from optimaru.tournament_scheduling.models import demo_data
+    from optimaru.tournament_scheduling.models import generate_demo_data
 
-    schedule = demo_data()  # the demo instance (7 teams, 18 days x 4 slots)
+    schedule = generate_demo_data()  # the demo instance (7 teams, 18 days x 4 slots)
     result = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
     print(result.score_hard, result.score_soft)
 

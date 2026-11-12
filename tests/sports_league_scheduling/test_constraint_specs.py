@@ -53,7 +53,7 @@ HOPS = [
 
 
 def build_schedule():
-    return sl.demo_schedule()
+    return sl.generate_demo_data()
 
 
 def forced_conflict_schedule():

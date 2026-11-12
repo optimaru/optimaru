@@ -5,6 +5,7 @@ file covers the selection path that picks "which constraints are on", the catalo
 (`constraint_info()`), the five knobs (the level included) and repeated picks.
 """
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -505,16 +506,14 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
 
 
 def test_offset_zero_reproduces_the_plain_scores():
-    """offset 0 is the plain shaping in both modes, so a selection scores the same with offset 0."""
-    plain = [*get_constraints()[:5], TagConflictCost(exponent=2)]
-    shifted = [
-        MinStartDateCost(offset=0.0, clip=False),
-        MaxEndDateCost(offset=0),
-        BeforeIdealEndDateCost(clip=False),
-        AfterIdealEndDateCost(offset=0.0),
-        CrewConflictCost(offset=0, clip=False),
-        TagConflictCost(exponent=2, offset=0.0, clip=False),
-    ]
+    """offset 0 is the plain shaping in both modes, so a selection scores the same with offset 0.
+
+    Every default is picked, the tag conflicts squared; the shifted copy states offset 0 on each
+    (int and float in turn), alternating the two modes. A constraint added to the catalog is covered.
+    """
+    plain = [TagConflictCost(exponent=2) if spec.name == "tag_conflict_cost" else spec for spec in get_constraints()]
+    assert [spec.exponent for spec in plain if spec.name == "tag_conflict_cost"] == [2]
+    shifted = [replace(spec, offset=(0.0, 0)[index % 2], clip=bool(index % 2)) for index, spec in enumerate(plain)]
     schedule = _solved()
     raw = mnt.constraint_costs(schedule)
     assert score(raw, shifted) == score(raw, plain)

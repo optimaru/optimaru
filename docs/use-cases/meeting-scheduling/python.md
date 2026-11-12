@@ -23,7 +23,7 @@ uv run pytest -q tests/meeting_scheduling
 ```python
 from optimaru import meeting_scheduling as ms
 
-schedule = ms.demo_data()  # the demo instance (24 meetings, 160 grains)
+schedule = ms.generate_demo_data()  # the demo instance (24 meetings, 160 grains)
 result = ms.solve(schedule, time_limit_seconds=10.0, random_seed=42)
 raw = ms.constraint_costs(result)
 medium = sum(sum(e["costs"]) * e["weight"] for e in raw.values() if e["level"] == "medium")
@@ -131,8 +131,9 @@ below 1e6 — always the case on realistic instances. The fold is declared once 
 - The composite encoding has no partial state like "time grain assigned, room unassigned":
   an assignment has both or neither, and an unassigned (-1) assignment contributes no score
   (engine contract).
-- `demo_data()` is deterministic: its draws come from a seeded `std::mt19937_64` and the
-  calendar dates are pinned to dayOfYear 200..203.
+- `generate_demo_data()` is deterministic: its draws come from a seeded `std::mt19937_64` and the
+  calendar dates are pinned to dayOfYear 200..203. Its name before 0.5.1, `demo_data()`, still works (an
+  alias of the same function, in the package, `models` and `_core`).
 
 ## Solver defaults and quality bench
 

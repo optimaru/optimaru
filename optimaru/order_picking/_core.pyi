@@ -120,7 +120,7 @@ def update_shadow_variables(solution: OrderPickingSolution) -> None:
 def calculate_score(solution: OrderPickingSolution) -> Score:
     """Refresh the derived fields, recompute and store solution.score."""
 
-def build_demo_data(
+def generate_demo_data(
     trolleys_count: int = 5,
     bucket_count: int = 4,
     bucket_capacity: int = 48000,
@@ -128,6 +128,8 @@ def build_demo_data(
     random_seed: int = 37,
 ) -> OrderPickingSolution:
     """The demo warehouse (deterministic for a given random_seed)."""
+
+build_demo_data = generate_demo_data  # the name before 0.5.1
 
 class SolverConfig:
     def __init__(self) -> None: ...

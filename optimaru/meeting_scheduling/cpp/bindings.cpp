@@ -174,7 +174,9 @@ PYBIND11_MODULE(_core, m) {
 
     m.def("calculate_score", &ScoreCalculator::score, py::arg("schedule"),
           "Full recompute of the score (also stores schedule.score).");
-    m.def("demo_data", &buildDemoData, "The demo instance (deterministic; see ms/demo_data.hpp).");
+    m.def("generate_demo_data", &buildDemoData,
+          "The demo instance (deterministic; see ms/demo_data.hpp).");
+    m.attr("demo_data") = m.attr("generate_demo_data");  // the name before 0.5.1
 
     optimaru::python::bind_solver_config(
             py::class_<Solver::Config>(m, "SolverConfig", py::module_local()))

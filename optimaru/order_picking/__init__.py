@@ -21,7 +21,7 @@ Quick start::
 
     import optimaru.order_picking as op
 
-    solution = op.build_demo_data()          # the demo warehouse
+    solution = op.generate_demo_data()       # the demo warehouse
     solution = op.solve(solution, time_limit_seconds=5.0, random_seed=0)
     print(solution.score, solution.routes())
 
@@ -41,12 +41,13 @@ from ._core import (
     SolverConfig,
     Trolley,
     WarehouseLocation,
-    build_demo_data,
+    build_demo_data,  # the name before 0.5.1
     calculate_distance,
     calculate_score,
     constraint_costs,
     constraint_info,
     distance_to_travel,
+    generate_demo_data,
     list_constraints,
     update_shadow_variables,
 )
@@ -63,12 +64,12 @@ __all__ = [
     "SolverConfig",
     "Trolley",
     "WarehouseLocation",
-    "build_demo_data",
     "calculate_distance",
     "calculate_score",
     "constraint_costs",
     "constraint_info",
     "distance_to_travel",
+    "generate_demo_data",
     "list_constraints",
     "solve",
     "solve_request",

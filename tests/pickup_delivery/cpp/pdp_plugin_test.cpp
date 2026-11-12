@@ -8,7 +8,8 @@
 //   (c) partial assemblies: each component isolates its own term
 //   (d) weight / level overrides
 //   (e) constraint_totals() explains exactly the reported score
-//   (f) a 2-second solve(plan, calculator) under ScoreChecks::Full
+//   (f) a 2-second solve(plan, calculator) under ScoreChecks::Full; the score it
+//       reports == a monolithic ScoreCalculator recompute of the final solution
 //   (g) the pair move takes a misplaced bound request to its vehicle
 //   (h) pinned stops and bound requests hold when other hard constraints are broken
 //   (i) every component's raw cost by hand: one positive and one zero case
@@ -283,8 +284,11 @@ void verifyFullAssertSolve() {
     }
     check(!corrupted, "2s FULL_ASSERT plugin solve without score corruption");
     if (!corrupted) {
+        // ScoreCalculator::score() stores its result in plan.score, so keep the
+        // score the plugin solve reported before recomputing.
+        const Score reported = plan.score;
         const Score recomputed = ScoreCalculator::score(plan);
-        check(plan.score == recomputed, "plugin-reported score == monolithic full recompute");
+        check(reported == recomputed, "plugin-reported score == monolithic full recompute");
     }
     std::printf("\n");
 }

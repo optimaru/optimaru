@@ -148,18 +148,18 @@ def test_distance_constraints_and_shadows():
 
 
 def test_demo_data_shape():
-    solution = op.build_demo_data()
+    solution = op.generate_demo_data()
     assert len(solution.trolleys) == 5
     assert len(solution.orders) == 8
     assert len(solution.pick_tasks) == 107  # seed 37
     assert all(t.bucket_count == 4 and t.bucket_capacity == 48000 for t in solution.trolleys)
     assert all(t.location.shelving_id == "(A,1)" for t in solution.trolleys)
     with pytest.raises(ValueError):
-        op.build_demo_data(bucket_capacity=100)  # smaller than the largest product
+        op.generate_demo_data(bucket_capacity=100)  # smaller than the largest product
 
 
 def test_solve_demo_reaches_feasible():
-    solution = op.build_demo_data()
+    solution = op.generate_demo_data()
     op.solve(solution, time_limit_seconds=3.0, random_seed=0, stop_at_first_feasible=True)
     assert solution.score.is_feasible()
     assigned = [i for t in solution.trolleys for i in t.pick_task_indices]
@@ -175,7 +175,7 @@ def test_parallel_solver_count_workers():
     consolidation move operator binds to a per-worker calculator. Each worker
     must finish cleanly and the best solution must be adopted."""
     for workers in (2, 4):
-        solution = op.build_demo_data()
+        solution = op.generate_demo_data()
         op.solve(
             solution,
             time_limit_seconds=2.0,
@@ -197,7 +197,7 @@ def test_seeded_runs_are_reproducible():
         config.step_count_limit = 5000
         config.spent_limit_seconds = 30.0
         config.random_seed = 3
-        return op.solve(op.build_demo_data(), config=config)
+        return op.solve(op.generate_demo_data(), config=config)
 
     a = run()
     b = run()
@@ -303,7 +303,7 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
     started = time.monotonic()
     with pytest.raises(RuntimeError, match="boom"):
         op.solve(
-            op.build_demo_data(),
+            op.generate_demo_data(),
             time_limit_seconds=30.0,
             parallel_solver_count=4,
             on_new_best=boom,
@@ -323,7 +323,7 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     try:
         started = time.monotonic()
         with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
-            op.solve(op.build_demo_data(), time_limit_seconds=30.0, parallel_solver_count=4)
+            op.solve(op.generate_demo_data(), time_limit_seconds=30.0, parallel_solver_count=4)
         assert time.monotonic() - started < 10.0
     finally:
         _core._fail_worker_thread_start(-1)
@@ -352,7 +352,7 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     seen = []
     started = time.monotonic()
     package.solve(
-        op.build_demo_data(),
+        op.generate_demo_data(),
         time_limit_seconds=30.0,
         random_seed=1,
         stop_at_first_feasible=True,

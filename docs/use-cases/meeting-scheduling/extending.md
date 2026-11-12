@@ -54,7 +54,7 @@ No build. Pass the constraints you want, with the knobs that differ from the def
 import optimaru.meeting_scheduling as ms
 from optimaru.meeting_scheduling.constraints import MeetingOverlapCost, RoomChangeCost, get_constraints
 
-schedule = ms.demo_data()
+schedule = ms.generate_demo_data()
 changed = {"meeting_overlap_cost", "room_change_cost", "larger_room_capacity_cost"}
 picks = [
     *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
@@ -198,7 +198,7 @@ picks = [*others, LateStartCost(weight=5)]
 config = ms.SolverConfig()
 config.step_count_limit = 2_000_000
 config.random_seed = 1
-schedule = ms.demo_data()
+schedule = ms.generate_demo_data()
 ms.solve(schedule, config=config, constraints=picks)
 print(sum(ms.constraint_costs(schedule, picks)["late_start_cost"]["costs"]))
 ```
@@ -455,7 +455,7 @@ from optimaru.meeting_scheduling.constraints import get_constraints
 
 steps = 2_000_000
 for label, picked in (("default path", None), ("assembly", get_constraints())):
-    schedule = ms.demo_data()
+    schedule = ms.generate_demo_data()
     config = ms.SolverConfig()
     config.step_count_limit = steps
     config.spent_limit_seconds = 600
