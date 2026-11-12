@@ -186,8 +186,12 @@ jobs:
         run: |
           runner=$(ls *_cpsat/benchmark.py 2>/dev/null | head -1)
           if [ -z "$runner" ]; then echo "no comparison runner"; exit 0; fi
-          # School timetabling's runner has its own tracks and flags; school-timetabling-bench.yml runs it.
-          if [ "${{ matrix.benchmark }}" = school-timetabling ]; then echo "run by school-timetabling-bench.yml"; exit 0; fi
+          # School timetabling's runner has its own tracks and flags: track 2 (engine vs CP-SAT on the
+          # canonical model) at size S; tracks 1 and 3 run in school-timetabling-bench.yml.
+          if [ "${{ matrix.benchmark }}" = school-timetabling ]; then
+            uv run --python 3.14 school-timetabling-compare --track2 --sizes S --seconds 1 --workers 2 --out-dir "$RUNNER_TEMP/st"
+            exit 0
+          fi
           uv run --python 3.14 python -m "$(dirname "$runner").benchmark" --seconds 1 --workers 2 --cpsat-grace 20
 
   vehicle-routing-benchmark:

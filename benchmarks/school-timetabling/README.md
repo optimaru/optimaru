@@ -54,8 +54,8 @@ the C++ score of the fixed instance matches `evaluate.py`
 
 The canonical `TimetableProblem` (every hard and soft canonical constraint) is solved under the same
 time limit by CP-SAT (`teacher_scheduling.solve`) and the C++ canonical
-engine (`optimaru.school_timetabling.solve`, single-threaded — shown as `pending` when the
-extension is not built and the import fails); both results are rescored with
+engine (`optimaru.school_timetabling.solve`, single-threaded; the CP-SAT model imports the
+engine's constraint specs, so both need the extension built); both results are rescored with
 cpsat's `validate.py`.
 
 ```sh

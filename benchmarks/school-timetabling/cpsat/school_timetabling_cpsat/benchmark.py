@@ -10,7 +10,7 @@ evaluate.py and compared with its self-report.
 
 Track 2 (--track2, full canonical constraints): the S/M/L canonical problems of
 gen_canonical.py are solved by CP-SAT (teacher_scheduling.solve) and by the C++
-canonical engine (optimaru.school_timetabling.solve; "pending" if the import fails), and
+canonical engine (optimaru.school_timetabling.solve), and
 both results are rescored with cpsat's validate.py (same time limit, same problem).
 
 Track 3 (--track3, partial timetabling): a track-2 instance loses one weekday
@@ -31,16 +31,14 @@ import argparse
 import json
 import re
 import subprocess
-import sys
 import time
 from collections import Counter
 from pathlib import Path
 
 from .evaluate import assignment_from_solution, format_score, load_json, score_assignment
 
-# benchmarks/school-timetabling (this file is cpsat/school_timetabling_cpsat/benchmark.py).
-BENCH_DIR = Path(__file__).resolve().parents[2]
-REPO_ROOT = BENCH_DIR.parents[1]
+# The repository root (this file is benchmarks/school-timetabling/cpsat/school_timetabling_cpsat/benchmark.py).
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 # Track-1 size presets: (classes, teachers, rooms). Same as documented in st_quality_bench.cpp.
 PRESETS: dict[str, tuple[int, int, int]] = {
@@ -200,38 +198,6 @@ def track1(args) -> None:
 # ---------------------------------------------------------------- track 2
 
 
-def _cpsat_path() -> None:
-    """Puts the CP-SAT reference (teacher_scheduling) on sys.path, together with the engine
-    package it builds on: its constraint registry subclasses the optimaru.school_timetabling specs and
-    takes their defaults from optimaru.school_timetabling.constraint_info(), so the extension must be built."""
-    for path in (BENCH_DIR / "cpsat", REPO_ROOT):
-        if str(path) not in sys.path:
-            sys.path.insert(0, str(path))
-
-
-def _load_engine_solver():
-    """The optimaru.school_timetabling canonical entry point (`optimaru.school_timetabling.solve`, default mode
-    canonical). None when the import fails (extension not built, say)."""
-    if str(REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(REPO_ROOT))
-    try:
-        from optimaru import school_timetabling
-    except ImportError:
-        return None
-    return school_timetabling.solve
-
-
-def _load_engine_assembly():
-    """`optimaru.school_timetabling.constraints.Assembly` (None when the package is not built)."""
-    if str(REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(REPO_ROOT))
-    try:
-        from optimaru.school_timetabling.constraints import Assembly
-    except ImportError:
-        return None
-    return Assembly
-
-
 def _drop_day(problem: dict, day: int) -> int:
     """Removes one weekday so the instance cannot be filled. Returns the cells lost per class.
 
@@ -275,9 +241,10 @@ def track3(args) -> None:
     separately — here they are the intended shortfall, not a defect, and the
     other hard violations must be 0.
     """
-    _cpsat_path()
     from pydantic import ValidationError
 
+    from optimaru.school_timetabling import solve as engine_solve
+    from optimaru.school_timetabling.constraints import Assembly
     from teacher_scheduling import SolverConfig, Timetable, TimetableProblem
     from teacher_scheduling.partial import UNASSIGNED_WEIGHT, solve_partial, unassigned_courses
     from teacher_scheduling.solver.config import ObjectiveWeights
@@ -289,10 +256,6 @@ def track3(args) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     sizes = [s.strip().upper() for s in args.sizes.split(",")]
     weights = ObjectiveWeights()
-    engine_solve = _load_engine_solver()
-    Assembly = _load_engine_assembly()
-    if engine_solve is None or Assembly is None:
-        print("engine: pending (optimaru.school_timetabling canonical not installed — running CP-SAT only)")
 
     def evaluate_result(problem, problem_dict, timetable) -> dict:
         """Shared rescoring. Separates the weekly-period shortfall from the other hard constraints.
@@ -365,24 +328,6 @@ def track3(args) -> None:
             }
         )
 
-        if engine_solve is None or Assembly is None:
-            rows.append(
-                {
-                    "size": size,
-                    "backend": "engine",
-                    "status": "pending",
-                    "wall": None,
-                    "required": required,
-                    "capacity": capacity,
-                    "placed": None,
-                    "missing": None,
-                    "violations": [],
-                    "penalties": {},
-                    "weighted": None,
-                }
-            )
-            continue
-
         print(f"== engine partial_{size} ({args.seconds}s) ==")
         t0 = time.perf_counter()
         try:
@@ -437,7 +382,7 @@ def track3(args) -> None:
     for row in rows:
         placed = "-" if row["placed"] is None else f"{row['placed']}/{row['required']}"
         missing = "-" if row["missing"] is None else str(row["missing"])
-        hard = "-" if row["status"] == "pending" else str(len(row["violations"]))
+        hard = str(len(row["violations"]))
         weighted = row["weighted"]
         wall = f"{row['wall']:.1f}s" if row["wall"] is not None else "-"
         # The value both solvers actually minimise: the unassigned penalty + the soft penalty.
@@ -465,7 +410,7 @@ def track3(args) -> None:
 
 
 def track2(args) -> None:
-    _cpsat_path()
+    from optimaru.school_timetabling import solve as engine_solve
     from teacher_scheduling import SolverConfig, TimetableProblem, solve
     from teacher_scheduling.solver.config import ObjectiveWeights
     from teacher_scheduling.validate import compute_penalties, validate_timetable
@@ -476,9 +421,6 @@ def track2(args) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     sizes = [s.strip().upper() for s in args.sizes.split(",")]
     weights = ObjectiveWeights()
-    engine_solve = _load_engine_solver()
-    if engine_solve is None:
-        print("engine: pending (optimaru.school_timetabling canonical not installed — running CP-SAT only)")
 
     def evaluate_result(problem, timetable) -> dict:
         violations = validate_timetable(problem, timetable)
@@ -515,19 +457,6 @@ def track2(args) -> None:
             }
         )
 
-        if engine_solve is None:
-            rows.append(
-                {
-                    "size": size,
-                    "backend": "engine",
-                    "status": "pending",
-                    "wall": None,
-                    "violations": [],
-                    "penalties": {},
-                    "weighted": None,
-                }
-            )
-            continue
         print(f"== engine canonical_{size} ({args.seconds}s) ==")
         t0 = time.perf_counter()
         try:
@@ -563,13 +492,13 @@ def track2(args) -> None:
         wall = f"{row['wall']:.1f}s" if row["wall"] is not None else "-"
         lines.append(
             f"| canonical_{row['size']} | {row['backend']} | {row['status']} "
-            f"| {len(row['violations']) if row['status'] not in ('pending',) else '-'} "
+            f"| {len(row['violations'])} "
             f"| {weighted if weighted is not None else '-'} | {wall} |"
         )
     lines += [
         "",
         "- Both backends are rescored with cpsat validate.py (hard-violation list + soft penalties × default weights).",
-        "- engine is the optimaru.school_timetabling canonical backend (single thread; pending if the import fails).",
+        "- engine is the optimaru.school_timetabling canonical backend (single thread).",
     ]
     for row in rows:
         if row["violations"]:

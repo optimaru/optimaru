@@ -148,7 +148,7 @@ def test_a_public_benchmark_runner_is_a_module_of_its_comparison_package():
     loose = sorted(
         path.relative_to(ROOT).as_posix()
         for path in (ROOT / "benchmarks").glob("*/bench")
-        if path.parent.name != "vehicle-routing"
+        if path.parent.name != "vehicle-routing"  # results dir: `benchmarks/vehicle-routing/bench/` in .gitignore
     )
     assert not loose, f"move these into their comparison package: {loose}"
     runners = sorted((ROOT / "benchmarks").glob("*/cpsat/*/public_benchmark.py"))
