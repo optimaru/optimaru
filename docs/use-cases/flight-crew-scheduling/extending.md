@@ -286,9 +286,10 @@ fc.solve(generate_schedule(), time_limit_seconds=1, random_seed=1, constraints=p
 ```
 
 While the default weight is 0, this solve is the only check of the constraint's incremental
-score. `fcs_plugin_test` walks 3,000 random moves on the default assembly, but a constraint at
-weight 0 adds 0 to both sides of every comparison: with `delta_cost()` made wrong on
-purpose, both C++ tests still passed and the solve above failed.
+score. `fcs_plugin_test` walks 3,000 random moves on the default assembly, but the engine
+leaves a constraint at weight 0 out of every move, so the walk never calls its
+`delta_cost()`: with `delta_cost()` made wrong on purpose, both C++ tests still passed
+and the solve above failed.
 
 **The tables.** The constraint tables in [README.md](README.md) and
 [python.md](python.md) must equal `fc.constraint_info()`; add the row. The notebook
@@ -465,7 +466,7 @@ counts; the moves that polish a ruin-and-recreate kick are not counted, on eithe
 | default path, six constraints | 4.36 million |
 | assembly, six constraints | 1.57 million |
 | assembly, six + the constraint of step 2 at weight 100 | 1.58 million |
-| assembly, six + the constraint with the table of step 4 | 1.54 million |
+| assembly, six + the constraint with the table of step 4, at weight 100 | 1.54 million |
 | default path, seven constraints (step 5) | 4.26 million |
 | assembly, seven constraints (step 5) | 1.57 million |
 
