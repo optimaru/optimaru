@@ -108,6 +108,13 @@
   before, and a field the catalog does not know fails the import. The example of
   `docs/use-cases/school-timetabling/extending.md` adds the field in step 5, with the
   monolithic terms; its steps 2 to 5 were applied, built and tested again.
+- **School timetabling docs: the speed of a solve with `constraints=` as measured.** The
+  python guide said the assembly runs at 35–55% of the monolith's move throughput (track 2
+  at 10 s), and a fixed-step run on 0.4.3 had shown about 25%. Seeded single-thread solves
+  of the track-2 schools (S and M 2 million steps, L 4 million, seeds 1 to 3) give a median
+  of 46% on S, 62% on M and 37% on L, and 25% to 71% for one seed: the rate of both paths
+  moves with the search. The python guide, the extending guide's step 5 and the track-2
+  notes in `benchmarks/school-timetabling/RESULTS.md` now say so.
 
 ## 0.5.0
 

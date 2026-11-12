@@ -418,9 +418,11 @@ sums stay exact and a hard total is never rounded.
 
 Do this when the constraint should be on in every solve (`kDefaultWeight > 0`). Then
 `st.solve(problem)` must score it, and that path scores with the monolithic calculators:
-four times the steps per second of the assembly, and the only path that runs parallel
-starts. `st_canonical_plugin_test` compares the default assembly with the monolithic
-calculators (checks (a), (b), (e) and (g)), so it fails from the moment the weight is
+more steps per second than the assembly (four times as many on the M school with seed 1,
+1.4 to 3.2 times in the other runs of 0.5.1;
+[python.md](python.md#plugin-constraint-assembly-constraints) has the measurement), and
+the only path that runs parallel starts. `st_canonical_plugin_test` compares the default
+assembly with the monolithic calculators (checks (a), (b), (e) and (g)), so it fails from the moment the weight is
 not 0 until both sides agree.
 
 **1. The weight.** In the component: `static constexpr double kDefaultWeight = 5.0;`. A

@@ -67,9 +67,9 @@ all three tables; the tables below cover tracks 1 and 2.
   cases of the C++ `st_canonical_test`).
 - Engine numbers use the default **monolithic incremental calculator** (fast
   path). The plugin-assembly path with the same semantics
-  (`optimaru.school_timetabling.solve(..., constraints=)`) reaches 35–55% of the
-  monolith's move throughput (track 2 S/M/L at 10 s), so it does not represent
-  these numbers — the benchmark and CI always use the fast path. See the plugin
+  (`optimaru.school_timetabling.solve(..., constraints=)`) runs at 37–62% of the
+  monolith's steps per second (median by size over three seeds of a step-limited
+  solve of S, M and L), so it does not represent these numbers — the benchmark and CI always use the fast path. See the plugin
   section of
   [`docs/use-cases/school-timetabling/python.md`](../../docs/use-cases/school-timetabling/python.md).
 
