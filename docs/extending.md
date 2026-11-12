@@ -321,7 +321,14 @@ struct MyRuleCost final : detail::PerVehicleConstraint {
   `reset()` / `on_unit_changed()`, and `cost()` returns the total. On the
   assignment shape, one that can keep them from joins and leaves alone derives
   from `optimaru::MemberChangeGlobalConstraint<Solution>` and writes the O(1)
-  `on_member_changed()` instead. All of
+  `on_member_changed()` instead. A global at weight 0 is still sent every
+  change, since what it keeps may serve more than its own cost. One whose
+  aggregates nothing but its own `cost()` reads, and whose `reset()` rebuilds
+  all of them, can override `idle_at_weight_zero()` to return `true`: at weight
+  0 it is then sent no change, and it is reset before `constraint_costs()`
+  reports its raw cost (assembly-line balancing's
+  [`alb/constraints/workload_imbalance_cost.hpp`](../optimaru/assembly_line_balancing/cpp/include/alb/constraints/workload_imbalance_cost.hpp)
+  does). All of
   knapsack's constraints are globals, for example
   [`ks/constraints/mandatory_items_cost.hpp`](../optimaru/knapsack/cpp/include/ks/constraints/mandatory_items_cost.hpp).
   On the sequence shape, a rule that keeps the elements of a group in one list
@@ -352,7 +359,12 @@ off this assembly. You then choose between two kinds of constraint:
 - **Opt-in** (`kDefaultWeight = 0.0`). The constraint scores nothing until a
   caller gives it a weight, and `constraint_info()` reports it with
   `default_enabled=False`. Vehicle routing's `LatencyCost` and
-  `RouteDurationCost` work this way. This is the right choice for most new
+  `RouteDurationCost` work this way. A unit constraint at weight 0 costs a move
+  nothing: the engine leaves it out of every move, costs it at a reset, and
+  costs it again when `constraint_costs()` reports it (school timetabling and
+  employee scheduling still evaluate one that is compiled into a shared delta
+  group with the rest of its group; for a global, see
+  `idle_at_weight_zero()` in step 2). This is the right choice for most new
   constraints, and step 4 doesn't apply.
 - **On by default** (`kDefaultWeight > 0`). This changes every default solve and
   the published scores. Do step 4.

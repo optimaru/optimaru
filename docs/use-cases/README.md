@@ -235,7 +235,12 @@ So `TravelTimeCost(offset=10, exponent=3)` adds `max(0, x - 10)**3` per
 vehicle, and the soft `TravelTimeCost(offset=10, exponent=3, clip=False)` adds
 `(x - 10)**3` per vehicle, an idle one included. Both formulas apply per unit,
 not to the total. With `offset=0` both modes are the plain `x ** exponent`. A
-weight of 0 contributes exactly 0 at any exponent and offset.
+weight of 0 contributes exactly 0 at any exponent and offset. A unit constraint
+picked at weight 0 is also left out of the moves, so it costs the search no
+time, and `constraint_costs()` still reports its raw cost. (A global constraint
+is left out only if it declares it can be, and a constraint that school
+timetabling or employee scheduling compiles into a shared group is still
+evaluated with that group.)
 
 A negative offset with `clip=True` is a fixed charge per unit in use:
 `TravelTimeCost(offset=-60)` adds `x + 60` for a vehicle that drives and 0 for
