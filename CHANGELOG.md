@@ -167,8 +167,9 @@
   made part of its first step. Now a solve with `constraints=` weighs it at the pick's
   weight, and the default path, whose monolithic calculators do not score it yet, reports it
   in `penalties` and weighs it at its component default in `objective_value`, as the field
-  will; `weights=` refuses any other value for it. A constraint with a field is read as
-  before, and a field the catalog does not know fails the import. The example of
+  will; `weights=` and `models.ObjectiveWeightsModel` refuse any other value for it (after
+  the usual checks: a bool, NaN or a negative weight raises as anywhere else). A constraint
+  with a field is read as before, and a field the catalog does not know fails the import. The example of
   `docs/use-cases/school-timetabling/extending.md` adds the field in step 5, with the
   monolithic terms; its steps 2 to 5 were applied, built and tested again.
 - **School timetabling docs: the speed of a solve with `constraints=` as measured.** The

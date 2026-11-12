@@ -43,8 +43,10 @@ parallel group splits one class, so valid input never has one).
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
-from ._core import canon
+from .._constraint import _check_knobs
+from ._core import canon, constraint_info
 from .constraints import default_weights
 
 __all__ = [
@@ -55,7 +57,9 @@ __all__ = [
     "inject_solution",
 ]
 
-# Soft constraint name -> its component default weight (kDefaultWeight), in catalog order.
+# Constraint name -> its component default weight (kDefaultWeight), every constraint and the
+# soft ones, in catalog order.
+_DEFAULTS = {row.name: row.default_weight for row in constraint_info()}
 _SOFT_DEFAULTS = default_weights()
 # The fields of the fast path's canon.ObjectiveWeights: the soft constraints the monolithic
 # calculators score. A soft component joins the catalog first and gets its field when it goes
@@ -90,6 +94,32 @@ def _soft_weights(weights: "canon.ObjectiveWeights | Mapping[str, float] | None"
     if unknown:
         raise ValueError(f"unknown soft weight(s) {unknown}; the weights are keyed by {list(_SOFT_DEFAULTS)}")
     return {name: float(weights.get(name, 0.0)) for name in _SOFT_DEFAULTS}
+
+
+def _fast_path_weights(weights: Mapping[str, Any]) -> "canon.ObjectiveWeights":
+    """The fast path's `canon.ObjectiveWeights` for soft weights keyed by constraint name.
+
+    The one rule for `solve(weights=)` and `models.ObjectiveWeightsModel.to_core()`. A
+    name that is not a soft constraint raises ValueError. A field takes its value
+    (`ObjectiveWeights` checks it). A soft constraint without a field is not scored
+    on this path: its value is checked like any weight (a bool, NaN, infinity or a
+    negative number raises), dropped at its default weight (so a full default dict
+    passes), and any other value, which would be ignored, raises ValueError."""
+    unknown = sorted(set(weights) - _SOFT_DEFAULTS.keys())
+    if unknown:
+        raise ValueError(f"unknown soft weight(s) {unknown}; the weights are keyed by {list(_SOFT_DEFAULTS)}")
+    off_path = []
+    for name, value in weights.items():
+        if name in _WEIGHT_FIELDS:
+            continue
+        checked, _, _ = _check_knobs(name, value, None, 1.0)
+        if checked != _SOFT_DEFAULTS[name]:
+            off_path.append(name)
+    if off_path:
+        raise ValueError(
+            f"{off_path} not on the default path (no canon.ObjectiveWeights field); pick them with constraints="
+        )
+    return canon.ObjectiveWeights(**{name: value for name, value in weights.items() if name in _WEIGHT_FIELDS})
 
 
 @dataclass

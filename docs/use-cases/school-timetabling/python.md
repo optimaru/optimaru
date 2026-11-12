@@ -231,7 +231,7 @@ Rules:
   ([extending.md](extending.md), step 5). Until then it solves with
   `constraints=` at its pick's weight, the default path does not score it
   (`objective_value` weighs it at its component default), and `solve(weights=)`
-  refuses another value for it.
+  and `models.ObjectiveWeightsModel` refuse another value for it.
 - `Timetable.penalties` keys are the soft constraint names; partial
   timetabling reports `unassigned_lessons_cost`.
 - `canon.constraint_costs(table)` is the per-constraint surface;

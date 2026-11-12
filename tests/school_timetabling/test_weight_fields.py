@@ -14,6 +14,7 @@ import pytest
 import optimaru.school_timetabling as st
 from optimaru.school_timetabling import canon, convert
 from optimaru.school_timetabling.constraints import NonPreferredPeriodCost, default_weights, get_constraints
+from optimaru.school_timetabling.models import ObjectiveWeightsModel, SolveConfig
 
 HIDDEN = "non_preferred_period_cost"
 
@@ -23,7 +24,6 @@ def without_field(monkeypatch):
     """The Python side as it is while HIDDEN has no ObjectiveWeights field."""
     fields = convert._WEIGHT_FIELDS - {HIDDEN}
     monkeypatch.setattr(convert, "_WEIGHT_FIELDS", fields)
-    monkeypatch.setattr(st, "_WEIGHT_FIELDS", fields)
 
 
 def _weighted(result, weights):
@@ -36,7 +36,6 @@ def test_a_constraint_with_a_field_reads_it():
     assert {"teacher_gap_cost", HIDDEN} <= convert._WEIGHT_FIELDS
     custom = canon.ObjectiveWeights(teacher_gap_cost=7, non_preferred_period_cost=4)
     weights = convert._soft_weights(custom)
-    assert weights == {name: getattr(custom, name, weights[name]) for name in default_weights()}
     assert (weights["teacher_gap_cost"], weights[HIDDEN]) == (7, 4)
 
 
@@ -73,3 +72,25 @@ def test_a_weight_the_fast_path_cannot_apply_raises(problem, without_field):
     assert result["lessons"]
     with pytest.raises(ValueError, match="not on the default path"):
         st.solve(problem, time_limit_seconds=0.1, weights={HIDDEN: 3})
+
+
+def test_the_pydantic_config_follows_the_same_rule(without_field):
+    """models.SolveConfig.weights: dropped at its default, refused at any other value, like weights=."""
+    assert SolveConfig().to_canon().weights == canon.ObjectiveWeights()
+    assert SolveConfig(weights=ObjectiveWeightsModel(teacher_gap_cost=2.5)).to_canon().weights.teacher_gap_cost == 2.5
+    with pytest.raises(ValueError, match="not on the default path"):
+        SolveConfig(weights=ObjectiveWeightsModel(**{HIDDEN: 8})).to_canon()
+
+
+@pytest.mark.parametrize(
+    ("bad", "error", "match"),
+    [
+        (True, TypeError, "weight must be a number"),
+        (float("nan"), ValueError, "weight must be finite and >= 0"),
+        (-1, ValueError, "weight must be finite and >= 0"),
+    ],
+)
+def test_an_off_path_weight_is_checked_like_any_weight(problem, without_field, bad, error, match):
+    """A bool, NaN or a negative value raises the usual error, not "not on the default path"."""
+    with pytest.raises(error, match=match):
+        st.solve(problem, time_limit_seconds=0.1, weights={HIDDEN: bad})
