@@ -47,7 +47,7 @@
   add a new unit constraint's name there instead of editing a slice. The five
   extending guides that explained a slice (and employee scheduling's, which named one in a
   test) no longer do. No expected score changed: the picks are the same lists.
-  `tests/test_layout.py` fails on an index or slice of `get_constraints()` or
+  `tests/test_layout.py` fails on an index or slice of `get_constraints()`, `constraint_info()` or
   `list_constraints()` in the tracked tests, docs, package sources, benchmarks, notebooks
   and the root README.
 
