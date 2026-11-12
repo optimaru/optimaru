@@ -32,6 +32,8 @@ from optimaru.task_assigning.constraints import (
 )
 from optimaru.task_assigning.demo import generate_demo_data
 
+from .._picks import replace_default
+
 MEDIUM_PER_HARD = 10**9  # kMissingSkillUnit: the below-hard medium fold
 SOFT1_WEIGHT = 10**7  # squared_makespan_cost's default weight (soft1 over soft2)
 
@@ -557,7 +559,7 @@ def test_the_global_total_is_shaped_once(make_pick, expected):
 
 def test_offset_zero_is_the_plain_shaping():
     """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
-    plain = [*get_constraints()[:-1], UnassignedTasksCost(exponent=2)]
+    plain = replace_default(get_constraints(), "unassigned_tasks_cost", UnassignedTasksCost(exponent=2))
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
     assert score(raw, shifted) == score(raw, plain)

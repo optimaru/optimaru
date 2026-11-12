@@ -31,6 +31,8 @@ from optimaru.max_cut.constraints import (
 )
 from optimaru.max_cut.models import EdgeModel, MaxCutProblemModel, VertexPairModel
 
+from .._picks import replace_default
+
 NAMES = [
     "fixed_partition_cost",
     "same_partition_pairs_cost",
@@ -223,7 +225,9 @@ def test_level_can_be_flipped():
     ]
     assert max_cut.calculate_score(problem, flipped) == (-3, 0.0)
     assert engine_score(problem, flipped) == (-3, 0.0)
-    promoted = [*get_constraints()[:4], PartitionImbalanceCost(weight=1, level="hard"), cut_weight_cost]
+    promoted = replace_default(
+        get_constraints(), "partition_imbalance_cost", PartitionImbalanceCost(weight=1, level="hard")
+    )
     assert max_cut.calculate_score(problem, promoted) == (-7, 2.0)
     assert engine_score(problem, promoted) == (-7, 2.0)
 
@@ -235,7 +239,7 @@ def test_reweighting_scales_only_that_term():
         for spec in get_constraints()
     ]
     assert max_cut.calculate_score(problem, heavier) == (-11, 2.0)
-    balanced = [*get_constraints()[:4], PartitionImbalanceCost(weight=1), cut_weight_cost]
+    balanced = replace_default(get_constraints(), "partition_imbalance_cost", PartitionImbalanceCost(weight=1))
     assert max_cut.calculate_score(problem, balanced) == (-5, 0.0)
 
 

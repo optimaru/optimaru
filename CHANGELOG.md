@@ -32,6 +32,24 @@
     use case (meeting scheduling's `xlarge`: a mean objective 17.5% worse over 12 seeds).
     No default changes with this.
   - `tests/test_layout.py` holds a C++ bench to reading a file that a Python writer names.
+- **Tests and docs pick the defaults by name, not by position, in every use case.** Lists
+  such as `[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)]` or `[:3]`, `[:9]`,
+  `[1:]` meant "every default, with this one replaced"; a constraint added to the catalog,
+  as the extending guides teach, would have been silently dropped or would have displaced
+  another pick (#117 fixed maintenance scheduling). The tests of 16 use cases, the snippets
+  in the READMEs and `python.md` of seven, the docstrings of five packages and a CP-SAT
+  parity test now select by name in catalog order: the docs with the plain comprehension
+  (`[X(...) if spec.name == "x_cost" else spec for spec in get_constraints()]`), the tests
+  with `tests/_picks.py` (`replace_default`, `without`, `only`), which fails on a name that
+  matches no pick or several. Meeting scheduling's and tournament scheduling's raw-cost
+  metadata tests took their unit constraints as the first five or two of
+  `list_constraints()`; they now name them (`UNIT_CONSTRAINTS`), and their guides say to
+  add a new unit constraint's name there instead of editing a slice. The five
+  extending guides that explained a slice (and employee scheduling's, which named one in a
+  test) no longer do. No expected score changed: the picks are the same lists.
+  `tests/test_layout.py` fails on an index or slice of `get_constraints()`, `constraint_info()` or
+  `list_constraints()` in the tracked tests, docs, package sources, benchmarks, notebooks
+  and the root README.
 
 ## 0.5.1
 

@@ -30,7 +30,10 @@ max_cut.constraint_info()
 problem = max_cut.solve(
     problem,
     time_limit_seconds=1.0,
-    constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()],
+    constraints=[
+        PartitionImbalanceCost(weight=2) if spec.name == "partition_imbalance_cost" else spec
+        for spec in get_constraints()
+    ],
 )
 raw = max_cut.constraint_costs(problem)   # {name: {"costs": [side 0, side 1] or [total], "weight": ..., ...}}
 score(raw), score(raw, [FixedPartitionCost(exponent=2.0)])

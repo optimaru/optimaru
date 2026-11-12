@@ -168,9 +168,8 @@ constraint, so a hard constraint returns whole numbers.
 `kTermCount = 21`. The `Term` order must equal the order of `defaultConstraints()`:
 `constraint_items()` pairs the per-item lists with the catalog names by position.
 The first `kHardTermCount` (14) terms are the hard ones, which `ScoreCalculator::scoreOf`
-adds up by index; a soft constraint goes after them. The place before `MakespanCost` keeps
-`get_constraints()[:-1]` meaning "all but the makespan", as the README and
-`constraints.py` write it.
+adds up by index; a soft constraint goes after them. The docs and the tests select
+defaults by name, not by position, so the new entry displaces none of their picks.
 
 **3. The assembly**, `cpp/include/fab/constraints.hpp`: include the header, and add
 one line to `defaultConstraints()`, after `CycleTimeCost`:

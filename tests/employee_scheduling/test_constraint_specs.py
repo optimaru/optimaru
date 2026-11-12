@@ -320,10 +320,10 @@ def test_the_run_repair_default_is_the_same_on_both_sides():
 
 def test_specs_carry_the_documented_defaults():
     """Spec knobs default to weight None (= the C++ default), hard None, exponent 1.0."""
-    spec = get_constraints()[0]
-    assert spec.weight is None
-    assert spec.level is None
-    assert spec.exponent == pytest.approx(1.0)
+    for spec in get_constraints():
+        assert spec.weight is None
+        assert spec.level is None
+        assert spec.exponent == pytest.approx(1.0)
 
 
 def test_weight_none_scores_like_the_explicit_default_weights():
@@ -677,15 +677,16 @@ def test_add_takes_the_offset_and_clip_knobs():
 def test_offset_zero_reproduces_the_plain_scores():
     """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
     plain = [*get_constraints(), UndesiredDayCost(exponent=2), DayPatternCost(pattern="WORK,WORK")]
+    defaults = [type(spec)(offset=0.0, clip=False) for spec in get_constraints()]  # every default, offset 0
     shifted = [
-        *[type(spec)(offset=0.0, clip=False) for spec in get_constraints()],
+        *defaults,
         UndesiredDayCost(exponent=2, offset=0),
         DayPatternCost(pattern="WORK,WORK", offset=0.0, clip=False),
     ]
     schedule = _assigned_roster()
     assert score(es.constraint_costs(schedule, shifted), shifted) == score(es.constraint_costs(schedule, plain), plain)
     assert _engine(plain, schedule) == _engine(shifted, schedule)
-    assert str(es.DecomposedCalculator(shifted[:8]).score(reference_schedule())) == REFERENCE_SCORE
+    assert str(es.DecomposedCalculator(defaults).score(reference_schedule())) == REFERENCE_SCORE
     for entry in es.constraint_costs(schedule).values():
         assert (entry["offset"], entry["clip"]) == (0.0, True)
 

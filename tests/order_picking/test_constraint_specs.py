@@ -25,6 +25,8 @@ from optimaru.order_picking.constraints import (
     trolley_capacity_cost,
 )
 
+from .._picks import replace_default
+
 
 def build_solution():
     return op.generate_demo_data()
@@ -205,8 +207,10 @@ def test_score_reproduces_the_engine_score_exactly():
 @pytest.mark.parametrize(
     "specs",
     [
-        [TrolleyCapacityCost(level="soft"), *get_constraints()[1:]],
-        [*get_constraints()[:3], OrderSplitByTrolleyCost(weight=10, exponent=2.0)],
+        replace_default(get_constraints(), "trolley_capacity_cost", TrolleyCapacityCost(level="soft")),
+        replace_default(
+            get_constraints(), "order_split_by_trolley_cost", OrderSplitByTrolleyCost(weight=10, exponent=2.0)
+        ),
         [TrolleyCapacityCost(exponent=2.0), DistanceFromPreviousPickTaskCost(level="hard", weight=0.5)],
         [*get_constraints(), DistanceFromPreviousPickTaskCost(weight=0.5, exponent=2.0)],
         [

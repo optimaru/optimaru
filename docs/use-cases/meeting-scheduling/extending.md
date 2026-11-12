@@ -250,8 +250,8 @@ Python tests. Update them:
   `test_list_constraints_matches_the_spec_names`,
   `test_module_level_instances_keep_every_default` and
   `test_constraint_info_reports_the_cpp_defaults` (the row is
-  `("soft", 0.0, True, False, False)`); `unit_names = ms.list_constraints()[:5]` in
-  `test_constraint_info_matches_the_raw_cost_metadata` (six unit constraints now); the
+  `("soft", 0.0, True, False, False)`); the name in `UNIT_CONSTRAINTS`, the set that
+  `test_constraint_info_matches_the_raw_cost_metadata` checks the `global` flag against; the
   weights written out in `test_weight_none_means_the_component_default`; and
   `test_the_attendance_clash_raw_costs`, which lists every non-zero raw cost of a hand
   schedule: there the constraint reads 2 in cell 5.

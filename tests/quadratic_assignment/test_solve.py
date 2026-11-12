@@ -12,6 +12,8 @@ import optimaru.quadratic_assignment as qap
 from optimaru.quadratic_assignment.constraints import get_constraints
 from optimaru.quadratic_assignment.models import QuadraticAssignmentProblemModel
 
+from .._picks import only
+
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -208,7 +210,7 @@ def test_calculate_score_fills_the_model():
     result = qap.calculate_score(model)
     assert (result.hard, result.soft) == (0, -374.0)
     assert (model.total_cost, model.score_hard, model.score_soft) == (374, 0, -374.0)
-    picked = qap.calculate_score(model, get_constraints()[-1:])
+    picked = qap.calculate_score(model, only(get_constraints(), "flow_distance_cost"))
     assert picked == (0, -374.0) and isinstance(picked, tuple)
 
 

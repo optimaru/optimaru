@@ -40,9 +40,11 @@ print(AssemblyLineBalancingProblemModel.from_core(core).station_loads)
 from optimaru.assembly_line_balancing.constraints import UsedStationsCost, WorkloadImbalanceCost, get_constraints, score
 
 alb.constraint_info()          # [ConstraintInfo(name='station_capacity_cost', default_level='hard', ...), ...]
-problem = alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+picks = [WorkloadImbalanceCost(weight=1) if spec.name == "workload_imbalance_cost" else spec for spec in get_constraints()]
+problem = alb.solve(problem, time_limit_seconds=1.0, constraints=picks)
 raw = alb.constraint_costs(problem)                 # raw costs, re-priced in pure Python:
-score(raw), score(raw, [*get_constraints()[:-1], WorkloadImbalanceCost(weight=2)])
+score(raw), score(raw, [WorkloadImbalanceCost(weight=2) if spec.name == "workload_imbalance_cost" else spec
+                        for spec in get_constraints()])
 score(raw, [UsedStationsCost(), UsedStationsCost(weight=10, offset=4)])   # a repeat, shifted
 ```
 

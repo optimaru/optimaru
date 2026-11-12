@@ -181,8 +181,8 @@ come out negative on such data overrides `raw_cost_can_be_negative()`, as
 
 **2. The assembly**, `cpp/include/qap/constraints.hpp`: include the header, and add
 one line to `defaultConstraints()`, after `LocationCapacityCost`. The catalog lists
-the unit constraints first and the globals after them, and the docs write
-`get_constraints()[:-1]` for "all but the flow objective":
+the unit constraints first and the globals after them; the docs and the tests select
+defaults by name, not by position, so the new entry displaces none of their picks:
 
 ```cpp
     assembly.emplace<UnusedLocationCapacityCost>();

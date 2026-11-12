@@ -13,7 +13,11 @@ A constraint list reads one way: one class call per constraint::
     )
 
     problem = max_cut.solve(problem, constraints=get_constraints())                       # defaults as-is
-    problem = max_cut.solve(problem, constraints=[*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()])
+    picks = [
+        PartitionImbalanceCost(weight=2) if spec.name == "partition_imbalance_cost" else spec
+        for spec in get_constraints()
+    ]
+    problem = max_cut.solve(problem, constraints=picks)                     # one default changed
     problem = max_cut.solve(problem, constraints=[PartitionSizeBoundsCost(), CutWeightCost()])   # picked
 
 Only listed constraints are scored — leave one out and its term disappears from the
@@ -51,10 +55,9 @@ its own knobs (its level included) and the picks add up. The imbalance plus its 
 beyond 2 vertices::
 
     problem = max_cut.solve(problem, constraints=[
-        *get_constraints()[:4],
+        *(spec for spec in get_constraints() if spec.name != "partition_imbalance_cost"),
         PartitionImbalanceCost(weight=1),
         PartitionImbalanceCost(weight=5, exponent=2, offset=2),
-        CutWeightCost(),
     ])
 
 ``max_cut.constraint_costs(problem, picks)`` keys the second pick
@@ -213,7 +216,11 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored. To change just one default, list the others as they are::
 
-        get_constraints([*get_constraints()[:4], PartitionImbalanceCost(weight=2), CutWeightCost()])
+        picks = [
+            PartitionImbalanceCost(weight=2) if spec.name == "partition_imbalance_cost" else spec
+            for spec in get_constraints()
+        ]
+        get_constraints(picks)
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
     that came out empty) raises ValueError; a constraint named several times is

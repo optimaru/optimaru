@@ -10,6 +10,8 @@ from optimaru import max_cut
 from optimaru.max_cut.constraints import get_constraints, partition_size_bounds_cost
 from optimaru.max_cut.models import MaxCutProblemModel
 
+from .._picks import only, replace_default
+
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -191,7 +193,9 @@ def test_the_constraints_path_scores_with_the_picks():
 def test_the_server_flow_round_trips_with_a_reweighted_selection():
     """engine._solve_metaheuristics: to_core -> solve(core, constraints=[replace(spec, ...)]) -> from_core."""
     core = demo().to_core()
-    selection = [*get_constraints()[:3], replace(partition_size_bounds_cost, weight=2.0), *get_constraints()[4:]]
+    selection = replace_default(
+        get_constraints(), "partition_size_bounds_cost", replace(partition_size_bounds_cost, weight=2.0)
+    )
     result = max_cut.solve(
         core, time_limit_seconds=0.3, random_seed=42, parallel_solver_count=1, constraints=selection
     ).score
@@ -215,7 +219,7 @@ def test_calculate_score_fills_the_model():
     result = max_cut.calculate_score(model)
     assert (result.hard, result.soft) == (0, 63.0)
     assert (model.cut_weight, model.score_hard, model.score_soft) == (63, 0, 63.0)
-    picked = max_cut.calculate_score(model, get_constraints()[-1:])
+    picked = max_cut.calculate_score(model, only(get_constraints(), "cut_weight_cost"))
     assert picked == (0, 63.0) and isinstance(picked, tuple)
 
 

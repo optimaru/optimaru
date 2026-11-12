@@ -48,6 +48,8 @@ NAMES = [
     "cycle_time_cost",
     "makespan_cost",
 ]
+# The constraints whose default level is hard.
+HARD_BY_DEFAULT = {row.name for row in fab.constraint_info() if row.default_level == "hard"}
 
 
 def _problem(seed: int = 3) -> SemiconductorScheduleModel:
@@ -423,7 +425,7 @@ def test_score_equals_the_engine_with_repeats_and_offsets():
     [
         [*get_constraints(), *REPEAT],
         [
-            *get_constraints()[:14],
+            *(spec for spec in get_constraints() if spec.name in HARD_BY_DEFAULT),
             specs.LotRoutePrecedenceCost(weight=2, offset=1),
             specs.LotRoutePrecedenceCost(level="soft", weight=2, offset=1, clip=False),  # literal: soft only
             MachineCapacityCost(offset=1),

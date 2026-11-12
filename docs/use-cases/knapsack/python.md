@@ -23,7 +23,8 @@ knapsack.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='selected_value_cost', default_level='soft', default_weight=1.0,
 #                 level_flippable=False, reward=True, default_enabled=True)]
-problem = knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
+picks = [SelectedValueCost(weight=2) if spec.name == "selected_value_cost" else spec for spec in get_constraints()]
+problem = knapsack.solve(problem, time_limit_seconds=1.0, constraints=picks)
 raw = knapsack.constraint_costs(problem)   # {name: {"costs": [total], "weight": ..., ...}}
 score(raw), score(raw, [MandatoryItemsCost(exponent=2.0)])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip

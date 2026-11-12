@@ -26,6 +26,7 @@ from optimaru.bin_packing.constraints import (
 )
 
 NAMES = ["bin_capacity_cost", "color_conflict_cost", "item_conflict_cost", "used_bins_cost"]
+PER_BIN = {"bin_capacity_cost", "color_conflict_cost", "item_conflict_cost"}  # one raw cost per bin
 
 
 def build_problem() -> bp.BinPackingProblem:
@@ -171,7 +172,7 @@ def test_constraint_costs_shapes():
     problem = build_problem()
     problem.set_assignment([0, 0, 1, 1, 4])
     raw = bp.constraint_costs(problem)
-    for name in NAMES[:3]:
+    for name in PER_BIN:
         assert len(raw[name]["costs"]) == problem.item_count()
     assert raw["used_bins_cost"]["costs"] == [3]
     assert raw["color_conflict_cost"]["costs"] == [1, 0, 0, 0, 0]

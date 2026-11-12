@@ -28,6 +28,8 @@ from optimaru.bed_allocation.constraints import (
     unassigned_stays_cost,
 )
 
+from .._picks import replace_default
+
 MEDIUM_UNIT = 1_000_000_000  # the domain's medium fold (into soft)
 
 
@@ -549,7 +551,7 @@ def test_the_scopes_report_their_units():
 
 def test_offset_zero_reproduces_the_plain_scores():
     """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
-    plain = [*get_constraints()[:-1], MixedGenderRoomCost(exponent=2)]
+    plain = replace_default(get_constraints(), "mixed_gender_room_cost", MixedGenderRoomCost(exponent=2))
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
     assert score(raw, shifted) == score(raw, plain)

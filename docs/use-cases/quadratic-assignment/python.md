@@ -27,7 +27,8 @@ qap.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='flow_distance_cost', default_level='soft', default_weight=1.0,
 #                 level_flippable=True, reward=False, default_enabled=True)]
-problem = qap.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])
+picks = [FlowDistanceCost(weight=2) if spec.name == "flow_distance_cost" else spec for spec in get_constraints()]
+problem = qap.solve(problem, time_limit_seconds=1.0, constraints=picks)
 raw = qap.constraint_costs(problem)   # {name: {"costs": [...], "weight": ..., ...}}
 score(raw), score(raw, [LocationCapacityCost(exponent=2.0)])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip

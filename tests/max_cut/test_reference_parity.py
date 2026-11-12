@@ -35,6 +35,7 @@ from optimaru.max_cut.constraints import (
 )
 from optimaru.max_cut.models import MaxCutProblemModel as Model
 
+from .._picks import only
 from . import reference_max_cut as ref
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -209,7 +210,7 @@ def _reference_selection(specs: list[Constraint]) -> list[dict]:
 
 def _random_selection(rng: random.Random) -> list[Constraint]:
     """A random subset with integral weights and level flips (exponent 1: where the reference and the engine agree)."""
-    picked = [spec for spec in get_constraints() if rng.random() < 0.7] or [get_constraints()[-1]]
+    picked = [spec for spec in get_constraints() if rng.random() < 0.7] or only(get_constraints(), "cut_weight_cost")
     selection = []
     for spec in picked:
         weight = rng.choice([None, 0, 1, 2, 5])

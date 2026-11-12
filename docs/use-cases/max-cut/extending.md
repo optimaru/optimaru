@@ -157,8 +157,8 @@ maximize such as `cutWeightCost`, returns a raw cost of 0 or less and sets
 
 **2. The assembly**, `cpp/include/mc/constraints.hpp`: include the header, and add
 one line to `defaultConstraints()`, after `PartitionSizeBoundsCost`. The catalog
-lists the unit constraints first and the globals after them, and the docs write
-`get_constraints()[:4]` for the four hard constraints:
+lists the unit constraints first and the globals after them; the docs and the tests
+select defaults by name, not by position, so the new entry displaces none of their picks:
 
 ```cpp
     assembly.emplace<UncutEdgesCost>();
