@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **Benchmarks: every table has 20 instances or more.** The 17 generated comparisons run
+  ladders of 20 instances: a few sizes with several seeds of the generator each, the first
+  instance of a size keeping its name and the others numbered from 2 (`medium-2`, ...;
+  `cpsat_plugins.benchmark.seeded`), and food packaging 20 plants of different sizes. The
+  RCPSP runner generates instances in the shape of RG30 (`--synthetic N`,
+  `--synthetic-seeds`), published as a second table beside Pat1-Pat5 (20 instances of 30 to
+  120 activities); the synthetic pickup-delivery table has one row per size and instance
+  seed (21 rows, 10 to 400 requests; `--synthetic-seeds`); school timetabling's track 2 runs
+  20 schools of 3 to 60 classes (`--sizes ladder`, or any class count that is a multiple of
+  3) and writes its results as JSON (`--out`), which `scripts/publish_benchmarks.py` reads as
+  `timetabling.json` in place of numbers copied by hand. The Li & Lim head-to-head table adds
+  the first 15 requests of each instance.
+
 ## 0.5.1
 
 **From 0.5.0.** One fix first: in the seven use cases that search in stages, a solve that
