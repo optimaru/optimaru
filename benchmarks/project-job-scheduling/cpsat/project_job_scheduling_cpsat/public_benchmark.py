@@ -133,26 +133,43 @@ def load_instance(name: str, cache_dir: Path) -> RcpspInstance:
 
 def synthetic_instance(activity_count: int, seed: int = 0) -> RcpspInstance:
     """A seeded instance in the shape of the RG30 set: `activity_count` activities between a
-    source and a sink of duration 0, over four renewable resources.
+    source and a sink of duration 0, over four renewable resources of capacity 10.
 
-    An activity lasts 1 to 10 time units and uses one or two of the resources, 1 to 5 units of
-    each against a capacity of 6 to 10. It follows up to three of the six activities before it
-    (none: it follows the source); one that nothing follows precedes the sink.
+    An activity lasts 1 to 10 time units and uses three of the four resources, 1 to 8 units of
+    each, so the resources bind before the precedences do: the activities' work is about twice
+    what the longest chain takes. The network is wide and shallow, as in RG30: the activities
+    are dealt into one layer per eight of them (three layers at least), and an activity follows
+    one or two activities of the layer before it and, three times in ten, one of an earlier
+    layer. The first layer follows the source; what nothing follows precedes the sink.
     """
     if activity_count < 1:
         raise ValueError("a synthetic instance needs at least one activity")
     rng = random.Random(seed)
     resource_count = 4
-    capacities = tuple(rng.randint(6, 10) for _ in range(resource_count))
+    capacities = (10,) * resource_count
     durations = [rng.randint(1, 10) for _ in range(activity_count)]
     requirements = []
     for _ in range(activity_count):
-        used = rng.sample(range(resource_count), rng.randint(1, 2))
-        requirements.append(tuple(rng.randint(1, 5) if resource in used else 0 for resource in range(resource_count)))
+        used = rng.sample(range(resource_count), 3)
+        requirements.append(tuple(rng.randint(1, 8) if resource in used else 0 for resource in range(resource_count)))
+
+    # Layers, in order: every layer has an activity, the others land anywhere.
+    layer_count = min(activity_count, max(3, activity_count // 8))
+    layer_of = sorted([*range(layer_count), *(rng.randrange(layer_count) for _ in range(activity_count - layer_count))])
+    members: list[list[int]] = [[] for _ in range(layer_count)]
+    for activity, layer in enumerate(layer_of):
+        members[layer].append(activity)
     predecessors: list[list[int]] = []
-    for activity in range(activity_count):
-        before = list(range(max(0, activity - 6), activity))
-        predecessors.append(rng.sample(before, min(len(before), rng.randint(0, 3))))
+    for activity, layer in enumerate(layer_of):
+        if layer == 0:
+            predecessors.append([])
+            continue
+        before = members[layer - 1]
+        chosen = rng.sample(before, min(len(before), rng.randint(1, 2)))
+        earlier = [other for other in range(activity) if layer_of[other] < layer - 1]
+        if earlier and rng.random() < 0.3:
+            chosen.append(rng.choice(earlier))
+        predecessors.append(sorted(chosen))
     successors: list[list[int]] = [[] for _ in range(activity_count)]
     for activity, before in enumerate(predecessors):
         for predecessor in before:

@@ -104,9 +104,9 @@ def test_a_generated_instance_is_seeded_and_has_the_shape_of_the_set() -> None:
     assert source.requirements == sink.requirements == (0, 0, 0, 0)
     for index, task in enumerate(activities, start=1):
         assert 1 <= task.duration <= 10
-        # An activity fits the capacities on its own, and uses one or two of the resources.
+        # An activity fits the capacities on its own, and uses three of the four resources.
         assert all(need <= capacity for need, capacity in zip(task.requirements, instance.capacities))
-        assert 1 <= sum(need > 0 for need in task.requirements) <= 2
+        assert sum(need > 0 for need in task.requirements) == 3
         # Successors come later, so the precedence graph has no cycle; the last ones precede the sink.
         assert task.successors and all(index < successor <= 31 for successor in task.successors)
     # Every activity is reached from the source.
@@ -117,8 +117,11 @@ def test_a_generated_instance_is_seeded_and_has_the_shape_of_the_set() -> None:
                 reached.add(successor)
                 frontier.append(successor)
     assert reached == set(range(32))
-    assert critical_path(instance) >= max(task.duration for task in activities)
     assert len(make_model(instance).jobs) == 32
+    # The resources bind, as in RG30: the busiest one alone needs longer than the longest chain.
+    assert instance.capacities == (10, 10, 10, 10)
+    work = max(sum(task.duration * task.requirements[resource] for task in activities) for resource in range(4))
+    assert max(task.duration for task in activities) <= critical_path(instance) < work / 10
 
     with pytest.raises(ValueError, match="at least one activity"):
         synthetic_instance(0)
