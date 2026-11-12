@@ -56,5 +56,8 @@ def test_the_fixed_assignment_scores_the_same_twice_and_leaves_the_problem_alone
     dump = _load()
     problem = benchmark.instances()["demo"]()
     before = ConferenceScheduleModel.from_core(problem).model_dump()
-    assert dump.crosscheck(problem) == dump.crosscheck(problem) == "hard=-90138300 soft=-151380"
+    score, costs = dump.crosscheck(problem)
+    assert (score, costs) == dump.crosscheck(problem)
+    assert score == "hard=-90138300 soft=-151380"
+    assert costs and all(name[0].islower() and "_" not in name and cost > 0 for name, cost in costs.items())
     assert ConferenceScheduleModel.from_core(problem).model_dump() == before

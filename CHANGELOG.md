@@ -22,8 +22,8 @@
     (they are in the `v0.5.0` tag). `benchmarks/<slug>/dump_instances.py` writes the
     instances, as bed allocation's does, so a tuning run and the comparison solve the same
     problems. `<ns>_quality_bench crosscheck <file>` scores a fixed assignment, and the dump
-    script prints the use case's own score of it: `--check <bench>` compares the two on every
-    instance, and CI's `benchmark-cpsat` job runs it.
+    script prints the use case's own score of it: `--check <bench>` compares the two, and
+    every constraint's raw cost, on every instance, and CI's `benchmark-cpsat` job runs it.
   - The three readers refuse an index outside its table, and a seed or a budget that is not
     a whole number.
   - The guides keep the tuning history measured on `scaled:N` and say where those instances

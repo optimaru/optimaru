@@ -14,7 +14,8 @@ Run from the repo root:
 Each line it prints ends with the score of the fixed assignment ``talk i -> slotRoom
 (7 * i) % slotRoomCount`` under the use case's own scorer; ``cs_quality_bench crosscheck <file>``
 prints the C++ score of the same assignment, which must be equal. ``--check`` with the path of
-the built bench runs it on every file and fails on a difference (CI does, so the writer here
+the built bench runs it on every file and fails on a difference in the total or in any
+constraint's raw cost (CI does, so the writer here
 and the reader in the bench cannot drift apart).
 
 Format (whitespace-separated tokens): a string is double-quoted, with ``\\`` before a
@@ -127,25 +128,32 @@ def to_text(model: ConferenceScheduleModel) -> str:
     return "\n".join(lines) + "\n"
 
 
-def crosscheck(problem) -> str:
-    """The score of the fixed assignment the C++ bench scores in its `crosscheck` mode.
-    Scores a copy; a pinned talk keeps its place."""
+def crosscheck(problem) -> tuple[str, dict[str, float]]:
+    """The score of the fixed assignment the C++ bench scores in its `crosscheck` mode, and
+    the non-zero raw cost of each constraint under its C++ name (the size of a reward).
+    Scores a copy; a pinned entity keeps its place."""
     schedule = ConferenceScheduleModel.from_core(problem).to_core()
     cells = schedule.slot_room_count()
     current = schedule.assignment()
     pinned = [talk.pinned for talk in schedule.talks]
     schedule.set_assignment([current[i] if pinned[i] else (7 * i) % cells for i in range(len(current))])
     score = conference_scheduling.calculate_score(schedule)
-    return f"hard={score.hard} soft={score.soft:.0f}"
+    costs = {
+        re.sub(r"_(\w)", lambda found: found.group(1).upper(), name): abs(sum(entry["costs"]))
+        for name, entry in conference_scheduling.constraint_costs(schedule).items()
+    }
+    return f"hard={score.hard} soft={score.soft:.0f}", {name: cost for name, cost in costs.items() if cost}
 
 
-def bench_crosscheck(bench: str, path: Path) -> str:
-    """What the C++ bench scores the fixed assignment of the dumped file at."""
+def bench_crosscheck(bench: str, path: Path) -> tuple[str, dict[str, float]]:
+    """What the C++ bench scores the fixed assignment of the dumped file at: the total and
+    its non-zero `Breakdown` members."""
     proc = subprocess.run([bench, "crosscheck", str(path)], capture_output=True, text=True)
     found = re.search(r"_BENCH_CROSSCHECK (.*)", proc.stdout)
     if proc.returncode != 0 or found is None:
         raise SystemExit(f"{bench} crosscheck {path} failed ({proc.returncode}): {proc.stderr.strip()}")
-    return found.group(1).strip()
+    units = re.findall(r"_BENCH breakdown \w\.(\w+) units=(-?\d+)", proc.stdout)
+    return found.group(1).strip(), {name: abs(float(value)) for name, value in units}
 
 
 def main(argv: list[str]) -> int:
@@ -160,10 +168,18 @@ def main(argv: list[str]) -> int:
         problem = factory()
         path = outdir / f"{name}.cstxt"
         path.write_text(to_text(ConferenceScheduleModel.from_core(problem)), encoding="utf-8")
-        expected = crosscheck(problem)
+        expected, costs = crosscheck(problem)
         print(f"{name}: {benchmark.describe(problem)} -> {path} (crosscheck {expected})")
-        if args.check and (got := bench_crosscheck(args.check, path)) != expected:
+        if not args.check:
+            continue
+        got, units = bench_crosscheck(args.check, path)
+        if got != expected:
             differing.append(f"{name}: Python {expected}, C++ {got}")
+        for constraint in sorted(costs.keys() | units.keys()):
+            if costs.get(constraint, 0) != units.get(constraint, 0):
+                differing.append(
+                    f"{name}: {constraint}: Python {costs.get(constraint, 0)}, C++ {units.get(constraint, 0)}"
+                )
     if differing:
         raise SystemExit("the C++ bench reads another problem than was dumped:\n  " + "\n  ".join(differing))
     if args.check:
