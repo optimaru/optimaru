@@ -9,10 +9,11 @@
 // Python, so a tuning run and the CP-SAT comparison solve the same problems.
 //
 // Usage: cs_quality_bench <instance.cstxt> <seed> <seconds> [key=value..]
-//   seconds 0: no solve. Scores the fixed assignment talk i -> slotRoom
+//        cs_quality_bench crosscheck <instance.cstxt>
+//   crosscheck: no solve. Scores the fixed assignment talk i -> slotRoom
 //   (7 * i) % slotRoomCount (a pinned talk keeps its place) and prints
 //   "CS_BENCH_CROSSCHECK hard=... soft=...", which must equal the score
-//   dump_instances.py printed for that instance.
+//   dump_instances.py printed for that instance (its --check runs this).
 // Knobs (bench-only overrides of Solver::Config, for A/B sweeps):
 //   compatProb= la= change= swap= alnsTrigger= alnsPolish= minRuin= maxRuin=
 //   max_ruin_count= decay= segments= asMove= as_move_max_ruin= descent=
@@ -40,6 +41,21 @@ namespace {
 // Instance file (dump_instances.py). Strings are std::quoted; a list is its
 // length and then its items.
 // ---------------------------------------------------------------------------
+// A whole non-negative number, or an error that names the argument.
+long long parseCount(const char* text, const char* name) {
+    char* end = nullptr;
+    const long long value = std::strtoll(text, &end, 10);
+    if (end == text || *end != '\0' || value < 0)
+        throw std::runtime_error(std::string(name) + " must be a whole number, got '" + text + "'");
+    return value;
+}
+
+void checkIndex(long long value, long long count, const char* what) {
+    if (value < 0 || value >= count)
+        throw std::runtime_error(std::string(what) + " " + std::to_string(value) +
+                                 " is out of range 0.." + std::to_string(count - 1));
+}
+
 std::string readString(std::istream& in) {
     std::string text;
     in >> std::quoted(text);
@@ -147,6 +163,27 @@ ConferenceSchedule loadConference(const std::string& path) {
         talk.pinned = pinned != 0;
     }
     if (!in) throw std::runtime_error("truncated instance file " + path);
+
+    // The file is read without the Python model's checks: refuse an index
+    // that points outside its table before the scorer reads through it.
+    const int typeCount = static_cast<int>(c.talkTypes.size());
+    const int speakerCount = static_cast<int>(c.speakers.size());
+    for (const Timeslot& slot : c.timeslots)
+        for (int type : slot.talkTypes) checkIndex(type, typeCount, "timeslot talk type");
+    for (const Room& room : c.rooms) {
+        for (int type : room.talkTypes) checkIndex(type, typeCount, "room talk type");
+        for (int slot : room.unavailableTimeslots)
+            checkIndex(slot, c.timeslotCount(), "room unavailable timeslot");
+    }
+    for (const Speaker& speaker : c.speakers)
+        for (int slot : speaker.unavailableTimeslots)
+            checkIndex(slot, c.timeslotCount(), "speaker unavailable timeslot");
+    for (const Talk& talk : c.talks) {
+        checkIndex(talk.talkType, typeCount, "talk type");
+        for (int speaker : talk.speakers) checkIndex(speaker, speakerCount, "talk speaker");
+        for (int other : talk.prerequisiteTalks) checkIndex(other, c.talkCount(), "prerequisite");
+        if (talk.slotRoom != -1) checkIndex(talk.slotRoom, c.slotRoomCount(), "slotRoom");
+    }
     return c;
 }
 
@@ -202,22 +239,20 @@ void printBreakdown(const Breakdown& b) {
 }
 
 int run(int argc, char** argv) {
-    if (argc < 4) {
+    const bool crosscheck = argc == 3 && std::string(argv[1]) == "crosscheck";
+    if (!crosscheck && argc < 4) {
         std::fprintf(stderr,
                      "usage: cs_quality_bench <instance.cstxt> <seed> "
-                     "<seconds> [key=value ...]\n");
+                     "<seconds> [key=value ...]\n"
+                     "       cs_quality_bench crosscheck <instance.cstxt>\n");
         return 2;
     }
-    const std::string path = argv[1];
-    const std::uint64_t seed = std::strtoull(argv[2], nullptr, 10);
-    const int seconds = std::atoi(argv[3]);
 
-    ConferenceSchedule conference = loadConference(path);
-
-    // seconds 0: no solve. Scores a fixed assignment so the dumped instance
+    // crosscheck: no solve. Scores a fixed assignment so the dumped instance
     // can be checked against the Python scorer (dump_instances.py prints the
     // same score).
-    if (seconds <= 0) {
+    if (crosscheck) {
+        ConferenceSchedule conference = loadConference(argv[2]);
         for (int i = 0; i < conference.talkCount(); ++i) {
             Talk& talk = conference.talks[i];
             if (!talk.pinned) talk.slotRoom = (7 * i) % conference.slotRoomCount();
@@ -229,6 +264,12 @@ int run(int argc, char** argv) {
                     score.soft);
         return 0;
     }
+
+    const std::string path = argv[1];
+    const std::uint64_t seed = static_cast<std::uint64_t>(parseCount(argv[2], "seed"));
+    const int seconds = static_cast<int>(parseCount(argv[3], "seconds"));
+    if (seconds == 0) throw std::runtime_error("seconds must be at least 1");
+    ConferenceSchedule conference = loadConference(path);
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);

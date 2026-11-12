@@ -9,10 +9,11 @@
 // and the CP-SAT comparison solve the same problems.
 //
 // Usage: ms_quality_bench <instance.mstxt> <seed> <seconds> [k=v ...]
-//   seconds 0: no solve. Scores the fixed assignment i -> grainRoom
+//        ms_quality_bench crosscheck <instance.mstxt>
+//   crosscheck: no solve. Scores the fixed assignment i -> grainRoom
 //   (7 * i) % grainRoomCount (a pinned assignment keeps its place) and prints
 //   "MS_BENCH_CROSSCHECK hard=... soft=...", which must equal the score
-//   dump_instances.py printed for that instance.
+//   dump_instances.py printed for that instance (its --check runs this).
 // Knobs (bench-only overrides of Solver::Config, for A/B sweeps):
 //   la= change= swap= alnsTrigger= alnsPolish= minRuin= maxRuin=
 //   max_ruin_count= decay= dayFit= asMove= asMoveRuin=
@@ -40,6 +41,21 @@ namespace {
 // Instance file (dump_instances.py). Strings are std::quoted; a list of ints
 // is its length and then its items.
 // ---------------------------------------------------------------------------
+// A whole non-negative number, or an error that names the argument.
+long long parseCount(const char* text, const char* name) {
+    char* end = nullptr;
+    const long long value = std::strtoll(text, &end, 10);
+    if (end == text || *end != '\0' || value < 0)
+        throw std::runtime_error(std::string(name) + " must be a whole number, got '" + text + "'");
+    return value;
+}
+
+void checkIndex(long long value, long long count, const char* what) {
+    if (value < 0 || value >= count)
+        throw std::runtime_error(std::string(what) + " " + std::to_string(value) +
+                                 " is out of range 0.." + std::to_string(count - 1));
+}
+
 std::string readString(std::istream& in) {
     std::string text;
     in >> std::quoted(text);
@@ -109,6 +125,22 @@ MeetingSchedule loadSchedule(const std::string& path) {
         assignment.pinned = pinned != 0;
     }
     if (!in) throw std::runtime_error("truncated instance file " + path);
+
+    // The file is read without the Python model's checks: refuse an index
+    // that points outside its table before the scorer reads through it.
+    const int personCount = static_cast<int>(schedule.people.size());
+    const int meetingCount = static_cast<int>(schedule.meetings.size());
+    for (const Meeting& meeting : schedule.meetings) {
+        for (int person : meeting.requiredAttendees)
+            checkIndex(person, personCount, "required attendee");
+        for (int person : meeting.preferredAttendees)
+            checkIndex(person, personCount, "preferred attendee");
+    }
+    for (const MeetingAssignment& assignment : schedule.meetingAssignments) {
+        checkIndex(assignment.meeting, meetingCount, "assignment meeting");
+        if (assignment.grainRoom != -1)
+            checkIndex(assignment.grainRoom, schedule.grainRoomCount(), "grainRoom");
+    }
     return schedule;
 }
 
@@ -140,22 +172,20 @@ void printBreakdown(const Breakdown& b) {
 }
 
 int run(int argc, char** argv) {
-    if (argc < 4) {
+    const bool crosscheck = argc == 3 && std::string(argv[1]) == "crosscheck";
+    if (!crosscheck && argc < 4) {
         std::fprintf(stderr,
                      "usage: ms_quality_bench <instance.mstxt> <seed> "
-                     "<seconds> [key=value ...]\n");
+                     "<seconds> [key=value ...]\n"
+                     "       ms_quality_bench crosscheck <instance.mstxt>\n");
         return 2;
     }
-    const std::string path = argv[1];
-    const std::uint64_t seed = std::strtoull(argv[2], nullptr, 10);
-    const int seconds = std::atoi(argv[3]);
 
-    MeetingSchedule schedule = loadSchedule(path);
-
-    // seconds 0: no solve. Scores a fixed assignment so the dumped instance
+    // crosscheck: no solve. Scores a fixed assignment so the dumped instance
     // can be checked against the Python scorer (dump_instances.py prints the
     // same score).
-    if (seconds <= 0) {
+    if (crosscheck) {
+        MeetingSchedule schedule = loadSchedule(argv[2]);
         const int assignmentCount = static_cast<int>(schedule.meetingAssignments.size());
         for (int i = 0; i < assignmentCount; ++i) {
             MeetingAssignment& assignment = schedule.meetingAssignments[i];
@@ -167,6 +197,12 @@ int run(int argc, char** argv) {
                     score.soft);
         return 0;
     }
+
+    const std::string path = argv[1];
+    const std::uint64_t seed = static_cast<std::uint64_t>(parseCount(argv[2], "seed"));
+    const int seconds = static_cast<int>(parseCount(argv[3], "seconds"));
+    if (seconds == 0) throw std::runtime_error("seconds must be at least 1");
+    MeetingSchedule schedule = loadSchedule(path);
 
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);

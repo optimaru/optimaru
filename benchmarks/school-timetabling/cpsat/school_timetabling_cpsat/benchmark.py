@@ -74,7 +74,10 @@ def crosscheck_gate(cpp_bin: Path, out_dir: Path) -> None:
     instance = gen_quickstart.crosscheck()
     crosscheck_text = gen_quickstart.write(instance, out_dir / "crosscheck.json")
     proc = _run([cpp_bin, "crosscheck", crosscheck_text], capture_output=True)
-    cpp_score = re.search(r"CROSSCHECK_SCORE=\S+", proc.stdout).group(0)
+    found = re.search(r"CROSSCHECK_SCORE=\S+", proc.stdout)
+    if found is None:
+        raise SystemExit(f"{cpp_bin} crosscheck printed no CROSSCHECK_SCORE:\n{proc.stdout}{proc.stderr}")
+    cpp_score = found.group(0)
     print(f"C++ : {cpp_score}")
 
     eval_score = format_score(score_assignment(instance, [(l["timeslot"], l["room"]) for l in instance["lessons"]]))
@@ -151,6 +154,8 @@ def track1(args) -> None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     sizes = [s.strip().upper() for s in args.sizes.split(",")]
+    if unknown := [size for size in sizes if size not in PRESETS]:
+        raise SystemExit(f"--sizes: unknown preset(s) {unknown}; track 1 has {sorted(PRESETS)}")
     cpp_bin = ensure_cpp_bin(args.cpp_bin)
 
     print("\n== cross-check gate ==")

@@ -71,8 +71,9 @@ instance is built in Python and written to a plain token file the bench reads, s
 run solves the problems the comparison solves and an instance is the same on every
 platform. `benchmarks/<slug>/dump_instances.py` writes the comparison's instances for bed
 allocation, conference scheduling and meeting scheduling (the file format is in its
-docstring, and it prints the score of a fixed assignment that the bench reproduces with a
-budget of 0 seconds); school timetabling's track-1 generator,
+docstring; conference and meeting scheduling's also prints the score of a fixed assignment,
+which `<ns>_quality_bench crosscheck <file>` reproduces, and CI compares the two on every
+instance with the script's `--check`); school timetabling's track-1 generator,
 `school_timetabling_cpsat/gen_quickstart.py`, writes its own.
 
 A CP-SAT constraint is a plugin that subclasses the use case's own constraint

@@ -24,6 +24,7 @@ generator of its own:
 uv run --project benchmarks/meeting-scheduling/cpsat \
     python benchmarks/meeting-scheduling/dump_instances.py /tmp/ms     # <name>.mstxt, one per instance
 cmake --build build --target ms_quality_bench
+./build/meeting_scheduling/ms_quality_bench crosscheck /tmp/ms/<name>.mstxt   # the score the dump printed
 ./build/meeting_scheduling/ms_quality_bench /tmp/ms/<name>.mstxt 1 10    # seed, seconds
 ```
 

@@ -21,8 +21,11 @@
     <seconds> [knobs]`) in the place of `demo` and `scaled:N`, whose generators are gone
     (they are in the `v0.5.0` tag). `benchmarks/<slug>/dump_instances.py` writes the
     instances, as bed allocation's does, so a tuning run and the comparison solve the same
-    problems. A budget of 0 seconds scores a fixed assignment, and the dump script prints the
-    use case's own score of it: the two were equal on all ten instances.
+    problems. `<ns>_quality_bench crosscheck <file>` scores a fixed assignment, and the dump
+    script prints the use case's own score of it: `--check <bench>` compares the two on every
+    instance, and CI's `benchmark-cpsat` job runs it.
+  - The three readers refuse an index outside its table, and a seed or a budget that is not
+    a whole number.
   - The guides keep the tuning history measured on `scaled:N` and say where those instances
     came from. Each has a new table of the as-move default against `asMove=0` on the
     comparison's instances: it wins on the smaller ones and not on the largest two of either

@@ -181,7 +181,10 @@ def main() -> int:
     args = parser.parse_args()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    schools = [(size, PRESETS[size]) for size in (s.strip().upper() for s in args.sizes.split(",")) if size]
+    sizes = [size for size in (s.strip().upper() for s in args.sizes.split(",")) if size]
+    if unknown := [size for size in sizes if size not in PRESETS]:
+        parser.error(f"--sizes: unknown preset(s) {unknown}; the presets are {sorted(PRESETS)}")
+    schools = [(size, PRESETS[size]) for size in sizes]
     schools += [("x".join(str(n) for n in shape), tuple(shape)) for shape in args.school]
     for name, (classes, teachers, rooms) in schools:
         instance = generate(classes, teachers, rooms, args.seed)

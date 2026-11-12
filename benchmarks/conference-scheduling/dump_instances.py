@@ -9,11 +9,13 @@ problems; the bench has no generator of its own.
 Run from the repo root:
 
     uv run --project benchmarks/conference-scheduling/cpsat \
-        python benchmarks/conference-scheduling/dump_instances.py <outdir>
+        python benchmarks/conference-scheduling/dump_instances.py <outdir> [--check <cs_quality_bench>]
 
 Each line it prints ends with the score of the fixed assignment ``talk i -> slotRoom
-(7 * i) % slotRoomCount`` under the use case's own scorer; ``cs_quality_bench <file> <seed> 0``
-prints the C++ score of the same assignment, which must be equal.
+(7 * i) % slotRoomCount`` under the use case's own scorer; ``cs_quality_bench crosscheck <file>``
+prints the C++ score of the same assignment, which must be equal. ``--check`` with the path of
+the built bench runs it on every file and fails on a difference (CI does, so the writer here
+and the reader in the bench cannot drift apart).
 
 Format (whitespace-separated tokens): a string is double-quoted, with ``\\`` before a
 quote or a backslash inside it (C++ ``std::quoted``); a list is its length and then its
@@ -41,6 +43,9 @@ then the required, preferred, prohibited and undesired room tags.
 
 from __future__ import annotations
 
+import argparse
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -48,6 +53,25 @@ from conference_scheduling_cpsat import benchmark
 from optimaru import conference_scheduling
 from optimaru.conference_scheduling.models import ConferenceScheduleModel
 
+SECTIONS = ("timeslots", "rooms", "speakers", "talks")
+# The list-valued fields of a talk, each written as its length and then its items.
+TALK_LISTS = (
+    "speakers",
+    "theme_track_tags",
+    "sector_tags",
+    "audience_types",
+    "content_tags",
+    "required_timeslot_tags",
+    "preferred_timeslot_tags",
+    "prohibited_timeslot_tags",
+    "undesired_timeslot_tags",
+    "required_room_tags",
+    "preferred_room_tags",
+    "prohibited_room_tags",
+    "undesired_room_tags",
+    "mutually_exclusive_talks_tags",
+    "prerequisite_talks",
+)
 PREFERENCE_TAGS = (
     "required_timeslot_tags",
     "preferred_timeslot_tags",
@@ -104,7 +128,7 @@ def to_text(model: ConferenceScheduleModel) -> str:
 
 
 def crosscheck(problem) -> str:
-    """The score of the fixed assignment the C++ bench scores with a budget of 0 seconds.
+    """The score of the fixed assignment the C++ bench scores in its `crosscheck` mode.
     Scores a copy; a pinned talk keeps its place."""
     schedule = ConferenceScheduleModel.from_core(problem).to_core()
     cells = schedule.slot_room_count()
@@ -115,14 +139,35 @@ def crosscheck(problem) -> str:
     return f"hard={score.hard} soft={score.soft:.0f}"
 
 
+def bench_crosscheck(bench: str, path: Path) -> str:
+    """What the C++ bench scores the fixed assignment of the dumped file at."""
+    proc = subprocess.run([bench, "crosscheck", str(path)], capture_output=True, text=True)
+    found = re.search(r"_BENCH_CROSSCHECK (.*)", proc.stdout)
+    if proc.returncode != 0 or found is None:
+        raise SystemExit(f"{bench} crosscheck {path} failed ({proc.returncode}): {proc.stderr.strip()}")
+    return found.group(1).strip()
+
+
 def main(argv: list[str]) -> int:
-    outdir = Path(argv[1]) if len(argv) > 1 else Path("out")
+    parser = argparse.ArgumentParser(description="Dump the comparison instances for the C++ bench.")
+    parser.add_argument("outdir", nargs="?", default="out")
+    parser.add_argument("--check", metavar="BENCH", help="the built C++ bench: its score of each file must match")
+    args = parser.parse_args(argv[1:])
+    outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+    differing = []
     for name, factory in benchmark.instances().items():
         problem = factory()
         path = outdir / f"{name}.cstxt"
         path.write_text(to_text(ConferenceScheduleModel.from_core(problem)), encoding="utf-8")
-        print(f"{name}: {benchmark.describe(problem)} -> {path} (crosscheck {crosscheck(problem)})")
+        expected = crosscheck(problem)
+        print(f"{name}: {benchmark.describe(problem)} -> {path} (crosscheck {expected})")
+        if args.check and (got := bench_crosscheck(args.check, path)) != expected:
+            differing.append(f"{name}: Python {expected}, C++ {got}")
+    if differing:
+        raise SystemExit("the C++ bench reads another problem than was dumped:\n  " + "\n  ".join(differing))
+    if args.check:
+        print("cross-check: OK")
     return 0
 
 

@@ -52,6 +52,15 @@ namespace {
 // assignment as timeslot and room indices, -1 -1 when unassigned.
 // NOTE: t.teacherUnavailable stays empty — see the file header.
 // -------------------------------------------------------------------------
+// A whole non-negative number, or an error that names the argument.
+long long parseCount(const char* text, const char* name) {
+    char* end = nullptr;
+    const long long value = std::strtoll(text, &end, 10);
+    if (end == text || *end != '\0' || value < 0)
+        throw std::runtime_error(std::string(name) + " must be a whole number, got '" + text + "'");
+    return value;
+}
+
 Timetable loadInstance(const std::string& path) {
     std::ifstream in(path);
     if (!in) throw std::runtime_error("cannot open " + path);
@@ -84,7 +93,15 @@ Timetable loadInstance(const std::string& path) {
         int room = -1;
         in >> lesson.id >> lesson.subject >> lesson.teacher >> lesson.studentGroup >> timeslot >>
                 room;
-        lesson.slotRoom = timeslot >= 0 && room >= 0 ? t.slotRoomOf(timeslot, room) : -1;
+        // The file is read without a model's checks: -1 -1 is unassigned,
+        // anything else has to be a cell of the grid.
+        const bool unassigned = timeslot == -1 && room == -1;
+        if (in && !unassigned &&
+            (timeslot < 0 || timeslot >= t.timeslotCount() || room < 0 || room >= t.roomCount()))
+            throw std::runtime_error("lesson " + lesson.id + ": timeslot " +
+                                     std::to_string(timeslot) + " / room " + std::to_string(room) +
+                                     " is not a cell of the grid");
+        lesson.slotRoom = unassigned ? -1 : t.slotRoomOf(timeslot, room);
     }
     if (!in) throw std::runtime_error("truncated instance file " + path);
     return t;
@@ -135,8 +152,9 @@ int run(int argc, char** argv) {
         return 2;
     }
     const std::string path = argv[1];
-    const std::uint64_t seed = std::strtoull(argv[2], nullptr, 10);
-    const int seconds = std::atoi(argv[3]);
+    const std::uint64_t seed = static_cast<std::uint64_t>(parseCount(argv[2], "seed"));
+    const int seconds = static_cast<int>(parseCount(argv[3], "seconds"));
+    if (seconds == 0) throw std::runtime_error("seconds must be at least 1");
 
     Timetable table = loadInstance(path);
     std::printf("QBENCH_CPP instance file=%s lessons=%zu timeslots=%d rooms=%d seed=%llu\n",
@@ -146,7 +164,9 @@ int run(int argc, char** argv) {
     Solver::Config config;
     config.time_limit = std::chrono::seconds(seconds);
     config.seed = seed;
-    if (argc >= 5) config.parallel_solver_count = std::max(1, std::atoi(argv[4]));
+    if (argc >= 5)
+        config.parallel_solver_count =
+                std::max(1, static_cast<int>(parseCount(argv[4], "parallel_solver_count")));
     // Optional knob overrides for A/B tuning sweeps (unset = solver
     // defaults, i.e. exactly the published bench configuration). These only
     // change SEARCH knobs, never scoring semantics.
