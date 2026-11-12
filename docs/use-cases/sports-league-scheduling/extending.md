@@ -17,7 +17,8 @@ the model and its ten constraints are in the [guide](README.md).
 The steps build one example: `workdayAwayTripCost`, the kilometres between the two teams' homes for
 every match played in a round that is neither a weekend nor a holiday. It moves the long away trips
 to the weekends. Every snippet below was compiled and run, and every figure measured, on optimaru
-0.4.3; a later change to the solver moves the figures, not the steps.
+0.4.3; the paragraph on weight 0 of step 4 and the first four rows of the table of step 6 on
+0.5.1. A later change to the solver moves the figures, not the steps.
 
 ## How a schedule is scored
 
@@ -342,11 +343,13 @@ gave 1.30, and it changes what a caller sees: `sl.constraint_costs()` then lists
 the constraint's `units`, and a pick with `clip=False` charges the 23 rounds instead of
 all 32. None of the ten constraints is scoped, and the example is not either.
 
-**A constraint at weight 0 is still computed.** `sl.constraint_costs()` reports it, so the
-assembly keeps its raw cost on every move: `get_constraints()` now returns eleven
-constraints, and a solve with them ran at 1.29 million steps per second where the ten ran
-at 1.33 million. A caller who does not want the constraint leaves it out of the list, as
-`others` does in step 2. `sl.solve(schedule)` is not affected.
+**A constraint at weight 0 costs a move nothing.** The assembly asks a unit constraint
+at weight 0 only when a solve starts and when `sl.constraint_costs()` reports it:
+`get_constraints()` now returns eleven constraints, and a solve with them ran at 1.34
+million steps per second, as the ten did. A global at weight 0 is still sent every change,
+unless it declares `idle_at_weight_zero()` (see
+[`decomposed_objective.hpp`](../../../optimaru/cpp/optimaru/score/decomposed_objective.hpp));
+the example is a unit constraint and needs nothing. `sl.solve(schedule)` is not affected.
 
 **Keep raw costs whole numbers.** Every constraint here counts matches or kilometres, so
 sums stay exact and a hard total is never rounded. Return `static_cast<double>` of
@@ -463,18 +466,19 @@ The first line makes other moves, so it ends elsewhere.
 
 | Measured on the demo league, 5 million steps | Steps per second |
 | --- | --- |
-| default path, ten constraints | 2.61 million |
-| default path, ten constraints, `costliest_match_sample = 1` | 2.65 million |
-| assembly, ten constraints | 1.33 million |
-| assembly, ten constraints and the constraint of step 2 at weight 0 | 1.29 million |
+| default path, ten constraints | 2.65 million |
+| default path, ten constraints, `costliest_match_sample = 1` | 2.63 million |
+| assembly, ten constraints | 1.34 million |
+| assembly, ten constraints and the constraint of step 2 at weight 0 | 1.34 million |
 | assembly, ten constraints and the constraint of step 2 at weight 1 | 1.24 million |
 | assembly, the same with the table of step 4 | 1.26 million |
 | default path, eleven constraints (step 5) | 2.48 million |
 | default path, eleven constraints, `costliest_match_sample = 1` | 2.51 million |
 | assembly, eleven constraints (step 5) | 1.26 million |
 
-Each figure is the median of three runs, the two around step 4 of eleven. Other
-work on the machine moved single runs by up to 8%.
+Each figure is the median of three runs, the two around step 4 of eleven. The first four
+rows were taken on 0.5.1, the others on 0.4.3. Other work on the machine moved single runs
+by up to 8%.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after: solve
