@@ -42,9 +42,11 @@ and `constraints`:
 from optimaru.knapsack.constraints import ForbiddenItemsCost, SelectedValueCost, get_constraints, score
 
 knapsack.constraint_info()     # [ConstraintInfo(name='knapsack_capacity_cost', default_level='hard', ...), ...]
-problem = knapsack.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
+picks = [SelectedValueCost(weight=2) if spec.name == "selected_value_cost" else spec for spec in get_constraints()]
+problem = knapsack.solve(problem, time_limit_seconds=1.0, constraints=picks)
 raw = knapsack.constraint_costs(problem)            # raw totals, re-priced in pure Python:
-score(raw), score(raw, [*get_constraints()[:3], ForbiddenItemsCost(level="soft"), *get_constraints()[4:]])
+score(raw), score(raw, [ForbiddenItemsCost(level="soft") if spec.name == "forbidden_items_cost" else spec
+                        for spec in get_constraints()])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip
 # shift the shaping of the total (clip=True: only the value beyond 10 is rewarded).
 score(raw, [SelectedValueCost(), SelectedValueCost(weight=0.5, offset=10)])

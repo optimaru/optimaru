@@ -13,7 +13,11 @@ A constraint list reads one way: one class call per constraint::
     )
 
     solved = alb.solve(problem, constraints=get_constraints())  # the defaults as-is
-    solved = alb.solve(problem, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+    picks = [
+        WorkloadImbalanceCost(weight=1) if spec.name == "workload_imbalance_cost" else spec
+        for spec in get_constraints()
+    ]
+    solved = alb.solve(problem, constraints=picks)                     # one default changed
     solved = alb.solve(problem, constraints=[StationCapacityCost(), UsedStationsCost()])   # picked
 
 Only listed constraints are scored — leave one out and its term disappears from
@@ -288,7 +292,11 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored::
 
-        get_constraints([*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+        picks = [
+            WorkloadImbalanceCost(weight=1) if spec.name == "workload_imbalance_cost" else spec
+            for spec in get_constraints()
+        ]
+        get_constraints(picks)
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
     that came out empty) raises ValueError; a constraint named several times is

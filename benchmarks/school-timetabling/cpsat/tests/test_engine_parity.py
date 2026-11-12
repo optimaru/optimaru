@@ -221,8 +221,10 @@ def test_parity_partial_solution(problem):
     result = st.solve(
         problem,
         constraints=[
-            *get_constraints()[1:],
-            UnassignedLessonsCost(level="soft", weight=UNASSIGNED_LESSONS_SOFT_WEIGHT),
+            UnassignedLessonsCost(level="soft", weight=UNASSIGNED_LESSONS_SOFT_WEIGHT)
+            if spec.name == "unassigned_lessons_cost"
+            else spec
+            for spec in get_constraints()
         ],
         time_limit_seconds=10.0,
         random_seed=7,

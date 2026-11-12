@@ -280,8 +280,8 @@ Update them:
   `test_module_level_instances_keep_every_default` (the instances),
   `test_constraint_info_reports_the_cpp_defaults` (the row is
   `("soft", 0.0, True, False, False)`),
-  `test_constraint_info_matches_the_raw_cost_metadata` (`unit_names =
-  ts.list_constraints()[:3]`, three unit constraints now) and
+  `test_constraint_info_matches_the_raw_cost_metadata` (the name in `UNIT_CONSTRAINTS`,
+  the set it checks the `global` flag against) and
   `test_weight_none_means_the_component_default` (`[1, 1, 0, 1, 1]`).
 
 **Incremental against full.** Solve with every score checked against a full

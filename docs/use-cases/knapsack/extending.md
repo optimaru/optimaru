@@ -172,8 +172,8 @@ to maximize such as `selectedValueCost`, returns a raw cost of 0 or less and set
 
 **2. The assembly**, `cpp/include/ks/constraints.hpp`: include the header, and add
 one line to `defaultConstraints()`, before `SelectedValueCost`. The order there is
-the order of the catalog, and the docs write `get_constraints()[:-1]` for "all but
-the reward":
+the order of the catalog; the docs and the tests select defaults by name, not by
+position, so the new entry displaces none of their picks:
 
 ```cpp
     assembly.emplace<UnusedCapacityCost>();

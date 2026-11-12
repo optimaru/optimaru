@@ -17,6 +17,8 @@ from optimaru.assembly_line_balancing.models import (
     TaskPairModel,
 )
 
+from .._picks import replace_default
+
 WEB_DEMO = Path(__file__).parent / "fixtures" / "web_demo.json"
 
 
@@ -100,7 +102,13 @@ def test_the_model_and_the_core_solve_alike():
     assert returned == AssemblyLineBalancingProblemModel.from_core(core)
 
 
-@pytest.mark.parametrize("constraints", [None, [*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)]])
+@pytest.mark.parametrize(
+    "constraints",
+    [
+        None,
+        replace_default(get_constraints(), "workload_imbalance_cost", WorkloadImbalanceCost(weight=1)),
+    ],
+)
 def test_full_assert_solves_on_both_paths(constraints):
     """ScoreChecks::Full cross-checks the incremental score after every move (monolith and plugin assembly)."""
     config = alb.SolverConfig()

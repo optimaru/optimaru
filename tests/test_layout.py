@@ -336,6 +336,42 @@ def test_the_tests_a_guide_names_exist():
         assert not cited_targets - targets, f"{name}: no such C++ test target: {sorted(cited_targets - targets)}"
 
 
+_POSITIONAL_PICK = re.compile(r"((get|list)_constraints|constraint_info)\(\)\s*\[")
+
+
+def test_picks_select_defaults_by_name_not_by_position():
+    """A slice or an index of the default list or the catalog names ("every default but the
+    last", "the first five are unit constraints") silently picks another constraint once one is
+    added to the catalog, which the extending guides teach. Tests, docs and docstrings select by
+    name: ``[X() if spec.name == "x" else spec for spec in get_constraints()]``. It checks one line
+    at a time for the direct form; a slice of a variable that holds the defaults is not seen."""
+    tracked = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "README.md",
+            "tests/*.py",
+            "docs/*.md",
+            "optimaru/*.py",
+            "optimaru/*.pyi",
+            "benchmarks/*.py",
+            "benchmarks/*.md",
+            "examples/*.ipynb",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if tracked.returncode != 0:
+        pytest.skip("not a git checkout")
+    hits = []
+    for path in tracked.stdout.splitlines():
+        for number, line in enumerate((ROOT / path).read_text().splitlines(), start=1):
+            if _POSITIONAL_PICK.search(line):
+                hits.append(f"{path}:{number}")
+    assert not hits, f"defaults picked by position, select them by name: {hits}"
+
+
 def test_ruff_is_configured_in_one_place():
     """The root pyproject.toml configures ruff for every directory, the benchmark projects
     included, so an import sorts the same way wherever ruff runs from."""

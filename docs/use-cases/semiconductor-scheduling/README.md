@@ -113,7 +113,7 @@ reads the calculator's one shared schedule view, so a repeat costs no second dec
 
 ```python
 problem = fab.solve(problem, constraints=[
-    *get_constraints()[:-1],
+    *(spec for spec in get_constraints() if spec.name != "makespan_cost"),
     MakespanCost(),                              # the makespan
     MakespanCost(weight=100, offset=480),        # + 100 x (every minute beyond 480)
 ])

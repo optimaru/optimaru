@@ -43,7 +43,7 @@ its own knobs (its level included) and the picks add up. The makespan plus a ste
 penalty on every minute beyond 480::
 
     problem = fab.solve(problem, constraints=[
-        *get_constraints()[:-1],
+        *(spec for spec in get_constraints() if spec.name != "makespan_cost"),
         MakespanCost(),
         MakespanCost(weight=100, offset=480),
     ])
