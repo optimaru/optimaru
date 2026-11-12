@@ -11,7 +11,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "flight-crew-scheduling"
 PACKAGE = "optimaru.flight_crew_scheduling"
@@ -136,16 +136,17 @@ def _build(count_days: int, count_flights: int, seed: int) -> Any:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {
-        "small": lambda: _build(3, 8, seed=3),
-        # The demo's scale: 6 airports, 5 days, 14 flights.
-        "demo": lambda: _build(5, 14, seed=0),
-        "medium": lambda: _build(7, 28, seed=1),
-        # The medium scale again from another seed.
-        "medium-2": lambda: _build(7, 28, seed=4),
-        "large": lambda: _build(10, 56, seed=2),
-        "xlarge": lambda: _build(14, 112, seed=5),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "small": (lambda seed: _build(3, 8, seed=seed), (3, 6, 7, 8)),
+            # The demo's scale: 6 airports, 5 days, 14 flights.
+            "demo": (lambda seed: _build(5, 14, seed=seed), (0, 9, 10, 11)),
+            "medium": (lambda seed: _build(7, 28, seed=seed), (1, 4, 12, 13, 14)),
+            "large": (lambda seed: _build(10, 56, seed=seed), (2, 15, 16, 17)),
+            "xlarge": (lambda seed: _build(14, 112, seed=seed), (5, 18, 19)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

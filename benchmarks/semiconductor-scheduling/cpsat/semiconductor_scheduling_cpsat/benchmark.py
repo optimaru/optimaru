@@ -12,7 +12,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "semiconductor-scheduling"
 PACKAGE = "optimaru.semiconductor_scheduling"
@@ -65,14 +65,17 @@ def _build(lot_count: int, seed: int) -> Any:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {
-        "lots6": lambda: _build(6, seed=0),
-        "lots12": lambda: _build(12, seed=1),
-        "lots18": lambda: _build(18, seed=2),
-        "lots24": lambda: _build(24, seed=3),
-        "lots36": lambda: _build(36, seed=4),
-        "lots48": lambda: _build(48, seed=5),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "lots6": (lambda seed: _build(6, seed=seed), (0, 6, 7, 8)),
+            "lots12": (lambda seed: _build(12, seed=seed), (1, 9, 10, 11)),
+            "lots18": (lambda seed: _build(18, seed=seed), (2, 12, 13, 14)),
+            "lots24": (lambda seed: _build(24, seed=seed), (3, 15, 16)),
+            "lots36": (lambda seed: _build(36, seed=seed), (4, 17, 18)),
+            "lots48": (lambda seed: _build(48, seed=seed), (5, 19)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

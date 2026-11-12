@@ -13,7 +13,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "sports-league-scheduling"
 PACKAGE = "optimaru.sports_league_scheduling"
@@ -56,15 +56,18 @@ def _generate(team_count: int, seed: int) -> Any:
 def instances() -> dict[str, Callable[[], Any]]:
     from optimaru import sports_league_scheduling
 
-    return {
-        "teams6": lambda: _generate(6, seed=1),
-        "teams8": lambda: _generate(8, seed=2),
-        "teams10": lambda: _generate(10, seed=3),
-        "teams12": lambda: _generate(12, seed=5),
-        # The demo league: 14 teams, 32 rounds, 182 matches.
-        "demo": lambda: sports_league_scheduling.generate_demo_data(),
-        "teams18": lambda: _generate(18, seed=4),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "teams6": (lambda seed: _generate(6, seed=seed), (1, 6, 7, 8)),
+            "teams8": (lambda seed: _generate(8, seed=seed), (2, 9, 10, 11)),
+            "teams10": (lambda seed: _generate(10, seed=seed), (3, 12, 13, 14)),
+            "teams12": (lambda seed: _generate(12, seed=seed), (5, 15, 16, 17)),
+            # The demo league: 14 teams, 32 rounds, 182 matches.
+            "demo": lambda: sports_league_scheduling.generate_demo_data(),
+            "teams18": (lambda seed: _generate(18, seed=seed), (4, 18, 19)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

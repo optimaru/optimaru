@@ -12,7 +12,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "conference-scheduling"
 PACKAGE = "optimaru.conference_scheduling"
@@ -128,14 +128,17 @@ def _generate(day_count: int, breakout_rooms: int, lab_rooms: int, seed: int) ->
 def instances() -> dict[str, Callable[[], Any]]:
     from optimaru import conference_scheduling
 
-    return {
-        # The demo conference: one day, 15 talks.
-        "demo": lambda: conference_scheduling.generate_demo_data(),
-        "days2": lambda: _generate(2, 4, 1, seed=1),
-        "days3": lambda: _generate(3, 6, 2, seed=2),
-        "days4": lambda: _generate(4, 8, 2, seed=3),
-        "days5": lambda: _generate(5, 10, 3, seed=4),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            # The demo conference: one day, 15 talks.
+            "demo": lambda: conference_scheduling.generate_demo_data(),
+            "days2": (lambda seed: _generate(2, 4, 1, seed=seed), (1, 5, 6, 7, 8, 18)),
+            "days3": (lambda seed: _generate(3, 6, 2, seed=seed), (2, 9, 10, 11, 12, 19)),
+            "days4": (lambda seed: _generate(4, 8, 2, seed=seed), (3, 13, 14, 15)),
+            "days5": (lambda seed: _generate(5, 10, 3, seed=seed), (4, 16, 17)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

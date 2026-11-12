@@ -14,7 +14,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "quadratic-assignment"
 PACKAGE = "optimaru.quadratic_assignment"
@@ -83,16 +83,19 @@ def _random(size: int, seed: int) -> Any:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {
-        "plant6": _plant,
-        "random8": lambda: _random(8, seed=0),
-        "random10": lambda: _random(10, seed=1),
-        "random12": lambda: _random(12, seed=2),
-        "random14": lambda: _random(14, seed=3),
-        "random16": lambda: _random(16, seed=4),
-        "random20": lambda: _random(20, seed=5),
-        "random25": lambda: _random(25, seed=6),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "plant6": _plant,
+            "random8": (lambda seed: _random(8, seed=seed), (0, 7, 8)),
+            "random10": (lambda seed: _random(10, seed=seed), (1, 9, 10)),
+            "random12": (lambda seed: _random(12, seed=seed), (2, 11, 12)),
+            "random14": (lambda seed: _random(14, seed=seed), (3, 13, 14)),
+            "random16": (lambda seed: _random(16, seed=seed), (4, 15, 16)),
+            "random20": (lambda seed: _random(20, seed=seed), (5, 17)),
+            "random25": (lambda seed: _random(25, seed=seed), (6, 18)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

@@ -12,7 +12,7 @@ from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "maintenance-scheduling"
 PACKAGE = "optimaru.maintenance_scheduling"
@@ -72,15 +72,17 @@ def _generate(job_count: int, crew_count: int, weeks: int, seed: int) -> Any:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {
-        # The demo data's two sizes.
-        "small": lambda: _build("SMALL"),
-        "medium": lambda: _generate(28, 4, 12, seed=1),
-        # The medium scale again from another seed.
-        "medium-2": lambda: _generate(28, 4, 12, seed=2),
-        "large": lambda: _build("LARGE"),
-        "xlarge": lambda: _generate(96, 8, 24, seed=3),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            # The demo data's two sizes are `small` and `large`; the other instances of
+            # those scales are generated in their shape.
+            "small": (lambda seed: _build("SMALL") if seed is None else _generate(14, 3, 8, seed=seed), (None, 4, 5, 6, 7, 8)),
+            "medium": (lambda seed: _generate(28, 4, 12, seed=seed), (1, 2, 9, 10, 11, 12)),
+            "large": (lambda seed: _build("LARGE") if seed is None else _generate(48, 5, 16, seed=seed), (None, 13, 14, 15, 16)),
+            "xlarge": (lambda seed: _generate(96, 8, 24, seed=seed), (3, 17, 18)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

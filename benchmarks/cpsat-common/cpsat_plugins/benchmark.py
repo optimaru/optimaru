@@ -19,6 +19,25 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 
+def seeded(scales: dict[str, Any]) -> dict[str, Callable[[], Any]]:
+    """The instances of a ladder that has several instances at a scale.
+
+    A scale given as ``(build, seeds)`` is one instance per seed, ``build(seed)``: the first
+    keeps the scale's name and the others are ``<scale>-2``, ``<scale>-3``, ... in the order
+    of the seeds. A scale given as a builder alone is one instance. The ladder keeps the
+    order of the scales.
+    """
+    ladder: dict[str, Callable[[], Any]] = {}
+    for name, entry in scales.items():
+        if callable(entry):
+            ladder[name] = entry
+            continue
+        build, seeds = entry
+        for index, seed in enumerate(seeds):
+            ladder[name if index == 0 else f"{name}-{index + 1}"] = lambda build=build, seed=seed: build(seed)
+    return ladder
+
+
 @dataclass(frozen=True, order=True)
 class Score:
     levels: tuple[float, ...]
