@@ -17,7 +17,9 @@ the model and its seven constraints are in the [guide](README.md).
 The steps build one example: `unusedCapacityCost`, the capacity the selected items leave unused. It
 is the other side of `knapsackCapacityCost`, which charges the weight over the capacity, and it
 makes the search prefer a full knapsack. Every snippet below was compiled and run, and every figure
-measured, on optimaru 0.4.3; a later change to the solver moves the figures, not the steps.
+measured, on optimaru 0.4.3, except the `idle_at_weight_zero()` of step 4 and the figures with it
+(and the seven alone they are compared with), on 0.5.1; a later change to the solver moves the
+figures, not the steps.
 
 ## How a selection is scored
 
@@ -26,7 +28,8 @@ units are the two values: unit 1 holds the selected items, unit 0 the others. No
 knapsack constraint is a sum of one term per unit: a capacity, a count per group and a
 pair of items all read the selected set as a whole. So all seven constraints are
 **global** components. Each keeps one raw total, is told about every item that
-becomes selected or stops being selected, and is asked for its total at every score.
+becomes selected or stops being selected, and is asked for its total at every score,
+whatever its weight, unless it declares that it may sit out at weight 0 (step 4).
 
 There are two scoring paths, and they give the same score for the same selection
 (`ks_plugin_test` checks it on 500 random selections):
@@ -294,8 +297,9 @@ score stale:
 knapsack.solve(problem, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
 ```
 
-Give the constraint a weight for this: at weight 0 a stale total scores the same. The
-walk of `ks_plugin_test` compares raw totals, so it does not depend on the weight.
+Give the constraint a weight for this: at weight 0 a stale total scores the same, and
+with the `idle_at_weight_zero()` of step 4 the engine does not keep it during the moves at
+all. The walk of `ks_plugin_test` compares raw totals, so it does not depend on the weight.
 
 **The tables and the CP-SAT model.** The constraint table in [README.md](README.md)
 must equal `knapsack.constraint_info()`; add the row. [python.md](python.md),
@@ -328,10 +332,26 @@ score. So a constraint is cheap when the first two are. What to keep depends on 
 The example is the second row, and there is nothing left to cut: one addition per
 flip, one comparison per score. What the other way costs: the same constraint with a
 `cost()` that adds up the weights of all 500 items ran the assembly at 0.36 instead
-of 1.0 million steps per second, and it did so at weight 0 too: the engine asks every
-constraint in the picks for its total at every score, whatever its weight. So leave an
-opt-in constraint out of the picks when you do not use it. `get_constraints()` lists all
-eight.
+of 1.0 million steps per second, and it did so at weight 0 too: the engine tells every
+global constraint in the picks of every flip and asks it for its total at every score,
+whatever its weight, because a global may keep something that more than its own total
+reads. `get_constraints()` lists all eight, the example at weight 0.
+
+**Let it sit out at weight 0.** A global may declare that the engine can leave it alone
+while its weight is 0 when nothing but its own `cost()` reads what it keeps and `reset()`
+rebuilds all of that from the selection. The example qualifies; add to it:
+
+```cpp
+    // Nothing but cost() reads the load, and reset() rebuilds it.
+    bool idle_at_weight_zero() const override { return true; }
+```
+
+At weight 0 the engine then sends it no flip and does not ask for its total, and resets
+it before `knapsack.constraint_costs()` reports the raw total. With it,
+`get_constraints()` ran at 0.97 million steps per second, against 0.96 for the seven
+alone in the same build. A constraint without the override at weight 0 costs what it
+costs at a weight (step 6), so leave such a constraint out of the picks when you do not
+use it.
 
 Two more things keep a constraint on the cheap side.
 
@@ -452,9 +472,14 @@ differ after a change, the two paths no longer score alike.
 | assembly, seven constraints | 1.02 million |
 | assembly, seven + the constraint of step 2 at weight 0 | 0.98 million |
 | assembly, seven + the constraint of step 2 at weight 10 | 1.01 million |
+| assembly, seven + the constraint with `idle_at_weight_zero()` (step 4) at weight 0 (the seven, 0.96) | 0.97 million |
 | assembly, the same constraint with a `cost()` over all items (step 4) | 0.36 million |
 | default path, eight constraints (step 5) | 2.22 million |
 | assembly, eight constraints (step 5) | 0.99 million |
+
+The row with `idle_at_weight_zero()` was taken on 0.5.1, next to the seven alone in the
+same build (in brackets): at weight 0 the constraint then costs a move nothing, so it is the
+speed of the assembly without it.
 
 **What it buys.** A constraint changes what the search can reach, so compare the results
 at the same budget over several seeds, with and without it:
@@ -483,7 +508,7 @@ constraint in the CP-SAT model.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/ks/constraints/<subject>_cost.hpp` | new | | the totals it keeps | weight |
+| `cpp/include/ks/constraints/<subject>_cost.hpp` | new | | the totals it keeps, `idle_at_weight_zero()` | weight |
 | `cpp/include/ks/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/knapsack/cpp/ks_plugin_test.cpp` | | case, totals, counts | | totals, row |
