@@ -23,6 +23,13 @@
 //       reset and kept on soft (and on the into_soft medium), incremental ==
 //       a fresh recompute over a random walk and a ScoreChecks::Full solve with
 //       repeated, shifted components
+//   (k) TeamCountMove on the plugin path: the instance of ts_test's
+//       verifyTeamCountMove() reaches the same 4-team, 0-soft layout under
+//       ScoreChecks::Full (so the move and its undo are exact on the
+//       assembly), seeded solves end on the same schedule on both paths
+//       (the move's own counts answer as the monolithic calculator's, and
+//       so do the guided change values), and the instance stays on more
+//       teams with team_count_moves off
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -908,6 +915,113 @@ void verifyRepeatsAndOffsets() {
     std::printf("\n");
 }
 
+// -------------------------------------------------------------------------
+// (k) TeamCountMove on the plugin path. 72 slots on 18 days, 4 a day, 7
+// teams: spread over 7 teams the load is at best 11 or 10 (medium 1.19523),
+// over 4 teams it is 18 each and every pair meets 18 times (0 soft). Only a
+// reshape of the loaded-team count gets there.
+// -------------------------------------------------------------------------
+struct TeamCountRun {
+    Score score;
+    int loadedTeams = 0;
+    bool corrupted = false;
+    std::vector<int> teams;  // per slot
+};
+
+// assembly == false solves the same instance on the default path.
+TeamCountRun solveTeamCountInstance(bool teamCountMoves, optimaru::ScoreChecks checks,
+                                    bool assembly = true) {
+    TournamentSchedule s = makeBase(7, 18);
+    for (int d = 0; d < 18; ++d) {
+        for (int i = 0; i < 4; ++i) addAssignment(s, d);
+    }
+    Solver::Config config;
+    config.time_limit = std::chrono::seconds(60);
+    config.step_limit = 100000;
+    config.seed = 42;
+    config.score_checks = checks;
+    config.team_count_moves = teamCountMoves;
+
+    DecomposedCalculator calculator;
+    addDefaultConstraints(calculator);
+    TeamCountRun run;
+    try {
+        Solver solver(config);
+        if (assembly) {
+            solver.solve(s, calculator);
+        } else {
+            solver.solve(s);
+        }
+    } catch (const optimaru::ScoreMismatchError& e) {
+        run.corrupted = true;
+        std::printf("  ScoreCorruptionError: %s\n", e.what());
+    }
+    std::vector<std::int64_t> loads(s.teamCount(), 0);
+    for (const TeamAssignment& assignment : s.teamAssignments) {
+        if (assignment.team >= 0) ++loads[assignment.team];
+    }
+    for (std::int64_t load : loads) run.loadedTeams += load > 0 ? 1 : 0;
+    for (const TeamAssignment& assignment : s.teamAssignments) run.teams.push_back(assignment.team);
+    run.score = s.score;
+    return run;
+}
+
+void verifyTeamCountMove() {
+    std::printf("== (k) Loaded-team-count macro move on the plugin path ==\n");
+    const TeamCountRun with = solveTeamCountInstance(true, optimaru::ScoreChecks::Full);
+    check(!with.corrupted, "FULL_ASSERT plugin solve with TeamCountMove without score corruption");
+    check(with.score.hard == 0, "penalty-free instance stays feasible");
+    check(with.loadedTeams == 4, "the move empties the teams that unbalance the load (" +
+                                         std::to_string(with.loadedTeams) + " teams loaded)");
+    check(with.score.soft == 0.0,
+          "reaches the 0hard/0soft optimum (got " + std::to_string(with.score.soft) + ")");
+
+    // The move keeps its own counts on this path and reads the monolithic
+    // calculator's on the default one; both answer alike, so the same seeded
+    // solve proposes the same reshapes and ends on the same schedule.
+    const TeamCountRun monolithic =
+            solveTeamCountInstance(true, optimaru::ScoreChecks::Off, /*assembly*/ false);
+    check(monolithic.teams == with.teams,
+          "the default path's seeded solve ends on the same schedule");
+
+    // The same on an instance with unavailable days, where the move also
+    // takes its relaxed replacements and the run ends short of an optimum,
+    // with the guided change values on: both paths step alike.
+    for (bool valueHint : {false, true}) {
+        std::vector<std::vector<int>> ends;
+        for (bool assembly : {false, true}) {
+            TournamentSchedule s = buildRandomInstance(/*teams*/ 12, /*days*/ 10, /*perDay*/ 4,
+                                                       /*seed*/ 5);
+            Solver::Config config;
+            config.time_limit = std::chrono::seconds(60);
+            config.step_limit = 20000;
+            config.seed = 7;
+            config.value_hint = valueHint;
+            DecomposedCalculator calculator;
+            addDefaultConstraints(calculator);
+            Solver solver(config);
+            if (assembly) {
+                solver.solve(s, calculator);
+            } else {
+                solver.solve(s);
+            }
+            ends.emplace_back();
+            for (const TeamAssignment& assignment : s.teamAssignments)
+                ends.back().push_back(assignment.team);
+        }
+        check(ends[0] == ends[1], std::string("instance with unavailable days") +
+                                          (valueHint ? ", value_hint on" : "") +
+                                          ": both paths end on the same schedule");
+    }
+
+    const TeamCountRun without = solveTeamCountInstance(false, optimaru::ScoreChecks::Off);
+    check(without.loadedTeams > 4 && without.score.soft < -1e6,
+          "team_count_moves off: the same solve stays above medium 1 on " +
+                  std::to_string(without.loadedTeams) + " teams (soft " +
+                  std::to_string(without.score.soft) + ")");
+    std::printf("\n");
+}
+
 }  // namespace
 
 int main() {
@@ -922,6 +1036,7 @@ int main() {
     verifyMediumLevel();
     verifyMediumIncremental();
     verifyRepeatsAndOffsets();
+    verifyTeamCountMove();
 
     if (failures == 0) {
         std::printf("All tournament-scheduling plugin checks PASSED.\n");

@@ -106,7 +106,7 @@ The solution has the **assignment** shape; the domain solver that configures the
 engine is `optimaru/tournament_scheduling/cpp/include/ts/solver.hpp` + `optimaru/tournament_scheduling/cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
-(weights in `Solver::Config`). `TeamCountMove` is defined and registered in `optimaru/tournament_scheduling/cpp/src/solver.cpp` — use it as the template. A new move is a
+(weights in `Solver::Config`). `TeamCountMove` is defined and registered in `optimaru/tournament_scheduling/cpp/src/solver.cpp` — use it as the template. It runs on both scoring paths: it reads its counts through a small type, the monolithic calculator's live counters on `ts.solve(schedule)` and counts of its own, recounted from the working solution at each move, on `ts.solve(schedule, constraints=[...])`, whose assembly has no such counters. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `optimaru/tournament_scheduling/cpp/src/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
