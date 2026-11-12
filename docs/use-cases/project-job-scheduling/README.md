@@ -135,8 +135,8 @@ Measured on one thread (2026-11-12), the move off and on:
 
 | Instances | off | on |
 | --- | --- | --- |
-| RG30 Pat1–Pat5, makespan after 30 s (OR-Tools CP-SAT on 8 workers: 62 / 74 / 55 / 73 / 71) | 66 / 82 / 59 / 76 / 75 | 63 / 75 / 55 / 73 / 72 |
-| the 20 generated instances of that shape, 30 to 120 activities, after 30 s | makespans add up to 5,138 | 4,044 (21% less): shorter on all 20 |
+| RG30 Pat1–Pat5, makespan after 30 s (OR-Tools CP-SAT on 8 workers: 62 / 74 / 56 / 73 / 71) | 66 / 82 / 59 / 76 / 75 | 63 / 75 / 55 / 73 / 72 |
+| the 20 generated instances of that shape, 30 to 120 activities, after 30 s (OR-Tools CP-SAT: 4,220 in sum) | makespans add up to 5,138 | 4,044 (21% less): shorter on all 20, and shorter than CP-SAT's on 13 |
 | the 20 instances of the comparison ladder, after 30 s | | better on 9, the same on 11 |
 | the 300-job instance of the ladder after 20,000 steps (a second or less), three seeds: project delay | 6,476 to 7,108 days | 15 to 31 days |
 | from a given plan, 100,000 steps: three sizes of the ladder, a rough plan and a solved plan with a fifth of its allocations taken out, 12 seeds each | | better on 56 of the 72, the same on 15, worse on 1 |

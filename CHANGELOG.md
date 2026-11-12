@@ -11,7 +11,7 @@
   renewable resources allow, late projects first. Single changes of a delay stalled some
   percent above what the order allows. After 30 s on one thread the RG30 makespans are 63 /
   75 / 55 / 73 / 72 (66 / 82 / 59 / 76 / 75 before; OR-Tools CP-SAT on 8 workers 62 / 74 /
-  55 / 73 / 71), the 20 generated instances of that shape end shorter on all 20 (21% in
+  56 / 73 / 71), the 20 generated instances of that shape end shorter on all 20 (21% in
   sum), and the comparison ladder is better on 9 instances and the same on 11. A seed's
   result differs from 0.5.1; `serial_schedule_moves = False` gives the earlier search.
 
