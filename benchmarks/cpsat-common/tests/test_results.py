@@ -43,6 +43,7 @@ def test_the_seeds_of_a_generated_run_are_distinct_whole_numbers() -> None:
     from cpsat_plugins.results import seed_list
 
     assert seed_list("0,4,1") == [0, 4, 1]
-    for text in ("0,x", "0,,1", "1,1"):
+    # A negative seed would name an instance synthetic-N-s-1, which the publisher does not read.
+    for text in ("0,x", "0,,1", "1,1", "-1"):
         with pytest.raises(argparse.ArgumentTypeError):
             seed_list(text)
