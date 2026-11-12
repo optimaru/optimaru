@@ -299,7 +299,8 @@ cmake -B build -DOPTIMARU_USE_CASES=none && cmake --build build && ctest --test-
 `knapsack,vehicle_routing` (commas, spaces or `;` between the names); each use case adds its core library, demo
 and the C++ tests in `tests/<use case>/cpp/`, built under `build/<use case>/`. Four use cases
 (bed allocation, conference scheduling, meeting scheduling, school timetabling) also build a
-quality bench, `<ns>_quality_bench`, from `benchmarks/<slug>/cpp/`.
+quality bench, `<ns>_quality_bench`, from `benchmarks/<slug>/cpp/`; it solves instance files
+that Python writes ([benchmarks/README.md](benchmarks/README.md)).
 
 ## Building and releasing
 
