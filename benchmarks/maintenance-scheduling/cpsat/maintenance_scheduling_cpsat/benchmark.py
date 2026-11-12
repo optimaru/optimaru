@@ -77,9 +77,15 @@ def instances() -> dict[str, Callable[[], Any]]:
         {
             # The demo data's two sizes are `small` and `large`; the other instances of
             # those scales are generated in their shape.
-            "small": (lambda seed: _build("SMALL") if seed is None else _generate(14, 3, 8, seed=seed), (None, 4, 5, 6, 7, 8)),
+            "small": (
+                lambda seed: _build("SMALL") if seed is None else _generate(14, 3, 8, seed=seed),
+                (None, 4, 5, 6, 7, 8),
+            ),
             "medium": (lambda seed: _generate(28, 4, 12, seed=seed), (1, 2, 9, 10, 11, 12)),
-            "large": (lambda seed: _build("LARGE") if seed is None else _generate(48, 5, 16, seed=seed), (None, 13, 14, 15, 16)),
+            "large": (
+                lambda seed: _build("LARGE") if seed is None else _generate(48, 5, 16, seed=seed),
+                (None, 13, 14, 15, 16),
+            ),
             "xlarge": (lambda seed: _generate(96, 8, 24, seed=seed), (3, 17, 18)),
         }
     )
