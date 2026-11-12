@@ -355,12 +355,16 @@ Add the plugin there, with a positive and a zero case in its
 
 The example has nothing left to cut. Its formula is one comparison, run only for the
 lots the move touched. What a step costs is the decode and the re-costing of the
-touched units, and they are shared by every constraint. Two consequences differ from most
+touched units, and they are shared by every constraint. Three consequences differ from most
 use cases here:
 
 - The evaluator computes every `Term` at every score, on both paths, whether the constraint
   is picked or not and at any weight. A constraint left out of the picks still costs its
   formula. So a slow formula slows `fab.solve(problem)` too, from step 2 on.
+- A pick at weight 0 is sent every change like the others. Elsewhere the engine leaves a unit
+  constraint at weight 0 out of the moves, and a global one that declares
+  `idle_at_weight_zero()`; no component here may declare it, because the view each one
+  keeps up to date is the one all of them read.
 - `cost()` of a component only reads a total. The work is in the static function and
   in how often the evaluator calls it.
 
