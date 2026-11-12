@@ -106,6 +106,32 @@
   remain as plain aliases of it in the modules that had them, without a warning, and are no
   longer in `__all__`. `tests/test_layout.py` checks from the source that a demo function has
   no other name.
+- **Tests: maintenance scheduling picks the defaults by name, not by position.**
+  `test_offset_zero_reproduces_the_plain_scores` took `get_constraints()[:5]` as "the four
+  date constraints and `crew_conflict_cost`", so a constraint added to the catalog would
+  have silently replaced one of them. It now takes every default with the tag conflicts
+  squared and states offset 0 on each, so a new constraint is covered without a change; the
+  snippet in `python.md` and the step in `extending.md` that warned about the slice follow.
+- **Tests: the pickup-delivery and order-picking plugin tests compare a solve with an
+  independent recompute.** Check (f) of `pdp_plugin_test` and `op_plugin_test` compared the
+  solution's score with `ScoreCalculator::score()` of the same solution, but that call
+  stores its result in the solution first, so both sides were one number. The check now keeps
+  the score the plugin solve reported and compares it with the monolithic recompute; with
+  the travel or walking weight doubled in the assembly it fails, as it passed before.
+- **Employee scheduling: the default solve no longer judges a pinned shift on the per-shift
+  constraints.** `es.solve(schedule)` and `es.calculate_score()` counted a pinned shift in
+  `required_skill_cost`, `employee_unavailability_cost`, `undesired_day_cost` and
+  `desired_day_cost`, while the components behind `constraints=` and `solve_request`, the
+  constraint descriptions and `python.md` treated it as settled history that is not judged
+  again. So the same schedule scored differently on the two paths: a pinned shift on a skill
+  its employee lacks scored `-1hard` on the default solve and 0 with `constraints=`. The
+  default solve now skips it too, so that schedule scores 0 on both, and a pinned shift on an
+  unavailable, undesired or desired day no longer costs or earns its minutes there. The
+  constraints between shifts (`shift_overlap_cost`, `max_one_shift_per_day_cost`,
+  `min_rest_cost`) and `shift_count_imbalance_cost` count a pinned shift on both paths, as
+  before. A schedule without pinned shifts scores as before; no benchmark instance pins a
+  shift. `es_plugin_test` now pins shifts in its parity check and solves with pinned
+  violations under `ScoreChecks::Full` on both paths.
 
 ## 0.5.0
 

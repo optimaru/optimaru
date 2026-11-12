@@ -111,6 +111,7 @@ Minutes ScoreCalculator::overlapWithDates(const Shift& shift, const std::set<Day
 }
 
 std::int64_t ScoreCalculator::shiftHardPenalty(const Employee& emp, const Shift& shift) {
+    if (shift.pinned) return 0;  // settled history: the per-shift terms do not judge it
     std::int64_t p = 0;
     if (shift.requiredSkillBit != 0 && (emp.skillMask & shift.requiredSkillBit) == 0)
         p += 1;  // requiredSkillCost (bit 0 == no requirement)
@@ -119,7 +120,8 @@ std::int64_t ScoreCalculator::shiftHardPenalty(const Employee& emp, const Shift&
 }
 
 std::int64_t ScoreCalculator::shiftSoftDelta(const Employee& emp, const Shift& shift) {
-    return overlapWithDates(shift, emp.desiredDates)       // desiredDayCost (reward)
+    if (shift.pinned) return 0;                       // settled history, as in shiftHardPenalty
+    return overlapWithDates(shift, emp.desiredDates)  // desiredDayCost (reward)
            - overlapWithDates(shift, emp.undesiredDates);  // undesiredDayCost (penalty)
 }
 
@@ -203,7 +205,7 @@ Score ScoreCalculator::score(EmployeeSchedule& schedule) {
         if (e >= 0) byEmployee[e].push_back(i);
     }
 
-    // Per-shift constraints.
+    // Per-shift constraints (a pinned shift contributes nothing here).
     for (const Shift& shift : shifts) {
         if (shift.employeeIndex < 0) continue;
         const Employee& emp = employees[shift.employeeIndex];
@@ -211,7 +213,7 @@ Score ScoreCalculator::score(EmployeeSchedule& schedule) {
         score.soft += shiftSoftDelta(emp, shift);
     }
 
-    // Pairwise constraints (same employee).
+    // Pairwise constraints (same employee; pinned shifts count).
     for (const std::vector<int>& group : byEmployee) {
         for (std::size_t a = 0; a < group.size(); ++a) {
             for (std::size_t b = a + 1; b < group.size(); ++b) {
