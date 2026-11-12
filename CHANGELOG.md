@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **Tests and docs pick the defaults by name, not by position, in every use case.** Lists
+  such as `[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)]` or `[:3]`, `[:9]`,
+  `[1:]` meant "every default, with this one replaced"; a constraint added to the catalog,
+  as the extending guides teach, would have been silently dropped or would have displaced
+  another pick (#117 fixed maintenance scheduling). The tests of 16 use cases, the snippets
+  in the READMEs and `python.md` of seven, the docstrings of five packages and a CP-SAT
+  parity test now select by name in catalog order
+  (`[X(...) if spec.name == "x_cost" else spec for spec in get_constraints()]`), and the
+  five extending guides that explained a slice (and employee scheduling's, which named one
+  in a test) no longer do. No expected score changed: the picks are the same lists.
+  `tests/test_layout.py` fails on an index or slice of the default list in tracked tests,
+  docs, package sources and benchmark tests.
+
 ## 0.5.1
 
 **From 0.5.0.** One fix first: in the seven use cases that search in stages, a solve that
