@@ -577,3 +577,15 @@ def test_generated_rcpsp_instances_are_a_second_table_of_the_data_set() -> None:
     # The two tables share one footer, so one seed.
     with pytest.raises(SystemExit, match="different seeds"):
         publish.rcpsp_block(public, ARGS, [makespan("synthetic-30-s0", 30, 1, 1) | {"seed": 4}])
+
+
+def test_the_generated_rcpsp_results_need_the_rg30_ones_and_extra_json_is_refused(tmp_path, monkeypatch) -> None:
+    argv = ["publish", str(tmp_path), "--date", "2026-01-02", "--machine", "m", "--machine-ko", "m"]
+    monkeypatch.setattr("sys.argv", argv)
+    (tmp_path / "rcpsp-synthetic.json").write_text(json.dumps([{"instance": "synthetic-30-s0", "runs": []}]))
+    with pytest.raises(SystemExit, match="published together with rcpsp.json"):
+        publish.main()
+    (tmp_path / "rcpsp-synthetic.json").unlink()
+    (tmp_path / "extra.json").write_text("{}")
+    with pytest.raises(SystemExit, match="replaced by timetabling.json"):
+        publish.main()

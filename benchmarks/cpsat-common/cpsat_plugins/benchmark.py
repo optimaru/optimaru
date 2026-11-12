@@ -40,6 +40,8 @@ def seeded(scales: dict[str, Any]) -> dict[str, Callable[[], Any]]:
             add(name, entry)
             continue
         build, seeds = entry
+        if not seeds:
+            raise ValueError(f"scale {name!r} has no seeds")
         for index, seed in enumerate(seeds):
             add(name if index == 0 else f"{name}-{index + 1}", lambda build=build, seed=seed: build(seed))
     return ladder

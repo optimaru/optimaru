@@ -139,9 +139,9 @@ def synthetic_instance(activity_count: int, seed: int = 0) -> RcpspInstance:
     each, so the resources bind before the precedences do: the activities' work is about twice
     what the longest chain takes. The network is wide and shallow, as in RG30: the activities
     are dealt into one layer per eight of them (three layers at least, one per activity below
-    three), and an activity follows
-    one or two activities of the layer before it and, three times in ten, one of an earlier
-    layer. The first layer follows the source; what nothing follows precedes the sink.
+    three). An activity follows one or two activities of the layer before it and, three times
+    in ten, one of an earlier layer. The first layer follows the source; what nothing follows
+    precedes the sink.
     """
     if activity_count < 1:
         raise ValueError("a synthetic instance needs at least one activity")

@@ -1379,6 +1379,8 @@ def main() -> None:
             block.removeprefix("## Results\n\n"),
         )
 
+    if (args.results / "extra.json").exists():
+        raise SystemExit("extra.json is replaced by timetabling.json (school-timetabling-compare --track2 --out FILE)")
     timetabling = _load(args.results, "timetabling.json")
     if timetabling:
         _check_protocol("school-timetabling (track 2)", timetabling, args)

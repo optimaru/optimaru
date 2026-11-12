@@ -12,7 +12,9 @@
   seed (21 rows, 10 to 400 requests; `--synthetic-seeds`); school timetabling's track 2 runs
   20 schools of 3 to 60 classes (`--sizes ladder`, or any class count that is a multiple of
   3) and writes its results as JSON (`--out`), which `scripts/publish_benchmarks.py` reads as
-  `timetabling.json` in place of numbers copied by hand. The Li & Lim head-to-head table adds
+  `timetabling.json` in place of numbers copied by hand (an `extra.json` is refused). Track 2's
+  CP-SAT time (`wall`) now includes building the model, so it is not comparable with older
+  `RESULTS_track2.md` files. The Li & Lim head-to-head table adds
   the first 15 requests of each instance.
 - **Benchmarks: every instance is generated in Python.** The C++ quality benches read
   instance files and generate nothing; no solver, constraint or published comparison table
