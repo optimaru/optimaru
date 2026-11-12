@@ -2,7 +2,11 @@ from semiconductor_scheduling_cpsat import benchmark
 
 
 def test_comparison_runner_owns_its_instances() -> None:
-    assert list(benchmark.instances()) == ["lots6", "lots12", "lots18", "lots24", "lots36", "lots48"]
+    names = list(benchmark.instances())
+    assert len(names) == 20
+    # One name per size, and the other draws of a size numbered after it.
+    assert [name for name in names if "-" not in name] == ["lots6", "lots12", "lots18", "lots24", "lots36", "lots48"]
+    assert names[:5] == ["lots6", "lots6-2", "lots6-3", "lots6-4", "lots12"]
     assert callable(benchmark.solve_engine)
     assert callable(benchmark.solve_cpsat)
     problem = benchmark.instances()["lots6"]()

@@ -16,7 +16,9 @@ whose file is missing keeps its README text and its homepage entry.
 - ``vrp-x.json``, ``vrp-a.json``: ``python -m vrp_benchmark --series x|a --out FILE``;
 - ``pdp-li-lim.json``, ``pdp-synthetic.json``: ``pickup-delivery-public-bench --json``
   (the lists of several runs concatenated);
-- ``rcpsp.json``: ``project-job-scheduling-public-bench --all --json``;
+- ``rcpsp.json``: ``project-job-scheduling-public-bench --all --json``, and
+  ``rcpsp-synthetic.json``: its ``--synthetic N --synthetic-seeds ... --json`` (the generated
+  instances are a second table of the same data set, so they are published with ``rcpsp.json``);
 - ``bpp.json``: ``bin-packing-public-bench --json``;
 - ``qaplib.json``: ``quadratic-assignment-public-bench --all --json``;
 - ``salbp-<data set>.json``:
@@ -176,6 +178,39 @@ def _seed(results: list[dict], default: int) -> int:
     if len(seeds) > 1:
         raise SystemExit(f"results of different seeds cannot share a table: {sorted(seeds)}")
     return seeds.pop() if seeds else default
+
+
+_SYNTHETIC_NAME = re.compile(r"synthetic-(\d+)-s(\d+)")
+
+
+def _synthetic(result: dict) -> tuple[int, int]:
+    """(size, instance seed) of a generated instance, which the runners name synthetic-<size>-s<seed>."""
+    match = _SYNTHETIC_NAME.fullmatch(result["instance"])
+    if match is None:
+        raise SystemExit(f"{result['instance']}: a generated instance is named synthetic-<size>-s<seed>")
+    return int(match[1]), int(match[2])
+
+
+def _synthetic_commands(runner: str, results: list[dict], seconds: float, workers: int) -> list[str]:
+    """The commands that run these generated instances: one for the sizes that share their seeds
+    and their backends, in the order of the results."""
+    seeds_of: dict[int, list[int]] = {}
+    engine_only: dict[int, bool] = {}
+    for result in results:
+        size, seed = _synthetic(result)
+        seeds_of.setdefault(size, []).append(seed)
+        engine_only[size] = engine_only.get(size, True) and "cp-sat" not in _runs(result)
+    groups: dict[tuple, list[int]] = {}
+    for size, seeds in seeds_of.items():
+        groups.setdefault((tuple(seeds), engine_only[size]), []).append(size)
+    commands = []
+    for (seeds, without_cpsat), sizes in groups.items():
+        command = f"uv run {runner} " + " ".join(f"--synthetic {size}" for size in sizes)
+        if seeds != (0,):
+            command += " --synthetic-seeds " + ",".join(str(seed) for seed in seeds)
+        command += f" --seconds {seconds:g}"
+        commands.append(command + (" --backend engine" if without_cpsat else f" --workers {workers}"))
+    return commands
 
 
 def _check_vrp(what: str, data: dict, args: argparse.Namespace) -> None:
@@ -460,22 +495,22 @@ def pdp_li_lim_block(cases: list[dict], args: argparse.Namespace) -> str:
 
 
 def pdp_synthetic_block(cases: list[dict]) -> str:
-    # A synthetic instance is named synthetic-<requests>-s<seed>.
-    seeds = sorted({case["instance"].rsplit("-s", 1)[-1] for case in cases})
+    seeds = sorted({_synthetic(case)[1] for case in cases})
+    seeded = "instance seed" if len(seeds) == 1 else "instance seeds"
     lines = [
-        f"**Synthetic Li & Lim-shaped instances** (`--synthetic N`, seed {_listed(seeds)}): customers in a",
-        "100 x 100 square, half in six clusters, service time 90, one vehicle per three requests. Cells",
-        "are vehicles / distance.",
+        f"**Synthetic Li & Lim-shaped instances** (`--synthetic N`, {seeded} {_listed(map(str, seeds))}):",
+        "customers in a 100 x 100 square, half in six clusters, service time 90, one vehicle per three",
+        "requests. Cells are vehicles / distance.",
         "",
-        "| Requests | engine | CP-SAT |",
-        "| --- | --- | --- |",
+        "| Requests | Instance seed | engine | CP-SAT |",
+        "| ---: | ---: | --- | --- |",
     ]
     engine_only = []
     for case in cases:
         cells, texts = _pdp_cells(case)
         texts = _bold(cells, texts)
-        lines.append(f"| {case['requests']} | {texts['engine']} | {texts['ortools']} |")
-        if cells["ortools"].get("status") == "not run":
+        lines.append(f"| {case['requests']} | {_synthetic(case)[1]} | {texts['engine']} | {texts['ortools']} |")
+        if cells["ortools"].get("status") == "not run" and str(case["requests"]) not in engine_only:
             engine_only.append(str(case["requests"]))
     if engine_only:
         measured = " (at 400 requests it was still being built after 10 minutes at 11 GB, 2026-10-29)"
@@ -506,11 +541,8 @@ def _count_cells(result: dict, field: str) -> tuple[dict[str, dict], dict[str, s
     return cells, texts
 
 
-def rcpsp_block(results: list[dict], args: argparse.Namespace) -> str:
+def _rcpsp_table(results: list[dict]) -> list[str]:
     lines = [
-        "Makespan of each solver's schedule, re-verified independently (durations, precedences and",
-        "cumulative resource use at every tick). Lower is better; the best value is bold.",
-        "",
         "| Instance | Activities | Critical path | engine | CP-SAT |",
         "| --- | ---: | ---: | ---: | ---: |",
     ]
@@ -521,7 +553,28 @@ def rcpsp_block(results: list[dict], args: argparse.Namespace) -> str:
             f"| {result['instance']} | {result['tasks'] - 2} | {result['critical_path']} | "
             f"{texts['engine']} | {texts['ortools']} |"
         )
-    lines += ["", _footer(args, _seed(results, 0))]
+    return lines
+
+
+def rcpsp_block(results: list[dict], args: argparse.Namespace, synthetic: list[dict] | None = None) -> str:
+    lines = [
+        "Makespan of each solver's schedule, re-verified independently (durations, precedences and",
+        "cumulative resource use at every tick). Lower is better; the best value is bold.",
+        "",
+        *_rcpsp_table(results),
+    ]
+    if synthetic:
+        seeds = sorted({_synthetic(result)[1] for result in synthetic})
+        seeded = "instance seed" if len(seeds) == 1 else "instance seeds"
+        lines += [
+            "",
+            f"**Generated instances of the same shape** (`--synthetic N`, {seeded} {_listed(map(str, seeds))}):",
+            "four renewable resources, activities of 1 to 10 time units that follow up to three of the six",
+            "activities before them.",
+            "",
+            *_rcpsp_table(synthetic),
+        ]
+    lines += ["", _footer(args, _seed([*results, *(synthetic or [])], 0))]
     return "\n".join(lines)
 
 
@@ -846,22 +899,20 @@ def pdp_li_lim_dataset(cases: list[dict], seconds: float) -> dict:
     )
 
 
-def pdp_synthetic_dataset(cases: list[dict], seconds: float) -> dict:
+def pdp_synthetic_dataset(cases: list[dict], seconds: float, workers: int = 8) -> dict:
     rows = []
     for case in cases:
         row = pdp_row(case, size=f"{case['requests']} requests / {case['vehicles']} vehicles", reference=False)
-        row["instance"] = f"{case['requests']} requests"
         row["cells"].setdefault("ortools", {"value": None, "status": "not run"})
         row["best"] = _lowest(row["cells"])
         rows.append(row)
-    sizes = " ".join(f"--synthetic {case['requests']}" for case in cases)
     return _dataset(
         "pickup-delivery-synthetic",
         "pickup-delivery",
         "generated",
         "cp-sat",
         "pickup-delivery/cpsat",
-        f"uv run pickup-delivery-public-bench {sizes} --seconds {seconds:g} --workers 8",
+        "\n".join(_synthetic_commands("pickup-delivery-public-bench", cases, seconds, workers)),
         [_section("instances", "distance", rows)],
     )
 
@@ -878,18 +929,24 @@ def _count_rows(results: list[dict], field: str, size) -> list[dict]:
     return rows
 
 
-def rcpsp_dataset(results: list[dict], seconds: float) -> dict:
-    rows = _count_rows(
-        results, "makespan", lambda result: f"{result['tasks'] - 2} activities / {result['resources']} resources"
-    )
+def rcpsp_dataset(results: list[dict], seconds: float, synthetic: list[dict] | None = None, workers: int = 8) -> dict:
+    def size(result: dict) -> str:
+        return f"{result['tasks'] - 2} activities / {result['resources']} resources"
+
+    runner = "project-job-scheduling-public-bench"
+    commands = [f"uv run {runner} --all --seconds {seconds:g} --workers {workers}"]
+    sections = [_section("instances", "makespan", _count_rows(results, "makespan", size))]
+    if synthetic:
+        commands += _synthetic_commands(runner, synthetic, seconds, workers)
+        sections.append(_section("generated", "makespan", _count_rows(synthetic, "makespan", size)))
     return _dataset(
         "rg30-rcpsp",
         "project-job-scheduling",
         "public",
         "cp-sat",
         "project-job-scheduling/cpsat",
-        f"uv run project-job-scheduling-public-bench --all --seconds {seconds:g} --workers 8",
-        [_section("instances", "makespan", rows)],
+        "\n".join(commands),
+        sections,
     )
 
 
@@ -1258,7 +1315,7 @@ def main() -> None:
         )
     if synthetic:
         _check_protocol("pickup-delivery (synthetic)", synthetic, args)
-        datasets["pickup-delivery-synthetic"] = pdp_synthetic_dataset(synthetic, args.seconds)
+        datasets["pickup-delivery-synthetic"] = pdp_synthetic_dataset(synthetic, args.seconds, args.workers)
         _replace_block(
             pdp / "README.md",
             "## Results\n\n"
@@ -1267,12 +1324,18 @@ def main() -> None:
             + _footer(args, _seed(synthetic, 0)),
         )
 
-    rcpsp = _load(args.results, "rcpsp.json")
+    rcpsp, rcpsp_synthetic = _load(args.results, "rcpsp.json"), _load(args.results, "rcpsp-synthetic.json")
+    if rcpsp_synthetic and not rcpsp:
+        # One data set and one results block: the generated table alone would drop the RG30 one.
+        raise SystemExit("rcpsp-synthetic.json is published together with rcpsp.json")
     if rcpsp:
         _check_protocol("project-job-scheduling (RG30)", rcpsp, args)
-        datasets["rg30-rcpsp"] = rcpsp_dataset(rcpsp, args.seconds)
+        if rcpsp_synthetic:
+            _check_protocol("project-job-scheduling (generated)", rcpsp_synthetic, args)
+        datasets["rg30-rcpsp"] = rcpsp_dataset(rcpsp, args.seconds, rcpsp_synthetic, args.workers)
         _replace_block(
-            BENCHMARKS / "project-job-scheduling" / "cpsat" / "PUBLIC_BENCHMARKS.md", rcpsp_block(rcpsp, args)
+            BENCHMARKS / "project-job-scheduling" / "cpsat" / "PUBLIC_BENCHMARKS.md",
+            rcpsp_block(rcpsp, args, rcpsp_synthetic),
         )
 
     bpp = _load(args.results, "bpp.json")

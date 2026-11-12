@@ -107,6 +107,20 @@ def test_json_output_lists_one_result_per_synthetic_size(capsys) -> None:
     assert "objective:" in captured.err
 
 
+def test_synthetic_seeds_give_one_instance_per_size_and_seed(capsys) -> None:
+    argv = ["--synthetic", "2", "--synthetic", "3", "--synthetic-seeds", "0,4"]
+    assert main([*argv, "--seconds", "1", "--backend", "engine", "--json"]) == 0
+    results = json.loads(capsys.readouterr().out)
+    assert [result["instance"] for result in results] == [
+        "synthetic-2-s0",
+        "synthetic-2-s4",
+        "synthetic-3-s0",
+        "synthetic-3-s4",
+    ]
+    # The solver's seed is --seed, whatever the instances' seeds are.
+    assert {result["seed"] for result in results} == {0}
+
+
 def test_a_plan_that_leaves_a_stop_out_is_incomplete_and_a_broken_rule_is_not() -> None:
     instance = parse_instance(SERVICED, name="tiny")
     pickup, dropoff = instance.requests[0]
@@ -123,6 +137,7 @@ def test_one_choice_of_instances_per_run() -> None:
         ["--all", "--synthetic", "5"],
         ["--instance", "lc101", "--synthetic", "5"],
         ["--synthetic", "5", "--requests", "3"],
+        ["--instance", "lc101", "--synthetic-seeds", "0,1"],
     ):
         with pytest.raises(SystemExit) as exit_info:
             main(argv)

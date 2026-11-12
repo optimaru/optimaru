@@ -118,3 +118,22 @@ def test_a_folded_medium_level_is_shown_on_its_own():
     assert "MISMATCH" in SolverRun("engine", into_soft, 1.0, self_report=(0, -9_001_000_020.0)).crosscheck
     plain = Score((0, -5.0), ("hard", "soft"))
     assert _unfold_medium(plain, {"some_cost": {}}) is plain
+
+
+def test_a_ladder_has_one_instance_per_seed_of_a_scale() -> None:
+    ladder = benchmark.seeded(
+        {
+            "small": (lambda seed: ("small", seed), (4, 9, 2)),
+            "demo": lambda: "the demo",
+            "large": (lambda seed: ("large", seed), (0,)),
+        }
+    )
+    # The first seed keeps the scale's name, so a ladder that gains seeds keeps its rows.
+    assert list(ladder) == ["small", "small-2", "small-3", "demo", "large"]
+    assert [build() for build in ladder.values()] == [
+        ("small", 4),
+        ("small", 9),
+        ("small", 2),
+        "the demo",
+        ("large", 0),
+    ]

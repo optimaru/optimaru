@@ -501,3 +501,76 @@ def test_school_timetabling_rows_come_from_the_track_2_results() -> None:
         publish._check_protocol(
             "school-timetabling (track 2)", [_school(3, ("FEASIBLE", 0, 1), ("FEASIBLE", 0, 1), budget=10.0)], ARGS
         )
+
+
+def test_generated_pickup_delivery_rows_are_one_per_size_and_instance_seed() -> None:
+    cases = [
+        _pdp("synthetic-10-s0", 10, 10, (4, 600.0), (4, 590.04)),
+        _pdp("synthetic-10-s1", 10, 10, (4, 610.0), "no solution: status=UNKNOWN"),
+        _pdp("synthetic-25-s0", 25, 25, (8, 1636.5), (8, 1653.3)),
+        _pdp("synthetic-25-s1", 25, 25, (9, 1700.0), (9, 1700.0)),
+        _pdp("synthetic-400-s0", 400, 400, (51, 19982.0)),
+    ]
+    block = publish.pdp_synthetic_block(cases)
+    assert "(`--synthetic N`, instance seeds 0 and 1):" in block
+    assert "| 10 | 0 | 4 / 600 | **4 / 590** |" in block
+    assert "| 10 | 1 | **4 / 610** | no solution in time |" in block
+    assert "| 400 | 0 | 51 / 19,982 | not run |" in block
+    assert "CP-SAT is not run at 400 requests" in block
+
+    dataset = publish.pdp_synthetic_dataset(cases, 30)
+    # One command per group of sizes that share their seeds and their backends.
+    assert dataset["command"].splitlines() == [
+        "uv run pickup-delivery-public-bench --synthetic 10 --synthetic 25 --synthetic-seeds 0,1 "
+        "--seconds 30 --workers 8",
+        "uv run pickup-delivery-public-bench --synthetic 400 --seconds 30 --backend engine",
+    ]
+    rows = dataset["sections"][0]["rows"]
+    assert [row["instance"] for row in rows] == [case["instance"] for case in cases]
+    assert rows[0]["size"] == "10 requests / 25 vehicles"
+    assert rows[-1]["cells"]["ortools"] == {"value": None, "status": "not run"} and rows[-1]["best"] == []
+    assert rows[3]["best"] == ["engine", "ortools"]
+    # One seed, the runner's default: the command names none.
+    assert "(`--synthetic N`, instance seed 0):" in publish.pdp_synthetic_block(cases[::2])
+    assert "--synthetic-seeds" not in publish.pdp_synthetic_dataset(cases[::2], 30)["command"]
+
+
+def test_generated_rcpsp_instances_are_a_second_table_of_the_data_set() -> None:
+    def makespan(instance, activities, engine, cpsat):
+        result = {"instance": instance, "tasks": activities + 2, "resources": 4, "critical_path": 20, "seed": 0}
+        result["runs"] = [{"solver": "engine", "makespan": engine}, {"solver": "cp-sat", "makespan": cpsat}]
+        return result
+
+    public = [makespan("Pat1", 30, 66, 62)]
+    generated = [
+        makespan(f"synthetic-{size}-s{seed}", size, 100 + seed, 101) for size in (30, 60) for seed in (0, 1, 2)
+    ]
+
+    dataset = publish.rcpsp_dataset(public, 30, generated)
+    assert [(section["id"], len(section["rows"])) for section in dataset["sections"]] == [
+        ("instances", 1),
+        ("generated", 6),
+    ]
+    assert dataset["sections"][1]["rows"][3]["size"] == "60 activities / 4 resources"
+    assert dataset["command"].splitlines() == [
+        "uv run project-job-scheduling-public-bench --all --seconds 30 --workers 8",
+        "uv run project-job-scheduling-public-bench --synthetic 30 --synthetic 60 --synthetic-seeds 0,1,2 "
+        "--seconds 30 --workers 8",
+    ]
+    block = publish.rcpsp_block(public, ARGS, generated)
+    assert "| Pat1 | 30 | 20 | 66 | **62** |" in block
+    assert "(`--synthetic N`, instance seeds 0, 1 and 2):" in block
+    assert "| synthetic-60-s1 | 60 | 20 | **101** | **101** |" in block
+    assert block.count("| Instance | Activities |") == 2 and block.count("Measured ") == 1
+
+    # Without generated results: the RG30 table alone, as before.
+    alone = publish.rcpsp_dataset(public, 30)
+    assert [section["id"] for section in alone["sections"]] == ["instances"]
+    assert alone["command"] == "uv run project-job-scheduling-public-bench --all --seconds 30 --workers 8"
+    assert "Generated" not in publish.rcpsp_block(public, ARGS)
+    # Sizes and seeds are read from the names the runner gives its generated instances.
+    with pytest.raises(SystemExit, match="Pat2: a generated instance is named synthetic-<size>-s<seed>"):
+        publish.rcpsp_block(public, ARGS, [makespan("Pat2", 30, 1, 1)])
+    # The two tables share one footer, so one seed.
+    with pytest.raises(SystemExit, match="different seeds"):
+        publish.rcpsp_block(public, ARGS, [makespan("synthetic-30-s0", 30, 1, 1) | {"seed": 4}])

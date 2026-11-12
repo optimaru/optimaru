@@ -1,5 +1,6 @@
 import hashlib
 import io
+import json
 import zipfile
 
 import pytest
@@ -14,6 +15,7 @@ from project_job_scheduling_cpsat.public_benchmark import (
     make_model,
     parse_instance,
     run_case,
+    synthetic_instance,
 )
 
 SAMPLE = """\
@@ -78,10 +80,62 @@ def test_run_case_reports_both_backends() -> None:
     assert lines[0].startswith("tiny: 4 tasks, 1 resources")
 
 
-def test_all_and_instance_do_not_go_together() -> None:
-    with pytest.raises(SystemExit) as exit_info:
-        main(["--all", "--instance", "Pat1"])
-    assert exit_info.value.code == 2
+def test_one_choice_of_instances_per_run() -> None:
+    for argv in (
+        ["--all", "--instance", "Pat1"],
+        ["--all", "--synthetic", "5"],
+        ["--instance", "Pat1", "--synthetic", "5"],
+        ["--instance", "Pat1", "--synthetic-seeds", "0,1"],
+    ):
+        with pytest.raises(SystemExit) as exit_info:
+            main(argv)
+        assert exit_info.value.code == 2
+
+
+def test_a_generated_instance_is_seeded_and_has_the_shape_of_the_set() -> None:
+    instance = synthetic_instance(30, seed=3)
+    assert instance == synthetic_instance(30, seed=3)
+    assert instance != synthetic_instance(30, seed=4)
+    assert instance.name == "synthetic-30-s3"
+    assert len(instance.tasks) == 32 and len(instance.capacities) == 4
+
+    source, *activities, sink = instance.tasks
+    assert source.duration == sink.duration == 0 and sink.successors == ()
+    assert source.requirements == sink.requirements == (0, 0, 0, 0)
+    for index, task in enumerate(activities, start=1):
+        assert 1 <= task.duration <= 10
+        # An activity fits the capacities on its own, and uses one or two of the resources.
+        assert all(need <= capacity for need, capacity in zip(task.requirements, instance.capacities))
+        assert 1 <= sum(need > 0 for need in task.requirements) <= 2
+        # Successors come later, so the precedence graph has no cycle; the last ones precede the sink.
+        assert task.successors and all(index < successor <= 31 for successor in task.successors)
+    # Every activity is reached from the source.
+    reached, frontier = {0}, [0]
+    while frontier:
+        for successor in instance.tasks[frontier.pop()].successors:
+            if successor not in reached:
+                reached.add(successor)
+                frontier.append(successor)
+    assert reached == set(range(32))
+    assert critical_path(instance) >= max(task.duration for task in activities)
+    assert len(make_model(instance).jobs) == 32
+
+    with pytest.raises(ValueError, match="at least one activity"):
+        synthetic_instance(0)
+
+
+def test_json_output_lists_one_result_per_generated_size_and_seed(capsys) -> None:
+    argv = ["--synthetic", "4", "--synthetic", "6", "--synthetic-seeds", "0,5"]
+    assert main([*argv, "--seconds", "1", "--backend", "engine", "--json"]) == 0
+    results = json.loads(capsys.readouterr().out)
+    assert [result["instance"] for result in results] == [
+        "synthetic-4-s0",
+        "synthetic-4-s5",
+        "synthetic-6-s0",
+        "synthetic-6-s5",
+    ]
+    assert [result["tasks"] for result in results] == [6, 6, 8, 8]
+    assert all(run["solver"] == "engine" and run["feasible"] for result in results for run in result["runs"])
 
 
 def test_an_instance_that_is_not_pinned_is_not_loaded(tmp_path) -> None:

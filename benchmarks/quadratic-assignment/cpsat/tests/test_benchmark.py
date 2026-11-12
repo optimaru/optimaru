@@ -3,7 +3,10 @@ from quadratic_assignment_cpsat import benchmark
 
 
 def test_comparison_runner_owns_its_instances() -> None:
-    assert list(benchmark.instances()) == [
+    names = list(benchmark.instances())
+    assert len(names) == 20
+    # One name per size, and the other draws of a size numbered after it.
+    assert [name for name in names if "-" not in name] == [
         "plant6",
         "random8",
         "random10",
@@ -13,6 +16,7 @@ def test_comparison_runner_owns_its_instances() -> None:
         "random20",
         "random25",
     ]
+    assert names[:5] == ["plant6", "random8", "random8-2", "random8-3", "random10"]
     assert callable(benchmark.solve_engine)
     assert callable(benchmark.solve_cpsat)
 
