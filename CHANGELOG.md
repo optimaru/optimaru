@@ -97,6 +97,12 @@
 - **Benchmarks: the facility location table measured again.** The engine has CP-SAT's score
   on the four instances up to 200 consumers (on two before) and is 0.02% and 0.29% behind on
   the two larger ones (1.4% to 3.3% behind on four before).
+- **Tests: maintenance scheduling picks the defaults by name, not by position.**
+  `test_offset_zero_reproduces_the_plain_scores` took `get_constraints()[:5]` as "the four
+  date constraints and `crew_conflict_cost`", so a constraint added to the catalog would
+  have silently replaced one of them. It now takes every default with the tag conflicts
+  squared and states offset 0 on each, so a new constraint is covered without a change; the
+  snippet in `python.md` and the step in `extending.md` that warned about the slice follow.
 
 ## 0.5.0
 
