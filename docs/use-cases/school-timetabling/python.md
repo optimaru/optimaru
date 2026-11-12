@@ -206,7 +206,8 @@ Rules:
   family, shared projections for the teacher-mask family), the plugin path
   runs at a quarter to two thirds of the monolith's steps per second; the rest
   of the gap is the fixed cost of the generic assembly dispatch. Measured on
-  the track-2 schools of `benchmarks/school-timetabling/gen_canonical.py` with
+  the track-2 schools (`gen_canonical.py` in
+  `benchmarks/school-timetabling/cpsat/school_timetabling_cpsat/`) with
   one thread and seeds 1 to 3 (S and M 2 million steps, L 4 million, where
   both paths end feasible), the assembly's median rate was 46% of the
   monolith's on S, 62% on M and 37% on L, and one seed alone ranged from 25%
