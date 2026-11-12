@@ -28,10 +28,10 @@ best known.
 cd benchmarks/pickup-delivery/cpsat
 # engine and CP-SAT on the first ten request pairs of one instance
 uv run pickup-delivery-public-bench --instance lc101 --requests 10 --seconds 10 --workers 8
-# the first instance of each class at 10 requests, 25 requests and whole
+# the first instance of each class at 10, 15 and 25 requests and whole
 uv run pickup-delivery-public-bench --instance lc101 --instance lc201 --instance lr101 \
   --instance lr201 --instance lrc101 --instance lrc201 \
-  --requests 10 --requests 25 --requests 0 --seconds 30 --workers 8
+  --requests 10 --requests 15 --requests 25 --requests 0 --seconds 30 --workers 8
 # the engine on all 56 whole instances
 uv run pickup-delivery-public-bench --all --seconds 30 --backend engine
 ```

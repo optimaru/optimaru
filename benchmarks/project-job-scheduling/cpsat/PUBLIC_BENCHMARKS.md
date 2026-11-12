@@ -13,9 +13,14 @@ directly.
 cd benchmarks/project-job-scheduling/cpsat
 uv run project-job-scheduling-public-bench --instance Pat1 --seconds 10 --workers 8
 uv run project-job-scheduling-public-bench --all --seconds 30 --workers 8     # Pat1-Pat5
+# the generated instances of the same shape: 30 to 120 activities, five seeds each
+uv run project-job-scheduling-public-bench --synthetic 30 --synthetic 60 --synthetic 90 --synthetic 120 \
+  --synthetic-seeds 0,1,2,3,4 --seconds 30 --workers 8
 ```
 
-`--instance` repeats, `--all` runs the five instances, `--json` prints the
+`--instance` repeats, `--all` runs the five instances, `--synthetic N` (repeatable) generates
+instances of N activities in the shape of RG30 (`synthetic_instance`), one per seed of
+`--synthetic-seeds` (comma-separated, default 0), `--json` prints the
 results as JSON (progress goes to stderr), and `--out FILE` rewrites FILE with
 the results after every instance. The engine runs one start
 here, on one thread; `--workers` is CP-SAT's.

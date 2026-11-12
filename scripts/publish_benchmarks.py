@@ -199,6 +199,7 @@ def _synthetic_commands(runner: str, results: list[dict], seconds: float, worker
     for result in results:
         size, seed = _synthetic(result)
         seeds_of.setdefault(size, []).append(seed)
+        # A size is engine only when no seed of it has a CP-SAT run.
         engine_only[size] = engine_only.get(size, True) and "cp-sat" not in _runs(result)
     groups: dict[tuple, list[int]] = {}
     for size, seeds in seeds_of.items():

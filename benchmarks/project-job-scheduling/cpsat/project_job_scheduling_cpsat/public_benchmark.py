@@ -18,7 +18,7 @@ from pathlib import Path
 from external_solver.project_job_scheduling import solve as solve_cpsat
 
 import optimaru.project_job_scheduling as pjs
-from cpsat_plugins.results import write_results, write_whole
+from cpsat_plugins.results import seed_list, write_results, write_whole
 from optimaru.project_job_scheduling.models import (
     AllocationModel,
     ExecutionModeModel,
@@ -138,7 +138,8 @@ def synthetic_instance(activity_count: int, seed: int = 0) -> RcpspInstance:
     An activity lasts 1 to 10 time units and uses three of the four resources, 1 to 8 units of
     each, so the resources bind before the precedences do: the activities' work is about twice
     what the longest chain takes. The network is wide and shallow, as in RG30: the activities
-    are dealt into one layer per eight of them (three layers at least, one per activity below three), and an activity follows
+    are dealt into one layer per eight of them (three layers at least, one per activity below
+    three), and an activity follows
     one or two activities of the layer before it and, three times in ten, one of an earlier
     layer. The first layer follows the source; what nothing follows precedes the sink.
     """
@@ -407,14 +408,6 @@ def run_case(
     }
 
 
-def _seed_list(text: str) -> list[int]:
-    """`--synthetic-seeds`: comma-separated whole numbers."""
-    try:
-        return [int(seed) for seed in text.split(",")]
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"not a comma-separated list of seeds: {text!r}") from None
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -434,7 +427,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--synthetic-seeds",
-        type=_seed_list,
+        type=seed_list,
         default=None,
         help="comma-separated seeds of the generated instances: one instance per size and seed (default 0)",
     )

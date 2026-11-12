@@ -17,7 +17,7 @@ from pathlib import Path
 
 from external_solver.pickup_delivery import solve_request as solve_cpsat_request
 
-from cpsat_plugins.results import write_results, write_whole
+from cpsat_plugins.results import seed_list, write_results, write_whole
 from optimaru.pickup_delivery.constraints import (
     max_end_time_cost,
     paired_request_cost,
@@ -469,14 +469,6 @@ def run_case(
     }
 
 
-def _seed_list(text: str) -> list[int]:
-    """`--synthetic-seeds`: comma-separated whole numbers."""
-    try:
-        return [int(seed) for seed in text.split(",")]
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"not a comma-separated list of seeds: {text!r}") from None
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -516,7 +508,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--synthetic-seeds",
-        type=_seed_list,
+        type=seed_list,
         default=None,
         help="comma-separated seeds of the synthetic instances: one instance per size and seed "
         "(default: the one of --seed)",

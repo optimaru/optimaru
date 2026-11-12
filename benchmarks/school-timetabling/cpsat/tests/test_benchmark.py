@@ -21,6 +21,8 @@ def test_a_size_is_a_preset_or_a_class_count() -> None:
 def test_the_ladder_is_twenty_schools() -> None:
     sizes = gen_canonical.expand_sizes("ladder")
     assert len(sizes) == 20 and sizes[:2] == ["3", "6"] and sizes[-1] == "60"
+    # scripts/publish_benchmarks.py names this ladder `--sizes ladder` by these class counts.
+    assert gen_canonical.LADDER == tuple(range(3, 61, 3))
     assert gen_canonical.expand_sizes("s, 9,LADDER")[:3] == ["S", "9", "3"]
     with pytest.raises(ValueError, match="unknown size 'XL'"):
         gen_canonical.expand_sizes("S,XL")

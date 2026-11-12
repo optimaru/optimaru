@@ -14,6 +14,16 @@ uv run pickup-delivery-public-bench --help              # Li & Lim PDPTW (SINTEF
 uv run pickup-delivery-public-bench --synthetic 200 --seconds 30 --workers 8   # seeded synthetic instance
 ```
 
+The synthetic table below: `--synthetic N` repeats, and `--synthetic-seeds` (comma-separated,
+default the value of `--seed`) gives one instance per size and seed:
+
+```sh
+uv run pickup-delivery-public-bench --synthetic 10 --synthetic 15 --synthetic 20 --synthetic 25 \
+  --synthetic 30 --synthetic 40 --synthetic 50 --synthetic 75 --synthetic 100 --synthetic 200 \
+  --synthetic-seeds 0,1 --seconds 30 --workers 8
+uv run pickup-delivery-public-bench --synthetic 400 --synthetic-seeds 0 --seconds 30 --backend engine
+```
+
 Public-instance protocol and results: [`cpsat/PUBLIC_BENCHMARKS.md`](cpsat/PUBLIC_BENCHMARKS.md).
 
 CP-SAT formulation notes: [`cpsat/README.md`](cpsat/README.md).
