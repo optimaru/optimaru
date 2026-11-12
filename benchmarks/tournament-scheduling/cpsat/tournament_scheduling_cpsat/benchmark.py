@@ -11,7 +11,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "tournament-scheduling"
 PACKAGE = "optimaru.tournament_scheduling"
@@ -25,12 +25,12 @@ CPSAT_CAVEAT = (
 TEAM_NAMES = ["Maarten", "Geoffrey", "Lukas", "Chris", "Fred", "Radek", "Maciej"]
 
 
-def _build(day_count: int, per_day: int, penalty_count: int, team_names: list[str]) -> Any:
+def _build(day_count: int, per_day: int, penalty_count: int, team_names: list[str], seed: int = 0) -> Any:
     """A tournament with `penalty_count` distinct (team, day) unavailabilities
     drawn from a seeded ``random.Random`` (the same instance on every run)."""
     import optimaru.tournament_scheduling as ts
 
-    rng = random.Random(0)
+    rng = random.Random(seed)
     teams = [ts.Team(name) for name in team_names]
     days = [ts.Day(d) for d in range(day_count)]
 
@@ -74,19 +74,23 @@ XLARGE_TEAM_NAMES = TEAM_NAMES + [
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {
-        "small": lambda: _build(12, 4, 8, TEAM_NAMES),
-        "demo": lambda: _build(18, 4, 12, TEAM_NAMES),
-        "medium": lambda: _build(24, 4, 20, XLARGE_TEAM_NAMES[:8]),
-        "large": lambda: _build(36, 5, 30, TEAM_NAMES + ["Anna", "Bram", "Cara"]),
-        "larger": lambda: _build(60, 6, 90, XLARGE_TEAM_NAMES[:14]),
-        # About xlarge, against demo and large above: those two saturate (the engine
-        # reaches their provable optima, demo -1.54919 and large 0.0, on every seed well
-        # inside a 10s budget), so they cannot rank solver changes. xlarge (800 slots /
-        # 20 teams / 100 days) still has headroom at 10s and separates seeds — it is the
-        # instance quality tuning is measured on.
-        "xlarge": lambda: _build(100, 8, 200, XLARGE_TEAM_NAMES),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    # (the seed draws which team is unavailable on which day).
+    return seeded(
+        {
+            "small": (lambda seed: _build(12, 4, 8, TEAM_NAMES, seed), (0, 1, 2, 3)),
+            "demo": (lambda seed: _build(18, 4, 12, TEAM_NAMES, seed), (0, 4, 5, 6)),
+            "medium": (lambda seed: _build(24, 4, 20, XLARGE_TEAM_NAMES[:8], seed), (0, 7, 8, 9)),
+            "large": (lambda seed: _build(36, 5, 30, TEAM_NAMES + ["Anna", "Bram", "Cara"], seed), (0, 10, 11)),
+            "larger": (lambda seed: _build(60, 6, 90, XLARGE_TEAM_NAMES[:14], seed), (0, 12, 13)),
+            # About xlarge, against demo and large above: those two saturate (the engine
+            # reaches their provable optima, demo -1.54919 and large 0.0, on every seed well
+            # inside a 10s budget), so they cannot rank solver changes. xlarge (800 slots /
+            # 20 teams / 100 days) still has headroom at 10s and separates seeds — it is the
+            # instance quality tuning is measured on.
+            "xlarge": (lambda seed: _build(100, 8, 200, XLARGE_TEAM_NAMES, seed), (0, 14)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

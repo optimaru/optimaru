@@ -33,3 +33,16 @@ def test_several_processes_can_write_the_same_file_at_once(tmp_path) -> None:
     assert [writer.exitcode for writer in writers] == [0, 0, 0, 0]
     assert path.read_bytes() == b"same bytes"
     assert [item.name for item in path.parent.iterdir()] == ["archive.zip"]
+
+
+def test_the_seeds_of_a_generated_run_are_distinct_whole_numbers() -> None:
+    import argparse
+
+    import pytest
+
+    from cpsat_plugins.results import seed_list
+
+    assert seed_list("0,4,1") == [0, 4, 1]
+    for text in ("0,x", "0,,1", "1,1"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            seed_list(text)

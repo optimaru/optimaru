@@ -59,8 +59,10 @@ all three tables; the tables below cover tracks 1 and 2.
   placements). Same as the
   [`API_SPEC.md`](../../docs/use-cases/school-timetabling/API_SPEC.md) contract.
 - **Instances**: `gen_canonical.py` generates S (6 classes / 15 teachers / 72
-  courses), M (12 / 23 / 138) and L (24 / 42 / 270). Class periods total == 34
-  slots, with a teacher-load check and pydantic validation.
+  courses), M (12 / 23 / 138) and L (24 / 42 / 270), and a school of any class
+  count that is a multiple of 3; `--sizes ladder` is the 20 schools of 3 to 60
+  classes. Class periods total == 34 slots, with a teacher-load check and
+  pydantic validation.
 - **Participants**: (1) the C++ canonical solver (`optimaru.school_timetabling.solve`,
   single-threaded), (2) the CP-SAT reference (`teacher_scheduling.solve` in
   `cpsat/`, 8 workers). Same time limit, same seed argument.
@@ -110,6 +112,42 @@ rescore == self-report.
   (the C++ bench's former generator) and another machine.
 - Reproduce: `uv run school-timetabling-compare --sizes S,M,L --seconds 30`
   (`--workers 4` for the second set of rows).
+
+## Track 2 on the 20-school ladder
+
+`--sizes ladder` runs track 2 on 20 generated schools, from 3 to 60 classes in steps of 3 (the S,
+M and L schools are its 6-, 12- and 24-class rungs). `scripts/publish_benchmarks.py` writes this
+table from the JSON of `--out`.
+
+<!-- results:start -->
+Weighted penalty of each solver's timetable at the default weights, rescored by `validate.py`;
+a timetable that breaks a hard rule has no penalty here. Lower is better; the best value is bold.
+
+| Classes | Teachers | Courses | engine | CP-SAT |
+| ---: | ---: | ---: | ---: | ---: |
+| 3 | 11 | 39 | 124 | **114** |
+| 6 | 15 | 72 | **231** | 277 |
+| 9 | 20 | 105 | **551** | 672 |
+| 12 | 23 | 138 | **1,151** | 1,359 |
+| 15 | 28 | 171 | **1,457** | 1,634 |
+| 18 | 34 | 204 | **1,725** | 1,890 |
+| 21 | 42 | 237 | **1,797** | 2,361 |
+| 24 | 42 | 270 | **2,606** | 3,328 |
+| 27 | 49 | 303 | **2,699** | 3,633 |
+| 30 | 53 | 336 | **3,237** | 4,177 |
+| 33 | 62 | 369 | **3,208** | 4,404 |
+| 36 | 63 | 402 | **3,878** | 5,387 |
+| 39 | 68 | 435 | **4,238** | 6,066 |
+| 42 | 76 | 468 | **4,145** | 6,553 |
+| 45 | 81 | 501 | **4,672** | 7,207 |
+| 48 | 82 | 534 | **5,639** | no solution in time |
+| 51 | 91 | 567 | **5,499** | 8,534 |
+| 54 | 95 | 600 | **5,967** | 9,670 |
+| 57 | 102 | 633 | **5,974** | 9,239 |
+| 60 | 102 | 666 | **6,836** | 11,418 |
+
+Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
+<!-- results:end -->
 
 ## Latest measurement (local, 2026-11-04)
 

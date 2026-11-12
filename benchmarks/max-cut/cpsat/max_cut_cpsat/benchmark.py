@@ -12,7 +12,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "max-cut"
 PACKAGE = "optimaru.max_cut"
@@ -41,16 +41,19 @@ def _build(vertex_count: int, density: float, seed: int) -> Any:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {
-        "g30": lambda: _build(30, 0.3, seed=0),
-        "g50": lambda: _build(50, 0.2, seed=3),
-        "g80": lambda: _build(80, 0.1, seed=1),
-        "g120": lambda: _build(120, 0.08, seed=4),
-        "g200": lambda: _build(200, 0.05, seed=2),
-        "g400": lambda: _build(400, 0.03, seed=5),
-        "g800": lambda: _build(800, 0.015, seed=6),
-        "g1600": lambda: _build(1600, 0.0075, seed=7),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "g30": (lambda seed: _build(30, 0.3, seed=seed), (0, 8, 9)),
+            "g50": (lambda seed: _build(50, 0.2, seed=seed), (3, 10, 11)),
+            "g80": (lambda seed: _build(80, 0.1, seed=seed), (1, 12, 13)),
+            "g120": (lambda seed: _build(120, 0.08, seed=seed), (4, 14, 15)),
+            "g200": (lambda seed: _build(200, 0.05, seed=seed), (2, 16, 17)),
+            "g400": (lambda seed: _build(400, 0.03, seed=seed), (5, 18)),
+            "g800": (lambda seed: _build(800, 0.015, seed=seed), (6, 19)),
+            "g1600": (lambda seed: _build(1600, 0.0075, seed=seed), (7,)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

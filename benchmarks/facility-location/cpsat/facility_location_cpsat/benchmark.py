@@ -11,7 +11,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "facility-location"
 PACKAGE = "optimaru.facility_location"
@@ -73,16 +73,17 @@ def _build(
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {
-        "small": lambda: _build(15, 30, 2250, 450, seed=3),
-        # The demo's scale.
-        "demo": lambda: _build(30, 60, 4500, 900, seed=0),
-        "medium": lambda: _build(50, 200, 15_000, 3_000, seed=1),
-        # The medium scale again from another seed.
-        "medium-2": lambda: _build(50, 200, 15_000, 3_000, seed=4),
-        "large": lambda: _build(80, 600, 45_000, 9_000, seed=2),
-        "xlarge": lambda: _build(120, 1200, 90_000, 18_000, seed=5),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "small": (lambda seed: _build(15, 30, 2250, 450, seed=seed), (3, 6, 7, 8)),
+            # The demo's scale.
+            "demo": (lambda seed: _build(30, 60, 4500, 900, seed=seed), (0, 9, 10, 11)),
+            "medium": (lambda seed: _build(50, 200, 15_000, 3_000, seed=seed), (1, 4, 12, 13, 14)),
+            "large": (lambda seed: _build(80, 600, 45_000, 9_000, seed=seed), (2, 15, 16, 17)),
+            "xlarge": (lambda seed: _build(120, 1200, 90_000, 18_000, seed=seed), (5, 18, 19)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

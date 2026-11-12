@@ -43,12 +43,25 @@ Every cell is the score of that solver's final solution under the use case's own
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
 | n50 | 50 items | **0hard/1569soft** | **0hard/1569soft** |
+| n50-2 | 50 items | **0hard/1595soft** | **0hard/1595soft** |
+| n50-3 | 50 items | **0hard/1790soft** | **0hard/1790soft** |
 | n100 | 100 items | **0hard/3714soft** | **0hard/3714soft** |
+| n100-2 | 100 items | **0hard/3261soft** | **0hard/3261soft** |
+| n100-3 | 100 items | **0hard/3213soft** | **0hard/3213soft** |
 | n200 | 200 items | **0hard/6899soft** | **0hard/6899soft** |
+| n200-2 | 200 items | **0hard/6592soft** | **0hard/6592soft** |
+| n200-3 | 200 items | **0hard/6890soft** | **0hard/6890soft** |
 | n500 | 500 items | **0hard/17472soft** | **0hard/17472soft** |
+| n500-2 | 500 items | **0hard/17356soft** | **0hard/17356soft** |
+| n500-3 | 500 items | **0hard/16563soft** | **0hard/16563soft** |
 | n1000 | 1000 items | **0hard/34336soft** | **0hard/34336soft** |
+| n1000-2 | 1000 items | **0hard/33706soft** | **0hard/33706soft** |
+| n1000-3 | 1000 items | **0hard/34532soft** | **0hard/34532soft** |
 | n2000 | 2000 items | **0hard/68262soft** | **0hard/68262soft** |
+| n2000-2 | 2000 items | **0hard/68888soft** | **0hard/68888soft** |
+| n2000-3 | 2000 items | **0hard/67138soft** | **0hard/67138soft** |
 | n5000 | 5000 items | **0hard/170341soft** | **0hard/170341soft** |
+| n5000-2 | 5000 items | **0hard/168536soft** | **0hard/168536soft** |
 
 Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

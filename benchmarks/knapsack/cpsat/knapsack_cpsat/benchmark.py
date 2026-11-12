@@ -12,7 +12,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "knapsack"
 PACKAGE = "optimaru.knapsack"
@@ -35,15 +35,18 @@ def _build(item_count: int, seed: int) -> Any:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {
-        "n50": lambda: _build(50, seed=0),
-        "n100": lambda: _build(100, seed=3),
-        "n200": lambda: _build(200, seed=1),
-        "n500": lambda: _build(500, seed=4),
-        "n1000": lambda: _build(1000, seed=2),
-        "n2000": lambda: _build(2000, seed=5),
-        "n5000": lambda: _build(5000, seed=6),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "n50": (lambda seed: _build(50, seed=seed), (0, 7, 8)),
+            "n100": (lambda seed: _build(100, seed=seed), (3, 9, 10)),
+            "n200": (lambda seed: _build(200, seed=seed), (1, 11, 12)),
+            "n500": (lambda seed: _build(500, seed=seed), (4, 13, 14)),
+            "n1000": (lambda seed: _build(1000, seed=seed), (2, 15, 16)),
+            "n2000": (lambda seed: _build(2000, seed=seed), (5, 17, 18)),
+            "n5000": (lambda seed: _build(5000, seed=seed), (6, 19)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

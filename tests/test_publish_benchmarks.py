@@ -446,3 +446,146 @@ def test_a_comparison_without_a_run_of_each_solver_is_refused(tmp_path) -> None:
     # A failed instance has no runs to count; it is reported as failed, as before.
     failed = [{"case": "knapsack", "instance": "demo", "error": "Traceback"}]
     assert publish.load_compared(_files(tmp_path / "failed", knapsack=failed)) == {"knapsack": failed}
+
+
+def _school(classes, engine, cpsat, **changes):
+    def run(solver, outcome):
+        status, violations, penalty = outcome
+        return {"solver": solver, "status": status, "hard_violations": violations, "penalty": penalty, "seconds": 30.0}
+
+    result = {"instance": f"canonical_{classes}", "classes": classes, "teachers": 4 * classes, "rooms": classes}
+    result |= {"courses": 11 * classes, "budget": 30.0, "seed": 1, "workers": 8}
+    result["runs"] = [run("cp-sat", cpsat), run("engine", engine)]
+    return result | changes
+
+
+def test_school_timetabling_rows_come_from_the_track_2_results() -> None:
+    results = [
+        _school(3, ("FEASIBLE", 0, 120), ("OPTIMAL", 0, 118)),
+        _school(6, ("FEASIBLE", 0, 231), ("FEASIBLE", 0, 320)),
+        _school(9, ("FEASIBLE", 0, 500), ("UNKNOWN", None, None)),
+        _school(12, ("FEASIBLE", 0, 1151), ("FEASIBLE", 2, 900)),
+    ]
+    block = publish.timetabling_block(results, ARGS)
+    assert "| 3 | 12 | 33 | 120 | **118** |" in block
+    assert "| 6 | 24 | 66 | **231** | 320 |" in block
+    assert "| 9 | 36 | 99 | **500** | no solution in time |" in block
+    # A timetable that breaks a hard rule has no penalty to compare, whatever its preferences cost.
+    assert "| 12 | 48 | 132 | **1,151** | infeasible (2 hard violations) |" in block
+    assert "seed 1." in block
+
+    dataset = publish.timetabling_dataset(results, 30)
+    assert dataset["code"] == "school-timetabling/cpsat"
+    assert dataset["command"] == "uv run school-timetabling-compare --track2 --sizes 3,6,9,12 --seconds 30 --workers 8"
+    rows = dataset["sections"][0]["rows"]
+    assert [(row["instance"], row["size"]) for row in rows][:2] == [
+        ("canonical_3", "3 classes / 12 teachers / 33 courses"),
+        ("canonical_6", "6 classes / 24 teachers / 66 courses"),
+    ]
+    assert [row["best"] for row in rows] == [["ortools"], ["engine"], ["engine"], ["engine"]]
+    assert rows[2]["cells"]["ortools"] == {"value": None, "status": "no solution"}
+    assert rows[3]["cells"]["ortools"] == {"value": None, "status": "infeasible"}
+
+    # The 20 schools of the runner's ladder are named as it names them.
+    ladder = [_school(classes, ("FEASIBLE", 0, 1), ("FEASIBLE", 0, 1)) for classes in range(3, 61, 3)]
+    assert "--sizes ladder --seconds 30" in publish.timetabling_dataset(ladder, 30)["command"]
+
+    # A solver without a run is "not run"; a run that failed is not published.
+    alone = _school(3, ("FEASIBLE", 0, 120), ("FEASIBLE", 0, 118))
+    alone["runs"] = [run for run in alone["runs"] if run["solver"] == "cp-sat"]
+    cells, texts = publish._timetabling_cells(alone)
+    assert cells["engine"] == {"value": None, "status": "not run"} and texts["engine"] == "not run"
+    with pytest.raises(SystemExit, match="canonical_3: a run cannot be published: error: boom"):
+        publish._timetabling_cells(_school(3, ("error: boom", None, None), ("FEASIBLE", 0, 118)))
+    with pytest.raises(SystemExit, match="10 s, not --seconds 30"):
+        publish._check_protocol(
+            "school-timetabling (track 2)", [_school(3, ("FEASIBLE", 0, 1), ("FEASIBLE", 0, 1), budget=10.0)], ARGS
+        )
+
+
+def test_generated_pickup_delivery_rows_are_one_per_size_and_instance_seed() -> None:
+    cases = [
+        _pdp("synthetic-10-s0", 10, 10, (4, 600.0), (4, 590.04)),
+        _pdp("synthetic-10-s1", 10, 10, (4, 610.0), "no solution: status=UNKNOWN"),
+        _pdp("synthetic-25-s0", 25, 25, (8, 1636.5), (8, 1653.3)),
+        _pdp("synthetic-25-s1", 25, 25, (9, 1700.0), (9, 1700.0)),
+        _pdp("synthetic-400-s0", 400, 400, (51, 19982.0)),
+    ]
+    block = publish.pdp_synthetic_block(cases)
+    assert "(`--synthetic N`, instance seeds 0 and 1):" in block
+    assert "| 10 | 0 | 4 / 600 | **4 / 590** |" in block
+    assert "| 10 | 1 | **4 / 610** | no solution in time |" in block
+    assert "| 400 | 0 | 51 / 19,982 | not run |" in block
+    assert "CP-SAT is not run at 400 requests" in block
+
+    dataset = publish.pdp_synthetic_dataset(cases, 30)
+    # One command per group of sizes that share their seeds and their backends.
+    assert dataset["command"].splitlines() == [
+        "uv run pickup-delivery-public-bench --synthetic 10 --synthetic 25 --synthetic-seeds 0,1 "
+        "--seconds 30 --workers 8",
+        "uv run pickup-delivery-public-bench --synthetic 400 --synthetic-seeds 0 --seconds 30 --backend engine",
+    ]
+    rows = dataset["sections"][0]["rows"]
+    assert [row["instance"] for row in rows] == [case["instance"] for case in cases]
+    assert rows[0]["size"] == "10 requests / 25 vehicles"
+    assert rows[-1]["cells"]["ortools"] == {"value": None, "status": "not run"} and rows[-1]["best"] == []
+    assert rows[3]["best"] == ["engine", "ortools"]
+    # One seed: still named, since the two runners default it differently.
+    assert "(`--synthetic N`, instance seed 0):" in publish.pdp_synthetic_block(cases[::2])
+    assert "--synthetic-seeds 0 " in publish.pdp_synthetic_dataset(cases[::2], 30)["command"]
+
+
+def test_generated_rcpsp_instances_are_a_second_table_of_the_data_set() -> None:
+    def makespan(instance, activities, engine, cpsat):
+        result = {"instance": instance, "tasks": activities + 2, "resources": 4, "critical_path": 20, "seed": 0}
+        result["runs"] = [{"solver": "engine", "makespan": engine}, {"solver": "cp-sat", "makespan": cpsat}]
+        return result
+
+    public = [makespan("Pat1", 30, 66, 62)]
+    generated = [
+        makespan(f"synthetic-{size}-s{seed}", size, 100 + seed, 101) for size in (30, 60) for seed in (0, 1, 2)
+    ]
+
+    # On the homepage the generated instances are a data set of their own, so the public set counts
+    # the instances from the literature alone.
+    public_set = publish.rcpsp_dataset(public, 30)
+    assert (public_set["slug"], public_set["kind"], len(public_set["sections"][0]["rows"])) == (
+        "rg30-rcpsp",
+        "public",
+        1,
+    )
+    dataset = publish.rcpsp_synthetic_dataset(generated, 30)
+    assert (dataset["slug"], dataset["kind"]) == ("rcpsp-synthetic", "generated")
+    assert [(section["id"], len(section["rows"])) for section in dataset["sections"]] == [("instances", 6)]
+    assert dataset["sections"][0]["rows"][3]["size"] == "60 activities / 4 resources"
+    assert dataset["command"] == (
+        "uv run project-job-scheduling-public-bench --synthetic 30 --synthetic 60 --synthetic-seeds 0,1,2 "
+        "--seconds 30 --workers 8"
+    )
+    assert public_set["command"] == "uv run project-job-scheduling-public-bench --all --seconds 30 --workers 8"
+    block = publish.rcpsp_block(public, ARGS, generated)
+    assert "| Pat1 | 30 | 20 | 66 | **62** |" in block
+    assert "(`--synthetic N`, instance seeds 0, 1 and 2):" in block
+    assert "| synthetic-60-s1 | 60 | 20 | **101** | **101** |" in block
+    assert block.count("| Instance | Activities |") == 2 and block.count("Measured ") == 1
+
+    # Without generated results: the RG30 table alone, as before.
+    assert "Generated" not in publish.rcpsp_block(public, ARGS)
+    # Sizes and seeds are read from the names the runner gives its generated instances.
+    with pytest.raises(SystemExit, match="Pat2: a generated instance is named synthetic-<size>-s<seed>"):
+        publish.rcpsp_block(public, ARGS, [makespan("Pat2", 30, 1, 1)])
+    # The two tables share one footer, so one seed.
+    with pytest.raises(SystemExit, match="different seeds"):
+        publish.rcpsp_block(public, ARGS, [makespan("synthetic-30-s0", 30, 1, 1) | {"seed": 4}])
+
+
+def test_the_generated_rcpsp_results_need_the_rg30_ones_and_extra_json_is_refused(tmp_path, monkeypatch) -> None:
+    argv = ["publish", str(tmp_path), "--date", "2026-01-02", "--machine", "m", "--machine-ko", "m"]
+    monkeypatch.setattr("sys.argv", argv)
+    (tmp_path / "rcpsp-synthetic.json").write_text(json.dumps([{"instance": "synthetic-30-s0", "runs": []}]))
+    with pytest.raises(SystemExit, match="published together with rcpsp.json"):
+        publish.main()
+    (tmp_path / "rcpsp-synthetic.json").unlink()
+    (tmp_path / "extra.json").write_text("{}")
+    with pytest.raises(SystemExit, match="replaced by timetabling.json"):
+        publish.main()

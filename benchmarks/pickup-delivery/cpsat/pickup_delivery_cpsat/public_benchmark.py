@@ -17,7 +17,7 @@ from pathlib import Path
 
 from external_solver.pickup_delivery import solve_request as solve_cpsat_request
 
-from cpsat_plugins.results import write_results, write_whole
+from cpsat_plugins.results import seed_list, write_results, write_whole
 from optimaru.pickup_delivery.constraints import (
     max_end_time_cost,
     paired_request_cost,
@@ -506,6 +506,13 @@ def main(argv: list[str] | None = None) -> int:
         metavar="N",
         help="solve a seeded synthetic instance with N requests instead (all of them); repeat for several sizes",
     )
+    parser.add_argument(
+        "--synthetic-seeds",
+        type=seed_list,
+        default=None,
+        help="comma-separated seeds of the synthetic instances: one instance per size and seed "
+        "(default: the one of --seed)",
+    )
     parser.add_argument("--backend", choices=("engine", "cpsat", "both"), default="both")
     parser.add_argument("--cache-dir", type=Path, default=Path(__file__).with_name(".cache"))
     parser.add_argument(
@@ -525,10 +532,13 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--all, --instance and --synthetic are mutually exclusive")
     if args.synthetic and args.requests:
         parser.error("--requests cuts an official instance; a synthetic instance is run whole")
+    if args.synthetic_seeds and not args.synthetic:
+        parser.error("--synthetic-seeds goes with --synthetic")
 
     cases: list[tuple[PdptwInstance, int | None]]
     if args.synthetic:
-        cases = [(synthetic_instance(count, args.seed), None) for count in args.synthetic]
+        seeds = args.synthetic_seeds or [args.seed]
+        cases = [(synthetic_instance(count, seed), None) for count in args.synthetic for seed in seeds]
     else:
         names = instance_names(args.cache_dir) if args.all else (args.instance or [DEFAULT_INSTANCE])
         cases = [

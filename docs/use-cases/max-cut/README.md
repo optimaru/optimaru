@@ -263,5 +263,5 @@ component, tested, made cheaper per move, moved to the default fast path and mea
 [`benchmarks/max-cut`](../../../benchmarks/max-cut) compares this use case with OR-Tools
 CP-SAT on the same instances, rescored by the same evaluator.
 
-Latest run (30 s per solver, 8 instances): best score by the engine on 8, CP-SAT on 4
+Latest run (30 s per solver, 20 instances): best score by the engine on 19, CP-SAT on 11
 (ties count for each). Full table: [benchmarks/max-cut/README.md](../../../benchmarks/max-cut/README.md#results).

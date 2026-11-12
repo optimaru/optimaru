@@ -255,5 +255,5 @@ component, tested, made cheaper per move, moved to the default fast path and mea
 [`benchmarks/knapsack`](../../../benchmarks/knapsack) compares this use case with OR-Tools
 CP-SAT on the same instances, rescored by the same evaluator.
 
-Latest run (30 s per solver, 7 instances): best score by the engine on 7, CP-SAT on 7
+Latest run (30 s per solver, 20 instances): best score by the engine on 20, CP-SAT on 20
 (ties count for each). Full table: [benchmarks/knapsack/README.md](../../../benchmarks/knapsack/README.md#results).

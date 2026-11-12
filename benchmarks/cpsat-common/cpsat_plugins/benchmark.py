@@ -19,6 +19,34 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 
+def seeded(scales: dict[str, Any]) -> dict[str, Callable[[], Any]]:
+    """The instances of a ladder that has several instances at a scale.
+
+    A scale given as ``(build, seeds)`` is one instance per seed, ``build(seed)``: the first
+    keeps the scale's name and the others are ``<scale>-2``, ``<scale>-3``, ... in the order
+    of the seeds. A scale given as a builder alone is one instance. The ladder keeps the
+    order of the scales. A name that two scales would both give (a scale `small-2` beside a
+    scale `small` with two seeds) is refused.
+    """
+    ladder: dict[str, Callable[[], Any]] = {}
+
+    def add(name: str, build: Callable[[], Any]) -> None:
+        if name in ladder:
+            raise ValueError(f"duplicate instance {name!r}")
+        ladder[name] = build
+
+    for name, entry in scales.items():
+        if callable(entry):
+            add(name, entry)
+            continue
+        build, seeds = entry
+        if not seeds:
+            raise ValueError(f"scale {name!r} has no seeds")
+        for index, seed in enumerate(seeds):
+            add(name if index == 0 else f"{name}-{index + 1}", lambda build=build, seed=seed: build(seed))
+    return ladder
+
+
 @dataclass(frozen=True, order=True)
 class Score:
     levels: tuple[float, ...]

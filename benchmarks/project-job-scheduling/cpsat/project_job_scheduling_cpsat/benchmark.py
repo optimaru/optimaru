@@ -11,7 +11,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "project-job-scheduling"
 PACKAGE = "optimaru.project_job_scheduling"
@@ -114,15 +114,16 @@ def _build(project_count: int, jobs_per_project: int, seed: int) -> Any:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
-    return {
-        "small": lambda: _build(1, 10, seed=3),
-        "demo": lambda: _build(2, 12, seed=0),
-        "medium": lambda: _build(4, 18, seed=1),
-        # The medium scale again from another seed.
-        "medium-2": lambda: _build(4, 18, seed=4),
-        "large": lambda: _build(6, 26, seed=2),
-        "xlarge": lambda: _build(10, 30, seed=5),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "small": (lambda seed: _build(1, 10, seed=seed), (3, 6, 7, 8)),
+            "demo": (lambda seed: _build(2, 12, seed=seed), (0, 9, 10, 11)),
+            "medium": (lambda seed: _build(4, 18, seed=seed), (1, 4, 12, 13, 14)),
+            "large": (lambda seed: _build(6, 26, seed=seed), (2, 15, 16, 17)),
+            "xlarge": (lambda seed: _build(10, 30, seed=seed), (5, 18, 19)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

@@ -28,10 +28,10 @@ best known.
 cd benchmarks/pickup-delivery/cpsat
 # engine and CP-SAT on the first ten request pairs of one instance
 uv run pickup-delivery-public-bench --instance lc101 --requests 10 --seconds 10 --workers 8
-# the first instance of each class at 10 requests, 25 requests and whole
+# the first instance of each class at 10, 15 and 25 requests and whole
 uv run pickup-delivery-public-bench --instance lc101 --instance lc201 --instance lr101 \
   --instance lr201 --instance lrc101 --instance lrc201 \
-  --requests 10 --requests 25 --requests 0 --seconds 30 --workers 8
+  --requests 10 --requests 15 --requests 25 --requests 0 --seconds 30 --workers 8
 # the engine on all 56 whole instances
 uv run pickup-delivery-public-bench --all --seconds 30 --backend engine
 ```
@@ -51,27 +51,33 @@ Each plan is re-verified independently: every request served, pickup before drop
 same vehicle, capacity and every time window. Distance is the Li & Lim round trip, with every
 leg rounded to a tenth of a unit; lower is better. Cells are vehicles / distance.
 
-**Engine and CP-SAT** on lc101, lc201, lr101, lr201, lrc101 and lrc201, at their first 10 and 25 requests and whole:
+**Engine and CP-SAT** on lc101, lc201, lr101, lr201, lrc101 and lrc201, at their first 10, 15 and 25 requests and whole:
 
 | Instance | Requests | engine | CP-SAT |
 | --- | --- | --- | --- |
 | lc101 | first 10 of 53 requests | **2 / 155.4** | **2 / 155.4** |
+| lc101 | first 15 of 53 requests | **3 / 204** | **3 / 204** |
 | lc101 | first 25 of 53 requests | **5 / 360.1** | **5 / 360.1** |
 | lc101 | all 53 requests | **10 / 828.7** | incomplete (leaves stops unserved) |
 | lc201 | first 10 of 51 requests | **2 / 304.9** | **2 / 304.9** |
+| lc201 | first 15 of 51 requests | **2 / 318.7** | **2 / 318.7** |
 | lc201 | first 25 of 51 requests | **3 / 444.7** | **3 / 444.7** |
 | lc201 | all 51 requests | **3 / 591.6** | incomplete (leaves stops unserved) |
 | lr101 | first 10 of 53 requests | **8 / 553** | **8 / 553** |
+| lr101 | first 15 of 53 requests | **12 / 798** | **12 / 798** |
 | lr101 | first 25 of 53 requests | **12 / 1,015.9** | **12 / 1,015.9** |
 | lr101 | all 53 requests | **19 / 1,650.8** | no solution in time |
 | lr201 | first 10 of 51 requests | **3 / 332.6** | **3 / 332.6** |
-| lr201 | first 25 of 51 requests | **5 / 733.8** | 7 / 903.1 |
+| lr201 | first 15 of 51 requests | **4 / 471.8** | **4 / 471.8** |
+| lr201 | first 25 of 51 requests | **5 / 733.8** | 7 / 866.4 |
 | lr201 | all 51 requests | **4 / 1,252.8** | incomplete (leaves stops unserved) |
 | lrc101 | first 10 of 53 requests | **4 / 425.7** | **4 / 425.7** |
-| lrc101 | first 25 of 53 requests | **9 / 1,018.2** | 10 / 1,109.6 |
+| lrc101 | first 15 of 53 requests | **6 / 644.6** | **6 / 644.6** |
+| lrc101 | first 25 of 53 requests | **9 / 1,018.2** | **9 / 1,018.2** |
 | lrc101 | all 53 requests | **15 / 1,703** | incomplete (leaves stops unserved) |
 | lrc201 | first 10 of 51 requests | **2 / 315.1** | **2 / 315.1** |
-| lrc201 | first 25 of 51 requests | **4 / 933.7** | 5 / 1,131.7 |
+| lrc201 | first 15 of 51 requests | **4 / 609.6** | **4 / 609.6** |
+| lrc201 | first 25 of 51 requests | **4 / 933.7** | 5 / 1,128.4 |
 | lrc201 | all 51 requests | **4 / 1,406.5** | incomplete (leaves stops unserved) |
 
 **Engine on 56 whole instances**, beside the best-known solution (which ranks by
@@ -137,7 +143,7 @@ harness's objective):
 | lrc207 | 51 | 3 / 1,062.05 | 3 / 1,061.8 | 0.0% |
 | lrc208 | 51 | 3 / 852.76 | 3 / 852.7 | 0.0% |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
+Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->
 
 The independent scorer verifies every stop exactly once, same vehicle,

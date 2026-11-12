@@ -9,10 +9,12 @@ Cross-check gate first: the C++ score of gen_quickstart's fixed instance must ma
 evaluate.py before the benchmark proceeds. Every solution is rescored with
 evaluate.py and compared with its self-report.
 
-Track 2 (--track2, full canonical constraints): the S/M/L canonical problems of
-gen_canonical.py are solved by CP-SAT (teacher_scheduling.solve) and by the C++
-canonical engine (optimaru.school_timetabling.solve), and
-both results are rescored with cpsat's validate.py (same time limit, same problem).
+Track 2 (--track2, full canonical constraints): the canonical problems of
+gen_canonical.py (S/M/L, a class count, or `ladder` for its 20 schools) are solved by
+CP-SAT (teacher_scheduling.solve) and by the C++ canonical engine
+(optimaru.school_timetabling.solve), and both results are rescored with cpsat's
+validate.py (same time limit, same problem). `--out FILE` also writes them as JSON,
+which scripts/publish_benchmarks.py reads.
 
 Track 3 (--track3, partial timetabling): a track-2 instance loses one weekday
 (--drop-day) so it cannot be filled, and both backends solve with the
@@ -23,6 +25,7 @@ validate.py, with the weekly-period shortfall counted separately.
 Example (from benchmarks/school-timetabling/cpsat):
     uv run school-timetabling-compare --sizes S,M --seconds 10
     uv run school-timetabling-compare --track2 --sizes S,M,L --seconds 10
+    uv run school-timetabling-compare --track2 --sizes ladder --seconds 30 --out out/track2.json
     uv run school-timetabling-compare --track3 --sizes S,M --seconds 10
 """
 
@@ -274,7 +277,7 @@ def track3(args) -> None:
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    sizes = [s.strip().upper() for s in args.sizes.split(",")]
+    sizes = gen_canonical.expand_sizes(args.sizes)
     weights = ObjectiveWeights()
 
     def evaluate_result(problem, problem_dict, timetable) -> dict:
@@ -439,7 +442,7 @@ def track2(args) -> None:
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    sizes = [s.strip().upper() for s in args.sizes.split(",")]
+    sizes = gen_canonical.expand_sizes(args.sizes)
     weights = ObjectiveWeights()
 
     def evaluate_result(problem, timetable) -> dict:
@@ -448,36 +451,76 @@ def track2(args) -> None:
         weighted = sum(getattr(weights, k) * v for k, v in penalties.items())
         return {"violations": violations, "penalties": penalties, "weighted": weighted}
 
+    def write_json(problems: dict[str, dict], rows: list[dict]) -> None:
+        """The rows so far as JSON, one entry per school: what scripts/publish_benchmarks.py reads.
+        Written after every school, so an interrupted run keeps what it measured."""
+        if args.out is None:
+            return
+        results = []
+        for size, problem_dict in problems.items():
+            runs = [
+                {
+                    "solver": "cp-sat" if row["backend"] == "cpsat" else "engine",
+                    "status": row["status"],
+                    # A run without a timetable has nothing to count violations or a penalty on.
+                    "hard_violations": len(row["violations"]) if row["weighted"] is not None else None,
+                    "penalty": row["weighted"],
+                    "seconds": row["wall"],
+                }
+                for row in rows
+                if row["size"] == size
+            ]
+            results.append(
+                {
+                    "instance": f"canonical_{size}",
+                    "classes": len(problem_dict["class_groups"]),
+                    "teachers": len(problem_dict["teachers"]),
+                    "rooms": len(problem_dict["rooms"]),
+                    "courses": len(problem_dict["courses"]),
+                    "budget": float(args.seconds),
+                    "seed": args.seed,
+                    "workers": args.workers,
+                    "runs": runs,
+                }
+            )
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+
     rows: list[dict] = []
+    problems: dict[str, dict] = {}
     for size in sizes:
         problem_dict = gen_canonical.generate(size)
         path = out_dir / f"canonical_{size}.json"
         with open(path, "w", encoding="utf-8") as f:
             json.dump(problem_dict, f, ensure_ascii=False, indent=2)
         problem = TimetableProblem.model_validate(problem_dict)
+        problems[size] = problem_dict
 
-        print(f"\n== CP-SAT canonical_{size} ({args.seconds}s) ==")
-        timetable = solve(
-            problem,
-            SolverConfig(
-                time_limit_seconds=float(args.seconds),
-                num_workers=args.workers,
-                random_seed=args.seed,
-                log_search_progress=False,
-            ),
-        )
-        checked = evaluate_result(problem, timetable)
-        rows.append(
-            {
-                "size": size,
-                "backend": "cpsat",
-                "status": str(timetable.status),
-                "wall": timetable.wall_time_seconds,
-                **checked,
-            }
-        )
+        print(f"\n== CP-SAT canonical_{size} ({args.seconds}s) ==", flush=True)
+        t0 = time.perf_counter()
+        nothing = {"violations": [], "penalties": {}, "weighted": None}
+        try:
+            timetable = solve(
+                problem,
+                SolverConfig(
+                    time_limit_seconds=float(args.seconds),
+                    num_workers=args.workers,
+                    random_seed=args.seed,
+                    log_search_progress=False,
+                ),
+            )
+        except Exception as e:  # noqa: BLE001 — a failure is a row of its own; the publisher refuses it
+            status, checked = f"error: {e}", nothing
+        else:
+            status = str(timetable.status)
+            # No timetable to rescore: every lesson would count as a violation.
+            checked = evaluate_result(problem, timetable) if timetable.status.has_solution else nothing
+        # The time limit is the search's: building the model comes on top, and `wall` has both.
+        wall = time.perf_counter() - t0
+        rows.append({"size": size, "backend": "cpsat", "status": status, "wall": wall, **checked})
 
-        print(f"== engine canonical_{size} ({args.seconds}s) ==")
+        print(f"== engine canonical_{size} ({args.seconds}s) ==", flush=True)
         t0 = time.perf_counter()
         try:
             result = engine_solve(problem_dict, time_limit_seconds=float(args.seconds), random_seed=args.seed)
@@ -493,6 +536,7 @@ def track2(args) -> None:
                     "weighted": None,
                 }
             )
+            write_json(problems, rows)
             continue
         wall = time.perf_counter() - t0
         from teacher_scheduling import Timetable
@@ -500,6 +544,7 @@ def track2(args) -> None:
         timetable = Timetable.model_validate(result)
         checked = evaluate_result(problem, timetable)
         rows.append({"size": size, "backend": "engine", "status": str(timetable.status), "wall": wall, **checked})
+        write_json(problems, rows)
 
     lines = [
         f"## Track 2: full canonical constraints — C++ canonical vs CP-SAT ({args.seconds}s, seed {args.seed})",
@@ -512,7 +557,7 @@ def track2(args) -> None:
         wall = f"{row['wall']:.1f}s" if row["wall"] is not None else "-"
         lines.append(
             f"| canonical_{row['size']} | {row['backend']} | {row['status']} "
-            f"| {len(row['violations'])} "
+            f"| {len(row['violations']) if weighted is not None else '-'} "
             f"| {weighted if weighted is not None else '-'} | {wall} |"
         )
     lines += [
@@ -541,11 +586,17 @@ def main() -> int:
         default=4,
         help="weekday removed in track 3 (0=Mon). Periods stay and only cells go, so it cannot be filled",
     )
-    parser.add_argument("--sizes", default="S,M", help="comma-separated (track 1: the S,M,L presets)")
+    parser.add_argument(
+        "--sizes",
+        default="S,M",
+        help="comma-separated: the S,M,L presets; tracks 2 and 3 also take a class count "
+        "(a multiple of 3) and `ladder`, the 20 schools of 3 to 60 classes",
+    )
     parser.add_argument("--seconds", type=int, default=10)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--workers", type=int, default=8, help="CP-SAT worker count")
     parser.add_argument("--out-dir", default="out")
+    parser.add_argument("--out", default=None, help="track 2: also write the results as JSON to this file")
     parser.add_argument("--cpp-bin", help="path of st_quality_bench (default: built with cmake)")
     args = parser.parse_args()
 

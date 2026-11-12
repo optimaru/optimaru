@@ -12,7 +12,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "task-assigning"
 PACKAGE = "optimaru.task_assigning"
@@ -97,14 +97,17 @@ def _generate(task_count: int, employee_count: int, customer_count: int, seed: i
 def instances() -> dict[str, Callable[[], Any]]:
     from optimaru.task_assigning import demo
 
-    return {
-        "small": lambda: _generate(12, 4, 3, seed=1),
-        # The demo data: 28 tasks, 8 employees, 4 customers.
-        "demo": lambda: demo.generate_demo_data().to_core(),
-        "medium": lambda: _generate(60, 12, 6, seed=2),
-        "large": lambda: _generate(120, 20, 8, seed=3),
-        "xlarge": lambda: _generate(240, 32, 12, seed=4),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "small": (lambda seed: _generate(12, 4, 3, seed=seed), (1, 5, 6, 7, 8)),
+            # The demo data: 28 tasks, 8 employees, 4 customers.
+            "demo": lambda: demo.generate_demo_data().to_core(),
+            "medium": (lambda seed: _generate(60, 12, 6, seed=seed), (2, 9, 10, 11, 12)),
+            "large": (lambda seed: _generate(120, 20, 8, seed=seed), (3, 13, 14, 15, 16)),
+            "xlarge": (lambda seed: _generate(240, 32, 12, seed=seed), (4, 17, 18, 19)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

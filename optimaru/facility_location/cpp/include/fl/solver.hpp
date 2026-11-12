@@ -95,8 +95,9 @@ public:
         // an assignment within 0.03% of the best one for its own 12, 1.4%
         // behind on the score.
         //
-        // Measured on the six instances of benchmarks/facility-location
-        // (2026-11-12, 30 s, three seeds, solved from the construction), as
+        // Measured on the six instances benchmarks/facility-location had
+        // before its ladder grew to 20 (small, demo, medium, medium-2, large,
+        // xlarge; 2026-11-12, 30 s, three seeds, solved from the construction), as
         // the mean cost above CP-SAT's at 30 s on 8 workers. Stages are late
         // acceptance restarting with a doubled history; the share is what the
         // gate on the macro moves is multiplied by, in the first five rows

@@ -37,13 +37,29 @@ def _plant(line_count: int, job_count: int) -> Callable[[], Any]:
 
 
 def instances() -> dict[str, Callable[[], Any]]:
+    # The demo generator has one seed, so every instance is another scale: `linesNxM` is N lines
+    # and M jobs beside the six plants named by their lines alone.
     return {
+        "lines2x10": _plant(2, 10),
         "lines2": _plant(2, 20),
+        "lines2x30": _plant(2, 30),
+        "lines3x20": _plant(3, 20),
+        "lines3x30": _plant(3, 30),
         "lines3": _plant(3, 40),
+        "lines3x60": _plant(3, 60),
+        "lines4x40": _plant(4, 40),
         "lines4": _plant(4, 60),
+        "lines4x80": _plant(4, 80),
+        "lines5x50": _plant(5, 50),
+        "lines5x75": _plant(5, 75),
         # The demo plant: `generate_demo_data()` with its own defaults.
         "demo": _plant(5, 100),
+        "lines6x90": _plant(6, 90),
+        "lines6x120": _plant(6, 120),
+        "lines7x140": _plant(7, 140),
+        "lines8x150": _plant(8, 150),
         "lines8": _plant(8, 200),
+        "lines9x250": _plant(9, 250),
         "lines10": _plant(10, 300),
     }
 

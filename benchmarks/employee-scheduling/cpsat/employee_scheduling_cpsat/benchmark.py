@@ -15,7 +15,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 from optimaru.employee_scheduling.models import ScheduleRequest
 
 NAME = "employee-scheduling"
@@ -41,18 +41,19 @@ def _build(seed: int, workers: int, days: int) -> Roster:
 
 
 def instances() -> dict[str, Callable[[], Roster]]:
-    return {
-        "small": lambda: _build(seed=3, workers=6, days=7),
-        # `generate_demo_data()` with its own defaults.
-        "demo": lambda: _build(seed=7, workers=12, days=14),
-        "medium": lambda: _build(seed=1, workers=24, days=28),
-        # The medium scale again from another seed.
-        "medium-2": lambda: _build(seed=4, workers=24, days=28),
-        "large": lambda: _build(seed=2, workers=48, days=28),
-        # 80 workers: at 96 the CP-SAT reference model is no longer valid (its squared-load
-        # objective leaves int64), which would be a model limit, not a search result.
-        "xlarge": lambda: _build(seed=5, workers=80, days=28),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "small": (lambda seed: _build(seed=seed, workers=6, days=7), (3, 6, 8, 9)),
+            # `generate_demo_data()` with its own defaults.
+            "demo": (lambda seed: _build(seed=seed, workers=12, days=14), (7, 10, 11, 12)),
+            "medium": (lambda seed: _build(seed=seed, workers=24, days=28), (1, 4, 13, 14, 15)),
+            "large": (lambda seed: _build(seed=seed, workers=48, days=28), (2, 16, 17, 18)),
+            # 80 workers: at 96 the CP-SAT reference model is no longer valid (its squared-load
+            # objective leaves int64), which would be a model limit, not a search result.
+            "xlarge": (lambda seed: _build(seed=seed, workers=80, days=28), (5, 19, 20)),
+        }
+    )
 
 
 def describe(problem: Roster) -> str:

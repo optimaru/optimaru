@@ -1,4 +1,4 @@
-"""Compare both backends on public RCPSP instances in Patterson format."""
+"""Compare both backends on public RCPSP instances in Patterson format, or on generated ones of that shape."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import io
 import json
+import random
 import sys
 import time
 import urllib.request
@@ -17,7 +18,7 @@ from pathlib import Path
 from external_solver.project_job_scheduling import solve as solve_cpsat
 
 import optimaru.project_job_scheduling as pjs
-from cpsat_plugins.results import write_results, write_whole
+from cpsat_plugins.results import seed_list, write_results, write_whole
 from optimaru.project_job_scheduling.models import (
     AllocationModel,
     ExecutionModeModel,
@@ -128,6 +129,62 @@ def load_instance(name: str, cache_dir: Path) -> RcpspInstance:
         raise ValueError(f"unknown instance {name!r}; available: {', '.join(instance_names())}")
     with zipfile.ZipFile(io.BytesIO(_download(cache_dir))) as archive:
         return parse_instance(archive.read(f"{ARCHIVE_PREFIX}{name}.rcp").decode(), name=name)
+
+
+def synthetic_instance(activity_count: int, seed: int = 0) -> RcpspInstance:
+    """A seeded instance in the shape of the RG30 set: `activity_count` activities between a
+    source and a sink of duration 0, over four renewable resources of capacity 10.
+
+    An activity lasts 1 to 10 time units and uses three of the four resources, 1 to 8 units of
+    each, so the resources bind before the precedences do: the activities' work is about twice
+    what the longest chain takes. The network is wide and shallow, as in RG30: the activities
+    are dealt into one layer per eight of them (three layers at least, one per activity below
+    three). An activity follows one or two activities of the layer before it and, three times
+    in ten, one of an earlier layer. The first layer follows the source; what nothing follows
+    precedes the sink.
+    """
+    if activity_count < 1:
+        raise ValueError("a synthetic instance needs at least one activity")
+    rng = random.Random(seed)
+    resource_count = 4
+    capacities = (10,) * resource_count
+    durations = [rng.randint(1, 10) for _ in range(activity_count)]
+    requirements = []
+    for _ in range(activity_count):
+        used = rng.sample(range(resource_count), 3)
+        requirements.append(tuple(rng.randint(1, 8) if resource in used else 0 for resource in range(resource_count)))
+
+    # Layers, in order: every layer has an activity, the others land anywhere.
+    layer_count = min(activity_count, max(3, activity_count // 8))
+    layer_of = sorted([*range(layer_count), *(rng.randrange(layer_count) for _ in range(activity_count - layer_count))])
+    members: list[list[int]] = [[] for _ in range(layer_count)]
+    for activity, layer in enumerate(layer_of):
+        members[layer].append(activity)
+    predecessors: list[list[int]] = []
+    for activity, layer in enumerate(layer_of):
+        if layer == 0:
+            predecessors.append([])
+            continue
+        before = members[layer - 1]
+        chosen = rng.sample(before, min(len(before), rng.randint(1, 2)))
+        earlier = [other for other in range(activity) if layer_of[other] < layer - 1]
+        if earlier and rng.random() < 0.3:
+            chosen.append(rng.choice(earlier))
+        predecessors.append(sorted(chosen))
+    successors: list[list[int]] = [[] for _ in range(activity_count)]
+    for activity, before in enumerate(predecessors):
+        for predecessor in before:
+            successors[predecessor].append(activity)
+
+    # Task 0 is the source, tasks 1..n the activities, task n + 1 the sink.
+    idle = (0,) * resource_count
+    sink = activity_count + 1
+    tasks = [Task(0, idle, tuple(1 + activity for activity in range(activity_count) if not predecessors[activity]))]
+    for activity in range(activity_count):
+        after = tuple(1 + successor for successor in sorted(successors[activity])) or (sink,)
+        tasks.append(Task(durations[activity], requirements[activity], after))
+    tasks.append(Task(0, idle, ()))
+    return RcpspInstance(f"synthetic-{activity_count}-s{seed}", capacities, tuple(tasks))
 
 
 def _topological_order(instance: RcpspInstance) -> list[int]:
@@ -360,6 +417,20 @@ def main(argv: list[str] | None = None) -> int:
         help=f"instance stem; repeat to select several (default {DEFAULT_INSTANCE})",
     )
     parser.add_argument("--all", action="store_true", help="run every instance of the archive")
+    parser.add_argument(
+        "--synthetic",
+        type=int,
+        action="append",
+        default=None,
+        metavar="N",
+        help="solve generated instances with N activities instead; repeat for several sizes",
+    )
+    parser.add_argument(
+        "--synthetic-seeds",
+        type=seed_list,
+        default=None,
+        help="comma-separated seeds of the generated instances: one instance per size and seed (default 0)",
+    )
     parser.add_argument("--seconds", type=float, default=10.0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
@@ -383,11 +454,17 @@ def main(argv: list[str] | None = None) -> int:
         help="write the results as JSON here after every instance, so an interrupted run keeps them",
     )
     args = parser.parse_args(argv)
-    if args.all and args.instance:
-        parser.error("--all and --instance are mutually exclusive")
+    if sum(bool(choice) for choice in (args.all, args.instance, args.synthetic)) > 1:
+        parser.error("--all, --instance and --synthetic are mutually exclusive")
+    if args.synthetic_seeds and not args.synthetic:
+        parser.error("--synthetic-seeds goes with --synthetic")
 
-    names = instance_names() if args.all else (args.instance or [DEFAULT_INSTANCE])
-    instances = [load_instance(name, args.cache_dir) for name in names]
+    if args.synthetic:
+        seeds = args.synthetic_seeds or [0]
+        instances = [synthetic_instance(count, seed) for count in args.synthetic for seed in seeds]
+    else:
+        names = instance_names() if args.all else (args.instance or [DEFAULT_INSTANCE])
+        instances = [load_instance(name, args.cache_dir) for name in names]
     backends = ("engine", "cpsat") if args.backend == "both" else (args.backend,)
 
     def log(line: str) -> None:

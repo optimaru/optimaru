@@ -12,7 +12,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from cpsat_plugins.benchmark import run_cli
+from cpsat_plugins.benchmark import run_cli, seeded
 
 NAME = "meeting-scheduling"
 PACKAGE = "optimaru.meeting_scheduling"
@@ -86,14 +86,17 @@ def _generate(meeting_count: int, people_count: int, room_count: int, day_count:
 def instances() -> dict[str, Callable[[], Any]]:
     from optimaru.meeting_scheduling import models
 
-    return {
-        "small": lambda: _generate(8, 10, 2, 2, seed=1),
-        "medium": lambda: _generate(16, 16, 3, 3, seed=2),
-        # The demo data: 24 meetings, 20 people, 3 rooms, 4 days.
-        "demo": lambda: models.generate_demo_data().to_core(),
-        "large": lambda: _generate(48, 40, 5, 5, seed=3),
-        "xlarge": lambda: _generate(96, 60, 8, 6, seed=4),
-    }
+    # The first seed of a scale is the instance of that name; the others are `<scale>-2`, `<scale>-3`, ...
+    return seeded(
+        {
+            "small": (lambda seed: _generate(8, 10, 2, 2, seed=seed), (1, 5, 6, 7, 8)),
+            "medium": (lambda seed: _generate(16, 16, 3, 3, seed=seed), (2, 9, 10, 11, 12)),
+            # The demo data: 24 meetings, 20 people, 3 rooms, 4 days.
+            "demo": lambda: models.generate_demo_data().to_core(),
+            "large": (lambda seed: _generate(48, 40, 5, 5, seed=seed), (3, 13, 14, 15, 16)),
+            "xlarge": (lambda seed: _generate(96, 60, 8, 6, seed=seed), (4, 17, 18, 19)),
+        }
+    )
 
 
 def describe(problem: Any) -> str:

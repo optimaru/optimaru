@@ -2,7 +2,11 @@ from max_cut_cpsat import benchmark
 
 
 def test_comparison_runner_owns_its_instances() -> None:
-    assert list(benchmark.instances()) == ["g30", "g50", "g80", "g120", "g200", "g400", "g800", "g1600"]
+    names = list(benchmark.instances())
+    assert len(names) == 20
+    # One name per size, and the other draws of a size numbered after it.
+    assert [name for name in names if "-" not in name] == ["g30", "g50", "g80", "g120", "g200", "g400", "g800", "g1600"]
+    assert names[:4] == ["g30", "g30-2", "g30-3", "g50"]
     assert callable(benchmark.solve_engine)
     assert callable(benchmark.solve_cpsat)
 

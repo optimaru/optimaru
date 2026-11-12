@@ -1,11 +1,12 @@
-"""Track-2 canonical instance generator (S/M/L).
+"""Track-2 canonical instance generator (S/M/L, or any class count that is a multiple of 3).
 
 Builds canonical `TimetableProblem` JSON (API_SPEC.md's serialized shape) by
 scaling up the `teacher_scheduling.sample` demo school of
 benchmarks/school-timetabling/cpsat.
 
 - 5-day week: Mon–Thu 7 periods, Fri 6 periods → 34 cells per class
-- Classes: S=6 (3 grades × 2) / M=12 (3 grades × 4) / L=24 (3 grades × 8)
+- Classes: S=6 (3 grades × 2) / M=12 (3 grades × 4) / L=24 (3 grades × 8), or a class count given
+  as a number; `ladder` stands for the 20 schools of 3 to 60 classes (`LADDER`)
 - Subject periods total 33 + homeroom (Monday period 1, fixed, homeroom teacher) 1 = 34
   → the timetable fills up with no empty cell
 - Special rooms (science lab / music room / art room / gym) grow with the class count
@@ -20,6 +21,7 @@ validated with teacher_scheduling's pydantic models.
 
 Usage:
     uv run python -m school_timetabling_cpsat.gen_canonical --sizes S,M,L --out-dir out
+    uv run python -m school_timetabling_cpsat.gen_canonical --sizes 9,45 --out-dir out
 """
 
 from __future__ import annotations
@@ -33,6 +35,33 @@ from pathlib import Path
 
 # Class-count presets.
 SIZES = {"S": 6, "M": 12, "L": 24}
+
+# Class counts of the track-2 ladder (`--sizes ladder`): 20 schools, 3 to 60 classes.
+LADDER = tuple(range(3, 61, 3))
+
+
+def class_count(size: str) -> int:
+    """The classes of a size: a preset (`S`, `M`, `L`) or a class count, a multiple of 3."""
+    if size in SIZES:
+        return SIZES[size]
+    if not size.isdecimal():
+        raise ValueError(f"unknown size {size!r}: S, M, L or a class count")
+    classes = int(size)
+    if classes < 3 or classes % 3 != 0:
+        raise ValueError(f"size {size}: the class count must be a multiple of 3 (spread evenly over 3 grades)")
+    return classes
+
+
+def expand_sizes(text: str) -> list[str]:
+    """`S,M,45` -> ["S", "M", "45"]; `ladder` stands for the class counts of `LADDER`."""
+    sizes: list[str] = []
+    for item in text.split(","):
+        item = item.strip()
+        sizes += [str(classes) for classes in LADDER] if item.lower() == "ladder" else [item.upper()]
+    for size in sizes:
+        class_count(size)
+    return sizes
+
 
 # Subject periods (homeroom hour separate). Total 33.
 CURRICULUM: dict[str, int] = {
@@ -87,9 +116,7 @@ def _class_ids(classes: int) -> list[str]:
 
 
 def generate(size: str) -> dict:
-    classes = SIZES[size]
-    if classes % 3 != 0:
-        raise ValueError("the class count must be a multiple of 3 (spread evenly over 3 grades)")
+    classes = class_count(size)
     class_ids = _class_ids(classes)
 
     # --- teachers: per subject, classes are dealt out in chunks ---
@@ -300,14 +327,15 @@ def _verify(problem: dict, size: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sizes", default="S,M,L", help="comma-separated: S,M,L")
+    parser.add_argument(
+        "--sizes", default="S,M,L", help="comma-separated: S, M, L, a class count (a multiple of 3) or `ladder`"
+    )
     parser.add_argument("--out-dir", default="out")
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    for size in args.sizes.split(","):
-        size = size.strip().upper()
+    for size in expand_sizes(args.sizes):
         problem = generate(size)
         path = out_dir / f"canonical_{size}.json"
         with open(path, "w", encoding="utf-8") as f:
