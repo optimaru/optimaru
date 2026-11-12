@@ -109,6 +109,19 @@
   `--json` are unchanged; the tests are `cpsat/tests/test_public_benchmark.py` and need no
   network. `tests/test_layout.py` checks that no `benchmarks/<slug>/bench/` package is left
   and that every `public_benchmark.py` has its `<slug>-public-bench` entry.
+- **Benchmarks: school timetabling's comparison is a package with a command.** Its
+  three-track harness was a separate script project (`benchmarks/school-timetabling`,
+  `st-bench`, not installed) whose four scripts imported each other as top-level modules and
+  put the CP-SAT model and the engine on `sys.path` by hand, run as `uv run run_bench.py`.
+  It is now the package `school_timetabling_cpsat` in the `benchmarks/school-timetabling/cpsat`
+  project, next to the CP-SAT model `teacher_scheduling`, as every other use case has it:
+  `run_bench.py` is `benchmark.py`, run as `uv run school-timetabling-compare` (`--track2`,
+  `--track3`), and `evaluate`, `cpsat_quickstart` and `gen_canonical` run as
+  `uv run python -m school_timetabling_cpsat.<module>`. The `st-bench` project and its lock
+  are gone, one `uv sync` there builds the engine extension too, and
+  `school-timetabling-bench.yml` syncs and runs only that project. Flags, outputs and the
+  generated instances are unchanged (the S, M and L schools are byte-identical); `out/` is
+  now under `cpsat/` when run with the default `--out-dir`.
 
 ## 0.5.0
 

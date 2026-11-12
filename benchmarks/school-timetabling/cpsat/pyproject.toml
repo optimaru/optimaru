@@ -1,7 +1,7 @@
 [project]
-name = "teacher-scheduling"
+name = "school-timetabling-cpsat"
 version = "0.0.0"
-description = "CP-SAT timetabling engine for middle/high-school teacher timetables"
+description = "CP-SAT timetabling model (teacher_scheduling) and the engine vs CP-SAT comparison for school timetabling"
 requires-python = ">=3.11,<4.0"
 dependencies = [
     "ortools>=9.15,<10",
@@ -14,12 +14,15 @@ dependencies = [
 [dependency-groups]
 dev = ["pytest>=8.3.4"]
 
+[project.scripts]
+school-timetabling-compare = "school_timetabling_cpsat.benchmark:main"
+
 [build-system]
 requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["teacher_scheduling*"]
+include = ["teacher_scheduling*", "school_timetabling_cpsat*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

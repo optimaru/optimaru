@@ -19,10 +19,10 @@ unassigned lessons relaxed (CP-SAT solve_partial, the engine with
 unassigned_lessons_cost level=soft); both are rescored with cpsat's
 validate.py, with the weekly-period shortfall counted separately.
 
-Example:
-    uv run run_bench.py --sizes S,M --seconds 10
-    uv run run_bench.py --track2 --sizes S,M,L --seconds 10
-    uv run run_bench.py --track3 --sizes S,M --seconds 10
+Example (from benchmarks/school-timetabling/cpsat):
+    uv run school-timetabling-compare --sizes S,M --seconds 10
+    uv run school-timetabling-compare --track2 --sizes S,M,L --seconds 10
+    uv run school-timetabling-compare --track3 --sizes S,M --seconds 10
 """
 
 from __future__ import annotations
@@ -36,9 +36,10 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from evaluate import assignment_from_solution, format_score, load_json, score_assignment
+from .evaluate import assignment_from_solution, format_score, load_json, score_assignment
 
-BENCH_DIR = Path(__file__).resolve().parent
+# benchmarks/school-timetabling (this file is cpsat/school_timetabling_cpsat/benchmark.py).
+BENCH_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = BENCH_DIR.parents[1]
 
 # Track-1 size presets: (classes, teachers, rooms). Same as documented in st_quality_bench.cpp.
@@ -106,7 +107,7 @@ def run_cpp(cpp_bin: Path, size: str, seed: int, seconds: int, out_dir: Path) ->
 
 
 def run_cpsat(size: str, seed: int, seconds: int, out_dir: Path, workers: int) -> dict:
-    import cpsat_quickstart
+    from . import cpsat_quickstart
 
     instance_path = out_dir / f"instance_{size}.json"
     instance = load_json(instance_path)
@@ -277,11 +278,12 @@ def track3(args) -> None:
     _cpsat_path()
     from pydantic import ValidationError
 
-    import gen_canonical
     from teacher_scheduling import SolverConfig, Timetable, TimetableProblem
     from teacher_scheduling.partial import UNASSIGNED_WEIGHT, solve_partial, unassigned_courses
     from teacher_scheduling.solver.config import ObjectiveWeights
     from teacher_scheduling.validate import compute_penalties, validate_timetable
+
+    from . import gen_canonical
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -464,10 +466,11 @@ def track3(args) -> None:
 
 def track2(args) -> None:
     _cpsat_path()
-    import gen_canonical
     from teacher_scheduling import SolverConfig, TimetableProblem, solve
     from teacher_scheduling.solver.config import ObjectiveWeights
     from teacher_scheduling.validate import compute_penalties, validate_timetable
+
+    from . import gen_canonical
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

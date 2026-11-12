@@ -21,7 +21,7 @@ whose file is missing keeps its README text and its homepage entry.
 - ``qaplib.json``: ``quadratic-assignment-public-bench --all --json``;
 - ``salbp-<data set>.json``:
   ``assembly-line-balancing-public-bench --dataset <data set> --json``;
-- ``extra.json``: the numbers the school-timetabling harness prints as text, copied by
+- ``extra.json``: the numbers ``school-timetabling-compare --track2`` prints as text, copied by
   hand: ``{"timetabling": {"date": "2026-11-04", "seconds": 30, "rows": [{"instance": "S",
   "size": "6 classes / 15 teachers / 72 courses", "engine": 231, "ortools": 320}, ...]}}``
   (track 2 weighted penalties).
@@ -976,8 +976,8 @@ def timetabling_dataset(extra: dict) -> dict:
         "school-timetabling",
         "generated",
         "cp-sat",
-        "school-timetabling",
-        f"uv run run_bench.py --track2 --sizes S,M,L --seconds {extra['seconds']:g}",
+        "school-timetabling/cpsat",
+        f"uv run school-timetabling-compare --track2 --sizes S,M,L --seconds {extra['seconds']:g}",
         [_section("instances", "penalty", rows, chart=rows)],
     )
     dataset["date"] = extra["date"]

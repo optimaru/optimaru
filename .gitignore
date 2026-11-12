@@ -17,5 +17,5 @@ wheelhouse/
 # benchmark downloads and results
 .bench-cache/
 benchmarks/vehicle-routing/bench/
-benchmarks/school-timetabling/out/
+benchmarks/school-timetabling/cpsat/out/
 site/

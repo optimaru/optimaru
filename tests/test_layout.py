@@ -121,6 +121,26 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
     assert not stale, f"links into external-solver that are not on {tag}: {stale}"
 
 
+def test_a_comparison_runner_is_named_after_its_use_case():
+    """`benchmarks/<slug>/cpsat/<use case>_cpsat/benchmark.py`, run as `uv run <slug>-compare`;
+    no loose scripts beside the project (school timetabling's tracks are a package too)."""
+    runners = sorted((ROOT / "benchmarks").glob("*/cpsat/*/benchmark.py"))
+    assert runners
+    for runner in runners:
+        project = runner.parents[1]
+        slug = project.parent.name
+        assert runner.parent.name == f"{slug.replace('-', '_')}_cpsat", runner
+        scripts = tomllib.loads((project / "pyproject.toml").read_text())["project"].get("scripts", {})
+        entry = f"{runner.parent.name}.benchmark:main"
+        assert scripts.get(f"{slug}-compare") == entry, f"{slug}: no `{slug}-compare = {entry!r}`"
+    assert (
+        ROOT / "benchmarks" / "school-timetabling" / "cpsat" / "school_timetabling_cpsat" / "benchmark.py"
+    ) in runners
+    loose = sorted(path.name for path in (ROOT / "benchmarks" / "school-timetabling").glob("*.py"))
+    assert not loose, f"school timetabling's scripts belong in school_timetabling_cpsat: {loose}"
+    assert not (ROOT / "benchmarks" / "school-timetabling" / "pyproject.toml").exists()
+
+
 def test_a_public_benchmark_runner_is_a_module_of_its_comparison_package():
     """A runner on a public instance archive is `<use case>_cpsat/public_benchmark.py`, run as
     `uv run <slug>-public-bench` from `benchmarks/<slug>/cpsat`; no loose `bench/` package

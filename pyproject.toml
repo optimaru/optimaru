@@ -96,7 +96,7 @@ ignore = ["E731", "E741"]
 # their packages here sorts an import the same way from any directory and any environment.
 known-first-party = [
   "optimaru", "cpsat_plugins", "*_cpsat", "teacher_scheduling", "vrp_benchmark",
-  "cpsat_quickstart", "dump_instances", "evaluate", "gen_canonical", "run_bench",
+  "dump_instances",
 ]
 
 [tool.cibuildwheel]

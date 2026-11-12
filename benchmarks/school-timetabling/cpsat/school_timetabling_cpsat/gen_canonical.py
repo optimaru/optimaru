@@ -19,7 +19,7 @@ weekly load ≤ min(30, max_periods_per_week); where possible the result is also
 validated with teacher_scheduling's pydantic models.
 
 Usage:
-    uv run gen_canonical.py --sizes S,M,L --out-dir out
+    uv run python -m school_timetabling_cpsat.gen_canonical --sizes S,M,L --out-dir out
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from collections import defaultdict
 from pathlib import Path
 
 # Used for the final validation with the canonical pydantic models of benchmarks/school-timetabling/cpsat.
-_CPSAT_DIR = Path(__file__).resolve().parent / "cpsat"
+_CPSAT_DIR = Path(__file__).resolve().parents[1]
 
 # Class-count presets.
 SIZES = {"S": 6, "M": 12, "L": 24}

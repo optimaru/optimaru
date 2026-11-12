@@ -37,7 +37,8 @@ The CP-SAT models come from
 its GitHub release tag (`external_solver.<subpackage>`); the models and their
 own tests live there. Two benchmarks are set up differently: school-timetabling
 keeps its CP-SAT model (`teacher_scheduling`) and its parity test in
-[`school-timetabling/cpsat`](school-timetabling/cpsat), and vehicle-routing is
+[`school-timetabling/cpsat`](school-timetabling/cpsat), the project that also holds its
+comparison (`school_timetabling_cpsat`, `school-timetabling-compare`), and vehicle-routing is
 the single `uv` project [`vehicle-routing`](vehicle-routing), which runs the
 OR-Tools Routing solver. Every other comparison is a `uv` project in
 `benchmarks/<slug>/cpsat` that installs `optimaru` from this checkout (an

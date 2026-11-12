@@ -22,7 +22,7 @@ and the solution is dumped to <instance name>.solution_cpsat.json for
 evaluate.py's rescoring.
 
 Usage:
-    uv run cpsat_quickstart.py <instance.json> <seconds> [--seed N] [--workers N]
+    uv run python -m school_timetabling_cpsat.cpsat_quickstart <instance.json> <seconds> [--seed N] [--workers N]
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from pathlib import Path
 
 from ortools.sat.python import cp_model
 
-from evaluate import format_score, load_json, score_assignment
+from .evaluate import format_score, load_json, score_assignment
 
 __all__ = ["solve_instance"]
 
