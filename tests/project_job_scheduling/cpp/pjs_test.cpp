@@ -635,28 +635,81 @@ void verifySerialScheduleMove() {
         check(pinnedMoved == 0, walk + "pinned allocations keep their value");
     }
 
-    // A solve. 40 activities of one project over two resources: the same
-    // seed and the same number of steps with and without the move. The
-    // margin is wide (the built-in moves stall well above what the order
-    // allows), so the comparison does not hang on one draw.
+    // A solve on an instance where the resources bind, as in RG30: 30
+    // activities of one project, four renewable resources of capacity 10,
+    // each activity on three of them, a layered network. The same seed and
+    // the same number of steps with and without the move, over three seeds:
+    // the makespans with the move add up to clearly less. (On an instance
+    // the precedences decide, both reach the critical path and the check
+    // would compare nothing.)
     {
-        auto solved = [](bool moves) {
-            ProjectJobSchedule t = buildRandomInstance(/*projects*/ 1,
-                                                       /*standardPerProject*/ 40,
-                                                       /*seed*/ 5,
-                                                       /*delayRangeSize*/ 400);
-            Solver::Config config;
-            config.step_limit = 30000;
-            config.seed = 3;
-            config.serial_schedule_moves = moves;
-            Solver(config).solve(t);
-            return t.score;
+        auto rg30Shaped = []() {
+            std::mt19937_64 rng(17);
+            auto draw = [&rng](int low, int high) {
+                return low + static_cast<int>(rng() % static_cast<std::uint64_t>(high - low + 1));
+            };
+            ProjectJobSchedule t;
+            t.delayRangeSize = 400;
+            t.projects.push_back({"P", 0, 0});
+            for (int r = 0; r < 4; ++r)
+                t.resources.push_back({"R" + std::to_string(r), 10, true, -1});
+            const int activities = 30, layers = 4;
+            auto addJob = [&t](JobType type, int duration, std::vector<ResourceRequirement> needs) {
+                Job job;
+                job.id = "J" + std::to_string(t.jobs.size());
+                job.project = 0;
+                job.jobType = type;
+                job.executionModes.push_back({job.id + "m", duration, std::move(needs)});
+                t.jobs.push_back(job);
+                Allocation allocation;
+                allocation.id = job.id;
+                allocation.job = static_cast<int>(t.jobs.size()) - 1;
+                if (type != JobType::STANDARD) allocation.modeDelay = 0;
+                t.allocations.push_back(allocation);
+                return static_cast<int>(t.allocations.size()) - 1;
+            };
+            const int source = addJob(JobType::SOURCE, 0, {});
+            std::vector<std::vector<int>> layer(layers);
+            for (int a = 0; a < activities; ++a) {
+                std::vector<ResourceRequirement> needs;
+                const int skipped = draw(0, 3);
+                for (int r = 0; r < 4; ++r) {
+                    if (r != skipped) needs.push_back({r, draw(1, 8)});
+                }
+                const int index = addJob(JobType::STANDARD, draw(1, 10), needs);
+                const int l = a * layers / activities;
+                if (l == 0) {
+                    t.allocations[index].predecessorAllocations.push_back(source);
+                } else {
+                    const std::vector<int>& before = layer[l - 1];
+                    t.allocations[index].predecessorAllocations.push_back(
+                            before[rng() % before.size()]);
+                }
+                layer[l].push_back(index);
+            }
+            const int sink = addJob(JobType::SINK, 0, {});
+            for (int a = 1; a <= activities; ++a)
+                t.allocations[sink].predecessorAllocations.push_back(a);
+            return t;
         };
-        const Score with = solved(true);
-        const Score without = solved(false);
-        std::printf("  with the move %s, without %s\n", with.str().c_str(), without.str().c_str());
-        check(with.hard == 0 && with.medium > without.medium,
-              "solve: 30,000 steps with the move end ahead of 30,000 without it");
+        long with = 0, without = 0;
+        for (const int seed : {1, 2, 3}) {
+            for (const bool moves : {true, false}) {
+                ProjectJobSchedule t = rg30Shaped();
+                Solver::Config config;
+                config.step_limit = 30000;
+                config.seed = seed;
+                config.serial_schedule_moves = moves;
+                Solver(config).solve(t);
+                if (t.score.hard != 0) with += 1000000;  // a broken capacity fails the check
+                (moves ? with : without) += -t.score.soft;
+            }
+        }
+        std::printf("  makespans over three seeds: with the move %ld, without %ld\n", with,
+                    without);
+        check(with * 100 <= without * 95,
+              "solve: 30,000 steps with the move end at least 5% earlier than without it, over "
+              "three seeds");
     }
     std::printf("\n");
 }
