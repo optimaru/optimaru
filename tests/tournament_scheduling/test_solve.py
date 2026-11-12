@@ -1,7 +1,10 @@
 """Demo solve: the demo instance reaches feasible
 and pinned assignments are kept."""
 
+import pytest
+
 import optimaru.tournament_scheduling as ts
+from optimaru.tournament_scheduling.constraints import get_constraints
 from optimaru.tournament_scheduling.models import TournamentScheduleModel, generate_demo_data
 
 
@@ -68,8 +71,6 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
     workers too, so it reaches the caller at once instead of after their whole budget."""
     import time
 
-    import pytest
-
     def boom(_step, _score):
         raise RuntimeError("boom")
 
@@ -84,8 +85,6 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     seam): the worker already running is stopped and joined, and the error reaches the caller
     at once. A joinable std::thread destroyed on that path would call std::terminate."""
     import time
-
-    import pytest
 
     from optimaru.tournament_scheduling import _core
 
@@ -110,7 +109,6 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     import time
 
     import optimaru.tournament_scheduling as package
-    from optimaru.tournament_scheduling.constraints import get_constraints
 
     info = {row.name: row for row in package.constraint_info()}
 
@@ -131,3 +129,33 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     )
     assert time.monotonic() - started < 20.0
     assert seen[-1].hard == 0 and seen[-1].soft < -1e18
+
+
+def _seeded_demo(constraints, team_count_moves=True):
+    config = ts.SolverConfig()
+    config.step_count_limit = 20_000
+    config.spent_limit_seconds = 60
+    config.random_seed = 1
+    config.team_count_moves = team_count_moves
+    core = generate_demo_data().to_core()
+    ts.solve(core, config=config, constraints=constraints)
+    return core.score
+
+
+def test_picked_constraints_cross_the_team_count_barrier_like_the_default_path():
+    """TeamCountMove runs on both paths.
+
+    The demo's 72 assignments are best spread over 7 teams at medium 1.19523 and over 6
+    at medium 0; only the move's reshape crosses between them. With it, a solve with the
+    default constraints picked reaches the default solve's medium 0 (and, with the same
+    seed and steps, its score; the C++ test checks the identical schedule); without it, it
+    stays on the 7-team optimum.
+    """
+    default = _seeded_demo(None)
+    picked = _seeded_demo(get_constraints())
+    assert default.hard == 0 and picked.hard == 0
+    assert -1e6 < default.soft <= 0  # medium 0
+    assert picked.soft == pytest.approx(default.soft)  # two calculators sum the same terms
+    without = _seeded_demo(get_constraints(), team_count_moves=False)
+    assert without.hard == 0
+    assert -1.2e6 < without.soft < -1.19e6  # medium 1.19523 (sqrt(10 / 7)), a small soft rest

@@ -137,10 +137,10 @@ class SolverConfig:
     """Upper bound on the probability of drawing the custom operator (TeamCountMove) in a step. 1 = unlimited."""
     value_recommender: bool
     """Steers the value choice of change moves to hard-feasible teams (no match that day +
-    not unavailable) (monolithic path only). Default False."""
+    not unavailable), with or without `constraints=`. Default False."""
     team_count_moves: bool
-    """Macro moves on the number of loaded teams (empty / revive a team). The only path
-    across the medium-level team-count barrier, so default True."""
+    """Macro moves on the number of loaded teams (empty / revive a team), with or without
+    `constraints=`. The only path across the medium-level team-count barrier, so default True."""
     best_score_limit: tuple[int, float]
     """Stop early at or above this score. E.g. (0, -inf) == stop at the first feasible."""
     on_new_best: Callable[[int, Score], None] | None
