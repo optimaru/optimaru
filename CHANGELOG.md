@@ -97,6 +97,17 @@
 - **Benchmarks: the facility location table measured again.** The engine has CP-SAT's score
   on the four instances up to 200 consumers (on two before) and is 0.02% and 0.29% behind on
   the two larger ones (1.4% to 3.3% behind on four before).
+- **School timetabling: a new soft constraint no longer needs a fast-path weight field to
+  solve.** Python read every soft constraint's weight off `canon.ObjectiveWeights` by name,
+  on both paths, so a soft component added to the catalog made every `st.solve()` raise
+  `AttributeError` until it had a field there (C++ struct, binding, stub), which the guide
+  made part of its first step. Now a solve with `constraints=` weighs it at the pick's
+  weight, and the default path, whose monolithic calculators do not score it yet, reports it
+  in `penalties` and weighs it at its component default in `objective_value`, as the field
+  will; `weights=` refuses any other value for it. A constraint with a field is read as
+  before, and a field the catalog does not know fails the import. The example of
+  `docs/use-cases/school-timetabling/extending.md` adds the field in step 5, with the
+  monolithic terms; its steps 2 to 5 were applied, built and tested again.
 
 ## 0.5.0
 

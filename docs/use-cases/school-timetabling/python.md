@@ -219,7 +219,12 @@ Rules:
   `SolverConfig.weights` / `solve(weights=)` / `models.ObjectiveWeightsModel`
   are keyed by the soft constraint names (`teacher_gap_cost`, ...) and take
   any finite number >= 0 (a bool, NaN, infinity or a negative weight raises,
-  as for a constraint pick's weight).
+  as for a constraint pick's weight). A soft constraint added to the catalog
+  gets its `ObjectiveWeights` field when it goes onto the default path
+  ([extending.md](extending.md), step 5). Until then it solves with
+  `constraints=` at its pick's weight, the default path does not score it
+  (`objective_value` weighs it at its component default), and `solve(weights=)`
+  refuses another value for it.
 - `Timetable.penalties` keys are the soft constraint names; partial
   timetabling reports `unassigned_lessons_cost`.
 - `canon.constraint_costs(table)` is the per-constraint surface;
