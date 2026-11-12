@@ -18,8 +18,9 @@ The steps build one example: `lateStartCost`, for every meeting the time grains 
 grain of the day it starts on and its starting grain. It fills the mornings first and keeps the
 afternoons free. (The existing `meetingEndTimeCost` fills the first days of the calendar instead.)
 Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3, except
-the two speeds of the weight-0 paragraph in step 4, measured on 0.5.1, and the quality-bench
-commands of step 6, run on 0.5.1; a later change to the solver moves the figures, not the steps.
+the two speeds of the weight-0 paragraph in step 4, measured on 0.5.1 (the quality-bench
+commands of step 6 are those of the development version after it); a later change to the
+solver moves the figures, not the steps.
 
 ## How a schedule is scored
 

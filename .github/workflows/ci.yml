@@ -185,8 +185,11 @@ jobs:
         # Conference and meeting scheduling: the bench scores a fixed assignment of every
         # dumped instance, and the score must equal the use case's own (--check).
         run: |
+          case "${{ matrix.benchmark }}" in
+            conference-scheduling|meeting-scheduling) ;;
+            *) echo "no dump with --check"; exit 0 ;;
+          esac
           script="benchmarks/${{ matrix.benchmark }}/dump_instances.py"
-          if ! grep -qs -- '--check' "$script"; then echo "no dump to check"; exit 0; fi
           target=$(basename benchmarks/${{ matrix.benchmark }}/cpp/*_quality_bench.cpp .cpp)
           cmake -B build/bench -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DOPTIMARU_ENGINE_TESTS=OFF -DOPTIMARU_USE_CASES="$OPTIMARU_USE_CASES"

@@ -141,7 +141,7 @@ comparison (the demo conference and the generator's `days2` to `days5`), so a tu
 solves the problems the comparison solves. Engine figures use the monolithic incremental
 calculator (fast path), the same convention as school-timetabling.
 
-The defaults were tuned up to 0.5.0, when the bench drew its own instances: `scaled:N`
+The defaults were tuned while the bench drew its own instances (up to 0.5.1): `scaled:N`
 below is a demo-like conference of N talks on a fixed 14 slots x 9 rooms = 126 cells (the
 generator is in `cs_quality_bench.cpp` at the tag `v0.5.0`). N >= ~63 is structurally
 infeasible (lab talks > lab cells), so hard is the primary metric there; 45/60 are

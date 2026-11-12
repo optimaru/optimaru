@@ -1,22 +1,6 @@
 # Changelog
 
-## 0.5.1
-
-**From 0.5.0.** One fix first: in the seven use cases that search in stages, a solve that
-starts from a given solution (`with_initial_solution`, a request's `initial_solution`)
-searches as in 0.4.3 again; 0.5.0 could return the given solution unchanged (#110). What
-else changes a result: bin packing and facility location have new moves, so a seed's
-result there differs from 0.5.0; tournament scheduling searches a solve with
-`constraints=` as it searches the default one, so a seed's result with `constraints=`
-differs; and in employee scheduling the default solve no longer judges a pinned shift on
-the four per-shift constraints, as the docs and the solve with `constraints=` already had
-it, so a schedule whose pinned shift breaks one of them scores 0 there where it scored
-`-1hard`. What changes without changing a result: a solve with constraints is faster where
-some of them are at weight 0, with the same scores for a seed and a step limit; school
-timetabling solves with a new soft constraint that has no weight field, where it raised;
-and every demo instance is `generate_demo_data()`, with the five earlier names kept as
-aliases. The entries on notebooks, benchmarks, tests and guides are about the repository,
-not the wheel.
+## Unreleased
 
 - **Benchmarks: every instance is generated in Python.** The C++ quality benches read
   instance files and generate nothing; no solver, constraint or published comparison table
@@ -35,7 +19,7 @@ not the wheel.
   - Conference scheduling and meeting scheduling: `cs_quality_bench` and `ms_quality_bench`
     take a dumped instance of the CP-SAT comparison (`<instance.cstxt|.mstxt> <seed>
     <seconds> [knobs]`) in the place of `demo` and `scaled:N`, whose generators are gone
-    (they are in the `v0.5.0` tag). `benchmarks/<slug>/dump_instances.py` writes the
+    (0.5.1 is the last release with them; they are also in the `v0.5.0` tag). `benchmarks/<slug>/dump_instances.py` writes the
     instances, as bed allocation's does, so a tuning run and the comparison solve the same
     problems. `<ns>_quality_bench crosscheck <file>` scores a fixed assignment, and the dump
     script prints the use case's own score of it: `--check <bench>` compares the two, and
@@ -48,6 +32,24 @@ not the wheel.
     use case (meeting scheduling's `xlarge`: a mean objective 17.5% worse over 12 seeds).
     No default changes with this.
   - `tests/test_layout.py` holds a C++ bench to reading a file that a Python writer names.
+
+## 0.5.1
+
+**From 0.5.0.** One fix first: in the seven use cases that search in stages, a solve that
+starts from a given solution (`with_initial_solution`, a request's `initial_solution`)
+searches as in 0.4.3 again; 0.5.0 could return the given solution unchanged (#110). What
+else changes a result: bin packing and facility location have new moves, so a seed's
+result there differs from 0.5.0; tournament scheduling searches a solve with
+`constraints=` as it searches the default one, so a seed's result with `constraints=`
+differs; and in employee scheduling the default solve no longer judges a pinned shift on
+the four per-shift constraints, as the docs and the solve with `constraints=` already had
+it, so a schedule whose pinned shift breaks one of them scores 0 there where it scored
+`-1hard`. What changes without changing a result: a solve with constraints is faster where
+some of them are at weight 0, with the same scores for a seed and a step limit; school
+timetabling solves with a new soft constraint that has no weight field, where it raised;
+and every demo instance is `generate_demo_data()`, with the five earlier names kept as
+aliases. The entries on notebooks, benchmarks, tests and guides are about the repository,
+not the wheel.
 
 - **Benchmarks: external-solver `v0.3.0`.** The benchmark projects pin the external-solver
   release that follows optimaru 0.5, the links into its sources point at that tag, and their

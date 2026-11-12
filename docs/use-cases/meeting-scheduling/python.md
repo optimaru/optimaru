@@ -143,7 +143,7 @@ A/B; absolute values are from one Apple Silicon macOS machine and vary per machi
 The objective is `medium penalty × 1e6 + raw soft` (given hard 0; lower is better).
 The bench generates nothing now: it solves the instances of the CP-SAT comparison, which
 `benchmarks/meeting-scheduling/dump_instances.py` writes (`ms_quality_bench <instance.mstxt>
-<seed> <seconds> [knobs]`). Up to 0.5.0 it drew its own, and the tuning below was measured
+<seed> <seconds> [knobs]`). Up to 0.5.1 it drew its own, and the tuning below was measured
 on those: `scaled:N` is an instance of N meetings in the demo's shape (the generator is in
 `ms_quality_bench.cpp` at the tag `v0.5.0`; it used `std::shuffle`, so an instance was
 another one per standard library).

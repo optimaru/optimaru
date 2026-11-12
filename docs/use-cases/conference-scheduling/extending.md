@@ -18,8 +18,9 @@ The steps build one example: `roomOverflowCost`, for every talk the people who m
 favorite beyond the seats of its room, times the minutes of its timeslot. It keeps a popular talk
 out of a room that cannot hold its audience. (The existing `popularTalksRoomSizeCost` only compares
 talks with each other.) Every snippet below was compiled and run, and every figure measured, on
-optimaru 0.4.3, and the `idle_at_weight_zero()` override of step 4 and the quality-bench
-commands of step 6 on 0.5.1; a later change to the solver moves the figures, not the steps.
+optimaru 0.4.3, and the `idle_at_weight_zero()` override of step 4 on 0.5.1 (the quality-bench
+commands of step 6 are those of the development version after it); a later change to the
+solver moves the figures, not the steps.
 
 ## How a schedule is scored
 

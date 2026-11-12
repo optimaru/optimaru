@@ -18,7 +18,7 @@ class Solver {
 public:
     // Tuning history (benchmarks/meeting-scheduling/cpp/ms_quality_bench.cpp, 10s single-thread,
     // interleaved A/B on demo + scaled:48 + scaled:96, seeds 42..47; scaled:N
-    // was an instance of the generator the bench had up to 0.5.0, which now
+    // was an instance of the generator the bench had up to 0.5.1, which now
     // reads the comparison's instances from benchmarks/meeting-scheduling/dump_instances.py; the
     // objective is medium * 1e6 + soft, since the folded medium level
     // dominates on every non-trivial instance). Adopted: the late-acceptance
