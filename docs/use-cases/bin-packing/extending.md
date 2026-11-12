@@ -17,17 +17,16 @@ the model and its four constraints are in the [guide](README.md).
 The steps build one example: `loadBalanceCost`, the load a bin in use is short of the even share.
 The even share is the total item weight divided by the fewest bins that could hold it. The
 constraint evens out the loads of the bins in use. Every snippet below was compiled and run, and
-every figure measured, on optimaru 0.4.3; a later change to the solver moves the figures, not the
-steps.
+every figure measured, on optimaru 0.4.3, except the steps per second, which were measured on
+0.5.1; a later change to the solver moves the figures, not the steps.
 
 ## How a packing is scored
 
 An item is assigned a bin. There are as many bins as items, all alike. The score is
 kept per **unit**: one bin, with the items assigned to it as its **members**. A
 change moves one item and a swap two, so only the bins they leave and join are
-scored again. The macro moves of the domain (`EmptyBinMove`, `RepackMove`, and
-`TradeMove`, which came after the measurements on this page) move several items in one
-step.
+scored again. The macro moves of the domain (`EmptyBinMove`, `RepackMove` and
+`TradeMove`) move several items in one step.
 
 There are two scoring paths, and they give the same score for the same packing
 (`bp_plugin_test` checks it on 500 random assignments):
@@ -36,8 +35,8 @@ There are two scoring paths, and they give the same score for the same packing
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/bp/constraints/` |
 | Constraints | the four, at their defaults | the ones you list, with your knobs |
-| Steps per second | 0.96 million | 0.89 million |
-| Steps per second, macro moves off | 17.9 million | 7.1 million |
+| Steps per second | 0.94 million | 0.87 million |
+| Steps per second, macro moves off | 17.4 million | 7.0 million |
 | Parallel starts | `parallel_solver_count` | one start |
 
 The speeds are a generated instance of 120 items ("sq1" of the benchmark, 43 bins at
@@ -342,18 +341,20 @@ private:
     std::int64_t share_ = 0;  // the even share of this solve's problem
 ```
 
-With the constraint at weight 1 and the macro moves off, the assembly went from 5.6 to 6.2
+With the constraint at weight 1 and the macro moves off, the assembly went from 5.3 to 6.0
 million steps per second, and the solve ended on the same score, as it must. In the
-default search the same change is within the spread of the runs (0.90 and 0.92
-million): the macro moves take most of a step there. A solve calls `on_reset()`
-twice, at its start and on its result. Under `full_assert` the engine rebuilds at
-every score, so `on_reset()` runs at every step there; 20,000 checked steps still
-take 0.03 seconds on the demo instance.
+default search the same change is about the spread of the runs (1.04 to 1.08 million
+before, 1.08 to 1.12 after): the macro moves take most of a step there. A solve calls
+`on_reset()` twice, at its start and on its result. Under `full_assert` the engine
+rebuilds at every score, so `on_reset()` runs at every step there; 20,000 checked steps
+still take 0.03 seconds on the demo instance.
 
-**A constraint in the picks is evaluated, whatever its weight.** `get_constraints()` now
-returns five picks, the new constraint at weight 0 among them, and the assembly calls its
-`cost()` on every move: 6.2 million steps per second with it, 7.1 million with the
-four others alone (macro moves off). Leave a constraint you do not use out of the picks.
+**A constraint at weight 0 costs a move nothing.** `get_constraints()` now returns five
+picks, the new constraint at weight 0 among them. The assembly leaves a unit constraint
+at weight 0 out of every move, and calls its `cost()` only at the two resets of a solve
+and when `constraint_costs()` reports it: 7.05 million steps per second with the five,
+6.94 million with the four others alone (macro moves off), the same speed within the
+spread of the runs.
 
 **Scratch buffers.** `ColorConflictCost` and `ItemConflictCost` size a `mutable`
 buffer in `on_reset()` and leave it zeroed after every call, so no call allocates.
@@ -404,7 +405,7 @@ load changes and put back after it, in `insert()` and in `retract()`, the way
 `rebuild()` sets `share_ = LoadBalanceCost::evenShare(solution)` and `belowShare_ =
 0`, `totals()` reports `belowShare_` as `loadBalance`, and `score()` weighs it. The
 update is a few integer operations per move: with the macro moves off the default
-path ran at 16.7 million steps per second with the fifth constraint in it, against 17.9
+path ran at 16.2 million steps per second with the fifth constraint in it, against 17.4
 million with four.
 
 A constraint that is not read off a bin's load or item count is more work: the
@@ -474,15 +475,18 @@ for macro_moves, steps in ((True, 2_000_000), (False, 10_000_000)):
 ```
 
 The two lines of a search end on the same score: same seed, same steps, same
-scoring. If they differ after a change, the two paths no longer score alike.
+scoring. If they differ after a change, the two paths no longer score alike. The rows
+of steps 2 and 4 pick the constraint at weight 1, `[*others, LoadBalanceCost(weight=1)]`
+as in step 2: in `get_constraints()` it is at weight 0, where it costs a move nothing
+(step 4).
 
 | Measured on sq1, million steps per second | Default search, 2 million steps | Macro moves off, 10 million steps |
 | --- | --- | --- |
-| default path, four constraints | 0.96 | 17.9 |
-| assembly, four constraints | 0.89 | 7.1 |
-| assembly, four + the constraint of step 2 | 0.90 | 5.6 |
-| assembly, four + the constraint with the share of step 4 | 0.92 | 6.2 |
-| default path, five constraints (step 5) | 1.01 | 16.7 |
+| default path, four constraints | 0.94 | 17.4 |
+| assembly, four constraints | 0.87 | 7.0 |
+| assembly, four + the constraint of step 2 at weight 1 | 1.06 | 5.3 |
+| assembly, four + the constraint with the share of step 4, at weight 1 | 1.10 | 6.0 |
+| default path, five constraints (step 5) | 1.16 | 16.2 |
 
 Each figure is the median of three runs. Read what a constraint costs per move in the
 right-hand column: in the left-hand one the macro moves cost more than scoring, and a
