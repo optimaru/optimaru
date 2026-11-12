@@ -73,7 +73,7 @@ platform. `benchmarks/<slug>/dump_instances.py` writes the comparison's instance
 allocation, conference scheduling and meeting scheduling (the file format is in its
 docstring; conference and meeting scheduling's also prints the score of a fixed assignment,
 which `<ns>_quality_bench crosscheck <file>` reproduces, and CI compares the two on every
-instance with the script's `--check`); school timetabling's track-1 generator,
+instance with the script's `--check`, on a pull request that runs that benchmark job); school timetabling's track-1 generator,
 `school_timetabling_cpsat/gen_quickstart.py`, writes its own.
 
 A CP-SAT constraint is a plugin that subclasses the use case's own constraint

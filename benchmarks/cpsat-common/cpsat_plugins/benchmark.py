@@ -55,10 +55,10 @@ def seeded(scales: dict[str, Any]) -> Ladder:
         if not seeds:
             raise ValueError(f"scale {name!r} has no seeds")
         for index, seed in enumerate(seeds):
-            repeat = f"{name}-{index + 1}"
-            add(name if index == 0 else repeat, lambda build=build, seed=seed: build(seed))
+            instance = name if index == 0 else f"{name}-{index + 1}"
+            add(instance, lambda build=build, seed=seed: build(seed))
             if index:
-                ladder.repeats.add(repeat)
+                ladder.repeats.add(instance)
     return ladder
 
 

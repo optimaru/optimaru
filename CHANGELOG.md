@@ -4,8 +4,10 @@
 
 - **CI: benchmarks run when a pull request touches them.** A CP-SAT comparison job (and the
   vehicle routing benchmark job) runs on a pull request that changes its benchmark project or
-  its use case, all of them when the shared runner (`benchmarks/cpsat-common/`) or `ci.yml`
-  changes, none on a push to `main`, and all on a manual run of CI. Its smoke run takes one
+  its use case, all of them when the shared runner (`benchmarks/cpsat-common/`), `ci.yml` or
+  the Python and build files every benchmark installs (`optimaru/*.py`, `setup.py`,
+  `pyproject.toml`) change, none on a push to `main`, and all on a manual run of CI. A change
+  to the C++ engine alone runs no benchmark job (the use-case Python jobs still run). Its smoke run takes one
   instance per scale (`--one-per-scale` skips the seeds `seeded()` repeats a scale on), and the
   school timetabling job also runs track 1's cross-check gate. `school-timetabling-bench.yml`
   and `vrp-public-bench.yml` are run by hand only. A CI run took 7 to 9 minutes on every pull

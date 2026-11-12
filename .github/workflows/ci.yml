@@ -16,8 +16,9 @@ jobs:
   # stub, which is what setup.py builds. The three matrices below take their lists from
   # here, so a new use case is built and tested without a line in this file.
   #
-  # The benchmark jobs run on a pull request whose files touch them, and on a manual run;
-  # not on a push to main, which only refreshes the build caches every pull request reads.
+  # The benchmark jobs run on a pull request whose files touch them (the rule is in the
+  # list step), and on a manual run; not on a push to main, which only refreshes the build
+  # caches every pull request reads.
   use-cases:
     runs-on: ubuntu-latest
     permissions:
@@ -46,20 +47,25 @@ jobs:
           # routing, whose comparison (OR-Tools Routing) is the vehicle-routing-benchmark job.
           benchmarks=$(jq -c '["cpsat-common"] + [.[] | gsub("_"; "-") | select(. != "vehicle-routing")]' <<<"$names")
           # Which of them run. A pull request: a comparison whose benchmark project or use case
-          # it changes, and all of them when it changes the shared runner or this file. A push
-          # to main: none. A manual run: all.
+          # it changes (a renamed file counts at both paths), and all of them when it changes
+          # the shared runner, this file, or the Python and build files every benchmark project
+          # installs (optimaru/*.py, setup.py, pyproject.toml). The C++ engine is left out on
+          # purpose: its changes reach the benchmarks through the use-case Python jobs, which
+          # run on every pull request. A push to main: none. A manual run: all.
+          changed='[]'; all=false
           case "$GITHUB_EVENT_NAME" in
             pull_request)
-              changed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' | jq -R . | jq -sc .)
+              changed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+                --jq '.[] | .filename, (.previous_filename // empty)' | jq -R . | jq -sc .)
               ;;
-            workflow_dispatch) changed='[".github/workflows/ci.yml"]' ;;
-            *) changed='[]' ;;
+            workflow_dispatch) all=true ;;
           esac
           touched='def touches($slug): ($slug | gsub("-"; "_")) as $name
             | any($changed[]; startswith("benchmarks/\($slug)/") or startswith("optimaru/\($name)/"));
-            def everything: any($changed[]; startswith("benchmarks/cpsat-common/") or . == ".github/workflows/ci.yml");'
-          benchmarks=$(jq -c --argjson changed "$changed" "$touched"' [.[] | select(everything or touches(.))]' <<<"$benchmarks")
-          vehicle_routing=$(jq -n --argjson changed "$changed" "$touched"' everything or touches("vehicle-routing")')
+            def everything: $all or any($changed[]; startswith("benchmarks/cpsat-common/")
+              or test("^optimaru/[^/]+\\.py$") or IN(".github/workflows/ci.yml", "setup.py", "pyproject.toml"));'
+          benchmarks=$(jq -c --argjson changed "$changed" --argjson all "$all" "$touched"' [.[] | select(everything or touches(.))]' <<<"$benchmarks")
+          vehicle_routing=$(jq -n --argjson changed "$changed" --argjson all "$all" "$touched"' everything or touches("vehicle-routing")')
           echo "benchmarks=$benchmarks" >> "$GITHUB_OUTPUT"
           echo "vehicle_routing_benchmark=$vehicle_routing" >> "$GITHUB_OUTPUT"
           echo "use cases: $names"; echo "benchmarks to run: $benchmarks"; echo "vehicle routing benchmark: $vehicle_routing"
