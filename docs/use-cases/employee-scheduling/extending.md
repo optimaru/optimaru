@@ -18,8 +18,8 @@ The steps build one example: `unusedSkillCost`, for each assigned shift the skil
 holds that some shift requires and this one does not. It keeps multi-skilled workers free for the
 shifts only they can take. Every snippet below was compiled and run, and every figure measured, on
 optimaru 0.4.3 (the step-5 `shiftSoftDelta()` snippet compiled and run again on 0.5.1, when the
-monolith began to skip pinned shifts); a later change to the solver moves the figures, not the steps. Paths that start with
-`cpp/` are under `optimaru/employee_scheduling/`.
+monolith began to skip pinned shifts); a later change to the solver moves the figures, not the
+steps. Paths that start with `cpp/` are under `optimaru/employee_scheduling/`.
 
 ## How a schedule is scored
 

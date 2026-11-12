@@ -267,8 +267,9 @@ void verifyDefaultAssemblyEqualsMonolith() {
     int mismatches = 0;
     for (int round = 0; round < 300; ++round) {
         randomAssignment(s, rng, /*allowUnassigned=*/round % 3 == 0);
-        // Every fifth assigned shift pinned (from round 100 on), so a pinned
-        // shift meets every per-shift and pair term at random.
+        // Every fifth shift by index pinned when it is assigned (from round
+        // 100 on), so a pinned shift meets every per-shift and pair term at
+        // random.
         for (std::size_t i = 0; i < s.shifts.size(); ++i)
             s.shifts[i].pinned = round >= 100 && i % 5 == static_cast<std::size_t>(round % 5) &&
                                  s.shifts[i].employeeIndex >= 0;

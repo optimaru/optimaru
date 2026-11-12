@@ -575,8 +575,8 @@ def test_a_pinned_shift_skips_the_per_shift_terms_on_both_paths(pin_skill_shift,
         cfg = es.SolverConfig()
         cfg.step_count_limit = 10
         cfg.random_seed = 1
-        scores.append(es.solve(_pinned_schedule(), config=cfg).score)
-        scores.append(es.solve(_pinned_schedule(), config=cfg, constraints=get_constraints()).score)
+        scores.append(es.solve(_pinned_schedule(pin_skill_shift), config=cfg).score)
+        scores.append(es.solve(_pinned_schedule(pin_skill_shift), config=cfg, constraints=get_constraints()).score)
     assert [(score.hard, score.soft) for score in scores] == [(hard, pytest.approx(soft))] * len(scores)
 
 
