@@ -205,8 +205,14 @@ def test_score_reproduces_the_engine_score_exactly():
 @pytest.mark.parametrize(
     "specs",
     [
-        [TrolleyCapacityCost(level="soft"), *get_constraints()[1:]],
-        [*get_constraints()[:3], OrderSplitByTrolleyCost(weight=10, exponent=2.0)],
+        [
+            TrolleyCapacityCost(level="soft") if spec.name == "trolley_capacity_cost" else spec
+            for spec in get_constraints()
+        ],
+        [
+            OrderSplitByTrolleyCost(weight=10, exponent=2.0) if spec.name == "order_split_by_trolley_cost" else spec
+            for spec in get_constraints()
+        ],
         [TrolleyCapacityCost(exponent=2.0), DistanceFromPreviousPickTaskCost(level="hard", weight=0.5)],
         [*get_constraints(), DistanceFromPreviousPickTaskCost(weight=0.5, exponent=2.0)],
         [

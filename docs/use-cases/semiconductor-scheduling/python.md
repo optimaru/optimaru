@@ -22,8 +22,8 @@ from optimaru.semiconductor_scheduling.constraints import (
 fab.constraint_info()
 # [ConstraintInfo(name='machine_eligibility_cost', default_level='hard', default_weight=1.0,
 #                 level_flippable=True, reward=False, default_enabled=True), ...]
-picks = [*get_constraints()[:7], MaxQueueTimeCost(level="soft"), *get_constraints()[8:17],
-         WeightedTardinessCost(weight=50), *get_constraints()[18:]]
+changed = {"max_queue_time_cost": MaxQueueTimeCost(level="soft"), "weighted_tardiness_cost": WeightedTardinessCost(weight=50)}
+picks = [changed.get(spec.name, spec) for spec in get_constraints()]   # catalog order, two replaced
 problem = fab.solve(problem, time_limit_seconds=5, constraints=picks)
 raw = fab.constraint_costs(problem)        # raw totals, re-priced in pure Python:
 score(raw), score(raw, picks), score(raw, [WeightedTardinessCost(exponent=2.0)])

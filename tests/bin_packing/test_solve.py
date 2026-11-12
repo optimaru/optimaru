@@ -76,7 +76,7 @@ def test_step_count_limit_makes_the_search_deterministic():
 
 def test_constraints_path_scores_with_the_picks():
     problem = web_demo()
-    picks = [*get_constraints()[:3], UsedBinsCost(weight=5)]
+    picks = [UsedBinsCost(weight=5) if spec.name == "used_bins_cost" else spec for spec in get_constraints()]
     config = bp.SolverConfig()
     config.step_count_limit = 2000
     config.random_seed = 2

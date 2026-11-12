@@ -100,7 +100,9 @@ def test_a_hard_total_beyond_the_fold_saturates_instead_of_looking_feasible():
     model = generate_demo_data()
     for index, employee in enumerate(model.employees):
         employee.tasks = [task.id for task in model.tasks] if index == 0 else []
-    picks = [RequiredSkillCost(weight=1e9), *get_constraints()[1:]]
+    picks = [
+        RequiredSkillCost(weight=1e9) if spec.name == "required_skill_cost" else spec for spec in get_constraints()
+    ]
     result = ta.solve(model, time_limit_seconds=0, constraints=picks)
     core = result.to_core()
     missing = sum(ta.constraint_costs(core)["required_skill_cost"]["costs"])

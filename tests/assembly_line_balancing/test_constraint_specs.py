@@ -134,6 +134,13 @@ def _solved(constraints=None):
     return problem
 
 
+def _with_workload(**knobs):
+    """Every default, the opt-in workload objective replaced by one with these knobs (catalog order)."""
+    return [
+        WorkloadImbalanceCost(**knobs) if spec.name == "workload_imbalance_cost" else spec for spec in get_constraints()
+    ]
+
+
 def test_list_constraints_matches_the_spec_names():
     """Names carried by specs must be names the core actually knows, in catalog order."""
     assert alb.list_constraints() == NAMES
@@ -163,7 +170,7 @@ def test_reweighting_one_constraint_scales_only_that_term():
 
 def test_the_opt_in_workload_objective_balances_the_line():
     """workload_imbalance_cost is off by default; weighted, it joins the soft score."""
-    problem = _solved([*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+    problem = _solved(_with_workload(weight=1))
     raw = alb.constraint_costs(problem)
     assert problem.score.soft == -(raw["used_stations_cost"]["costs"][0] + raw["workload_imbalance_cost"]["costs"][0])
 
@@ -289,7 +296,7 @@ def test_score_equals_the_engine_for_the_default_assembly():
     [
         None,
         [station_capacity_cost],
-        [*get_constraints()[:-1], WorkloadImbalanceCost(weight=3)],
+        _with_workload(weight=3),
         [StationCapacityCost(level="soft"), TaskPrecedenceCost(level="soft"), used_stations_cost],
         [StationCapacityCost(exponent=2.0), SameStationGroupsCost(exponent=2.0), UsedStationsCost(level="hard")],
         [DifferentStationPairsCost(weight=0.5), MaxStationsCost(weight=2.5), used_stations_cost],
@@ -497,9 +504,13 @@ def test_the_scoped_constraints_report_and_charge_their_units_only():
 
 def test_offset_zero_reproduces_the_plain_scores():
     """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
-    plain = [*get_constraints()[:-1], WorkloadImbalanceCost(weight=2, exponent=2)]
-    shifted = [type(spec)(offset=0.0, clip=bool(index % 2)) for index, spec in enumerate(get_constraints()[:-1])]
-    shifted.append(WorkloadImbalanceCost(weight=2, exponent=2, offset=0, clip=False))
+    plain = _with_workload(weight=2, exponent=2)
+    shifted = [
+        WorkloadImbalanceCost(weight=2, exponent=2, offset=0, clip=False)
+        if spec.name == "workload_imbalance_cost"
+        else type(spec)(offset=0.0, clip=bool(index % 2))
+        for index, spec in enumerate(get_constraints())
+    ]
     raw = alb.constraint_costs(fixture_h())
     assert score(raw, shifted) == score(raw, plain)
     assert _engine(plain) == _engine(shifted) == score(raw, plain)

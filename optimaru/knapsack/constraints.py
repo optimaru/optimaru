@@ -13,7 +13,7 @@ A constraint list reads one way: one class call per constraint::
     )
 
     solved = knapsack.solve(problem, constraints=get_constraints())  # defaults as-is
-    solved = knapsack.solve(problem, constraints=[*get_constraints()[:-1], SelectedValueCost(weight=2)])
+    solved = knapsack.solve(problem, constraints=[SelectedValueCost(weight=2) if spec.name == "selected_value_cost" else spec for spec in get_constraints()])
     solved = knapsack.solve(problem, constraints=[  # picked
         KnapsackCapacityCost(), MandatoryItemsCost(), SelectedValueCost(),
     ])
@@ -231,7 +231,7 @@ def get_constraints(constraints: list[Constraint] | None = None) -> list[Constra
     When `constraints` is given, that list is used as-is — only the listed
     constraints are scored. To change just one default, list the others as they are::
 
-        get_constraints([*get_constraints()[:-1], SelectedValueCost(weight=2)])
+        get_constraints([SelectedValueCost(weight=2) if spec.name == "selected_value_cost" else spec for spec in get_constraints()])
 
     Same contract as the C++ applyConstraints: an empty list (most likely a filter
     that came out empty) raises ValueError; a constraint named several times is

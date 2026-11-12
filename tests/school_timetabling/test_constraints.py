@@ -217,7 +217,10 @@ def test_relaxed_unassigned_lessons_do_not_unassign_what_fits(problem):
     """
     result = st.solve(
         problem,
-        constraints=[*st.get_constraints()[1:], UnassignedLessonsCost(level="soft", weight=10_000)],
+        constraints=[
+            UnassignedLessonsCost(level="soft", weight=10_000) if spec.name == "unassigned_lessons_cost" else spec
+            for spec in st.get_constraints()
+        ],
         time_limit_seconds=10.0,
         random_seed=7,
     )

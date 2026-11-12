@@ -152,8 +152,8 @@ one line to `forEachDefaultConstraint()`, before `WorkloadImbalanceCost`:
 ```
 
 That function states the catalog order once, for `list_constraints()` and
-`constraint_info()`. The docs and the tests write `get_constraints()[:-1]` for "all
-but the workload constraint", so that constraint stays last.
+`constraint_info()`. The docs and the tests select defaults by name, not by position
+(`spec.name == "workload_imbalance_cost"`), so the new entry displaces none of their picks.
 
 A constraint has to be in that list for Python to see it. With `kDefaultWeight = 0.0` it
 is there and scores nothing until a caller gives it a weight, so no default solve

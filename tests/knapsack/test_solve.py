@@ -179,7 +179,7 @@ def test_calculate_score_fills_the_model():
     result = knapsack.calculate_score(model)
     assert (result.hard, result.soft) == (0, 53.0)
     assert (model.total_weight, model.total_value, model.score_hard, model.score_soft) == (24, 53, 0, 53.0)
-    picked = knapsack.calculate_score(model, get_constraints()[-1:])
+    picked = knapsack.calculate_score(model, [spec for spec in get_constraints() if spec.name == "selected_value_cost"])
     assert picked == (0, 53.0) and isinstance(picked, tuple)
 
 

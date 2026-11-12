@@ -524,7 +524,10 @@ def test_only_the_scoped_constraint_reports_units():
 
 def test_offset_zero_is_the_plain_shaping():
     """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
-    plain = [*get_constraints()[:-1], ConfrontationCountImbalanceCost(exponent=2)]
+    plain = [
+        ConfrontationCountImbalanceCost(exponent=2) if spec.name == "confrontation_count_imbalance_cost" else spec
+        for spec in get_constraints()
+    ]
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
     assert score(raw, shifted) == score(raw, plain)

@@ -13,7 +13,7 @@ Score, at the default weights (all 1):
            + demand above location capacities)
   soft = -(direct assignment cost + flow-distance cost)
 The problem carries no weights: change one through a constraint selection, e.g.
-``solve(problem, constraints=[*get_constraints()[:-1], FlowDistanceCost(weight=2)])``
+``solve(problem, constraints=[FlowDistanceCost(weight=2) if spec.name == "flow_distance_cost" else spec for spec in get_constraints()])``
 (see `optimaru.quadratic_assignment.constraints`). `constraint_info()` lists every
 constraint with its default level and weight.
 

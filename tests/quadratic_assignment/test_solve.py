@@ -208,7 +208,7 @@ def test_calculate_score_fills_the_model():
     result = qap.calculate_score(model)
     assert (result.hard, result.soft) == (0, -374.0)
     assert (model.total_cost, model.score_hard, model.score_soft) == (374, 0, -374.0)
-    picked = qap.calculate_score(model, get_constraints()[-1:])
+    picked = qap.calculate_score(model, [spec for spec in get_constraints() if spec.name == "flow_distance_cost"])
     assert picked == (0, -374.0) and isinstance(picked, tuple)
 
 

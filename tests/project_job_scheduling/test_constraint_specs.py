@@ -529,7 +529,7 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
 
 def test_offset_zero_reproduces_the_plain_scores():
     """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
-    plain = [*get_constraints()[:-1], MakespanCost(exponent=2)]
+    plain = [MakespanCost(exponent=2) if spec.name == "makespan_cost" else spec for spec in get_constraints()]
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
     assert score(raw, shifted) == score(raw, plain)

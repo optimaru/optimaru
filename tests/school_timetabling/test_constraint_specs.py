@@ -489,7 +489,7 @@ def test_offset_zero_reproduces_the_plain_scores(problem):
     converted = st.convert_problem(problem)
     st.inject_solution(converted, st.solve(problem, time_limit_seconds=1.0, random_seed=3)["lessons"])
     table = converted.table
-    plain = [*get_constraints()[:9], TeacherGapCost(exponent=2), *get_constraints()[10:]]
+    plain = [TeacherGapCost(exponent=2) if spec.name == "teacher_gap_cost" else spec for spec in get_constraints()]
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw = canon.constraint_costs(table)
     assert score(raw, shifted) == score(raw, plain)

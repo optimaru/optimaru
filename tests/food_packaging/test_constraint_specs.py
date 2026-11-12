@@ -500,7 +500,9 @@ def test_the_per_line_constraints_evaluate_the_lines_and_not_the_pool():
 
 def test_offset_zero_reproduces_the_plain_scores():
     """offset 0 is the plain shaping in both modes, so a selection scores the same with offset 0."""
-    plain = [*get_constraints()[:-1], UnassignedJobsCost(exponent=2)]
+    plain = [
+        UnassignedJobsCost(exponent=2) if spec.name == "unassigned_jobs_cost" else spec for spec in get_constraints()
+    ]
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
     assert score(raw, shifted) == score(raw, plain)

@@ -223,7 +223,10 @@ def test_level_can_be_flipped():
     ]
     assert max_cut.calculate_score(problem, flipped) == (-3, 0.0)
     assert engine_score(problem, flipped) == (-3, 0.0)
-    promoted = [*get_constraints()[:4], PartitionImbalanceCost(weight=1, level="hard"), cut_weight_cost]
+    promoted = [
+        PartitionImbalanceCost(weight=1, level="hard") if spec.name == "partition_imbalance_cost" else spec
+        for spec in get_constraints()
+    ]
     assert max_cut.calculate_score(problem, promoted) == (-7, 2.0)
     assert engine_score(problem, promoted) == (-7, 2.0)
 
@@ -235,7 +238,10 @@ def test_reweighting_scales_only_that_term():
         for spec in get_constraints()
     ]
     assert max_cut.calculate_score(problem, heavier) == (-11, 2.0)
-    balanced = [*get_constraints()[:4], PartitionImbalanceCost(weight=1), cut_weight_cost]
+    balanced = [
+        PartitionImbalanceCost(weight=1) if spec.name == "partition_imbalance_cost" else spec
+        for spec in get_constraints()
+    ]
     assert max_cut.calculate_score(problem, balanced) == (-5, 0.0)
 
 

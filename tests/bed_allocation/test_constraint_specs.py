@@ -549,7 +549,9 @@ def test_the_scopes_report_their_units():
 
 def test_offset_zero_reproduces_the_plain_scores():
     """offset 0 is the plain shaping in both modes, so a selection scores the same with or without it."""
-    plain = [*get_constraints()[:-1], MixedGenderRoomCost(exponent=2)]
+    plain = [
+        MixedGenderRoomCost(exponent=2) if spec.name == "mixed_gender_room_cost" else spec for spec in get_constraints()
+    ]
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
     assert score(raw, shifted) == score(raw, plain)

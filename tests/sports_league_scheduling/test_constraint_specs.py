@@ -423,9 +423,15 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
 
 def test_offset_zero_is_the_plain_shaping():
     """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
-    plain = [*get_constraints()[:9], AwayToHomeHopCost(exponent=2)]
-    shifted = [type(spec)(offset=0.0, clip=bool(index % 2)) for index, spec in enumerate(get_constraints()[:9])]
-    shifted.append(AwayToHomeHopCost(exponent=2, offset=0, clip=False))
+    plain = [
+        AwayToHomeHopCost(exponent=2) if spec.name == "away_to_home_hop_cost" else spec for spec in get_constraints()
+    ]
+    shifted = [
+        AwayToHomeHopCost(exponent=2, offset=0, clip=False)
+        if spec.name == "away_to_home_hop_cost"
+        else type(spec)(offset=0.0, clip=bool(index % 2))
+        for index, spec in enumerate(get_constraints())
+    ]
     raw, schedule = _raw()
     assert score(raw, shifted) == score(raw, plain)
     engines = []

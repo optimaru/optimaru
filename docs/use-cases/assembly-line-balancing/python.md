@@ -27,7 +27,8 @@ alb.constraint_info()
 #                 level_flippable=True, reward=False, default_enabled=True), ...,
 #  ConstraintInfo(name='workload_imbalance_cost', default_level='soft', default_weight=0.0,
 #                 level_flippable=True, reward=False, default_enabled=False)]
-problem = alb.solve(problem, time_limit_seconds=1.0, constraints=[*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)])
+picks = [WorkloadImbalanceCost(weight=1) if spec.name == "workload_imbalance_cost" else spec for spec in get_constraints()]
+problem = alb.solve(problem, time_limit_seconds=1.0, constraints=picks)
 raw = alb.constraint_costs(problem)       # raw costs per station (one total for a global)
 score(raw), score(raw, [UsedStationsCost(exponent=2.0)])
 # A constraint may be picked several times, each pick with its own knobs; offset / clip

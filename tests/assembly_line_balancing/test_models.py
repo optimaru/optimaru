@@ -100,7 +100,16 @@ def test_the_model_and_the_core_solve_alike():
     assert returned == AssemblyLineBalancingProblemModel.from_core(core)
 
 
-@pytest.mark.parametrize("constraints", [None, [*get_constraints()[:-1], WorkloadImbalanceCost(weight=1)]])
+@pytest.mark.parametrize(
+    "constraints",
+    [
+        None,
+        [
+            WorkloadImbalanceCost(weight=1) if spec.name == "workload_imbalance_cost" else spec
+            for spec in get_constraints()
+        ],
+    ],
+)
 def test_full_assert_solves_on_both_paths(constraints):
     """ScoreChecks::Full cross-checks the incremental score after every move (monolith and plugin assembly)."""
     config = alb.SolverConfig()
