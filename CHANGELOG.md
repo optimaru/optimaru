@@ -192,9 +192,9 @@
     still reported.
   - A global is still sent every change by default, because a global may serve more than its
     own cost (aggregates a move source or another component reads). One that only feeds its
-    own `cost()` can declare `idle_at_weight_zero()` (`GlobalConstraint`, see
-    [Extending a use case](docs/extending.md)): at weight 0 it is then sent no change and is
-    reset before its raw cost is reported. Assembly-line balancing's `workload_imbalance_cost`
+    own `cost()` can declare `idle_at_weight_zero()` (`GlobalConstraint`, described in
+    `docs/extending.md`): at weight 0 it is then sent no change and is reset before its raw
+    cost is reported. Assembly-line balancing's `workload_imbalance_cost`
     and max-cut's `partition_imbalance_cost`, the two globals with a default weight of 0, do.
   - A member of a compiled delta group is still evaluated with its group at weight 0; only its
     fold is left out.
