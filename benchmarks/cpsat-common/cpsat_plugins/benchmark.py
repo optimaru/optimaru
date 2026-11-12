@@ -23,7 +23,8 @@ class Ladder(dict):
     """The instances of a ladder, by name, with the names that only repeat a scale on another seed.
 
     `run_cli --one-per-scale` skips the repeats (a CI smoke run); a plain dict from `instances()`
-    has none, so every instance of it runs.
+    has none, so every instance of it runs. `instances()` returns the ladder itself: a copy
+    (`dict(ladder)`, `{**ladder}`) drops the repeats, and the smoke run would take every seed.
     """
 
     def __init__(self) -> None:

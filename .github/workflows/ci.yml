@@ -4,8 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Every benchmark job, whatever changed (a pull request runs only the ones its files touch).
+  # Every benchmark job, whatever changed (a pull request runs only the ones its files touch):
+  # by hand, and once a week as the net under the pull requests that run none (a change to
+  # the C++ engine alone).
   workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * 0" # Sunday 18:00 UTC
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -17,8 +21,9 @@ jobs:
   # here, so a new use case is built and tested without a line in this file.
   #
   # The benchmark jobs run on a pull request whose files touch them (the rule is in the
-  # list step), and on a manual run; not on a push to main, which only refreshes the build
-  # caches every pull request reads.
+  # list step), on a manual run and on the weekly one. A push to main runs every benchmark
+  # job up to its install, which builds the extension: a pull request reads the build caches
+  # (uv, ccache) that main saved, not another pull request's.
   use-cases:
     runs-on: ubuntu-latest
     permissions:
@@ -51,14 +56,16 @@ jobs:
           # the shared runner, this file, or the Python and build files every benchmark project
           # installs (optimaru/*.py, setup.py, pyproject.toml). The C++ engine is left out on
           # purpose: its changes reach the benchmarks through the use-case Python jobs, which
-          # run on every pull request. A push to main: none. A manual run: all.
+          # run on every pull request. A manual or weekly run: all. A push to main: all of the
+          # CP-SAT jobs up to their install (the cache refresh), not the vehicle routing job.
+          # (The file list stops at 3000 files.)
           changed='[]'; all=false
           case "$GITHUB_EVENT_NAME" in
             pull_request)
               changed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
                 --jq '.[] | .filename, (.previous_filename // empty)' | jq -R . | jq -sc .)
               ;;
-            workflow_dispatch) all=true ;;
+            workflow_dispatch|schedule|push) all=true ;;
           esac
           touched='def touches($slug): ($slug | gsub("-"; "_")) as $name
             | any($changed[]; startswith("benchmarks/\($slug)/") or startswith("optimaru/\($name)/"));
@@ -66,6 +73,7 @@ jobs:
               or test("^optimaru/[^/]+\\.py$") or IN(".github/workflows/ci.yml", "setup.py", "pyproject.toml"));'
           benchmarks=$(jq -c --argjson changed "$changed" --argjson all "$all" "$touched"' [.[] | select(everything or touches(.))]' <<<"$benchmarks")
           vehicle_routing=$(jq -n --argjson changed "$changed" --argjson all "$all" "$touched"' everything or touches("vehicle-routing")')
+          if [ "$GITHUB_EVENT_NAME" = push ]; then vehicle_routing=false; fi
           echo "benchmarks=$benchmarks" >> "$GITHUB_OUTPUT"
           echo "vehicle_routing_benchmark=$vehicle_routing" >> "$GITHUB_OUTPUT"
           echo "use cases: $names"; echo "benchmarks to run: $benchmarks"; echo "vehicle routing benchmark: $vehicle_routing"
@@ -214,9 +222,12 @@ jobs:
           CC: ccache cc
           CXX: ccache c++
       - name: Test
+        # Not on a push to main, which only refreshes the caches.
+        if: github.event_name != 'push'
         working-directory: ${{ env.PROJECT }}
         run: uv run --python 3.14 --with pytest python -m pytest -q tests
       - name: The C++ bench reads what dump_instances.py writes
+        if: github.event_name != 'push'
         # Conference and meeting scheduling: the bench scores a fixed assignment of every
         # dumped instance, and the score must equal the use case's own (--check).
         # School timetabling: track 1's C++ bench scores the cross-check instance as its
@@ -243,12 +254,14 @@ jobs:
           uv run --project "$PROJECT" --python 3.14 python "$script" "$RUNNER_TEMP/dump" \
             --check "build/bench/$OPTIMARU_USE_CASES/$target"
       - name: Engine vs CP-SAT smoke run
+        if: github.event_name != 'push'
         working-directory: ${{ env.PROJECT }}
         run: |
           runner=$(ls *_cpsat/benchmark.py 2>/dev/null | head -1)
           if [ -z "$runner" ]; then echo "no comparison runner"; exit 0; fi
           # School timetabling's runner has its own tracks and flags: track 2 (engine vs CP-SAT on the
-          # canonical model) at size S; tracks 1 and 3 run in school-timetabling-bench.yml.
+          # canonical model) at size S; track 1 runs in the step above, track 3 only in
+          # school-timetabling-bench.yml.
           if [ "${{ matrix.benchmark }}" = school-timetabling ]; then
             uv run --python 3.14 school-timetabling-compare --track2 --sizes S --seconds 1 --workers 2 --out-dir "$RUNNER_TEMP/st"
             exit 0
