@@ -18,7 +18,7 @@ The steps build one example: `rideTimeCost`, the seconds each request spends on 
 its pickup to reaching its dropoff. `travel_time_cost` prices the driving and `latency_cost` the
 time from the vehicle's departure to each stop; no constraint prices how long the goods or
 passengers ride. Every snippet below was compiled and run, and every figure measured, on optimaru
-0.4.3; a later change to the solver moves the figures, not the steps.
+0.5.1; a later change to the solver moves the figures, not the steps.
 
 ## How a plan is scored
 
@@ -40,7 +40,7 @@ and over 1,500 random list moves):
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/pdp/constraints/` |
 | Constraints | the seven core constraints: `vehicle_capacity_cost`, `max_end_time_cost`, the three coupling constraints, `unassigned_requests_cost`, `travel_time_cost` | the ones you list, with your knobs |
-| Steps per second | 89.2 thousand | 57.7 thousand |
+| Steps per second | 87.3 thousand | 71.2 thousand |
 | Parallel starts | `parallel_solver_count` | `parallel_solver_count`, each start on its own copy of the picks (the C++ overload `Solver::solve(plan, calculator)`: one start) |
 
 The speeds are the generated instance `pdp.build_random_instance(100, 10, seed=7)`
@@ -309,9 +309,9 @@ pdp.solve(plan, time_limit_seconds=1, random_seed=1, constraints=picks, full_ass
 ```
 
 `pdp_plugin_test` does the same for the default assembly, which now holds the constraint
-at weight 0 (a constraint at weight 0 is still costed on every applied move here): 1,500
-random list moves against `ScoreCalculator::score`, and a 2-second solve under
-`ScoreChecks::Full`.
+at weight 0: 1,500 random list moves against `ScoreCalculator::score`, and a 2-second
+solve under `ScoreChecks::Full`. A constraint at weight 0 is not asked on a move, so those
+check the others; the solve above, with the constraint picked, is what checks it.
 
 **The tables.** The constraint tables in [README.md](README.md) and
 [python.md](python.md) must equal `pdp.constraint_info()`; add the row. The constraints are
@@ -325,12 +325,13 @@ constraint list.
 
 On the assembly every candidate move is applied, scored and undone (see
 [How a plan is scored](#how-a-plan-is-scored)). Applying it reloads the routes it
-changed and calls `cost()` of every unit constraint on each of them, **the constraints at weight
-0 included**, since `constraint_costs()` reports them; then every global is told
-about each changed route. Counted with a throwaway counter in the example on the
-generated plan: about five calls of `cost()` per step (4.8 at weight 0,
-5.3 at weight 0.1, over 300,000 steps). So a constraint left at weight 0 is not
-free here, and what a constraint costs is what its `cost()` and its updates cost:
+changed and calls `cost()` of every unit constraint on each of them that has a weight; then
+every global is told about each changed route. A unit constraint at weight 0 is left out:
+only a rebuild of the objective (below) costs it, and `constraint_costs()` when it
+reports. Counted with a throwaway counter in the example on the generated plan, over
+300,000 steps: 5.3 calls of `cost()` per step at weight 0.1, and at weight 0 thirty in the
+whole solve, all from the three rebuilds. So a constraint left at weight 0 costs a move
+nothing, and what a picked constraint costs is what its `cost()` and its updates cost:
 
 | The constraint is | Use | Per applied move | Example to copy |
 | --- | --- | --- | --- |
@@ -353,9 +354,12 @@ rejected and the routes are put back from a snapshot (`SolutionSnapshot::restore
 the engine's `model/snapshot.hpp`). The moves that do that (route elimination, ruin
 and recreate as a move, the iterated local search) are off here by default, or need
 previews: the counter saw 3 calls of `on_reset()`
-in 300,000 steps. With `route_elimination_weight = 0.1` it saw 2,887 in 30,000. So
+in 300,000 steps. With `route_elimination_weight = 0.1` it saw 2,997 in 30,000. So
 a table built in `on_reset()` is cheap with the defaults and is paid every ten steps
-when such a move is switched on; keep it to a pass over the requests.
+when such a move is switched on; keep it to a pass over the requests. A rebuild costs
+every constraint on every route, the ones at weight 0 included, so with such a move on a
+constraint at weight 0 is no longer free: one call of `cost()` per step there, ten per
+rebuild.
 
 **The example.** Step 2 keeps the requests on board in a `std::vector` it allocates
 in each call, and looks each dropoff's pickup up in it. One slot per request, sized
@@ -395,16 +399,16 @@ private:
 ```
 
 `cost()` returns what it returned before, and the solves end on the same scores. The
-assembly's steps per second, in thousands, against 57.7 for the twenty-one constraints alone:
+assembly's steps per second at weight 0.1, the weight of the step-2 solve, in thousands:
 
-| | Constraint at weight 0 | At weight 0.1 |
-| --- | --- | --- |
-| step 2 | 50.4 | 51.4 |
-| with the slots | 54.8 | 53.6 |
+| | At weight 0.1 |
+| --- | --- |
+| step 2 | 61.7 |
+| with the slots | 66.1 |
 
-At weight 0 the search is the one of the twenty-one constraints, so the first column is the
-constraint's own cost: 13% of a step before, 5% after. At weight 0.1 the search differs from
-the first column, so compare the two rows only.
+At weight 0.1 the search is not the one of the twenty-one constraints alone (71.2), so
+compare the two rows only. At weight 0 the constraint is asked on no move, with the slots
+or without, and the assembly runs as the twenty-one do.
 
 **Scope and whole numbers.** `scoped_units()` returns the units a constraint is ever
 non-zero for (`PerVehicleConstraint`: the vehicles, never the pool), and the engine
@@ -415,7 +419,7 @@ minutes and demand units keep sums exact.
 
 Do this when the constraint should be on in every solve (`kDefaultWeight > 0`). On pickup
 and delivery that makes it the eighth core constraint: `pdp.solve(plan)` scores with the
-monolithic calculators, which run 1.5 times the steps per second of the
+monolithic calculators, which run 1.2 times the steps per second of the
 assembly. `pdp_plugin_test`
 compares the default assembly with `ScoreCalculator::score` on random route layouts
 (`verifyAssemblyParity()`) and over random list moves (`verifyIncremental()`), and
@@ -481,10 +485,10 @@ index of the route being walked is current, because `after_list_edit()` sets it
 before it calls `evaluateRoute()`. `pdp_test` held it to the full recompute over 500
 random list moves and through a `FULL_ASSERT` solve.
 
-With the eighth constraint the default path ran at 87.1 thousand steps per second, where
-seven constraints ran at 89.2. That is not all the term: with ride time priced the search
+With the eighth constraint the default path ran at 84.6 thousand steps per second, where
+seven constraints ran at 87.3. That is not all the term: with ride time priced the search
 goes elsewhere, and the two runs end on different plans. The assembly with the constraint
-at weight 1 ran at 52.8.
+at weight 1 ran at 62.2.
 
 **4. What else moves.** A constraint that is on by default changes every default score.
 With the example at weight 1 these failed, and are expected to:
@@ -548,13 +552,16 @@ solves. On a shared machine one solve can come out much slower than the others (
 
 | Measured on the generated instance, in thousand steps per second | |
 | --- | --- |
-| default path, seven constraints | 89.2 |
-| assembly, twenty-one constraints | 57.7 |
-| assembly, twenty-one + the constraint of step 2 at weight 0 | 50.4 |
-| assembly, the constraint of step 2 at weight 0.1 | 51.4 |
-| assembly, the constraint with the slots of step 4, at weight 0 | 54.8 |
-| assembly, the constraint with the slots of step 4, at weight 0.1 | 53.6 |
-| default path, eight constraints (step 5) | 87.1 |
+| default path, seven constraints | 87.3 |
+| assembly, twenty-one constraints | 71.2 |
+| assembly, twenty-one + the constraint of step 2 at weight 0 | 71.4 |
+| assembly, the constraint of step 2 at weight 0.1 | 61.7 |
+| assembly, the constraint with the slots of step 4, at weight 0.1 | 66.1 |
+| default path, eight constraints (step 5) | 84.6 |
+
+The second and third rows differ by noise only: a unit constraint at weight 0 is asked on
+no move. That holds for the four opt-in objectives that `get_constraints()` carries at
+weight 0 as well.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 plans at the same budget over several seeds, before and after: the score, and the

@@ -16,7 +16,7 @@ the model and its sixteen constraints are in the [guide](README.md).
 
 The steps build one example: `waitingTimeCost`, the seconds a vehicle stands at a visit before the
 visit's time window opens. `vehicle_metrics` on a solution already reports that time; no constraint
-prices it. Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3; a
+prices it. Every snippet below was compiled and run, and every figure measured, on optimaru 0.5.1; a
 later change to the solver moves the figures, not the steps.
 
 ## How a plan is scored
@@ -34,8 +34,8 @@ checks that on 300 random route layouts):
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/vrp/constraints/` |
 | Constraints | the four core constraints: `vehicle_capacity_cost`, `max_end_time_cost`, `unassigned_visits_cost`, `travel_time_cost` | the ones you list, with your knobs |
-| Steps per second, windows that make vehicles wait | 28.0 thousand | 13.4 thousand |
-| Steps per second, every window open all day | 76.3 thousand | 13.0 thousand |
+| Steps per second, windows that make vehicles wait | 27.6 thousand | 13.1 thousand |
+| Steps per second, every window open all day | 75.3 thousand | 12.8 thousand |
 | Parallel starts | `parallel_solver_count` | `parallel_solver_count`, each start on its own copy of the picks (the C++ overload `Solver::solve(plan, calculator)`: one start) |
 
 The speeds are a generated instance (100 visits, 10 vehicles), 100,000 steps, one
@@ -238,7 +238,7 @@ raw = vrp.constraint_costs(plan, picks)
 print(sum(raw["waiting_time_cost"]["costs"]), sum(raw["travel_time_cost"]["costs"]))
 ```
 
-On the generated plan that prints 29,369 seconds of waiting and 5,798 of driving. A
+On the generated plan that prints 29,291 seconds of waiting and 5,969 of driving. A
 default solve of the same length (`constraints=None`) leaves 128,786 seconds of
 waiting and drives 4,823.
 
@@ -293,8 +293,8 @@ vrp.solve(make_plan(), time_limit_seconds=1, random_seed=1, constraints=picks, f
 ```
 
 `vrp_plugin_test` does the same for the default assembly, which now holds the constraint,
-but at weight 0, and a constraint at weight 0 is not asked in a preview. The solve above,
-with the constraint picked, is what checks its previews.
+but at weight 0, and a constraint at weight 0 is not asked on a move, previewed or applied.
+The solve above, with the constraint picked, is what checks it.
 
 **The tables.** The constraint table in [README.md](README.md) must equal
 `vrp.constraint_info()`; add the row. The constraints are also counted or listed in the
@@ -305,17 +305,19 @@ and `_core.pyi`, and in the comment of `common.hpp`. The notebook
 ## 4. Make it cheaper per move
 
 On the assembly a constraint is asked in two ways. When a move is **applied**, the engine
-reloads each route it changed and calls `cost()` of every constraint on it, the constraints at
-weight 0 included. But most candidates are only **previewed**: the search describes
-a candidate route as pieces of the routes as they are (`optimaru::ListPiece`: a run
+reloads each route it changed and calls `cost()` of every constraint on it that has a weight.
+A constraint at weight 0 is left out: only a rebuild of the objective (below) costs it, and
+`constraint_costs()` when it reports. But most candidates are only **previewed**: the search
+describes a candidate route as pieces of the routes as they are (`optimaru::ListPiece`: a run
 of a route, forward or reversed, or one visit) and asks every constraint that has a weight
 what the route would cost. A constraint answers from the pieces (`piecewise_cost()`), or
 the engine writes the candidate route out and calls `cost()` on it.
 
 Counted with a throwaway component on the C++ demo instance
-(`buildRandomInstance(100, 10, 1)`, 30,000 steps): 8 calls of `cost()` per step at
-weight 0, 762 per step at weight 1. So a constraint left at weight 0 costs next to
-nothing, and what a picked constraint costs is what its preview costs:
+(`buildRandomInstance(100, 10, 1)`, 30,000 steps): 0.9 calls of `cost()` per step at
+weight 0, all of them from the rebuilds, and 1,146 per step at weight 1. So a constraint
+left at weight 0 costs a move nothing, and what a picked constraint costs is what its
+preview costs:
 
 | The constraint is | Use | Per preview | Example to copy |
 | --- | --- | --- | --- |
@@ -350,24 +352,26 @@ lateness the same way. Derive from `detail::SummedUnitConstraint` instead
 
 | Plan | Constraint at weight 0 | At 0.1, before | At 0.1, after |
 | --- | --- | --- | --- |
-| the generated plan | 13.1 | 7.2 | 7.2 |
-| the same plan, every window open all day | 12.8 | 11.6 | 12.6 |
+| the generated plan | 13.0 | 7.0 | 6.7 |
+| the same plan, every window open all day | 12.8 | 11.3 | 12.1 |
 
-Before and after ended on the same score, as they must. On the plan with windows
-nothing is gained: every preview declines and the route is walked, as before, and
-the monolithic calculator walks such a plan too. Its distance to 13.1 is not all
-the constraint's walk: with waiting priced the search finds more to try in a step. The
-second row is like for like, because a constraint that is 0 everywhere changes no
-decision: the constraint took 9% of the steps before and 2% after. One count in the tests
-follows: `verifyPiecewiseByHand()` in `vrp_plugin_test.cpp` counts the unit
+At weight 0 the constraint is asked on no move, so the first column is the speed of the
+sixteen constraints without it. Before and after ended on the same score, as they must. On
+the plan with windows nothing is gained, and the declined call costs a little: every preview
+declines and the route is walked, as before, and the monolithic calculator walks such a plan
+too. Its distance to 13.0 is not all the constraint's walk: with waiting priced the search
+finds more to try in a step. The second row is like for like, because a constraint that is 0
+everywhere changes no decision: the constraint took 12% of the steps before and 5% after. One
+count in the tests follows: `verifyPiecewiseByHand()` in `vrp_plugin_test.cpp` counts the unit
 components that answer from pieces, `compared == 4`, now 5.
 
 **Keep `on_reset()` light.** `on_reset()` runs whenever the objective is rebuilt,
 and on routes that is not once per solve: a rejected ruin and repair, route
 elimination or iterated local search step puts the routes back from a snapshot and
-rebuilds (`SolutionSnapshot::restore` in the engine's `model/snapshot.hpp`). The
-count above gave 3,078 calls of `on_reset()` in 30,000 steps, so a table over
-visits and vehicles built there is paid for every ten steps. The constraints here do at
+rebuilds (`SolutionSnapshot::restore` in the engine's `model/snapshot.hpp`). Every
+constraint is costed on every route there, the ones at weight 0 included. The
+count above gave 2,836 calls of `on_reset()` in 30,000 steps, so a table over
+visits and vehicles built there is paid for every eleven steps. The constraints here do at
 most one pass over the visits in `on_reset()` (`visit_order_cost.hpp` looks for an
 order). What is kept per route goes into a shared context: `RouteSumsContext` marks
 a route in `on_list_changed()` and builds its sums on the first preview that reads
@@ -430,11 +434,11 @@ that is a sum along the route is more work there: its prefix sum in `ListCache`
 (`rebuildCache()`), its difference per piece in `previewRuns()` and its delta in
 `preview_insert()`.
 
-With the fifth constraint the default path ran at 11.8 thousand steps per second on the
-generated plan, where four constraints ran at 28.0. That is the search, not the term:
+With the fifth constraint the default path ran at 11.6 thousand steps per second on the
+generated plan, where four constraints ran at 27.6. That is the search, not the term:
 with waiting priced a step finds more to try, and the assembly with the constraint at
-weight 1 fell the same way, from 13.4 to 5.9. On the plan with every window open,
-where the constraint is 0 and the search is the same, it ran at 73.1 against 76.3.
+weight 1 fell the same way, from 13.1 to 5.7. On the plan with every window open,
+where the constraint is 0 and the search is the same, it ran at 74.9 against 75.3.
 
 **4. What else moves.** A constraint that is on by default changes every default score:
 
@@ -484,15 +488,17 @@ alike is what `vrp_plugin_test` checks. A figure moves by about 2% between runs.
 
 | Measured, in thousand steps per second | The generated plan | Every window open all day |
 | --- | --- | --- |
-| default path, four constraints | 28.0 | 76.3 |
-| assembly, sixteen constraints | 13.4 | 13.0 |
-| assembly, sixteen + the constraint of step 2 at weight 0 | 13.1 | 12.8 |
-| assembly, the constraint of step 2 at weight 0.1 | 7.2 | 11.6 |
-| assembly, the constraint with the preview of step 4 at weight 0.1 | 7.2 | 12.6 |
-| default path, five constraints (step 5) | 11.8 | 73.1 |
+| default path, four constraints | 27.6 | 75.3 |
+| assembly, sixteen constraints | 13.1 | 12.8 |
+| assembly, sixteen + the constraint of step 2 at weight 0 | 13.0 | 12.8 |
+| assembly, the constraint of step 2 at weight 0.1 | 7.0 | 11.3 |
+| assembly, the constraint with the preview of step 4 at weight 0.1 | 6.7 | 12.1 |
+| default path, five constraints (step 5) | 11.6 | 74.9 |
 
 In the first column a picked constraint changes the search as well as the scoring. The
-second column is the scoring alone.
+second column is the scoring alone. The second and third rows differ by noise only: a
+constraint at weight 0 is asked on no move. That holds for the three opt-in objectives
+that `get_constraints()` carries at weight 0 as well.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 plans at the same budget over several seeds, before and after: the score, and the

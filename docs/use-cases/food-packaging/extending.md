@@ -16,7 +16,7 @@ the model and its five constraints are in the [guide](README.md).
 
 The steps build one example: `beforeIdealEndTimeCost`, the minutes a job is done before its ideal
 end time, the mirror of `afterIdealEndTimeCost`. What is packaged early has to be stored until it is
-due. Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3; a later
+due. Every snippet below was compiled and run, and every figure measured, on optimaru 0.5.1; a later
 change to the solver moves the figures, not the steps.
 
 ## How a schedule is scored
@@ -33,7 +33,7 @@ There are two scoring paths, and they give the same score for the same schedule
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/fp/constraints/` |
 | Constraints | the five, at their defaults | the ones you list, with your knobs |
-| Steps per second | 2.5 million | 0.24 million |
+| Steps per second | 2.7 million | 0.26 million |
 | Parallel starts | `parallel_solver_count` | one start |
 | Operators of the lines | reassigned between search legs when lines share one (`operator_rounds`) | assigned once, one leg |
 
@@ -209,8 +209,8 @@ fp.solve(schedule, config=config, constraints=picks)
 print(sum(fp.constraint_costs(schedule, picks)["before_ideal_end_time_cost"]["costs"]))
 ```
 
-On the demo plant that sum is 76,855 minutes. A default solve of the same length
-(`constraints=None`) leaves it at 185,247. The price is on the same soft level: the
+On the demo plant that sum is 75,210 minutes. A default solve of the same length
+(`constraints=None`) leaves it at 186,251. The price is on the same soft level: the
 squared makespans grow from 97 to 148 million, because a job can only end later by
 queueing behind more jobs.
 
@@ -275,8 +275,8 @@ fp.solve(schedule, time_limit_seconds=1, random_seed=1, constraints=picks, full_
 Run it once more with the constraint picked twice (`BeforeIdealEndTimeCost(weight=1000),
 BeforeIdealEndTimeCost(weight=1, exponent=2)`): the engine computes the raw cost of a
 repeated pick once, and this checks that too. The 1,500 random moves of
-`fp_plugin_test` run on the default assembly, where the constraint is at weight 0, so they
-say nothing about its value.
+`fp_plugin_test` run on the default assembly, where the constraint is at weight 0 and asked
+on no move, so they say nothing about it.
 
 **The tables.** The constraint tables in [README.md](README.md) and
 [python.md](python.md) must equal `fp.constraint_info()`; add the row, and the file to
@@ -285,12 +285,16 @@ constraint list, and the docstrings of `_core.pyi` name the constraints.
 
 ## 4. Make it cheaper per move
 
-On the assembly a constraint pays one `cost()` call for a line each time the engine edits
-that line's list. A move is several edits, and a rejected move is undone with as many
-again: in 500,000 steps on the demo plant the example's `cost()` ran 2.3 million times,
-4.6 times a step. Each call is one walk of the line. That is as cheap as a constraint of one
-line gets here, and it is not where the time goes: with the constraint at weight 0 the
-assembly ran at 0.233 million steps per second, against 0.236 without it.
+On the assembly a constraint with a weight pays one `cost()` call for a line each time the
+engine edits that line's list. A move is several edits, and a rejected move is undone with
+as many again: in 500,000 steps on the demo plant the example's `cost()` ran 2.05 million
+times at weight 1000, 4.1 times a step. Each call is one walk of the line. That is as
+cheap as a constraint of one line gets here, and it is not where the time goes (the pair
+scan below is): with the constraint at weight 1000 the assembly ran at 0.24 million steps
+per second, against 0.26 without it, and part of that is the search, which now has early
+ends to trade. A constraint at weight 0 is asked on no edit: only a rebuild of the
+objective costs it, and `constraint_costs()` when it reports, so the assembly with it runs
+as the assembly without it.
 
 What each kind of constraint costs, and the one thing that changes the speed of the assembly:
 
@@ -303,7 +307,7 @@ What each kind of constraint costs, and the one thing that changes the speed of 
 **Leave out a constraint that cannot fire.** `operatorCleaningConflictCost` is the third
 kind, and it sets the pace of the whole assembly. It is 0 by construction when every
 line has an operator of its own, which is the demo plant: 5 lines, 5 operators. Picks
-without it ran at 2.0 million steps per second instead of 0.24, and ended on the same
+without it ran at 2.2 million steps per second instead of 0.26, and ended on the same
 score. Measure a new constraint that way, or its cost is lost in the noise of the pair scan.
 A new constraint over pairs should keep per-line state and compare only the lines a move
 changed, as `incremental_calculator.cpp` does for this one (`pairOverlap()`).
@@ -319,7 +323,7 @@ rejected compound move, but this use case switches none of them on. Under
 without applying it, by calling `cost()` on the candidate members. This assembly
 cannot answer: its constraints read the line from the schedule, which a preview has not
 changed, and neither global implements `supports_preview()`. So every move is applied,
-scored and, when rejected, undone, which is the 4.6 calls a step above.
+scored and, when rejected, undone, which is the 4.1 calls a step above.
 
 **Keep raw costs whole numbers.** Every constraint here counts minutes, so sums stay exact
 and a hard total is never rounded. Return `static_cast<double>` of an integer count.
@@ -328,7 +332,7 @@ and a hard total is never rounded. Return `static_cast<double>` of an integer co
 
 Do this when the constraint should be on in every solve (`kDefaultWeight > 0`). Then
 `fp.solve(schedule)` must score it, and `fp.solve(schedule)` scores with the monolithic
-calculators: 11 times the steps per second of the assembly on the demo plant, and the
+calculators: 10 times the steps per second of the assembly on the demo plant, and the
 only path that runs parallel starts and reassigns operators between legs.
 
 `fp_plugin_test` compares the default assembly with the monolithic calculators on
@@ -366,7 +370,7 @@ The line in `deriveLine()`:
 `fp_plugin_test` has a check per component against `ConstraintBreakdown` in
 `verifyConstraintTotals()`; add the new member's.
 
-The default path ran at 2.2 million steps per second with the sixth constraint in it (2.5
+The default path ran at 2.5 million steps per second with the sixth constraint in it (2.7
 with five), and ended on the score the assembly gave at weight 1000. The solves differ,
 so the two speeds are not the cost of the term alone: with the constraint on, lines are
 longer.
@@ -419,15 +423,16 @@ reassigns operators between them, and the assembly does not.
 
 | Million steps per second | Demo plant: 100 jobs, 5 lines | `generate_demo_data(10, 300)`: 300 jobs, 10 lines |
 | --- | --- | --- |
-| default path, five constraints | 2.5 | 1.4 |
-| assembly, five constraints | 0.24 | 0.020 |
-| assembly, five + the constraint of step 2 at weight 0 | 0.23 | 0.020 |
-| assembly, five + the constraint at weight 1000 | 0.21 | 0.022 |
-| assembly, five constraints without `operator_cleaning_conflict_cost` (step 4) | 2.0 | 1.2 |
-| default path, six constraints (step 5) | 2.2 | 1.6 |
+| default path, five constraints | 2.7 | 2.0 |
+| assembly, five constraints | 0.26 | 0.030 |
+| assembly, five + the constraint of step 2 at weight 0 | 0.26 | 0.030 |
+| assembly, five + the constraint at weight 1000 | 0.24 | 0.027 |
+| assembly, five constraints without `operator_cleaning_conflict_cost` (step 4) | 2.2 | 1.8 |
+| default path, six constraints (step 5) | 2.5 | 1.8 |
 
 Each is the median of three runs, of 500,000 steps on the demo plant and 200,000 on
-the larger one.
+the larger one. The second and third rows differ by noise only: a constraint at weight 0 is
+asked on no move.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after:

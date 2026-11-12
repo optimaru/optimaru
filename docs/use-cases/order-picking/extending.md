@@ -19,7 +19,7 @@ The steps build one example: `orderRevisitCost`, the picks that bring a trolley 
 already left. Orders never share a bucket, so a picker who jumps from order to order and back has to
 find the right bucket again. The four constraints price the walk, the buckets and the splits; none
 prices the order the picks come in. Every snippet below was compiled and run, and every figure
-measured, on optimaru 0.4.3; a later change to the solver moves the figures, not the steps.
+measured, on optimaru 0.5.1; a later change to the solver moves the figures, not the steps.
 
 ## How a plan is scored
 
@@ -38,7 +38,7 @@ moves):
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/op/constraints/` |
 | Constraints | the four, at their defaults | the ones you list, with your knobs |
-| Steps per second | 0.87 million | 2.22 million |
+| Steps per second | 0.86 million | 2.20 million |
 | Moves | the built-in list moves and `OrderConsolidateMove` | the built-in list moves |
 | Parallel starts | `parallel_solver_count` | one start |
 
@@ -284,8 +284,8 @@ op.solve(solution, time_limit_seconds=1, random_seed=1, constraints=picks, full_
 ```
 
 `op_plugin_test` does the same for the default assembly, which now holds the constraint,
-but at weight 0, and a constraint at weight 0 is not asked in a preview. The solve above,
-with the constraint picked, is what checks its previews.
+but at weight 0, and a constraint at weight 0 is not asked on a move, previewed or applied.
+The solve above, with the constraint picked, is what checks it.
 
 **The tables.** The constraint tables in [README.md](README.md) and
 [python.md](python.md) must equal `op.constraint_info()`; add the row. The constraints are
@@ -300,11 +300,12 @@ On the assembly a constraint is asked in two ways. Most candidate moves are only
 **previewed**: the engine asks every constraint with a weight what the changed lists would
 cost (`cost()` on the candidate list, written out once per preview), and a constraint at
 weight 0 is not asked at all. A move it accepts is **applied**: the changed lists are
-reloaded and `cost()` of every constraint runs on them, the constraints at weight 0 included.
-Counted with a throwaway counter in the example on the larger demo, 3 million steps:
-0.10 calls of `cost()` per step at weight 0, 1.87 at weight 10. So a constraint left at
-weight 0 costs next to nothing, and what a picked constraint costs is what its `cost()`
-costs:
+reloaded and `cost()` of every constraint with a weight runs on them. A constraint at weight
+0 is left out there too: only a rebuild of the objective (below) costs it, and
+`constraint_costs()` when it reports. Counted with a throwaway counter in the example on the
+larger demo, 3 million steps: 1.87 calls of `cost()` per step at weight 10, and at weight 0
+thirty in the whole solve, all from the three rebuilds. So a constraint left at weight 0 costs a
+move nothing, and what a picked constraint costs is what its `cost()` costs:
 
 | The constraint is | Use | Per preview | Example to copy |
 | --- | --- | --- | --- |
@@ -359,17 +360,18 @@ private:
 ```
 
 `cost()` returns what it returned before, and the solves end on the same scores. The
-assembly's steps per second, in millions, against 2.22 for the four constraints alone:
+assembly's steps per second at weight 10, the weight of the step-2 solve, in millions,
+against 2.20 for the four constraints alone:
 
-| | Constraint at weight 0 | At weight 10 |
-| --- | --- | --- |
-| step 2 | 2.16 | 1.69 |
-| with the scratch | 2.16 | 1.78 |
+| | At weight 10 |
+| --- | --- |
+| step 2 | 1.68 |
+| with the scratch | 1.76 |
 
-At weight 0 the constraint is asked on applied moves only, about one call in ten steps, and
-the allocation does not show. At weight 10 it is asked in every preview, and the
-scratch takes 5% more steps per second. The distance from 2.22 to 1.78 is not all the
-constraint: with returns priced the search accepts other moves.
+At weight 10 the constraint is asked in every preview, and the scratch takes 5% more steps
+per second. The distance from 2.20 to 1.76 is not all the constraint: with returns priced
+the search accepts other moves. At weight 0 the constraint is asked on no move, with the
+scratch or without, and the assembly runs as the four do.
 
 **Scope and whole numbers.** `scoped_units()` returns the units a constraint is ever
 non-zero for, and the engine skips it on the others; a constraint here evaluates every
@@ -439,11 +441,11 @@ std::int64_t OrderPickingIncrementalScoreCalculator::revisits(int trolley) {
 }
 ```
 
-With the fifth constraint the default path ran at 0.72 million steps per second, where
-four constraints ran at 0.87. Part of that is the term, one more walk of each list
+With the fifth constraint the default path ran at 0.71 million steps per second, where
+four constraints ran at 0.86. Part of that is the term, one more walk of each list
 the default path applies and undoes; part is the search, which now trades walking
 against returns and ends on another plan. The assembly with the constraint at weight 10 ran
-at 1.79.
+at 1.76.
 
 **4. What else moves.** A constraint that is on by default changes every default score.
 With the example at weight 10 these failed, and are expected to:
@@ -496,16 +498,16 @@ median of three runs of the script, each the median of three solves.
 
 | Measured on the larger demo, in million steps per second | |
 | --- | --- |
-| default path, four constraints | 0.87 |
-| assembly, four constraints | 2.22 |
-| assembly, four + the constraint of step 2 at weight 0 | 2.16 |
-| assembly, the constraint of step 2 at weight 10 | 1.69 |
-| assembly, the constraint with the scratch of step 4, at weight 0 | 2.16 |
-| assembly, the constraint with the scratch of step 4, at weight 10 | 1.78 |
-| default path, five constraints (step 5) | 0.72 |
+| default path, four constraints | 0.86 |
+| assembly, four constraints | 2.20 |
+| assembly, four + the constraint of step 2 at weight 0 | 2.19 |
+| assembly, the constraint of step 2 at weight 10 | 1.68 |
+| assembly, the constraint with the scratch of step 4, at weight 10 | 1.76 |
+| default path, five constraints (step 5) | 0.71 |
 
 A step of the assembly is mostly a preview and a step of the default path an applied
-and undone move, so the first two lines compare the paths, not the constraints.
+and undone move, so the first two lines compare the paths, not the constraints. The
+second and third lines differ by noise only: a constraint at weight 0 is asked on no move.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 plans at the same budget over several seeds, before and after: the score, and the raw
