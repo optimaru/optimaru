@@ -160,6 +160,37 @@
   `school-timetabling-bench.yml` syncs and runs only that project. Flags, outputs and the
   generated instances are unchanged (the S, M and L schools are byte-identical); `out/` is
   now under `cpsat/` when run with the default `--out-dir`.
+- **Engine: a constraint at weight 0 costs a move nothing.** An opt-in constraint that is off
+  (weight 0) adds an exact 0 to the score, but a solve with constraints still computed it: on
+  an assignment-shaped use case every move called its `delta_cost()` or `cost()`, on a
+  sequence-shaped one every applied list edit did (the previews already left it out), and a
+  global was sent every change. So `get_constraints()`, which holds the opt-in constraints at
+  their weight 0, ran slower than the same picks without them, and slower with every opt-in
+  constraint added.
+  - A unit constraint at weight 0 is now left out of every move: member changes, list edits,
+    batch ends, previews and the trial snapshot. Only a reset costs it, and
+    `constraint_costs()` costs it on the current solution when it reports, so its raw cost is
+    still reported.
+  - A global is still sent every change by default, because a global may serve more than its
+    own cost (aggregates a move source or another component reads). One that only feeds its
+    own `cost()` can declare `idle_at_weight_zero()` (`GlobalConstraint`, see
+    [Extending a use case](docs/extending.md)): at weight 0 it is then sent no change and is
+    reset before its raw cost is reported. Assembly-line balancing's `workload_imbalance_cost`
+    and max-cut's `partition_imbalance_cost`, the two globals with a default weight of 0, do.
+  - A member of a compiled delta group is still evaluated with its group at weight 0; only its
+    fold is left out.
+  - No score changes, bit for bit: the weighted constraints are visited in the order they
+    always were. Checked on seeded, step-limited solves with `get_constraints()`, three seeds
+    each (assembly-line balancing 1 million steps, max-cut 2 million, vehicle routing and
+    pickup and delivery 300,000): the final score and the sequence of new bests are those of
+    main before this change. A solve without `constraints=` does not go through this code.
+  - Measured on the same solves, one thread, medians of six runs with before and after taken
+    in turns: assembly-line balancing (100 tasks) from 1.78 to 4.51 million steps per second,
+    pickup and delivery (100 requests, 10 vehicles) from 54 to 70 thousand, max-cut (400
+    vertices) from 3.53 to 3.59 million. Vehicle routing (100 visits, 10 vehicles) stays where
+    it was, 14 and 13 thousand, inside the spread of its runs (12 to 14).
+  - The step-by-step guides said that a pick at weight 0 is still computed and measured what
+    it cost; those passages and their figures are re-measured on this version.
 
 ## 0.5.0
 
