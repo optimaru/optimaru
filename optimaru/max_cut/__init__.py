@@ -9,9 +9,15 @@ Score, at the default weights:
            + different-side pairs left together + side-size shortfall/excess)
   soft = +(cut weight)                         # cut_weight_cost is a reward
 (`partition_imbalance_cost` is an opt-in objective: default weight 0.) The
-problem carries no weights: change one through a constraint selection, e.g.
-``solve(problem, constraints=[PartitionImbalanceCost(weight=2) if spec.name == "partition_imbalance_cost" else spec for spec in get_constraints()])``
-(see `optimaru.max_cut.constraints`). `constraint_info()` lists every constraint with its
+problem carries no weights: change one through a constraint selection, e.g.::
+
+    picks = [
+        PartitionImbalanceCost(weight=2) if spec.name == "partition_imbalance_cost" else spec
+        for spec in get_constraints()
+    ]
+    solve(problem, constraints=picks)
+
+See `optimaru.max_cut.constraints`; `constraint_info()` lists every constraint with its
 default level and weight.
 
 Basic usage::

@@ -43,6 +43,8 @@ from optimaru.assembly_line_balancing.models import (
     TaskPairModel,
 )
 
+from .._picks import replace_default
+
 NAMES = [
     "station_capacity_cost",
     "task_precedence_cost",
@@ -136,9 +138,7 @@ def _solved(constraints=None):
 
 def _with_workload(**knobs):
     """Every default, the opt-in workload objective replaced by one with these knobs (catalog order)."""
-    return [
-        WorkloadImbalanceCost(**knobs) if spec.name == "workload_imbalance_cost" else spec for spec in get_constraints()
-    ]
+    return replace_default(get_constraints(), "workload_imbalance_cost", WorkloadImbalanceCost(**knobs))
 
 
 def test_list_constraints_matches_the_spec_names():

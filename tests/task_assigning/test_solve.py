@@ -9,6 +9,8 @@ import optimaru.task_assigning as ta
 from optimaru.task_assigning.demo import generate_demo_data
 from optimaru.task_assigning.models import TaskAssigningSolutionModel
 
+from .._picks import replace_default
+
 
 def test_demo_solve_reaches_feasible():
     model = generate_demo_data()
@@ -100,9 +102,7 @@ def test_a_hard_total_beyond_the_fold_saturates_instead_of_looking_feasible():
     model = generate_demo_data()
     for index, employee in enumerate(model.employees):
         employee.tasks = [task.id for task in model.tasks] if index == 0 else []
-    picks = [
-        RequiredSkillCost(weight=1e9) if spec.name == "required_skill_cost" else spec for spec in get_constraints()
-    ]
+    picks = replace_default(get_constraints(), "required_skill_cost", RequiredSkillCost(weight=1e9))
     result = ta.solve(model, time_limit_seconds=0, constraints=picks)
     core = result.to_core()
     missing = sum(ta.constraint_costs(core)["required_skill_cost"]["costs"])

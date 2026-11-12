@@ -336,16 +336,27 @@ def test_the_tests_a_guide_names_exist():
         assert not cited_targets - targets, f"{name}: no such C++ test target: {sorted(cited_targets - targets)}"
 
 
-_POSITIONAL_PICK = re.compile(r"get_constraints\(\)\[")
+_POSITIONAL_PICK = re.compile(r"(get|list)_constraints\(\)\[")
 
 
 def test_picks_select_defaults_by_name_not_by_position():
-    """A slice or an index of the default list ("every default but the last") silently picks
-    another constraint once one is added to the catalog, which the extending guides teach.
-    Tests, docs and docstrings select by name: ``[X() if spec.name == "x" else spec for spec in
-    get_constraints()]``."""
+    """A slice or an index of the default list or the catalog names ("every default but the
+    last", "the first five are unit constraints") silently picks another constraint once one is
+    added to the catalog, which the extending guides teach. Tests, docs and docstrings select by
+    name: ``[X() if spec.name == "x" else spec for spec in get_constraints()]``."""
     tracked = subprocess.run(
-        ["git", "ls-files", "tests/*.py", "docs/*.md", "optimaru/*.py", "optimaru/*.pyi", "benchmarks/*.py"],
+        [
+            "git",
+            "ls-files",
+            "README.md",
+            "tests/*.py",
+            "docs/*.md",
+            "optimaru/*.py",
+            "optimaru/*.pyi",
+            "benchmarks/*.py",
+            "benchmarks/*.md",
+            "examples/*.ipynb",
+        ],
         cwd=ROOT,
         capture_output=True,
         text=True,

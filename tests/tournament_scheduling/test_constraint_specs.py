@@ -26,6 +26,8 @@ from optimaru.tournament_scheduling.constraints import (
 )
 from optimaru.tournament_scheduling.models import generate_demo_data
 
+from .._picks import replace_default
+
 MEDIUM = "assignment_count_imbalance_cost"
 
 
@@ -147,7 +149,10 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     """constraint_costs() reports the same defaults (weight, level) for every constraint,
     and every entry carries the domain's medium fold (1e6 into soft)."""
     raw = ts.constraint_costs(build_schedule())
-    unit_names = ts.list_constraints()[:2]
+    # A unit constraint reports one raw cost per unit, a global one a single total.
+    units = max(len(entry["costs"]) for entry in raw.values())
+    assert units > 1
+    unit_names = {name for name, entry in raw.items() if len(entry["costs"]) == units}
     for row in ts.constraint_info():
         entry = raw[row.name]
         assert (entry["weight"], entry["level"]) == (
@@ -524,10 +529,9 @@ def test_only_the_scoped_constraint_reports_units():
 
 def test_offset_zero_is_the_plain_shaping():
     """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
-    plain = [
-        ConfrontationCountImbalanceCost(exponent=2) if spec.name == "confrontation_count_imbalance_cost" else spec
-        for spec in get_constraints()
-    ]
+    plain = replace_default(
+        get_constraints(), "confrontation_count_imbalance_cost", ConfrontationCountImbalanceCost(exponent=2)
+    )
     shifted = [type(spec)(exponent=spec.exponent, offset=0.0, clip=False) for spec in plain]
     raw, solved = _raw()
     assert score(raw, shifted) == score(raw, plain)

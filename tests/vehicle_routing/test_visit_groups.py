@@ -15,6 +15,8 @@ from optimaru.vehicle_routing.models import (
     to_plan,
 )
 
+from .._picks import only
+
 
 def visit(name: str, group: str | None = None, after=()) -> VisitModel:
     return VisitModel(
@@ -532,12 +534,14 @@ def test_on_new_best_reports_from_parallel_starts_on_a_constraint_list():
     config.step_count_limit = 2000
     config.parallel_solver_count = 3
     reported = []
-    basics = {"vehicle_capacity_cost", "max_end_time_cost", "travel_time_cost", "max_travel_time_cost"}
+    basics = only(
+        get_constraints(), "vehicle_capacity_cost", "max_end_time_cost", "travel_time_cost", "max_travel_time_cost"
+    )
 
     vrp.solve(
         plan,
         config=config,
-        constraints=[VisitGroupCost(), VisitOrderCost(), *(spec for spec in get_constraints() if spec.name in basics)],
+        constraints=[VisitGroupCost(), VisitOrderCost(), *basics],
         on_new_best=lambda step, score: reported.append((step, as_tuple(score))),
     )
 

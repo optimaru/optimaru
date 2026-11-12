@@ -9,7 +9,7 @@ the model and its four constraints are in the [guide](README.md).
 | --- | --- | --- |
 | [1](#1-change-a-constraint-that-exists) | Reweight, drop, re-level or shape a constraint that exists | a Python call |
 | [2](#2-a-new-constraint-from-one-function) | Add a constraint, off by default | one header, two lines of C++, one Python class |
-| [3](#3-check-it) | Prove it right | two C++ test cases, two counts in the C++ test, five lists in the Python tests |
+| [3](#3-check-it) | Prove it right | two C++ test cases, two counts in the C++ test, four lists in the Python tests |
 | [4](#4-make-it-cheaper-per-move) | Cut what it costs per move | the header |
 | [5](#5-put-it-on-the-default-path) | Turn it on by default | the two monolithic calculators |
 | [6](#6-measure) | Show what it costs and what it buys | no code |
@@ -275,14 +275,14 @@ Update them:
   `verifyConstraintTotals()`, and `rows.size() == 4` in `verifyCatalog()`. The two
   globals move to `rows[3]` and `rows[4]`. `rowIs()` expects a constraint that is on by
   default, so check the new row's fields directly (`!rows[2].default_enabled`);
-- `tests/tournament_scheduling/test_constraint_specs.py`, five tests:
+- `tests/tournament_scheduling/test_constraint_specs.py`, four tests:
   `test_list_constraints_matches_the_spec_names` (the list),
   `test_module_level_instances_keep_every_default` (the instances),
   `test_constraint_info_reports_the_cpp_defaults` (the row is
-  `("soft", 0.0, True, False, False)`),
-  `test_constraint_info_matches_the_raw_cost_metadata` (`unit_names =
-  ts.list_constraints()[:3]`, three unit constraints now) and
+  `("soft", 0.0, True, False, False)`) and
   `test_weight_none_means_the_component_default` (`[1, 1, 0, 1, 1]`).
+  `test_constraint_info_matches_the_raw_cost_metadata` tells the unit constraints from
+  the raw costs (one per unit against a single total), so it covers the new one as it is.
 
 **Incremental against full.** Solve with every score checked against a full
 recompute. A move that leaves the score stale raises `RuntimeError`, "Score

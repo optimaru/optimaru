@@ -9,7 +9,7 @@ the model and its twelve constraints are in the [guide](README.md).
 | --- | --- | --- |
 | [1](#1-change-a-constraint-that-exists) | Reweight, drop, re-level or shape a constraint that exists | a Python call |
 | [2](#2-a-new-constraint-from-one-function) | Add a constraint, off by default | one header, two lines of C++, one Python class |
-| [3](#3-check-it) | Prove it right | two C++ test cases, the catalog check and one count in the C++ test, six Python tests |
+| [3](#3-check-it) | Prove it right | two C++ test cases, the catalog check and one count in the C++ test, five Python tests |
 | [4](#4-make-it-cheaper-per-move) | Cut what it costs per move | the header |
 | [5](#5-put-it-on-the-default-path) | Turn it on by default | the two monolithic calculators |
 | [6](#6-measure) | Show what it costs and what it buys | no code |
@@ -239,7 +239,7 @@ cmake -B build -DOPTIMARU_USE_CASES=meeting_scheduling && cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-**The counts.** A thirteenth constraint fails two checks of `ms_plugin_test.cpp` and six
+**The counts.** A thirteenth constraint fails two checks of `ms_plugin_test.cpp` and five
 Python tests. Update them:
 
 - `ms_plugin_test.cpp`: `constraint_totals().size() == 12`, and `rows.size() == 12` in
@@ -250,11 +250,13 @@ Python tests. Update them:
   `test_list_constraints_matches_the_spec_names`,
   `test_module_level_instances_keep_every_default` and
   `test_constraint_info_reports_the_cpp_defaults` (the row is
-  `("soft", 0.0, True, False, False)`); `unit_names = ms.list_constraints()[:5]` in
-  `test_constraint_info_matches_the_raw_cost_metadata` (six unit constraints now); the
-  weights written out in `test_weight_none_means_the_component_default`; and
+  `("soft", 0.0, True, False, False)`); the weights written out in
+  `test_weight_none_means_the_component_default`; and
   `test_the_attendance_clash_raw_costs`, which lists every non-zero raw cost of a hand
   schedule: there the constraint reads 2 in cell 5.
+
+`test_constraint_info_matches_the_raw_cost_metadata` tells the unit constraints from the raw
+costs (one per unit against a single total), so it covers the new one as it is.
 
 **Incremental against full.** Solve with every score checked against a full recompute. It raises
 `RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
@@ -509,7 +511,7 @@ what such a comparison reports. Against CP-SAT:
 | `cpp/include/ms/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/meeting_scheduling/cpp/ms_plugin_test.cpp` | | cases, catalog, count | | the row, the medium hand instance |
-| `tests/meeting_scheduling/test_constraint_specs.py` | | six tests | | the row, the weights |
+| `tests/meeting_scheduling/test_constraint_specs.py` | | five tests | | the row, the weights |
 | `docs/use-cases/meeting-scheduling/README.md`, `python.md` | | table row | | defaults, counts |
 | `cpp/include/ms/score_calculator.hpp`, `cpp/src/score_calculator.cpp` | | | | member, weight, term |
 | `cpp/include/ms/incremental_calculator.hpp`, `cpp/src/incremental_calculator.cpp` | | | | total, table, term |

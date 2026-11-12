@@ -17,6 +17,8 @@ from optimaru.assembly_line_balancing.models import (
     TaskPairModel,
 )
 
+from .._picks import replace_default
+
 WEB_DEMO = Path(__file__).parent / "fixtures" / "web_demo.json"
 
 
@@ -104,10 +106,7 @@ def test_the_model_and_the_core_solve_alike():
     "constraints",
     [
         None,
-        [
-            WorkloadImbalanceCost(weight=1) if spec.name == "workload_imbalance_cost" else spec
-            for spec in get_constraints()
-        ],
+        replace_default(get_constraints(), "workload_imbalance_cost", WorkloadImbalanceCost(weight=1)),
     ],
 )
 def test_full_assert_solves_on_both_paths(constraints):

@@ -9,10 +9,16 @@ Score, at the default weights:
            + station-domain distance + missed fixed stations + forbidden stations hit
            + extra stations of same-station groups + different-station pairs together)
   soft = -(stations used)                       # workload_imbalance_cost is opt-in (weight 0)
-The problem carries no weights: change one through a constraint selection, e.g.
-``solve(problem, constraints=[WorkloadImbalanceCost(weight=1) if spec.name == "workload_imbalance_cost" else spec for spec in get_constraints()])``
-(see `optimaru.assembly_line_balancing.constraints`). `constraint_info()` lists every constraint
-with its default level and weight.
+The problem carries no weights: change one through a constraint selection, e.g.::
+
+    picks = [
+        WorkloadImbalanceCost(weight=1) if spec.name == "workload_imbalance_cost" else spec
+        for spec in get_constraints()
+    ]
+    solve(problem, constraints=picks)
+
+See `optimaru.assembly_line_balancing.constraints`; `constraint_info()` lists every constraint with its
+default level and weight.
 
 Basic usage::
 

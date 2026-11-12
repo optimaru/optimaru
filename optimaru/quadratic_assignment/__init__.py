@@ -12,10 +12,13 @@ Score, at the default weights (all 1):
            + facilities at a forbidden location
            + demand above location capacities)
   soft = -(direct assignment cost + flow-distance cost)
-The problem carries no weights: change one through a constraint selection, e.g.
-``solve(problem, constraints=[FlowDistanceCost(weight=2) if spec.name == "flow_distance_cost" else spec for spec in get_constraints()])``
-(see `optimaru.quadratic_assignment.constraints`). `constraint_info()` lists every
-constraint with its default level and weight.
+The problem carries no weights: change one through a constraint selection, e.g.::
+
+    picks = [FlowDistanceCost(weight=2) if spec.name == "flow_distance_cost" else spec for spec in get_constraints()]
+    solve(problem, constraints=picks)
+
+See `optimaru.quadratic_assignment.constraints`; `constraint_info()` lists every constraint with its
+default level and weight.
 
 Basic usage::
 

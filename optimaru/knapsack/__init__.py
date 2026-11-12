@@ -9,9 +9,12 @@ Score, at the default weights:
            + selected forbidden items + selection-group shortfall/excess
            + unmet item dependencies)
   soft = +(selected value)                       # selected_value_cost is a reward
-The problem carries no weights: change one through a constraint selection, e.g.
-``solve(problem, constraints=[SelectedValueCost(weight=2) if spec.name == "selected_value_cost" else spec for spec in get_constraints()])``
-(see `optimaru.knapsack.constraints`). `constraint_info()` lists every constraint with its
+The problem carries no weights: change one through a constraint selection, e.g.::
+
+    picks = [SelectedValueCost(weight=2) if spec.name == "selected_value_cost" else spec for spec in get_constraints()]
+    solve(problem, constraints=picks)
+
+See `optimaru.knapsack.constraints`; `constraint_info()` lists every constraint with its
 default level and weight.
 
 Basic usage::

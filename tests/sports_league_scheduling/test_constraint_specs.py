@@ -37,6 +37,8 @@ from optimaru.sports_league_scheduling.constraints import (
     workday_classic_matches_cost,
 )
 
+from .._picks import replace_default
+
 HARD_PICKS = [
     team_conflict_cost,
     consecutive_home_matches_cost,
@@ -423,9 +425,7 @@ def test_offsets_by_hand_on_both_paths(pick, expected):
 
 def test_offset_zero_is_the_plain_shaping():
     """offset 0 is the plain shaping in both modes: a pick with offset 0 scores like one without it."""
-    plain = [
-        AwayToHomeHopCost(exponent=2) if spec.name == "away_to_home_hop_cost" else spec for spec in get_constraints()
-    ]
+    plain = replace_default(get_constraints(), "away_to_home_hop_cost", AwayToHomeHopCost(exponent=2))
     shifted = [
         AwayToHomeHopCost(exponent=2, offset=0, clip=False)
         if spec.name == "away_to_home_hop_cost"

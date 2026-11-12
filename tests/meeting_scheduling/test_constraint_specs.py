@@ -167,7 +167,10 @@ def test_constraint_info_matches_the_raw_cost_metadata():
     """constraint_costs() reports the same defaults (weight, level) for every constraint,
     and every entry carries the domain's medium fold (1e6 into soft)."""
     raw = ms.constraint_costs(build_schedule())
-    unit_names = ms.list_constraints()[:5]
+    # A unit constraint reports one raw cost per unit, a global one a single total.
+    units = max(len(entry["costs"]) for entry in raw.values())
+    assert units > 1
+    unit_names = {name for name, entry in raw.items() if len(entry["costs"]) == units}
     for row in ms.constraint_info():
         entry = raw[row.name]
         assert (entry["weight"], entry["level"]) == (
