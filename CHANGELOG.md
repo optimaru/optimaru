@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Project job scheduling: a move that rebuilds the schedule from its order.**
+  `SerialScheduleMove` (`SolverConfig.serial_schedule_moves`, on by default; drawn on at most
+  a fifth of the steps, `custom_move_probability = 0.2`) reads the start dates of the working
+  schedule, changes the order they give (one allocation's place, a few neighbours, a
+  precedence chain or a project, an execution mode, or the order of the schedule pushed to
+  the right) and places every allocation again as early as its predecessors and the
+  renewable resources allow, late projects first. Single changes of a delay stalled some
+  percent above what the order allows. After 30 s on one thread the RG30 makespans are 63 /
+  75 / 55 / 73 / 72 (66 / 82 / 59 / 76 / 75 before; OR-Tools CP-SAT on 8 workers 62 / 74 /
+  55 / 73 / 71), the 20 generated instances of that shape end shorter on all 20 (21% in
+  sum), and the comparison ladder is better on 9 instances and the same on 11. A seed's
+  result differs from 0.5.1; `serial_schedule_moves = False` gives the earlier search.
+
 - **Benchmarks: every table has 20 instances or more.** The 17 generated comparisons run
   ladders of 20 instances: a few sizes with several seeds of the generator each, the first
   instance of a size keeping its name and the others numbered from 2 (`medium-2`, ...;
