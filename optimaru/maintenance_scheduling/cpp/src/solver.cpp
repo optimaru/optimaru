@@ -80,7 +80,8 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
                     : std::clamp<std::size_t>(8 * schedule.jobs.size(), 400, 3200);
     // Restart late acceptance with a doubled history when the search stalls
     // (see AcceptanceSettings::history_growth). Measured on the five instances
-    // of benchmarks/maintenance-scheduling at 30 s on three seeds: 13 of 15
+    // benchmarks/maintenance-scheduling had before its ladder grew to 20 (small,
+    // medium, medium-2, large, xlarge), at 30 s on three seeds: 13 of 15
     // runs better, the mean soft score 24%, 27%, 3.4%, 3.8% and 0.1% better
     // from the smallest up.
     // A solve that starts from a solution the caller gave has no stages: the

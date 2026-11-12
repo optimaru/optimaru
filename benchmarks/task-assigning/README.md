@@ -19,8 +19,9 @@ The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports
 for it includes building the model.
 
-On every instance but the smallest, the CP-SAT model of this use case is
-solved one score level at a time, hard first, within the one budget
+On every instance but the five of the smallest size (12 tasks), the CP-SAT
+model of this use case is solved one score level at a time, hard first, within
+the one budget
 ([how a CP-SAT run is timed](../README.md#how-a-cp-sat-run-is-timed)).
 
 <!-- results:start -->

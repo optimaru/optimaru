@@ -593,7 +593,7 @@ uv sync
 uv run tournament-scheduling-compare --seconds 10 --workers 8
 ```
 
-It solves six instances with both solvers and rescores both answers with the engine
+It solves twenty instances with both solvers and rescores both answers with the engine
 ([README](../../../benchmarks/tournament-scheduling/README.md)). `xlarge` is the one
 that still separates seeds at 10 seconds; for the engine alone, run
 `ts.solve(tournament(), time_limit_seconds=10, random_seed=seed)` over a few seeds on

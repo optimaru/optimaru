@@ -144,8 +144,9 @@ allows: a later stage takes worse solutions for a long while, and the macro move
 each make a pass over every consumer, would take the steps that settle who goes where. A
 solve from a given assignment has no stages and keeps the full gate.
 
-Measured on the six instances of
-[`benchmarks/facility-location`](../../../benchmarks/facility-location) (30 s, three
+Measured on the six instances that
+[`benchmarks/facility-location`](../../../benchmarks/facility-location) had before its
+ladder grew to 20 (`small`, `demo`, `medium`, `medium-2`, `large`, `xlarge`; 30 s, three
 seeds, one thread), as the mean cost above OR-Tools CP-SAT's at 30 s on 8 workers:
 
 | search | mean cost above CP-SAT's |

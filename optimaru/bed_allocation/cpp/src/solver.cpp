@@ -36,7 +36,8 @@ optimaru::Settings configureEngine(const Solver::Config& config, const BedPlan& 
                     : std::clamp<std::size_t>(8 * plan.stays.size(), 8000, 12000);
     // Restart late acceptance with a doubled history when the search stalls
     // (see AcceptanceSettings::history_growth). Measured on the six instances
-    // of benchmarks/bed-allocation at 30 s on three seeds: the mean soft score
+    // benchmarks/bed-allocation had before its ladder grew to 20 (small, demo,
+    // medium, medium-2, large, xlarge), at 30 s on three seeds: the mean soft score
     // is 2.8%, 1.7% and 3.7% better up to 183 stays (the 20-stay instance ends
     // on one value on every seed), and within 0.3% either way from 180 stays
     // up, where few stages fit.

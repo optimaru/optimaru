@@ -27,10 +27,25 @@ Every cell is the score of that solver's final solution under the use case's own
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
 | tiny | 10 picks / 1 trolley | **0hard/-4134soft** | **0hard/-4134soft** |
+| tiny-2 | 15 picks / 1 trolley | **0hard/-4124soft** | **0hard/-4124soft** |
+| tiny-3 | 17 picks / 1 trolley | **0hard/-4162soft** | **0hard/-4162soft** |
+| tiny-4 | 16 picks / 1 trolley | **0hard/-4154soft** | **0hard/-4154soft** |
 | small | 22 picks / 2 trolleys | **0hard/-8244soft** | **0hard/-8244soft** |
+| small-2 | 18 picks / 2 trolleys | **0hard/-8210soft** | **0hard/-8210soft** |
+| small-3 | 15 picks / 2 trolleys | **0hard/-8218soft** | **0hard/-8218soft** |
+| small-4 | 27 picks / 2 trolleys | **0hard/-8258soft** | **0hard/-8258soft** |
 | medium | 56 picks / 4 trolleys | **0hard/-20478soft** | 0hard/-20488soft |
-| large | 137 picks / 8 trolleys | **0hard/-40940soft** | 0hard/-41132soft |
-| xlarge | 235 picks / 16 trolleys | **0hard/-81604soft** | 0hard/-89242soft |
+| medium-2 | 71 picks / 4 trolleys | **0hard/-20518soft** | 0hard/-20528soft |
+| medium-3 | 69 picks / 4 trolleys | **0hard/-20514soft** | 0hard/-20558soft |
+| medium-4 | 62 picks / 4 trolleys | **0hard/-20524soft** | 0hard/-20546soft |
+| large | 137 picks / 8 trolleys | **0hard/-40940soft** | 0hard/-41098soft |
+| large-2 | 138 picks / 8 trolleys | **0hard/-40908soft** | 0hard/-41112soft |
+| large-3 | 106 picks / 8 trolleys | **0hard/-40842soft** | 0hard/-40976soft |
+| large-4 | 120 picks / 8 trolleys | **0hard/-40888soft** | 0hard/-41038soft |
+| xlarge | 235 picks / 16 trolleys | **0hard/-81604soft** | 0hard/-92378soft |
+| xlarge-2 | 227 picks / 16 trolleys | **0hard/-81552soft** | 0hard/-89604soft |
+| xlarge-3 | 224 picks / 16 trolleys | **0hard/-81688soft** | 0hard/-94404soft |
+| xlarge-4 | 233 picks / 16 trolleys | **0hard/-81670soft** | 0hard/-91916soft |
 
-Measured 2026-11-11 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
+Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->
