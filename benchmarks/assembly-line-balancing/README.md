@@ -3,7 +3,7 @@
 The [`assembly-line-balancing`](../../docs/use-cases/assembly-line-balancing) use case (the C++
 engine) against **OR-Tools CP-SAT** ([`cpsat/`](cpsat), package `assembly_line_balancing_cpsat`)
 on SALBP-1 instances (the Otto et al. SALBP archive from assembly-line-balancing.de),
-downloaded on demand and checksum-verified ([`bench/data.py`](bench/data.py)). Both
+downloaded on demand and checksum-verified ([`public_benchmark_data.py`](cpsat/assembly_line_balancing_cpsat/public_benchmark_data.py)). Both
 answers are rescored by the use case's own evaluator (`constraint_costs()`).
 
 The CP-SAT model is built from [external-solver](https://github.com/optimaru/external-solver) plugins, one per engine
@@ -29,12 +29,12 @@ objective is built.
 ```sh
 cd benchmarks/assembly-line-balancing/cpsat
 OPTIMARU_USE_CASES=assembly_line_balancing uv sync   # also builds this checkout's optimaru (assembly_line_balancing only)
-uv run pytest -q tests     # comparison runner and SALBP parser (the model tests live in external-solver)
+uv run pytest -q tests     # comparison and public-archive runners, SALBP parser (the model tests live in external-solver)
 uv run python -m assembly_line_balancing_cpsat.benchmark --seconds 10     # generated lines, no download
-cd .. && uv run --project cpsat python -m bench.run_bench --seconds 60   # the SALBP archive
+uv run assembly-line-balancing-public-bench --seconds 60   # the SALBP archive
 ```
 
-Recorded results: [`bench/RESULTS.md`](bench/RESULTS.md).
+Public-archive protocol and results: [`cpsat/PUBLIC_BENCHMARKS.md`](cpsat/PUBLIC_BENCHMARKS.md).
 
 <!-- results:start -->
 ## Results

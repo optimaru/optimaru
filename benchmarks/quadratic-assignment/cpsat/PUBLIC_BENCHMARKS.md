@@ -7,7 +7,8 @@ what its QAPLIB reference permutation scores under the same evaluator, read in
 whichever index convention the solution file uses (facility per location, or
 location per facility). That is the value the file states, except for `kra32`,
 whose file states 88900 (the value of `kra30a`) while its permutation scores
-88700: `REFERENCE_ERRATA` in `bench/run_bench.py` records it, and any other
+88700: `REFERENCE_ERRATA` in
+[`public_benchmark.py`](quadratic_assignment_cpsat/public_benchmark.py) records it, and any other
 mismatch stops the run.
 
 <!-- results:start -->
@@ -60,7 +61,7 @@ The table is the benchmark's whole QAPLIB selection (every instance with 30 to
 50 facilities):
 
 ```sh
-cd benchmarks/quadratic-assignment && uv run --project cpsat python -m bench.run_bench --all --seconds 30 --json
+cd benchmarks/quadratic-assignment/cpsat && uv run quadratic-assignment-public-bench --all --seconds 30 --json
 ```
 
 The CP-SAT reference is disabled by default on these instances because its

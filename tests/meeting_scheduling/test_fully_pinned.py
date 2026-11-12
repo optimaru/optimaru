@@ -6,7 +6,7 @@ import optimaru.meeting_scheduling as ms
 
 
 def _reversed_values(pin):
-    schedule = ms.demo_data()
+    schedule = ms.generate_demo_data()
     ms.solve(schedule, time_limit_seconds=0.1, random_seed=1)
     values = [assignment.grain_room for assignment in schedule.meeting_assignments][::-1]
     for index, assignment in enumerate(schedule.meeting_assignments):

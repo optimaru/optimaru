@@ -256,18 +256,17 @@ cmake --build build/st -j
 ./build/st/school_timetabling/st_test && ./build/st/school_timetabling/st_canonical_test
 
 # 1) Track 1: cross-check gate → C++ vs CP-SAT → rescoring → table (out/RESULTS_track1.md)
-cd benchmarks/school-timetabling
-uv run run_bench.py --sizes S,M,L --seconds 10 \
-  --cpp-bin ../../build/st/school_timetabling/st_quality_bench
+cd benchmarks/school-timetabling/cpsat
+export OPTIMARU_USE_CASES=school_timetabling   # keep it set: uv rebuilds the extension when it changes
+uv sync                                        # the project, with this checkout's optimaru built in place
+uv run school-timetabling-compare --sizes S,M,L --seconds 10 \
+  --cpp-bin ../../../build/st/school_timetabling/st_quality_bench
 
-# 2) Track-2 prerequisite: build the pybind extension in place in the source tree
-( cd ../.. && OPTIMARU_USE_CASES=school_timetabling uv sync --all-groups )
+# 2) Track 2: full canonical constraints (out/RESULTS_track2.md)
+uv run school-timetabling-compare --track2 --sizes S,M,L --seconds 10
 
-# 3) Track 2: full canonical constraints (out/RESULTS_track2.md)
-uv run run_bench.py --track2 --sizes S,M,L --seconds 10
-
-# 4) Track 3: partial timetabling, unassigned_lessons_cost relaxed (out/RESULTS_track3.md)
-uv run run_bench.py --track3 --sizes S,M,L --seconds 10
+# 3) Track 3: partial timetabling, unassigned_lessons_cost relaxed (out/RESULTS_track3.md)
+uv run school-timetabling-compare --track3 --sizes S,M,L --seconds 10
 ```
 
 ### CI

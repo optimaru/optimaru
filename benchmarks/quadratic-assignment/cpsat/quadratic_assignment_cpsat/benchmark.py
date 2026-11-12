@@ -3,7 +3,7 @@
 Both solvers get the same instances and wall-clock budget; both answers are
 rescored by the use case's own evaluator (`quadratic_assignment.constraint_costs`).
 The CP-SAT reference model is O(n^4), so the instances stay small (QAPLIB-size
-runs live in `bench/run_bench.py`).
+runs live in `public_benchmark.py`).
 Run: `uv run python -m quadratic_assignment_cpsat.benchmark --seconds 10`.
 """
 

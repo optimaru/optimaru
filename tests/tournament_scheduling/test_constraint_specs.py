@@ -24,13 +24,13 @@ from optimaru.tournament_scheduling.constraints import (
     team_conflict_cost,
     team_unavailability_cost,
 )
-from optimaru.tournament_scheduling.models import demo_data
+from optimaru.tournament_scheduling.models import generate_demo_data
 
 MEDIUM = "assignment_count_imbalance_cost"
 
 
 def build_schedule():
-    return demo_data().to_core()
+    return generate_demo_data().to_core()
 
 
 def solve(constraints=None):

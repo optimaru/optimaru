@@ -98,7 +98,7 @@ def test_workday_classic_matches_cost():
 
 
 def test_demo_schedule_shape():
-    s = sl.demo_schedule()
+    s = sl.generate_demo_data()
     assert s.team_count() == 14
     assert s.round_count() == 32
     assert s.match_count() == 14 * 13

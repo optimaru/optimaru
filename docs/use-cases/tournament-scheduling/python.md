@@ -16,12 +16,15 @@ uv run pytest -q tests/tournament_scheduling
 
 ```python
 from optimaru import tournament_scheduling as ts
-from optimaru.tournament_scheduling.models import demo_data
+from optimaru.tournament_scheduling.models import generate_demo_data
 
-schedule = demo_data()  # the demo instance: 7 teams, 18 days x 4 slots, 12 unavailable days
+schedule = generate_demo_data()  # the demo instance: 7 teams, 18 days x 4 slots, 12 unavailable days
 result = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score_hard, result.score_soft)  # 0, -1.54919 (feasible, 6 teams x 12 assignments)
 ```
+
+`models.generate_demo_data()` builds the demo instance; its name before 0.5.1, `models.demo_data()`, still
+works (an alias of the same function).
 
 `solve` accepts both the pydantic model (`models.TournamentScheduleModel`) and `_core`
 objects. Pin an assignment with `TeamAssignmentModel.pinned=True`;

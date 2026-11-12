@@ -8,8 +8,8 @@ gap. This script keeps the review's instances and, with ``--check``, fails when 
 engine uses more bins than the recorded baseline on one of them or ends infeasible
 anywhere.
 
-    uv run --project cpsat python -m bench.quality --seconds 2 --seeds 1,2,3 --check
-    uv run --project cpsat python -m bench.quality --extra --seconds 10   # the full table
+    uv run bin-packing-quality-bench --seconds 2 --seeds 1,2,3 --check
+    uv run bin-packing-quality-bench --extra --seconds 10   # the full table
 
 The default set is the review's four coloured instances and their plain twins
 (the same weights, no colours or conflicts), so a change that helps the coloured
@@ -32,7 +32,7 @@ from pathlib import Path
 from optimaru import bin_packing
 from optimaru.bin_packing.models import BinPackingProblemModel
 
-WEB_DEMO = Path(__file__).resolve().parents[3] / "tests" / "bin_packing" / "fixtures" / "web_demo.json"
+WEB_DEMO = Path(__file__).resolve().parents[4] / "tests" / "bin_packing" / "fixtures" / "web_demo.json"
 
 # Generator seeds: 20261031 is the review's instance; 11, 22 and 33 are the ones that
 # show the gap is not specific to one instance.

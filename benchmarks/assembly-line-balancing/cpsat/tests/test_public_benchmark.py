@@ -1,13 +1,9 @@
 import io
-import sys
 import zipfile
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from bench.data import parse_alb_data, parse_xlsx_best_known
+from assembly_line_balancing_cpsat.public_benchmark_data import parse_alb_data, parse_xlsx_best_known
 
 
 def test_salbp_parser_maps_tasks_cycle_time_and_precedence() -> None:

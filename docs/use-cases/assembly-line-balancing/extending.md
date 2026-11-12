@@ -470,7 +470,7 @@ hand-computed (below).
   still runs, but CP-SAT minimizes the objective without the constraint while both
   answers are scored with it: it no longer compares one objective;
 - the published results in `benchmarks/assembly-line-balancing/README.md` and
-  `bench/RESULTS.md`, and `CHANGELOG.md`.
+  `cpsat/PUBLIC_BENCHMARKS.md`, and `CHANGELOG.md`.
 
 ## 6. Measure
 
@@ -527,7 +527,7 @@ Both commands solve on the default path, so they measure a constraint after step
 the "small", "medium" and "large" generated lines of the benchmark. They print the score
 at the default constraints: the station count before step 5, stations plus late work
 after it. To compare stations across the change, read `stations_used()` as the snippet
-of step 2 does. The public archive runs through `python -m bench.run_bench`
+of step 2 does. The public archive runs through `uv run assembly-line-balancing-public-bench`
 ([README](../../../benchmarks/assembly-line-balancing/README.md)), which reports the
 stations used.
 

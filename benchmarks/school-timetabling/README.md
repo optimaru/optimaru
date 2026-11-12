@@ -5,14 +5,28 @@ with modifications; see the repository [NOTICE](../../NOTICE).
 
 A harness that solves the same instances with the engine and OR-Tools CP-SAT
 and compares them. It runs build → cross-check gate → quality benchmark → table.
+It is the package `school_timetabling_cpsat` of the `uv` project [`cpsat/`](cpsat), next to
+the CP-SAT reference `teacher_scheduling`, and runs from that directory:
 
-| File | Role |
+```sh
+cd benchmarks/school-timetabling/cpsat
+OPTIMARU_USE_CASES=school_timetabling uv sync   # also builds this checkout's optimaru (school_timetabling only)
+uv run pytest -q                                # the CP-SAT model's tests and its parity with the engine
+uv run school-timetabling-compare --help
+```
+
+The helper modules also run on their own, as
+`uv run python -m school_timetabling_cpsat.<module>` (`evaluate`, `cpsat_quickstart`,
+`gen_canonical`). The runner and the generator write to `out/` in the working directory
+(`--out-dir`).
+
+| File (`cpsat/school_timetabling_cpsat/`) | Role |
 | --- | --- |
-| `run_bench.py` | Orchestration (track 1 by default, `--track2` for the canonical track, `--track3` for partial timetabling) |
+| `benchmark.py` | `school-timetabling-compare`: orchestration (track 1 by default, `--track2` for the canonical track, `--track3` for partial timetabling) |
 | `evaluate.py` | Track-1 shared evaluator: recomputes the quickstart model's six-constraint score from a solution (checked against each solver's self-report); its per-term keys are the `*_cost` names below, each holding the raw cost (the reward `teacher_time_efficiency_cost` is <= 0) |
 | `cpsat_quickstart.py` | Track-1 CP-SAT solver (six constraints: hard as constraints, the three soft ones as the objective) |
 | `gen_canonical.py` | Track-2 generator of S/M/L canonical `TimetableProblem`s (blocks / parallel sections / team teaching / unavailability, with a load check) |
-| `cpp/st_quality_bench.cpp` | Track-1 C++ side: builds instances, dumps JSON, solves, cross-check mode |
+| `../cpp/st_quality_bench.cpp` | Track-1 C++ side: builds instances, dumps JSON, solves, cross-check mode |
 
 ## Track 1: the quickstart model's six constraints
 
@@ -29,7 +43,7 @@ The grid is 5 days × 8 periods = 40 slots.
 
 ```sh
 # cross-check gate → S/M 10 s each → rescoring → Markdown table
-uv run run_bench.py --sizes S,M --seconds 10
+uv run school-timetabling-compare --sizes S,M --seconds 10
 ```
 
 The result is `out/RESULTS_track1.md`. The cross-check gate passes only when
@@ -40,12 +54,12 @@ the C++ score of the fixed instance matches `evaluate.py`
 
 The canonical `TimetableProblem` (every hard and soft canonical constraint) is solved under the same
 time limit by CP-SAT (`teacher_scheduling.solve`) and the C++ canonical
-engine (`optimaru.school_timetabling.solve`, single-threaded — shown as `pending` when the
-extension is not built and the import fails); both results are rescored with
+engine (`optimaru.school_timetabling.solve`, single-threaded; the CP-SAT model imports the
+engine's constraint specs, so both need the extension built); both results are rescored with
 cpsat's `validate.py`.
 
 ```sh
-uv run run_bench.py --track2 --sizes S,M,L --seconds 10
+uv run school-timetabling-compare --track2 --sizes S,M,L --seconds 10
 ```
 
 The result is `out/RESULTS_track2.md` (status / hard-violation count / penalty
@@ -61,7 +75,7 @@ documented soft weight `UNASSIGNED_LESSONS_SOFT_WEIGHT`). Placing everything is
 impossible from the start, so the comparison is **how much gets filled**.
 
 ```sh
-uv run run_bench.py --track3 --sizes S,M --seconds 10
+uv run school-timetabling-compare --track3 --sizes S,M --seconds 10
 ```
 
 The result is `out/RESULTS_track3.md` (placed/required · unassigned · hard

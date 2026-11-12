@@ -9,7 +9,7 @@ import random
 
 from ._core import LeagueSchedule, Match, Round, Team
 
-__all__ = ["demo_schedule"]
+__all__ = ["generate_demo_data"]
 
 _TEAM_NAMES = [
     "Cruzeiro",
@@ -55,7 +55,7 @@ def _pick(rng: random.Random, n: int) -> int:
     return int(rng.random() * n)
 
 
-def demo_schedule() -> LeagueSchedule:
+def generate_demo_data() -> LeagueSchedule:
     """The demo instance (deterministic)."""
     rng = random.Random(0)
 
@@ -92,3 +92,6 @@ def demo_schedule() -> LeagueSchedule:
             match.classic_match = True
 
     return LeagueSchedule(teams, rounds, matches, _DISTANCE_IN_KM)
+
+
+demo_schedule = generate_demo_data  # the name before 0.5.1

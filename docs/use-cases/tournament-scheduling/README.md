@@ -14,9 +14,9 @@ uv run pytest -q tests/tournament_scheduling
 
 ```python
 from optimaru import tournament_scheduling as ts
-from optimaru.tournament_scheduling.models import demo_data
+from optimaru.tournament_scheduling.models import generate_demo_data
 
-schedule = demo_data()
+schedule = generate_demo_data()
 result = ts.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score_hard, result.score_soft)
 ```

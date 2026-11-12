@@ -10,6 +10,7 @@ dev = ["pytest"]
 
 [project.scripts]
 quadratic-assignment-compare = "quadratic_assignment_cpsat.benchmark:main"
+quadratic-assignment-public-bench = "quadratic_assignment_cpsat.public_benchmark:main"
 
 [tool.uv]
 # external-solver pins the published optimaru; the benchmarks measure the engine in

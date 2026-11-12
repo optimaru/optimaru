@@ -67,9 +67,9 @@ No build. Pass the constraints you want, with the knobs that differ from the def
 ```python
 import optimaru.tournament_scheduling as ts
 from optimaru.tournament_scheduling.constraints import ConfrontationCountImbalanceCost, TeamUnavailabilityCost, get_constraints
-from optimaru.tournament_scheduling.models import demo_data
+from optimaru.tournament_scheduling.models import generate_demo_data
 
-schedule = demo_data()
+schedule = generate_demo_data()
 changed = {"confrontation_count_imbalance_cost", "team_unavailability_cost", "assignment_count_imbalance_cost"}
 picks = [
     *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
@@ -223,7 +223,7 @@ for picked in (picks, others, None):
     config = ts.SolverConfig()
     config.step_count_limit = 1_000_000
     config.random_seed = 1
-    result = ts.solve(demo_data(), config=config, constraints=picked)
+    result = ts.solve(generate_demo_data(), config=config, constraints=picked)
     print(sum(ts.constraint_costs(result.to_core(), picks)["consecutive_days_cost"]["costs"]))
 ```
 
@@ -290,7 +290,7 @@ corruption: incremental score ... != full recompute ..." (the engine's
 `ScoreMismatchError`):
 
 ```python
-ts.solve(demo_data(), time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
+ts.solve(generate_demo_data(), time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
 ```
 
 With the `delta_cost()` of step 4 deliberately doubled, this raised within the second.

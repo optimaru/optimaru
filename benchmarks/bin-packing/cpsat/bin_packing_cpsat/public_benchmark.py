@@ -1,3 +1,5 @@
+"""Run the engine and CP-SAT on Falkenauer's uniform and triplet instances (OR-Library, downloaded on demand)."""
+
 from __future__ import annotations
 
 import argparse
@@ -6,8 +8,9 @@ import math
 import time
 from pathlib import Path
 
-from bench.data import load_suite
 from optimaru import bin_packing
+
+from .public_benchmark_data import load_suite
 
 DEFAULT_INSTANCES = ("t60_00", "u120_04", "u250_03")
 
@@ -51,8 +54,6 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
 
 def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
     from external_solver import bin_packing as cpsat
-
-    import bin_packing_cpsat  # noqa: F401 - points external_solver at the checkout engine
 
     started = time.perf_counter()
     try:

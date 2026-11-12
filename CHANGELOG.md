@@ -97,6 +97,69 @@
 - **Benchmarks: the facility location table measured again.** The engine has CP-SAT's score
   on the four instances up to 200 consumers (on two before) and is 0.02% and 0.29% behind on
   the two larger ones (1.4% to 3.3% behind on four before).
+- **Python: every demo instance is `generate_demo_data()`.** The function that returns a use
+  case's demo instance had five names; six use cases already called it `generate_demo_data`,
+  five did not: `order_picking.build_demo_data`, `meeting_scheduling.demo_data` (the package,
+  `models` and `_core`), `tournament_scheduling.models.demo_data`,
+  `conference_scheduling.demo_conference` and `sports_league_scheduling.demo_schedule`. They are
+  `generate_demo_data` now, with the same arguments and the same instance. The five old names
+  remain as plain aliases of it in the modules that had them, without a warning, and are no
+  longer in `__all__`. `tests/test_layout.py` checks from the source that a demo function has
+  no other name.
+- **Tests: maintenance scheduling picks the defaults by name, not by position.**
+  `test_offset_zero_reproduces_the_plain_scores` took `get_constraints()[:5]` as "the four
+  date constraints and `crew_conflict_cost`", so a constraint added to the catalog would
+  have silently replaced one of them. It now takes every default with the tag conflicts
+  squared and states offset 0 on each, so a new constraint is covered without a change; the
+  snippet in `python.md` and the step in `extending.md` that warned about the slice follow.
+- **Tests: the pickup-delivery and order-picking plugin tests compare a solve with an
+  independent recompute.** Check (f) of `pdp_plugin_test` and `op_plugin_test` compared the
+  solution's score with `ScoreCalculator::score()` of the same solution, but that call
+  stores its result in the solution first, so both sides were one number. The check now keeps
+  the score the plugin solve reported and compares it with the monolithic recompute; with
+  the travel or walking weight doubled in the assembly it fails, as it passed before.
+- **Employee scheduling: the default solve no longer judges a pinned shift on the per-shift
+  constraints.** `es.solve(schedule)` and `es.calculate_score()` counted a pinned shift in
+  `required_skill_cost`, `employee_unavailability_cost`, `undesired_day_cost` and
+  `desired_day_cost`, while the components behind `constraints=` and `solve_request`, the
+  constraint descriptions and `python.md` treated it as settled history that is not judged
+  again. So the same schedule scored differently on the two paths: a pinned shift on a skill
+  its employee lacks scored `-1hard` on the default solve and 0 with `constraints=`. The
+  default solve now skips it too, so that schedule scores 0 on both, and a pinned shift on an
+  unavailable, undesired or desired day no longer costs or earns its minutes there. The
+  constraints between shifts (`shift_overlap_cost`, `max_one_shift_per_day_cost`,
+  `min_rest_cost`) and `shift_count_imbalance_cost` count a pinned shift on both paths, as
+  before. A schedule without pinned shifts scores as before; no benchmark instance pins a
+  shift. `es_plugin_test` now pins shifts in its parity check and solves with pinned
+  violations under `ScoreChecks::Full` on both paths.
+- **Benchmarks: every public-instance runner has one form.** Pickup & delivery and
+  project-job scheduling ran theirs as a command of the comparison package, while bin
+  packing, quadratic assignment and assembly-line balancing kept a loose `bench/` package
+  beside the project, run as `uv run --project cpsat python -m bench.run_bench`. Those three
+  now follow the first two: `<use case>_cpsat/public_benchmark.py` (helpers in
+  `public_benchmark_data.py`) with the command `<slug>-public-bench`, run with `uv run` from
+  `benchmarks/<slug>/cpsat`; `bench/RESULTS.md` is `cpsat/PUBLIC_BENCHMARKS.md`, downloads
+  are cached in the package's ignored `.cache/`, and bin packing's search-quality check is
+  `bin-packing-quality-bench` (`bin_packing_cpsat/quality_bench.py`). Flags, output and
+  `--json` are unchanged; the tests are `cpsat/tests/test_public_benchmark.py` and need no
+  network. `tests/test_layout.py` checks that no `benchmarks/<slug>/bench/` package is left
+  and that every `public_benchmark.py` has its `<slug>-public-bench` entry. A checkout that
+  ran the old runners keeps its downloads in `benchmarks/<slug>/bench/.cache/`: still
+  ignored, no longer read, so delete that `bench/` directory or move the archives to
+  `cpsat/<use case>_cpsat/.cache/`.
+- **Benchmarks: school timetabling's comparison is a package with a command.** Its
+  three-track harness was a separate script project (`benchmarks/school-timetabling`,
+  `st-bench`, not installed) whose four scripts imported each other as top-level modules and
+  put the CP-SAT model and the engine on `sys.path` by hand, run as `uv run run_bench.py`.
+  It is now the package `school_timetabling_cpsat` in the `benchmarks/school-timetabling/cpsat`
+  project, next to the CP-SAT model `teacher_scheduling`, as every other use case has it:
+  `run_bench.py` is `benchmark.py`, run as `uv run school-timetabling-compare` (`--track2`,
+  `--track3`), and `evaluate`, `cpsat_quickstart` and `gen_canonical` run as
+  `uv run python -m school_timetabling_cpsat.<module>`. The `st-bench` project and its lock
+  are gone, one `uv sync` there builds the engine extension too, and
+  `school-timetabling-bench.yml` syncs and runs only that project. Flags, outputs and the
+  generated instances are unchanged (the S, M and L schools are byte-identical); `out/` is
+  now under `cpsat/` when run with the default `--out-dir`.
 - **Tournament scheduling: `TeamCountMove` and the guided change values run with picked
   constraints too.** `ts.solve(schedule, constraints=[...])` searched without the macro move
   that empties or refills whole teams, because the move read the monolithic calculator's

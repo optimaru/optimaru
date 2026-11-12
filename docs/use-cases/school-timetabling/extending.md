@@ -45,7 +45,8 @@ There are two scoring paths:
 | Steps per second | 1.31 million | 0.32 million |
 | Parallel starts | `parallel_solver_count` | one start |
 
-The speeds are the M school of `benchmarks/school-timetabling/gen_canonical.py` (12
+The speeds are the M school of `school_timetabling_cpsat/gen_canonical.py` in
+`benchmarks/school-timetabling/cpsat` (12
 classes, 408 lessons, 34 slots), 2 million steps, one thread of an Apple M4 Max;
 [step 6](#6-measure) has the script. With `constraints=` Python builds a
 `canon.DecomposedCalculator` and hands it to `canon.Solver(config).solve(table, calculator)`.
@@ -66,8 +67,8 @@ No build. Pass the constraints you want, with the knobs that differ from the def
 ```python
 import sys
 
-sys.path.insert(0, "benchmarks/school-timetabling")
-from gen_canonical import generate
+sys.path.insert(0, "benchmarks/school-timetabling/cpsat")
+from school_timetabling_cpsat.gen_canonical import generate
 
 import optimaru.school_timetabling as st
 from optimaru.school_timetabling.constraints import Assembly, ClassGapCost, TeacherMaxPeriodsCost, get_constraints
@@ -343,7 +344,7 @@ returning 0 on purpose, the call above raised it.
 the file list of "Adding a hard or soft cost" in [README.md](README.md#extending) name
 every constraint; add the row. The CP-SAT model this use case is compared with lives in this
 repository, not in external-solver: `benchmarks/school-timetabling/cpsat`, package
-`teacher_scheduling`. It has one plugin per constraint, a subclass of the engine's spec, in
+`teacher_scheduling` (the comparison next to it is the package `school_timetabling_cpsat`). It has one plugin per constraint, a subclass of the engine's spec, in
 `teacher_scheduling/solver/registry.py` (`CONSTRAINT_TYPES` follows the catalog order),
 and its `validate.py` computes the penalties that the benchmark rescoring and
 `tests/test_engine_parity.py` compare. Add the constraint there so the benchmark stays like
@@ -531,16 +532,18 @@ The timing includes the conversion of the problem, a few milliseconds.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare scores
 at the same budget over several seeds, before and after. The canonical domain is
-benchmark track 2, which solves the S, M and L schools of `gen_canonical.py` with the
+benchmark track 2, which solves the S, M and L schools of `gen_canonical` with the
 engine and with the CP-SAT model and rescores both with `validate.py`:
 
 ```sh
-cd benchmarks/school-timetabling
-uv run run_bench.py --track2 --sizes S,M,L --seconds 10     # out/RESULTS_track2.md
+cd benchmarks/school-timetabling/cpsat
+export OPTIMARU_USE_CASES=school_timetabling   # keep it set: uv rebuilds when it changes
+uv sync
+uv run school-timetabling-compare --track2 --sizes S,M,L --seconds 10     # out/RESULTS_track2.md
 ```
 
 The C++ quality bench `benchmarks/school-timetabling/cpp/st_quality_bench.cpp` and
-`run_bench.py` without a flag are track 1: they run the quickstart domain and say
+`school-timetabling-compare` without a flag are track 1: they run the quickstart domain and say
 nothing about a canonical constraint. Partial timetabling is track 3 (`--track3`); see the
 [benchmark README](../../../benchmarks/school-timetabling/README.md).
 

@@ -9,9 +9,9 @@ Score mapping (hard / medium / soft -> engine Score):
 ``-(medium penalty * 1e6 + soft penalty)`` — folded with a 1e6 offset so medium
 (required+preferred / preferred attendance conflicts) always dominates soft::
 
-    from optimaru.meeting_scheduling.models import MeetingScheduleModel, demo_data
+    from optimaru.meeting_scheduling.models import MeetingScheduleModel, generate_demo_data
 
-    model = demo_data()                          # the demo instance
+    model = generate_demo_data()                 # the demo instance
     clone = MeetingScheduleModel.model_validate_json(model.model_dump_json())
     schedule = clone.to_core()                   # pydantic -> engine
 """
@@ -37,7 +37,7 @@ __all__ = [
     "PersonModel",
     "RoomModel",
     "TimeGrainModel",
-    "demo_data",
+    "generate_demo_data",
     "solve_request",
     "with_initial_solution",
 ]
@@ -184,10 +184,13 @@ class MeetingScheduleModel(StrictModel):
         )
 
 
-def demo_data() -> MeetingScheduleModel:
+def generate_demo_data() -> MeetingScheduleModel:
     """The demo instance (deterministic; exposes C++ `ms::buildDemoData` as-is): 20 people, 160 time
     grains (4 days x 40), 3 rooms (30/20/16 seats), 24 meetings (8/12/16 grains)."""
-    return MeetingScheduleModel.from_core(_core.demo_data())
+    return MeetingScheduleModel.from_core(_core.generate_demo_data())
+
+
+demo_data = generate_demo_data  # the name before 0.5.1
 
 
 def with_initial_solution(problem, solution):

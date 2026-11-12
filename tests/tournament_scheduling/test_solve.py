@@ -2,11 +2,11 @@
 and pinned assignments are kept."""
 
 import optimaru.tournament_scheduling as ts
-from optimaru.tournament_scheduling.models import TournamentScheduleModel, demo_data
+from optimaru.tournament_scheduling.models import TournamentScheduleModel, generate_demo_data
 
 
 def test_demo_solve_reaches_feasible():
-    model = demo_data()
+    model = generate_demo_data()
     result = ts.solve(model, time_limit_seconds=5.0, random_seed=42)
     assert isinstance(result, TournamentScheduleModel)
     assert result.score_hard == 0  # feasible
@@ -22,7 +22,7 @@ def test_demo_solve_reaches_feasible():
 
 
 def test_solve_core_in_place():
-    core = demo_data().to_core()
+    core = generate_demo_data().to_core()
     result = ts.solve(core, time_limit_seconds=2.0, random_seed=1)
     assert result is core
     assert core.score.is_feasible()
@@ -30,7 +30,7 @@ def test_solve_core_in_place():
 
 
 def test_pinned_assignment_kept():
-    model = demo_data()
+    model = generate_demo_data()
     model.team_assignments[0].team = 6  # pin Maciej to Day 0 slot 0
     model.team_assignments[0].pinned = True
     result = ts.solve(model, time_limit_seconds=2.0, random_seed=7)
@@ -42,7 +42,7 @@ def test_pinned_assignment_kept():
 def test_stop_at_first_feasible_and_callback():
     events = []
     result = ts.solve(
-        demo_data(),
+        generate_demo_data(),
         time_limit_seconds=5.0,
         random_seed=3,
         stop_at_first_feasible=True,
@@ -57,7 +57,7 @@ def test_parallel_solver_count_workers():
     built-in multiStart (TeamCountMove must bind to each worker's calculator).
     Checks that each worker's independent solve ends normally and the best is adopted."""
     for workers in (2, 4):
-        core = demo_data().to_core()
+        core = generate_demo_data().to_core()
         ts.solve(core, time_limit_seconds=2.0, random_seed=42, parallel_solver_count=workers)
         assert core.score.is_feasible()
         assert all(t >= 0 for t in core.assignment())
@@ -75,7 +75,7 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
 
     started = time.monotonic()
     with pytest.raises(RuntimeError, match="boom"):
-        ts.solve(demo_data(), time_limit_seconds=30.0, parallel_solver_count=4, on_new_best=boom)
+        ts.solve(generate_demo_data(), time_limit_seconds=30.0, parallel_solver_count=4, on_new_best=boom)
     assert time.monotonic() - started < 10.0
 
 
@@ -93,7 +93,7 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     try:
         started = time.monotonic()
         with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
-            ts.solve(demo_data(), time_limit_seconds=30.0, parallel_solver_count=4)
+            ts.solve(generate_demo_data(), time_limit_seconds=30.0, parallel_solver_count=4)
         assert time.monotonic() - started < 10.0
     finally:
         _core._fail_worker_thread_start(-1)
@@ -122,7 +122,7 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     seen = []
     started = time.monotonic()
     package.solve(
-        demo_data(),
+        generate_demo_data(),
         time_limit_seconds=30.0,
         random_seed=1,
         stop_at_first_feasible=True,
