@@ -280,13 +280,19 @@ instance). `es.list_constraints()` lists every name.
 ## Pinning
 
 `ShiftModel(pinned=True, worker="Worker 01")` fixes an assignment: the shift is
-scored like any other but never moved. Use it to carry in the last days of the
-previous planning period, so week-spanning constraints see across the boundary, or for
-assignments that are already settled. A pinned shift requires `worker`. Number the
-days so the carried-in ones come first: day 0 is the first day of history.
+never moved. Use it to carry in the last days of the previous planning period, so
+week-spanning constraints see across the boundary, or for assignments that are already
+settled. A pinned shift requires `worker`. Number the days so the carried-in ones come
+first: day 0 is the first day of history. The default solve and `constraints=` score a
+pinned shift the same way:
 
-- **Per-shift constraints** (required skill, availability, one shift per day, rest
-  between shifts): a pinned shift is settled history and is not re-judged.
+- **Per-shift constraints** (`required_skill_cost`, `employee_unavailability_cost`,
+  `undesired_day_cost`, `desired_day_cost`): a pinned shift is settled history and is not
+  judged. It costs nothing and earns no reward.
+- **Constraints between shifts, and the imbalance** (`shift_overlap_cost`,
+  `max_one_shift_per_day_cost`, `min_rest_cost`, `shift_count_imbalance_cost`): a pinned
+  shift counts like any other, so a movable shift placed next to it is judged against it,
+  and two pinned shifts that overlap still cost.
 - **Pattern constraints** (consecutive days, location runs, weekly rest, horizon counts):
   pinned days are context. A violation lying entirely within pinned days is not
   penalized; one that involves a movable day is, with the pinned days counted.

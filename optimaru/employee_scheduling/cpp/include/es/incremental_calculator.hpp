@@ -68,7 +68,8 @@ private:
     std::vector<int> bucketPos_;           // shift -> position in its day bucket
     // Immutable score terms, flattened for cache-friendly hot-path lookup.
     // These replace tree lookups and branch-heavy interval arithmetic on
-    // every candidate move.
+    // every candidate move. A pinned shift's per-shift terms are 0 for every
+    // employee (ScoreCalculator::shiftHardPenalty / shiftSoftDelta).
     struct ShiftTerms {
         std::int64_t penalty;
         std::int64_t soft;

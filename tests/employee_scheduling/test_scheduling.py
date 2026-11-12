@@ -11,6 +11,7 @@ import time
 import pytest
 
 import optimaru.employee_scheduling as es
+from optimaru.employee_scheduling.constraints import get_constraints
 
 from ._reference import REFERENCE_SCORE, reference_schedule
 
@@ -536,6 +537,62 @@ def test_a_fully_pinned_schedule_is_scored_but_not_searched(use_calculator):
         es.Solver(cfg).solve(schedule)
     assert {shift.employee_index for shift in schedule.shifts} == {0}
     assert str(schedule.score) == str(expected)
+
+
+def _pinned_schedule(pin_skill_shift=True):
+    """Worker A lacks Skill A, is unavailable on day 1 and avoids day 0; every shift is
+    pinned on A (the skill-less one only with `pin_skill_shift`), two of them overlapping
+    by 240 minutes on day 3. Worker B, who has Skill A, has no shift."""
+    a = es.Employee("A", unavailable_dates={1}, undesired_dates={0})
+    shifts = [
+        es.Shift("Skill-less", es.minutes(0, 9), es.minutes(0, 17), required_skill="Skill A"),
+        es.Shift("Unavailable", es.minutes(1, 9), es.minutes(1, 17)),
+        es.Shift("Early", es.minutes(3, 9), es.minutes(3, 17)),
+        es.Shift("Late", es.minutes(3, 13), es.minutes(3, 21)),
+    ]
+    for shift in shifts:
+        shift.employee_index, shift.pinned = 0, True
+    shifts[0].pinned = pin_skill_shift
+    return es.EmployeeSchedule([a, es.Employee("B", {"Skill A"})], shifts)
+
+
+@pytest.mark.parametrize(
+    ("pin_skill_shift", "hard", "soft"),
+    # Hard: 240 overlap minutes + 1 for two shifts on one day; movable, the skill-less shift
+    # adds 1 and its 480 minutes on A's undesired day 0. Soft: the imbalance over (4, 0)
+    # shifts, sqrt(16 - 16 / 2) = 2.82843.
+    [(True, -241, -2.82843), (False, -242, -482.82843)],
+    ids=["skill-less-pinned", "skill-less-movable"],
+)
+def test_a_pinned_shift_skips_the_per_shift_terms_on_both_paths(pin_skill_shift, hard, soft):
+    """A pinned shift is settled: required skill, unavailability and the day wishes skip it,
+    on es.solve() with and without constraints=; the pair terms and the imbalance count it."""
+    scores = [
+        es.calculate_score(_pinned_schedule(pin_skill_shift)),
+        es.DecomposedCalculator(get_constraints()).score(_pinned_schedule(pin_skill_shift)),
+    ]
+    if pin_skill_shift:  # nothing to search: the solves return the score of the given roster
+        cfg = es.SolverConfig()
+        cfg.step_count_limit = 10
+        cfg.random_seed = 1
+        scores.append(es.solve(_pinned_schedule(), config=cfg).score)
+        scores.append(es.solve(_pinned_schedule(), config=cfg, constraints=get_constraints()).score)
+    assert [(score.hard, score.soft) for score in scores] == [(hard, pytest.approx(soft))] * len(scores)
+
+
+@pytest.mark.parametrize("use_constraints", [False, True], ids=["built-in", "constraints"])
+def test_a_full_assert_solve_with_pinned_violations_stays_exact(use_constraints):
+    """The reference roster with its unavailable, skill-less and undesired shifts pinned: a
+    full_assert solve (every incremental score checked) ends on the score a recompute gives."""
+    schedule = reference_schedule()
+    for index in (2, 3, 4):  # Shift 3 (undesired day), Shift 4 (unavailable day), Shift 5 (skill miss)
+        schedule.shifts[index].pinned = True
+    cfg = es.SolverConfig()
+    cfg.step_count_limit = 5_000
+    cfg.random_seed = 3
+    es.solve(schedule, config=cfg, full_assert=True, constraints=get_constraints() if use_constraints else None)
+    assert [schedule.shifts[i].employee_index for i in (2, 3, 4)] == [1, 0, 2]
+    assert str(schedule.score) == str(es.calculate_score(schedule))
 
 
 def _two_shifts():

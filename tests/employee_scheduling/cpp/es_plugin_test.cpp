@@ -5,7 +5,10 @@
 //       component's kDefaultWeight / kDefaultLevel, reward and flippability;
 //       registry names are camelCase and map to the Python names
 //   (b) the default assembly reproduces the monolithic score bit-for-bit on
-//       random assignments (including unassigned shifts)
+//       random assignments (including unassigned and pinned shifts); a pinned
+//       shift by hand (the four per-shift terms skip it, the pair terms and the
+//       imbalance count it); a ScoreChecks::Full solve on each path with
+//       pinned shifts
 //   (c) incremental score == full recompute across random moves driven
 //       through the engine's Editor, for an assembly of all 30
 //       components at parameters that bind (scoped and repeated instances
@@ -264,6 +267,11 @@ void verifyDefaultAssemblyEqualsMonolith() {
     int mismatches = 0;
     for (int round = 0; round < 300; ++round) {
         randomAssignment(s, rng, /*allowUnassigned=*/round % 3 == 0);
+        // Every fifth assigned shift pinned (from round 100 on), so a pinned
+        // shift meets every per-shift and pair term at random.
+        for (std::size_t i = 0; i < s.shifts.size(); ++i)
+            s.shifts[i].pinned = round >= 100 && i % 5 == static_cast<std::size_t>(round % 5) &&
+                                 s.shifts[i].employeeIndex >= 0;
         EmployeeSchedule copy = s;
         const Score monolithic = ScoreCalculator::score(copy);
         DecomposedCalculator calc;
@@ -276,7 +284,89 @@ void verifyDefaultAssemblyEqualsMonolith() {
         }
     }
     check(mismatches == 0,
-          "300 random assignments: the default assembly equals the monolith bit-for-bit");
+          "300 random assignments (200 with pinned shifts): the default assembly equals the "
+          "monolith bit-for-bit");
+}
+
+// A pinned shift is settled: the four per-shift terms (required skill,
+// unavailability, undesired and desired day) skip it on both paths, the pair
+// terms and the shift-count imbalance count it. Worker 1 lacks Skill A, is
+// unavailable on day 1, avoids day 2 and wants day 3; Worker 2 has Skill A.
+EmployeeSchedule pinnedInstance() {
+    EmployeeSchedule s;
+    s.employees.push_back(Employee{"Worker 1", {}, {1}, {2}, {3}, {}});
+    s.employees.push_back(Employee{"Worker 2", {"Skill A"}, {}, {}, {}, {}});
+    auto add = [&](int day, int hour, int hours, const char* skill, bool pinned) {
+        Shift shift;
+        shift.id = "Shift " + std::to_string(s.shifts.size());
+        shift.start = at(day, hour);
+        shift.end = shift.start + hours * 60;
+        shift.requiredSkill = skill;
+        shift.employeeIndex = 0;
+        shift.pinned = pinned;
+        s.shifts.push_back(shift);
+    };
+    add(0, 9, 8, "Skill A", true);  // missing skill
+    add(1, 9, 8, "", true);         // unavailable day: 480 minutes
+    add(2, 9, 8, "", true);         // undesired day: 480 minutes
+    add(3, 9, 8, "", true);         // desired day: 480 minutes
+    add(5, 9, 8, "", true);         // overlaps the next one by 240 minutes, same day
+    add(5, 13, 8, "", true);
+    add(8, 9, 8, "Skill A", false);  // movable: its missing skill counts
+    return s;
+}
+
+void verifyPinnedShifts() {
+    std::printf("== (b2) pinned shifts on both paths ==\n");
+    // Hard: the movable missing skill (1) + the pinned overlap (240) + one shift
+    // per day (1). Soft: imbalance over (7, 0), sqrt(49 - 49 / 2) = 4.94975.
+    const Score expected{-242, -4.94975};
+    {
+        EmployeeSchedule mono = pinnedInstance();
+        const Score monolithic = ScoreCalculator::score(mono);
+        EmployeeSchedule plug = pinnedInstance();
+        DecomposedCalculator calc;
+        addDefaultConstraints(calc);
+        const Score plugin = score(calc, plug);
+        std::printf("    monolith %s plugin %s\n", str(monolithic).c_str(), str(plugin).c_str());
+        check(sameScore(monolithic, expected),
+              "monolith: pinned per-shift terms skipped, -242hard");
+        check(sameScore(plugin, expected), "default assembly: the same score");
+    }
+    // A solve on each path under ScoreChecks::Full: no move picks a pinned shift,
+    // so the incremental score never adds or drops its per-shift terms.
+    for (const bool plugin : {false, true}) {
+        EmployeeSchedule s = buildRoster(23);
+        std::mt19937_64 rng(31);
+        randomAssignment(s, rng, /*allowUnassigned=*/false);
+        for (std::size_t i = 0; i < s.shifts.size(); i += 3) s.shifts[i].pinned = true;
+        Solver::Config config;
+        config.time_limit = std::chrono::seconds(10);
+        config.step_limit = 20000;
+        config.seed = 7;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        bool corrupted = false;
+        try {
+            Solver solver(config);
+            if (plugin) {
+                DecomposedCalculator calc;
+                addDefaultConstraints(calc);
+                solver.solve(s, calc);
+            } else {
+                solver.solve(s);
+            }
+        } catch (const optimaru::ScoreMismatchError& e) {
+            corrupted = true;
+            std::printf("  ScoreCorruptionError: %s\n", e.what());
+        }
+        EmployeeSchedule copy = s;
+        const Score monolithic = ScoreCalculator::score(copy);
+        const std::string path = plugin ? "default assembly" : "monolithic";
+        check(!corrupted && sameScore(s.score, monolithic),
+              "20000-step FULL_ASSERT " + path +
+                      " solve with every third shift pinned: "
+                      "the reported score == a monolithic recompute");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -762,6 +852,7 @@ void verifyRepeatsAndOffsets() {
 int main() {
     verifyCatalog();
     verifyDefaultAssemblyEqualsMonolith();
+    verifyPinnedShifts();
     verifyIncrementalEqualsFull();
     verifyScopedUnit();
     verifyLabels();
