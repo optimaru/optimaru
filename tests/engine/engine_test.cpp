@@ -1843,6 +1843,218 @@ void testDecomposedPiecewisePreviews() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Weight 0: an opt-in constraint that is off costs a move nothing.
+// The same costs as TaCost and TaJoinBalance, counting what the objective
+// asks of them.
+template <bool WithDelta>
+struct TaCountedCost final : optimaru::UnitConstraint<TaskAssignment> {
+    explicit TaCountedCost(double weight)
+        : UnitConstraint(WithDelta ? "counted cost" : "counted cost (no delta)", weight,
+                         optimaru::Level::Soft) {}
+    double cost(const TaskAssignment& s, int unit, const std::vector<int>& members) const override {
+        ++costCalls;
+        double c = 0;
+        for (int t : members) c += static_cast<double>(s.cost[t][unit]);
+        return c;
+    }
+    bool supports_delta() const override { return WithDelta; }
+    double delta_cost(const TaskAssignment& s, int unit, const std::vector<int>&,
+                      int entity) const override {
+        ++deltaCalls;
+        return static_cast<double>(s.cost[entity][unit]);
+    }
+    mutable long costCalls = 0;
+    mutable long deltaCalls = 0;
+};
+struct TaCountedBalance final : optimaru::MemberChangeGlobalConstraint<TaskAssignment> {
+    TaCountedBalance(const char* name, double weight, bool idle)
+        : MemberChangeGlobalConstraint(name, weight, optimaru::Level::Soft), idle(idle) {}
+    void reset(const TaskAssignment&,
+               const std::vector<std::vector<int>>& members_per_unit) override {
+        ++resets;
+        counts.clear();
+        squares = 0;
+        for (const auto& m : members_per_unit) {
+            counts.push_back(static_cast<long>(m.size()));
+            squares += counts.back() * counts.back();
+        }
+    }
+    void on_member_changed(const TaskAssignment&, int unit, const std::vector<int>&, int,
+                           bool joined) override {
+        ++changes;
+        const long before = counts[unit];
+        counts[unit] += joined ? 1 : -1;
+        squares += counts[unit] * counts[unit] - before * before;
+    }
+    double cost() const override { return static_cast<double>(squares); }
+    bool idle_at_weight_zero() const override { return idle; }
+    bool idle;
+    std::vector<long> counts;
+    long squares = 0;
+    long resets = 0;
+    long changes = 0;
+};
+
+void testWeightZeroIsLeftOutOfTheMoves() {
+    std::printf("== DecomposedObjective: weight 0 is left out of the moves ==\n");
+    TaskAssignment s = buildTaskInstance();
+    for (int t = 0; t < 6; ++t) s.assignment[t] = t % 4;
+
+    struct Assembly {
+        std::unique_ptr<optimaru::DecomposedObjective<TaskAssignment>> calc;
+        TaCountedCost<true>* delta = nullptr;
+        TaCountedCost<false>* recost = nullptr;
+        TaCountedBalance* idle = nullptr;
+        TaCountedBalance* notified = nullptr;
+    };
+    // Three weighted constraints (a delta, a full re-cost, a global), alone
+    // or with four picks at weight 0 placed between them.
+    auto build = [&s](bool withZeros) {
+        Assembly a;
+        a.calc = std::make_unique<optimaru::DecomposedObjective<TaskAssignment>>();
+        a.calc->add(std::make_unique<TaConflict>(s, 2.0));
+        if (withZeros) {
+            auto delta = std::make_unique<TaCountedCost<true>>(0.0);
+            auto recost = std::make_unique<TaCountedCost<false>>(0.0);
+            a.delta = delta.get();
+            a.recost = recost.get();
+            a.calc->add(std::move(delta));
+            a.calc->add(std::move(recost));
+        }
+        a.calc->emplace<TaCost<false>>(0.5, /*exponent=*/2.0);
+        if (withZeros) {
+            auto idle = std::make_unique<TaCountedBalance>("idle balance", 0.0, true);
+            auto notified = std::make_unique<TaCountedBalance>("notified balance", 0.0, false);
+            a.idle = idle.get();
+            a.notified = notified.get();
+            a.calc->add(std::move(idle));
+            a.calc->add(std::move(notified));
+        }
+        a.calc->emplace<TaBalance>(0.25);
+        a.calc->rebuild(s);
+        return a;
+    };
+    Assembly zeros = build(true);
+    Assembly plain = build(false);
+    const long deltaCostsAtReset = zeros.delta->costCalls;
+    const long recostCostsAtReset = zeros.recost->costCalls;
+    check(deltaCostsAtReset > 0 && recostCostsAtReset > 0 && zeros.idle->resets == 1,
+          "a reset costs every constraint, the ones at weight 0 included");
+
+    auto change = [&](int entity, int value) {
+        zeros.calc->before_assign(entity);
+        plain.calc->before_assign(entity);
+        s.assignment[entity] = value;
+        zeros.calc->after_assign(entity);
+        plain.calc->after_assign(entity);
+    };
+    std::mt19937_64 rng(11);
+    bool same = true;
+    for (int step = 0; step < 2000; ++step) {
+        const int task = static_cast<int>(rng() % 6);
+        const int worker = (rng() % 8 == 0) ? -1 : static_cast<int>(rng() % 4);
+        change(task, worker);
+        if (!(zeros.calc->score() == plain.calc->score())) same = false;
+    }
+    check(same, "the score is the weighted constraints' alone, bit for bit, 2000 moves");
+
+    // A batched move and its rollback (the trial snapshot: the weighted full
+    // re-cost needs it).
+    const Score before = zeros.calc->score();
+    const int old0 = s.assignment[0];
+    const int old1 = s.assignment[1];
+    for (auto* calc : {zeros.calc.get(), plain.calc.get()}) {
+        calc->begin_trial();
+        calc->begin_batch();
+    }
+    change(0, (old0 + 2) % 4);
+    change(1, (old1 + 3) % 4);
+    for (auto* calc : {zeros.calc.get(), plain.calc.get()}) calc->end_batch();
+    const bool batched = zeros.calc->score() == plain.calc->score();
+    for (auto* calc : {zeros.calc.get(), plain.calc.get()}) {
+        calc->begin_rollback();
+        calc->begin_batch();
+    }
+    change(1, old1);
+    change(0, old0);
+    for (auto* calc : {zeros.calc.get(), plain.calc.get()}) {
+        calc->end_batch();
+        calc->end_trial(false);
+    }
+    check(batched && zeros.calc->score() == before && plain.calc->score() == before,
+          "... through a batched move and its rollback too");
+
+    check(zeros.delta->deltaCalls == 0 && zeros.delta->costCalls == deltaCostsAtReset &&
+                  zeros.recost->deltaCalls == 0 && zeros.recost->costCalls == recostCostsAtReset,
+          "no move asks a unit constraint at weight 0, with the delta contract or without");
+    check(zeros.idle->changes == 0 && zeros.idle->resets == 1,
+          "... nor a global that is idle at weight 0");
+    check(zeros.notified->changes > 0,
+          "... while a global at weight 0 that is not idle is sent every change");
+
+    // The reports after those moves: every raw cost is the current
+    // assignment's, as a fresh reset reports it.
+    Assembly fresh = build(true);
+    const auto reported = zeros.calc->constraint_costs();
+    const auto expected = fresh.calc->constraint_costs();
+    bool costsEqual = reported.size() == expected.size();
+    for (std::size_t i = 0; costsEqual && i < reported.size(); ++i) {
+        costsEqual = reported[i].name == expected[i].name &&
+                     reported[i].unit_costs == expected[i].unit_costs;
+    }
+    check(costsEqual, "constraint_costs() reports the raw costs of the current assignment");
+    check(zeros.delta->costCalls > deltaCostsAtReset &&
+                  zeros.recost->costCalls > recostCostsAtReset && zeros.idle->resets == 2,
+          "... by costing there what the moves left out");
+    const auto totals = zeros.calc->constraint_totals();
+    const auto freshTotals = fresh.calc->constraint_totals();
+    bool totalsEqual = totals.size() == freshTotals.size();
+    for (std::size_t i = 0; totalsEqual && i < totals.size(); ++i) {
+        totalsEqual = totals[i].cost == freshTotals[i].cost;
+    }
+    check(totalsEqual, "constraint_totals() agrees with a fresh reset");
+
+    // A weight given later counts from the next reset on.
+    zeros.delta->weight = 1.0;
+    zeros.idle->weight = 1.0;
+    zeros.calc->rebuild(s);
+    change(0, (old0 + 1) % 4);
+    check(zeros.delta->deltaCalls > 0 && zeros.idle->changes > 0,
+          "with a weight again, both take part in the moves after the next reset");
+
+    // Sequence shape: a list edit does not cost a unit constraint at weight 0
+    // either.
+    TspSolution tsp = buildRandomTsp(3, 24);
+    for (int c = 0; c < 24; ++c) tsp.routes[c % 3].push_back(c);
+    TspRouteLengthSums* off = nullptr;
+    auto buildRoutes = [&tsp, &off](optimaru::DecomposedObjective<TspSolution>& routes) {
+        routes.emplace<TspRouteLength>();
+        auto owned = std::make_unique<TspRouteLengthSums>(/*piecewise=*/false);
+        owned->weight = 0.0;
+        off = owned.get();
+        routes.add(std::move(owned));
+        routes.rebuild(tsp);
+    };
+    optimaru::DecomposedObjective<TspSolution> routes;
+    buildRoutes(routes);
+    TspRouteLengthSums* const offOfRoutes = off;
+    const int costsAtReset = offOfRoutes->costCalls;
+    routes.before_list_edit(0);
+    routes.before_list_edit(1);
+    tsp.routes[1].push_back(tsp.routes[0].back());
+    tsp.routes[0].pop_back();
+    routes.after_list_edit(0);
+    routes.after_list_edit(1);
+    optimaru::DecomposedObjective<TspSolution> freshRoutes;
+    buildRoutes(freshRoutes);
+    check(offOfRoutes->costCalls == costsAtReset && routes.score() == freshRoutes.score(),
+          "a list edit leaves a unit constraint at weight 0 out as well");
+    check(routes.constraint_costs()[1].unit_costs == freshRoutes.constraint_costs()[1].unit_costs &&
+                  offOfRoutes->costCalls == costsAtReset + 3,
+          "... and constraint_costs() costs it on the current lists");
+}
+
 void testDecomposedListPreviews() {
     std::printf("== DecomposedObjective: sequence move previews ==\n");
     TspSolution s = buildRandomTsp(3, 24);
@@ -2519,6 +2731,7 @@ int main() {
     testExpandedMoves();
     testDecomposedDeltaCalculator();
     testMemberChangeGlobalConstraint();
+    testWeightZeroIsLeftOutOfTheMoves();
     testDecomposedListPreviews();
     testDecomposedPiecewisePreviews();
     testConstraintAssembly();

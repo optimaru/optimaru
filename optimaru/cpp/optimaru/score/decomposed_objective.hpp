@@ -509,6 +509,19 @@ struct GlobalConstraint : ConstraintMetadata {
     }
     virtual double cost() const = 0;
 
+    // Optional weight-0 contract. A global left at weight 0 (an opt-in
+    // objective that is off) adds nothing to the score, but by default the
+    // objective keeps sending it every change: a global may serve more than
+    // its own cost (aggregates that a move source or another component
+    // reads). Return true when nothing but this global's own cost() reads
+    // what it keeps and reset() rebuilds all of it from (solution, members):
+    // the objective then sends it no change while its weight is 0, does not
+    // ask its cost() for a score, and resets it on the current members before
+    // constraint_costs() reports its raw cost. A unit constraint needs no
+    // such answer: its cost() is a function of (solution, unit, members), so
+    // the objective leaves every unit constraint at weight 0 out of its moves.
+    virtual bool idle_at_weight_zero() const { return false; }
+
     // The sign contract of UnitConstraint::raw_cost_can_be_negative, for the
     // single total.
     virtual bool raw_cost_can_be_negative(const Solution& /*solution*/) const { return false; }
@@ -639,10 +652,12 @@ public:
             context->begin_reset();
         }
         // Preview capabilities, sampled once like the dispatch metadata. A
-        // constraint at weight 0 (an opt-in objective left off) is not asked
-        // during a preview at all: its contribution is 0 whatever it answers,
-        // and some such costs are the most expensive in an assembly. The
-        // applied path still costs it, since constraint_costs() reports it. An
+        // unit constraint at weight 0 (an opt-in objective left off) is not
+        // asked on a move at all, previewed or applied: its contribution is 0
+        // whatever it answers, and some such costs are the most expensive in
+        // an assembly (compile_unit_dispatch puts its entries behind the ones
+        // a move visits). This reset costs it, and constraint_costs() costs it
+        // again once a move has passed, so its raw cost is still reported. An
         // instance whose shaping jumps at 0 previews through cost() on the
         // written-out candidate, never its piecewise answer (see
         // UnitConstraint::piecewise_cost), so a preview's raw is the applied
@@ -663,20 +678,27 @@ public:
         // Score-time metadata (weight/exponent/offset/clip/level) is sampled here too —
         // metadata overrides take effect at reset, when the cached per-unit
         // contributions are rebuilt against them anyway.
+        // A global that is idle at weight 0 (GlobalConstraint::
+        // idle_at_weight_zero) is in none of the three notification lists.
         member_change_globals_.clear();
         unit_change_globals_.clear();
+        notified_globals_.clear();
         global_score_.clear();
         for (std::size_t g = 0; g < global_constraints_.size(); ++g) {
             GlobalConstraint<Solution>* pointer = global_constraints_[g].get();
-            if (pointer->supports_member_change()) {
-                member_change_globals_.push_back(pointer);
-            } else {
-                unit_change_globals_.push_back(pointer);
+            const bool idle = pointer->weight == 0.0 && pointer->idle_at_weight_zero();
+            if (!idle) {
+                notified_globals_.push_back(pointer);
+                if (pointer->supports_member_change()) {
+                    member_change_globals_.push_back(pointer);
+                } else {
+                    unit_change_globals_.push_back(pointer);
+                }
             }
             global_score_.push_back({pointer, pointer->weight, pointer->exponent,
                                      pointer->level == Level::Hard, pointer->level == Level::Medium,
                                      pointer->supports_piecewise_preview(), pointer->offset,
-                                     pointer->clip});
+                                     pointer->clip, idle});
         }
         delta_group_ptrs_.clear();
         for (const auto& group : delta_groups_) delta_group_ptrs_.push_back(group.get());
@@ -697,9 +719,10 @@ public:
         saved_hard_.resize(cells);
         saved_soft_.resize(cells);
         saved_unit_hard_.resize(unit_count_);
-        for (int u = 0; u < unit_count_; ++u) refresh_unit(u);
+        for (int u = 0; u < unit_count_; ++u) refresh_unit(u, dispatch_end(u));
         verify_share_classes();
         for (const auto& g : global_constraints_) g->reset(solution, members_);
+        moved_since_reset_ = false;
         // Every constraint, unit and global, has seen the solution: the shared
         // contexts may now build whatever they keep per list.
         if constexpr (Traits::shape == Shape::Sequence) {
@@ -778,7 +801,7 @@ public:
         if (!accepted) {
             for (int unit : saved_unit_list_) {
                 const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
-                const UnitDispatchEntry* const end = dispatch_end(unit);
+                const UnitDispatchEntry* const end = dispatch_live_end(unit);
                 for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
                     const std::size_t idx = base + entry->c;
                     cache_raw_[idx] = saved_raw_[idx];
@@ -806,7 +829,7 @@ public:
                 if (has_full_recost_) {
                     const std::size_t base =
                             static_cast<std::size_t>(unit) * unit_constraints_.size();
-                    const UnitDispatchEntry* const end = dispatch_end(unit);
+                    const UnitDispatchEntry* const end = dispatch_live_end(unit);
                     begin_share_pass();
                     for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end;
                          ++entry) {
@@ -828,6 +851,7 @@ public:
     // sequence: the touched list is re-read and re-costed whole (O(list size)).
     void before_list_edit(int /*list_index*/) override {}
     void after_list_edit(int list_index) override {
+        moved_since_reset_ = true;
         reload_list_members(list_index);
         for (SharedConstraintContext* context : shared_context_list_) {
             context->on_list_changed(list_index);
@@ -1009,9 +1033,13 @@ public:
         for (std::size_t g = 0; g < global_constraints_.size(); ++g) {
             const GlobalConstraint<Solution>& global = *global_constraints_[g];
             const SampledKnobs knobs = global_knobs(g);
+            // At weight 0 the total is 0 whatever cost() says, and an idle
+            // global's cost() is not current: not asked.
             totals.push_back({global.name,
-                              weighted_cost(knobs.weight, global.cost(), knobs.exponent,
-                                            knobs.offset, knobs.clip),
+                              knobs.weight == 0.0
+                                      ? 0.0
+                                      : weighted_cost(knobs.weight, global.cost(), knobs.exponent,
+                                                      knobs.offset, knobs.clip),
                               knobs.level == Level::Hard, knobs.level, global.label});
         }
         return totals;
@@ -1046,6 +1074,13 @@ public:
     // data (false before the first reset): the Python mirror refuses such an
     // entry on a level that counts toward the hard score, as the objective
     // does at reset.
+    //
+    // A unit constraint at weight 0 and a global that is idle at weight 0 are
+    // left out of the moves, so after a move their cells and aggregates are
+    // those of the last reset. Their raw costs are computed here instead, on
+    // the current members: cost() per evaluated unit, and a reset() of the
+    // global (its own aggregates only, which is why a const report may do
+    // it). Right after a reset nothing is recomputed.
     struct ConstraintCosts {
         std::string name;
         double weight;  // the weight in effect (sampled at the last reset)
@@ -1074,12 +1109,28 @@ public:
         out.reserve(C + global_constraints_.size());
         for (std::size_t c = 0; c < C; ++c) {
             const UnitConstraint<Solution>& constraint = *unit_constraints_[c];
-            std::vector<double> costs;
-            costs.reserve(static_cast<std::size_t>(unit_count_));
-            for (int u = 0; u < unit_count_; ++u) {
-                costs.push_back(cache_raw_[static_cast<std::size_t>(u) * C + c]);
-            }
             const SampledKnobs knobs = unit_knobs(c);
+            std::vector<double> costs;
+            if (moved_since_reset_ && solution_ != nullptr && c < unit_knobs_.size() &&
+                knobs.weight == 0.0) {
+                costs.assign(static_cast<std::size_t>(unit_count_), 0.0);
+                if (const std::vector<int>* scope = constraint.scoped_units()) {
+                    for (int u : *scope) {
+                        if (u >= 0 && u < unit_count_) {
+                            costs[u] = constraint.cost(*solution_, u, members_[u]);
+                        }
+                    }
+                } else {
+                    for (int u = 0; u < unit_count_; ++u) {
+                        costs[u] = constraint.cost(*solution_, u, members_[u]);
+                    }
+                }
+            } else {
+                costs.reserve(static_cast<std::size_t>(unit_count_));
+                for (int u = 0; u < unit_count_; ++u) {
+                    costs.push_back(cache_raw_[static_cast<std::size_t>(u) * C + c]);
+                }
+            }
             ConstraintCosts entry{constraint.name,
                                   knobs.weight,
                                   knobs.exponent,
@@ -1112,6 +1163,10 @@ public:
         for (std::size_t g = 0; g < global_constraints_.size(); ++g) {
             const GlobalConstraint<Solution>& global = *global_constraints_[g];
             const SampledKnobs knobs = global_knobs(g);
+            if (moved_since_reset_ && solution_ != nullptr && g < global_score_.size() &&
+                global_score_[g].constraint == &global && global_score_[g].idle) {
+                global_constraints_[g]->reset(*solution_, members_);
+            }
             ConstraintCosts entry{global.name,
                                   knobs.weight,
                                   knobs.exponent,
@@ -1223,6 +1278,7 @@ private:
     Totals totals_with_globals() const {
         Totals totals{hard_units_, medium_units_, soft_units_};
         for (const GlobalScoreEntry& entry : global_score_) {
+            if (entry.idle) continue;  // weight 0, and its aggregates are not kept current
             accumulate(entry, global_contribution(entry, entry.constraint->cost()), totals.hard,
                        totals.medium, totals.soft);
         }
@@ -1316,6 +1372,12 @@ private:
     }
     const UnitDispatchEntry* dispatch_end(int unit) const {
         return dispatch_.data() + dispatch_start_[unit + 1];
+    }
+    // The end of the entries a move visits: [dispatch_begin, dispatch_live_end)
+    // are the unit's constraints with a weight, [dispatch_live_end,
+    // dispatch_end) the ones at weight 0, which only a reset costs.
+    const UnitDispatchEntry* dispatch_live_end(int unit) const {
+        return dispatch_.data() + dispatch_live_end_[unit];
     }
 
     // --- Repeats share the raw cost ----------------------------------------
@@ -1464,6 +1526,16 @@ private:
     // this instead of [0,C), so scoped-out (unit,c) cells stay at their reset
     // value (0) forever, which is exactly their true cost.
     //
+    // Within a unit the entries of constraints at weight 0 come last, behind
+    // dispatch_live_end: a move (a member change, a list edit, a batch end, a
+    // preview, the trial snapshot) visits only the entries before it, in the
+    // order they always had. A weight-0 entry adds an exact 0 to every total
+    // (weighted_cost), so leaving it out changes no score, bit for bit; its
+    // raw cell then describes the last reset, and constraint_costs() costs
+    // such a constraint itself once a move has passed. A full re-cost at
+    // weight 0 does not count for has_full_recost_ either: no trial snapshot
+    // is taken for cells no move writes.
+    //
     // An instance whose shaping jumps at 0 (shaping_jumps_at_zero: the threshold
     // with a negative offset) needs its raw exactly as cost() gives it: a
     // raw accumulated as cache_raw_ + sign * delta (kGroupedApply,
@@ -1504,7 +1576,7 @@ private:
             } else {
                 meta.kind = exact_raw ? kFullRecost : kVirtualDelta;
             }
-            has_full_recost_ |= meta.kind == kFullRecost;
+            has_full_recost_ |= meta.kind == kFullRecost && meta.weight != 0.0;
             meta.is_hard = constraint.level == Level::Hard;
             meta.is_medium = constraint.level == Level::Medium;
             meta.shifted = constraint.offset != 0.0;
@@ -1529,17 +1601,26 @@ private:
             dispatch_start_[u + 1] = total;
         }
         dispatch_.resize(total);
+        dispatch_live_end_.assign(static_cast<std::size_t>(unit_count_), 0);
         std::vector<std::size_t> cursor(unit_count_);
-        for (int u = 0; u < unit_count_; ++u) {
-            std::size_t at = dispatch_start_[u];
-            for (std::size_t c : apply_all) dispatch_[at++] = metas[c];
-            cursor[u] = at;
-        }
-        for (std::size_t c = 0; c < C; ++c) {
-            const std::vector<int>* su = unit_constraints_[c]->scoped_units();
-            if (su == nullptr) continue;
-            for (int u : *su)
-                if (u >= 0 && u < unit_count_) dispatch_[cursor[u]++] = metas[c];
+        for (int u = 0; u < unit_count_; ++u) cursor[u] = dispatch_start_[u];
+        // Two passes in the same order: the constraints with a weight, then
+        // the ones at weight 0.
+        for (const bool live : {true, false}) {
+            for (int u = 0; u < unit_count_; ++u) {
+                for (std::size_t c : apply_all) {
+                    if ((metas[c].weight != 0.0) == live) dispatch_[cursor[u]++] = metas[c];
+                }
+            }
+            for (std::size_t c = 0; c < C; ++c) {
+                const std::vector<int>* su = unit_constraints_[c]->scoped_units();
+                if (su == nullptr || (metas[c].weight != 0.0) != live) continue;
+                for (int u : *su)
+                    if (u >= 0 && u < unit_count_) dispatch_[cursor[u]++] = metas[c];
+            }
+            if (live) {
+                for (int u = 0; u < unit_count_; ++u) dispatch_live_end_[u] = cursor[u];
+            }
         }
     }
 
@@ -1656,27 +1737,29 @@ private:
         }
     }
 
-    // Re-cost one unit against every unit constraint, then notify the globals.
-    void refresh_unit(int unit) {
+    // Re-cost one unit against its unit constraints up to `end`: dispatch_end
+    // at a reset (every constraint), dispatch_live_end on a move.
+    void refresh_unit(int unit, const UnitDispatchEntry* end) {
         const std::vector<int>& m = members_[unit];
         const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
-        const UnitDispatchEntry* const end = dispatch_end(unit);
         begin_share_pass();
         for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
             apply_raw(unit, *entry, base + entry->c, raw_cost(*entry, unit, m));
         }
         set_penalized(unit, unit_hard_[unit].positive());
     }
+    // A list edit: re-cost the unit, then notify the globals.
     void touch_unit(int unit) {
-        refresh_unit(unit);
-        for (const auto& g : global_constraints_) {
-            g->on_unit_changed(*solution_, unit, members_[unit]);
+        refresh_unit(unit, dispatch_live_end(unit));
+        for (GlobalConstraint<Solution>* global : notified_globals_) {
+            global->on_unit_changed(*solution_, unit, members_[unit]);
         }
     }
     // assignment move path: `entity` just joined/left `unit` (members_ already
     // updated). Delta-capable constraints adjust the cached raw cost by the
     // marginal term; the rest fall back to a full unit re-cost.
     void touch_unit_member_changed(int unit, int entity, bool joined) {
+        moved_since_reset_ = true;
         if (trial_active_ && !rollback_active_) save_unit_for_trial(unit);
         const std::vector<int>& m = members_[unit];
         const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
@@ -1690,7 +1773,7 @@ private:
         // through one local accumulator is exact (unlike the soft doubles,
         // which keep their original accumulation order through apply_raw).
         HardTotal hard_acc;
-        const UnitDispatchEntry* const end = dispatch_end(unit);
+        const UnitDispatchEntry* const end = dispatch_live_end(unit);
         begin_share_pass();
         for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
             switch (entry->kind) {
@@ -1874,7 +1957,8 @@ private:
         for (int i = 0; i < count; ++i) {
             const int unit = changes[i].unit;
             const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
-            const UnitDispatchEntry* const end = dispatch_end(unit);
+            // A constraint at weight 0 contributes nothing and is not asked.
+            const UnitDispatchEntry* const end = dispatch_live_end(unit);
             // The candidate raw cost of one entry: its piecewise answer, or
             // cost() on the written-out list.
             auto candidate_raw = [&](const UnitDispatchEntry& entry) {
@@ -1889,7 +1973,6 @@ private:
             };
             begin_share_pass();
             for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
-                if (entry->weight == 0.0) continue;  // contributes nothing, see reset
                 const std::size_t idx = base + entry->c;
                 const double raw =
                         is_shared(entry->kind)
@@ -1940,7 +2023,7 @@ private:
         saved_units_[unit] = 1;
         saved_unit_list_.push_back(unit);
         const std::size_t base = static_cast<std::size_t>(unit) * unit_constraints_.size();
-        const UnitDispatchEntry* const end = dispatch_end(unit);
+        const UnitDispatchEntry* const end = dispatch_live_end(unit);
         for (const UnitDispatchEntry* entry = dispatch_begin(unit); entry != end; ++entry) {
             const std::size_t idx = base + entry->c;
             saved_raw_[idx] = cache_raw_[idx];
@@ -1960,6 +2043,7 @@ private:
         bool piecewise;  // supports_piecewise_preview(), sampled at reset
         double offset;
         bool clip;
+        bool idle;  // weight 0 and idle_at_weight_zero(): not notified, cost() not asked
     };
 
     // One global's shaped, weighted total (the knobs sampled at reset).
@@ -2006,11 +2090,13 @@ private:
     // member-change fast-path subscribers and the unit-diff rest.
     std::vector<GlobalConstraint<Solution>*> member_change_globals_;
     std::vector<GlobalConstraint<Solution>*> unit_change_globals_;
-    std::vector<GlobalScoreEntry> global_score_;  // all globals, registration order
+    std::vector<GlobalConstraint<Solution>*> notified_globals_;  // both, registration order
+    std::vector<GlobalScoreEntry> global_score_;                 // all globals, registration order
     std::vector<std::unique_ptr<UnitConstraintDeltaGroup<Solution>>> delta_groups_;
     std::vector<UnitConstraintDeltaGroup<Solution>*> delta_group_ptrs_;  // dense view
-    std::vector<UnitDispatchEntry> dispatch_;  // per unit: compiled entries, contiguous
-    std::vector<std::size_t> dispatch_start_;  // unit -> [start, end) into dispatch_
+    std::vector<UnitDispatchEntry> dispatch_;     // per unit: compiled entries, contiguous
+    std::vector<std::size_t> dispatch_start_;     // unit -> [start, end) into dispatch_
+    std::vector<std::size_t> dispatch_live_end_;  // unit -> end of its entries with a weight
     std::vector<char> delta_capable_;       // supports_delta() per unit constraint, cached at reset
     std::vector<double> unit_offset_;       // per unit constraint: offset, sampled at reset
     std::vector<char> unit_clip_;           // per unit constraint: clip, sampled at reset
@@ -2032,6 +2118,9 @@ private:
     mutable std::uint64_t share_pass_ = 0;
 
     Solution* solution_ = nullptr;
+    // A move was applied since the last reset: what the moves leave out (unit
+    // constraints at weight 0, idle globals) no longer describes members_.
+    bool moved_since_reset_ = false;
     int unit_count_ = 0;
     int pending_old_unit_ = -1;
     std::vector<std::vector<int>>

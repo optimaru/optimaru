@@ -12,7 +12,9 @@ namespace mc {
 // from equal size. Raw cost = |n0 - n1| (one total), so 0 = equal sides (or,
 // with an odd vertex count, never 0: at best 1). Weight 0 keeps it out of
 // the default score; pick it with a weight to balance the cut. Counts kept
-// from the joins / leaves: O(1).
+// from the joins / leaves: O(1). Nothing but cost() reads them and reset()
+// recounts, so at weight 0 the objective sends this constraint no change
+// (idle_at_weight_zero).
 struct PartitionImbalanceCost final : detail::MemberChangeConstraint {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
@@ -36,6 +38,8 @@ struct PartitionImbalanceCost final : detail::MemberChangeConstraint {
     }
 
     double cost() const override { return static_cast<double>(std::abs(count_[0] - count_[1])); }
+
+    bool idle_at_weight_zero() const override { return true; }
 
 private:
     int count_[kSideCount] = {0, 0};
