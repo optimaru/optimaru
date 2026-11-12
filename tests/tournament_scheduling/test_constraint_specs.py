@@ -56,10 +56,9 @@ def test_list_constraints_matches_the_spec_names():
 def test_default_constraints_reproduce_the_monolithic_cost_function():
     """A cost function assembled from all default specs must equal the monolithic scoring.
 
-    Whether both paths reach the same **solution** cannot be checked: the team_count_moves
-    guided operator does not run on ts's plugin path (it is tied to the monolithic
-    calculator's live aggregates — cpp/include/ts/solver.hpp).
-    What can be checked is that both calculators agree on the same solution."""
+    Both calculators agree on the same solution. That both paths also search alike (same
+    seed and steps, same end) is checked in test_solve.py and in ts_plugin_test's
+    verifyTeamCountMove()."""
     schedule = build_schedule()
     ts.solve(
         schedule,
@@ -82,8 +81,11 @@ def test_picking_a_subset_drops_the_other_terms():
 
 
 def test_reweighting_one_constraint_scales_only_that_term():
-    """Raising only the head-to-head balance weight grows soft only; hard stays put."""
-    picks = [team_conflict_cost]
+    """Raising only the head-to-head balance weight grows soft only; hard stays put.
+
+    Unavailability stays picked: without it TeamCountMove reaches four teams that play every
+    day, where every pair meets 18 times and the head-to-head term is 0 at any weight."""
+    picks = [team_conflict_cost, team_unavailability_cost]
     base = solve([*picks, confrontation_count_imbalance_cost])
     heavier = solve([*picks, ConfrontationCountImbalanceCost(weight=50)])
     assert heavier.hard == base.hard
@@ -93,12 +95,13 @@ def test_reweighting_one_constraint_scales_only_that_term():
 def test_level_can_be_flipped():
     """Promoting a soft constraint to hard moves its penalty to the hard level.
 
-    Head-to-head unfairness can never be 0 on this instance, so raising the level always
-    lands on hard."""
-    soft_level = solve([team_conflict_cost, confrontation_count_imbalance_cost])
+    Head-to-head unfairness is never 0 on this instance while unavailability is hard (only
+    one team has no unavailable day, so no four teams can play every day), so raising the
+    level always lands on hard."""
+    soft_level = solve([team_conflict_cost, team_unavailability_cost, confrontation_count_imbalance_cost])
     assert soft_level.hard == 0 and soft_level.soft < 0
 
-    hard_level = solve([team_conflict_cost, ConfrontationCountImbalanceCost(level="hard")])
+    hard_level = solve([team_conflict_cost, team_unavailability_cost, ConfrontationCountImbalanceCost(level="hard")])
     assert hard_level.hard < 0
     assert hard_level.soft == 0
 
