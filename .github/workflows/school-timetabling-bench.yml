@@ -7,6 +7,9 @@
 #   2. Score-calculator parity: the fixed cross-check instance
 #      (school_timetabling_cpsat.gen_quickstart) must produce the same score on the C++ side
 #      and in the shared evaluator (school_timetabling_cpsat.evaluate). Track 1 runs it first.
+# Both gates also run in ci.yml on every pull request that touches school timetabling (the
+# use-case C++ job and the school-timetabling CP-SAT benchmark job), so this workflow is run
+# by hand, for the report.
 # Report (not a gate), published to the job summary:
 #   Track 1 — the quickstart model's six constraints, identical instances (generated in
 #     Python by gen_quickstart) solved by this repo's C++ engine and OR-Tools CP-SAT;
@@ -28,38 +31,10 @@ on:
       seconds:
         description: "Solve budget per instance per solver (seconds)"
         default: "10"
-  push:
-    branches:
-      - main
-    paths:
-      - "optimaru/cpp/**"
-      - "optimaru/__init__.py"
-      - "optimaru/_constraint.py"
-      - "optimaru/_solve.py"
-      - "optimaru/_models.py"
-      - "setup.py"
-      - "pyproject.toml"
-      - "optimaru/school_timetabling/**"
-      - "tests/school_timetabling/**"
-      - "benchmarks/school-timetabling/**"
-      - ".github/workflows/school-timetabling-bench.yml"
-  pull_request:
-    paths:
-      - "optimaru/cpp/**"
-      - "optimaru/__init__.py"
-      - "optimaru/_constraint.py"
-      - "optimaru/_solve.py"
-      - "optimaru/_models.py"
-      - "setup.py"
-      - "pyproject.toml"
-      - "optimaru/school_timetabling/**"
-      - "tests/school_timetabling/**"
-      - "benchmarks/school-timetabling/**"
-      - ".github/workflows/school-timetabling-bench.yml"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   bench:

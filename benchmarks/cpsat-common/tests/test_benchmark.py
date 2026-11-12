@@ -137,8 +137,42 @@ def test_a_ladder_has_one_instance_per_seed_of_a_scale() -> None:
         "the demo",
         ("large", 0),
     ]
+    # The names that only repeat a scale on another seed, which a smoke run skips.
+    assert ladder.repeats == {"small-2", "small-3"}
     # A name two scales would both give is refused, not overwritten.
     with pytest.raises(ValueError, match="duplicate instance 'small-2'"):
         benchmark.seeded({"small": (lambda seed: seed, (1, 2)), "small-2": lambda: "another"})
     with pytest.raises(ValueError, match="scale 'medium' has no seeds"):
         benchmark.seeded({"medium": (lambda seed: seed, ())})
+
+
+def test_a_smoke_run_takes_one_instance_per_scale(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        benchmark,
+        "score_solution",
+        lambda package, problem: benchmark.Score((0, float(problem.value)), ("hard", "soft")),
+    )
+
+    def problem():
+        return SimpleNamespace(score=SimpleNamespace(hard=0, soft=0))
+
+    class Seeded(FakeCase):
+        @staticmethod
+        def instances():
+            return benchmark.seeded({"small": (lambda seed: problem(), (1, 2, 3)), "demo": problem})
+
+    class Plain(FakeCase):
+        @staticmethod
+        def instances():
+            return {"small": problem, "small-2": problem}
+
+    argv = ["--json", "--seconds", "0.01", "--solver", "engine"]
+    ran = {}
+    for case in (Seeded, Plain):
+        for flags in ([], ["--one-per-scale"]):
+            assert benchmark.run_cli(case, argv + flags) == 0
+            ran[case.__name__, bool(flags)] = [result["instance"] for result in json.loads(capsys.readouterr().out)]
+    assert ran["Seeded", False] == ["small", "small-2", "small-3", "demo"]
+    assert ran["Seeded", True] == ["small", "demo"]
+    # A ladder that is a plain dict has no repeats: its names are scales, whatever they look like.
+    assert ran["Plain", True] == ran["Plain", False] == ["small", "small-2"]

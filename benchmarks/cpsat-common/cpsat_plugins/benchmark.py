@@ -19,16 +19,28 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 
-def seeded(scales: dict[str, Any]) -> dict[str, Callable[[], Any]]:
+class Ladder(dict):
+    """The instances of a ladder, by name, with the names that only repeat a scale on another seed.
+
+    `run_cli --one-per-scale` skips the repeats (a CI smoke run); a plain dict from `instances()`
+    has none, so every instance of it runs.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.repeats: set[str] = set()
+
+
+def seeded(scales: dict[str, Any]) -> Ladder:
     """The instances of a ladder that has several instances at a scale.
 
     A scale given as ``(build, seeds)`` is one instance per seed, ``build(seed)``: the first
     keeps the scale's name and the others are ``<scale>-2``, ``<scale>-3``, ... in the order
-    of the seeds. A scale given as a builder alone is one instance. The ladder keeps the
-    order of the scales. A name that two scales would both give (a scale `small-2` beside a
-    scale `small` with two seeds) is refused.
+    of the seeds (the ladder's `repeats`). A scale given as a builder alone is one instance.
+    The ladder keeps the order of the scales. A name that two scales would both give (a scale
+    `small-2` beside a scale `small` with two seeds) is refused.
     """
-    ladder: dict[str, Callable[[], Any]] = {}
+    ladder = Ladder()
 
     def add(name: str, build: Callable[[], Any]) -> None:
         if name in ladder:
@@ -43,7 +55,10 @@ def seeded(scales: dict[str, Any]) -> dict[str, Callable[[], Any]]:
         if not seeds:
             raise ValueError(f"scale {name!r} has no seeds")
         for index, seed in enumerate(seeds):
-            add(name if index == 0 else f"{name}-{index + 1}", lambda build=build, seed=seed: build(seed))
+            repeat = f"{name}-{index + 1}"
+            add(name if index == 0 else repeat, lambda build=build, seed=seed: build(seed))
+            if index:
+                ladder.repeats.add(repeat)
     return ladder
 
 
@@ -394,6 +409,11 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
         help="run one solver only; the JSON of an engine-only and a cp-sat-only run of the "
         "same instances add up to a comparison",
     )
+    parser.add_argument(
+        "--one-per-scale",
+        action="store_true",
+        help="skip the instances that repeat a scale on another seed (`<scale>-2`, ...); CI's smoke run",
+    )
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--markdown", action="store_true")
     args = parser.parse_args(argv)
@@ -401,8 +421,10 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
 
     wanted = set(args.instance) if args.instance else None
     results: list[dict] = []
-    for name, factory in case.instances().items():
-        if wanted is not None and name not in wanted:
+    ladder = case.instances()
+    skipped = getattr(ladder, "repeats", set()) if args.one_per_scale else set()
+    for name, factory in ladder.items():
+        if (wanted is not None and name not in wanted) or name in skipped:
             continue
         if not args.as_json:
             print(f"running {case.NAME}/{name} ...", file=sys.stderr)
