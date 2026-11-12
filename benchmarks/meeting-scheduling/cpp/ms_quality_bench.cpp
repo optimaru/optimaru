@@ -16,7 +16,7 @@
 //   dump_instances.py printed for that instance (its --check runs this).
 // Knobs (bench-only overrides of Solver::Config, for A/B sweeps):
 //   la= change= swap= alnsTrigger= alnsPolish= minRuin= maxRuin=
-//   max_ruin_count= decay= dayFit= asMove= asMoveRuin=
+//   maxRuinCount= decay= dayFit= asMove= asMoveRuin=
 
 #include <chrono>
 #include <cstdint>
@@ -186,6 +186,7 @@ int run(int argc, char** argv) {
     // same score).
     if (crosscheck) {
         MeetingSchedule schedule = loadSchedule(argv[2]);
+        if (schedule.grainRoomCount() == 0) throw std::runtime_error("no time grains or no rooms");
         const int assignmentCount = static_cast<int>(schedule.meetingAssignments.size());
         for (int i = 0; i < assignmentCount; ++i) {
             MeetingAssignment& assignment = schedule.meetingAssignments[i];

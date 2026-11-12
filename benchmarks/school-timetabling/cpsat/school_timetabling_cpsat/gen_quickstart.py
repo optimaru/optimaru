@@ -81,6 +81,8 @@ def _instance(days: int, periods: int, rooms: list[str], lessons: list[dict]) ->
 
 def generate(classes: int, teachers: int, rooms: int, seed: int) -> dict:
     """A school of ``classes`` classes, ``teachers`` teachers and ``rooms`` rooms, unassigned."""
+    if classes < 1 or rooms < 1:
+        raise ValueError(f"need at least one class and one room, got {classes} and {rooms}")
     if teachers < len(CURRICULUM):
         raise ValueError(f"need at least {len(CURRICULUM)} teachers (one per subject), got {teachers}")
     rng = random.Random(seed)

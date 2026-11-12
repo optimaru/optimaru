@@ -16,7 +16,7 @@
 //   dump_instances.py printed for that instance (its --check runs this).
 // Knobs (bench-only overrides of Solver::Config, for A/B sweeps):
 //   compatProb= la= change= swap= alnsTrigger= alnsPolish= minRuin= maxRuin=
-//   max_ruin_count= decay= segments= asMove= as_move_max_ruin= descent=
+//   maxRuinCount= decay= segments= asMove= asMoveMaxRuin= descent= hot=
 
 #include <chrono>
 #include <cstdint>
@@ -253,6 +253,7 @@ int run(int argc, char** argv) {
     // same score).
     if (crosscheck) {
         ConferenceSchedule conference = loadConference(argv[2]);
+        if (conference.slotRoomCount() == 0) throw std::runtime_error("no timeslots or no rooms");
         for (int i = 0; i < conference.talkCount(); ++i) {
             Talk& talk = conference.talks[i];
             if (!talk.pinned) talk.slotRoom = (7 * i) % conference.slotRoomCount();
