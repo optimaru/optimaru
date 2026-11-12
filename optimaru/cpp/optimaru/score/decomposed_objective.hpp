@@ -519,10 +519,12 @@ struct GlobalConstraint : ConstraintMetadata {
     // ask its cost() for a score, and resets it on the current members before
     // constraint_costs() reports its raw cost. That reset can come at any
     // point between two changes, inside an open batch or trial too, and must
-    // leave nothing behind that a later change relies on. A unit constraint
-    // needs no such answer: its cost() is a function of (solution, unit,
-    // members), so the objective leaves every unit constraint at weight 0 out
-    // of its moves (compile_unit_dispatch).
+    // leave nothing behind that a later change relies on. So a global that
+    // keeps state in a shared context (shared_context_key) other components
+    // read may declare this only if its reset() does not change that
+    // context. A unit constraint needs no such answer: its cost() is a
+    // function of (solution, unit, members), so the objective leaves every
+    // unit constraint at weight 0 out of its moves (compile_unit_dispatch).
     virtual bool idle_at_weight_zero() const { return false; }
 
     // The sign contract of UnitConstraint::raw_cost_can_be_negative, for the

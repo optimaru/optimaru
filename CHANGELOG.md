@@ -208,7 +208,9 @@
   - A unit constraint at weight 0 is now left out of every move: member changes, list edits,
     batch ends, previews and the trial snapshot. Only a reset costs it, and
     `constraint_costs()` costs it on the current solution when it reports, so its raw cost is
-    still reported.
+    still reported. A report right after a reset costs nothing extra, which is what `solve`
+    and the Python `constraint_costs()` do; a C++ caller that reports between moves pays one
+    `cost()` per unit for each such constraint, every time.
   - A global is still sent every change by default, because a global may serve more than its
     own cost (aggregates a move source or another component reads). One that only feeds its
     own `cost()` can declare `idle_at_weight_zero()` (`GlobalConstraint`, described in
