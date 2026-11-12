@@ -12,7 +12,8 @@ on:
     - cron: "0 18 * * 0" # Sunday 18:00 UTC
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # The event is in the group so a push to main cannot replace a pending weekly or manual run.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.event_name) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
@@ -54,23 +55,27 @@ jobs:
           # Which of them run. A pull request: a comparison whose benchmark project or use case
           # it changes (a renamed file counts at both paths), and all of them when it changes
           # the shared runner, this file, or the Python and build files every benchmark project
-          # installs (optimaru/*.py, setup.py, pyproject.toml). The C++ engine is left out on
-          # purpose: its changes reach the benchmarks through the use-case Python jobs, which
-          # run on every pull request. A manual or weekly run: all. A push to main: all of the
+          # installs (optimaru/*.py, setup.py, pyproject.toml, CMakeLists.txt). A change to the
+          # C++ engine (optimaru/cpp/) runs only the three jobs whose C++ bench checks scores
+          # against Python (conference and meeting scheduling's --check, school timetabling's
+          # cross-check gate); the others' smoke runs are left out on purpose, and the use-case
+          # C++ and Python jobs run on every pull request. A manual or weekly run: all. A push to main: all of the
           # CP-SAT jobs up to their install (the cache refresh), not the vehicle routing job.
-          # (The file list stops at 3000 files.)
+          # The file list stops at 3000 files: a list that long runs everything.
           changed='[]'; all=false
           case "$GITHUB_EVENT_NAME" in
             pull_request)
               changed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
                 --jq '.[] | .filename, (.previous_filename // empty)' | jq -R . | jq -sc .)
+              if [ "$(jq length <<<"$changed")" -ge 3000 ]; then all=true; fi
               ;;
             workflow_dispatch|schedule|push) all=true ;;
           esac
           touched='def touches($slug): ($slug | gsub("-"; "_")) as $name
-            | any($changed[]; startswith("benchmarks/\($slug)/") or startswith("optimaru/\($name)/"));
+            | any($changed[]; startswith("benchmarks/\($slug)/") or startswith("optimaru/\($name)/")
+              or (startswith("optimaru/cpp/") and ($slug | IN("conference-scheduling", "meeting-scheduling", "school-timetabling"))));
             def everything: $all or any($changed[]; startswith("benchmarks/cpsat-common/")
-              or test("^optimaru/[^/]+\\.py$") or IN(".github/workflows/ci.yml", "setup.py", "pyproject.toml"));'
+              or test("^optimaru/[^/]+\\.py$") or IN(".github/workflows/ci.yml", "setup.py", "pyproject.toml", "CMakeLists.txt"));'
           benchmarks=$(jq -c --argjson changed "$changed" --argjson all "$all" "$touched"' [.[] | select(everything or touches(.))]' <<<"$benchmarks")
           vehicle_routing=$(jq -n --argjson changed "$changed" --argjson all "$all" "$touched"' everything or touches("vehicle-routing")')
           if [ "$GITHUB_EVENT_NAME" = push ]; then vehicle_routing=false; fi

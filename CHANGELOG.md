@@ -6,9 +6,10 @@
   vehicle routing benchmark job) runs on a pull request that changes its benchmark project or
   its use case, all of them when the shared runner (`benchmarks/cpsat-common/`), `ci.yml` or
   the Python and build files every benchmark installs (`optimaru/*.py`, `setup.py`,
-  `pyproject.toml`) change, and all on a manual run of CI and on a weekly one (Sunday 18:00
-  UTC). A change to the C++ engine alone runs no benchmark job (the use-case Python jobs
-  still run). A push to `main` runs the CP-SAT jobs only up to their install, which keeps the
+  `pyproject.toml`, `CMakeLists.txt`) change, and all on a manual run of CI and on a weekly
+  one (Sunday 18:00 UTC). A change to the C++ engine alone runs the three jobs whose C++
+  bench checks scores against Python (conference and meeting scheduling, school timetabling)
+  and no other. A push to `main` runs the CP-SAT jobs only up to their install, which keeps the
   build caches warm for pull requests. A smoke run takes one instance per scale
   (`--one-per-scale` skips the seeds `seeded()` repeats a scale on), and the school
   timetabling job also runs track 1's cross-check gate. `school-timetabling-bench.yml`

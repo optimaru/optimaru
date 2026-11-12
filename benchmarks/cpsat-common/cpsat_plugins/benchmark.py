@@ -424,6 +424,9 @@ def run_cli(case: BenchmarkCase, argv: Sequence[str] | None = None) -> int:
     results: list[dict] = []
     ladder = case.instances()
     skipped = getattr(ladder, "repeats", set()) if args.one_per_scale else set()
+    if args.one_per_scale and not args.as_json:
+        # Visible in a CI log: a ladder copied out of its `Ladder` would bring every seed back.
+        print(f"--one-per-scale: skipping {len(skipped)} repeated seeds", file=sys.stderr)
     for name, factory in ladder.items():
         if (wanted is not None and name not in wanted) or name in skipped:
             continue
