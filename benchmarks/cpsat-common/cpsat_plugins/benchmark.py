@@ -25,16 +25,23 @@ def seeded(scales: dict[str, Any]) -> dict[str, Callable[[], Any]]:
     A scale given as ``(build, seeds)`` is one instance per seed, ``build(seed)``: the first
     keeps the scale's name and the others are ``<scale>-2``, ``<scale>-3``, ... in the order
     of the seeds. A scale given as a builder alone is one instance. The ladder keeps the
-    order of the scales.
+    order of the scales. A name that two scales would both give (a scale `small-2` beside a
+    scale `small` with two seeds) is refused.
     """
     ladder: dict[str, Callable[[], Any]] = {}
+
+    def add(name: str, build: Callable[[], Any]) -> None:
+        if name in ladder:
+            raise ValueError(f"duplicate instance {name!r}")
+        ladder[name] = build
+
     for name, entry in scales.items():
         if callable(entry):
-            ladder[name] = entry
+            add(name, entry)
             continue
         build, seeds = entry
         for index, seed in enumerate(seeds):
-            ladder[name if index == 0 else f"{name}-{index + 1}"] = lambda build=build, seed=seed: build(seed)
+            add(name if index == 0 else f"{name}-{index + 1}", lambda build=build, seed=seed: build(seed))
     return ladder
 
 

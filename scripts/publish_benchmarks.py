@@ -205,9 +205,9 @@ def _synthetic_commands(runner: str, results: list[dict], seconds: float, worker
         groups.setdefault((tuple(seeds), engine_only[size]), []).append(size)
     commands = []
     for (seeds, without_cpsat), sizes in groups.items():
+        # The seeds are always named: the two runners default them differently.
         command = f"uv run {runner} " + " ".join(f"--synthetic {size}" for size in sizes)
-        if seeds != (0,):
-            command += " --synthetic-seeds " + ",".join(str(seed) for seed in seeds)
+        command += " --synthetic-seeds " + ",".join(str(seed) for seed in seeds)
         command += f" --seconds {seconds:g}"
         commands.append(command + (" --backend engine" if without_cpsat else f" --workers {workers}"))
     return commands

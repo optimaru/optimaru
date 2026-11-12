@@ -137,3 +137,6 @@ def test_a_ladder_has_one_instance_per_seed_of_a_scale() -> None:
         "the demo",
         ("large", 0),
     ]
+    # A name two scales would both give is refused, not overwritten.
+    with pytest.raises(ValueError, match="duplicate instance 'small-2'"):
+        benchmark.seeded({"small": (lambda seed: seed, (1, 2)), "small-2": lambda: "another"})

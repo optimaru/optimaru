@@ -138,7 +138,7 @@ def synthetic_instance(activity_count: int, seed: int = 0) -> RcpspInstance:
     An activity lasts 1 to 10 time units and uses three of the four resources, 1 to 8 units of
     each, so the resources bind before the precedences do: the activities' work is about twice
     what the longest chain takes. The network is wide and shallow, as in RG30: the activities
-    are dealt into one layer per eight of them (three layers at least), and an activity follows
+    are dealt into one layer per eight of them (three layers at least, one per activity below three), and an activity follows
     one or two activities of the layer before it and, three times in ten, one of an earlier
     layer. The first layer follows the source; what nothing follows precedes the sink.
     """
@@ -407,6 +407,14 @@ def run_case(
     }
 
 
+def _seed_list(text: str) -> list[int]:
+    """`--synthetic-seeds`: comma-separated whole numbers."""
+    try:
+        return [int(seed) for seed in text.split(",")]
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a comma-separated list of seeds: {text!r}") from None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -426,6 +434,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--synthetic-seeds",
+        type=_seed_list,
         default=None,
         help="comma-separated seeds of the generated instances: one instance per size and seed (default 0)",
     )
@@ -458,7 +467,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--synthetic-seeds goes with --synthetic")
 
     if args.synthetic:
-        seeds = [int(seed) for seed in (args.synthetic_seeds or "0").split(",")]
+        seeds = args.synthetic_seeds or [0]
         instances = [synthetic_instance(count, seed) for count in args.synthetic for seed in seeds]
     else:
         names = instance_names() if args.all else (args.instance or [DEFAULT_INSTANCE])

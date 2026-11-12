@@ -469,6 +469,14 @@ def run_case(
     }
 
 
+def _seed_list(text: str) -> list[int]:
+    """`--synthetic-seeds`: comma-separated whole numbers."""
+    try:
+        return [int(seed) for seed in text.split(",")]
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a comma-separated list of seeds: {text!r}") from None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -508,6 +516,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--synthetic-seeds",
+        type=_seed_list,
         default=None,
         help="comma-separated seeds of the synthetic instances: one instance per size and seed "
         "(default: the one of --seed)",
@@ -536,7 +545,7 @@ def main(argv: list[str] | None = None) -> int:
 
     cases: list[tuple[PdptwInstance, int | None]]
     if args.synthetic:
-        seeds = [int(seed) for seed in args.synthetic_seeds.split(",")] if args.synthetic_seeds else [args.seed]
+        seeds = args.synthetic_seeds or [args.seed]
         cases = [(synthetic_instance(count, seed), None) for count in args.synthetic for seed in seeds]
     else:
         names = instance_names(args.cache_dir) if args.all else (args.instance or [DEFAULT_INSTANCE])

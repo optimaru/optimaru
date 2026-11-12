@@ -523,16 +523,16 @@ def test_generated_pickup_delivery_rows_are_one_per_size_and_instance_seed() -> 
     assert dataset["command"].splitlines() == [
         "uv run pickup-delivery-public-bench --synthetic 10 --synthetic 25 --synthetic-seeds 0,1 "
         "--seconds 30 --workers 8",
-        "uv run pickup-delivery-public-bench --synthetic 400 --seconds 30 --backend engine",
+        "uv run pickup-delivery-public-bench --synthetic 400 --synthetic-seeds 0 --seconds 30 --backend engine",
     ]
     rows = dataset["sections"][0]["rows"]
     assert [row["instance"] for row in rows] == [case["instance"] for case in cases]
     assert rows[0]["size"] == "10 requests / 25 vehicles"
     assert rows[-1]["cells"]["ortools"] == {"value": None, "status": "not run"} and rows[-1]["best"] == []
     assert rows[3]["best"] == ["engine", "ortools"]
-    # One seed, the runner's default: the command names none.
+    # One seed: still named, since the two runners default it differently.
     assert "(`--synthetic N`, instance seed 0):" in publish.pdp_synthetic_block(cases[::2])
-    assert "--synthetic-seeds" not in publish.pdp_synthetic_dataset(cases[::2], 30)["command"]
+    assert "--synthetic-seeds 0 " in publish.pdp_synthetic_dataset(cases[::2], 30)["command"]
 
 
 def test_generated_rcpsp_instances_are_a_second_table_of_the_data_set() -> None:

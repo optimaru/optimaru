@@ -499,23 +499,26 @@ def track2(args) -> None:
 
         print(f"\n== CP-SAT canonical_{size} ({args.seconds}s) ==", flush=True)
         t0 = time.perf_counter()
-        timetable = solve(
-            problem,
-            SolverConfig(
-                time_limit_seconds=float(args.seconds),
-                num_workers=args.workers,
-                random_seed=args.seed,
-                log_search_progress=False,
-            ),
-        )
+        nothing = {"violations": [], "penalties": {}, "weighted": None}
+        try:
+            timetable = solve(
+                problem,
+                SolverConfig(
+                    time_limit_seconds=float(args.seconds),
+                    num_workers=args.workers,
+                    random_seed=args.seed,
+                    log_search_progress=False,
+                ),
+            )
+        except Exception as e:  # noqa: BLE001 — a failure is a row of its own; the publisher refuses it
+            status, checked = f"error: {e}", nothing
+        else:
+            status = str(timetable.status)
+            # No timetable to rescore: every lesson would count as a violation.
+            checked = evaluate_result(problem, timetable) if timetable.status.has_solution else nothing
         # The time limit is the search's: building the model comes on top, and `wall` has both.
         wall = time.perf_counter() - t0
-        if timetable.status.has_solution:
-            checked = evaluate_result(problem, timetable)
-        else:
-            # No timetable to rescore: every lesson would count as a violation.
-            checked = {"violations": [], "penalties": {}, "weighted": None}
-        rows.append({"size": size, "backend": "cpsat", "status": str(timetable.status), "wall": wall, **checked})
+        rows.append({"size": size, "backend": "cpsat", "status": status, "wall": wall, **checked})
 
         print(f"== engine canonical_{size} ({args.seconds}s) ==", flush=True)
         t0 = time.perf_counter()

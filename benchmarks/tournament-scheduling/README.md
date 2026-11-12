@@ -28,6 +28,10 @@ The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports
 for it includes building the model.
 
+Both solvers end at the same score on the eight instances of the two smallest sizes
+(`small`, `demo` and their other seeds), where the optimum is easy to reach; the larger
+sizes are the ones that tell the solvers apart.
+
 <!-- results:start -->
 ## Results
 
