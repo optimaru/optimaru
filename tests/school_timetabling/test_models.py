@@ -192,19 +192,18 @@ def test_core_objective_weights_refuse_bools_and_non_numbers(bad):
     assert weights.class_gap_cost == 4.0
 
 
-def test_a_term_the_fast_path_does_not_know_is_left_out_of_to_core():
-    """A soft term only the catalog knows is silently left out by to_core (the plugin path uses it)."""
-    from pydantic import Field, create_model
+def test_a_term_the_fast_path_does_not_know_is_left_out_of_to_core(monkeypatch):
+    """A soft term without an ObjectiveWeights field is left out by to_core at its default (the plugin
+    path weighs it); another value raises (test_weight_fields.py)."""
+    from optimaru.school_timetabling import convert
+    from optimaru.school_timetabling.models import ObjectiveWeightsModel
 
-    from optimaru.school_timetabling.models import _ObjectiveWeightsBase
-
-    generated = create_model(
-        "Extended",
-        __base__=_ObjectiveWeightsBase,
-        first_period_load_cost=(float, Field(default=7.0, ge=0)),
-    )
-    assert generated().model_dump() == {"first_period_load_cost": 7.0}
-    assert "first_period_load_cost" not in generated().to_core().__dir__()
+    monkeypatch.setattr(convert, "_WEIGHT_FIELDS", convert._WEIGHT_FIELDS - {"non_preferred_period_cost"})
+    assert ObjectiveWeightsModel().model_dump()["non_preferred_period_cost"] == 1.0
+    monkeypatch.setattr(st.canon, "ObjectiveWeights", lambda **kwargs: kwargs)  # what to_core passes on
+    passed = ObjectiveWeightsModel().to_core()
+    assert "non_preferred_period_cost" not in passed
+    assert passed["teacher_gap_cost"] == 20.0
 
 
 def _dump_with_slot_room(value):

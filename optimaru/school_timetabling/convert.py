@@ -41,9 +41,13 @@ cannot be expressed as a merge and also raises ValueError (by definition a
 parallel group splits one class, so valid input never has one).
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
-from ._core import canon
+from .._constraint import _check_knobs
+from ._core import canon, constraint_info
+from .constraints import default_weights
 
 __all__ = [
     "ConvertedProblem",
@@ -52,6 +56,70 @@ __all__ = [
     "convert_solution",
     "inject_solution",
 ]
+
+# Constraint name -> its component default weight (kDefaultWeight), every constraint and the
+# soft ones, in catalog order.
+_DEFAULTS = {row.name: row.default_weight for row in constraint_info()}
+_SOFT_DEFAULTS = default_weights()
+# The fields of the fast path's canon.ObjectiveWeights: the soft constraints the monolithic
+# calculators score. A soft component joins the catalog first and gets its field when it goes
+# onto the default path (extending.md, step 5), so the fields may be fewer than the soft names,
+# never other names: a field the catalog does not know is a misspelt binding.
+_WEIGHT_FIELDS = frozenset(name for name, value in vars(canon.ObjectiveWeights).items() if isinstance(value, property))
+if not _WEIGHT_FIELDS <= _SOFT_DEFAULTS.keys():
+    raise RuntimeError(
+        f"canon.ObjectiveWeights fields {sorted(_WEIGHT_FIELDS - _SOFT_DEFAULTS.keys())} "
+        f"are not soft constraints of the catalog {list(_SOFT_DEFAULTS)}"
+    )
+
+
+def _soft_weights(weights: "canon.ObjectiveWeights | Mapping[str, float] | None" = None) -> dict[str, float]:
+    """The weight of every soft constraint, keyed by name in catalog order.
+
+    An `ObjectiveWeights` (None = the defaults) gives its field to each soft
+    constraint that has one. A soft constraint without a field is not on the
+    default path yet (the monolithic calculators do not score it, and
+    `st_canonical_plugin_test` fails once its default weight is not 0); it takes
+    its component default weight, the value its field will have. A mapping is a
+    selection's weights: a soft constraint it leaves out weighs 0, and a key that
+    is not a soft constraint raises ValueError."""
+    if weights is None:
+        weights = canon.ObjectiveWeights()
+    if isinstance(weights, canon.ObjectiveWeights):
+        return {
+            name: getattr(weights, name) if name in _WEIGHT_FIELDS else default
+            for name, default in _SOFT_DEFAULTS.items()
+        }
+    unknown = sorted(set(weights) - _SOFT_DEFAULTS.keys())
+    if unknown:
+        raise ValueError(f"unknown soft weight(s) {unknown}; the weights are keyed by {list(_SOFT_DEFAULTS)}")
+    return {name: float(weights.get(name, 0.0)) for name in _SOFT_DEFAULTS}
+
+
+def _fast_path_weights(weights: Mapping[str, Any]) -> "canon.ObjectiveWeights":
+    """The fast path's `canon.ObjectiveWeights` for soft weights keyed by constraint name.
+
+    The one rule for `solve(weights=)` and `models.ObjectiveWeightsModel.to_core()`. A
+    name that is not a soft constraint raises ValueError. A field takes its value
+    (`ObjectiveWeights` checks it). A soft constraint without a field is not scored
+    on this path: its value is checked like any weight (a bool, NaN, infinity or a
+    negative number raises), dropped at its default weight (so a full default dict
+    passes), and any other value, which would be ignored, raises ValueError."""
+    unknown = sorted(set(weights) - _SOFT_DEFAULTS.keys())
+    if unknown:
+        raise ValueError(f"unknown soft weight(s) {unknown}; the weights are keyed by {list(_SOFT_DEFAULTS)}")
+    off_path = []
+    for name, value in weights.items():
+        if name in _WEIGHT_FIELDS:
+            continue
+        checked, _, _ = _check_knobs(name, value, None, 1.0)
+        if checked != _SOFT_DEFAULTS[name]:
+            off_path.append(name)
+    if off_path:
+        raise ValueError(
+            f"{off_path} not on the default path (no canon.ObjectiveWeights field); pick them with constraints="
+        )
+    return canon.ObjectiveWeights(**{name: value for name, value in weights.items() if name in _WEIGHT_FIELDS})
 
 
 @dataclass
@@ -401,7 +469,7 @@ def convert_solution(
     *,
     wall_time_seconds: float = 0.0,
     unassigned_weight: float | None = None,
-    weights: "canon.ObjectiveWeights | None" = None,
+    weights: "canon.ObjectiveWeights | Mapping[str, float] | None" = None,
 ) -> dict:
     """Turns the engine assignment (the slots of `converted.table`) back into a
     canonical Timetable JSON (dict). Merged groups unfold into one canonical
@@ -418,9 +486,11 @@ def convert_solution(
     (`canon.constraint_costs`), keyed by the soft constraint names
     (teacher_gap_cost ... non_preferred_period_cost; the same meaning as
     validate.py's compute_penalties); objective_value is their sum weighted by
-    ``weights`` (a `canon.ObjectiveWeights`; None = the default weights) — the
-    same unit as the cpsat backend. status follows the hard rescore at the
-    components' default weights.
+    ``weights`` — the same unit as the cpsat backend. ``weights`` is a
+    `canon.ObjectiveWeights` (None = the default weights; a soft constraint it
+    has no field for counts at its component default weight), or a dict of soft
+    weights keyed by constraint name (a name left out counts 0). status follows
+    the hard rescore at the components' default weights.
 
     ``unassigned_weight`` is passed only by a selection that demotes
     unassigned_lessons_cost to soft (partial timetabling): unassigned periods
@@ -500,10 +570,10 @@ def convert_solution(
     feasible = hard_total == 0
     if not feasible:
         notes.append(f"hard violations left: {hard_total}")
-    weights = canon.ObjectiveWeights() if weights is None else weights
+    soft_weights = _soft_weights(weights)
     soft_names = [name for name, entry in costs.items() if entry["level"] == "soft"]
     penalties = {name: int(raw[name]) for name in soft_names}
-    objective = float(sum(getattr(weights, name) * penalties[name] for name in soft_names))
+    objective = float(sum(soft_weights[name] * penalties[name] for name in soft_names))
     if unassigned_weight is not None:
         # The unfilled periods are the penalty term, in cpsat's relaxed-mode unit.
         penalties["unassigned_lessons_cost"] = unassigned

@@ -203,10 +203,17 @@ Rules:
   caller-owned calculator cannot be cloned). When performance comes first, keep
   the default fast path.
 - Thanks to structural optimisations (compiled delta groups for the per-slot
-  family, shared projections for the teacher-mask family), the plugin path's
-  move throughput is back to 35–55% of the monolith (track 2 S/M/L at 10 s;
-  the rest of the gap is the fixed cost of the generic assembly dispatch). This
-  holds for partial assemblies and weight overrides too.
+  family, shared projections for the teacher-mask family), the plugin path
+  runs at a quarter to two thirds of the monolith's steps per second; the rest
+  of the gap is the fixed cost of the generic assembly dispatch. Measured on
+  the track-2 schools (`gen_canonical.py` in
+  `benchmarks/school-timetabling/cpsat/school_timetabling_cpsat/`) with
+  one thread and seeds 1 to 3 (S and M 2 million steps, L 4 million, where
+  both paths end feasible), the assembly's median rate was 46% of the
+  monolith's on S, 62% on M and 37% on L, and one seed alone ranged from 25%
+  (M, seed 1) to 71% (L, seed 1). The rate of both paths moves with the
+  search, and the two paths do not search alike, so compare them over several
+  seeds.
 
 ## Names and weights
 
@@ -219,7 +226,12 @@ Rules:
   `SolverConfig.weights` / `solve(weights=)` / `models.ObjectiveWeightsModel`
   are keyed by the soft constraint names (`teacher_gap_cost`, ...) and take
   any finite number >= 0 (a bool, NaN, infinity or a negative weight raises,
-  as for a constraint pick's weight).
+  as for a constraint pick's weight). A soft constraint added to the catalog
+  gets its `ObjectiveWeights` field when it goes onto the default path
+  ([extending.md](extending.md), step 5). Until then it solves with
+  `constraints=` at its pick's weight, the default path does not score it
+  (`objective_value` weighs it at its component default), and `solve(weights=)`
+  and `models.ObjectiveWeightsModel` refuse another value for it.
 - `Timetable.penalties` keys are the soft constraint names; partial
   timetabling reports `unassigned_lessons_cost`.
 - `canon.constraint_costs(table)` is the per-constraint surface;

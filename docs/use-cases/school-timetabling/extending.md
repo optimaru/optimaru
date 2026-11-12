@@ -8,16 +8,17 @@ the model and its seventeen constraints are in [python.md](python.md).
 | Step | What you do | What it touches |
 | --- | --- | --- |
 | [1](#1-change-a-constraint-that-exists) | Reweight, drop, re-level or shape a constraint that exists | a Python call |
-| [2](#2-a-new-constraint-from-two-functions) | Add a constraint, off by default | one header, one line of C++, one weight field, one Python class |
+| [2](#2-a-new-constraint-from-two-functions) | Add a constraint, off by default | one header, one line of C++, one Python class |
 | [3](#3-check-it) | Prove it right | one C++ test case, the catalog checks in five test files |
 | [4](#4-make-it-cheaper-per-move) | Cut what it costs per move | the header |
-| [5](#5-put-it-on-the-default-path) | Turn it on by default | the two monolithic calculators |
+| [5](#5-put-it-on-the-default-path) | Turn it on by default | the weight field, the two monolithic calculators |
 | [6](#6-measure) | Show what it costs and what it buys | no code |
 
 The steps build one example: `specialRoomLastPeriodCost`, the special rooms (lab, gym, music room,
 ...) that lessons take in the last period of a day. It keeps those rooms free at the end of the day
-for the clubs that use them after school. Every snippet below was compiled and run, and every figure
-measured, on optimaru 0.4.3; a later change to the solver moves the figures, not the steps.
+for the clubs that use them after school. Every snippet below was compiled and run on optimaru 0.5.1,
+and every figure measured on optimaru 0.4.3; a later change to the solver moves the figures, not the
+steps.
 
 **Two domains, one package.** `optimaru.school_timetabling` holds two independent C++
 domains. The quickstart domain (`st::`, `domain.hpp`, `solver.hpp`, `score_calculator.cpp`)
@@ -127,7 +128,7 @@ The example reads only the slot and the lessons on it, so it is a plain
 `CanonUnitConstraint` with `cost()` and `delta_cost()`. Do not derive it from
 `GroupableSlotConstraint`: `SlotDeltaGroup::add()` knows the six by type, marks the
 group unsupported for anything else, and the engine then drops the group for all six.
-[Step 4](#4-make-it-cheaper-per-move) has the measurement. Five edits:
+[Step 4](#4-make-it-cheaper-per-move) has the measurement. Four edits:
 
 **1. The component**, `optimaru/school_timetabling/cpp/include/st/constraints/special_room_last_period_cost.hpp`:
 
@@ -210,23 +211,7 @@ add one line to `detail::buildDefaultSet()`, after `NonPreferredPeriodCost`:
 order is the catalog order of `list_constraints()`: the CP-SAT reference's numbering,
 then the two structural constraints last. A constraint has to be in it for Python to see it.
 
-**3. The fast path's weight field.** A soft constraint needs a field in `ObjectiveWeights`
-(`cpp/include/st/objective_weights.hpp`) from the start, not only in step 5. Python
-derives the soft constraint names from `constraint_info()` and reads each one off
-`canon.ObjectiveWeights`, on both paths; without the field every `st.solve()` fails with
-`AttributeError: ... 'ObjectiveWeights' object has no attribute
-'special_room_last_period_cost'`. Add
-
-```cpp
-    double specialRoomLastPeriodCost = SpecialRoomLastPeriodCost::kDefaultWeight;
-```
-
-and, in `cpp/bindings.cpp`, the field in `kWeightFields`, an argument of the
-`ObjectiveWeights` constructor, and the field in its `__eq__` and `__repr__`; the stub
-`_core.pyi` lists the same field. Until step 5 the monolithic calculators ignore this
-weight. A hard constraint needs none of this.
-
-**4. The Python spec**, `optimaru/school_timetabling/constraints.py`:
+**3. The Python spec**, `optimaru/school_timetabling/constraints.py`:
 
 ```python
 class SpecialRoomLastPeriodCost(Constraint):
@@ -245,7 +230,7 @@ class SpecialRoomLastPeriodCost(Constraint):
     )
 ```
 
-**5. Its default instance**, in the same file: `special_room_last_period_cost =
+**4. Its default instance**, in the same file: `special_room_last_period_cost =
 SpecialRoomLastPeriodCost()` with the other instances, that instance in `_DEFAULTS` at
 the same place as in `buildDefaultSet()`, and both names in `__all__`.
 
@@ -273,6 +258,13 @@ print(result["penalties"]["special_room_last_period_cost"])
 On the M school that count is 9. A default solve of the same length
 (`constraints=None`) leaves it at 22. The new key is in every result's `penalties`
 from this step on, which is a change of the response.
+
+The fast path's soft weights, `canon.ObjectiveWeights`, have no field for the constraint
+yet; it gets one in [step 5](#5-put-it-on-the-default-path), with its terms in the monolithic
+calculators. Until then the default path does not score it: its `objective_value` weighs the
+count at the component default (0 here), and `weights=` refuses any other value for it
+(`ValueError: ['special_room_last_period_cost'] not on the default path`). A solve with
+`constraints=` scores it at the weight you pick, as above.
 
 ## 3. Check it
 
@@ -427,22 +419,37 @@ sums stay exact and a hard total is never rounded.
 
 Do this when the constraint should be on in every solve (`kDefaultWeight > 0`). Then
 `st.solve(problem)` must score it, and that path scores with the monolithic calculators:
-four times the steps per second of the assembly, and the only path that runs parallel
-starts. `st_canonical_plugin_test` compares the default assembly with the monolithic
-calculators (checks (a), (b), (e) and (g)), so it fails from the moment the weight is
+more steps per second than the assembly (four times as many on the M school with seed 1,
+1.4 to 3.2 times in the other runs of 0.5.1;
+[python.md](python.md#plugin-constraint-assembly-constraints) has the measurement), and
+the only path that runs parallel starts. `st_canonical_plugin_test` compares the default
+assembly with the monolithic calculators (checks (a), (b), (e) and (g)), so it fails from the moment the weight is
 not 0 until both sides agree.
 
-**1. The weight.** In the component: `static constexpr double kDefaultWeight = 5.0;`.
-`ObjectiveWeights` reads it, so the fast path's default follows. A soft weight may be
-fractional; a hard one must be whole.
+**1. The weight.** In the component: `static constexpr double kDefaultWeight = 5.0;`. A
+soft weight may be fractional; a hard one must be whole.
 
-**2. The full recompute**, `canonical_score_calculator.hpp` and `.cpp`: a `Breakdown`
+**2. The fast path's weight field.** `st.solve(problem, weights=...)` sets the soft weights of
+the monolithic calculators through `ObjectiveWeights` (`cpp/include/st/objective_weights.hpp`).
+Add the field, which reads the default from the component:
+
+```cpp
+    double specialRoomLastPeriodCost = SpecialRoomLastPeriodCost::kDefaultWeight;
+```
+
+and, in `cpp/bindings.cpp`, the field in `kWeightFields`, an argument of the
+`ObjectiveWeights` constructor, and the field in its `__eq__` and `__repr__`; the stub
+`_core.pyi` lists the same field. Python finds the field by the constraint's name, so
+`weights={"special_room_last_period_cost": 8}` works from here on. A hard constraint needs
+no field.
+
+**3. The full recompute**, `canonical_score_calculator.hpp` and `.cpp`: a `Breakdown`
 member named like the constraint, its term at the end of `Breakdown::softPenalty()`, and the
 count in the room-demand loop of `computeBreakdown()`. Both calculators need the "last
 period" table, so it became a helper, `ScoreCalculator::lastPeriodSlots(table)`, the
 loop of step 2 over every slot.
 
-**3. The incremental calculator**, `canonical_incremental_calculator.hpp` and `.cpp`: a
+**4. The incremental calculator**, `canonical_incremental_calculator.hpp` and `.cpp`: a
 running total `lastRooms_` and the table `lastSlot_`, both set in `rebuild()`.
 `insert()` and `retract()` already walk the lesson's room demand for
 `roomCapacityCost`, so the term is one line in each loop, in `insert()`
@@ -468,10 +475,12 @@ on by default; `rowIs()` serves now), and a default-path solve with `full_assert
 passed. The default path ran at 1.34 million steps per second with the eighteenth constraint
 in it, and on the M school it left 15 special rooms in the last period instead of 22.
 
-**4. What else moves.** A constraint that is on by default changes every default score. Ten
-Python tests failed, all for one reason: they weigh `penalties` with a hand-written dict
+**5. What else moves.** A constraint that is on by default changes every default score. Up
+to ten Python tests failed, all for one reason: they weigh `penalties` with a hand-written dict
 of default weights that still holds 0 for the constraint (`DEFAULT_WEIGHTS` in
-`test_constraints.py`, the dicts in `test_solve.py`), or expect the opt-in catalog row:
+`test_constraints.py`, the dicts in `test_solve.py`), or expect the opt-in catalog row. The
+two `unassigned_lessons` tests below solve against a time limit and fail only when their
+timetable keeps a special room in a last period, so a run shows eight or ten:
 
 - `test_constraint_specs.py::test_constraint_info_reports_the_cpp_defaults`;
 - `test_constraints.py`: `test_plugin_solve_default_assembly_parity`,
@@ -553,7 +562,7 @@ nothing about a canonical constraint. Partial timetabling is track 3 (`--track3`
 | --- | --- | --- | --- | --- |
 | `cpp/include/st/constraints/<subject>_cost.hpp` | new | | table, scope | weight |
 | `cpp/include/st/canonical_constraints.hpp` | include, `add` | | | |
-| `cpp/include/st/objective_weights.hpp`, `cpp/bindings.cpp`, `_core.pyi` | weight field | | | |
+| `cpp/include/st/objective_weights.hpp`, `cpp/bindings.cpp`, `_core.pyi` | | | | weight field |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/school_timetabling/cpp/st_canonical_plugin_test.cpp` | | case, catalog | | catalog row |
 | `tests/school_timetabling/test_*.py` (four files) | | names, counts, weight dicts | | expected scores |
