@@ -103,6 +103,12 @@
   have silently replaced one of them. It now takes every default with the tag conflicts
   squared and states offset 0 on each, so a new constraint is covered without a change; the
   snippet in `python.md` and the step in `extending.md` that warned about the slice follow.
+- **Tests: the pickup-delivery and order-picking plugin tests compare a solve with an
+  independent recompute.** Check (f) of `pdp_plugin_test` and `op_plugin_test` compared the
+  solution's score with `ScoreCalculator::score()` of the same solution, but that call
+  stores its result in the solution first, so both sides were one number. The check now keeps
+  the score the plugin solve reported and compares it with the monolithic recompute; with
+  the travel or walking weight doubled in the assembly it fails, as it passed before.
 
 ## 0.5.0
 
