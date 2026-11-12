@@ -546,17 +546,23 @@ def test_generated_rcpsp_instances_are_a_second_table_of_the_data_set() -> None:
         makespan(f"synthetic-{size}-s{seed}", size, 100 + seed, 101) for size in (30, 60) for seed in (0, 1, 2)
     ]
 
-    dataset = publish.rcpsp_dataset(public, 30, generated)
-    assert [(section["id"], len(section["rows"])) for section in dataset["sections"]] == [
-        ("instances", 1),
-        ("generated", 6),
-    ]
-    assert dataset["sections"][1]["rows"][3]["size"] == "60 activities / 4 resources"
-    assert dataset["command"].splitlines() == [
-        "uv run project-job-scheduling-public-bench --all --seconds 30 --workers 8",
+    # On the homepage the generated instances are a data set of their own, so the public set counts
+    # the instances from the literature alone.
+    public_set = publish.rcpsp_dataset(public, 30)
+    assert (public_set["slug"], public_set["kind"], len(public_set["sections"][0]["rows"])) == (
+        "rg30-rcpsp",
+        "public",
+        1,
+    )
+    dataset = publish.rcpsp_synthetic_dataset(generated, 30)
+    assert (dataset["slug"], dataset["kind"]) == ("rcpsp-synthetic", "generated")
+    assert [(section["id"], len(section["rows"])) for section in dataset["sections"]] == [("instances", 6)]
+    assert dataset["sections"][0]["rows"][3]["size"] == "60 activities / 4 resources"
+    assert dataset["command"] == (
         "uv run project-job-scheduling-public-bench --synthetic 30 --synthetic 60 --synthetic-seeds 0,1,2 "
-        "--seconds 30 --workers 8",
-    ]
+        "--seconds 30 --workers 8"
+    )
+    assert public_set["command"] == "uv run project-job-scheduling-public-bench --all --seconds 30 --workers 8"
     block = publish.rcpsp_block(public, ARGS, generated)
     assert "| Pat1 | 30 | 20 | 66 | **62** |" in block
     assert "(`--synthetic N`, instance seeds 0, 1 and 2):" in block
@@ -564,9 +570,6 @@ def test_generated_rcpsp_instances_are_a_second_table_of_the_data_set() -> None:
     assert block.count("| Instance | Activities |") == 2 and block.count("Measured ") == 1
 
     # Without generated results: the RG30 table alone, as before.
-    alone = publish.rcpsp_dataset(public, 30)
-    assert [section["id"] for section in alone["sections"]] == ["instances"]
-    assert alone["command"] == "uv run project-job-scheduling-public-bench --all --seconds 30 --workers 8"
     assert "Generated" not in publish.rcpsp_block(public, ARGS)
     # Sizes and seeds are read from the names the runner gives its generated instances.
     with pytest.raises(SystemExit, match="Pat2: a generated instance is named synthetic-<size>-s<seed>"):

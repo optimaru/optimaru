@@ -18,7 +18,8 @@ whose file is missing keeps its README text and its homepage entry.
   (the lists of several runs concatenated);
 - ``rcpsp.json``: ``project-job-scheduling-public-bench --all --json``, and
   ``rcpsp-synthetic.json``: its ``--synthetic N --synthetic-seeds ... --json`` (the generated
-  instances are a second table of the same data set, so they are published with ``rcpsp.json``);
+  instances are a second table of the same README block, so they are published with ``rcpsp.json``,
+  and the homepage data set ``rcpsp-synthetic`` of kind generated);
 - ``bpp.json``: ``bin-packing-public-bench --json``;
 - ``qaplib.json``: ``quadratic-assignment-public-bench --all --json``;
 - ``salbp-<data set>.json``:
@@ -930,24 +931,33 @@ def _count_rows(results: list[dict], field: str, size) -> list[dict]:
     return rows
 
 
-def rcpsp_dataset(results: list[dict], seconds: float, synthetic: list[dict] | None = None, workers: int = 8) -> dict:
-    def size(result: dict) -> str:
-        return f"{result['tasks'] - 2} activities / {result['resources']} resources"
+def _rcpsp_size(result: dict) -> str:
+    return f"{result['tasks'] - 2} activities / {result['resources']} resources"
 
-    runner = "project-job-scheduling-public-bench"
-    commands = [f"uv run {runner} --all --seconds {seconds:g} --workers {workers}"]
-    sections = [_section("instances", "makespan", _count_rows(results, "makespan", size))]
-    if synthetic:
-        commands += _synthetic_commands(runner, synthetic, seconds, workers)
-        sections.append(_section("generated", "makespan", _count_rows(synthetic, "makespan", size)))
+
+def rcpsp_dataset(results: list[dict], seconds: float, workers: int = 8) -> dict:
     return _dataset(
         "rg30-rcpsp",
         "project-job-scheduling",
         "public",
         "cp-sat",
         "project-job-scheduling/cpsat",
-        "\n".join(commands),
-        sections,
+        f"uv run project-job-scheduling-public-bench --all --seconds {seconds:g} --workers {workers}",
+        [_section("instances", "makespan", _count_rows(results, "makespan", _rcpsp_size))],
+    )
+
+
+def rcpsp_synthetic_dataset(results: list[dict], seconds: float, workers: int = 8) -> dict:
+    """The generated instances of the RG30 shape: a data set of their own, of kind generated,
+    so that the public set's counts stay the five instances from the literature."""
+    return _dataset(
+        "rcpsp-synthetic",
+        "project-job-scheduling",
+        "generated",
+        "cp-sat",
+        "project-job-scheduling/cpsat",
+        "\n".join(_synthetic_commands("project-job-scheduling-public-bench", results, seconds, workers)),
+        [_section("instances", "makespan", _count_rows(results, "makespan", _rcpsp_size))],
     )
 
 
@@ -1097,6 +1107,7 @@ ORDER = (
     "salbp-1",
     "school-timetabling",
     "pickup-delivery-synthetic",
+    "rcpsp-synthetic",
     *COMPARED,
 )
 
@@ -1333,7 +1344,9 @@ def main() -> None:
         _check_protocol("project-job-scheduling (RG30)", rcpsp, args)
         if rcpsp_synthetic:
             _check_protocol("project-job-scheduling (generated)", rcpsp_synthetic, args)
-        datasets["rg30-rcpsp"] = rcpsp_dataset(rcpsp, args.seconds, rcpsp_synthetic, args.workers)
+        datasets["rg30-rcpsp"] = rcpsp_dataset(rcpsp, args.seconds, args.workers)
+        if rcpsp_synthetic:
+            datasets["rcpsp-synthetic"] = rcpsp_synthetic_dataset(rcpsp_synthetic, args.seconds, args.workers)
         _replace_block(
             BENCHMARKS / "project-job-scheduling" / "cpsat" / "PUBLIC_BENCHMARKS.md",
             rcpsp_block(rcpsp, args, rcpsp_synthetic),
