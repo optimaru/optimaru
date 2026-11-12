@@ -1,3 +1,5 @@
+"""The QAPLIB instance and solution archives: download (SHA-256 pinned) and parsers."""
+
 from __future__ import annotations
 
 import hashlib

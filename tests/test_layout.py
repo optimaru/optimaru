@@ -121,6 +121,46 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
     assert not stale, f"links into external-solver that are not on {tag}: {stale}"
 
 
+def test_a_comparison_runner_is_named_after_its_use_case():
+    """`benchmarks/<slug>/cpsat/<use case>_cpsat/benchmark.py`, run as `uv run <slug>-compare`;
+    no loose scripts beside the project (school timetabling's tracks are a package too)."""
+    runners = sorted((ROOT / "benchmarks").glob("*/cpsat/*/benchmark.py"))
+    assert runners
+    for runner in runners:
+        project = runner.parents[1]
+        slug = project.parent.name
+        assert runner.parent.name == f"{slug.replace('-', '_')}_cpsat", runner
+        scripts = tomllib.loads((project / "pyproject.toml").read_text())["project"].get("scripts", {})
+        entry = f"{runner.parent.name}.benchmark:main"
+        assert scripts.get(f"{slug}-compare") == entry, f"{slug}: no `{slug}-compare = {entry!r}`"
+    assert (
+        ROOT / "benchmarks" / "school-timetabling" / "cpsat" / "school_timetabling_cpsat" / "benchmark.py"
+    ) in runners
+    loose = sorted(path.name for path in (ROOT / "benchmarks" / "school-timetabling").glob("*.py"))
+    assert not loose, f"school timetabling's scripts belong in school_timetabling_cpsat: {loose}"
+    assert not (ROOT / "benchmarks" / "school-timetabling" / "pyproject.toml").exists()
+
+
+def test_a_public_benchmark_runner_is_a_module_of_its_comparison_package():
+    """A runner on a public instance archive is `<use case>_cpsat/public_benchmark.py`, run as
+    `uv run <slug>-public-bench` from `benchmarks/<slug>/cpsat`; no loose `bench/` package
+    beside the project (vehicle-routing's `bench/` is its ignored output directory)."""
+    # Tracked files only: a checkout that ran the old runners still has an ignored
+    # `benchmarks/<slug>/bench/.cache/`, and vehicle-routing's `bench/` is ignored output.
+    tracked = subprocess.run(["git", "ls-files", "benchmarks"], cwd=ROOT, capture_output=True, text=True)
+    parts = [path.split("/") for path in tracked.stdout.splitlines()]
+    loose = sorted({"/".join(path[:3]) for path in parts if len(path) > 3 and path[2] == "bench"})
+    assert not loose, f"move these into their comparison package: {loose}"
+    runners = sorted((ROOT / "benchmarks").glob("*/cpsat/*/public_benchmark.py"))
+    assert runners
+    for runner in runners:
+        project = runner.parents[1]
+        slug = project.parent.name
+        scripts = tomllib.loads((project / "pyproject.toml").read_text())["project"].get("scripts", {})
+        entry = f"{runner.parent.name}.public_benchmark:main"
+        assert scripts.get(f"{slug}-public-bench") == entry, f"{slug}: no `{slug}-public-bench = {entry!r}`"
+
+
 def test_every_use_case_has_a_guide_and_a_benchmark():
     for name in USE_CASES:
         slug = name.replace("_", "-")

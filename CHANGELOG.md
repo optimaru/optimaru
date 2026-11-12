@@ -132,6 +132,34 @@
   before. A schedule without pinned shifts scores as before; no benchmark instance pins a
   shift. `es_plugin_test` now pins shifts in its parity check and solves with pinned
   violations under `ScoreChecks::Full` on both paths.
+- **Benchmarks: every public-instance runner has one form.** Pickup & delivery and
+  project-job scheduling ran theirs as a command of the comparison package, while bin
+  packing, quadratic assignment and assembly-line balancing kept a loose `bench/` package
+  beside the project, run as `uv run --project cpsat python -m bench.run_bench`. Those three
+  now follow the first two: `<use case>_cpsat/public_benchmark.py` (helpers in
+  `public_benchmark_data.py`) with the command `<slug>-public-bench`, run with `uv run` from
+  `benchmarks/<slug>/cpsat`; `bench/RESULTS.md` is `cpsat/PUBLIC_BENCHMARKS.md`, downloads
+  are cached in the package's ignored `.cache/`, and bin packing's search-quality check is
+  `bin-packing-quality-bench` (`bin_packing_cpsat/quality_bench.py`). Flags, output and
+  `--json` are unchanged; the tests are `cpsat/tests/test_public_benchmark.py` and need no
+  network. `tests/test_layout.py` checks that no `benchmarks/<slug>/bench/` package is left
+  and that every `public_benchmark.py` has its `<slug>-public-bench` entry. A checkout that
+  ran the old runners keeps its downloads in `benchmarks/<slug>/bench/.cache/`: still
+  ignored, no longer read, so delete that `bench/` directory or move the archives to
+  `cpsat/<use case>_cpsat/.cache/`.
+- **Benchmarks: school timetabling's comparison is a package with a command.** Its
+  three-track harness was a separate script project (`benchmarks/school-timetabling`,
+  `st-bench`, not installed) whose four scripts imported each other as top-level modules and
+  put the CP-SAT model and the engine on `sys.path` by hand, run as `uv run run_bench.py`.
+  It is now the package `school_timetabling_cpsat` in the `benchmarks/school-timetabling/cpsat`
+  project, next to the CP-SAT model `teacher_scheduling`, as every other use case has it:
+  `run_bench.py` is `benchmark.py`, run as `uv run school-timetabling-compare` (`--track2`,
+  `--track3`), and `evaluate`, `cpsat_quickstart` and `gen_canonical` run as
+  `uv run python -m school_timetabling_cpsat.<module>`. The `st-bench` project and its lock
+  are gone, one `uv sync` there builds the engine extension too, and
+  `school-timetabling-bench.yml` syncs and runs only that project. Flags, outputs and the
+  generated instances are unchanged (the S, M and L schools are byte-identical); `out/` is
+  now under `cpsat/` when run with the default `--out-dir`.
 
 ## 0.5.0
 

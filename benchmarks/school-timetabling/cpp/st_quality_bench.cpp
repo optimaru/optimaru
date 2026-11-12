@@ -27,7 +27,8 @@
 //   st_quality_bench crosscheck <out.json>
 //     Dumps a small FIXED instance with a FIXED assignment that exercises all
 //     six constraints, and prints "CROSSCHECK_SCORE=..." — pairs with
-//     benchmarks/school-timetabling/evaluate.py, which re-scores the same JSON.
+//     school_timetabling_cpsat/evaluate.py (in benchmarks/school-timetabling/cpsat), which
+//     re-scores the same JSON.
 //     The scores must be identical.
 
 #include <algorithm>

@@ -290,17 +290,17 @@ by the same evaluator, and runs the QAPLIB instances below.
 
 ### QAPLIB benchmark
 
-`benchmarks/quadratic-assignment/bench/run_bench.py` downloads the QAPLIB
+`quadratic-assignment-public-bench` (`benchmarks/quadratic-assignment/cpsat`) downloads the QAPLIB
 instance and solution archives, verifies both SHA-256 checksums, then re-scores every result with this
 package's `constraint_costs()` (`flow_distance_cost`). Downloaded files stay in
-`benchmarks/quadratic-assignment/bench/.cache/` and are not committed.
+`benchmarks/quadratic-assignment/cpsat/quadratic_assignment_cpsat/.cache/` and are not committed.
 
 ```sh
-cd benchmarks/quadratic-assignment
-uv sync --project cpsat --all-groups
-uv run --project cpsat python -m bench.run_bench --seconds 60
+cd benchmarks/quadratic-assignment/cpsat
+uv sync
+uv run quadratic-assignment-public-bench --seconds 60
 # Select more instances; CP-SAT is optional because its reference QAP model is O(n^4).
-uv run --project cpsat python -m bench.run_bench \
+uv run quadratic-assignment-public-bench \
   --instance nug30 --instance lipa40a --exact-max-size 32 --seconds 60
 ```
 
@@ -311,4 +311,4 @@ the location of each facility, whichever the solution file uses (a mismatch
 with the value the file states stops the run, bar one recorded erratum); an
 instance without a solution file in the archive has no gap. `--all` runs the 33
 instances with 30 to 50 facilities.
-The checked-in local snapshot is [`bench/RESULTS.md`](../../../benchmarks/quadratic-assignment/bench/RESULTS.md).
+The checked-in local snapshot is [`cpsat/PUBLIC_BENCHMARKS.md`](../../../benchmarks/quadratic-assignment/cpsat/PUBLIC_BENCHMARKS.md).
