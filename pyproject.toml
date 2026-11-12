@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "optimaru"
-version = "0.5.0"
+version = "0.5.1"
 description = "Metaheuristic optimization engine for routing, scheduling, timetabling and allocation — 22 ready-to-use models."
 readme = "docs/pypi.md"
 requires-python = ">=3.11"
