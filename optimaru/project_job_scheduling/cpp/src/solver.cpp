@@ -4,10 +4,12 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <random>
 #include <utility>
 
 #include "pjs/incremental_calculator.hpp"
+#include "pjs/moves.hpp"
 #include "pjs/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
@@ -57,6 +59,7 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
                     : std::clamp<std::size_t>(16 * schedule.allocations.size(), 400, 3200);
     engineConfig.search.moves.change_weight = config.change_weight;
     engineConfig.search.moves.swap_weight = config.swap_weight;
+    engineConfig.search.custom_move_probability = config.custom_move_probability;
 
     // Guided value selection (see Config::near_current_delay_probability): a
     // recommended change-move value keeps the delay within a small geometric
@@ -93,6 +96,9 @@ void runEngine(const Solver::Config& config, ProjectJobSchedule& schedule,
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     auto engine = optimaru::Solver<ProjectJobSchedule>(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
+    if (config.serial_schedule_moves) {
+        engine.add_move_operator(std::make_unique<SerialScheduleMove>());
+    }
     engine.solve(schedule, calculator);
 }
 

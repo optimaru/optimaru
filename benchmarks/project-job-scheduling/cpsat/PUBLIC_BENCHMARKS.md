@@ -31,11 +31,11 @@ cumulative resource use at every tick). Lower is better; the best value is bold.
 
 | Instance | Activities | Critical path | engine | CP-SAT |
 | --- | ---: | ---: | ---: | ---: |
-| Pat1 | 30 | 20 | 66 | **62** |
-| Pat2 | 30 | 27 | 82 | **74** |
-| Pat3 | 30 | 20 | 59 | **56** |
-| Pat4 | 30 | 30 | 76 | **73** |
-| Pat5 | 30 | 24 | 75 | **71** |
+| Pat1 | 30 | 20 | 63 | **62** |
+| Pat2 | 30 | 27 | 75 | **74** |
+| Pat3 | 30 | 20 | **55** | 56 |
+| Pat4 | 30 | 30 | **73** | **73** |
+| Pat5 | 30 | 24 | 72 | **71** |
 
 **Generated instances of the same shape** (`--synthetic N`, instance seeds 0, 1, 2, 3 and 4):
 four renewable resources of capacity 10, activities of 1 to 10 time units that each use three
@@ -43,26 +43,26 @@ of them, and a wide, shallow precedence network (a layer per eight activities).
 
 | Instance | Activities | Critical path | engine | CP-SAT |
 | --- | ---: | ---: | ---: | ---: |
-| synthetic-30-s0 | 30 | 27 | 84 | **75** |
-| synthetic-30-s1 | 30 | 27 | 83 | **73** |
-| synthetic-30-s2 | 30 | 23 | 83 | **77** |
-| synthetic-30-s3 | 30 | 25 | 101 | **93** |
-| synthetic-30-s4 | 30 | 22 | 72 | **62** |
-| synthetic-60-s0 | 60 | 54 | 212 | **168** |
-| synthetic-60-s1 | 60 | 59 | 184 | **154** |
-| synthetic-60-s2 | 60 | 55 | 207 | **161** |
-| synthetic-60-s3 | 60 | 57 | 245 | **194** |
-| synthetic-60-s4 | 60 | 45 | 196 | **160** |
-| synthetic-90-s0 | 90 | 80 | 316 | **242** |
-| synthetic-90-s1 | 90 | 86 | 333 | **250** |
-| synthetic-90-s2 | 90 | 91 | 334 | **275** |
-| synthetic-90-s3 | 90 | 78 | 313 | **248** |
-| synthetic-90-s4 | 90 | 71 | 290 | **250** |
-| synthetic-120-s0 | 120 | 108 | 412 | **356** |
-| synthetic-120-s1 | 120 | 120 | 444 | **377** |
-| synthetic-120-s2 | 120 | 105 | 433 | **338** |
-| synthetic-120-s3 | 120 | 113 | 408 | **342** |
-| synthetic-120-s4 | 120 | 97 | 388 | **325** |
+| synthetic-30-s0 | 30 | 27 | **75** | **75** |
+| synthetic-30-s1 | 30 | 27 | 74 | **73** |
+| synthetic-30-s2 | 30 | 23 | **77** | **77** |
+| synthetic-30-s3 | 30 | 25 | **93** | **93** |
+| synthetic-30-s4 | 30 | 22 | 63 | **62** |
+| synthetic-60-s0 | 60 | 54 | **165** | 168 |
+| synthetic-60-s1 | 60 | 59 | **153** | 154 |
+| synthetic-60-s2 | 60 | 55 | 163 | **161** |
+| synthetic-60-s3 | 60 | 57 | **189** | 194 |
+| synthetic-60-s4 | 60 | 45 | **160** | **160** |
+| synthetic-90-s0 | 90 | 80 | **238** | 242 |
+| synthetic-90-s1 | 90 | 86 | **247** | 250 |
+| synthetic-90-s2 | 90 | 91 | **256** | 275 |
+| synthetic-90-s3 | 90 | 78 | **246** | 248 |
+| synthetic-90-s4 | 90 | 71 | **245** | 250 |
+| synthetic-120-s0 | 120 | 108 | **327** | 356 |
+| synthetic-120-s1 | 120 | 120 | **341** | 377 |
+| synthetic-120-s2 | 120 | 105 | **307** | 338 |
+| synthetic-120-s3 | 120 | 113 | **317** | 342 |
+| synthetic-120-s4 | 120 | 97 | **308** | 325 |
 
 Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->

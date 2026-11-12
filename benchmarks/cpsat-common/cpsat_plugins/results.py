@@ -27,7 +27,7 @@ def write_results(path: Path, results: list[dict]) -> None:
 
 
 def seed_list(text: str) -> list[int]:
-    """`--synthetic-seeds` of the public-instance runners: distinct whole numbers, comma-separated.
+    """`--synthetic-seeds` of the public-instance runners: distinct non-negative whole numbers, comma-separated.
 
     A repeated seed would give two instances of one name, so it is refused like a bad number.
     """
@@ -35,6 +35,8 @@ def seed_list(text: str) -> list[int]:
         seeds = [int(seed) for seed in text.split(",")]
     except ValueError:
         raise argparse.ArgumentTypeError(f"not a comma-separated list of seeds: {text!r}") from None
+    if any(seed < 0 for seed in seeds):
+        raise argparse.ArgumentTypeError(f"a seed is negative: {text!r}")
     if len(set(seeds)) != len(seeds):
         raise argparse.ArgumentTypeError(f"a seed is given twice: {text!r}")
     return seeds

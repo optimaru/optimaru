@@ -7,6 +7,11 @@
 //       through the engine's Editor protocol (before/set/after)
 //   (c) a small instance solved under ScoreChecks::ScoreChecks::Full
 //   (d) a demo-sized solve reaches feasibility and keeps pinned allocations
+//   (e) SerialScheduleMove: a hand-computed case; a walk through the engine's
+//       move protocol (incremental == full recompute, undo restores, a
+//       rebuilt schedule is within every renewable capacity, pinned
+//       allocations keep their value); and a solve with the move ends ahead
+//       of one without it
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -18,6 +23,7 @@
 
 #include "pjs/domain.hpp"
 #include "pjs/incremental_calculator.hpp"
+#include "pjs/moves.hpp"
 #include "pjs/score_calculator.hpp"
 #include "pjs/solver.hpp"
 #include "optimaru/model/editor.hpp"
@@ -436,6 +442,279 @@ void verifySolve() {
 }
 
 // -------------------------------------------------------------------------
+// (e) SerialScheduleMove
+// -------------------------------------------------------------------------
+// One step of the engine's move protocol around a MoveOperator.
+struct MoveDriver {
+    explicit MoveDriver(optimaru::Editor<ProjectJobSchedule>& editor)
+        : ctx{editor, nearby, noLists, noLists} {}
+    optimaru::Neighborhoods nearby;  // empty: no distance meter
+    std::vector<int> noLists;        // Assignment: no element index
+    optimaru::OperatorContext<ProjectJobSchedule> ctx;
+    std::vector<int> entities;
+};
+
+std::vector<int> valuesOf(const ProjectJobSchedule& schedule) {
+    std::vector<int> values;
+    for (const Allocation& allocation : schedule.allocations)
+        values.push_back(allocation.modeDelay);
+    return values;
+}
+
+// The days on which a renewable resource is over its capacity, summed over
+// the resources, from the dates of a full recompute.
+int renewableExcess(ProjectJobSchedule& schedule) {
+    ScoreCalculator::score(schedule);
+    int excess = 0;
+    for (std::size_t r = 0; r < schedule.resources.size(); ++r) {
+        if (!schedule.resources[r].renewable) continue;
+        std::vector<int> days;
+        for (int a = 0; a < schedule.allocationCount(); ++a) {
+            const Allocation& allocation = schedule.allocations[a];
+            if (allocation.modeDelay < 0) continue;
+            for (const ResourceRequirement& requirement :
+                 schedule.executionModeOf(a, allocation.modeDelay).resourceRequirements) {
+                if (requirement.resource != static_cast<int>(r)) continue;
+                if (static_cast<int>(days.size()) < allocation.endDate)
+                    days.resize(allocation.endDate, 0);
+                for (int day = allocation.startDate; day < allocation.endDate; ++day) {
+                    days[day] += requirement.requirement;
+                }
+            }
+        }
+        for (int used : days) excess += std::max(0, used - schedule.resources[r].capacity);
+    }
+    return excess;
+}
+
+void verifySerialScheduleMove() {
+    std::printf("== (e) Serial schedule move ==\n");
+
+    // By hand. Capacity 3; A lasts 3 days and B 2, and each takes 2 units,
+    // so they cannot overlap. A waits 4 days for no reason: B [0, 2), A
+    // [4, 7), the sink at 7. Whatever the move changes in the order, placing
+    // both again as early as they fit ends at 5: B [0, 2) A [2, 5), or A
+    // [0, 3) B [3, 5). The critical path is 3, so the project is 2 late.
+    {
+        ProjectJobSchedule s = makeBase(3, /*renewable*/ true, 3);
+        const int source = addJob(s, JobType::SOURCE, 0, 0, {}, 0);
+        const int a = addJob(s, JobType::STANDARD, 3, 2, {source}, 4);
+        const int b = addJob(s, JobType::STANDARD, 2, 2, {source}, 0);
+        addJob(s, JobType::SINK, 0, 0, {a, b}, 0);
+        ScoreCalculator::prepare(s);
+        checkScore("by hand: A waits for no reason", ScoreCalculator::score(s), 0, -4, -7);
+
+        bool ok = true;
+        int applied = 0;
+        for (std::uint64_t seed = 0; seed < 40; ++seed) {
+            ProjectJobSchedule t = s;
+            ProjectJobSchedulingIncrementalScoreCalculator calc;
+            optimaru::Editor<ProjectJobSchedule> editor(t, calc);
+            MoveDriver driver(editor);
+            SerialScheduleMove move;
+            std::mt19937_64 rng(seed);
+            if (!move.apply(driver.ctx, rng, driver.entities)) {
+                ok = ok && valuesOf(t) == valuesOf(s);  // declined: nothing touched
+                continue;
+            }
+            ++applied;
+            const Score rebuilt = ScoreCalculator::score(t);
+            ok = ok && rebuilt.hard == 0 && rebuilt.medium == -2 && rebuilt.soft == -5;
+            ok = ok && editor.score() == toEngineScore(rebuilt);
+            move.undo_last(driver.ctx);
+            ok = ok && valuesOf(t) == valuesOf(s) &&
+                 editor.score() == toEngineScore(Score{0, -4, -7});
+        }
+        check(ok && applied >= 20, "by hand: every applied move ends at 5 within capacity (" +
+                                           std::to_string(applied) +
+                                           " of 40 draws applied); undo restores");
+    }
+
+    // The walk: three projects with several modes, a delay range that no
+    // placement runs out of. Half the steps are single random changes, which
+    // leave the schedule over capacity or with an allocation unassigned. The
+    // second walk pins a STANDARD allocation: it keeps its mode and its
+    // delay, and takes its resources where that puts it, so only the first
+    // walk holds every rebuilt schedule to the capacities.
+    for (const bool withPinned : {false, true}) {
+        const std::string walk = withPinned ? "walk, one allocation pinned: " : "walk: ";
+        ProjectJobSchedule t = buildRandomInstance(/*projects*/ 3,
+                                                   /*standardPerProject*/ 8,
+                                                   /*seed*/ 11,
+                                                   /*delayRangeSize*/ 400);
+        ScoreCalculator::prepare(t);
+        if (withPinned) {
+            const int pinnedStandard = 3;
+            t.allocations[pinnedStandard].modeDelay = t.valueOf(2, 0);
+            t.allocations[pinnedStandard].pinned = true;
+        }
+        for (int a = 0; a < t.allocationCount(); ++a) {
+            if (t.allocations[a].modeDelay < 0) t.allocations[a].modeDelay = t.valueOf(a % 7, 0);
+        }
+
+        ProjectJobSchedulingIncrementalScoreCalculator calc;
+        optimaru::Editor<ProjectJobSchedule> editor(t, calc);
+        MoveDriver driver(editor);
+        ProjectJobSchedule shadow = t;
+        SerialScheduleMove move;
+        std::mt19937_64 rng(31);
+        const int count = t.allocationCount();
+        using Traits = optimaru::SolutionTraits<ProjectJobSchedule>;
+
+        auto agrees = [&]() {
+            for (int i = 0; i < count; ++i)
+                shadow.allocations[i].modeDelay = t.allocations[i].modeDelay;
+            const optimaru::Score full = ScoreCalculator::calculateEngineScore(shadow);
+            const optimaru::Score incremental = editor.score();
+            return full.hard == incremental.hard && std::fabs(full.soft - incremental.soft) < 1e-9;
+        };
+
+        int applied = 0, kept = 0, undone = 0, declined = 0, declinedUnassigned = 0;
+        int mismatches = 0, badUndo = 0, overCapacity = 0, pinnedMoved = 0, fromOverCapacity = 0;
+        for (int step = 0; step < 4000; ++step) {
+            if (rng() % 2 == 0) {
+                // A single change; one in ten takes an allocation out, and
+                // the next single change of an unassigned one puts it back.
+                int allocation = static_cast<int>(rng() % count);
+                for (int a = 0; a < count; ++a) {
+                    if (t.allocations[a].modeDelay < 0) allocation = a;
+                }
+                if (Traits::is_pinned(t, allocation)) continue;
+                const bool out = t.allocations[allocation].modeDelay >= 0 && rng() % 10 == 0;
+                const int delay = static_cast<int>(rng() % 3);  // early, so that it often collides
+                editor.assign(
+                        allocation,
+                        out ? -1 : t.valueOf(delay, static_cast<int>(rng() % t.maxModeCount)));
+                if (!agrees()) ++mismatches;
+                continue;
+            }
+            const std::vector<int> before = valuesOf(t);
+            const optimaru::Score beforeScore = editor.score();
+            bool unassigned = false;
+            for (int value : before) unassigned = unassigned || value < 0;
+            const bool startedOver = renewableExcess(shadow) > 0;
+            driver.entities.clear();
+            if (!move.apply(driver.ctx, rng, driver.entities)) {
+                ++declined;
+                if (unassigned) ++declinedUnassigned;
+                if (valuesOf(t) != before) ++badUndo;
+                continue;
+            }
+            ++applied;
+            if (unassigned) ++badUndo;  // the move does nothing inside a ruin
+            if (startedOver) ++fromOverCapacity;
+            if (!agrees()) ++mismatches;
+            if (renewableExcess(shadow) > 0) ++overCapacity;
+            for (int a = 0; a < count; ++a) {
+                if (Traits::is_pinned(t, a) && t.allocations[a].modeDelay != before[a])
+                    ++pinnedMoved;
+            }
+            if (rng() % 2 == 0) {
+                move.undo_last(driver.ctx);
+                ++undone;
+                if (valuesOf(t) != before || !(editor.score() == beforeScore)) ++badUndo;
+            } else {
+                ++kept;
+            }
+            if (!agrees()) ++mismatches;
+        }
+        check(mismatches == 0, walk + std::to_string(applied) + " applied (" +
+                                       std::to_string(kept) + " kept, " + std::to_string(undone) +
+                                       " undone), incremental == full recompute");
+        check(applied > 800 && kept > 300 && undone > 300 && fromOverCapacity > 50,
+              walk + "the move is applied and undone often, from schedules over capacity too (" +
+                      std::to_string(fromOverCapacity) + ")");
+        check(declinedUnassigned > 50 && declined >= declinedUnassigned,
+              walk + "the move declines while an allocation is unassigned (" +
+                      std::to_string(declinedUnassigned) + " times)");
+        check(badUndo == 0, walk + "undo (and a declined move) leaves every value as it was");
+        if (!withPinned) {
+            check(overCapacity == 0,
+                  walk + "a rebuilt schedule is within every renewable capacity");
+        }
+        check(pinnedMoved == 0, walk + "pinned allocations keep their value");
+    }
+
+    // A solve on an instance where the resources bind, as in RG30: 30
+    // activities of one project, four renewable resources of capacity 10,
+    // each activity on three of them, a layered network. The same seed and
+    // the same number of steps with and without the move, over three seeds:
+    // the makespans with the move add up to clearly less. (On an instance
+    // the precedences decide, both reach the critical path and the check
+    // would compare nothing.)
+    {
+        auto rg30Shaped = []() {
+            std::mt19937_64 rng(17);
+            auto draw = [&rng](int low, int high) {
+                return low + static_cast<int>(rng() % static_cast<std::uint64_t>(high - low + 1));
+            };
+            ProjectJobSchedule t;
+            t.delayRangeSize = 400;
+            t.projects.push_back({"P", 0, 0});
+            for (int r = 0; r < 4; ++r)
+                t.resources.push_back({"R" + std::to_string(r), 10, true, -1});
+            const int activities = 30, layers = 4;
+            auto addJob = [&t](JobType type, int duration, std::vector<ResourceRequirement> needs) {
+                Job job;
+                job.id = "J" + std::to_string(t.jobs.size());
+                job.project = 0;
+                job.jobType = type;
+                job.executionModes.push_back({job.id + "m", duration, std::move(needs)});
+                t.jobs.push_back(job);
+                Allocation allocation;
+                allocation.id = job.id;
+                allocation.job = static_cast<int>(t.jobs.size()) - 1;
+                if (type != JobType::STANDARD) allocation.modeDelay = 0;
+                t.allocations.push_back(allocation);
+                return static_cast<int>(t.allocations.size()) - 1;
+            };
+            const int source = addJob(JobType::SOURCE, 0, {});
+            std::vector<std::vector<int>> layer(layers);
+            for (int a = 0; a < activities; ++a) {
+                std::vector<ResourceRequirement> needs;
+                const int skipped = draw(0, 3);
+                for (int r = 0; r < 4; ++r) {
+                    if (r != skipped) needs.push_back({r, draw(1, 8)});
+                }
+                const int index = addJob(JobType::STANDARD, draw(1, 10), needs);
+                const int l = a * layers / activities;
+                if (l == 0) {
+                    t.allocations[index].predecessorAllocations.push_back(source);
+                } else {
+                    const std::vector<int>& before = layer[l - 1];
+                    t.allocations[index].predecessorAllocations.push_back(
+                            before[rng() % before.size()]);
+                }
+                layer[l].push_back(index);
+            }
+            const int sink = addJob(JobType::SINK, 0, {});
+            for (int a = 1; a <= activities; ++a)
+                t.allocations[sink].predecessorAllocations.push_back(a);
+            return t;
+        };
+        long with = 0, without = 0;
+        for (const int seed : {1, 2, 3}) {
+            for (const bool moves : {true, false}) {
+                ProjectJobSchedule t = rg30Shaped();
+                Solver::Config config;
+                config.step_limit = 30000;
+                config.seed = seed;
+                config.serial_schedule_moves = moves;
+                Solver(config).solve(t);
+                if (t.score.hard != 0) with += 1000000;  // a broken capacity fails the check
+                (moves ? with : without) += -t.score.soft;
+            }
+        }
+        std::printf("  makespans over three seeds: with the move %ld, without %ld\n", with,
+                    without);
+        check(with * 100 <= without * 95,
+              "solve: 30,000 steps with the move end at least 5% earlier than without it, over "
+              "three seeds");
+    }
+    std::printf("\n");
+}
+
+// -------------------------------------------------------------------------
 // stop_at_first_feasible's best-score limit (0, INT64_MIN, INT64_MIN): the
 // engine compares hard only (soft -inf), so no soft score, however low,
 // misses the stop. Through toEngineScore the sentinel folded into a finite
@@ -467,6 +746,7 @@ int main() {
     verifyIncremental();
     verifyFullAssertSolve();
     verifySolve();
+    verifySerialScheduleMove();
 
     if (failures == 0) {
         std::printf("All project-job-scheduling checks PASSED.\n");

@@ -224,6 +224,8 @@ PYBIND11_MODULE(_core, m) {
             .def(py::init<>())
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
+            .def_readwrite("serial_schedule_moves", &Solver::Config::serial_schedule_moves)
+            .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             // Early termination once bestScore >= (hard, medium, soft), e.g.
             // (0, -2**63, -2**63) stops at the first feasible solution: INT64_MIN
             // on medium or soft is "no floor" (toEngineScoreLimit, pjs/domain.hpp).

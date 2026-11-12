@@ -42,16 +42,16 @@ Every cell is the score of that solver's final solution under the use case's own
 | demo-4 | 24 jobs / 2 projects / 7 res | **0hard/0medium/-12soft** | **0hard/0medium/-12soft** |
 | medium | 72 jobs / 4 projects / 13 res | **0hard/-9medium/-20soft** | **0hard/-9medium/-20soft** |
 | medium-2 | 72 jobs / 4 projects / 13 res | **0hard/0medium/-18soft** | **0hard/0medium/-18soft** |
-| medium-3 | 72 jobs / 4 projects / 13 res | 0hard/0medium/-15soft | **0hard/0medium/-12soft** |
+| medium-3 | 72 jobs / 4 projects / 13 res | **0hard/0medium/-12soft** | **0hard/0medium/-12soft** |
 | medium-4 | 72 jobs / 4 projects / 13 res | **0hard/-4medium/-14soft** | **0hard/-4medium/-14soft** |
-| medium-5 | 72 jobs / 4 projects / 13 res | 0hard/0medium/-18soft | **0hard/0medium/-12soft** |
-| large | 156 jobs / 6 projects / 19 res | **0hard/-1medium/-35soft** | 0hard/-1medium/-55soft |
-| large-2 | 156 jobs / 6 projects / 19 res | 0hard/-13medium/-35soft | **0hard/-13medium/-23soft** |
-| large-3 | 156 jobs / 6 projects / 19 res | **0hard/-5medium/-31soft** | 0hard/-1134medium/-586soft |
-| large-4 | 156 jobs / 6 projects / 19 res | **0hard/0medium/-35soft** | 0hard/-1258medium/-589soft |
-| xlarge | 300 jobs / 10 projects / 31 res | **0hard/-11medium/-61soft** | — (no solution in time) |
-| xlarge-2 | 300 jobs / 10 projects / 31 res | **0hard/-5medium/-61soft** | — (no solution in time) |
-| xlarge-3 | 300 jobs / 10 projects / 31 res | **0hard/-9medium/-62soft** | — (no solution in time) |
+| medium-5 | 72 jobs / 4 projects / 13 res | **0hard/0medium/-12soft** | **0hard/0medium/-12soft** |
+| large | 156 jobs / 6 projects / 19 res | **0hard/-1medium/-21soft** | 0hard/-1medium/-55soft |
+| large-2 | 156 jobs / 6 projects / 19 res | **0hard/-13medium/-23soft** | **0hard/-13medium/-23soft** |
+| large-3 | 156 jobs / 6 projects / 19 res | **0hard/-5medium/-19soft** | 0hard/-1134medium/-586soft |
+| large-4 | 156 jobs / 6 projects / 19 res | **0hard/0medium/-21soft** | 0hard/-1258medium/-589soft |
+| xlarge | 300 jobs / 10 projects / 31 res | **0hard/-11medium/-33soft** | — (no solution in time) |
+| xlarge-2 | 300 jobs / 10 projects / 31 res | **0hard/-5medium/-32soft** | — (no solution in time) |
+| xlarge-3 | 300 jobs / 10 projects / 31 res | **0hard/-9medium/-35soft** | — (no solution in time) |
 
 Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

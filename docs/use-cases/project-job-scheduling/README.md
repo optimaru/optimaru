@@ -21,7 +21,7 @@ result = pj.solve(schedule, time_limit_seconds=5.0, random_seed=42)
 print(result.score_hard, result.score_medium, result.score_soft)
 ```
 
-`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`optimaru.project_job_scheduling.SolverConfig`) and `constraints` (see below). The C++ side builds and tests with:
+`solve` takes `time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`, `full_assert`, `on_new_best`, a full `config` (`optimaru.project_job_scheduling.SolverConfig`) and `constraints` (see below). The config has the switch and the gate of the domain's own move, `serial_schedule_moves` and `custom_move_probability` ([Search](#search)). The C++ side builds and tests with:
 
 ```sh
 cmake -B build -DOPTIMARU_USE_CASES=project_job_scheduling && cmake --build build -j
@@ -92,6 +92,59 @@ pj.solve(core, constraints=[
 `constraints.score()` reports the exact engine value. The CP-SAT reference takes integral
 offsets on every constraint (one term per global total).
 
+## Search
+
+The construction places the allocations one after another; late acceptance then works with
+the engine's change / swap moves on single values (a mode and a delay), its
+ruin-and-recreate kicks, and one move of the domain, `SerialScheduleMove`
+(`serial_schedule_moves`, in `optimaru/project_job_scheduling/cpp/include/pjs/moves.hpp`).
+
+A delay counts from the end of an allocation's predecessors, so one changed delay shifts
+every successor. In a schedule whose allocations already start as early as they can, almost
+no single change keeps the resources within capacity and ends earlier, and a search with
+the built-in moves alone stalls some percent above what the instance allows.
+`SerialScheduleMove` works on the order of the schedule instead (the serial schedule
+generation scheme of resource-constrained project scheduling): it reads the start dates,
+changes the order they give, and places every allocation again in that order, each as early
+as its predecessors and the renewable resources allow. One move makes one of these changes:
+
+- one allocation moves next to another, or the two trade places: mostly a few places
+  apart, now and then anywhere in the order;
+- a few neighbours in the order trade places at random;
+- a group moves by a number of days: an allocation with everything before it, or after it,
+  in the precedence graph, or a whole project;
+- one allocation switches its execution mode, half the time together with a second one of
+  its project (where a non-renewable resource is at its capacity, one mode can take more of
+  it only when another gives some back);
+- none: the allocations are pushed to the right, as late as their successors allow, and
+  placed again in the order of those starts (a forward-backward pass).
+
+With several projects, the ones that end after their critical path come first in the
+order, and half the moves pick an allocation of such a project: `project_delay_cost` is
+scored above `makespan_cost`, and a project that is not late loses nothing by waiting for
+one that is.
+
+A rebuilt schedule is within every renewable capacity, with two exceptions: a delay that
+reaches the end of `delay_range_size` (an allocation that fits nowhere before it waits there; a
+range shorter than the schedule needs takes much of the move's effect away), and a pinned allocation, which keeps its delay and
+takes its resources where that puts it. Non-renewable capacities depend on the modes alone
+and are left to the score. The move makes a few passes over the schedule where a built-in
+move changes one value, so `custom_move_probability` (0.2) caps how often a step draws it;
+`serial_schedule_moves = False` gives the search of 0.5.1 and earlier, step for step.
+
+Measured on one thread (2026-11-12), the move off and on:
+
+| Instances | off | on |
+| --- | --- | --- |
+| RG30 Pat1–Pat5, makespan after 30 s (OR-Tools CP-SAT on 8 workers: 62 / 74 / 56 / 73 / 71) | 66 / 82 / 59 / 76 / 75 | 63 / 75 / 55 / 73 / 72 |
+| the 20 generated instances of that shape, 30 to 120 activities, after 30 s (OR-Tools CP-SAT: 4,220 in sum) | makespans add up to 5,138 | 4,044 (21% less): shorter on all 20, and shorter than CP-SAT's on 13 |
+| the 20 instances of the comparison ladder, after 30 s | | better on 9, the same on 11 |
+| the 300-job instance of the ladder after 20,000 steps (a second or less), three seeds: project delay | 6,476 to 7,108 days | 15 to 31 days |
+| from a given plan, 100,000 steps: three sizes of the ladder, a rough plan and a solved plan with a fifth of its allocations taken out, 12 seeds each | | better on 56 of the 72, the same on 15, worse on 1 |
+
+The tables of [`benchmarks/project-job-scheduling`](../../../benchmarks/project-job-scheduling)
+have the 30 s runs instance by instance, beside CP-SAT's.
+
 ## Starting from an existing solution
 
 `with_initial_solution(problem, solution)` returns a copy of `problem` whose search starts from `solution`, which is the model a solve returned or that model as a JSON dict:
@@ -112,9 +165,11 @@ The solution has the **assignment** shape; the domain solver that configures the
 engine is `optimaru/project_job_scheduling/cpp/include/pjs/solver.hpp` + `optimaru/project_job_scheduling/cpp/src/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
-(weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
+(weights in `Solver::Config`), and the use case adds one move of its own, `SerialScheduleMove`
+([Search](#search)). A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/project_job_scheduling/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/project_job_scheduling/cpp/src/solver.cpp`, as
+`SerialScheduleMove` is; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set
