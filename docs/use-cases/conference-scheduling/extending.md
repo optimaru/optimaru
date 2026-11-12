@@ -18,7 +18,8 @@ The steps build one example: `roomOverflowCost`, for every talk the people who m
 favorite beyond the seats of its room, times the minutes of its timeslot. It keeps a popular talk
 out of a room that cannot hold its audience. (The existing `popularTalksRoomSizeCost` only compares
 talks with each other.) Every snippet below was compiled and run, and every figure measured, on
-optimaru 0.4.3; a later change to the solver moves the figures, not the steps.
+optimaru 0.4.3, and the `idle_at_weight_zero()` override of step 4 on 0.5.1; a later change to
+the solver moves the figures, not the steps.
 
 ## How a schedule is scored
 
@@ -330,6 +331,8 @@ rolled back. Name it as the base in the struct line and in the constructor, incl
         total_ += (joined ? 1 : -1) * term(schedule, unit, talk);
     }
     double cost() const override { return static_cast<double>(total_); }
+    // At weight 0 (the default until step 5): send it no change, see below.
+    bool idle_at_weight_zero() const override { return true; }
 
 private:
     // Reads the facts only, so it does not need ScoreCalculator::prepare().
@@ -348,6 +351,12 @@ only the facts does, and `full_assert` (step 3) checks it. `reset()` runs when a
 starts and once more for the final score (after every score under `full_assert`), so
 what it prepares is paid once. `Breakdown::roomOverflowCost` stays: it is the full
 recompute the tests of step 3 compare the component with, and step 5 needs it.
+
+A global at weight 0 is still sent every change, because what a global keeps may be read
+by more than its own `cost()`. Here nothing else reads `total_` and `reset()` rebuilds
+it, so the component declares `idle_at_weight_zero()`: picked at weight 0, it is sent no
+change, its `cost()` is not asked for a score, and it is reset before
+`constraint_costs()` reports its total.
 
 Measured on the conference of step 6, in thousand steps per second:
 
