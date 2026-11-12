@@ -1,12 +1,7 @@
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from bench.data import parse_orlib_bpp
-from bench.run_bench import main, sample_per_class
+from bin_packing_cpsat.public_benchmark import main, sample_per_class
+from bin_packing_cpsat.public_benchmark_data import parse_orlib_bpp
 
 ORLIB_SAMPLE = """\
 2

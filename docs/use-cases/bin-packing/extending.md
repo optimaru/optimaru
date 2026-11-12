@@ -439,21 +439,19 @@ comparisons of the plugin test and all of `test_reference_parity.py` pass.
   constraint there, [`benchmarks/bin-packing`](../../../benchmarks/bin-packing) no longer
   compares one objective: CP-SAT then minimizes the bins alone;
 - the published results in `benchmarks/bin-packing/README.md`, the recorded baseline
-  of `bench/quality.py`, and `CHANGELOG.md`.
+  of `bin_packing_cpsat/quality_bench.py`, and `CHANGELOG.md`.
 
 ## 6. Measure
 
 **Steps per second.** The same number of steps on both paths, with one seed, once
-with the default search and once with the macro moves off:
+with the default search and once with the macro moves off (run it with `uv run python`
+in `benchmarks/bin-packing/cpsat`, whose package holds the generated instances):
 
 ```python
-import sys
 import time
 
-sys.path.insert(0, "benchmarks/bin-packing")  # bench.quality: the generated instances
-
 import optimaru.bin_packing as bp
-from bench.quality import review_instance
+from bin_packing_cpsat.quality_bench import review_instance  # the generated instances
 from optimaru.bin_packing.constraints import get_constraints
 from optimaru.bin_packing.models import BinPackingProblemModel
 
@@ -492,18 +490,18 @@ constraint with a weight changes which moves are taken.
 bins at the same budget over several seeds, before and after:
 
 ```sh
-cd benchmarks/bin-packing
+cd benchmarks/bin-packing/cpsat
 export OPTIMARU_USE_CASES=bin_packing      # keep it set: uv rebuilds when it changes
-uv sync --project cpsat
-uv run --project cpsat python -m bench.quality --seconds 2 --seeds 1,2,3    # bins per seed
-uv run --project cpsat python -m bin_packing_cpsat.benchmark --seconds 1 --workers 2 --cpsat-grace 20
+uv sync
+uv run bin-packing-quality-bench --seconds 2 --seeds 1,2,3    # bins per seed
+uv run python -m bin_packing_cpsat.benchmark --seconds 1 --workers 2 --cpsat-grace 20
 ```
 
-`bench.quality` solves generated instances on the default path only, so it measures
+`bin-packing-quality-bench` solves generated instances on the default path only, so it measures
 a constraint after step 5; `--check` fails when a run uses more bins than the recorded
 baseline. With `loadBalanceCost` on by default its eight instances still ended on
 their lower bounds. The last command is the comparison with CP-SAT on generated
-instances, and `python -m bench.run_bench` the one on public instances
+instances, and `bin-packing-public-bench` the one on public instances
 ([README](../../../benchmarks/bin-packing/README.md)).
 
 ## What each step touched

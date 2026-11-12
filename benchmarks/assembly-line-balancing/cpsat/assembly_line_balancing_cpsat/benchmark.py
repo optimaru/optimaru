@@ -2,7 +2,7 @@
 
 The formulation, deterministic comparison instances, and CLI entry point live
 together in this use-case package. The public Otto et al. SALBP archive runs
-through ``bench/run_bench.py`` (downloaded on demand); these instances need no
+through ``public_benchmark.py`` (downloaded on demand); these instances need no
 download, so CI can smoke-test both solvers.
 """
 

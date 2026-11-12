@@ -43,9 +43,9 @@ CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, 100 tasks).
 The rows are a sample of each 525-instance data set, not an aggregate result:
 
 ```sh
-cd benchmarks/assembly-line-balancing
+cd benchmarks/assembly-line-balancing/cpsat
 for n in 1 125 250 375 500; do set -- "$@" --instance "instance_n=100_$n"; done
-uv run --project cpsat python -m bench.run_bench --dataset large "$@" --seconds 30
+uv run assembly-line-balancing-public-bench --dataset large "$@" --seconds 30
 ```
 
 `--dataset` is `small` (n=20), `medium` (n=50), `medium-permuted`, `large`
