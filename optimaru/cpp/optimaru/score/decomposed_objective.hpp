@@ -519,7 +519,8 @@ struct GlobalConstraint : ConstraintMetadata {
     // ask its cost() for a score, and resets it on the current members before
     // constraint_costs() reports its raw cost. A unit constraint needs no
     // such answer: its cost() is a function of (solution, unit, members), so
-    // the objective leaves every unit constraint at weight 0 out of its moves.
+    // the objective leaves every unit constraint at weight 0 out of its moves
+    // (compile_unit_dispatch).
     virtual bool idle_at_weight_zero() const { return false; }
 
     // The sign contract of UnitConstraint::raw_cost_can_be_negative, for the
@@ -1080,7 +1081,9 @@ public:
     // those of the last reset. Their raw costs are computed here instead, on
     // the current members: cost() per evaluated unit, and a reset() of the
     // global (its own aggregates only, which is why a const report may do
-    // it). Right after a reset nothing is recomputed.
+    // it). Right after a reset nothing is recomputed; after a move every
+    // report computes them again. Because of that reset this is not a call
+    // for another thread to make while a solve runs on this objective.
     struct ConstraintCosts {
         std::string name;
         double weight;  // the weight in effect (sampled at the last reset)
@@ -1534,7 +1537,10 @@ private:
     // raw cell then describes the last reset, and constraint_costs() costs
     // such a constraint itself once a move has passed. A full re-cost at
     // weight 0 does not count for has_full_recost_ either: no trial snapshot
-    // is taken for cells no move writes.
+    // is taken for cells no move writes. One thing a move still does for a
+    // constraint at weight 0: a member of a compiled delta group is evaluated
+    // with its group (the group computes all its members' deltas in one
+    // pass), and only its fold is left out.
     //
     // An instance whose shaping jumps at 0 (shaping_jumps_at_zero: the threshold
     // with a negative offset) needs its raw exactly as cost() gives it: a
@@ -1860,9 +1866,12 @@ private:
     // they may only use what both shapes have (members_, no list Traits calls).
     bool previews_served() const {
         if (Traits::shape != Shape::Sequence || solution_ == nullptr) return false;
-        for (const auto& g : global_constraints_) {
-            // A global at weight 0 is never asked (see preview_score).
-            if (g->weight != 0.0 && !g->supports_preview()) return false;
+        for (std::size_t g = 0; g < global_constraints_.size(); ++g) {
+            // A global at weight 0 is never asked (see preview_score): the
+            // weight sampled at the last reset, the one the score uses.
+            if (global_knobs(g).weight != 0.0 && !global_constraints_[g]->supports_preview()) {
+                return false;
+            }
         }
         return true;
     }

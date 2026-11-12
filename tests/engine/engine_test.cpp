@@ -2040,6 +2040,11 @@ void testWeightZeroIsLeftOutOfTheMoves() {
     buildRoutes(routes);
     TspRouteLengthSums* const offOfRoutes = off;
     const int costsAtReset = offOfRoutes->costCalls;
+    // The last city of route 0 goes to the end of route 1: previewed, then applied.
+    Score previewed{};
+    const bool served =
+            routes.preview_segment_move(0, static_cast<int>(tsp.routes[0].size()) - 1, 1, 1,
+                                        static_cast<int>(tsp.routes[1].size()), previewed);
     routes.before_list_edit(0);
     routes.before_list_edit(1);
     tsp.routes[1].push_back(tsp.routes[0].back());
@@ -2050,6 +2055,7 @@ void testWeightZeroIsLeftOutOfTheMoves() {
     buildRoutes(freshRoutes);
     check(offOfRoutes->costCalls == costsAtReset && routes.score() == freshRoutes.score(),
           "a list edit leaves a unit constraint at weight 0 out as well");
+    check(served && previewed == routes.score(), "... and so did the preview of that edit");
     check(routes.constraint_costs()[1].unit_costs == freshRoutes.constraint_costs()[1].unit_costs &&
                   offOfRoutes->costCalls == costsAtReset + 3,
           "... and constraint_costs() costs it on the current lists");
