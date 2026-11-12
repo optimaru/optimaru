@@ -97,6 +97,23 @@
 - **Benchmarks: the facility location table measured again.** The engine has CP-SAT's score
   on the four instances up to 200 consumers (on two before) and is 0.02% and 0.29% behind on
   the two larger ones (1.4% to 3.3% behind on four before).
+- **Tournament scheduling: `TeamCountMove` and the guided change values run with picked
+  constraints too.** `ts.solve(schedule, constraints=[...])` searched without the macro move
+  that empties or refills whole teams, because the move read the monolithic calculator's
+  counters, so on the demo it stayed on the 7-team optimum (medium 1.19523) where the default
+  solve reaches medium 0 (6 teams of 12 slots). The move now reads its counts through a small
+  type: the calculator's on the default path, as before, and counts of its own on the
+  assembly, recounted from the schedule each time the move is drawn; `value_recommender`
+  counts the day's teams off the schedule there. `team_count_moves` and `value_recommender`
+  now apply to both paths, and the same seed and step limit end on the same schedule on both.
+  - Demo, 1 million seeded steps: with the default constraints picked, medium 0 (soft
+    -1.54919), from medium 1.19523; with `team_count_moves` off, medium 1.19523 on both paths.
+  - The default path is unchanged: the same final score and the same number of new bests
+    from the same seed and steps (demo and the 800-slot `xlarge` instance), and 2.33 million steps per second on `xlarge` before and after (medians of three seeded
+    runs at 4 million steps, interleaved).
+  - The assembly pays for the move as the default path does: 1.20 million steps per second on `xlarge`, from 1.73, and a better end after 1 million
+    seeded steps (soft -6.97615, from -9.31891, which the default path also reaches) on `xlarge`.
+  - A seed's result with `constraints=` differs from 0.5.0.
 
 ## 0.5.0
 

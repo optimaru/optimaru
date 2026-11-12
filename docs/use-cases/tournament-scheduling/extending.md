@@ -16,8 +16,10 @@ the model and its four constraints are in the [guide](README.md).
 
 The steps build one example: `consecutiveDaysCost`, for every team the pairs of its assignments on
 two days in a row. It gives every team a day off between two matches. Every snippet below was
-compiled and run, and every figure measured, on optimaru 0.4.3; a later change to the solver moves
-the figures, not the steps.
+compiled and run, and every figure measured, on optimaru 0.4.3, except these, measured again on
+optimaru 0.5.1, where the assembly gained `TeamCountMove`: the steps per second (but the
+0.4.3 comparison step 4 names as such), the solve results with constraints picked and the
+test outputs of step 5. A later change to the solver moves the figures, not the steps.
 
 ## How a schedule is scored
 
@@ -38,8 +40,8 @@ incremental calculator with it over 3,000 random moves.
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/ts/constraints/` |
 | Constraints | the four, at their defaults | the ones you list, with your knobs |
-| Moves | change, swap, ruin and recreate, and `TeamCountMove` | the same without `TeamCountMove` |
-| Steps per second | 2.38 million (3.21 million without `TeamCountMove`) | 1.77 million |
+| Moves | change, swap, ruin and recreate, and `TeamCountMove` | the same |
+| Steps per second | 2.33 million (3.12 million without `TeamCountMove`) | 1.20 million (1.72 million without) |
 | Parallel starts | `parallel_solver_count` | one start |
 
 The speeds are the benchmark's `xlarge` instance (800 slots, 20 teams, 100 days),
@@ -47,13 +49,16 @@ The speeds are the benchmark's `xlarge` instance (800 slots, 20 teams, 100 days)
 Apple M4 Max; [step 6](#6-measure) has the script. Steps 1 to 4 work on the assembly.
 Step 5 moves a constraint to the monolithic calculators.
 
-`TeamCountMove` (`cpp/src/solver.cpp`) empties or refills whole teams in one move. It reads the
-monolithic calculator's live counters, so the assembly cannot run it (`Solver::solve` in
-[`solver.hpp`](../../../optimaru/tournament_scheduling/cpp/include/ts/solver.hpp)). It matters for
-the medium level: on the demo instance, after 1 million seeded steps, the default path ends on `0
-medium`, the assembly of the same four constraints on a medium of 1.19523 (soft -1195232.56348),
-exactly where the default path ends with `config.team_count_moves = False`. Judge a new constraint
-against the assembly of the four, not against a default solve.
+`TeamCountMove` (`cpp/src/solver.cpp`) empties or refills whole teams in one move. It matters for
+the medium level: on the demo instance, after 1 million seeded steps, both paths end on `0 medium`
+(soft -1.54919), on the same schedule; with `config.team_count_moves = False` both end on a medium
+of 1.19523 (soft -1195232.56348). The move steers by the per-team loads and the per-(team, day)
+counts. On the default path it reads them off the monolithic calculator; the assembly has no such
+counters, so there the move keeps its own, recounted from the schedule each time it is drawn
+(`OwnedCounts` in `solver.cpp`, `verifyTeamCountMove()` in `ts_plugin_test`). It picks its target
+team counts from the two imbalance constraints at their default weights (`idealPenaltyFor()`),
+whatever the assembly holds; the assembly's score judges every reshape, so with an assembly
+that leaves those two out the move only costs steps, and `team_count_moves = False` turns it off.
 
 ## 1. Change a constraint that exists
 
@@ -222,9 +227,10 @@ for picked in (picks, others, None):
     print(sum(ts.constraint_costs(result.to_core(), picks)["consecutive_days_cost"]["costs"]))
 ```
 
-On the demo instance that sum is 17 with the constraint picked, and 33 with the same
-assembly without it. A default solve (`None`) leaves 42 pairs; it also reaches a
-medium of 0, which the assembly does not (see above).
+On the demo instance that sum is 34 with the constraint picked, and 42 with the same
+assembly without it, as many as a default solve (`None`) leaves. All three reach a medium of
+0 (six teams of 12 slots): the medium level outweighs a weight of 1 on soft, so the constraint
+only chooses among the six-team schedules.
 
 What the base gave you: the engine keeps one cost per team and calls `cost()` again
 for the team a slot leaves and the team it joins, so the constraint is right after any move.
@@ -366,12 +372,12 @@ Measured on the instance of step 6, in million steps per second:
 
 | Picked | Step 2: `cost()` alone | Step 4: delta and table |
 | --- | --- | --- |
-| the four and the constraint at weight 1 | 0.81 | 1.44 |
-| `get_constraints()`, the constraint at its default weight 0 | 0.85 | 1.43 |
-| the four, without the constraint | 1.77 | 1.77 (the same code) |
+| the four and the constraint at weight 1 | 0.61 | 0.88 |
+| `get_constraints()`, the constraint at its default weight 0 | 0.58 | 0.95 |
+| the four, without the constraint | 1.20 | 1.20 (the same code) |
 
-The delta does almost all of it: in an earlier session the first row read 1.38 with
-the delta and no table, against 1.40 with both. Both forms end on the same score for the same
+The delta does almost all of it: in a session on 0.4.3, before the assembly ran
+`TeamCountMove`, the first row read 1.38 with the delta and no table, against 1.40 with both. Both forms end on the same score for the same
 seed and steps, as they must.
 
 **A constraint at weight 0 is still computed.** The assembly evaluates every picked unit
@@ -393,8 +399,8 @@ does: sums stay exact and a hard total is never rounded.
 
 Do this when the constraint should be on in every solve (`kDefaultWeight > 0`). Then
 `ts.solve(schedule)` must score it, and `ts.solve(schedule)` scores with the
-monolithic calculators: 1.3 times the steps per second of the assembly here, the only
-path with `TeamCountMove`, and the only one that runs parallel starts.
+monolithic calculators: 1.9 times the steps per second of the assembly here, and the only
+path that runs parallel starts.
 
 `ts_plugin_test` compares the default assembly with `ScoreCalculator::score()`
 (`verifyAssemblyParity()`), and `ts_test` compares the incremental calculator with it.
@@ -474,9 +480,9 @@ soft penalty after the confrontation unfairness, in the same order as the full
 recompute. The neighbour days never include the slot's own day, so it does not
 matter whether the cell has been counted yet.
 
-That is all: with the parity checks passing, the default path ran at 2.36 million
-steps per second with the fifth constraint in it, against 2.38 million without
-(2.96 against 3.21 million with `team_count_moves` off). A `full_assert` default
+That is all: with the parity checks passing, the default path ran at 2.27 million
+steps per second with the fifth constraint in it, against 2.33 million without
+(2.96 against 3.12 million with `team_count_moves` off). A `full_assert` default
 solve of the demo passed.
 
 **5. What else moves.** With the weight at 1 and the three calculators in agreement,
@@ -492,9 +498,10 @@ these still failed:
   `test_constraints.py`, `test_the_medium_level_folds_into_soft_at_1e6`, and all eight
   checks of `verifyMediumLevel()` in `ts_plugin_test.cpp`; these last two score the
   same schedule, where T1 plays days 0 to 3 and T2 days 0 and 1;
-- `verifyTeamCountMove()` in `ts_test.cpp`: 72 slots on 18 days are best spread over
-  four teams that play every day, which this constraint now charges. The solve loads six
-  teams and ends at -46.05 soft instead of 0. `TeamCountMove` picks its target team
+- `verifyTeamCountMove()` in `ts_test.cpp` and its twin on the assembly in
+  `ts_plugin_test.cpp`: 72 slots on 18 days are best spread over four teams that play every
+  day, which this constraint now charges. Both solves load six teams and end at -46.05 soft
+  instead of 0. `TeamCountMove` picks its target team
   counts from the two imbalance constraints alone (`idealPenaltyFor()` in `solver.cpp`), so
   a default constraint that pulls against them is worth teaching it.
 
@@ -552,23 +559,27 @@ for label, picked, steps in (("default path", None, 4_000_000), ("assembly", get
     start_up, _ = solve(1, picked)  # the construction heuristic
     seconds, score = solve(steps, picked)
     print(f"{label:14s} {steps / (seconds - start_up) / 1e6:5.2f} M steps/s  {score}")
-print(solve(1_000_000, None, team_count_moves=False)[1], solve(1_000_000, get_constraints())[1])
+print(solve(1_000_000, None)[1], solve(1_000_000, get_constraints())[1])
 ```
 
 The last line prints the same score twice: same seed, same steps, same scoring, same
-moves (the default path without `TeamCountMove`, which the assembly does not have).
-If the two differ after a change, the two paths no longer score alike.
+moves. If the two differ after a change, the two paths no longer score or search alike.
 
 | Measured on `xlarge`, median of three runs | Steps per second |
 | --- | --- |
-| default path, four constraints | 2.38 million |
-| default path, four constraints, `team_count_moves` off | 3.21 million |
-| assembly, four constraints | 1.77 million |
-| assembly, four + the constraint at weight 1 (step 2, step 4) | 0.81 million, 1.44 million |
-| default path, five constraints (step 5) | 2.36 million |
+| default path, four constraints | 2.33 million |
+| default path, four constraints, `team_count_moves` off | 3.12 million |
+| assembly, four constraints | 1.20 million |
+| assembly, four constraints, `team_count_moves` off | 1.72 million |
+| assembly, four + the constraint at weight 1 (step 2, step 4) | 0.61 million, 0.88 million |
+| default path, five constraints (step 5) | 2.27 million |
 
-The machine was shared while these ran; a figure moved by up to 12% between
-sessions, never the order of the rows.
+The machine was shared while these ran (at most two measurements at a time); a figure
+moved by up to 8% between repeats, never the order of the rows. `TeamCountMove` walks every
+slot each time it is drawn, so it costs the assembly about as much as the default path
+(1.72 against 1.20 million on the assembly, 3.12 against 2.33 on the default path), and it
+buys a better end: after 1 million seeded steps both paths end on soft -6.97615 with it and
+on -9.31891 without.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after. There is no C++
@@ -594,11 +605,11 @@ two builds.
 | `cpp/include/ts/constraints/<subject>_cost.hpp` | new | | table, delta | weight, `neighbourDays()` |
 | `cpp/include/ts/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
-| `tests/tournament_scheduling/cpp/ts_plugin_test.cpp` | | two cases, counts | | the row, medium fixtures |
+| `tests/tournament_scheduling/cpp/ts_plugin_test.cpp` | | two cases, counts | | the row, medium fixtures, team-count instance |
 | `tests/tournament_scheduling/test_constraint_specs.py` | | lists | | the row, the weights |
 | `docs/use-cases/tournament-scheduling/README.md`, `python.md` | | table row | | defaults, counts |
 | `cpp/src/score_calculator.cpp`, `cpp/src/incremental_calculator.cpp`, `incremental_calculator.hpp` | | | | the term |
-| `tests/tournament_scheduling/cpp/ts_test.cpp`, `test_constraints.py` | | | | expected scores |
+| `tests/tournament_scheduling/cpp/ts_test.cpp`, `test_constraints.py` | | | | expected scores, team-count instance |
 | external-solver, `benchmarks/tournament-scheduling` | | the plugin | | results |
 
 Moves and the construction heuristic are a different subject: see

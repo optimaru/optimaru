@@ -20,9 +20,9 @@ namespace {
 
 using Calculator = TournamentSchedulingIncrementalScoreCalculator;
 
-// The counts TeamCountMove and the guided change values steer by, read off
-// the monolithic calculator's live aggregates (the default path): nothing to
-// keep in step, every read O(1).
+// The counts TeamCountMove steers by, read off the monolithic calculator's
+// live aggregates (the default path): nothing to keep in step, every read
+// O(1).
 class CalculatorCounts {
 public:
     static constexpr bool kOwned = false;
