@@ -19,12 +19,12 @@ aliases. The entries on notebooks, benchmarks, tests and guides are about the re
 not the wheel.
 
 - **Benchmarks: external-solver `v0.3.0`.** The benchmark projects pin the external-solver
-  release that follows optimaru 0.5, the links into its sources point at that tag, and
-  their lock files record the version of this checkout (0.5.1 with this release). In `v0.3.0` the worker count of a CP-SAT `solve`
-  is `parallel_solver_count`, the name of the engine's keyword (`num_workers` is still
-  read), and its employee scheduling plugins say constraint where they said rule
-  (`SchedulePlugin` was `RulePlugin`); the runners and the READMEs here use the new names.
-  No table changes: the CP-SAT models are unchanged since `v0.2.3`.
+  release that follows optimaru 0.5, the links into its sources point at that tag, and their
+  lock files record the version of this checkout (0.5.1 with this release). In `v0.3.0` the
+  worker count of a CP-SAT `solve` is `parallel_solver_count`, the name of the engine's
+  keyword (`num_workers` is still read), and its employee scheduling plugins say constraint
+  where they said rule (`SchedulePlugin` was `RulePlugin`); the runners and the READMEs here
+  use the new names. No table changes: the CP-SAT models are unchanged since `v0.2.3`.
 - **Notebooks on 0.5.0.** Every notebook in `examples/` is saved with outputs from optimaru
   0.5.0 and asks for it; `examples/README.md` names that version. The four that build a request
   use the names of 0.5: `time_limit_seconds`, and in employee scheduling
