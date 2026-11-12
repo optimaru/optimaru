@@ -515,14 +515,14 @@ struct GlobalConstraint : ConstraintMetadata {
     // its own cost (aggregates that a move source or another component
     // reads). Return true when nothing but this global's own cost() reads
     // what it keeps and reset() rebuilds all of it from (solution, members):
-    // the objective then sends it no change while its weight is 0 (no global
-    // at weight 0 is asked its cost() for a score) and resets it on the current members before
+    // the objective then sends it no change while its weight is 0, does not
+    // ask its cost() for a score, and resets it on the current members before
     // constraint_costs() reports its raw cost. That reset can come at any
     // point between two changes, inside an open batch or trial too, and must
-    // leave nothing behind that a later change relies on. A unit constraint needs no
-    // such answer: its cost() is a function of (solution, unit, members), so
-    // the objective leaves every unit constraint at weight 0 out of its moves
-    // (compile_unit_dispatch).
+    // leave nothing behind that a later change relies on. A unit constraint
+    // needs no such answer: its cost() is a function of (solution, unit,
+    // members), so the objective leaves every unit constraint at weight 0 out
+    // of its moves (compile_unit_dispatch).
     virtual bool idle_at_weight_zero() const { return false; }
 
     // The sign contract of UnitConstraint::raw_cost_can_be_negative, for the
@@ -1288,9 +1288,11 @@ private:
     Totals totals_with_globals() const {
         Totals totals{hard_units_, medium_units_, soft_units_};
         for (const GlobalScoreEntry& entry : global_score_) {
-            // Weight 0 adds an exact 0, and an idle global's aggregates are
-            // not even current: not asked.
-            if (entry.weight == 0.0) continue;
+            // An idle global's aggregates are not current: not asked. Any
+            // other global at weight 0 is asked as it always was (its
+            // contribution is an exact 0): only one that declares itself
+            // idle is treated differently from before.
+            if (entry.idle) continue;
             accumulate(entry, global_contribution(entry, entry.constraint->cost()), totals.hard,
                        totals.medium, totals.soft);
         }
@@ -2061,7 +2063,7 @@ private:
         bool piecewise;  // supports_piecewise_preview(), sampled at reset
         double offset;
         bool clip;
-        bool idle;  // weight 0 and idle_at_weight_zero(): not notified, reset for a report
+        bool idle;  // weight 0 and idle_at_weight_zero(): not notified, cost() not asked
     };
 
     // One global's shaped, weighted total (the knobs sampled at reset).
