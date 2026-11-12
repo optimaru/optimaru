@@ -143,7 +143,10 @@
   `bin-packing-quality-bench` (`bin_packing_cpsat/quality_bench.py`). Flags, output and
   `--json` are unchanged; the tests are `cpsat/tests/test_public_benchmark.py` and need no
   network. `tests/test_layout.py` checks that no `benchmarks/<slug>/bench/` package is left
-  and that every `public_benchmark.py` has its `<slug>-public-bench` entry.
+  and that every `public_benchmark.py` has its `<slug>-public-bench` entry. A checkout that
+  ran the old runners keeps its downloads in `benchmarks/<slug>/bench/.cache/`: still
+  ignored, no longer read, so delete that `bench/` directory or move the archives to
+  `cpsat/<use case>_cpsat/.cache/`.
 - **Benchmarks: school timetabling's comparison is a package with a command.** Its
   three-track harness was a separate script project (`benchmarks/school-timetabling`,
   `st-bench`, not installed) whose four scripts imported each other as top-level modules and

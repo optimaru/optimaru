@@ -145,11 +145,11 @@ def test_a_public_benchmark_runner_is_a_module_of_its_comparison_package():
     """A runner on a public instance archive is `<use case>_cpsat/public_benchmark.py`, run as
     `uv run <slug>-public-bench` from `benchmarks/<slug>/cpsat`; no loose `bench/` package
     beside the project (vehicle-routing's `bench/` is its ignored output directory)."""
-    loose = sorted(
-        path.relative_to(ROOT).as_posix()
-        for path in (ROOT / "benchmarks").glob("*/bench")
-        if path.parent.name != "vehicle-routing"  # results dir: `benchmarks/vehicle-routing/bench/` in .gitignore
-    )
+    # Tracked files only: a checkout that ran the old runners still has an ignored
+    # `benchmarks/<slug>/bench/.cache/`, and vehicle-routing's `bench/` is ignored output.
+    tracked = subprocess.run(["git", "ls-files", "benchmarks"], cwd=ROOT, capture_output=True, text=True)
+    parts = [path.split("/") for path in tracked.stdout.splitlines()]
+    loose = sorted({"/".join(path[:3]) for path in parts if len(path) > 3 and path[2] == "bench"})
     assert not loose, f"move these into their comparison package: {loose}"
     runners = sorted((ROOT / "benchmarks").glob("*/cpsat/*/public_benchmark.py"))
     assert runners

@@ -134,7 +134,7 @@ both are back.)
 
 The `<slug>-compare` commands in the READMEs use `--seconds 10` for a quick
 check, and the public-instance runners show their own budgets. Every results
-block, `RESULTS.md` and `PUBLIC_BENCHMARKS.md` states the budget it was measured with (30 s per solver
+block, `RESULTS.md` and `PUBLIC_BENCHMARKS.md` state the budget it was measured with (30 s per solver
 and instance for most); pass that `--seconds` to reproduce it.
 
 ## Publishing results

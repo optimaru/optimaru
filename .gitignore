@@ -16,6 +16,8 @@ wheelhouse/
 
 # benchmark downloads and results
 .bench-cache/
+# where the public runners cached downloads before they moved into `cpsat/<package>/.cache/`
+benchmarks/*/bench/.cache/
 benchmarks/vehicle-routing/bench/
 benchmarks/school-timetabling/out/
 benchmarks/school-timetabling/cpsat/out/
