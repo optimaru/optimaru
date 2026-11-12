@@ -17,7 +17,8 @@ the model and its six constraints are in the [guide](README.md).
 The steps build one example: `weekendSpanCost`, the Saturdays and Sundays a job stays open across,
 between its first and its last working day. A job left open over a weekend keeps its site out of
 service on days nobody works on it. Every snippet below was compiled and run, and every figure
-measured, on optimaru 0.4.3; a later change to the solver moves the figures, not the steps.
+measured, on optimaru 0.4.3; the speeds of the assembly (in the table below, in step 4 and in
+the table of step 6) on 0.5.1. A later change to the solver moves the figures, not the steps.
 
 ## How a schedule is scored
 
@@ -280,10 +281,11 @@ constraint list.
 
 On the assembly a move costs, for every constraint, one call for each cell a job leaves
 and each it joins, and as many again when a rejected move is undone. In 2 million
-steps on the `large` instance the example's `jobCost` ran 10.4 million times, 5.2
-times a step, picked at weight 0 or at 10 alike: a constraint at weight 0 is still called,
-it only adds nothing. So leave a constraint out of the picks rather than give it weight 0;
-`get_constraints()` includes it.
+steps on the `large` instance the example's `jobCost` ran 10.4 million times at weight
+10, 5.2 times a step. A unit constraint at weight 0 is asked only when a solve starts and
+when `mnt.constraint_costs()` reports it, so it costs a move nothing: `get_constraints()`,
+which includes the example at weight 0, ran at 3.83 million steps per second, as the six
+did.
 
 What one call costs depends on the constraint:
 
@@ -328,9 +330,8 @@ private:
     std::vector<double> table_;  // jobs x start dates
 ```
 
-With the constraint at weight 10 the assembly went from 3.46 to 3.50 million steps per
-second, and the solve ended on the same score, as it must. Picked at weight 0 it went
-from 3.35 to 3.46, against 3.75 with the constraint left out. The gain is small: the term was
+With the constraint at weight 10 the assembly went from 3.47 to 3.53 million steps per
+second, and the solve ended on the same score, as it must. The gain is small: the term was
 already a few array reads (`occupancyOf()` reads `startDates` and `endDateByDur`); a
 term that walks the job's days or its tags gains more.
 
@@ -447,15 +448,15 @@ path as it ships; it ends elsewhere because it searches differently.
 | --- | --- |
 | default path, six constraints | 5.78 |
 | default path, six constraints, guidance off | 6.32 |
-| assembly, six constraints | 3.75 |
-| assembly, six + the constraint of step 2 at weight 0 | 3.35 |
-| assembly, six + the constraint at weight 10 | 3.46 |
-| assembly, six + the constraint at weight 0, with the table of step 4 | 3.46 |
-| assembly, six + the constraint at weight 10, with the table of step 4 | 3.50 |
+| assembly, six constraints | 3.83 |
+| assembly, six + the constraint of step 2 at weight 0 | 3.83 |
+| assembly, six + the constraint at weight 10 | 3.47 |
+| assembly, six + the constraint at weight 10, with the table of step 4 | 3.53 |
 | default path, seven constraints (step 5) | 6.05 |
 | default path, seven constraints, guidance off | 6.58 |
 
-Each is the median of three runs of 2 million steps on one thread of an Apple M4 Max.
+Each is the median of three runs of 2 million steps on one thread of an Apple M4 Max. The
+four assembly rows were taken on 0.5.1, the default-path rows on 0.4.3.
 `large` is `mnt.generate_demo_data("LARGE", 20_454)`, the `large` instance of
 [`benchmarks/maintenance-scheduling`](../../../benchmarks/maintenance-scheduling).
 
