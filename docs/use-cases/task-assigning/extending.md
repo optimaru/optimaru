@@ -16,7 +16,8 @@ the model and its six constraints are in the [guide](README.md).
 
 The steps build one example: `customerSwitchCost`, the times an employee goes from a task of one
 customer to a task of another. It keeps an employee's work for one customer together. Every snippet
-below was compiled and run, and every figure measured, on optimaru 0.4.3; a later change to the
+below was compiled and run, and every figure measured, on optimaru 0.4.3, except the calls at
+weight 0 in step 4 and the row at weight 0 in step 6, measured on 0.5.1; a later change to the
 solver moves the figures, not the steps.
 
 ## How a solution is scored
@@ -275,10 +276,10 @@ say nothing about its value.
 
 ## 4. Make it cheaper per move
 
-On the assembly a constraint pays one `cost()` call, over the whole list, each time the
-engine edits a list. A move is several edits, and a rejected move is undone with as
-many again: in 2 million steps on the demo instance the example's `cost()` ran 8.8
-million times, 4.4 times a step. Two things cut that: what one call does, and how many
+On the assembly a constraint with a weight pays one `cost()` call, over the whole list, each
+time the engine edits a list. A move is several edits, and a rejected move is undone with as
+many again: in 2 million steps on the demo instance the example's `cost()` at weight 200
+ran 8.8 million times, 4.4 times a step. Two things cut that: what one call does, and how many
 calls a move needs.
 
 **What one call does.** Lists are short, so one plain pass over `members` is the right
@@ -317,8 +318,9 @@ whole assembly:
 
 With the constraint at weight 200 the assembly went from 2.0 to 3.9 million steps per second
 and the example's `cost()` from 4.4 to 1.9 calls a step; the solve ended on the same
-score, as it must. A constraint left at weight 0 is not asked during a preview at all: its
-calls fell from 8.8 million to 0.24 million. This is done once for the use case, not
+score, as it must. A constraint left at weight 0 is asked on no move at all, previewed or
+applied: in the 2 million steps its `cost()` ran 24 times, once per employee in each of the
+three rebuilds, with or without the previews. This is done once for the use case, not
 once per constraint. From then on `cost()` is called on lists that do not exist yet, which is
 why it may read only `(solution, unit, members)`. A new case `verifyPreviews()` of
 `ta_plugin_test.cpp` checks that with the engine's parity harness,
@@ -435,13 +437,15 @@ differ after a change, the two paths no longer score alike.
 | --- | --- | --- |
 | default path, six constraints | 7.8 | 4.5 |
 | assembly, six constraints | 2.1 | 0.84 |
-| assembly, six + the constraint of step 2 at weight 0 | 2.0 | 0.80 |
+| assembly, six + the constraint of step 2 at weight 0 | 2.0 | 0.82 |
 | assembly, six + the constraint at weight 200 | 2.0 | 0.79 |
 | assembly, six + the constraint at weight 200, with the previews of step 4 | 3.9 | 1.4 |
 | default path, seven constraints (step 5) | 7.7 | 4.5 |
 
 Each is the median of three runs of 2 million steps. `xlarge` is the largest instance
-of [`benchmarks/task-assigning`](../../../benchmarks/task-assigning), 12 customers.
+of [`benchmarks/task-assigning`](../../../benchmarks/task-assigning), 12 customers. The row
+at weight 0 is the speed of the six alone, since the engine asks that constraint on no move;
+it was measured on 0.5.1, in a session that put the six at 2.0 and 0.82.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after:
