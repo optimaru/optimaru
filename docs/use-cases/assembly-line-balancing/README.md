@@ -225,12 +225,12 @@ component, tested, made cheaper per move, moved to the default fast path and mea
 
 [`benchmarks/assembly-line-balancing`](../../../benchmarks/assembly-line-balancing) compares this
 use case with OR-Tools CP-SAT: generated lines (`assembly_line_balancing_cpsat.benchmark`) and
-the public SALBP archive of Otto et al. (`bench/run_bench.py`, downloaded on demand and
-checksum-verified; results in [`bench/RESULTS.md`](../../../benchmarks/assembly-line-balancing/bench/RESULTS.md)).
+the public SALBP archive of Otto et al. (`assembly-line-balancing-public-bench`, downloaded on demand and
+checksum-verified; results in [`cpsat/PUBLIC_BENCHMARKS.md`](../../../benchmarks/assembly-line-balancing/cpsat/PUBLIC_BENCHMARKS.md)).
 
 ```sh
-cd benchmarks/assembly-line-balancing
-uv sync --project cpsat --all-groups
-uv run --project cpsat python -m bench.run_bench --dataset large --seconds 60
-uv run --project cpsat python -m bench.run_bench --dataset very-large --exact-max-size 0 --seconds 60
+cd benchmarks/assembly-line-balancing/cpsat
+uv sync
+uv run assembly-line-balancing-public-bench --dataset large --seconds 60
+uv run assembly-line-balancing-public-bench --dataset very-large --exact-max-size 0 --seconds 60
 ```

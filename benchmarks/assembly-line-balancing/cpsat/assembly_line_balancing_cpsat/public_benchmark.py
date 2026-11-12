@@ -1,3 +1,5 @@
+"""Run the engine and CP-SAT on the Otto et al. SALBP-1 benchmark archive (downloaded on demand)."""
+
 from __future__ import annotations
 
 import argparse
@@ -5,8 +7,9 @@ import json
 import time
 from pathlib import Path
 
-from bench.data import DATASETS, load_suite
 from optimaru import assembly_line_balancing
+
+from .public_benchmark_data import DATASETS, load_suite
 
 
 def _gap(value: int, reference: int | None) -> float | None:
@@ -40,8 +43,6 @@ def _run_engine(problem, seconds: float, seed: int) -> dict:
 
 def _run_cpsat(problem, seconds: float, seed: int, workers: int) -> dict:
     from external_solver import assembly_line_balancing as cpsat
-
-    import assembly_line_balancing_cpsat  # noqa: F401 - points external_solver at the checkout engine
 
     started = time.perf_counter()
     try:

@@ -16,6 +16,7 @@ dev = ["pytest"]
 
 [project.scripts]
 assembly-line-balancing-compare = "assembly_line_balancing_cpsat.benchmark:main"
+assembly-line-balancing-public-bench = "assembly_line_balancing_cpsat.public_benchmark:main"
 
 [tool.uv]
 # external-solver pins the published optimaru; the benchmarks measure the engine in

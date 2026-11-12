@@ -9,9 +9,9 @@ Score mapping (hard / medium / soft -> engine Score):
 ``-(medium unfairness * 1e6 + soft unfairness)`` — folded with a 1e6 offset so medium
 (per-team assignment balance) always dominates soft (head-to-head balance)::
 
-    from optimaru.tournament_scheduling.models import TournamentScheduleModel, demo_data
+    from optimaru.tournament_scheduling.models import TournamentScheduleModel, generate_demo_data
 
-    model = demo_data()                          # the demo instance
+    model = generate_demo_data()                 # the demo instance
     clone = TournamentScheduleModel.model_validate_json(model.model_dump_json())
     schedule = clone.to_core()                   # pydantic -> engine
 """
@@ -38,7 +38,7 @@ __all__ = [
     "TournamentScheduleModel",
     "TournamentScheduleRequest",
     "UnavailabilityPenaltyModel",
-    "demo_data",
+    "generate_demo_data",
     "solve_request",
     "with_initial_solution",
 ]
@@ -158,7 +158,7 @@ def _pick(rng: random.Random, n: int) -> int:
     return int(rng.random() * n)
 
 
-def demo_data() -> TournamentScheduleModel:
+def generate_demo_data() -> TournamentScheduleModel:
     """The demo instance: 7 teams, 18 days x 4 slots = 72
     assignments, 12 unavailable days drawn from a seeded ``random.Random`` (deterministic)."""
     rng = random.Random(0)
@@ -177,6 +177,9 @@ def demo_data() -> TournamentScheduleModel:
         unavailability_penalties=penalties,
         team_assignments=assignments,
     )
+
+
+demo_data = generate_demo_data  # the name before 0.5.1
 
 
 def with_initial_solution(problem, solution):

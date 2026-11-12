@@ -121,12 +121,135 @@ def test_every_benchmark_project_is_packaged_and_pins_one_external_solver():
     assert not stale, f"links into external-solver that are not on {tag}: {stale}"
 
 
+def test_a_comparison_runner_is_named_after_its_use_case():
+    """`benchmarks/<slug>/cpsat/<use case>_cpsat/benchmark.py`, run as `uv run <slug>-compare`;
+    no loose scripts beside the project (school timetabling's tracks are a package too)."""
+    runners = sorted((ROOT / "benchmarks").glob("*/cpsat/*/benchmark.py"))
+    assert runners
+    for runner in runners:
+        project = runner.parents[1]
+        slug = project.parent.name
+        assert runner.parent.name == f"{slug.replace('-', '_')}_cpsat", runner
+        scripts = tomllib.loads((project / "pyproject.toml").read_text())["project"].get("scripts", {})
+        entry = f"{runner.parent.name}.benchmark:main"
+        assert scripts.get(f"{slug}-compare") == entry, f"{slug}: no `{slug}-compare = {entry!r}`"
+    assert (
+        ROOT / "benchmarks" / "school-timetabling" / "cpsat" / "school_timetabling_cpsat" / "benchmark.py"
+    ) in runners
+    loose = sorted(path.name for path in (ROOT / "benchmarks" / "school-timetabling").glob("*.py"))
+    assert not loose, f"school timetabling's scripts belong in school_timetabling_cpsat: {loose}"
+    assert not (ROOT / "benchmarks" / "school-timetabling" / "pyproject.toml").exists()
+
+
+def test_a_public_benchmark_runner_is_a_module_of_its_comparison_package():
+    """A runner on a public instance archive is `<use case>_cpsat/public_benchmark.py`, run as
+    `uv run <slug>-public-bench` from `benchmarks/<slug>/cpsat`; no loose `bench/` package
+    beside the project (vehicle-routing's `bench/` is its ignored output directory)."""
+    # Tracked files only: a checkout that ran the old runners still has an ignored
+    # `benchmarks/<slug>/bench/.cache/`, and vehicle-routing's `bench/` is ignored output.
+    tracked = subprocess.run(["git", "ls-files", "benchmarks"], cwd=ROOT, capture_output=True, text=True)
+    parts = [path.split("/") for path in tracked.stdout.splitlines()]
+    loose = sorted({"/".join(path[:3]) for path in parts if len(path) > 3 and path[2] == "bench"})
+    assert not loose, f"move these into their comparison package: {loose}"
+    runners = sorted((ROOT / "benchmarks").glob("*/cpsat/*/public_benchmark.py"))
+    assert runners
+    for runner in runners:
+        project = runner.parents[1]
+        slug = project.parent.name
+        scripts = tomllib.loads((project / "pyproject.toml").read_text())["project"].get("scripts", {})
+        entry = f"{runner.parent.name}.public_benchmark:main"
+        assert scripts.get(f"{slug}-public-bench") == entry, f"{slug}: no `{slug}-public-bench = {entry!r}`"
+
+
 def test_every_use_case_has_a_guide_and_a_benchmark():
     for name in USE_CASES:
         slug = name.replace("_", "-")
         assert (ROOT / "docs" / "use-cases" / slug / "README.md").is_file(), slug
         assert (ROOT / "docs" / "use-cases" / slug / "extending.md").is_file(), slug
         assert (ROOT / "benchmarks" / slug).is_dir(), slug
+
+
+DEMO_FUNCTION = "generate_demo_data"
+
+# The names the demo functions had before 0.5.1. Each stays an alias of `generate_demo_data` in
+# the modules that had it (tests/test_demo_data_names.py checks they are the same object).
+FORMER_DEMO_NAMES = {
+    "conference_scheduling": "demo_conference",
+    "meeting_scheduling": "demo_data",
+    "order_picking": "build_demo_data",
+    "sports_league_scheduling": "demo_schedule",
+    "tournament_scheduling": "demo_data",
+}
+
+_DEMO_LIKE = re.compile(r"^(?!_)[a-z0-9_]*(demo|sample|example)[a-z0-9_]*$")
+
+
+def _python_names(path: Path) -> tuple[dict[str, str | None], list[str] | None]:
+    """The public top-level names a module or stub defines or imports, each with the name it is an
+    alias of (`old = new`) or None, and its `__all__` (None when it has none)."""
+    names: dict[str, str | None] = {}
+    listed = None
+    for node in ast.parse(path.read_text()).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names[node.name] = None
+        elif isinstance(node, ast.ImportFrom):
+            names.update((alias.asname or alias.name, None) for alias in node.names)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if len(targets) != 1 or not isinstance(targets[0], ast.Name):
+                continue
+            if targets[0].id == "__all__":
+                listed = [element.value for element in node.value.elts]
+            else:
+                names[targets[0].id] = node.value.id if isinstance(node.value, ast.Name) else None
+    return names, listed
+
+
+def _binding_names(path: Path) -> dict[str, str | None]:
+    """The functions a bindings.cpp registers (`m.def("name"`) and its aliases
+    (`m.attr("old") = m.attr("new")`)."""
+    text = path.read_text()
+    names: dict[str, str | None] = dict.fromkeys(re.findall(r'm\.def\(\s*"(\w+)"', text))
+    names.update(re.findall(r'm\.attr\("(\w+)"\)\s*=\s*m\.attr\("(\w+)"\)', text))
+    return names
+
+
+def test_a_demo_instance_is_offered_as_generate_demo_data():
+    """Every public function of a use case that builds its demo (or sample, or example) instance
+    is called `generate_demo_data`, in the package, its `demo`, `models` and `_core` modules and in
+    what the bindings register. The one other name allowed is the use case's name before 0.5.1, as
+    a plain alias of `generate_demo_data` next to it, left out of `__all__`. Read off the source, so
+    it needs no compiled extension."""
+    offering = set()
+    for name in sorted(USE_CASES):
+        package = ROOT / "optimaru" / name
+        former = FORMER_DEMO_NAMES.get(name)
+        modules = {
+            path.name: _python_names(path)
+            for path in (package / file for file in ("__init__.py", "demo.py", "models.py", "_core.pyi"))
+            if path.is_file()
+        }
+        modules["cpp/bindings.cpp"] = (_binding_names(package / "cpp" / "bindings.cpp"), None)
+        for module, (names, listed) in modules.items():
+            demo_names = {n for n in names if _DEMO_LIKE.match(n)}
+            if DEMO_FUNCTION in demo_names:
+                offering.add(name)
+            strays = demo_names - {DEMO_FUNCTION, former}
+            assert not strays, (
+                f"{name}/{module}: {sorted(strays)} looks like the function that builds a demo instance, which is "
+                f"called {DEMO_FUNCTION} in every use case. Rename it; if it is something else (a helper that only "
+                f"has demo, sample or example in its name), narrow _DEMO_LIKE instead."
+            )
+            if former in demo_names:
+                assert DEMO_FUNCTION in names, f"{name}/{module}: {former} without {DEMO_FUNCTION}"
+                assert names[former] in (None, DEMO_FUNCTION), f"{name}/{module}: {former} = {names[former]}"
+                if names[former] is None:  # imported: it must be imported next to the new name
+                    assert module == "__init__.py", f"{name}/{module}: {former} is not an alias of {DEMO_FUNCTION}"
+            if listed is not None:
+                assert former not in listed, f"{name}/{module}: __all__ lists the former name {former}"
+                if DEMO_FUNCTION in names:
+                    assert DEMO_FUNCTION in listed, f"{name}/{module}: __all__ does not list {DEMO_FUNCTION}"
+    assert set(FORMER_DEMO_NAMES) <= offering, f"aliases without a demo function: {set(FORMER_DEMO_NAMES) - offering}"
 
 
 _NUMBER_WORDS = (

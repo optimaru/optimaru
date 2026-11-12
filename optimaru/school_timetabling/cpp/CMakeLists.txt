@@ -43,7 +43,7 @@ target_link_libraries(st_canonical_plugin_test PRIVATE st_canon)
 target_compile_options(st_canonical_plugin_test PRIVATE -Wall -Wextra)
 
 # Solution-quality benchmark vs CP-SAT (benchmarks/school-timetabling/cpp/st_quality_bench.cpp,
-# driven by benchmarks/school-timetabling/run_bench.py).
+# driven by school-timetabling-compare in benchmarks/school-timetabling/cpsat).
 add_executable(st_quality_bench ${OPTIMARU_BENCHMARKS_DIR}/school-timetabling/cpp/st_quality_bench.cpp)
 target_link_libraries(st_quality_bench PRIVATE st_core)
 target_compile_options(st_quality_bench PRIVATE -Wall -Wextra)

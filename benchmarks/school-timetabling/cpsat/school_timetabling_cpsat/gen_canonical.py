@@ -19,7 +19,7 @@ weekly load ≤ min(30, max_periods_per_week); where possible the result is also
 validated with teacher_scheduling's pydantic models.
 
 Usage:
-    uv run gen_canonical.py --sizes S,M,L --out-dir out
+    uv run python -m school_timetabling_cpsat.gen_canonical --sizes S,M,L --out-dir out
 """
 
 from __future__ import annotations
@@ -30,9 +30,6 @@ import math
 import sys
 from collections import defaultdict
 from pathlib import Path
-
-# Used for the final validation with the canonical pydantic models of benchmarks/school-timetabling/cpsat.
-_CPSAT_DIR = Path(__file__).resolve().parent / "cpsat"
 
 # Class-count presets.
 SIZES = {"S": 6, "M": 12, "L": 24}
@@ -290,11 +287,12 @@ def _verify(problem: dict, size: str) -> None:
             )
 
     # Where possible, validate with the canonical pydantic models too (referential integrity, parallel-group consistency, ...).
-    if str(_CPSAT_DIR) not in sys.path:
-        sys.path.insert(0, str(_CPSAT_DIR))
     try:
         from teacher_scheduling import TimetableProblem
     except ImportError:
+        # Still a case: the generator imported outside this project, as the guide's snippet does
+        # from the root environment, which lacks teacher_scheduling's dependencies (OR-Tools);
+        # there it skips the check instead of failing.
         print(f"[{size}] teacher_scheduling not installed — skipping the pydantic validation", file=sys.stderr)
         return
     TimetableProblem.model_validate(problem)

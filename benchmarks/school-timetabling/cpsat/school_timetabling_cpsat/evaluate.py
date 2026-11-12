@@ -17,7 +17,7 @@ teacher_time_efficiency_cost is <= 0 (minus the adjacent same-teacher pairs)
 and ``hard`` / ``soft`` are minus the sums of their three keys.
 
 Usage:
-    uv run evaluate.py <instance.json> <solution.json>
+    uv run python -m school_timetabling_cpsat.evaluate <instance.json> <solution.json>
 """
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ def assignment_from_solution(instance: dict, solution: dict) -> list[tuple[int, 
 
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
-        print("usage: evaluate.py <instance.json> <solution.json>", file=sys.stderr)
+        print("usage: python -m school_timetabling_cpsat.evaluate <instance.json> <solution.json>", file=sys.stderr)
         return 2
     instance = load_json(argv[1])
     solution = load_json(argv[2])

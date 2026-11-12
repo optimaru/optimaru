@@ -17,8 +17,9 @@ constraints are in the [guide](README.md) and in [python.md](python.md#the-const
 The steps build one example: `unusedSkillCost`, for each assigned shift the skills its employee
 holds that some shift requires and this one does not. It keeps multi-skilled workers free for the
 shifts only they can take. Every snippet below was compiled and run, and every figure measured, on
-optimaru 0.4.3; a later change to the solver moves the figures, not the steps. Paths that start with
-`cpp/` are under `optimaru/employee_scheduling/`.
+optimaru 0.4.3 (the step-5 `shiftSoftDelta()` snippet compiled and run again on 0.5.1, when the
+monolith began to skip pinned shifts); a later change to the solver moves the figures, not the
+steps. Paths that start with `cpp/` are under `optimaru/employee_scheduling/`.
 
 ## How a schedule is scored
 
@@ -434,9 +435,9 @@ weight and the level to the two `static_assert`s, and add the term to
 
 ```cpp
 std::int64_t ScoreCalculator::shiftSoftDelta(const Employee& emp, const Shift& shift) {
+    if (shift.pinned) return 0;  // settled history, as in shiftHardPenalty
     // unusedSkillCost: the required skills the employee holds that this shift does not need.
-    const std::int64_t spare =
-            shift.pinned ? 0 : std::bitset<64>(emp.skillMask & ~shift.requiredSkillBit).count();
+    const std::int64_t spare = std::bitset<64>(emp.skillMask & ~shift.requiredSkillBit).count();
     return overlapWithDates(shift, emp.desiredDates)       // desiredDayCost (reward)
            - overlapWithDates(shift, emp.undesiredDates)   // undesiredDayCost (penalty)
            - spare;                                        // unusedSkillCost (penalty)
@@ -450,10 +451,9 @@ steps per second with the ninth constraint, against 3.42 without. With the term 
 check failed on its first round (monolith `-2881.39697soft`, assembly `-2968.39697soft`); with
 it, `es_plugin_test` passes.
 
-The existing per-shift terms of the monolith count pinned shifts, where their components skip
-them: a pinned shift on a missing skill scores `-1hard` on `es.solve(schedule)` and 0 on the
-default assembly. The parity check uses no pinned shift, so it does not see this. The new term
-skips pinned shifts, as its component does.
+`shiftSoftDelta()` and `shiftHardPenalty()` return 0 for a pinned shift before any term, so the
+new term skips pinned shifts as its component does, and as the other per-shift terms do on both
+paths. The parity check pins shifts in 200 of its 300 rounds.
 
 A hard pair constraint goes into `ScoreCalculator::pairHardPenalty()`, which the incremental
 calculator caches per pair of shifts (within a memory budget). A constraint about runs, weeks or

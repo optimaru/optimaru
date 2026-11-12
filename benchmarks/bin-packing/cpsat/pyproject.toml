@@ -16,6 +16,8 @@ dev = ["pytest"]
 
 [project.scripts]
 bin-packing-compare = "bin_packing_cpsat.benchmark:main"
+bin-packing-public-bench = "bin_packing_cpsat.public_benchmark:main"
+bin-packing-quality-bench = "bin_packing_cpsat.quality_bench:main"
 
 [tool.uv]
 # external-solver pins the published optimaru; the benchmarks measure the engine in

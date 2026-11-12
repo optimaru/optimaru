@@ -18,7 +18,7 @@ uv run pytest -q tests/sports_league_scheduling
 ```python
 from optimaru import sports_league_scheduling as sl
 
-schedule = sl.demo_schedule()  # the demo instance (14 teams/32 rounds/182 matches)
+schedule = sl.generate_demo_data()  # the demo instance (14 teams/32 rounds/182 matches)
 sl.solve(schedule, time_limit_seconds=10.0, random_seed=42, stop_at_first_feasible=True)
 print(schedule.score)  # e.g. 0hard/-218994soft (value at the first feasible stop)
 print(sum(sl.constraint_costs(schedule)["away_to_away_hop_cost"]["costs"]))  # raw km
@@ -115,8 +115,9 @@ gap is treated as "no round".
 
 ## Demo data
 
-`demo_schedule()` builds the demo league: the measured
+`generate_demo_data()` builds the demo league: the measured
 distance matrix of 14 South American teams, 32 rounds, 182 matches over all ordered pairs, and
 a 5% classic draw from a seeded `random.Random` (+ symmetric closure, 18 matches in total).
 Round 0 is pinned to a Wednesday, so the instance is the same on every run. (The C++ demo
-`sls_demo` draws its classic matches with `std::mt19937_64`, so its instance differs.)
+`sls_demo` draws its classic matches with `std::mt19937_64`, so its instance differs.) Its name before
+0.5.1, `demo_schedule()`, still works (an alias of the same function).

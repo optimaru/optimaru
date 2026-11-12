@@ -95,7 +95,7 @@ seven terms are named `room_conflict_cost`, `teacher_conflict_cost`,
 `class_conflict_cost`, `teacher_unavailability_cost` (hard),
 `teacher_room_change_cost`, `teacher_time_efficiency_cost` (a reward) and
 `class_subject_repeat_cost` (soft) in its docs and in the benchmark's
-`evaluate.py`.
+`school_timetabling_cpsat/evaluate.py`.
 
 ## Plugin constraint assembly (`constraints=`)
 

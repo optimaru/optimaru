@@ -7,7 +7,7 @@ from optimaru.conference_scheduling.models import ConferenceScheduleModel
 
 
 def _problem():
-    return ConferenceScheduleModel.from_core(cs.demo_conference())
+    return ConferenceScheduleModel.from_core(cs.generate_demo_data())
 
 
 def _slots(model):
