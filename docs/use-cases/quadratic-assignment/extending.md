@@ -17,8 +17,9 @@ the model and its five constraints are in the [guide](README.md).
 The steps build one example: `unusedLocationCapacityCost`, the capacity a location has beyond the
 demand of the facility standing there. It is the other side of `locationCapacityCost`, which charges
 the demand over the capacity, and it keeps the large locations for the facilities that need them.
-Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3; a later
-change to the solver moves the figures, not the steps.
+Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3, except
+the rows with the constraint at weight 0 and the five alone they are compared with, on 0.5.1; a
+later change to the solver moves the figures, not the steps.
 
 ## How an assignment is scored
 
@@ -244,7 +245,9 @@ The lowest the instance allows is 28: its pin keeps F39, a demand of 2, on L0.
 What the base gave you: after a swap the engine calls `cost()` once for each of the
 two locations it touched, and keeps the results. A refused swap puts the old results
 back without another call. Each call is one facility and one comparison, so the
-constraint is cheap from the start.
+constraint is cheap from the start. At weight 0 the engine does not call it on a swap at
+all: it costs the constraint when the solve starts, and again when `qap.constraint_costs()`
+reports it.
 
 ## 3. Check it
 
@@ -319,7 +322,8 @@ recompute ...") if a move leaves the score stale:
 qap.solve(problem, time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
 ```
 
-Give the constraint a weight for this: at weight 0 a stale cost scores the same.
+Give the constraint a weight for this: at weight 0 the engine does not ask it on a move,
+so there is nothing to check.
 
 **The tables and the CP-SAT model.** The constraint table in [README.md](README.md)
 must equal `qap.constraint_info()`; add the row, and the header to the component files
@@ -375,15 +379,15 @@ in 1 million steps of the solve of step 2 the engine called `cost()` 2.0 million
 without it and 1.0 million times with it. The solve printed the same line as before,
 as it must. With the scope switched off and on inside one build (an environment
 variable read in `on_reset()`, the median of five runs each), the assembly went from
-2.71 to 2.86 million steps per second with the constraint at weight 0, and from 2.73
-to 2.86 at weight 20. Measure a small change that way. The builds of step 2 and step 4
-ran at 2.72 and 2.71 at weight 0, and at 2.71 and 2.72 at weight 20: a rebuild alone
-moves a figure by as much as the scope gains ([step 6](#6-measure)).
+2.73 to 2.86 million steps per second with the constraint at weight 20. Measure a small
+change that way. The builds of step 2 and step 4 ran at 2.71 and 2.72 at weight 20: a
+rebuild alone moves a figure by as much as the scope gains ([step 6](#6-measure)).
 
-The constraint costs the same at weight 0 as at weight 20. The engine keeps the cost of
-every constraint in the picks, whatever its weight, and `get_constraints()` lists the
-opt-in constraint. Leave it out of the picks when you do not use it, as `others` does
-in step 2: the five alone ran at 2.94 in the build with the switch.
+At weight 0 neither the scope nor the constraint costs a swap anything: the engine
+leaves a unit constraint at weight 0 out of the moves. `get_constraints()` lists the
+opt-in constraint at weight 0, and solving with it ran at 2.84 million steps per second
+in the build of step 4, where the five alone ran at 2.81 (step 2: 2.93 and 2.88): the
+speed of the five.
 
 The scope is also part of what the constraint means, so settle it when you add the constraint:
 
@@ -521,9 +525,9 @@ differ after a change, the two paths no longer score alike.
 | --- | --- |
 | default path, five constraints | 3.71 million |
 | assembly, five constraints | 2.86 million |
-| assembly, five + the constraint of step 2 at weight 0 | 2.72 million |
+| assembly, five + the constraint of step 2 at weight 0 (the five, 2.88) | 2.93 million |
 | assembly, five + the constraint of step 2 at weight 20 | 2.71 million |
-| assembly, five + the constraint with the scope (step 4) at weight 0 | 2.71 million |
+| assembly, five + the constraint with the scope (step 4) at weight 0 (the five, 2.81) | 2.84 million |
 | assembly, five + the constraint with the scope at weight 20 | 2.72 million |
 | default path, six constraints (step 5) | 3.55 million |
 | assembly, six constraints (step 5) | 2.72 million |
@@ -535,6 +539,9 @@ is as much as the scope of step 4 gains, so the table does not show it. A figure
 moves by about 2 percent from one run to the next, and other work on the machine, which
 there was when these were taken, lowers every row together. The two default-path rows
 are not the same work either: with the constraint on, the solve makes other moves.
+The two rows at weight 0 were taken on 0.5.1, each next to the five alone in the same
+build (in brackets): at weight 0 the constraint costs a swap nothing, so they are the
+speed of the assembly without it.
 
 **What it buys.** A constraint changes what the search can reach, so compare the results
 at the same budget over several seeds, with and without it:

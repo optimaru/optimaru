@@ -47,6 +47,12 @@
 //       call per share class, the same score bit for bit as independent
 //       instances on random walks (trials, batches) and previews, and the
 //       instances that cannot share (another dispatch, another type)
+//   (y) a pick at weight 0 beside the others: a repeat class with its first
+//       instance or its repeat at weight 0, a member of a compiled delta group
+//       (grouped apply and the direct hard fold), a scoped and a hard
+//       constraint: the score and the penalized units of the same assembly
+//       without the pick on random walks (trials, batches), and
+//       constraint_costs() reports the pick as a fresh reset does
 //   (q) the literal offset formula (clip false, offset != 0) stays off the
 //       levels that count toward the hard score: python::check_literal_offset
 //       (both messages, both offset signs, the default level, a structural
@@ -3006,6 +3012,176 @@ void testReportedKnobsAreSampledAtReset() {
 
 }  // namespace
 
+// --- (y) weight 0 beside repeats, a compiled group, a scope, the hard level --
+
+// The same random walk (plain moves, rejected trials, batches of two moves)
+// on an assembly with picks at weight 0 and on the same assembly without
+// them: the scores and the penalized units must be identical at every step,
+// since a pick at weight 0 is left out of the moves and adds nothing. At the
+// end every pick at weight 0 reports the raw costs a fresh reset reports.
+// Returns what differed, or "".
+template <typename S>
+std::string weightZeroWalk(const std::function<optimaru::ConstraintAssembly<S>(bool)>& build,
+                           unsigned seed, bool everyRawExact = false) {
+    S a = assignmentA<S>();
+    S b = assignmentA<S>();
+    optimaru::DecomposedObjective<S> zeros, plain;
+    build(true).into(zeros);
+    build(false).into(plain);
+    zeros.rebuild(a);
+    plain.rebuild(b);
+    std::mt19937_64 rng(seed);
+    auto assign = [&](int task, int worker) {
+        zeros.before_assign(task);
+        a.assignment[task] = worker;
+        zeros.after_assign(task);
+        plain.before_assign(task);
+        b.assignment[task] = worker;
+        plain.after_assign(task);
+    };
+    auto sorted = [](std::vector<int> units) {
+        std::sort(units.begin(), units.end());
+        return units;
+    };
+    std::string problem;
+    auto compare = [&] {
+        const Score x = zeros.score(), y = plain.score();
+        if (x.hard != y.hard || x.soft != y.soft) {
+            problem = "scores differ: " + str(x) + " against " + str(y);
+        } else if (sorted(zeros.penalized_units()) != sorted(plain.penalized_units())) {
+            problem = "penalized units differ";
+        }
+    };
+    compare();
+    for (int step = 0; step < 2000 && problem.empty(); ++step) {
+        const int kind = static_cast<int>(rng() % 3);
+        const int t1 = static_cast<int>(rng() % 6), t2 = static_cast<int>(rng() % 6);
+        const int w1 = (rng() % 7 == 0) ? -1 : static_cast<int>(rng() % 4);
+        const int w2 = static_cast<int>(rng() % 4);
+        if (kind == 0) {
+            assign(t1, w1);
+        } else if (kind == 1) {
+            const int old = a.assignment[t1];
+            zeros.begin_trial();
+            plain.begin_trial();
+            assign(t1, w1);
+            compare();
+            zeros.begin_rollback();
+            plain.begin_rollback();
+            assign(t1, old);
+            zeros.end_trial(false);
+            plain.end_trial(false);
+        } else {
+            zeros.begin_batch();
+            plain.begin_batch();
+            assign(t1, w1);
+            assign(t2, w2);
+            zeros.end_batch();
+            plain.end_batch();
+        }
+        compare();
+    }
+    if (!problem.empty()) return problem;
+    optimaru::DecomposedObjective<S> fresh;
+    build(true).into(fresh);
+    fresh.rebuild(a);
+    const auto reported = zeros.constraint_costs(), expected = fresh.constraint_costs();
+    int off = 0;
+    for (std::size_t i = 0; i < reported.size(); ++i) {
+        // A weighted constraint on the delta path reports what its deltas
+        // added up to, which for real-valued loads can differ from a fresh
+        // cost() in the last bit: compared only where it is exact.
+        if (reported[i].weight != 0.0 && !everyRawExact) continue;
+        if (reported[i].weight == 0.0) ++off;
+        if (reported[i].unit_costs != expected[i].unit_costs ||
+            reported[i].scoped != expected[i].scoped || reported[i].units != expected[i].units) {
+            return "constraint_costs() of '" + reported[i].name + "' is not a fresh reset's";
+        }
+    }
+    return off > 0 ? "" : "no pick at weight 0 in the assembly";
+}
+
+void testWeightZeroBesideTheOthers() {
+    std::printf("== (y) weight 0 beside repeats, a compiled group, a scope, the hard level ==\n");
+    auto run = [](const std::string& label, const std::function<LoadAssembly(bool)>& build) {
+        const std::string problem = weightZeroWalk<Loads>(build, 31);
+        check(problem.empty(), label + (problem.empty() ? "" : " (" + problem + ")"));
+    };
+    run("a repeat keeps its class's cost when the first instance is at weight 0",
+        [](bool zeros) -> LoadAssembly {
+            LoadAssembly assembly;
+            assembly.emplace<LoadCost<Loads>>();
+            if (!zeros) {
+                assembly.exponent("loadCost", 2.0);
+                return assembly;
+            }
+            LoadAssembly repeat;
+            repeat.emplace_instance<LoadCost<Loads>>();
+            repeat.exponent("loadCost", 0, 2.0);
+            assembly.add_repeats(std::move(repeat));
+            assembly.weight("loadCost", 0, 0.0);
+            return assembly;
+        });
+    run("a repeat at weight 0 leaves the first instance of its class alone",
+        [](bool zeros) -> LoadAssembly {
+            LoadAssembly assembly;
+            assembly.emplace<LoadCost<Loads>>();
+            assembly.exponent("loadCost", 2.0);
+            if (zeros) {
+                LoadAssembly repeat;
+                repeat.emplace_instance<LoadCost<Loads>>();
+                repeat.weight("loadCost", 0, 0.0);
+                assembly.add_repeats(std::move(repeat));
+            }
+            return assembly;
+        });
+    run("a member of a compiled delta group at weight 0, between two weighted ones",
+        [](bool zeros) -> LoadAssembly {
+            LoadAssembly assembly;
+            assembly.emplace<GroupedLoadCost<Loads, false>>();
+            if (zeros) {
+                assembly.emplace_instance<GroupedLoadCost<Loads, false>>();
+                assembly.weight("groupedLoadCost", 1, 0.0);
+            }
+            assembly.emplace_instance<GroupedLoadCost<Loads, false>>();
+            assembly.exponent("groupedLoadCost", zeros ? 2 : 1, 2.0);
+            return assembly;
+        });
+    run("a scoped constraint at weight 0", [](bool zeros) -> LoadAssembly {
+        LoadAssembly assembly;
+        if (zeros) assembly.emplace<ScopedLoadCost<Loads>>(0.0);
+        assembly.emplace<LoadCost<Loads>>();
+        return assembly;
+    });
+    run("a hard constraint at weight 0 penalizes no unit", [](bool zeros) -> LoadAssembly {
+        LoadAssembly assembly;
+        if (zeros) {
+            assembly.emplace<LoadCost<Loads>>(Level::Hard, "offHardLoadCost");
+            assembly.weight("offHardLoadCost", 0.0);
+        }
+        assembly.emplace<LoadCost<Loads>>(Level::Hard, "hardLoadCost");
+        assembly.emplace<LoadCost<Loads>>();
+        return assembly;
+    });
+    {
+        using Grouped = GroupedTaskCost<SoftFoldTasks>;
+        const std::string problem = weightZeroWalk<SoftFoldTasks>(
+                [](bool zeros) {
+                    optimaru::ConstraintAssembly<SoftFoldTasks> assembly;
+                    assembly.emplace<Grouped>();
+                    if (zeros) assembly.emplace_instance<Grouped>(0.0);
+                    assembly.emplace_instance<Grouped>(2.0);
+                    return assembly;
+                },
+                37, /*everyRawExact=*/true);
+        check(problem.empty(),
+              "a member at weight 0 of a group with integral deltas (the direct hard fold), "
+              "whose weighted members report their raw costs after the moves too" +
+                      (problem.empty() ? std::string() : " (" + problem + ")"));
+    }
+    std::printf("\n");
+}
+
 int main() {
     testLevelMetadata();
     testMediumFold();
@@ -3027,6 +3203,7 @@ int main() {
     testHashInAssemblyNames();
     testExactNegativeThreshold();
     testSharedRepeats();
+    testWeightZeroBesideTheOthers();
     testSignedCostLevel();
     testReportedKnobsAreSampledAtReset();
     if (failures == 0) {

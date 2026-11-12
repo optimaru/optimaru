@@ -15,9 +15,11 @@ namespace alb {
 // used station carries the same processing time. One total (a global), so
 // the exponent shapes the range.
 //
-// Kept up to date even at weight 0, because constraint_costs() reports the
-// raw value for re-pricing: per-station loads plus an ordered multiset of the
-// non-zero ones, O(log stations) per change.
+// Per-station loads plus an ordered multiset of the non-zero ones, O(log
+// stations) per change. Nothing but cost() reads them and reset() rebuilds
+// them, so at weight 0 the objective sends this constraint no change
+// (idle_at_weight_zero) and resets it when constraint_costs() reports the raw
+// value for re-pricing.
 struct WorkloadImbalanceCost final : MemberChangeGlobalConstraint {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
@@ -48,6 +50,8 @@ struct WorkloadImbalanceCost final : MemberChangeGlobalConstraint {
         if (loads_.empty()) return 0.0;
         return static_cast<double>(*loads_.rbegin() - *loads_.begin());
     }
+
+    bool idle_at_weight_zero() const override { return true; }
 
 private:
     std::vector<std::int64_t> load_;     // per station

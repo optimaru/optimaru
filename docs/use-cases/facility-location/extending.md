@@ -17,8 +17,9 @@ the model and its three constraints are in the [guide](README.md).
 The steps build one example: `demandDistanceCost`, the meters a consumer stands from its facility
 times the demand it draws. `distanceFromFacilityCost` counts every consumer the same; this
 constraint pulls the large consumers closer than the small ones. Every snippet below was compiled
-and run, and every figure measured, on optimaru 0.4.3; a later change to the solver moves the
-figures, not the steps.
+and run, and every figure measured, on optimaru 0.4.3; the speeds in the table below, in the
+paragraph on weight 0 of step 4, the ratio at the start of step 5 and the first three rows of
+the table of step 6 on 0.5.1. A later change to the solver moves the figures, not the steps.
 
 ## How an assignment is scored
 
@@ -26,7 +27,7 @@ A consumer is assigned a facility. The score is kept per **unit**: one facility,
 the consumers assigned to it as its **members**. A consumer without a facility (`-1`)
 is in no unit and scores nothing. A move changes one or two consumers, or the
 consumers of a facility that closes or opens (`CloseFacilityMove`, and `SwapFacilityMove`,
-which came after the measurements on this page), so only the facilities they leave
+which came after most of the measurements on this page), so only the facilities they leave
 and join are scored again.
 
 There are two scoring paths, and they give the same score for the same assignment
@@ -36,7 +37,7 @@ There are two scoring paths, and they give the same score for the same assignmen
 | --- | --- | --- |
 | Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/fl/constraints/` |
 | Constraints | the three, at their defaults | the ones you list, with your knobs |
-| Steps per second | 3.1 million | 1.5 million |
+| Steps per second | 2.8 million | 1.7 million |
 | Parallel starts | `parallel_solver_count` | one start |
 
 The speeds are a generated instance (600 consumers, 80 facilities), 4 million steps,
@@ -343,11 +344,13 @@ that `problem.distanceOf()` reads. A constraint that needs another table of fact
 it in `on_reset()`, which runs once when the solve starts (and on every step under
 `full_assert`).
 
-**A constraint at weight 0 is still computed.** `fl.constraint_costs()` reports it, so
-the assembly keeps its raw cost on every move: `get_constraints()` now returns four
-constraints, and a solve with them ran at 1.35 million steps per second where the three
-ran at 1.46 million. A caller who does not want the constraint leaves it out of the list,
-as `others` does in step 2. `fl.solve(problem)` is not affected.
+**A constraint at weight 0 costs a move nothing.** The assembly asks a unit constraint
+at weight 0 only when a solve starts and when `fl.constraint_costs()` reports it:
+`get_constraints()` now returns four constraints, and a solve with them ran at
+1.69 million steps per second where the three ran at 1.68 million. A global at
+weight 0 is still sent every change, unless it declares `idle_at_weight_zero()` (see
+[`decomposed_objective.hpp`](../../../optimaru/cpp/optimaru/score/decomposed_objective.hpp));
+the example is a unit constraint and needs nothing. `fl.solve(problem)` is not affected.
 
 **Keep raw costs whole numbers.** Demand, capacity, setup cost and meters are
 integers, so sums stay exact and a hard total is never rounded. Add in `int64` and
@@ -357,7 +360,7 @@ return `static_cast<double>` of the sum.
 
 Do this when the constraint should be on in every solve (`kDefaultWeight > 0`). Then
 `fl.solve(problem)` must score it, and `fl.solve(problem)` scores with the
-monolithic calculators: twice the steps per second of the assembly, and the only
+monolithic calculators: 1.7 times the steps per second of the assembly, and the only
 path that runs parallel starts.
 
 `fl_plugin_test` compares the default assembly with the monolithic calculators on
@@ -463,15 +466,16 @@ the last three.
 
 | Measured on the instance of step 1, 4 million steps | Steps per second |
 | --- | --- |
-| default path, three constraints | 3.12 million |
-| assembly, three constraints | 1.46 million |
-| assembly, three constraints and the constraint of step 2 at weight 0 | 1.35 million |
+| default path, three constraints | 2.84 million |
+| assembly, three constraints | 1.68 million |
+| assembly, three constraints and the constraint of step 2 at weight 0 | 1.69 million |
 | assembly, three constraints and the constraint of step 2 at weight 1 | 1.75 million |
 | assembly, the same with the delta of step 4 | 1.64 million |
 | default path, four constraints (step 5) | 3.70 million |
 
-Each figure is the median of three runs. The same build measured an hour apart
-moved by up to 6%.
+Each figure is the median of three runs. The first three rows were taken on 0.5.1, the
+others on 0.4.3, whose search ended elsewhere; the same build measured an hour apart moved
+by up to 6%.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after: solve

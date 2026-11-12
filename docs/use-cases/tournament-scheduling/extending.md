@@ -315,8 +315,9 @@ one too.
 
 ## 4. Make it cheaper per move
 
-On the assembly a move costs, for every picked constraint, one call for the team a slot
-leaves and one for the team it joins. What that call is depends on the constraint:
+On the assembly a move costs, for every picked constraint (a unit constraint only when its
+weight is not 0), one call for the team a slot leaves and one for the team it joins. What
+that call is depends on the constraint:
 
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
@@ -372,20 +373,20 @@ Measured on the instance of step 6, in million steps per second:
 
 | Picked | Step 2: `cost()` alone | Step 4: delta and table |
 | --- | --- | --- |
-| the four and the constraint at weight 1 | 0.61 | 0.88 |
-| `get_constraints()`, the constraint at its default weight 0 | 0.58 | 0.95 |
-| the four, without the constraint | 1.20 | 1.20 (the same code) |
+| the four and the constraint at weight 1 | 0.62 | 0.89 |
+| `get_constraints()`, the constraint at its default weight 0 | 1.19 | 1.18 |
+| the four, without the constraint | 1.19 | 1.19 (the same code) |
 
 The delta does almost all of it: in a session on 0.4.3, before the assembly ran
-`TeamCountMove`, the first row read 1.38 with the delta and no table, against 1.40 with both. Both forms end on the same score for the same
-seed and steps, as they must.
+`TeamCountMove`, the first row read 1.38 with the delta and no table, against 1.40 with
+both. Both forms end on the same score for the same seed and steps, as they must.
 
-**A constraint at weight 0 is still computed.** The assembly evaluates every picked unit
-constraint on every move, also one whose weight is 0, because `constraint_costs()`
-reports its raw cost. `get_constraints()` holds the new constraint at its default weight 0,
-so `ts.solve(schedule, constraints=get_constraints())` pays for it (the second row). A
-caller who does not want the constraint leaves it out of the picks, as the snippet of step 2
-does with `others`.
+**A unit constraint at weight 0 costs a move nothing.** The assembly asks a picked unit
+constraint on a move only when its weight is not 0. At weight 0 its `cost()` runs when the
+objective is rebuilt and when `constraint_costs()` reports its raw cost, never on a move.
+`get_constraints()` holds the new constraint at its default weight 0, so
+`ts.solve(schedule, constraints=get_constraints())` runs at the speed of the four without it
+(the second row against the third) and ends on the same score.
 
 **A global would be O(1), and means something else.** A `MemberChangeGlobalConstraint`
 keeping a count per (team, date) needs no pass over the team. But `exponent` and

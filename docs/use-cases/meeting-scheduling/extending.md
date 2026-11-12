@@ -17,8 +17,9 @@ the model and its twelve constraints are in the [guide](README.md).
 The steps build one example: `lateStartCost`, for every meeting the time grains between the first
 grain of the day it starts on and its starting grain. It fills the mornings first and keeps the
 afternoons free. (The existing `meetingEndTimeCost` fills the first days of the calendar instead.)
-Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3; a later
-change to the solver moves the figures, not the steps.
+Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3, except
+the two speeds of the weight-0 paragraph in step 4, measured on 0.5.1; a later change to the
+solver moves the figures, not the steps.
 
 ## How a schedule is scored
 
@@ -333,13 +334,13 @@ second, and the solve ended on the same score, as it must. Call the base's
 Under `full_assert` the engine rebuilds after every score, so `on_reset()` runs every
 step there.
 
-**A constraint at weight 0 is still computed.** The assembly evaluates every picked unit
-constraint on every move, also one whose weight is 0, because `constraint_costs()`
-reports its raw cost. `get_constraints()` holds the new constraint at its default weight 0,
-so `ms.solve(schedule, constraints=get_constraints())` pays for it: 0.62 million steps
-per second with the loop of step 2, 0.82 million with the table, against 0.86 million
-for the twelve without it. A caller who does not want the constraint leaves it out of the
-picks, as the snippet of step 2 does with `others`.
+**A constraint at weight 0 costs a move nothing.** The assembly leaves a picked unit
+constraint whose weight is 0 out of every move, and computes it only when it rebuilds the
+score (when the solve starts) and when `constraint_costs()` reports its raw cost.
+`get_constraints()` holds the new constraint at its default weight 0, and
+`ms.solve(schedule, constraints=get_constraints())` runs as fast as the twelve without it,
+even with the loop of step 2: 0.84 against 0.85 million steps per second, on
+the same score.
 
 **Keep raw costs whole numbers.** Every constraint here counts grains, seats or people, so
 sums stay exact and a hard total is never rounded. Return `static_cast<double>` of an

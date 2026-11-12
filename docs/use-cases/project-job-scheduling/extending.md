@@ -17,8 +17,10 @@ the model and its four constraints are in the [guide](README.md).
 The steps build one example: `nonRenewableResourceUsageCost`, what the chosen execution modes take
 from the non-renewable resources in total, within capacity or not. It makes the solver prefer modes
 that spend less stock. Paths that start with `cpp/` are under `optimaru/project_job_scheduling/`.
-Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3; a later
-change to the solver moves the figures, not the steps.
+Every snippet below was compiled and run, and every figure measured, on optimaru 0.4.3, except
+the step-4 constraint at weight 0 (its `idle_at_weight_zero()` and the figures with it, and the
+four alone they are compared with), on 0.5.1; a later change to the solver moves the figures,
+not the steps.
 
 ## How a schedule is scored
 
@@ -227,12 +229,14 @@ What the base gave you: any change marks the constraint stale, and once per scor
 derives the date chain and runs `evaluate()`, both over the whole schedule. That is correct
 from the first build, and it is the cost that step 4 removes.
 
-The assembly asks every constraint in the picks for its total at every score, whatever its
-weight. `get_constraints()` now returns five constraints, the new one at weight 0, and
-solving with that list is slower than with the four (1.31 against 1.56 million steps per
-second) for the same score: at weight 0 `evaluate()` still ran 272,574 times in a solve of
-200,000 steps. Leave a constraint out of the picks, as `others` does above, instead of
-passing it at weight 0.
+The assembly tells every global constraint in the picks of every change and asks it for its
+total at every score, whatever its weight, because a global may keep something that more
+than its own total reads. `get_constraints()` now returns five constraints, the new one at
+weight 0, and solving with that list is slower than with the four (1.31 against 1.56
+million steps per second) for the same score: at weight 0 `evaluate()` still ran 272,574
+times in a solve of 200,000 steps. Leave a constraint like this one out of the picks, as
+`others` does above, instead of passing it at weight 0. Step 4 lets the constraint declare
+that it may sit out at weight 0, and then the five cost what the four do.
 
 ## 3. Check it
 
@@ -287,7 +291,8 @@ pj.solve(schedule, time_limit_seconds=1, random_seed=1, constraints=picks, full_
 
 While the default weight is 0, this solve is the only check of what the constraint keeps
 between moves. `pjs_plugin_test` walks 1,500 random moves on the default assembly, but
-a constraint at weight 0 adds 0 to both sides of every comparison: with the update of step 4
+a constraint at weight 0 adds 0 to both sides of every comparison (and with the
+`idle_at_weight_zero()` of step 4 it is not even told of the moves): with the update of step 4
 made wrong on purpose (a leave not subtracted), both C++ tests and the Python tests still
 passed, and the solve above failed.
 
@@ -318,10 +323,14 @@ Two changes, measured with the constraint at weight 1 (million steps per second)
 | a member-change global, below | 1.60 | 0.63 |
 | the four constraints without it, for reference | 1.56 | 0.65 |
 
-At weight 0, where the search takes the same moves as with the four alone, the three read
-1.31, 1.41 and 1.54 on the demo and 0.53, 0.57 and 0.65 on `medium`. The four alone read
-1.56 when these runs began and 1.59 when they ended, so the member-change global is level
-with them within the noise: kept this way, the fifth constraint costs nothing that shows.
+The four alone read 1.56 when these runs began and 1.59 when they ended, so the
+member-change global is level with them within the noise: kept this way, the fifth
+constraint costs nothing that shows. At weight 0, where the search takes the same moves as
+with the four alone, the first two read 1.31 and 1.41 on the demo and 0.53 and 0.57 on
+`medium`: a global is told of every change and asked for its total at every score, whatever
+its weight. The member-change global below declares that it may sit out at weight 0, and
+then it read 1.50 on the demo and 0.64 on `medium`, against
+1.51 and 0.64 for the four alone in the same session.
 
 **Keep the total from joins and leaves.** The engine tells a member-change global
 which allocation left which value and which it joined. The constraint keeps one integer
@@ -357,6 +366,8 @@ constructor, and `evaluate()` gives way to:
         total_ += joined ? usage_[cell(entity, unit)] : -usage_[cell(entity, unit)];
     }
     double cost() const override { return static_cast<double>(total_); }
+    // Nothing but cost() reads the table and the total, and reset() rebuilds both.
+    bool idle_at_weight_zero() const override { return true; }
 
 private:
     // (allocation, value) -> the table cell of the value's mode slot.
@@ -374,6 +385,12 @@ rejected move back through the same calls. An integer total does that; `full_ass
 (step 3) checks it. `reset()` ran twice in a solve, at the start and for the final
 score, whether the solve took 200,000 steps or 2 million, so the table costs nothing
 per move. Under `full_assert` it runs at every check.
+
+`idle_at_weight_zero()` returning true tells the engine that, while the weight is 0, it may
+send the constraint no change and not ask for its total: the engine resets it before
+`pj.constraint_costs()` reports the raw total. A global may declare it when nothing but its
+own `cost()` reads what it keeps and `reset()` rebuilds all of that from the schedule and
+the members, as here. The `ScheduleAggregateConstraint` of step 2 keeps the default, false.
 
 The constraint stays a global although its total is a sum over units. As a unit constraint
 it would have one raw cost per value, and `exponent` and `offset` would shape each of
@@ -493,7 +510,7 @@ five scored constraints after step 5.
 | assembly, four + the constraint of step 2 at weight 1 | 1.32 | 0.51 |
 | assembly, four + the constraint of step 2 at weight 0 (`get_constraints()`) | 1.31 | 0.53 |
 | assembly, four + the constraint of step 4 at weight 1 | 1.60 | 0.63 |
-| assembly, four + the constraint of step 4 at weight 0 (`get_constraints()`) | 1.54 | 0.65 |
+| assembly, four + the constraint of step 4 at weight 0 (`get_constraints()`) | 1.50 | 0.64 |
 | default path, five constraints (step 5) | 4.76 | 3.29 |
 | assembly, five constraints (step 5) | 1.62 | 0.65 |
 
@@ -505,6 +522,10 @@ The default path, which steps 2 to 4 leave alone, read between 4.5 and 4.7 on th
 from one of those builds to the next (`medium`: 2.9 to 3.2), and the four on the assembly
 read 1.59 when measured again at the end. So read a difference of a few percent as noise;
 the gap between the two paths and the cost of the step-2 constraint are well outside it.
+The row of the step-4 constraint at weight 0 was taken on 0.5.1, with its
+`idle_at_weight_zero()`, where the four alone read 1.51 and
+0.64: at weight 0 the constraint then costs a move nothing, so the row is the
+speed of the four.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after:
@@ -527,7 +548,7 @@ default path, so they show a constraint after step 5.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/pjs/constraints/<subject>_cost.hpp` | new | | member-change total | weight |
+| `cpp/include/pjs/constraints/<subject>_cost.hpp` | new | | member-change total, `idle_at_weight_zero()` | weight |
 | `cpp/include/pjs/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/project_job_scheduling/cpp/pjs_plugin_test.cpp` | | cases, counts | | the row, expected scores |

@@ -119,15 +119,18 @@ void verifyIncremental() {
     int totalMismatches = 0;
     int printBudget = 3;
     std::map<std::string, int> nonZeroStates;
-    for (std::uint64_t seed = 1; seed <= 6; ++seed) {
+    for (std::uint64_t seed = 1; seed <= 8; ++seed) {
         AssemblyLineBalancingProblem p = randomInstance(12 + static_cast<int>(seed), seed);
         ScoreCalculator::prepare(p);
         DecomposedCalculator calculator;
         // Weighted workload (the opt-in weight-0 constraint switched on), a
         // shaped unit and a shaped global: every accumulation path is
-        // exercised.
+        // exercised. The last two seeds leave workload at its weight 0: it
+        // is then sent no move (idle_at_weight_zero) and its raw total below
+        // comes from the reset constraint_costs() gives it.
+        const double workloadWeight = seed <= 6 ? 2 : 0;
         defaultConstraints()
-                .weight("workloadImbalanceCost", 2)
+                .weight("workloadImbalanceCost", workloadWeight)
                 .exponent("stationCapacityCost", 2.0)
                 .exponent("sameStationGroupsCost", 2.0)
                 .into(calculator);
@@ -163,7 +166,7 @@ void verifyIncremental() {
             AssemblyLineBalancingProblem shadow = p;
             DecomposedCalculator fresh;
             defaultConstraints()
-                    .weight("workloadImbalanceCost", 2)
+                    .weight("workloadImbalanceCost", workloadWeight)
                     .exponent("stationCapacityCost", 2.0)
                     .exponent("sameStationGroupsCost", 2.0)
                     .into(fresh);
@@ -181,7 +184,7 @@ void verifyIncremental() {
         }
     }
     check(mismatches == 0,
-          "3000 random moves on shaped / re-weighted assemblies, incremental == reset");
+          "4000 random moves on shaped / re-weighted assemblies, incremental == reset");
     check(totalMismatches == 0, "after every move each constraint's raw total == the reset's");
     check(everyConstraintNonZero(nonZeroStates, kNames),
           "every constraint is non-zero at least once in the walk");
