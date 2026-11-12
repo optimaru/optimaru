@@ -123,16 +123,20 @@ solution it finds, so such a run ends without a solution only when the whole
 budget passed without one. A later level that finds nothing in its share
 returns the solution of the level before it. Food packaging and tournament
 scheduling are solved this way on every instance of their ladders, conference
-scheduling, meeting scheduling and task assigning on every instance but the
-smallest. Of the ten rows without a CP-SAT solution in those five tables, two
-are runs whose first level found nothing in the whole budget: the demo plant
-of food packaging and the 16-meeting instance of meeting scheduling. The other
-eight are runs the runner stopped 60 s past the budget, with the model still
-being built or the search still running. All shares come from one clock: it
+scheduling on every instance but the smallest, task assigning on every instance
+but the five of the smallest size, and meeting scheduling on every instance but
+two of the smallest (whether the levels fit one objective depends on an
+instance's bounds, not on its size alone). Of the 37 rows without a CP-SAT
+solution in those five tables, four are runs whose first level found nothing
+in the whole budget: four plants of food packaging, from 5 lines / 75 jobs to
+6 lines / 120 jobs. The other 33 are runs the runner stopped 60 s past the
+budget, with the model still being built or the search still running (on the
+16-meeting instances of meeting scheduling, building the model alone takes
+about a minute). All shares come from one clock: it
 starts with the first level and keeps running between levels, while each
 level's solution is written into the model as the next level's hint. A row
-that this split shapes stays in its table, with a note beside it (the 4-line
-plant of food packaging), and is not left out.
+that this split shapes stays in its table, with a note beside it (five plants
+of food packaging), and is not left out.
 (Before external-solver `v0.2.2` a first level without a solution ended the
 run at its share; two rungs were left out of the ladders for that reason, and
 both are back.)
@@ -181,11 +185,16 @@ depends on the clock: of the 35 instances of five of them, measured twice on
 2026-11-11 with an earlier build, the engine's score was the same on 32
 (the 10-line plant of food packaging moved by 0.01%, the 400-vertex max-cut by
 0.1%, the 18-team league by 5%), and all 33 QAPLIB results were the same.
-The tables of the seven and of QAPLIB are of one run on 2026-11-12, the CP-SAT
-lane beside the engine's as before. One seed says little about a change of
-the search: the 8-team and the 14-team league of that run are 2% and 4% behind
-the run of the day before, on a build whose mean over three seeds is 2% ahead,
-and QAPLIB's `tai30b` is 1.4% above its best known value where the run before
-reached it.
+QAPLIB's table is of one run on 2026-11-12. One seed says little about a
+change of the search: QAPLIB's `tai30b` is 1.4% above its best known value in
+that run where the run before reached it.
+The 20-instance tables of the generated comparisons are of one run on
+2026-11-12, three engine lanes beside one CP-SAT lane. On the 102 instances
+that the tables had before, the engine's score was the same as in the tables it
+replaced on 91; the 11 that moved are bed allocation `xlarge`, conference
+`days5`, facility location `medium`, food packaging `lines8`, maintenance
+`medium` and `medium-2`, max-cut `g120` and the semiconductor instances of 18
+to 48 lots, all by under 1% except maintenance `medium` (8% better) and the
+semiconductor ones (up to 2.4%).
 Read a small margin in any table as noise.
 
