@@ -1,6 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.5.1
+
+**From 0.5.0.** One fix first: in the seven use cases that search in stages, a solve that
+starts from a given solution (`with_initial_solution`, a request's `initial_solution`)
+searches as in 0.4.3 again; 0.5.0 could return the given solution unchanged (#110). Four
+other things change what a caller gets. Bin packing and facility location have new moves,
+so a seed's result there differs from 0.5.0. Tournament scheduling searches a solve with
+`constraints=` as it searches the default one, so a seed's result with `constraints=`
+differs. In employee scheduling the default solve no longer judges a pinned shift on the
+four per-shift constraints, as the docs and the solve with `constraints=` already had it:
+a schedule whose pinned shift breaks one of them scores 0 there where it scored `-1hard`.
+And a solve with constraints is faster where some of them are at weight 0, with the same
+scores for a seed and a step limit. Every demo instance is `generate_demo_data()` now; the
+five earlier names remain as aliases. The entries on notebooks, benchmarks, tests and
+guides are about the repository, not the wheel.
 
 - **Benchmarks: external-solver `v0.3.0`.** The benchmark projects pin the external-solver
   release that follows optimaru 0.5, the links into its sources point at that tag, and
