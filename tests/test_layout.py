@@ -150,16 +150,18 @@ def _python_names(path: Path) -> tuple[dict[str, str | None], list[str] | None]:
     names: dict[str, str | None] = {}
     listed = None
     for node in ast.parse(path.read_text()).body:
-        if isinstance(node, ast.FunctionDef):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             names[node.name] = None
         elif isinstance(node, ast.ImportFrom):
             names.update((alias.asname or alias.name, None) for alias in node.names)
-        elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            target = node.targets[0].id
-            if target == "__all__":
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if len(targets) != 1 or not isinstance(targets[0], ast.Name):
+                continue
+            if targets[0].id == "__all__":
                 listed = [element.value for element in node.value.elts]
             else:
-                names[target] = node.value.id if isinstance(node.value, ast.Name) else None
+                names[targets[0].id] = node.value.id if isinstance(node.value, ast.Name) else None
     return names, listed
 
 
@@ -193,7 +195,11 @@ def test_a_demo_instance_is_offered_as_generate_demo_data():
             if DEMO_FUNCTION in demo_names:
                 offering.add(name)
             strays = demo_names - {DEMO_FUNCTION, former}
-            assert not strays, f"{name}/{module}: a demo function is called {DEMO_FUNCTION}, not {sorted(strays)}"
+            assert not strays, (
+                f"{name}/{module}: {sorted(strays)} looks like the function that builds a demo instance, which is "
+                f"called {DEMO_FUNCTION} in every use case. Rename it; if it is something else (a helper that only "
+                f"has demo, sample or example in its name), narrow _DEMO_LIKE instead."
+            )
             if former in demo_names:
                 assert DEMO_FUNCTION in names, f"{name}/{module}: {former} without {DEMO_FUNCTION}"
                 assert names[former] in (None, DEMO_FUNCTION), f"{name}/{module}: {former} = {names[former]}"
