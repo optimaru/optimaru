@@ -196,6 +196,14 @@ class SolverConfig:
     ruin_recreate_polish_steps: int
     change_move_weight: float
     swap_move_weight: float
+    serial_schedule_moves: bool
+    """Enable SerialScheduleMove: change the order of the schedule (one allocation's place, a
+    group's, or an execution mode) and place every allocation again in that order, each as early
+    as its predecessors and the renewable resources allow. Without it the search changes one
+    delay or mode at a time and stalls above what the order of the allocations allows."""
+    custom_move_probability: float
+    """Cap on how often a step may draw the serial schedule move, which makes a few passes over
+    the schedule where a built-in move changes one value. 1 means no cap."""
     best_score_limit: tuple[int, int, int]
     """Stop early once (hard, medium, soft) is reached. -(2**63) on medium or
     soft means no floor on the soft side (only hard is compared), so

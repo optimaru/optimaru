@@ -39,6 +39,15 @@ public:
         // a fresh random mode slot; the rest of the draws stay uniform for
         // diversity. 0 disables the guidance entirely.
         double near_current_delay_probability = 0.85;
+
+        // SerialScheduleMove (pjs/moves.hpp): change the order of the
+        // schedule and place every allocation again in that order, each as
+        // early as its predecessors and the renewable resources allow.
+        bool serial_schedule_moves = true;
+        // Cap on how often a step may draw the serial schedule move, which
+        // costs a few passes over the schedule where a built-in move costs
+        // one change. 1 means no cap.
+        double custom_move_probability = 0.2;
     };
 
     Solver() = default;
