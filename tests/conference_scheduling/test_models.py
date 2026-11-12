@@ -7,7 +7,7 @@ from optimaru.conference_scheduling.models import ConferenceScheduleModel, Solve
 
 
 def test_roundtrip_preserves_score_semantics():
-    schedule = cs.demo_conference()
+    schedule = cs.generate_demo_data()
     # A partially assigned state must survive as well.
     assignment = [-1] * schedule.talk_count()
     assignment[0] = schedule.slot_room_of(0, 4)
@@ -32,7 +32,7 @@ def test_roundtrip_preserves_score_semantics():
 
 
 def test_score_fields_serialized():
-    schedule = cs.demo_conference()
+    schedule = cs.generate_demo_data()
     cs.calculate_score(schedule)
     model = ConferenceScheduleModel.from_core(schedule)
     assert model.score_hard == schedule.score.hard
@@ -56,7 +56,7 @@ def test_solve_config_to_core():
 
 
 def _dump_with(field, value):
-    data = ConferenceScheduleModel.from_core(cs.demo_conference()).model_dump()
+    data = ConferenceScheduleModel.from_core(cs.generate_demo_data()).model_dump()
     data["talks"][0][field] = value
     return data
 
@@ -79,27 +79,27 @@ def test_an_index_out_of_range_is_refused_before_the_engine(field, value, messag
 
 
 def test_the_last_slot_room_is_accepted():
-    schedule = cs.demo_conference()
+    schedule = cs.generate_demo_data()
     last = schedule.slot_room_count() - 1
     assert ConferenceScheduleModel.model_validate(_dump_with("slot_room", last)).to_core().talks[0].slot_room == last
 
 
 def test_an_index_edited_after_validation_is_refused_by_to_core():
-    model = ConferenceScheduleModel.from_core(cs.demo_conference())
+    model = ConferenceScheduleModel.from_core(cs.generate_demo_data())
     model.talks[0].speakers = [99999999]
     with pytest.raises(ValueError, match="out of range"):
         model.to_core()
 
 
 def test_an_index_into_an_empty_list_says_the_list_is_empty():
-    data = ConferenceScheduleModel.from_core(cs.demo_conference()).model_dump()
+    data = ConferenceScheduleModel.from_core(cs.generate_demo_data()).model_dump()
     data["talk_types"] = []
     with pytest.raises(ValueError, match=r"talk_type \d+ is out of range \(the list is empty\)"):
         ConferenceScheduleModel.model_validate(data)
 
 
 def test_solve_takes_the_model_and_leaves_it_as_it_was():
-    model = ConferenceScheduleModel.from_core(cs.demo_conference())
+    model = ConferenceScheduleModel.from_core(cs.generate_demo_data())
     before = model.model_dump()
     config = cs.SolverConfig()
     config.step_count_limit = 500

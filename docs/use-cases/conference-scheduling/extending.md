@@ -57,7 +57,7 @@ No build. Pass the constraints you want, with the knobs that differ from the def
 import optimaru.conference_scheduling as cs
 from optimaru.conference_scheduling.constraints import ContentConflictCost, SpeakerMakespanCost, get_constraints
 
-schedule = cs.demo_conference()
+schedule = cs.generate_demo_data()
 changed = {"content_conflict_cost", "speaker_makespan_cost", "language_diversity_cost"}
 picks = [
     *[spec for spec in get_constraints() if spec.name not in changed],  # the others as they are
@@ -212,7 +212,7 @@ picks = [*others, RoomOverflowCost(weight=1)]
 config = cs.SolverConfig()
 config.step_count_limit = 200_000
 config.random_seed = 1
-schedule = cs.demo_conference()
+schedule = cs.generate_demo_data()
 cs.solve(schedule, config=config, constraints=picks)
 print(cs.constraint_costs(schedule, picks)["room_overflow_cost"]["costs"][0])
 ```

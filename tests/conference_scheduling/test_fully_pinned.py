@@ -6,7 +6,7 @@ import optimaru.conference_scheduling as cs
 
 
 def _reversed_values(pin):
-    schedule = cs.demo_conference()
+    schedule = cs.generate_demo_data()
     cs.solve(schedule, time_limit_seconds=0.1, random_seed=1)
     values = [talk.slot_room for talk in schedule.talks][::-1]
     for index, talk in enumerate(schedule.talks):

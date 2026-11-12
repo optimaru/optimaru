@@ -11,7 +11,7 @@ the raw per-constraint costs::
 
     import optimaru.meeting_scheduling as ms
 
-    schedule = ms.demo_data()  # the demo instance (24 meetings)
+    schedule = ms.generate_demo_data()  # the demo instance (24 meetings)
     result = ms.solve(schedule, time_limit_seconds=10.0, random_seed=42)
     print(result.score.hard, result.score.soft)
 
@@ -40,7 +40,8 @@ from ._core import (
     calculate_score,
     constraint_costs,
     constraint_info,
-    demo_data,
+    demo_data,  # the name before 0.5.1
+    generate_demo_data,
     list_constraints,
 )
 from .models import MeetingScheduleModel, solve_request, with_initial_solution
@@ -61,7 +62,7 @@ __all__ = [
     "calculate_score",
     "constraint_costs",
     "constraint_info",
-    "demo_data",
+    "generate_demo_data",
     "list_constraints",
     "solve",
     "solve_request",

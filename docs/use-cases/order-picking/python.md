@@ -26,11 +26,15 @@ uv run pytest -q tests/order_picking
 ```python
 from optimaru import order_picking as op
 
-solution = op.build_demo_data()   # the demo warehouse (deterministic, seed 37)
+solution = op.generate_demo_data()   # the demo warehouse (deterministic, seed 37)
 op.solve(solution, time_limit_seconds=5.0, random_seed=0)
 print(solution.score)             # e.g. 0hard/-8652soft
 print(solution.routes())          # {trolley id: [pick task id, ...]}
 ```
+
+`generate_demo_data(trolleys_count=5, bucket_count=4, bucket_capacity=48000, orders_count=8,
+random_seed=37)` builds the demo warehouse. Its name before 0.5.1, `build_demo_data()`, still works (an alias
+of the same function).
 
 JSON in/out is `optimaru.order_picking.models` (pydantic v2):
 

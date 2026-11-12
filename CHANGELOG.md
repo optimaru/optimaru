@@ -97,6 +97,15 @@
 - **Benchmarks: the facility location table measured again.** The engine has CP-SAT's score
   on the four instances up to 200 consumers (on two before) and is 0.02% and 0.29% behind on
   the two larger ones (1.4% to 3.3% behind on four before).
+- **Python: every demo instance is `generate_demo_data()`.** The function that returns a use
+  case's demo instance had five names; six use cases already called it `generate_demo_data`,
+  five did not: `order_picking.build_demo_data`, `meeting_scheduling.demo_data` (the package,
+  `models` and `_core`), `tournament_scheduling.models.demo_data`,
+  `conference_scheduling.demo_conference` and `sports_league_scheduling.demo_schedule`. They are
+  `generate_demo_data` now, with the same arguments and the same instance. The five old names
+  remain as plain aliases of it in the modules that had them, without a warning, and are no
+  longer in `__all__`. `tests/test_layout.py` checks from the source that a demo function has
+  no other name.
 - **Tests: maintenance scheduling picks the defaults by name, not by position.**
   `test_offset_zero_reproduces_the_plain_scores` took `get_constraints()[:5]` as "the four
   date constraints and `crew_conflict_cost`", so a constraint added to the catalog would

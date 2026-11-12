@@ -15,7 +15,7 @@ uv run pytest -q tests/order_picking
 ```python
 from optimaru import order_picking as op
 
-solution = op.build_demo_data()
+solution = op.generate_demo_data()
 solution = op.solve(solution, time_limit_seconds=5.0, random_seed=0)
 print(solution.score)
 ```

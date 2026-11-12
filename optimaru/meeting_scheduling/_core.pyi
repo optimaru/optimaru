@@ -160,8 +160,10 @@ class MeetingSchedule:
 def calculate_score(schedule: MeetingSchedule) -> Score:
     """Full recalculation (also stored in schedule.score)."""
 
-def demo_data() -> MeetingSchedule:
+def generate_demo_data() -> MeetingSchedule:
     """The demo instance (deterministic): 20 people, 160 time grains, 3 rooms, 24 meetings."""
+
+demo_data = generate_demo_data  # the name before 0.5.1
 
 class SolverConfig:
     """Engine settings (default: 30 s budget, late acceptance + ALNS)."""
