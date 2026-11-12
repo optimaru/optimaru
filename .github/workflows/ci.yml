@@ -22,9 +22,10 @@ jobs:
   # here, so a new use case is built and tested without a line in this file.
   #
   # The benchmark jobs run on a pull request whose files touch them (the rule is in the
-  # list step), on a manual run and on the weekly one. A push to main runs every benchmark
-  # job up to its install, which builds the extension: a pull request reads the build caches
-  # (uv, ccache) that main saved, not another pull request's.
+  # list step), on a manual run and on the weekly one. A push to main runs every CP-SAT
+  # benchmark job up to its install, which builds the use case's extension: a pull request
+  # reads the caches (uv, ccache) that main saved, not another pull request's. The C++
+  # quality benches those jobs build in a later step are not in main's cache and compile cold.
   use-cases:
     runs-on: ubuntu-latest
     permissions:
