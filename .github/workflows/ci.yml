@@ -4,20 +4,37 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Every benchmark job, whatever changed (a pull request runs only the ones its files touch):
+  # by hand, and once a week as the net under the pull requests that run none (a change to
+  # the C++ engine alone).
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * 0" # Sunday 18:00 UTC
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # The event is in the group so a push to main cannot replace a pending weekly or manual run.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.event_name) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   # The use cases, read off the repository: a subpackage of optimaru/ with a _core.pyi
   # stub, which is what setup.py builds. The three matrices below take their lists from
   # here, so a new use case is built and tested without a line in this file.
+  #
+  # The benchmark jobs run on a pull request whose files touch them (the rule is in the
+  # list step), on a manual run and on the weekly one. A push to main runs every CP-SAT
+  # benchmark job up to its install, which builds the use case's extension: a pull request
+  # reads the caches (uv, ccache) that main saved, not another pull request's. The C++
+  # quality benches those jobs build in a later step are not in main's cache and compile cold.
   use-cases:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       names: ${{ steps.list.outputs.names }}
       benchmarks: ${{ steps.list.outputs.benchmarks }}
+      vehicle_routing_benchmark: ${{ steps.list.outputs.vehicle_routing_benchmark }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,6 +42,9 @@ jobs:
           sparse-checkout: optimaru/*/_core.pyi
           sparse-checkout-cone-mode: false
       - id: list
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
           shopt -s nullglob
           names=$(for stub in optimaru/*/_core.pyi; do basename "$(dirname "$stub")"; done | jq -R . | jq -sc .)
@@ -33,8 +53,36 @@ jobs:
           # The CP-SAT comparisons: the shared runner, then every use case but vehicle
           # routing, whose comparison (OR-Tools Routing) is the vehicle-routing-benchmark job.
           benchmarks=$(jq -c '["cpsat-common"] + [.[] | gsub("_"; "-") | select(. != "vehicle-routing")]' <<<"$names")
+          # Which of them run. A pull request: a comparison whose benchmark project or use case
+          # it changes (a renamed file counts at both paths), and all of them when it changes
+          # the shared runner, this file, or the Python and build files every benchmark project
+          # installs (optimaru/*.py, setup.py, pyproject.toml, CMakeLists.txt). A change to the
+          # C++ engine (optimaru/cpp/) runs only the three jobs whose C++ bench checks scores
+          # against Python (conference and meeting scheduling's --check, school timetabling's
+          # cross-check gate); the others' smoke runs are left out on purpose, and the use-case
+          # C++ and Python jobs run on every pull request. A manual or weekly run: all. A push to main: all of the
+          # CP-SAT jobs up to their install (the cache refresh), not the vehicle routing job.
+          # The file list stops at 3000 files: a list that long runs everything.
+          changed='[]'; all=false
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              changed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+                --jq '.[] | .filename, (.previous_filename // empty)' | jq -R . | jq -sc .)
+              if [ "$(jq length <<<"$changed")" -ge 3000 ]; then all=true; fi
+              ;;
+            workflow_dispatch|schedule|push) all=true ;;
+          esac
+          touched='def touches($slug): ($slug | gsub("-"; "_")) as $name
+            | any($changed[]; startswith("benchmarks/\($slug)/") or startswith("optimaru/\($name)/")
+              or (startswith("optimaru/cpp/") and ($slug | IN("conference-scheduling", "meeting-scheduling", "school-timetabling"))));
+            def everything: $all or any($changed[]; startswith("benchmarks/cpsat-common/")
+              or test("^optimaru/[^/]+\\.py$") or IN(".github/workflows/ci.yml", "setup.py", "pyproject.toml", "CMakeLists.txt"));'
+          benchmarks=$(jq -c --argjson changed "$changed" --argjson all "$all" "$touched"' [.[] | select(everything or touches(.))]' <<<"$benchmarks")
+          vehicle_routing=$(jq -n --argjson changed "$changed" --argjson all "$all" "$touched"' everything or touches("vehicle-routing")')
+          if [ "$GITHUB_EVENT_NAME" = push ]; then vehicle_routing=false; fi
           echo "benchmarks=$benchmarks" >> "$GITHUB_OUTPUT"
-          echo "$names"; echo "$benchmarks"
+          echo "vehicle_routing_benchmark=$vehicle_routing" >> "$GITHUB_OUTPUT"
+          echo "use cases: $names"; echo "benchmarks to run: $benchmarks"; echo "vehicle routing benchmark: $vehicle_routing"
 
   engine:
     strategy:
@@ -149,6 +197,7 @@ jobs:
   benchmark-cpsat:
     name: ${{ matrix.benchmark }} (CP-SAT benchmark)
     needs: use-cases
+    if: needs.use-cases.outputs.benchmarks != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -179,14 +228,28 @@ jobs:
           CC: ccache cc
           CXX: ccache c++
       - name: Test
+        # Not on a push to main, which only refreshes the caches.
+        if: github.event_name != 'push'
         working-directory: ${{ env.PROJECT }}
         run: uv run --python 3.14 --with pytest python -m pytest -q tests
       - name: The C++ bench reads what dump_instances.py writes
+        if: github.event_name != 'push'
         # Conference and meeting scheduling: the bench scores a fixed assignment of every
         # dumped instance, and the score must equal the use case's own (--check).
+        # School timetabling: track 1's C++ bench scores the cross-check instance as its
+        # evaluator does (the gate before track 1), then solves the S instance for a second.
         run: |
           case "${{ matrix.benchmark }}" in
             conference-scheduling|meeting-scheduling) ;;
+            school-timetabling)
+              cmake -B build/bench -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                -DOPTIMARU_ENGINE_TESTS=OFF -DOPTIMARU_USE_CASES=school_timetabling
+              cmake --build build/bench -j --target st_quality_bench
+              cd "$PROJECT"
+              uv run --python 3.14 school-timetabling-compare --sizes S --seconds 1 --workers 2 \
+                --cpp-bin "$GITHUB_WORKSPACE/build/bench/school_timetabling/st_quality_bench" --out-dir "$RUNNER_TEMP/st1"
+              exit 0
+              ;;
             *) echo "no dump with --check"; exit 0 ;;
           esac
           script="benchmarks/${{ matrix.benchmark }}/dump_instances.py"
@@ -197,19 +260,24 @@ jobs:
           uv run --project "$PROJECT" --python 3.14 python "$script" "$RUNNER_TEMP/dump" \
             --check "build/bench/$OPTIMARU_USE_CASES/$target"
       - name: Engine vs CP-SAT smoke run
+        if: github.event_name != 'push'
         working-directory: ${{ env.PROJECT }}
         run: |
           runner=$(ls *_cpsat/benchmark.py 2>/dev/null | head -1)
           if [ -z "$runner" ]; then echo "no comparison runner"; exit 0; fi
           # School timetabling's runner has its own tracks and flags: track 2 (engine vs CP-SAT on the
-          # canonical model) at size S; tracks 1 and 3 run in school-timetabling-bench.yml.
+          # canonical model) at size S; track 1 runs in the step above, track 3 only in
+          # school-timetabling-bench.yml.
           if [ "${{ matrix.benchmark }}" = school-timetabling ]; then
             uv run --python 3.14 school-timetabling-compare --track2 --sizes S --seconds 1 --workers 2 --out-dir "$RUNNER_TEMP/st"
             exit 0
           fi
-          uv run --python 3.14 python -m "$(dirname "$runner").benchmark" --seconds 1 --workers 2 --cpsat-grace 20
+          # One instance per scale: the seeds a ladder repeats a scale on add time, not paths.
+          uv run --python 3.14 python -m "$(dirname "$runner").benchmark" --seconds 1 --workers 2 --cpsat-grace 20 --one-per-scale
 
   vehicle-routing-benchmark:
+    needs: use-cases
+    if: needs.use-cases.outputs.vehicle_routing_benchmark == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

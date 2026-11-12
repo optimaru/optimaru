@@ -69,8 +69,8 @@ uv run python -m vrp_benchmark --series x --only X-n101-k25 --only X-n153-k22 --
 the optimum of a tiny instance.
 
 The [`vrp-public-bench`](../../.github/workflows/vrp-public-bench.yml)
-workflow runs the one-per-bucket sample at 60 s on every push to `main` that
-touches the engine, the use case or this harness, and on every `v*` tag. It
+workflow, run by hand (Actions > vrp-public-bench > Run workflow, 15 to 20
+minutes), runs the one-per-bucket sample at 60 s by default. It
 posts the Markdown table as the job summary and keeps the JSON as an
 artifact. It is a report, not a quality gate — gaps move with the runner —
 except that an incomplete engine plan fails the job (`--fail-on-incomplete`).

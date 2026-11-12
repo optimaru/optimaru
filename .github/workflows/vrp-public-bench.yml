@@ -6,25 +6,9 @@
 # engine returning an incomplete plan.
 name: vrp-public-bench
 
+# Run by hand (Actions > vrp-public-bench > Run workflow): a run is 15 to 20 minutes, and the
+# numbers are a report, not a gate.
 on:
-  push:
-    branches:
-      - main
-    # Only commits that can move the numbers: the engine, the VRP use case
-    # and the benchmark itself.
-    paths:
-      - "optimaru/cpp/**"
-      - "optimaru/__init__.py"
-      - "optimaru/_constraint.py"
-      - "optimaru/_solve.py"
-      - "optimaru/_models.py"
-      - "setup.py"
-      - "pyproject.toml"
-      - "optimaru/vehicle_routing/**"
-      - "benchmarks/vehicle-routing/**"
-      - ".github/workflows/vrp-public-bench.yml"
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       seconds:
@@ -38,8 +22,8 @@ on:
         default: "all"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   bench:

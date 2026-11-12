@@ -1,9 +1,10 @@
 # School timetabling benchmark — results and method
 
 Results and methodology of comparing this repository's C++ solver with
-OR-Tools CP-SAT on the same instances and the same wall-clock budget. The benchmark runs continuously in CI through
-[`.github/workflows/school-timetabling-bench.yml`](../../.github/workflows/school-timetabling-bench.yml)
-(push / PR), and the harness lives in [this directory](./).
+OR-Tools CP-SAT on the same instances and the same wall-clock budget. The full benchmark is
+[`.github/workflows/school-timetabling-bench.yml`](../../.github/workflows/school-timetabling-bench.yml),
+run by hand; CI runs its gates on every pull request that touches school timetabling (see [CI](#ci)).
+The harness lives in [this directory](./).
 
 ## Method
 
@@ -350,16 +351,20 @@ uv run school-timetabling-compare --track3 --sizes S,M,L --seconds 10
 
 ### CI
 
-[`school-timetabling-bench.yml`](../../.github/workflows/school-timetabling-bench.yml)
-runs exactly that order: ccache build → `st_test`/`st_canonical_test` gate →
-track 1 (C++/evaluator cross-check gate first) → track 2 → track 3 →
-all three tables published in the job summary (+ instance/solution JSON uploaded as
-artifacts).
+[`school-timetabling-bench.yml`](../../.github/workflows/school-timetabling-bench.yml),
+run by hand (Actions > school-timetabling-bench > Run workflow), runs exactly that order:
+ccache build → `st_test`/`st_canonical_test` gate → track 1 (C++/evaluator cross-check gate
+first) → track 2 → track 3 → all three tables published in the job summary (+
+instance/solution JSON uploaded as artifacts).
 
-- Triggers: push to `main` / PR (`optimaru/cpp/**`, `optimaru/school_timetabling/**`,
-  `tests/school_timetabling/**`,
-  `benchmarks/school-timetabling/**`, the workflow itself), and
-  `workflow_dispatch` (per-instance budget `seconds`, default 10).
+The gates run in `ci.yml`. The C++ tests run in the `school_timetabling (C++)` job on every
+pull request. The cross-check gate runs in the `school-timetabling (CP-SAT benchmark)` job
+(track 1 at size S for one second, then track 2 at size S) on every pull request that
+touches `optimaru/school_timetabling/`, `benchmarks/school-timetabling/`, the C++ engine
+(`optimaru/cpp/`) or the shared Python and build files (`optimaru/*.py`, `setup.py`,
+`pyproject.toml`, `CMakeLists.txt`), and in the weekly run.
+
+- Trigger: `workflow_dispatch` only (per-instance budget `seconds`, default 10).
 - The runner is ubuntu-latest (4 vCPUs), so absolute values differ from the
   tables above — the gates (tests / cross-check) are deterministic and stay
   equally valid.
@@ -384,5 +389,5 @@ artifacts).
 
 In short: short budgets, large problems and embedding in a service — the C++
 engine; small settled schedules that need a proof — CP-SAT. That both
-implementations score identically is guaranteed continuously in CI by the
-cross-check and parity gates.
+implementations score identically is checked in CI by the cross-check and parity
+gates.
