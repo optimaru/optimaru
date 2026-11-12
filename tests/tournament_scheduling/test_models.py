@@ -5,12 +5,12 @@ import pytest
 from optimaru.tournament_scheduling.models import (
     TeamAssignmentModel,
     TournamentScheduleModel,
-    demo_data,
+    generate_demo_data,
 )
 
 
 def test_demo_data_shape():
-    model = demo_data()
+    model = generate_demo_data()
     assert [t.name for t in model.teams] == [
         "Maarten",
         "Geoffrey",
@@ -34,7 +34,7 @@ def test_demo_data_shape():
 
 
 def test_json_round_trip():
-    model = demo_data()
+    model = generate_demo_data()
     model.team_assignments[0].team = 3
     model.team_assignments[0].pinned = True
     clone = TournamentScheduleModel.model_validate_json(model.model_dump_json())
@@ -42,7 +42,7 @@ def test_json_round_trip():
 
 
 def test_core_round_trip():
-    model = demo_data()
+    model = generate_demo_data()
     model.team_assignments[5].team = 2
     core = model.to_core()
     assert core.team_count() == 7
@@ -56,7 +56,7 @@ def test_core_round_trip():
 
 
 def test_unassigned_team_maps_to_none():
-    model = demo_data()
+    model = generate_demo_data()
     core = model.to_core()
     assert core.assignment() == [-1] * 72
     back = TournamentScheduleModel.from_core(core)
@@ -85,21 +85,21 @@ def test_assignment_model_defaults():
     ],
 )
 def test_an_index_out_of_range_is_refused_before_the_engine(section, field, value, message):
-    data = demo_data().model_dump()
+    data = generate_demo_data().model_dump()
     data[section][0][field] = value
     with pytest.raises(ValueError, match=message):
         TournamentScheduleModel.model_validate(data)
 
 
 def test_an_index_edited_after_validation_is_refused_by_to_core():
-    model = demo_data()
+    model = generate_demo_data()
     model.unavailability_penalties[0].day = 99999999
     with pytest.raises(ValueError, match="out of range"):
         model.to_core()
 
 
 def test_an_index_into_an_empty_list_says_the_list_is_empty():
-    data = demo_data().model_dump()
+    data = generate_demo_data().model_dump()
     data["teams"] = []
     with pytest.raises(ValueError, match=r"team \d+ is out of range \(the list is empty\)"):
         TournamentScheduleModel.model_validate(data)

@@ -7,7 +7,7 @@ from optimaru.sports_league_scheduling.models import LeagueScheduleModel, SolveC
 
 
 def test_demo_solve_feasible():
-    schedule = sl.demo_schedule()
+    schedule = sl.generate_demo_data()
     result = sl.solve(
         schedule,
         time_limit_seconds=20.0,
@@ -34,7 +34,7 @@ def test_demo_solve_feasible():
 
 
 def test_solve_accepts_config_objects():
-    schedule = sl.demo_schedule()
+    schedule = sl.generate_demo_data()
     sl.solve(
         schedule,
         config=SolveConfig(time_limit_seconds=2.0, random_seed=1),
@@ -42,11 +42,11 @@ def test_solve_accepts_config_objects():
     assert all(m.round >= 0 for m in schedule.matches)
 
     with pytest.raises(ValueError, match="config"):
-        sl.solve(sl.demo_schedule(), config=object())
+        sl.solve(sl.generate_demo_data(), config=object())
 
 
 def test_on_new_best_callback():
-    schedule = sl.demo_schedule()
+    schedule = sl.generate_demo_data()
     bests: list[tuple[int, float]] = []
     sl.solve(
         schedule,
@@ -64,7 +64,7 @@ def test_parallel_solver_count_workers():
     built-in multiStart (the guidance hooks bind to each worker's working solution/calculator).
     Checks that each worker ends normally and the best is adopted."""
     for workers in (2, 4):
-        schedule = sl.demo_schedule()
+        schedule = sl.generate_demo_data()
         sl.solve(
             schedule,
             time_limit_seconds=2.0,
@@ -82,7 +82,7 @@ def test_a_zero_soft_score_is_positive_zero():
 
     import optimaru.sports_league_scheduling as _pkg
 
-    score = _pkg.calculate_score(_pkg.demo_schedule())
+    score = _pkg.calculate_score(_pkg.generate_demo_data())
     assert score.soft == 0.0
     assert math.copysign(1.0, score.soft) == 1.0
     assert "-0soft" not in repr(score)
@@ -99,7 +99,7 @@ def test_a_raising_on_new_best_stops_every_parallel_worker():
     started = time.monotonic()
     with pytest.raises(RuntimeError, match="boom"):
         sl.solve(
-            sl.demo_schedule(),
+            sl.generate_demo_data(),
             time_limit_seconds=30.0,
             parallel_solver_count=4,
             on_new_best=boom,
@@ -119,7 +119,7 @@ def test_a_worker_thread_that_cannot_start_raises_instead_of_aborting():
     try:
         started = time.monotonic()
         with pytest.raises(RuntimeError, match="injected worker thread creation failure"):
-            sl.solve(sl.demo_schedule(), time_limit_seconds=30.0, parallel_solver_count=4)
+            sl.solve(sl.generate_demo_data(), time_limit_seconds=30.0, parallel_solver_count=4)
         assert time.monotonic() - started < 10.0
     finally:
         _core._fail_worker_thread_start(-1)
@@ -148,7 +148,7 @@ def test_stop_at_first_feasible_stops_whatever_the_soft_total():
     seen = []
     started = time.monotonic()
     package.solve(
-        sl.demo_schedule(),
+        sl.generate_demo_data(),
         time_limit_seconds=30.0,
         random_seed=1,
         stop_at_first_feasible=True,

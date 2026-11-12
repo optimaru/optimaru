@@ -1,13 +1,13 @@
-"""Serialization round-trip of the pydantic mirror and demo_data reproduction."""
+"""Serialization round-trip of the pydantic mirror and generate_demo_data reproduction."""
 
 import pytest
 
 import optimaru.meeting_scheduling as ms
-from optimaru.meeting_scheduling.models import MeetingScheduleModel, demo_data
+from optimaru.meeting_scheduling.models import MeetingScheduleModel, generate_demo_data
 
 
 def test_demo_data_shape():
-    model = demo_data()
+    model = generate_demo_data()
     assert len(model.people) == 20
     assert len(model.time_grains) == 160  # 4 days x 40 (08:00-17:45, 15 min)
     assert [r.capacity for r in model.rooms] == [30, 20, 16]
@@ -26,7 +26,7 @@ def test_demo_data_shape():
 
 
 def test_json_round_trip():
-    model = demo_data()
+    model = generate_demo_data()
     clone = MeetingScheduleModel.model_validate_json(model.model_dump_json())
     assert clone == model
     core = clone.to_core()
@@ -40,7 +40,7 @@ def test_json_round_trip():
 
 
 def test_round_trip_preserves_solution_and_score():
-    core = ms.demo_data()
+    core = ms.generate_demo_data()
     ms.solve(core, time_limit_seconds=3.0, random_seed=11, stop_at_first_feasible=True)
     model = MeetingScheduleModel.from_core(core)
     assert model.score_hard == core.score.hard
@@ -52,7 +52,7 @@ def test_round_trip_preserves_solution_and_score():
 
 
 def _dump_with_grain_room(value):
-    data = demo_data().model_dump()
+    data = generate_demo_data().model_dump()
     data["meeting_assignments"][0]["grain_room"] = value
     return data
 
@@ -70,7 +70,7 @@ def test_every_grain_room_in_range_is_accepted(value):
 
 
 def test_a_grain_room_edited_after_validation_is_refused_by_to_core():
-    model = demo_data()
+    model = generate_demo_data()
     model.meeting_assignments[0].grain_room = 99999999
     with pytest.raises(ValueError, match="out of range"):
         model.to_core()

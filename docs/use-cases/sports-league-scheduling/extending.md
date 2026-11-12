@@ -61,7 +61,7 @@ from optimaru.sports_league_scheduling.constraints import (
     get_constraints,
 )
 
-schedule = sl.demo_schedule()
+schedule = sl.generate_demo_data()
 changed = {
     "workday_classic_matches_cost",
     "repeat_match_on_next_day_cost",
@@ -78,7 +78,7 @@ sl.solve(schedule, time_limit_seconds=10, constraints=picks)
 ```
 
 `sl.solve()` solves a `LeagueSchedule` in place, and a schedule solved again starts
-from the solution it holds: take a new `demo_schedule()` for every solve you compare.
+from the solution it holds: take a new `generate_demo_data()` for every solve you compare.
 To try weights without solving again, score a finished schedule with other picks:
 
 ```python
@@ -212,7 +212,7 @@ picks = [*others, WorkdayAwayTripCost(weight=1)]
 config = sl.SolverConfig()
 config.step_count_limit = 5_000_000
 config.random_seed = 1
-schedule = sl.demo_schedule()
+schedule = sl.generate_demo_data()
 sl.solve(schedule, config=config, constraints=picks)
 print(sum(sl.constraint_costs(schedule, picks)["workday_away_trip_cost"]["costs"]))
 ```
@@ -270,7 +270,7 @@ recompute. It raises `RuntimeError` ("Score corruption: incremental score ... !=
 full recompute ...") if a move leaves the score stale:
 
 ```python
-sl.solve(sl.demo_schedule(), time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
+sl.solve(sl.generate_demo_data(), time_limit_seconds=1, random_seed=1, constraints=picks, full_assert=True)
 ```
 
 Pick the constraint with a weight for this, as `picks` does. `sls_plugin_test` walks 3,000
@@ -445,7 +445,7 @@ from optimaru.sports_league_scheduling.constraints import get_constraints
 steps = 5_000_000
 lines = (("default path", None, 4), ("default path, uniform pick", None, 1), ("assembly", get_constraints(), 4))
 for label, picked, sample in lines:
-    schedule = sl.demo_schedule()
+    schedule = sl.generate_demo_data()
     config = sl.SolverConfig()
     config.step_count_limit = steps
     config.spent_limit_seconds = 600
@@ -478,7 +478,7 @@ work on the machine moved single runs by up to 8%.
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 scores at the same budget over several seeds, before and after: solve
-`sl.demo_schedule()` with `time_limit_seconds` and `random_seed`, with and without
+`sl.generate_demo_data()` with `time_limit_seconds` and `random_seed`, with and without
 the constraint in `constraints`. `./build/sports_league_scheduling/sls_demo 10` solves the
 C++ demo league for ten seconds and prints every new best. Against CP-SAT:
 `uv run sports-league-scheduling-compare --seconds 10 --workers 8` in

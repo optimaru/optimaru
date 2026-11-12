@@ -121,7 +121,7 @@ REWARDS = ["audience_type_diversity_cost", "audience_level_diversity_cost", "lan
 
 
 def build_schedule():
-    return cs.demo_conference()
+    return cs.generate_demo_data()
 
 
 def solve(constraints=None):

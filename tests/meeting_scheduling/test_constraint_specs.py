@@ -47,7 +47,7 @@ MEDIUM = ("required_and_preferred_attendance_conflict_cost", "preferred_attendan
 
 
 def build_schedule():
-    return ms.demo_data()
+    return ms.generate_demo_data()
 
 
 def solve(constraints=None):

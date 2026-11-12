@@ -90,7 +90,7 @@ def instances() -> dict[str, Callable[[], Any]]:
         "small": lambda: _generate(8, 10, 2, 2, seed=1),
         "medium": lambda: _generate(16, 16, 3, 3, seed=2),
         # The demo data: 24 meetings, 20 people, 3 rooms, 4 days.
-        "demo": lambda: models.demo_data().to_core(),
+        "demo": lambda: models.generate_demo_data().to_core(),
         "large": lambda: _generate(48, 40, 5, 5, seed=3),
         "xlarge": lambda: _generate(96, 60, 8, 6, seed=4),
     }
