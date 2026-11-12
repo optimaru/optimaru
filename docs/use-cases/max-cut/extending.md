@@ -17,8 +17,9 @@ the model and its six constraints are in the [guide](README.md).
 The steps build one example: `uncutEdgesCost`, the number of edges a side keeps inside, whatever
 their weight. The cut weight values the heavy edges; this constraint counts every edge that is left
 uncut the same. Every snippet below was compiled and run, and every figure measured, on optimaru
-0.4.3, except the rows with the constraint at weight 0 and the five constraints they are compared
-with, on 0.5.1; a later change to the solver moves the figures, not the steps.
+0.4.3, except the rows with the constraint at weight 0, the five constraints they are compared
+with and the call counts of step 4, on 0.5.1; a later change to the solver moves the figures, not
+the steps.
 
 ## How a partition is scored
 
@@ -345,8 +346,10 @@ assembly ran at 3.76 million in the build of step 2 and 3.76 in the build of ste
 where the five that score by default ran at 3.71 and 3.73. So a solve with
 `get_constraints()`, which lists the opt-in constraints at weight 0, pays nothing for
 them: it ran at 3.76 in the build of step 4. On a random 200-vertex instance of the test
-fixtures, 1 million steps called `cost()` 2.2 million times without the delta, and
-`delta_cost()` 5.0 million times with it.
+fixtures (`randomInstance(200, 1)`, 4,321 edges), 1 million steps with the constraint at
+weight 2 called `cost()` 2.1 million times without the delta, and `delta_cost()` 4.7
+million times with it; at weight 0 it is called only at the resets (`cost()` 4 times,
+both ways).
 
 Three things made the delta short, and they hold for any constraint here.
 
