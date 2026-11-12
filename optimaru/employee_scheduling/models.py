@@ -132,8 +132,9 @@ class ShiftModel(StrictModel):
     pinned: bool = Field(
         default=False,
         description=(
-            "Fix the assignment to `worker` (scored but never moved) — for history carried in "
-            "from the previous planning period and for settled assignments; requires `worker`"
+            "Fix the assignment to `worker` (never moved; the per-shift constraints skip it, the "
+            "constraints between shifts count it) — for history carried in from the previous "
+            "planning period and for settled assignments; requires `worker`"
         ),
     )
 

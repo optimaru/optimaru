@@ -252,11 +252,8 @@ Update them:
   `test_module_level_instances_keep_every_default` (the instances) and
   `test_constraint_info_reports_the_cpp_defaults` (the rows).
 
-One more check does not fail but stops checking what it says.
-`test_offset_zero_reproduces_the_plain_scores` builds its plain picks as
-`get_constraints()[:5]`, which were the four date constraints and `crew_conflict_cost`; with
-the new constraint fifth in `_DEFAULTS` they lose `crew_conflict_cost`. List the six by name
-there.
+`test_offset_zero_reproduces_the_plain_scores` picks every default, so it covers the new
+constraint without a change.
 
 **Incremental against full.** Solve with every score checked against a full recompute. It raises
 `RuntimeError` ("Score corruption: ...", the engine's `ScoreMismatchError`) if a move leaves the
@@ -483,7 +480,7 @@ Against CP-SAT: `uv run maintenance-scheduling-compare --seconds 10 --workers 8`
 | `cpp/include/mnt/constraints.hpp` | include, `emplace` | | | the list in the comment |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/maintenance_scheduling/cpp/mnt_plugin_test.cpp` | | cases, counts | | catalog row, builder |
-| `tests/maintenance_scheduling/test_constraint_specs.py` | | lists, the `[:5]` slice | | defaults |
+| `tests/maintenance_scheduling/test_constraint_specs.py` | | lists | | defaults |
 | `docs/use-cases/maintenance-scheduling/README.md`, `python.md` | | table row | | defaults, score |
 | `cpp/src/score_calculator.cpp`, `cpp/src/incremental_calculator.cpp`, `incremental_calculator.hpp` | | | | the term |
 | `tests/maintenance_scheduling/cpp/mnt_test.cpp` | | | | expected scores |

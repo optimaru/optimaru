@@ -39,15 +39,18 @@ public:
     static Minutes overlapWithDates(const Shift& shift, const std::set<DayIndex>& dates);
 
     // Hard penalty magnitude (>= 0) for a single assigned shift: missing skill
-    // (1) + unavailable-date overlap minutes.
+    // (1) + unavailable-date overlap minutes. 0 for a pinned shift, which is
+    // settled history (the components skip it too).
     static std::int64_t shiftHardPenalty(const Employee& emp, const Shift& shift);
 
     // Net soft contribution for a single assigned shift: desired-day reward
-    // minus undesired-day penalty (in minutes; may be negative).
+    // minus undesired-day penalty (in minutes; may be negative). 0 for a pinned
+    // shift.
     static std::int64_t shiftSoftDelta(const Employee& emp, const Shift& shift);
 
     // Hard penalty magnitude (>= 0) for a pair of shifts assigned to the SAME
     // employee: overlap minutes + one-shift-per-day + the <10h rest shortfall.
+    // Pinned shifts count here.
     static std::int64_t pairHardPenalty(const Shift& a, const Shift& b);
 
     // Load-balancing unfairness (see DefaultLoadBalance.unfairness): rounded to

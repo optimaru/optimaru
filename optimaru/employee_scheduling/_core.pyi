@@ -192,8 +192,10 @@ class Shift:
     """Index into `EmployeeSchedule.employees`; -1 == unassigned. Solving and
     scoring raise ValueError for a value outside that range."""
     pinned: bool
-    """If True the shift keeps its employee_index fixed (scored but never moved).
-    Solving and scoring raise ValueError if it has none."""
+    """If True the shift keeps its employee_index fixed (never moved). The four
+    per-shift constraints (required skill, unavailability, undesired and desired
+    day) skip it; the constraints between shifts and the shift-count imbalance
+    count it. Solving and scoring raise ValueError if it has none."""
 
 class EmployeeSchedule:
     """The solution: employees (value range) + shifts (entities).
