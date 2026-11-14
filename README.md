@@ -96,6 +96,9 @@ key nothing is sent.
   non-finite number.
 - School timetabling is not on the API. It solves on this machine either way, and says so
   once in a `RuntimeWarning`.
+- The setting moves `solve` and `solve_request`. The compiled `Solver` class
+  (`Solver(config).solve(problem)`, `solve_with_constraints`) is the engine itself and
+  always runs on this machine.
 - `config` travels as the `SolverConfig` fields that differ from the defaults and
   `constraints` as the picks in their order, so a solve with the same seed and a step
   limit gives the same result there as here on the same engine version. A keyword or a

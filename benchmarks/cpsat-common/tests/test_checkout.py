@@ -1,3 +1,4 @@
+import os
 import sys
 
 import pytest
@@ -26,6 +27,14 @@ def test_the_checkout_engine_is_accepted(fake_engine):
 
     assert module is sys.modules["optimaru.fake_case"]
     assert checkout.use_checkout_engine("fake_case", repo_root=fake_engine) is module  # idempotent
+
+
+def test_an_api_key_in_the_environment_is_set_aside(fake_engine, monkeypatch):
+    monkeypatch.setenv("OPTIMARU_API_KEY", "om_live_key")
+
+    checkout.use_checkout_engine("fake_case", repo_root=fake_engine)
+
+    assert "OPTIMARU_API_KEY" not in os.environ
 
 
 def test_an_engine_from_elsewhere_is_refused(fake_engine, tmp_path):

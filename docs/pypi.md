@@ -132,7 +132,8 @@ optimaru.use_api("om_live_...")
 With a key, `solve(model, ...)` and `solve_request(request, ...)` send the problem to
 the API, wait for the solve job and return what they return on your machine. A problem
 built from the compiled classes is solved in place and cannot be sent: pass its model.
-School timetabling is not on the API and keeps solving locally.
+School timetabling is not on the API and keeps solving locally, and so does the compiled
+`Solver` class used directly, as in the example above.
 `optimaru.use_local()` turns the API off again, `OPTIMARU_API_URL` names another API,
 and what the API refuses raises `optimaru.ApiError`. The
 [guide](https://github.com/optimaru/optimaru/blob/main/docs/use-cases/README.md#solving-on-the-optimaru-api)

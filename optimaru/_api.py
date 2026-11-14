@@ -140,7 +140,8 @@ def use_api(key: str | None = None, *, url: str | None = None) -> None:
     ``optimaru`` logger. What cannot be sent is refused
     instead of being solved here without notice: a compiled problem (pass its model), a
     callback (``on_new_best``, ``select``) and a non-finite number. School timetabling is
-    not on the API and keeps solving on this machine.
+    not on the API and keeps solving on this machine, and so does the compiled ``Solver``
+    class used directly: the setting moves ``solve`` and ``solve_request``.
 
     Raises ValueError for an empty key, a missing one (no ``key`` and no
     ``OPTIMARU_API_KEY``) and a ``url`` that is not accepted.
@@ -297,11 +298,8 @@ def _config_json(config: Any) -> dict[str, Any]:
 
     The API sets each one by name on a ``SolverConfig()`` of its own, so the defaults need
     not travel, and the ones that JSON cannot carry (``best_score_limit`` is infinite by
-    default) stay at home unless they were changed. A ``models.SolveConfig`` is read
-    through its ``to_core()``, as the ``solve()`` that takes one reads it.
+    default) stay at home unless they were changed.
     """
-    if callable(getattr(config, "to_core", None)):
-        config = config.to_core()  # a models.SolveConfig, where a use case's solve() takes one
     if getattr(config, "on_new_best", None) is not None:
         raise ValueError("on_new_best is a callback, which cannot be sent to the optimaru API")
     defaults = type(config)()
@@ -335,6 +333,22 @@ def _solve_body(keywords: dict[str, Any]) -> dict[str, Any]:
     config = keywords.pop("config", None)
     constraints = keywords.pop("constraints", None)
     body: dict[str, Any] = {}
+    if callable(getattr(config, "to_core", None)):
+        config = config.to_core()  # a models.SolveConfig, where a use case's solve() takes one
+    limit = getattr(config, "best_score_limit", None)
+    if (
+        isinstance(limit, tuple)
+        and limit[:1] == (0,)
+        and limit[1:]
+        and all(level == float("-inf") for level in limit[1:])
+    ):
+        # Hard 0 and no floor below is what stop_at_first_feasible sets, and JSON has no infinity:
+        # the limit travels as the keyword, which the API turns into the same limit.
+        import copy
+
+        config = copy.copy(config)
+        config.best_score_limit = type(config)().best_score_limit
+        keywords["stop_at_first_feasible"] = True
     fields = {} if config is None else _config_json(config)
     for name in _SOLVE_KEYWORDS:
         value = keywords.pop(name, None)

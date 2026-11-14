@@ -207,6 +207,10 @@ class ApiStandIn:
         if wrong or first not in body:
             detail = [{"type": "extra_forbidden", "loc": ["body", wrong[0] if wrong else first], "msg": "not a field"}]
             return 422, {"code": "VALIDATION_ERROR", "message": "invalid request", "detail": detail}, {}
+        refused = _refused(body)
+        if refused is not None:
+            detail = [{"type": "value_error", "loc": ["body", *refused[0]], "msg": refused[1]}]
+            return 422, {"code": "VALIDATION_ERROR", "message": "invalid request", "detail": detail}, {}
         job_id = str(uuid.uuid4())
         self.jobs[job_id] = {"slug": slug, "body": body, "status": "queued", "looks": 0}
         return 202, self._document(job_id), {}
@@ -289,6 +293,62 @@ class ApiStandIn:
                 pass
 
         return Handler
+
+
+def _number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _refused(body: dict[str, Any]) -> tuple[list[Any], str] | None:
+    """What the API's request model refuses before a job exists, as (where, why); None when it takes the body.
+
+    Its rules for the fields beside the problem: a time limit above 0, 1 to 16 parallel
+    starts (in ``config`` too), strict booleans, and for a pick a name, a weight that is a
+    number or null (0 or more), a level by its name, an exponent above 0, a number as
+    offset and a boolean as clip, the last two never null.
+    """
+    limit = body.get("time_limit_seconds")
+    if limit is not None and not (_number(limit) and limit > 0):
+        return ["time_limit_seconds"], "Input should be greater than 0"
+    seed = body.get("random_seed")
+    if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool)):
+        return ["random_seed"], "Input should be a valid integer"
+    config = body.get("config")
+    if config is not None and not isinstance(config, dict):
+        return ["config"], "Input should be a valid dictionary"
+    for where, count in (
+        (["parallel_solver_count"], body.get("parallel_solver_count")),
+        (["config", "parallel_solver_count"], (config or {}).get("parallel_solver_count")),
+    ):
+        if count is not None and not (isinstance(count, int) and not isinstance(count, bool) and 1 <= count <= 16):
+            return where, "parallel_solver_count must be between 1 and 16"
+    for name in ("stop_at_first_feasible", "full_assert"):
+        if name in body and not isinstance(body[name], bool):
+            return [name], "Input should be a valid boolean"
+    picks = body.get("constraints")
+    if picks is None:
+        return None
+    if not isinstance(picks, list) or not any(isinstance(pick, dict) and pick.get("enabled", True) for pick in picks):
+        return ["constraints"], "at least one enabled constraint is required"
+    for position, pick in enumerate(picks):
+        where = ["constraints", position]
+        if not isinstance(pick, dict) or not isinstance(pick.get("name"), str) or not pick["name"]:
+            return where, "a constraint needs a name"
+        if "hard" in pick:
+            return [*where, "hard"], "`hard` was replaced by `level`"
+        weight = pick.get("weight")
+        if weight is not None and not (_number(weight) and weight >= 0):
+            return [*where, "weight"], "Input should be a number of 0 or more"
+        if pick.get("level") not in (None, "hard", "medium", "soft"):
+            return [*where, "level"], "Input should be 'hard', 'medium' or 'soft'"
+        exponent = pick.get("exponent")
+        if exponent is not None and not (_number(exponent) and exponent > 0):
+            return [*where, "exponent"], "Input should be greater than 0"
+        if "offset" in pick and not _number(pick["offset"]):
+            return [*where, "offset"], "Input should be a valid number"
+        if "clip" in pick and not isinstance(pick["clip"], bool):
+            return [*where, "clip"], "Input should be a valid boolean"
+    return None
 
 
 def _error(code: str, message: str, detail: Any = None) -> dict[str, Any]:

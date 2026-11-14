@@ -460,6 +460,43 @@ def test_a_dict_goes_where_solve_takes_one(api):
         use_case_module("knapsack").solve(model_of("knapsack").model_dump(mode="json"))
 
 
+@pytest.mark.parametrize("use_case", ["conference_scheduling", "flight_crew_scheduling", "sports_league_scheduling"])
+def test_a_first_feasible_limit_in_a_config_travels_as_the_keyword(api, use_case):
+    """`models.SolveConfig(stop_at_first_feasible=True)` is a limit of (0, -inf), which JSON cannot carry."""
+    module = use_case_module(use_case)
+    models = importlib.import_module(f"optimaru.{use_case}.models")
+    slug = use_case.replace("_", "-")
+
+    solved = module.solve(model_of(slug), time_limit_seconds=5, config=models.SolveConfig(stop_at_first_feasible=True))
+
+    (created,) = api.created()
+    assert created.body["stop_at_first_feasible"] is True
+    assert "best_score_limit" not in created.body.get("config", {})
+    ((_, keywords),) = api.calls
+    assert keywords["stop_at_first_feasible"] is True
+    assert score_of(solved)
+
+
+def test_the_stand_in_refuses_what_the_api_refuses(api):
+    """The stand-in is as strict as the API's request model, so a body it takes is one the API takes."""
+    knapsack = use_case_module("knapsack")
+    problem = _api._model_json(model_of("knapsack"))
+    settings = _api._settings()
+    for body, where in (
+        ({"time_limit_seconds": 0}, "time_limit_seconds"),
+        ({"parallel_solver_count": 17}, "parallel_solver_count"),
+        ({"config": {"parallel_solver_count": 0}}, "config.parallel_solver_count"),
+        ({"full_assert": 1}, "full_assert"),
+        ({"constraints": []}, "constraints"),
+        ({"constraints": [{"name": "knapsack_capacity_cost", "weight": True}]}, "constraints.0.weight"),
+        ({"constraints": [{"name": "knapsack_capacity_cost", "clip": None}]}, "constraints.0.clip"),
+        ({"constraints": [{"name": "knapsack_capacity_cost", "hard": True}]}, "constraints.0.hard"),
+    ):
+        with pytest.raises(optimaru.ApiError, match=f"422 VALIDATION_ERROR: {where}"):
+            _api._solve_job(settings, "knapsack", {"problem": problem, **body})
+    assert knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05).score_hard == 0
+
+
 def test_a_time_limit_of_zero_travels_as_the_config_field(api):
     knapsack = use_case_module("knapsack")
     solved = knapsack.solve(model_of("knapsack"), time_limit_seconds=0)
@@ -498,7 +535,7 @@ def test_what_cannot_be_sent_is_refused_before_anything_is_sent(api):
     with pytest.raises(ValueError, match="on_new_best is a callback"):
         knapsack.solve(problem, config=config)
     config = knapsack.SolverConfig()
-    config.best_score_limit = (0, float("-inf"))
+    config.best_score_limit = (-3, float("-inf"))  # not the first feasible solution, which travels as the keyword
     with pytest.raises(ValueError, match="config.best_score_limit.*non-finite.*stop_at_first_feasible=True"):
         knapsack.solve(problem, config=config)
     module = use_case_module("employee_scheduling")
@@ -619,7 +656,7 @@ def test_a_plan_limit_says_which_one(api):
         402,
         {
             "code": "PLAN_LIMIT_EXCEEDED",
-            "message": "한도를 넘었습니다",
+            "message": "over the limit of the plan",
             "detail": {"reason": "quota_exceeded", "entitlements": entitlements},
         },
         {},
@@ -630,7 +667,7 @@ def test_a_plan_limit_says_which_one(api):
     ) as raised:
         knapsack.solve(model_of("knapsack"))
     assert raised.value.detail == {"reason": "quota_exceeded", "entitlements": entitlements}
-    assert "한도를 넘었습니다" in str(raised.value)
+    assert "(over the limit of the plan)" in str(raised.value)  # the API's own sentence follows
 
 
 def test_too_many_jobs_at_once_says_when_to_retry(api):

@@ -16,7 +16,8 @@
   compiled classes (pass its model), the `solve(problem)` of vehicle routing, pickup and
   delivery, order picking and employee scheduling (call `solve_request`), a callback
   (`on_new_best`, `select`) and a non-finite number. School timetabling is not on the API
-  and keeps solving here, with a `RuntimeWarning` once. What the API refuses or fails at
+  and keeps solving here, with a `RuntimeWarning` once; the compiled `Solver` class used
+  directly is the engine itself and always runs here. What the API refuses or fails at
   raises `optimaru.ApiError` (`status`, `code`, `detail`, `retry_after`). A solve is a job
   the call waits for: a look at it that fails for a reason that passes (the network, a 5xx,
   a 408, a 429) is tried again for a minute, as is the read of its result, and interrupting
