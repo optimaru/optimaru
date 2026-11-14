@@ -140,8 +140,8 @@ def use_api(key: str | None = None, *, url: str | None = None) -> None:
     With the API on, ``solve(model, ...)`` and ``solve_request(request, ...)`` send the
     problem and return what they return on this machine. The settings travel as what was
     given: a keyword or a ``SolverConfig`` field left at its default takes the default of
-    the engine the API runs. A solve waits for its job for at most twice its time limit
-    and ten minutes more, then cancels it. The first solve sent to an API is logged at INFO
+    the engine the API runs. A solve waits for its job, from when the job is created, for
+    at most twice its time limit and ten minutes more, then cancels it. The first solve sent to an API is logged at INFO
     on the ``optimaru`` logger. What cannot be sent is refused
     instead of being solved here without notice: a compiled problem (pass its model), a
     callback (``on_new_best``, ``select``) and a non-finite number. School timetabling is
@@ -273,7 +273,11 @@ def _plain(value: Any, where: str) -> Any:
     if isinstance(value, (list, tuple)):
         return [_plain(item, where) for item in value]
     if isinstance(value, (set, frozenset)):
-        return sorted(_plain(item, where) for item in value)
+        items = [_plain(item, where) for item in value]
+        try:
+            return sorted(items)
+        except TypeError:  # mixed types: an order of its own, the same on every call
+            return sorted(items, key=repr)
     if callable(getattr(value, "model_dump", None)):
         return value.model_dump(mode="json")
     name = getattr(value, "name", None)
@@ -389,8 +393,10 @@ def _solve_body(keywords: dict[str, Any]) -> dict[str, Any]:
         and limit[1:]
         and all(level == float("-inf") for level in limit[1:])
     ):
-        # Hard 0 and no floor below is what stop_at_first_feasible sets, and JSON has no infinity:
-        # the limit travels as the keyword, which the API turns into the same limit.
+        # Hard 0 and no floor below is what stop_at_first_feasible sets on a float-scored use case,
+        # and JSON has no infinity: the limit travels as the keyword, which the API turns into the
+        # same limit. (The integer-scored ones use -(2**63), which is finite and travels as it is.)
+        # A compiled SolverConfig supports copy.copy (bind_config_copy in the engine's bindings).
         import copy
 
         config = copy.copy(config)
@@ -441,6 +447,23 @@ _ERROR_HINTS: dict[Any, str] = {
 }
 
 
+def _seconds_until(retry_after: str) -> float | None:
+    """A ``Retry-After`` as seconds from now: a number of seconds, or an HTTP date. None when it is neither."""
+    import email.utils
+    import time
+
+    try:
+        return max(0.0, float(retry_after))
+    except ValueError:
+        pass
+    try:
+        when = email.utils.parsedate_to_datetime(retry_after)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, when.timestamp() - time.time())
+
+
+@functools.cache
 def _version() -> str:
     from importlib.metadata import PackageNotFoundError, version
 
@@ -482,10 +505,7 @@ def _error_of(status: int, text: str, headers: Any) -> ApiError:
     if said and message:
         answer += f" ({message})"  # the API's own sentence
     retry = headers.get("Retry-After") if headers is not None else None
-    try:
-        retry_after = max(0.0, float(retry)) if retry else None
-    except ValueError:
-        retry_after = None  # a date: left to the caller
+    retry_after = _seconds_until(retry) if retry else None
     if retry_after is not None:
         answer += f"; retry after {retry_after:g} s"
     return ApiError(answer, status=status, code=code, detail=detail, retry_after=retry_after)
@@ -528,9 +548,9 @@ def _send(
         try:
             data = json.dumps(body, allow_nan=False).encode()
         except ValueError as error:
-            raise ValueError(
-                "the problem holds a non-finite number, which cannot be sent to the optimaru API"
-            ) from error
+            # allow_nan=False refuses a non-finite number; a circular reference is the other case.
+            why = "it holds a non-finite number (inf or nan)" if "float" in str(error) else str(error)
+            raise ValueError(f"the request cannot be sent to the optimaru API as JSON: {why}") from error
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
@@ -561,8 +581,8 @@ def _job_of(answer: Any, url: str) -> dict[str, Any]:
     return answer
 
 
-def _patiently(method: str, url: str, key: str) -> Any:
-    """`_send` for a job that exists: a failure that passes is tried again, for `_POLL_PATIENCE` seconds.
+def _patiently(method: str, url: str, key: str, patience: float = _POLL_PATIENCE) -> Any:
+    """`_send` for a job that exists: a failure that passes is tried again, for `patience` seconds.
 
     The network, a 5xx, a 408 and a 429 say nothing about the job, which runs on and is
     paid for; giving it up for one of them would throw the solve away. What the API says
@@ -577,7 +597,7 @@ def _patiently(method: str, url: str, key: str) -> Any:
             return _send(method, url, key)
         except ApiError as error:
             passes = error.status is None or error.status >= 500 or error.status in (408, 429)
-            if not passes or time.monotonic() - started > _POLL_PATIENCE:
+            if not passes or time.monotonic() - started > patience:
                 raise
             time.sleep(max(wait, min(error.retry_after or 0.0, _RETRY_AFTER_LONGEST)))
             wait = min(wait * 1.5, _POLL_LONGEST)
@@ -650,6 +670,8 @@ def _solve_job(settings: tuple[str, str], slug: str, body: dict[str, Any]) -> An
     job = _job_of(created, base)
     status_url = base + job["status_url"]
     limit = _wait_limit(body)
+    # A long solve rides out a longer outage: a tenth of its wait, and never less than the minute.
+    patience = max(_POLL_PATIENCE, 0.1 * limit)
     started = time.monotonic()
     try:
         wait = _POLL_FIRST
@@ -657,14 +679,15 @@ def _solve_job(settings: tuple[str, str], slug: str, body: dict[str, Any]) -> An
             if time.monotonic() - started > limit:
                 raise ApiError(
                     f"the solve job did not finish within {limit:g} s on the optimaru API "
-                    f"(still {job['status']!r}); it was cancelled",
+                    f"(still {job['status']!r}); it was cancelled. The wait follows the time limit "
+                    "of the call: give time_limit_seconds to wait longer",
                     code="JOB_TIMEOUT",
                 )
             time.sleep(wait)
             wait = min(wait * 1.5, _POLL_LONGEST)
-            job = _job_of(_patiently("GET", status_url, key), base)
+            job = _job_of(_patiently("GET", status_url, key, patience), base)
         if job["status"] == "succeeded":
-            return _patiently("GET", base + job["result_url"], key)
+            return _patiently("GET", base + job["result_url"], key, patience)
     except BaseException:
         # Interrupted (Ctrl-C), given up or past its time: do not leave the job running on the account.
         # Cancelling a job that has ended changes nothing.
@@ -791,6 +814,12 @@ def request_solve(
         import sys
 
         signature = inspect.signature(solve_request)
+        # Every solve_request is defined in optimaru.<use case>.models; its package holds the SolverConfig.
+        package, _, module = solve_request.__module__.rpartition(".")
+        if module != "models" or not package.startswith("optimaru."):
+            raise TypeError(
+                f"request_solve decorates a solve_request of optimaru.<use case>.models, not of {solve_request.__module__}"
+            )
 
         @functools.wraps(solve_request)
         def solve_here_or_on_the_api(*args: _P.args, **keywords: _P.kwargs) -> _R:
@@ -806,9 +835,7 @@ def request_solve(
             for name, value in rest.items():
                 if value is not None:
                     raise ValueError(f"{name} cannot be sent to the optimaru API")
-            _check_settings(
-                solve_request.__module__.rpartition(".")[0], {"random_seed": getattr(request, "random_seed", None)}
-            )
+            _check_settings(package, {"random_seed": getattr(request, "random_seed", None)})
             body: dict[str, Any] = {}
             if prepare is not None:
                 request = prepare(request, picked)

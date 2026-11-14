@@ -197,6 +197,43 @@ def test_an_error_body_of_another_shape_is_still_an_api_error(api):
         knapsack.solve(model_of("knapsack"))
 
 
+def test_an_ipv6_localhost_is_a_localhost():
+    optimaru.use_api(KEY, url="http://[::1]:8000/")
+    assert _api._settings() == (KEY, "http://[::1]:8000")
+
+
+def test_solves_from_several_threads_each_get_their_own_answer(api):
+    from concurrent.futures import ThreadPoolExecutor
+
+    knapsack = use_case_module("knapsack")
+    problem = model_of("knapsack")
+    config = knapsack.SolverConfig()
+    config.step_count_limit = 50
+    with ThreadPoolExecutor(4) as pool:
+        solved = list(pool.map(lambda seed: knapsack.solve(problem, random_seed=seed, config=config), range(8)))
+    assert len(api.created()) == 8
+    assert sorted(request.body["random_seed"] for request in api.created()) == list(range(8))
+    for seed, model in enumerate(solved):
+        here = knapsack.solve.__wrapped__(problem, random_seed=seed, config=config)
+        assert model.model_dump(mode="json") == here.model_dump(mode="json")
+
+
+def test_a_retry_after_given_as_a_date_is_read():
+    from datetime import datetime, timedelta, timezone
+    from email.utils import format_datetime
+
+    when = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=30), usegmt=True)
+    error = _api._error_of(503, "", {"Retry-After": when})
+    assert 25 <= error.retry_after <= 31
+    assert _api._error_of(503, "", {"Retry-After": "soon"}).retry_after is None
+
+
+def test_a_set_of_mixed_values_travels_in_an_order_of_its_own():
+    assert _api._plain({3, 1, 2}, "x") == [1, 2, 3]
+    mixed = _api._plain({1, "a"}, "x")
+    assert sorted(mixed, key=repr) == mixed and set(mixed) == {1, "a"}
+
+
 def test_the_settings_are_not_use_cases():
     assert {"use_api", "use_local", "ApiError"} <= set(dir(optimaru))
     assert not {"use_api", "use_local", "ApiError"} & set(optimaru.__all__)
@@ -656,7 +693,9 @@ def test_a_job_that_does_not_finish_in_time_is_given_up_and_cancelled(api, monke
     monkeypatch.setattr(_api, "_WAIT_MARGIN", 0.05)
     api.looks_while_running = 10**6
     knapsack = use_case_module("knapsack")
-    with pytest.raises(optimaru.ApiError, match="did not finish within .* s .*'running'.*cancelled") as raised:
+    with pytest.raises(
+        optimaru.ApiError, match="did not finish within .*'running'.*cancelled.*time_limit_seconds"
+    ) as raised:
         knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
     assert raised.value.code == "JOB_TIMEOUT"
     assert len(api.cancelled) == 1

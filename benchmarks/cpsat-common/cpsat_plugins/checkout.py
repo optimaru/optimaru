@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -28,11 +29,15 @@ def use_checkout_engine(subpackage: str, repo_root: Path = REPO_ROOT) -> ModuleT
 
     Raises RuntimeError if the module is loaded from outside ``repo_root``, since
     the benchmark would then measure another engine. Removes ``OPTIMARU_API_KEY``
-    from the environment of this process and the ones it starts, since the engine
-    would then solve on the optimaru API instead of here.
+    from the environment of this process and the ones it starts, and calls
+    ``optimaru.use_local()``, since the engine would otherwise solve on the
+    optimaru API instead of here.
     """
     os.environ.pop("OPTIMARU_API_KEY", None)
     module = importlib.import_module(f"optimaru.{subpackage}")
+    use_local = getattr(sys.modules["optimaru"], "use_local", None)
+    if use_local is not None:  # and a key given in code: an engine before the setting has neither
+        use_local()
     location = Path(module.__file__).resolve()
     if repo_root.resolve() not in location.parents:
         raise RuntimeError(
