@@ -502,8 +502,8 @@ def _error_of(status: int, text: str, headers: Any) -> ApiError:
         loc, msg = detail[0].get("loc"), detail[0].get("msg")
         parts = loc if isinstance(loc, list) else []
         where = ".".join(str(part) for part in parts if part != "body")
-        text = msg if isinstance(msg, str) else ""
-        said = (f"{where}: {text}" if where and text else where or text) or said
+        what = msg if isinstance(msg, str) else ""
+        said = (f"{where}: {what}" if where and what else where or what) or said
     if 300 <= status < 400:
         target = headers.get("Location") if headers is not None else None
         where = f" to {target}" if target else ""
@@ -607,8 +607,11 @@ def _patiently(method: str, url: str, key: str, patience: float = _POLL_PATIENCE
             return _send(method, url, key)
         except ApiError as error:
             # No answer at all (a code would say what came back instead), a 5xx, a 408 or a 429.
-            transport = error.status is None and error.code is None
-            passes = transport or (error.status is not None and (error.status >= 500 or error.status in (408, 429)))
+            status = error.status
+            if status is None:
+                passes = error.code is None
+            else:
+                passes = status >= 500 or status in (408, 429)
             left = patience - (time.monotonic() - started)
             if not passes or left <= 0:
                 raise

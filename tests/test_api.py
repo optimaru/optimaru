@@ -806,23 +806,15 @@ def test_a_subclass_the_result_cannot_fill_is_named(api):
     assert raised.value.code == "JOB_FAILED"
 
 
-def test_an_answer_that_is_not_json_is_not_retried(api, monkeypatch):
+def test_an_answer_that_is_not_json_is_not_retried(api):
     """A captive portal or a wrong host answering 200 with a page is said at once, not polled for a minute."""
-    api.looks_while_running = 1
-    real = _api._send
-    calls = []
-
-    def send(method, url, key, body=None, *, timeout=_api._REQUEST_TIMEOUT):
-        calls.append(method)
-        if method == "GET" and not url.endswith("/result"):
-            raise optimaru.ApiError(f"the optimaru API at {url} did not answer with JSON", code="BAD_ANSWER")
-        return real(method, url, key, body, timeout=timeout)
-
-    monkeypatch.setattr(_api, "_send", send)
+    api.html_looks = 10**6
     with pytest.raises(optimaru.ApiError, match="did not answer with JSON") as raised:
         use_case_module("knapsack").solve(model_of("knapsack"), time_limit_seconds=0.05)
-    assert raised.value.code == "BAD_ANSWER"
-    assert calls == ["POST", "GET", "POST"]  # create, one look, cancel
+    assert (raised.value.status, raised.value.code) == (None, "BAD_ANSWER")
+    looks = [request for request in api.requests if request.method == "GET"]
+    assert len(looks) == 1
+    assert len(api.cancelled) == 1
 
 
 def test_an_interrupt_while_a_look_is_retried_still_cancels_the_job(api, monkeypatch):

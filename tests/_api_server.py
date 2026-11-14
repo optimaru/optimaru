@@ -146,7 +146,8 @@ class ApiStandIn:
     ``looks_while_running`` status answers say ``running_as`` before the job is solved,
     ``refuse`` is ``(status, body, headers)`` answered to the next job instead of creating
     it, ``fail_looks`` status answers and ``fail_results`` result answers are ``fail_with``
-    (a 503 unless set), ``result`` replaces every job's result, and ``end_as`` ends every
+    (a 503 unless set), ``html_looks`` status answers are a 200 page that is not JSON,
+    ``result`` replaces every job's result, and ``end_as`` ends every
     job in that status without solving it. ``requests`` lists what arrived, ``calls`` the
     keywords each solve ran with, ``cancelled`` the cancelled jobs.
     """
@@ -160,6 +161,7 @@ class ApiStandIn:
         self.looks_while_running = 0
         self.running_as = "running"
         self.fail_looks = 0
+        self.html_looks = 0
         self.fail_results = 0
         self.fail_with: tuple[int, Any, dict[str, str]] = (503, _error("QUEUE_UNAVAILABLE", "try again"), {})
         self.refuse: tuple[int, Any, dict[str, str]] | None = None
@@ -217,6 +219,9 @@ class ApiStandIn:
         return 202, self._document(job_id), {}
 
     def _look(self, job_id: str) -> tuple[int, Any, dict[str, str]]:
+        if self.html_looks > 0:  # a captive portal's page, with a 200
+            self.html_looks -= 1
+            return 200, b"<html><body>Sign in to the network</body></html>", {}
         if self.fail_looks > 0:
             self.fail_looks -= 1
             return self.fail_with
