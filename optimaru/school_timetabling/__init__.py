@@ -41,6 +41,7 @@ serialization) live in `optimaru.school_timetabling.models` too.
 
 import time
 
+from .. import _api
 from .._solve import solver_config
 from . import quickstart
 from ._core import (
@@ -216,6 +217,7 @@ def _resolve_config(config, *, canonical: bool):
     raise ValueError("a quickstart-mode config must be a SolverConfig or an object with to_core()")
 
 
+@_api.local_solve("school timetabling")
 def solve(
     problem: dict,
     *,

@@ -25,6 +25,7 @@ The pydantic mirror (for serialization) is in `optimaru.conference_scheduling.mo
 
 from typing import TypeVar
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from ._core import (
     ConferenceSchedule,
@@ -71,6 +72,7 @@ __all__ = [
 _Problem = TypeVar("_Problem")
 
 
+@_api.model_solve("conference-scheduling", ConferenceScheduleModel)
 def solve(
     schedule: _Problem,
     *,

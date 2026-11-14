@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **Solving on the optimaru API with one setting.** The optimaru API is the Enterprise
+  edition: this engine run as a hosted service, whose solve request is the Python call. With
+  an API key, in the environment (`OPTIMARU_API_KEY`) or in code
+  (`optimaru.use_api("om_live_...")`), `solve(model, ...)` and `solve_request(request, ...)`
+  send the problem there, wait for the solve job and return what they return on this
+  machine: a new solved model, or the response model. `OPTIMARU_API_URL` or
+  `use_api(key, url=...)` names another API than `https://app.optimaru.com`, and
+  `optimaru.use_local()` solves here again. `config` travels as the `SolverConfig` fields
+  that differ from the defaults and `constraints` as the picks in their order, so the same
+  seed and step limit give the same result there as here on the same engine version. What
+  cannot be sent is refused, not solved here without notice: a problem built from the
+  compiled classes (pass its model), the `solve(problem)` of vehicle routing, pickup and
+  delivery, order picking and employee scheduling (call `solve_request`), a callback
+  (`on_new_best`, `select`) and a non-finite number. School timetabling is not on the API
+  and keeps solving here, with a `RuntimeWarning` once. What the API refuses or fails at
+  raises `optimaru.ApiError` (`status`, `code`, `detail`), and interrupting a solve cancels
+  its job. No new dependency: the standard library and pydantic. Without a key nothing
+  changes and nothing is sent. `solve` and `solve_request` are wrapped for this
+  (`__wrapped__` is the function that always solves here); their signatures are unchanged.
+
 - **CI: benchmarks run when a pull request touches them.** A CP-SAT comparison job (and the
   vehicle routing benchmark job) runs on a pull request that changes its benchmark project or
   its use case, all of them when the shared runner (`benchmarks/cpsat-common/`), `ci.yml` or

@@ -113,6 +113,31 @@ instances such as `vehicle_capacity_cost`, which is `VehicleCapacityCost()`.
 `constraint_info()` on a use case lists its constraints with their default level
 and weight.
 
+## The optimaru API
+
+The optimaru API is the Enterprise edition: this engine as a hosted service. Its solve
+request is the Python call, so one setting moves a program that uses this package onto
+it, an API key in the environment or in code:
+
+```bash
+export OPTIMARU_API_KEY=om_live_...
+```
+
+```python
+import optimaru
+
+optimaru.use_api("om_live_...")
+```
+
+With a key, `solve(model, ...)` and `solve_request(request, ...)` send the problem to
+the API, wait for the solve job and return what they return on your machine. A problem
+built from the compiled classes is solved in place and cannot be sent: pass its model.
+School timetabling is not on the API and keeps solving locally.
+`optimaru.use_local()` turns the API off again, `OPTIMARU_API_URL` names another API,
+and what the API refuses raises `optimaru.ApiError`. The
+[guide](https://github.com/optimaru/optimaru/blob/main/docs/use-cases/README.md#solving-on-the-optimaru-api)
+has the details.
+
 ## Use cases
 
 | Family | `optimaru.…` |
@@ -133,7 +158,7 @@ and `constraint_info()` their defaults.
 - Example notebooks, one per use case: <https://github.com/optimaru/optimaru/tree/main/examples>
 
 optimaru comes in a free, open-source edition (this package, Apache-2.0) and
-an Enterprise edition (coming soon).
+an Enterprise edition, the optimaru API: the same engine as a hosted service.
 
 ## License
 

@@ -6,6 +6,7 @@ so the site follows the packages under optimaru/ without hand-kept lists:
 - reference/<use case>.md: mkdocstrings sections for optimaru.<use case>
   (the package, `models`, `constraints` and the `_core` extension stubs);
 - reference/constraint-base.md: the shared constraint-spec base;
+- reference/api.md: the setting that moves a solve to the optimaru API;
 - SUMMARY.md: the site navigation (read by mkdocs-literate-nav).
 """
 
@@ -74,6 +75,9 @@ for use_case in use_cases():
 with mkdocs_gen_files.open("reference/constraint-base.md", "w") as page:
     page.write("# Constraint-spec base\n\n::: optimaru._constraint\n")
 nav["API reference", "optimaru._constraint"] = "reference/constraint-base.md"
+with mkdocs_gen_files.open("reference/api.md", "w") as page:
+    page.write("# Solving on the optimaru API\n\n::: optimaru._api\n")
+nav["API reference", "optimaru.use_api"] = "reference/api.md"
 nav["Changelog"] = "changelog.md"
 
 with mkdocs_gen_files.open("SUMMARY.md", "w") as summary:

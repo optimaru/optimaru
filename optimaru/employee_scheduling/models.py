@@ -64,6 +64,7 @@ from pydantic import (
     model_validator,
 )
 
+from .. import _api
 from .._constraint import _check_literal_offset
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
@@ -905,6 +906,21 @@ def _solve_in_processes(jobs: list, max_workers: int) -> list[ScheduleSolution] 
             return None
 
 
+def _with_constraints(request: ScheduleRequest, constraints) -> ScheduleRequest:
+    """`request` with ``constraints`` as its ``model_input.constraints``. The request given is not changed."""
+    if isinstance(constraints, _core.DecomposedCalculator):
+        raise TypeError("solve_request takes constraints as a list of specs, not a DecomposedCalculator")
+    constraints = list(constraints)  # a generator is read once
+    if any(isinstance(constraint, str) for constraint in constraints):
+        raise TypeError("solve_request takes constraints as specs (or their JSON dicts), not as names")
+    # A copy with the one field replaced: assignment validates the new list only.
+    model_input = request.model_input.model_copy()
+    model_input.constraints = constraints
+    return request.model_copy(update={"model_input": model_input})
+
+
+# On the optimaru API the selection travels inside the request, so a ``constraints=`` goes there first.
+@_api.request_solve("employee-scheduling", "ScheduleSolution", constraints=_with_constraints)
 def solve_request(
     request: ScheduleRequest,
     *,
@@ -941,15 +957,7 @@ def solve_request(
     to rank candidates on an external objective the internal score only
     approximates. Ignored for a single start."""
     if constraints is not None:
-        if isinstance(constraints, _core.DecomposedCalculator):
-            raise TypeError("solve_request takes constraints as a list of specs, not a DecomposedCalculator")
-        constraints = list(constraints)  # a generator is read once
-        if any(isinstance(constraint, str) for constraint in constraints):
-            raise TypeError("solve_request takes constraints as specs (or their JSON dicts), not as names")
-        # A copy with the one field replaced: assignment validates the new list only.
-        model_input = request.model_input.model_copy()
-        model_input.constraints = constraints
-        request = request.model_copy(update={"model_input": model_input})
+        request = _with_constraints(request, constraints)
     n = max(request.parallel_solver_count, request.settings.multi_start)
     if n <= 1:
         return _build_and_solve(request, request._effective("random_seed"))

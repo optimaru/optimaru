@@ -27,6 +27,7 @@ from typing import Any
 
 from pydantic import Field, model_validator
 
+from .. import _api
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
 from .constraints import get_constraints
@@ -289,6 +290,7 @@ def vehicle_metrics(plan: "_core.VehicleRoutePlan", routes: dict[str, list[Visit
     return metrics
 
 
+@_api.request_solve("vehicle-routing", "RouteSolution")
 def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSolution:
     """Solve a routing request end-to-end and return the pydantic solution."""
     plan = to_plan(request.model_input)

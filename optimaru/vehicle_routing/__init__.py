@@ -50,6 +50,7 @@ Compared lexicographically: hard dominates medium dominates soft.
 `optimaru.vehicle_routing.constraints` picks and re-weights them.
 """
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from ._core import (
     AcceptorType,
@@ -90,6 +91,7 @@ __all__ = [
 ]
 
 
+@_api.compiled_solve
 def solve(
     plan: VehicleRoutePlan,
     *,

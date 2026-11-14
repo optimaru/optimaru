@@ -21,6 +21,7 @@ objects (`TournamentSchedule`). The pydantic mirror (for serialization) is in
 
 from typing import TypeVar
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from ._core import (
     MEDIUM_SCALE,
@@ -67,6 +68,7 @@ __all__ = [
 _Problem = TypeVar("_Problem")
 
 
+@_api.model_solve("tournament-scheduling", TournamentScheduleModel)
 def solve(
     schedule: _Problem,
     *,

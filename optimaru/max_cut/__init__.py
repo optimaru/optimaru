@@ -39,6 +39,7 @@ from __future__ import annotations
 
 from typing import Any, TypeVar
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
@@ -135,6 +136,7 @@ def calculate_score(problem, constraints=None):
 _Problem = TypeVar("_Problem")
 
 
+@_api.model_solve("max-cut", MaxCutProblemModel)
 def solve(
     problem: _Problem,
     *,

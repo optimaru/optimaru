@@ -35,6 +35,7 @@ and uses `Solver`. The pydantic mirror is in `optimaru.flight_crew_scheduling.mo
 
 from typing import TypeVar
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from ._core import (
     Airport,
@@ -77,6 +78,7 @@ __all__ = [
 _Problem = TypeVar("_Problem")
 
 
+@_api.model_solve("flight-crew-scheduling", FlightCrewScheduleModel, dicts=True)
 def solve(
     schedule: _Problem,
     *,

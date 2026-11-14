@@ -32,6 +32,7 @@ from __future__ import annotations
 
 from typing import TypeVar
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from . import _core
 from ._core import (
@@ -122,6 +123,7 @@ def _assignment_models(core, assignments):
 _Problem = TypeVar("_Problem")
 
 
+@_api.model_solve("semiconductor-scheduling", SemiconductorScheduleModel)
 def solve(
     problem: _Problem,
     *,

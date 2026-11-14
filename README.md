@@ -3,8 +3,10 @@
 A metaheuristic optimization engine for real-world routing, scheduling,
 timetabling and allocation, with 22 ready-to-use models you call from Python.
 
-optimaru comes in a free edition and a paid edition; this repository is the
-free, open-source edition.
+optimaru comes in a free, open-source edition, this repository, and an Enterprise
+edition, the optimaru API: the same engine run as a hosted service. A program
+that uses this package moves onto it with one setting, an API key
+([Solving on the optimaru API](#solving-on-the-optimaru-api)).
 
 Documentation: <https://optimaru.github.io/optimaru/> (built from [`docs/`](docs)
 with MkDocs; the API reference is generated from the sources).
@@ -56,6 +58,55 @@ Every constraint takes the same knobs — `weight`, `level` (`"hard"`,
 several times. `constraint_info()` on a use case lists its constraints and
 their defaults. More in [`docs/pypi.md`](docs/pypi.md) and the
 [notebooks](examples).
+
+## Solving on the optimaru API
+
+The optimaru API is the Enterprise edition of the engine: the same engine, run as a
+hosted service. The body of its solve request is the Python call (the first argument and
+the keywords of `solve` or `solve_request`, as JSON), so a program that uses this
+package moves onto it with one setting, an API key. Give it in the environment:
+
+```bash
+export OPTIMARU_API_KEY=om_live_...
+```
+
+or in code:
+
+```python
+import optimaru
+
+optimaru.use_api("om_live_...")
+```
+
+With a key, `solve(model, ...)` and `solve_request(request, ...)` send the problem to
+the API, wait for the solve job and return what they return on this machine: a new
+solved model, or the response model. The rest of the program stays as it is. Without a
+key nothing is sent.
+
+- `OPTIMARU_API_URL`, or `optimaru.use_api(key, url=...)`, names another API than
+  `https://app.optimaru.com`. It must be an https URL (http is accepted for localhost).
+  `optimaru.use_api()` without a key reads `OPTIMARU_API_KEY`, and
+  `optimaru.use_local()` solves on this machine again, whatever the environment says.
+- What cannot be sent is refused instead of being solved here without notice: a problem
+  built from the compiled classes (it is solved in place, which a result that comes back
+  as JSON cannot do; pass its model, `Model.from_core(problem)`, and use the model that
+  comes back), the `solve(problem)` of the four use cases whose pydantic layer is a whole
+  request (vehicle routing, pickup and delivery, order picking, employee scheduling: call
+  `solve_request`), a callback (`on_new_best`, employee scheduling's `select`) and a
+  non-finite number.
+- School timetabling is not on the API. It solves on this machine either way, and says so
+  once in a `RuntimeWarning`.
+- `config` travels as the `SolverConfig` fields that differ from the defaults and
+  `constraints` as the picks in their order, so a solve with the same seed and a step
+  limit gives the same result there as here on the same engine version.
+- What the API refuses or fails at raises `optimaru.ApiError`: the HTTP `status`, the
+  API's error `code` (`"INVALID_CREDENTIALS"`, `"PLAN_LIMIT_EXCEEDED"`,
+  `"VALIDATION_ERROR"`, ...; `"JOB_FAILED"` carries the engine's own message for an input
+  it refused) and its `detail`. Interrupting a solve (Ctrl-C) cancels its job.
+- The problem and the settings leave the machine, over https, to the API. `score`,
+  `calculate_score`, `constraint_costs` and the other helpers keep running here.
+- The API runs a released engine. A `SolverConfig` field or a model field that a newer
+  source checkout has and the API's engine does not is refused there by its name.
 
 ## Contributing: add a constraint or a move
 
@@ -178,6 +229,7 @@ optimaru/                          the Python package (pip install optimaru)
 ├── _constraint.py                 the constraint-spec base every use case shares
 ├── _solve.py                      the steps the use cases' solve() functions share
 ├── _models.py                     what the use cases' pydantic models share
+├── _api.py                        solving on the optimaru API: the key, the request, the job
 ├── cpp/optimaru/                  the engine (header-only C++17), below
 └── <use case>/                    22 subpackages, e.g. vehicle_routing/
     ├── __init__.py, models.py,    the Python API: solve, pydantic models,
@@ -190,6 +242,7 @@ optimaru/                          the Python package (pip install optimaru)
 tests/                             mirrors the package
 ├── engine/                        engine tests (C++)
 ├── test_constraint.py             the constraint-spec base
+├── test_api.py                    solving on the optimaru API, against a local stand-in
 └── <use case>/                    pytest suite; cpp/ holds the C++ tests
 docs/                              the documentation site (mkdocs.yml): the
                                    extending guide, one guide per use case

@@ -29,6 +29,7 @@ pydantic request/response models (JSON in/out) live in
 `optimaru.order_picking.models`.
 """
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
@@ -78,6 +79,7 @@ __all__ = [
 ]
 
 
+@_api.compiled_solve
 def solve(
     solution: OrderPickingSolution,
     *,

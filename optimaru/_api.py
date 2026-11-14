@@ -1,0 +1,607 @@
+"""Solving on the optimaru API instead of on this machine.
+
+This package solves where it is installed. The optimaru API is the same engine run as a
+hosted service (optimaru Engine Enterprise), and the body of its solve request is the
+Python call: the first argument and the keywords of ``solve()`` or ``solve_request()``,
+as JSON. So a program that already uses this package moves onto the API with one
+setting, an API key, given in the environment or in code::
+
+    export OPTIMARU_API_KEY=om_live_...
+
+    import optimaru
+    optimaru.use_api("om_live_...")
+
+With a key, ``optimaru.<use case>.solve(model, ...)`` and ``solve_request(request, ...)``
+send the problem to the API, wait for the solve job and return what they return on this
+machine: a new solved model, or the response model. Without one nothing changes.
+
+What a use case's ``__init__.py`` and ``models.py`` do with this module::
+
+    from .. import _api
+
+    @_api.model_solve("knapsack", KnapsackProblemModel)
+    def solve(problem, *, time_limit_seconds=None, ..., config=None, constraints=None): ...
+
+    @_api.request_solve("vehicle-routing", "RouteSolution")
+    def solve_request(request, *, constraints=None): ...
+
+`model_solve` is for a ``solve()`` that takes the use case's pydantic model (the API calls
+``solve``), `request_solve` for a ``solve_request()`` that the API calls itself,
+`compiled_solve` for a ``solve()`` that takes compiled objects only, and `local_solve`
+for a use case the API does not serve. The decorated function is unchanged while no key
+is set, and ``__wrapped__`` is the function that always solves here.
+
+Only the standard library and pydantic are used, and both are imported when a solve is
+sent, so ``import optimaru`` stays as light as it was.
+"""
+
+import functools
+import os
+from collections.abc import Callable
+from typing import Any, ParamSpec, TypeVar
+
+__all__ = [
+    "API_KEY_VARIABLE",
+    "API_URL_VARIABLE",
+    "DEFAULT_API_URL",
+    "ApiError",
+    "compiled_solve",
+    "local_solve",
+    "model_solve",
+    "request_solve",
+    "use_api",
+    "use_local",
+]
+
+#: The environment variable that holds the API key. Set, it turns the API on.
+API_KEY_VARIABLE = "OPTIMARU_API_KEY"
+#: The environment variable that names another API than `DEFAULT_API_URL`.
+API_URL_VARIABLE = "OPTIMARU_API_URL"
+#: Where the optimaru API is, without a trailing slash.
+DEFAULT_API_URL = "https://app.optimaru.com"
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+# What the program chose in code. `_chosen` None = it did not choose, and the environment
+# decides: the API when `API_KEY_VARIABLE` is set, this machine otherwise.
+_chosen: bool | None = None
+_key: str | None = None
+_url: str | None = None
+
+#: Seconds one HTTP request may take. A solve is a job that is polled, so no request waits for the search.
+_REQUEST_TIMEOUT = 60.0
+#: Seconds between two looks at a job: the first, and the longest the wait grows to.
+_POLL_FIRST, _POLL_LONGEST = 0.2, 2.0
+#: Looks at a job that may fail in a row (the network, a 5xx) before the solve gives up.
+_POLL_RETRIES = 5
+#: The keywords every ``solve()`` has that the API takes under the same name.
+_SOLVE_KEYWORDS = (
+    "time_limit_seconds",
+    "random_seed",
+    "parallel_solver_count",
+    "stop_at_first_feasible",
+    "full_assert",
+)
+
+
+class ApiError(RuntimeError):
+    """The optimaru API refused a solve, or failed at it.
+
+    ``status`` is the HTTP status of the response, or None when none came back (the API
+    could not be reached) or when a job that was accepted then failed. ``code`` is the
+    API's error code, such as ``"INVALID_CREDENTIALS"``, ``"PLAN_LIMIT_EXCEEDED"`` or
+    ``"VALIDATION_ERROR"``; ``"JOB_FAILED"`` and ``"JOB_CANCELLED"`` are a job that ended
+    without a result. ``detail`` is what the API sent with the error: for a plan limit,
+    a dict with the ``reason`` and the plan's ``entitlements``.
+    """
+
+    def __init__(self, message: str, *, status: int | None = None, code: str | None = None, detail: Any = None):
+        super().__init__(message)
+        self.status = status
+        self.code = code
+        self.detail = detail
+
+
+def use_api(key: str | None = None, *, url: str | None = None) -> None:
+    """Solve on the optimaru API from now on, in this process.
+
+    ``key`` is the API key (it starts with ``om_``); None reads the environment variable
+    ``OPTIMARU_API_KEY`` at each solve. ``url`` is the API to call when it is not the
+    default one, ``https://app.optimaru.com``; None reads ``OPTIMARU_API_URL``, then the
+    default. It must be an https URL (http is accepted for localhost).
+
+    Setting ``OPTIMARU_API_KEY`` alone does the same without a line of code; this call is
+    for a key that comes from somewhere else, and it wins over the environment.
+    `use_local` turns the API off again.
+
+    With the API on, ``solve(model, ...)`` and ``solve_request(request, ...)`` send the
+    problem and return what they return on this machine. What cannot be sent is refused
+    instead of being solved here without notice: a compiled problem (pass its model), a
+    callback (``on_new_best``, ``select``) and a non-finite number. School timetabling is
+    not on the API and keeps solving on this machine.
+
+    Raises ValueError for an empty key, a missing one (no ``key`` and no
+    ``OPTIMARU_API_KEY``) and a ``url`` that is not accepted.
+    """
+    global _chosen, _key, _url
+    if key is not None:
+        if not isinstance(key, str):
+            raise TypeError(f"key must be a string, not {type(key).__name__}")
+        key = key.strip()
+        if not key:
+            raise ValueError("key must not be empty")
+    elif not _environment(API_KEY_VARIABLE):
+        raise ValueError(f"no API key: pass one, or set {API_KEY_VARIABLE}")
+    if url is not None:
+        if not isinstance(url, str):
+            raise TypeError(f"url must be a string, not {type(url).__name__}")
+        url = _checked_url(url)
+    _chosen, _key, _url = True, key, url
+
+
+def use_local() -> None:
+    """Solve on this machine from now on, in this process, whatever ``OPTIMARU_API_KEY`` says."""
+    global _chosen, _key, _url
+    _chosen, _key, _url = False, None, None
+
+
+def _environment(name: str) -> str:
+    return os.environ.get(name, "").strip()
+
+
+def _checked_url(url: str) -> str:
+    """`url` without its trailing slash. Refuses what would send the key in the clear."""
+    from urllib.parse import urlsplit
+
+    url = url.strip().rstrip("/")
+    parts = urlsplit(url)
+    local = parts.hostname in ("localhost", "127.0.0.1", "::1")
+    if parts.scheme not in ("https", "http") or not parts.hostname or (parts.scheme == "http" and not local):
+        raise ValueError(f"the API URL must be an https URL (http for localhost only), not {url!r}")
+    return url
+
+
+def _settings() -> tuple[str, str] | None:
+    """The key and the URL of the API to solve on, or None to solve on this machine."""
+    if _chosen is False:
+        return None
+    key = _key or _environment(API_KEY_VARIABLE)
+    if not key:
+        if _chosen:
+            raise ApiError(f"use_api() was called without a key and {API_KEY_VARIABLE} is no longer set")
+        return None
+    return key, _url or _checked_url(_environment(API_URL_VARIABLE) or DEFAULT_API_URL)
+
+
+# ---------------------------------------------------------------------------
+# The Python call as the JSON the API takes
+# ---------------------------------------------------------------------------
+
+
+def _plain(value: Any, where: str) -> Any:
+    """`value` as JSON can carry it and the API reads it back: `where` names it in an error.
+
+    A member of a compiled enum goes by its name and a tuple as a list, which is how the
+    API sets a ``SolverConfig`` field and a constraint parameter from JSON.
+    """
+    import enum
+    import math
+    import numbers
+
+    if value is None or isinstance(value, (bool, str)) and not isinstance(value, enum.Enum):
+        return value
+    if isinstance(value, enum.Enum):
+        return _plain(value.value, where)
+    if isinstance(value, numbers.Integral):
+        return int(value)
+    if isinstance(value, numbers.Real):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError(f"{where} is {value!r}: a non-finite number cannot be sent to the optimaru API")
+        return number
+    if isinstance(value, dict):
+        return {str(key): _plain(item, where) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(item, where) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return sorted(_plain(item, where) for item in value)
+    if callable(getattr(value, "model_dump", None)):
+        return value.model_dump(mode="json")
+    name = getattr(value, "name", None)
+    if isinstance(name, str) and hasattr(type(value), name):  # a compiled enum: AcceptorType.LATE_ACCEPTANCE
+        return name
+    raise TypeError(f"{where} is a {type(value).__name__}, which cannot be sent to the optimaru API")
+
+
+def _model_json(model: Any) -> dict[str, Any]:
+    return model.model_dump(mode="json")
+
+
+def _constraints_json(constraints: Any) -> list[dict[str, Any]]:
+    """A ``constraints=`` selection as the API's list: one object per pick, in order.
+
+    ``{"name": ..., <knob>: ..., <parameter>: ...}``, as the API builds each pick back with
+    ``dataclasses.replace(<the default spec of that name>, **the rest)``. A None knob or
+    parameter is left out: on both sides it is the default.
+    """
+    import dataclasses
+
+    picks = list(constraints)
+    if not picks:
+        raise ValueError("constraints must not be empty (pass None for the defaults)")
+    items = []
+    for pick in picks:
+        name = getattr(pick, "name", None)
+        if isinstance(pick, type) or not dataclasses.is_dataclass(pick) or not isinstance(name, str) or not name:
+            raise TypeError(f"constraints must be constraint specs to be sent to the optimaru API, not {pick!r}")
+        item: dict[str, Any] = {"name": name}
+        for field in dataclasses.fields(pick):
+            value = getattr(pick, field.name)
+            if value is not None:
+                item[field.name] = _plain(value, f"constraint {name!r}: {field.name}")
+        items.append(item)
+    return items
+
+
+def _config_json(config: Any) -> dict[str, Any]:
+    """A compiled ``SolverConfig`` as the API's ``config``: the fields that differ from the defaults.
+
+    The API sets each one by name on a ``SolverConfig()`` of its own, so the defaults need
+    not travel, and the ones that JSON cannot carry (``best_score_limit`` is infinite by
+    default) stay at home unless they were changed. A ``models.SolveConfig`` is read
+    through its ``to_core()``, as the ``solve()`` that takes one reads it.
+    """
+    if callable(getattr(config, "to_core", None)):
+        config = config.to_core()  # a models.SolveConfig, where a use case's solve() takes one
+    if getattr(config, "on_new_best", None) is not None:
+        raise ValueError("on_new_best is a callback, which cannot be sent to the optimaru API")
+    defaults = type(config)()
+    fields = {}
+    for name in dir(config):
+        if name.startswith("_") or name == "on_new_best":
+            continue
+        value = getattr(config, name)
+        if callable(value) or value == getattr(defaults, name):
+            continue
+        try:
+            fields[name] = _plain(value, f"config.{name}")
+        except ValueError as error:
+            if name == "best_score_limit":
+                raise ValueError(
+                    f"{error} (to stop at the first feasible solution, pass stop_at_first_feasible=True)"
+                ) from None
+            raise
+    return fields
+
+
+def _solve_body(keywords: dict[str, Any]) -> dict[str, Any]:
+    """The keywords of a ``solve()`` call as the top-level fields of the API's body.
+
+    A keyword left at its default is left out, as the API's default is the same one.
+    ``config`` travels as the fields that were changed, and ``constraints`` as a list.
+    """
+    keywords = dict(keywords)
+    if keywords.pop("on_new_best", None) is not None:
+        raise ValueError("on_new_best is a callback, which cannot be sent to the optimaru API")
+    config = keywords.pop("config", None)
+    constraints = keywords.pop("constraints", None)
+    body: dict[str, Any] = {}
+    fields = {} if config is None else _config_json(config)
+    for name in _SOLVE_KEYWORDS:
+        value = keywords.pop(name, None)
+        if value is None or value is False:
+            continue
+        if name == "time_limit_seconds" and value == 0:
+            # The API takes a budget of 0 (the construction, or the warm start, as it is) only as
+            # the config field, like a search that is switched off in config.
+            fields["spent_limit_seconds"] = 0
+            continue
+        body[name] = _plain(value, name)
+    for name, value in keywords.items():
+        if value is not None and value is not False:
+            raise ValueError(f"{name} cannot be sent to the optimaru API")
+    if fields:
+        body["config"] = fields
+    if constraints is not None:
+        body["constraints"] = _constraints_json(constraints)
+    return body
+
+
+# ---------------------------------------------------------------------------
+# HTTP: one solve is a job that is created, polled and read
+# ---------------------------------------------------------------------------
+
+
+#: What an error means, by the plan limit's reason, the API's error code, or the HTTP status when the
+#: answer is not the API's own (a proxy in between).
+_ERROR_HINTS: dict[Any, str] = {
+    "quota_exceeded": "the plan's included solver time is used up",
+    "payment_overdue": "an invoice is overdue",
+    "job_time_limit": "the time limit is longer than the plan allows for one job",
+    "concurrent_jobs": "the plan's limit of jobs running at once is reached",
+    "AUTH_REQUIRED": "the API needs an API key",
+    "INVALID_CREDENTIALS": "the API key was not accepted",
+    "FORBIDDEN": "the API key may not run solve jobs",
+    "USE_CASE_NOT_FOUND": "the API does not serve this use case",
+    401: "the API key was not accepted",
+    403: "the request was refused",
+    404: "nothing is served at that address: check the API URL",
+    413: "the problem is too large for one request",
+}
+
+
+def _version() -> str:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("optimaru")
+    except PackageNotFoundError:  # running from a source tree
+        return "0.0.0"
+
+
+def _error_of(status: int, text: str, headers: Any) -> ApiError:
+    """The API's error response as an `ApiError`. The body is ``{"code", "message", "detail"}``."""
+    import json
+
+    code, message, detail = None, "", None
+    try:
+        body = json.loads(text)
+    except ValueError:
+        body = None  # not the API's own answer: a proxy's page, an empty body
+    if isinstance(body, dict):
+        code = body.get("code") if isinstance(body.get("code"), str) else None
+        message = body.get("message") if isinstance(body.get("message"), str) else ""
+        detail = body.get("detail")
+    reason = detail.get("reason") if isinstance(detail, dict) else None
+    said = _ERROR_HINTS.get(reason) or _ERROR_HINTS.get(code) or _ERROR_HINTS.get(status)
+    if code == "VALIDATION_ERROR" and isinstance(detail, list) and detail and isinstance(detail[0], dict):
+        # pydantic's list of errors: say where the first one is.
+        where = ".".join(str(part) for part in detail[0].get("loc", ()) if part != "body")
+        said = f"{where}: {detail[0].get('msg', '')}".strip(": ") or None
+    answer = f"the optimaru API answered {status}" + (f" {code}" if code else "")
+    if said or message:
+        answer += f": {said or message}"
+    if said and message:
+        answer += f" ({message})"  # the API's own sentence
+    retry = headers.get("Retry-After") if headers is not None else None
+    if retry:
+        answer += f"; retry after {retry} s"
+    return ApiError(answer, status=status, code=code, detail=detail)
+
+
+def _send(method: str, url: str, key: str, body: dict[str, Any] | None = None) -> Any:
+    """One request to the API, and its JSON. Raises `ApiError` for an error response and when the API cannot be reached."""
+    import http.client
+    import json
+    import urllib.error
+    import urllib.request
+
+    headers = {"X-API-Key": key, "Accept": "application/json", "User-Agent": f"optimaru-python/{_version()}"}
+    data = None
+    if body is not None:
+        try:
+            data = json.dumps(body, allow_nan=False).encode()
+        except ValueError as error:
+            raise ValueError(
+                "the problem holds a non-finite number, which cannot be sent to the optimaru API"
+            ) from error
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=_REQUEST_TIMEOUT) as response:
+            text = response.read().decode()
+    except urllib.error.HTTPError as error:
+        with error:
+            raise _error_of(error.code, error.read().decode(errors="replace"), error.headers) from None
+    except (OSError, http.client.HTTPException) as error:  # URLError is an OSError
+        reason = getattr(error, "reason", None) or error
+        raise ApiError(f"could not reach the optimaru API at {url}: {reason}") from error
+    try:
+        return json.loads(text)
+    except ValueError as error:
+        raise ApiError(f"the optimaru API at {url} did not answer with JSON") from error
+
+
+def _job_of(answer: Any, url: str) -> dict[str, Any]:
+    if not isinstance(answer, dict) or not all(
+        isinstance(answer.get(name), str) for name in ("status", "status_url", "result_url")
+    ):
+        raise ApiError(f"the optimaru API at {url} did not answer with a solve job")
+    return answer
+
+
+def _solve_job(settings: tuple[str, str], slug: str, body: dict[str, Any]) -> Any:
+    """Create the solve job of `body`, wait for it and return its result: the solved model's JSON."""
+    import time
+
+    key, base = settings
+    job = _job_of(_send("POST", f"{base}/api/use-cases/{slug}/solve/jobs", key, body), base)
+    status_url = base + job["status_url"]
+    try:
+        wait, failures = _POLL_FIRST, 0
+        while job["status"] in ("queued", "running"):
+            time.sleep(wait)
+            wait = min(wait * 1.5, _POLL_LONGEST)
+            try:
+                job = _job_of(_send("GET", status_url, key), base)
+                failures = 0
+            except ApiError as error:
+                # The job runs on, whatever happened to this look at it: try again unless the API said no.
+                failures += 1
+                if failures > _POLL_RETRIES or (error.status is not None and error.status < 500):
+                    raise
+    except BaseException:
+        # Interrupted (Ctrl-C) or given up: do not leave the job running on the account.
+        try:
+            _send("POST", f"{status_url}/cancel", key)
+        except Exception:
+            pass
+        raise
+    if job["status"] == "succeeded":
+        return _send("GET", base + job["result_url"], key)
+    if job["status"] == "cancelled":
+        raise ApiError("the solve job was cancelled on the optimaru API", code="JOB_CANCELLED")
+    raise ApiError(job.get("error") or f"the solve job ended as {job['status']!r}", code="JOB_FAILED")
+
+
+def _read(model: Any, result: Any, slug: str) -> Any:
+    """The API's result as the model the local call returns."""
+    from pydantic import ValidationError
+
+    try:
+        return model.model_validate(result)
+    except ValidationError as error:
+        raise ApiError(
+            f"the optimaru API returned a {slug} result that optimaru {_version()} cannot read; "
+            "the API may run another version of the engine"
+        ) from error
+
+
+# ---------------------------------------------------------------------------
+# What a use case decorates its entry points with
+# ---------------------------------------------------------------------------
+
+
+def _bound(signature: Any, args: tuple, keywords: dict) -> tuple[Any, dict[str, Any]]:
+    """The first argument and the keywords of a call, defaults filled in. A wrong call raises as the function would."""
+    call = signature.bind(*args, **keywords)
+    call.apply_defaults()
+    first, *rest = call.arguments.items()
+    return first[1], dict(rest)
+
+
+def model_solve(slug: str, model: type, *, dicts: bool = False) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+    """The ``solve()`` of a use case the API solves with ``solve``: its problem is `model` or the compiled twin.
+
+    With the API on, a `model` goes to ``POST /api/use-cases/<slug>/solve/jobs`` as
+    ``{"problem": <the model>, <keyword>: ...}`` and the result comes back as a new
+    `model`, which is what ``solve(model)`` returns here too. A compiled problem is
+    solved in place, which a result that comes back as JSON cannot do: it is refused,
+    naming the way out. `dicts` is for a ``solve()`` that also takes a dict of the
+    model's shape and returns the solved model for it.
+    """
+
+    def decorate(solve: Callable[_P, _R]) -> Callable[_P, _R]:
+        import inspect
+
+        signature = inspect.signature(solve)
+
+        @functools.wraps(solve)
+        def solve_here_or_on_the_api(*args: _P.args, **keywords: _P.kwargs) -> _R:
+            settings = _settings()
+            if settings is None:
+                return solve(*args, **keywords)
+            problem, rest = _bound(signature, args, keywords)
+            if dicts and isinstance(problem, dict):
+                problem = model.model_validate(problem)
+            if not isinstance(problem, model):
+                raise TypeError(
+                    f"with the optimaru API on, {solve.__module__}.solve() takes a {model.__name__}, not a "
+                    f"{type(problem).__name__}. A compiled problem is solved in place, which the API cannot do: "
+                    f"pass its model ({model.__name__}.from_core(problem)) and use the model that comes back, "
+                    "or call optimaru.use_local() to solve on this machine"
+                )
+            body = {"problem": _model_json(problem), **_solve_body(rest)}
+            return _read(model, _solve_job(settings, slug, body), slug)
+
+        return solve_here_or_on_the_api
+
+    return decorate
+
+
+def request_solve(
+    slug: str, result: str, *, constraints: Callable[[Any, Any], Any] | None = None
+) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+    """The ``solve_request()`` of a use case the API solves with ``solve_request``.
+
+    With the API on, the request goes to ``POST /api/use-cases/<slug>/solve/jobs`` as
+    ``{"request": <the request>, "constraints": [...]}`` and the result comes back as the
+    model named `result` in the function's module, its response model.
+
+    `constraints` is for a use case whose selection travels inside the request (employee
+    scheduling): a function ``(request, constraints) -> request`` that puts a
+    ``constraints=`` selection there, as its ``solve_request()`` does itself.
+    """
+
+    def decorate(solve_request: Callable[_P, _R]) -> Callable[_P, _R]:
+        import inspect
+        import sys
+
+        signature = inspect.signature(solve_request)
+
+        @functools.wraps(solve_request)
+        def solve_here_or_on_the_api(*args: _P.args, **keywords: _P.kwargs) -> _R:
+            settings = _settings()
+            if settings is None:
+                return solve_request(*args, **keywords)
+            request, rest = _bound(signature, args, keywords)
+            if not callable(getattr(request, "model_dump", None)):
+                raise TypeError(
+                    f"{solve_request.__module__}.solve_request() takes a request model, not a {type(request).__name__}"
+                )
+            picked = rest.pop("constraints", None)
+            for name, value in rest.items():
+                if value is not None:
+                    raise ValueError(f"{name} cannot be sent to the optimaru API")
+            body: dict[str, Any] = {}
+            if picked is not None and constraints is not None:
+                request = constraints(request, picked)
+            elif picked is not None:
+                body["constraints"] = _constraints_json(picked)
+            body = {"request": _model_json(request), **body}
+            answer = _solve_job(settings, slug, body)
+            return _read(getattr(sys.modules[solve_request.__module__], result), answer, slug)
+
+        return solve_here_or_on_the_api
+
+    return decorate
+
+
+def compiled_solve(solve: Callable[_P, _R]) -> Callable[_P, _R]:
+    """The ``solve()`` of a use case whose ``solve()`` takes compiled objects only.
+
+    Such a problem is solved in place and has no JSON to send, so with the API on the
+    call is refused, naming ``solve_request()``, which the API does solve.
+    """
+
+    @functools.wraps(solve)
+    def solve_here_only(*args: _P.args, **keywords: _P.kwargs) -> _R:
+        if _settings() is not None:
+            raise TypeError(
+                f"with the optimaru API on, {solve.__module__}.solve() cannot run: it solves a compiled "
+                "problem in place, which the API cannot do. Call solve_request() with a request model, or "
+                "call optimaru.use_local() to solve on this machine"
+            )
+        return solve(*args, **keywords)
+
+    return solve_here_only
+
+
+def local_solve(use_case: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+    """The ``solve()`` of a use case the API does not serve: it solves on this machine either way.
+
+    With the API on it says so once, as a warning, so that nobody takes a solve that ran
+    here for one that ran there.
+    """
+
+    def decorate(solve: Callable[_P, _R]) -> Callable[_P, _R]:
+        warned = False
+
+        @functools.wraps(solve)
+        def solve_here(*args: _P.args, **keywords: _P.kwargs) -> _R:
+            nonlocal warned
+            if not warned and _settings() is not None:
+                import warnings
+
+                warned = True
+                warnings.warn(
+                    f"{use_case} is not on the optimaru API: it is solved on this machine",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            return solve(*args, **keywords)
+
+        return solve_here
+
+    return decorate

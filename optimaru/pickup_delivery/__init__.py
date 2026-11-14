@@ -37,6 +37,7 @@ one job: they ride one vehicle together or all stay unassigned
 (`request_group_cost`), and the request moves carry them as one unit.
 """
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from ._core import (
     AcceptorType,
@@ -82,6 +83,7 @@ __all__ = [
 ]
 
 
+@_api.compiled_solve
 def solve(
     plan: PdpRoutePlan,
     *,
