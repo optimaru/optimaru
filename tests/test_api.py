@@ -584,6 +584,30 @@ def test_an_answer_that_is_not_the_apis_own_is_still_an_api_error(api):
     assert raised.value.code is None
 
 
+def test_a_redirect_is_not_followed_so_the_key_stays_with_the_api(api):
+    with ApiStandIn(KEY) as elsewhere:
+        api.refuse = (307, {"detail": "moved"}, {"Location": f"{elsewhere.url}/api/use-cases/knapsack/solve/jobs"})
+        knapsack = use_case_module("knapsack")
+        with pytest.raises(
+            optimaru.ApiError, match="307: the address redirects to .*the key is not sent along"
+        ) as raised:
+            knapsack.solve(model_of("knapsack"))
+        assert raised.value.status == 307
+        assert not elsewhere.requests
+
+
+def test_a_job_that_points_off_the_api_is_not_followed(api):
+    api.refuse = (
+        202,
+        {"id": "1", "status": "queued", "status_url": "https://elsewhere.example/job", "result_url": "/result"},
+        {},
+    )
+    knapsack = use_case_module("knapsack")
+    with pytest.raises(optimaru.ApiError, match="did not answer with a solve job"):
+        knapsack.solve(model_of("knapsack"))
+    assert len(api.requests) == 1
+
+
 def test_an_api_that_cannot_be_reached_is_an_api_error():
     with socket.socket() as taken:
         taken.bind(("127.0.0.1", 0))

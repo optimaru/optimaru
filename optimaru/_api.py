@@ -359,6 +359,9 @@ def _error_of(status: int, text: str, headers: Any) -> ApiError:
         # pydantic's list of errors: say where the first one is.
         where = ".".join(str(part) for part in detail[0].get("loc", ()) if part != "body")
         said = f"{where}: {detail[0].get('msg', '')}".strip(": ") or None
+    if 300 <= status < 400:
+        target = headers.get("Location") if headers is not None else None
+        said = f"the address redirects{f' to {target}' if target else ''}; the key is not sent along, so set the API URL to where it points"
     answer = f"the optimaru API answered {status}" + (f" {code}" if code else "")
     if said or message:
         answer += f": {said or message}"
@@ -368,6 +371,22 @@ def _error_of(status: int, text: str, headers: Any) -> ApiError:
     if retry:
         answer += f"; retry after {retry} s"
     return ApiError(answer, status=status, code=code, detail=detail)
+
+
+@functools.cache
+def _opener() -> Any:
+    """What every request is sent with: it follows no redirect.
+
+    urllib would send the request's headers, the key among them, to wherever a redirect
+    points. The API does not redirect, so one is an error, and it names the address.
+    """
+    import urllib.request
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args: Any, **keywords: Any) -> None:
+            return None
+
+    return urllib.request.build_opener(NoRedirect)
 
 
 def _send(method: str, url: str, key: str, body: dict[str, Any] | None = None) -> Any:
@@ -389,7 +408,7 @@ def _send(method: str, url: str, key: str, body: dict[str, Any] | None = None) -
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(request, timeout=_REQUEST_TIMEOUT) as response:
+        with _opener().open(request, timeout=_REQUEST_TIMEOUT) as response:
             text = response.read().decode()
     except urllib.error.HTTPError as error:
         with error:
@@ -404,8 +423,13 @@ def _send(method: str, url: str, key: str, body: dict[str, Any] | None = None) -
 
 
 def _job_of(answer: Any, url: str) -> dict[str, Any]:
-    if not isinstance(answer, dict) or not all(
-        isinstance(answer.get(name), str) for name in ("status", "status_url", "result_url")
+    # The two addresses are paths on the API: anything else is not followed, as the key goes with every request.
+    if (
+        not isinstance(answer, dict)
+        or not isinstance(answer.get("status"), str)
+        or not all(
+            isinstance(answer.get(name), str) and answer[name].startswith("/") for name in ("status_url", "result_url")
+        )
     ):
         raise ApiError(f"the optimaru API at {url} did not answer with a solve job")
     return answer
