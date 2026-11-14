@@ -755,9 +755,15 @@ def _check_settings(package: str, keywords: dict[str, Any]) -> None:
     )
 
 
-def _bound(signature: Any, args: tuple, keywords: dict) -> tuple[Any, dict[str, Any]]:
+def _bound(function: Any, signature: Any, args: tuple, keywords: dict) -> tuple[Any, dict[str, Any]]:
     """The first argument and the keywords of a call, defaults filled in. A wrong call raises as the function would."""
-    call = signature.bind(*args, **keywords)
+    try:
+        call = signature.bind(*args, **keywords)
+    except TypeError:
+        # The same call fails in Python's own binding, before the body runs, and its message names
+        # the function and the argument.
+        function(*args, **keywords)
+        raise
     call.apply_defaults()
     first, *rest = call.arguments.items()
     return first[1], dict(rest)
@@ -784,7 +790,7 @@ def model_solve(slug: str, model: type, *, dicts: bool = False) -> Callable[[Cal
             settings = _settings()
             if settings is None:
                 return solve(*args, **keywords)
-            problem, rest = _bound(signature, args, keywords)
+            problem, rest = _bound(solve, signature, args, keywords)
             if dicts and isinstance(problem, dict):
                 problem = model.model_validate(problem)
             if not isinstance(problem, model):
@@ -835,7 +841,7 @@ def request_solve(
             settings = _settings()
             if settings is None:
                 return solve_request(*args, **keywords)
-            request, rest = _bound(signature, args, keywords)
+            request, rest = _bound(solve_request, signature, args, keywords)
             if not callable(getattr(request, "model_dump", None)):
                 raise TypeError(
                     f"{solve_request.__module__}.solve_request() takes a request model, not a {type(request).__name__}"
@@ -844,16 +850,15 @@ def request_solve(
             for name, value in rest.items():
                 if value is not None:
                     raise ValueError(f"{name} cannot be sent to the optimaru API")
-            # The seed it solves with: employee scheduling's request may take it from its settings.
-            effective = getattr(request, "_effective", None)
-            seed = effective("random_seed") if callable(effective) else getattr(request, "random_seed", None)
-            _check_settings(package, {"random_seed": seed})
             body: dict[str, Any] = {}
             if prepare is not None:
                 request = prepare(request, picked)
             elif picked is not None:
                 body["constraints"] = _constraints_json(picked)
             body = {"request": _model_json(request), **body}
+            # The seed as sent, which is the one it solves with (employee scheduling's request writes
+            # the seed of its settings there while its own is not given).
+            _check_settings(package, {"random_seed": body["request"].get("random_seed")})
             answer = _solve_job(settings, slug, body)
             return _read(getattr(sys.modules[solve_request.__module__], result), answer, slug)
 

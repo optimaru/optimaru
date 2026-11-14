@@ -924,9 +924,38 @@ def test_the_seed_checked_is_the_one_employee_scheduling_solves_with(api):
     """Its request also takes the seed in its settings, which wins while the request's own was not given."""
     module = use_case_module("employee_scheduling")
     request = request_of("employee-scheduling")
-    request = request.model_copy(update={"settings": request.settings.model_copy(update={"random_seed": -1})})
+    request.settings.random_seed = -1  # a supported way to set the seed after construction
     with pytest.raises((TypeError, ValueError)):
         module.solve_request(request)
+    assert not api.requests
+    request.settings.random_seed = 5
+    module.solve_request(request)
+    (created,) = api.created()
+    assert created.body["request"]["random_seed"] == 5
+
+
+@pytest.mark.parametrize("config", [{"spent_limit_seconds": 1}, "fast"])
+def test_a_config_of_another_type_is_refused_as_here(api, config):
+    knapsack = use_case_module("knapsack")
+    with pytest.raises(TypeError, match="config must be a optimaru.knapsack.SolverConfig"):
+        knapsack.solve(model_of("knapsack"), config=config)
+    with pytest.raises(TypeError):
+        knapsack.solve.__wrapped__(model_of("knapsack"), config=config)
+    assert not api.requests
+
+
+@pytest.mark.parametrize(
+    ("args", "keywords", "said"),
+    [
+        ((), {}, r"solve\(\) missing 1 required positional argument: 'problem'"),
+        (("p", 5), {}, r"solve\(\) takes 1 positional argument but 2 were given"),
+        ((), {"schedule": "p"}, r"solve\(\) got an unexpected keyword argument 'schedule'"),
+    ],
+)
+def test_a_wrong_call_raises_as_the_function_does(api, args, keywords, said):
+    knapsack = use_case_module("knapsack")
+    with pytest.raises(TypeError, match=said):
+        knapsack.solve(*args, **keywords)
     assert not api.requests
 
 
