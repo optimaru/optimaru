@@ -343,6 +343,55 @@ def test_a_request_use_case_sends_its_selection_beside_the_request(api):
     assert keywords["constraints"] == picks
 
 
+def test_a_pick_added_to_the_request_in_place_is_sent_with_its_name(api):
+    module = use_case_module("employee_scheduling")
+    from optimaru.employee_scheduling import constraints as specs
+
+    request = request_of("employee-scheduling")
+    count = len(request.model_input.constraints)
+    request.model_input.constraints.append(specs.MaxConsecutiveDaysCost(value=4))  # past pydantic
+
+    module.solve_request(request)
+
+    (created,) = api.created()
+    sent = created.body["request"]["model_input"]["constraints"]
+    assert len(sent) == count + 1 and all(item.get("name") for item in sent)
+    assert (sent[-1]["name"], sent[-1]["value"]) == ("max_consecutive_days_cost", 4)
+
+
+def test_free_form_solver_parameters_are_made_plain_or_refused(api):
+    module = use_case_module("vehicle_routing")
+    request = request_of("vehicle-routing")
+    acceptor = next(
+        getattr(module.AcceptorType, name)
+        for name in dir(module.AcceptorType)
+        if name.isupper() and getattr(module.AcceptorType, name) != module.SolverConfig().acceptor_type
+    )
+    named = request.model_copy(update={"solver_parameters": {"acceptor_type": acceptor, "step_count_limit": 50}})
+    module.solve_request(named)
+    (created,) = api.created()
+    assert created.body["request"]["solver_parameters"] == {"acceptor_type": acceptor.name, "step_count_limit": 50}
+
+    # pydantic would write this limit as [0, null], which the API reads as "leave it as it is".
+    endless = request.model_copy(update={"solver_parameters": {"best_score_limit": (0, float("-inf"))}})
+    with pytest.raises(ValueError, match="solver_parameters.*non-finite"):
+        module.solve_request(endless)
+    assert len(api.created()) == 1
+
+
+def test_a_subclass_of_the_model_comes_back_as_one(api):
+    knapsack = use_case_module("knapsack")
+    problem = model_of("knapsack")
+
+    class Rucksack(type(problem)):
+        pass
+
+    mine = Rucksack.model_validate(problem.model_dump())
+    solved = knapsack.solve(mine, time_limit_seconds=0.05)
+    assert type(solved) is Rucksack
+    assert type(knapsack.solve.__wrapped__(mine, time_limit_seconds=0.05)) is Rucksack
+
+
 @pytest.mark.parametrize("constraints", [[], ["knapsack_capacity_cost"], [object()]])
 def test_a_selection_that_is_not_a_list_of_specs_is_refused(api, constraints):
     knapsack = use_case_module("knapsack")

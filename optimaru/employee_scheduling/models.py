@@ -919,8 +919,16 @@ def _with_constraints(request: ScheduleRequest, constraints) -> ScheduleRequest:
     return request.model_copy(update={"model_input": model_input})
 
 
-# On the optimaru API the selection travels inside the request, so a ``constraints=`` goes there first.
-@_api.request_solve("employee-scheduling", "ScheduleSolution", constraints=_with_constraints)
+def _for_the_api(request: ScheduleRequest, constraints) -> ScheduleRequest:
+    """`request` as the optimaru API takes it: the selection inside it, every pick a constraint model.
+
+    Assigning the list validates it, so a spec that reached ``model_input.constraints``
+    through an in-place edit is sent with its name, like the ones the request was built with.
+    """
+    return _with_constraints(request, request.model_input.constraints if constraints is None else constraints)
+
+
+@_api.request_solve("employee-scheduling", "ScheduleSolution", prepare=_for_the_api)
 def solve_request(
     request: ScheduleRequest,
     *,

@@ -246,6 +246,12 @@ key nothing is sent.
   solve sent there is logged at INFO on the `optimaru` logger. No redirect is followed,
   so the key goes to that API only. `calculate_score`, `constraint_costs` and the other
   helpers keep running here.
+- A dict in what comes back (routes by vehicle, an assignment by location) has the same
+  entries as here, possibly in another order: the API keeps a JSON object's keys
+  unordered. Read it by key.
+- The API has limits of its own: how long one job may run, how many parallel starts it
+  may take, and what the plan of the key allows. Past one it answers with an `ApiError`
+  that says which.
 - The API runs a released engine. A `SolverConfig` field or a model field that a newer
   source checkout has and the API's engine does not is refused there by its name.
 

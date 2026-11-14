@@ -238,7 +238,32 @@ def _plain(value: Any, where: str) -> Any:
 
 
 def _model_json(model: Any) -> dict[str, Any]:
-    return model.model_dump(mode="json")
+    """A problem model or a request as the JSON it is sent as.
+
+    A request's free-form fields (``solver_parameters``, and the ``portfolio`` of employee
+    scheduling's ``settings``) are made plain first. pydantic writes a non-finite number
+    in such a field as null, which the API reads as "leave the field as it is", and cannot
+    write a compiled enum member at all; `_plain` refuses the one and names the other. A
+    non-finite number in a typed field stays one and is refused when the body is encoded.
+    """
+    from pydantic_core import PydanticSerializationError
+
+    update: dict[str, Any] = {}
+    parameters = getattr(model, "solver_parameters", None)
+    if isinstance(parameters, dict) and parameters:
+        update["solver_parameters"] = _plain(parameters, "solver_parameters")
+    settings = getattr(model, "settings", None)
+    portfolio = getattr(settings, "portfolio", None)
+    if isinstance(portfolio, list) and portfolio:
+        update["settings"] = settings.model_copy(update={"portfolio": _plain(portfolio, "settings.portfolio")})
+    if update:
+        model = model.model_copy(update=update)
+    try:
+        return model.model_dump(mode="json")
+    except PydanticSerializationError as error:
+        raise TypeError(
+            f"the {type(model).__name__} holds a value that cannot be sent to the optimaru API: {error}"
+        ) from None
 
 
 def _constraints_json(constraints: Any) -> list[dict[str, Any]]:
@@ -586,7 +611,8 @@ def model_solve(slug: str, model: type, *, dicts: bool = False) -> Callable[[Cal
                     "or call optimaru.use_local() to solve on this machine"
                 )
             body = {"problem": _model_json(problem), **_solve_body(rest)}
-            return _read(model, _solve_job(settings, slug, body), slug)
+            # The caller's own class, so that a subclass of the model comes back as one, as it does here.
+            return _read(type(problem), _solve_job(settings, slug, body), slug)
 
         return solve_here_or_on_the_api
 
@@ -594,7 +620,7 @@ def model_solve(slug: str, model: type, *, dicts: bool = False) -> Callable[[Cal
 
 
 def request_solve(
-    slug: str, result: str, *, constraints: Callable[[Any, Any], Any] | None = None
+    slug: str, result: str, *, prepare: Callable[[Any, Any], Any] | None = None
 ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     """The ``solve_request()`` of a use case the API solves with ``solve_request``.
 
@@ -602,9 +628,9 @@ def request_solve(
     ``{"request": <the request>, "constraints": [...]}`` and the result comes back as the
     model named `result` in the function's module, its response model.
 
-    `constraints` is for a use case whose selection travels inside the request (employee
-    scheduling): a function ``(request, constraints) -> request`` that puts a
-    ``constraints=`` selection there, as its ``solve_request()`` does itself.
+    `prepare` is for a use case whose selection travels inside the request (employee
+    scheduling): a function ``(request, constraints) -> request`` that returns the request
+    to send, with a ``constraints=`` selection (or None) put where the API reads it.
     """
 
     def decorate(solve_request: Callable[_P, _R]) -> Callable[_P, _R]:
@@ -628,8 +654,8 @@ def request_solve(
                 if value is not None:
                     raise ValueError(f"{name} cannot be sent to the optimaru API")
             body: dict[str, Any] = {}
-            if picked is not None and constraints is not None:
-                request = constraints(request, picked)
+            if prepare is not None:
+                request = prepare(request, picked)
             elif picked is not None:
                 body["constraints"] = _constraints_json(picked)
             body = {"request": _model_json(request), **body}
