@@ -105,10 +105,10 @@ class ApiError(RuntimeError):
     did not finish in time. ``code`` is the API's error code, such as
     ``"INVALID_CREDENTIALS"``, ``"PLAN_LIMIT_EXCEEDED"`` or ``"VALIDATION_ERROR"``;
     ``"JOB_FAILED"``, ``"JOB_CANCELLED"`` and ``"JOB_TIMEOUT"`` are a job that ended without
-    a result. ``detail`` is what the API sent with the error: for a plan limit, a dict with
-    the ``reason`` and the plan's ``entitlements``. ``retry_after`` is the
-    number of seconds the API asked to wait before trying again (its ``Retry-After``),
-    or None.
+    a result, and ``"BAD_ANSWER"`` an answer that is not the API's JSON. ``detail`` is what
+    the API sent with the error: for a plan limit, a dict with the ``reason`` and the plan's
+    ``entitlements``. ``retry_after`` is the number of seconds the API asked to wait before
+    trying again (its ``Retry-After``), or None.
     """
 
     def __init__(
@@ -133,7 +133,9 @@ def use_api(key: str | None = None, *, url: str | None = None) -> None:
     ``key`` is the API key (it starts with ``om_``); None reads the environment variable
     ``OPTIMARU_API_KEY`` at each solve. ``url`` is the API to call when it is not the
     default one, ``https://app.optimaru.com``; None reads ``OPTIMARU_API_URL``, then the
-    default. It must be an https URL (http is accepted for localhost).
+    default. It must be an https URL (http is accepted for localhost). It may have a path
+    (an API behind a prefix): every address of a solve, the job's included, is that URL
+    and a path.
 
     Setting ``OPTIMARU_API_KEY`` alone does the same without a line of code; this call is
     for a key that comes from somewhere else, and it wins over the environment.
@@ -500,7 +502,8 @@ def _error_of(status: int, text: str, headers: Any) -> ApiError:
         loc, msg = detail[0].get("loc"), detail[0].get("msg")
         parts = loc if isinstance(loc, list) else []
         where = ".".join(str(part) for part in parts if part != "body")
-        said = f"{where}: {msg if isinstance(msg, str) else ''}".strip(": ") or said
+        text = msg if isinstance(msg, str) else ""
+        said = (f"{where}: {text}" if where and text else where or text) or said
     if 300 <= status < 400:
         target = headers.get("Location") if headers is not None else None
         where = f" to {target}" if target else ""
@@ -572,7 +575,7 @@ def _send(
     try:
         return json.loads(text)
     except (ValueError, RecursionError) as error:
-        raise ApiError(f"the optimaru API at {url} did not answer with JSON") from error
+        raise ApiError(f"the optimaru API at {url} did not answer with JSON", code="BAD_ANSWER") from error
 
 
 def _job_of(answer: Any, url: str) -> dict[str, Any]:
@@ -584,7 +587,7 @@ def _job_of(answer: Any, url: str) -> dict[str, Any]:
             isinstance(answer.get(name), str) and answer[name].startswith("/") for name in ("status_url", "result_url")
         )
     ):
-        raise ApiError(f"the optimaru API at {url} did not answer with a solve job")
+        raise ApiError(f"the optimaru API at {url} did not answer with a solve job", code="BAD_ANSWER")
     return answer
 
 
@@ -603,7 +606,9 @@ def _patiently(method: str, url: str, key: str, patience: float = _POLL_PATIENCE
         try:
             return _send(method, url, key)
         except ApiError as error:
-            passes = error.status is None or error.status >= 500 or error.status in (408, 429)
+            # No answer at all (a code would say what came back instead), a 5xx, a 408 or a 429.
+            transport = error.status is None and error.code is None
+            passes = transport or (error.status is not None and (error.status >= 500 or error.status in (408, 429)))
             left = patience - (time.monotonic() - started)
             if not passes or left <= 0:
                 raise
@@ -612,7 +617,8 @@ def _patiently(method: str, url: str, key: str, patience: float = _POLL_PATIENCE
 
 
 #: What has been said once in this process: the APIs solves were sent to, and ``local:<use case>``
-#: for a use case that solved here with the API on.
+#: for a use case that solved here with the API on. No lock: two threads at once can at worst say
+#: a thing twice.
 _said: set[str] = set()
 
 
@@ -637,6 +643,7 @@ def _wait_limit(body: dict[str, Any]) -> float:
         return float(given) if given is not None else _DEFAULT_TIME_LIMIT
 
     if "problem" in body:
+        # A model solve's parallel starts run at once, in threads; a request's may run one after another.
         limit = seconds(body.get("time_limit_seconds"), (body.get("config") or {}).get("spent_limit_seconds"))
     else:
         request = body.get("request") or {}

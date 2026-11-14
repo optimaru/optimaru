@@ -806,6 +806,46 @@ def test_a_subclass_the_result_cannot_fill_is_named(api):
     assert raised.value.code == "JOB_FAILED"
 
 
+def test_an_answer_that_is_not_json_is_not_retried(api, monkeypatch):
+    """A captive portal or a wrong host answering 200 with a page is said at once, not polled for a minute."""
+    api.looks_while_running = 1
+    real = _api._send
+    calls = []
+
+    def send(method, url, key, body=None, *, timeout=_api._REQUEST_TIMEOUT):
+        calls.append(method)
+        if method == "GET" and not url.endswith("/result"):
+            raise optimaru.ApiError(f"the optimaru API at {url} did not answer with JSON", code="BAD_ANSWER")
+        return real(method, url, key, body, timeout=timeout)
+
+    monkeypatch.setattr(_api, "_send", send)
+    with pytest.raises(optimaru.ApiError, match="did not answer with JSON") as raised:
+        use_case_module("knapsack").solve(model_of("knapsack"), time_limit_seconds=0.05)
+    assert raised.value.code == "BAD_ANSWER"
+    assert calls == ["POST", "GET", "POST"]  # create, one look, cancel
+
+
+def test_an_interrupt_while_a_look_is_retried_still_cancels_the_job(api, monkeypatch):
+    api.fail_looks = 10**6
+    naps = []
+
+    def nap(seconds):
+        naps.append(seconds)
+        if len(naps) == 3:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr("time.sleep", nap)
+    with pytest.raises(KeyboardInterrupt):
+        use_case_module("knapsack").solve(model_of("knapsack"), time_limit_seconds=0.05)
+    assert len(api.cancelled) == 1
+
+
+def test_the_default_time_limit_is_the_requests():
+    from optimaru._models import SolveRequest
+
+    assert _api._DEFAULT_TIME_LIMIT == SolveRequest.model_fields["time_limit_seconds"].default
+
+
 def test_an_interrupted_solve_cancels_its_job(api, monkeypatch):
     api.looks_while_running = 100
     naps = []
