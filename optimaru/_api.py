@@ -604,9 +604,10 @@ def _patiently(method: str, url: str, key: str, patience: float = _POLL_PATIENCE
             return _send(method, url, key)
         except ApiError as error:
             passes = error.status is None or error.status >= 500 or error.status in (408, 429)
-            if not passes or time.monotonic() - started > patience:
+            left = patience - (time.monotonic() - started)
+            if not passes or left <= 0:
                 raise
-            time.sleep(max(wait, min(error.retry_after or 0.0, _RETRY_AFTER_LONGEST)))
+            time.sleep(min(max(wait, min(error.retry_after or 0.0, _RETRY_AFTER_LONGEST)), left))
             wait = min(wait * 1.5, _POLL_LONGEST)
 
 
@@ -758,14 +759,40 @@ def _check_settings(package: str, keywords: dict[str, Any]) -> None:
     )
 
 
+@functools.cache
+def _stub(function: Any) -> Any:
+    """A function with `function`'s name and parameters and an empty body.
+
+    Called with the arguments a wrong call gave, it raises Python's own TypeError, which names
+    the function and the argument, and it can solve nothing: the real function never runs on a
+    call the API was meant to take.
+    """
+    import inspect
+
+    parts: list[str] = []
+    for parameter in inspect.signature(function).parameters.values():
+        kind = parameter.kind
+        if kind is parameter.VAR_POSITIONAL:
+            parts.append(f"*{parameter.name}")
+        elif kind is parameter.VAR_KEYWORD:
+            parts.append(f"**{parameter.name}")
+        else:
+            if kind is parameter.KEYWORD_ONLY and not any(part.startswith("*") for part in parts):
+                parts.append("*")
+            parts.append(parameter.name if parameter.default is parameter.empty else f"{parameter.name}=None")
+            if kind is parameter.POSITIONAL_ONLY:
+                parts = [part for part in parts if part != "/"] + ["/"]
+    namespace: dict[str, Any] = {}
+    exec(f"def {function.__name__}({', '.join(parts)}):\n    pass", namespace)  # names from a signature only
+    return namespace[function.__name__]
+
+
 def _bound(function: Any, signature: Any, args: tuple, keywords: dict) -> tuple[Any, dict[str, Any]]:
     """The first argument and the keywords of a call, defaults filled in. A wrong call raises as the function would."""
     try:
         call = signature.bind(*args, **keywords)
     except TypeError:
-        # The same call fails in Python's own binding, before the body runs, and its message names
-        # the function and the argument.
-        function(*args, **keywords)
+        _stub(function)(*args, **keywords)  # the interpreter's message for the same call
         raise
     call.apply_defaults()
     first, *rest = call.arguments.items()

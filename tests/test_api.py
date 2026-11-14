@@ -964,6 +964,30 @@ def test_a_wrong_call_raises_as_the_function_does(api, args, keywords, said):
     assert not api.requests
 
 
+def test_a_wrong_call_never_runs_the_function_here(api, monkeypatch):
+    """The message comes from a stub with the same parameters: the real function does not run."""
+    knapsack = use_case_module("knapsack")
+    ran = []
+    monkeypatch.setattr(knapsack.solve, "__wrapped__", lambda *args, **keywords: ran.append(1))
+    with pytest.raises(TypeError, match=r"solve\(\) got an unexpected keyword argument 'schedule'"):
+        knapsack.solve(schedule="p")
+    assert not ran and not api.requests
+
+
+@pytest.mark.parametrize("use_case", optimaru.__all__)
+def test_the_stub_has_the_parameters_of_the_entry_points(use_case):
+    import inspect
+
+    module = use_case_module(use_case)
+    for function in (module.solve, module.solve_request):
+        original = inspect.unwrap(function)
+        stub = _api._stub(original)
+        assert stub.__name__ == original.__name__
+        assert [(p.name, p.kind) for p in inspect.signature(stub).parameters.values()] == [
+            (p.name, p.kind) for p in inspect.signature(original).parameters.values()
+        ]
+
+
 def test_a_decimal_travels_as_the_number_it_is(api):
     from decimal import Decimal
 
