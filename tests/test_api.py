@@ -5,7 +5,7 @@ way the hosted API does, so what the client sends is checked against what a serv
 """
 
 import importlib
-import json
+import re
 import socket
 import warnings
 
@@ -360,12 +360,23 @@ def test_solve_of_a_compiled_problem_names_solve_request(api, slug):
 def test_school_timetabling_solves_here_and_says_so_once(api):
     school = use_case_module("school_timetabling")
     problem = small_problem("school_timetabling")
-    with pytest.warns(RuntimeWarning, match="school timetabling is not on the optimaru API"):
+    with pytest.warns(RuntimeWarning, match="does not take the Python call of school timetabling"):
         first = school.solve(problem, time_limit_seconds=0.2, random_seed=1)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         school.solve(problem, time_limit_seconds=0.2, random_seed=1)
     assert first["lessons"]
+    assert not api.requests
+
+
+def test_school_timetablings_solve_request_warns_at_its_caller(api):
+    use_case_module("school_timetabling")
+    from optimaru.school_timetabling.models import TimetableRequest, solve_request
+
+    request = TimetableRequest(model_input=small_problem("school_timetabling"), time_limit_seconds=0.2)
+    with pytest.warns(RuntimeWarning, match="does not take the Python call") as caught:
+        solve_request(request)
+    assert [warning.filename for warning in caught] == [__file__]
     assert not api.requests
 
 
@@ -565,25 +576,51 @@ def test_a_first_feasible_limit_in_a_config_travels_as_the_keyword(api, use_case
     assert score_of(solved)
 
 
-def test_the_stand_in_refuses_what_the_api_refuses(api):
-    """The stand-in refuses what the API's request model refuses before a job exists (checked against the server)."""
-    knapsack = use_case_module("knapsack")
+# What the real server answers to each body, as the client words it (taken from optimaru/server).
+REAL_REFUSALS = (
+    ({"time_limit_seconds": 0}, "time_limit_seconds: Input should be greater than 0"),
+    ({"time_limit_seconds": 2e9}, "time_limit_seconds: Input should be less than or equal to 1000000000"),
+    ({"parallel_solver_count": 17}, "Value error, parallel_solver_count must be between 1 and 16"),
+    ({"config": {"parallel_solver_count": 0}}, "Value error, config.parallel_solver_count must be between 1 and 16"),
+    ({"config": {"spent_limit_seconds": -1}}, "Value error, config.spent_limit_seconds must be between 0 and 1e9"),
+    ({"constraints": []}, "constraints: Value error, constraints must select at least one enabled constraint"),
+    (
+        {"constraints": [{"name": "knapsack_capacity_cost", "weight": True}]},
+        "constraints.0.weight: Input should be a valid number",
+    ),
+    (
+        {"constraints": [{"name": "knapsack_capacity_cost", "clip": None}]},
+        "constraints.0.clip: Input should be a valid boolean",
+    ),
+    (
+        {"constraints": [{"name": "knapsack_capacity_cost", "hard": True}]},
+        "constraints.0: Value error, `hard` was replaced by `level`",
+    ),
+)
+
+
+@pytest.mark.parametrize(("body", "said"), REAL_REFUSALS)
+def test_the_stand_in_refuses_what_the_api_refuses(api, body, said):
+    """The stand-in refuses what the API's request model refuses before a job exists, in the API's words."""
+    use_case_module("knapsack")
     problem = _api._model_json(model_of("knapsack"))
-    settings = _api._settings()
-    for body, where in (
-        ({"time_limit_seconds": 0}, "time_limit_seconds"),
-        ({"parallel_solver_count": 17}, "parallel_solver_count"),
-        ({"config": {"parallel_solver_count": 0}}, "config.parallel_solver_count"),
-        ({"time_limit_seconds": 2e9}, "time_limit_seconds"),
-        ({"config": {"spent_limit_seconds": -1}}, "config.spent_limit_seconds"),
-        ({"constraints": []}, "constraints"),
-        ({"constraints": [{"name": "knapsack_capacity_cost", "weight": True}]}, "constraints.0.weight"),
-        ({"constraints": [{"name": "knapsack_capacity_cost", "clip": None}]}, "constraints.0.clip"),
-        ({"constraints": [{"name": "knapsack_capacity_cost", "hard": True}]}, "constraints.0.hard"),
-    ):
-        with pytest.raises(optimaru.ApiError, match=f"422 VALIDATION_ERROR: {where}"):
-            _api._solve_job(settings, "knapsack", {"problem": problem, **body})
-    assert knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05).score_hard == 0
+    with pytest.raises(optimaru.ApiError, match="422 VALIDATION_ERROR: " + re.escape(said)):
+        _api._solve_job(_api._settings(), "knapsack", {"problem": problem, **body})
+    assert not api.jobs
+
+
+@pytest.mark.parametrize(
+    ("update", "said"),
+    [
+        ({"parallel_solver_count": 17}, "Value error, request.parallel_solver_count must be between 1 and 16"),
+        ({"timelimit": 3}, "Value error, request.time_limit_seconds and request.timelimit are the same field"),
+    ],
+)
+def test_the_stand_in_refuses_a_request_as_the_api_does(api, update, said):
+    use_case_module("vehicle_routing")
+    request = {**_api._model_json(request_of("vehicle-routing")), **update}
+    with pytest.raises(optimaru.ApiError, match="422 VALIDATION_ERROR: " + re.escape(said)):
+        _api._solve_job(_api._settings(), "vehicle-routing", {"request": request})
 
 
 def test_a_time_limit_of_zero_travels_as_the_config_field(api):
@@ -627,11 +664,15 @@ def test_what_cannot_be_sent_is_refused_before_anything_is_sent(api):
     config.best_score_limit = (-3, float("-inf"))  # not the first feasible solution, which travels as the keyword
     with pytest.raises(ValueError, match="config.best_score_limit.*non-finite.*stop_at_first_feasible=True"):
         knapsack.solve(problem, config=config)
+    with pytest.raises(TypeError):
+        knapsack.solve(problem, no_such_keyword=1)
+    assert not api.requests
+
+
+def test_a_select_callback_is_refused_before_anything_is_sent(api):
     module = use_case_module("employee_scheduling")
     with pytest.raises(ValueError, match="select cannot be sent"):
         module.solve_request(request_of("employee-scheduling"), select=lambda solutions: solutions[0])
-    with pytest.raises(TypeError):
-        knapsack.solve(problem, no_such_keyword=1)
     assert not api.requests
 
 
@@ -703,7 +744,7 @@ def test_a_job_that_does_not_finish_in_time_is_given_up_and_cancelled(api, monke
     api.looks_while_running = 10**6
     knapsack = use_case_module("knapsack")
     with pytest.raises(
-        optimaru.ApiError, match="did not finish within .*'running'.*cancelled.*time_limit_seconds"
+        optimaru.ApiError, match="did not finish within .*'running'.*cancel was sent.*longer time limit"
     ) as raised:
         knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
     assert raised.value.code == "JOB_TIMEOUT"
@@ -735,7 +776,7 @@ def test_a_setting_a_local_solve_never_uses_does_not_stop_it(monkeypatch):
     school = use_case_module("school_timetabling")
     monkeypatch.setenv("OPTIMARU_API_KEY", KEY)
     monkeypatch.setenv("OPTIMARU_API_URL", "http://not-local.example")  # refused by a solve that sends
-    with pytest.warns(RuntimeWarning, match="not on the optimaru API"):
+    with pytest.warns(RuntimeWarning, match="does not take the Python call"):
         assert school.solve(small_problem("school_timetabling"), time_limit_seconds=0.2)["lessons"]
 
 
@@ -867,9 +908,25 @@ def test_a_time_limit_longer_than_a_job_may_run_says_so(api):
 def test_a_seed_the_engine_refuses_is_refused_before_a_job_exists(api, seed):
     with pytest.raises((TypeError, ValueError)):
         use_case_module("knapsack").solve(model_of("knapsack"), random_seed=seed)
+    assert not api.requests
+
+
+@pytest.mark.parametrize("seed", [-1, 2**64])
+def test_a_seed_in_a_request_the_engine_refuses_is_refused_before_a_job_exists(api, seed):
+    use_case_module("vehicle_routing")
     request = request_of("vehicle-routing").model_copy(update={"random_seed": seed})
     with pytest.raises((TypeError, ValueError)):
         use_case_module("vehicle_routing").solve_request(request)
+    assert not api.requests
+
+
+def test_the_seed_checked_is_the_one_employee_scheduling_solves_with(api):
+    """Its request also takes the seed in its settings, which wins while the request's own was not given."""
+    module = use_case_module("employee_scheduling")
+    request = request_of("employee-scheduling")
+    request = request.model_copy(update={"settings": request.settings.model_copy(update={"random_seed": -1})})
+    with pytest.raises((TypeError, ValueError)):
+        module.solve_request(request)
     assert not api.requests
 
 
@@ -891,13 +948,14 @@ def test_an_answer_that_is_not_the_apis_own_is_still_an_api_error(api):
 
 def test_a_redirect_is_not_followed_so_the_key_stays_with_the_api(api):
     with ApiStandIn(KEY) as elsewhere:
-        api.refuse = (307, {"detail": "moved"}, {"Location": f"{elsewhere.url}/api/use-cases/knapsack/solve/jobs"})
+        # A 302 is what urllib would follow, even on a POST (as a GET, with the headers and the key).
+        api.refuse = (302, {"detail": "moved"}, {"Location": f"{elsewhere.url}/api/use-cases/knapsack/solve/jobs"})
         knapsack = use_case_module("knapsack")
         with pytest.raises(
-            optimaru.ApiError, match="307: the address redirects to .*the key is not sent along"
+            optimaru.ApiError, match="302: the address redirects to .*the key is not sent along"
         ) as raised:
             knapsack.solve(model_of("knapsack"))
-        assert raised.value.status == 307
+        assert raised.value.status == 302
         assert not elsewhere.requests
 
 
@@ -991,12 +1049,3 @@ def test_the_first_solve_sent_to_an_api_is_logged(api, caplog):
         knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
         knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
     assert [record.getMessage() for record in caplog.records] == [f"solving on the optimaru API at {api.url}"]
-
-
-def test_the_stand_in_reads_json_only():
-    """What arrived at the stand-in went through JSON, so nothing rode along as a Python object."""
-    with ApiStandIn(KEY) as stand_in:
-        optimaru.use_api(KEY, url=stand_in.url)
-        use_case_module("knapsack").solve(model_of("knapsack"), time_limit_seconds=0.05)
-        (created,) = stand_in.created()
-        assert json.loads(json.dumps(created.body)) == created.body

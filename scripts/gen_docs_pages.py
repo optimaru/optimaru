@@ -76,7 +76,14 @@ with mkdocs_gen_files.open("reference/constraint-base.md", "w") as page:
     page.write("# Constraint-spec base\n\n::: optimaru._constraint\n")
 nav["API reference", "optimaru._constraint"] = "reference/constraint-base.md"
 with mkdocs_gen_files.open("reference/api.md", "w") as page:
-    page.write("# Solving on the optimaru API\n\n::: optimaru._api\n")
+    # The setting and its error, as optimaru exports them; the decorators are for use cases, not users.
+    page.write(
+        "# Solving on the optimaru API\n\n::: optimaru._api\n    options:\n      members:\n"
+        + "".join(
+            f"        - {name}\n"
+            for name in ("use_api", "use_local", "ApiError", "API_KEY_VARIABLE", "API_URL_VARIABLE", "DEFAULT_API_URL")
+        )
+    )
 nav["API reference", "optimaru.use_api"] = "reference/api.md"
 nav["Changelog"] = "changelog.md"
 

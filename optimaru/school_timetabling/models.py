@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from pydantic import Field, create_model, model_validator
 
+from .. import _api
 from .._models import SolveConfigBase, SolveRequest, StrictModel, apply_solver_parameters
 from . import _core, convert
 from .constraints import default_weights, soft_specs
@@ -322,6 +323,8 @@ class TimetableRequest(SolveRequest):
     )
 
 
+# It calls solve(); decorated as well, so that the warning points at the caller of solve_request.
+@_api.local_solve("school timetabling")
 def solve_request(request: TimetableRequest, *, constraints=None) -> TimetableResultModel:
     """Solve a pydantic request and return the timetable as a `TimetableResultModel`.
 

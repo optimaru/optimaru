@@ -169,7 +169,8 @@ class ApiStandIn:
         self.url = f"http://127.0.0.1:{self._server.server_address[1]}"
 
     def __enter__(self):
-        threading.Thread(target=self._server.serve_forever, daemon=True).start()
+        # A short poll: shutting down waits for one, and every test starts and stops a stand-in.
+        threading.Thread(target=self._server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True).start()
         return self
 
     def __exit__(self, *exc):
@@ -232,6 +233,11 @@ class ApiStandIn:
                     job["status"] = "succeeded"
                 except (ValidationError, ValueError, OverflowError) as error:  # the engine refused the input
                     job["status"], job["error"] = "failed", str(error)
+                except Exception as error:  # anything else: the API keeps the kind and a fixed sentence
+                    job["status"], job["error"] = (
+                        "failed",
+                        f"{type(error).__name__}: an unexpected error during the solve",
+                    )
         return 200, self._document(job_id), {}
 
     def _result(self, job_id: str) -> tuple[int, Any, dict[str, str]]:
@@ -302,7 +308,9 @@ def _number(value: Any) -> bool:
 def _refused(body: dict[str, Any]) -> tuple[list[Any], str] | None:
     """What the API's request model refuses before a job exists, as (where, why); None when it takes the body.
 
-    Its rules for the fields beside the problem: a time limit above 0 and at most 1e9 s
+    Worded and placed as the API reports it (checked against optimaru/server): a field's own
+    rule under the field, a rule over several fields under ``body`` as a "Value error". Its
+    rules beside the problem: a time limit above 0 and at most 1e9 s
     (``config.spent_limit_seconds`` from 0), 1 to 16 parallel starts (in ``config`` too),
     and in a request the same for its time limit and its starts, each given under one name.
     For a pick: a name, a weight that is a number or null (0 or more), a level by its name,
@@ -312,44 +320,48 @@ def _refused(body: dict[str, Any]) -> tuple[list[Any], str] | None:
     """
     longest = 1e9
     limit = body.get("time_limit_seconds")
-    if limit is not None and not (_number(limit) and 0 < limit <= longest):
-        return ["time_limit_seconds"], "Input should be greater than 0 and at most 1e9"
+    if limit is not None and not (_number(limit) and limit > 0):
+        return ["time_limit_seconds"], "Input should be greater than 0"
+    if limit is not None and limit > longest:
+        return ["time_limit_seconds"], "Input should be less than or equal to 1000000000"
     config = body.get("config")
     if config is not None and not isinstance(config, dict):
         return ["config"], "Input should be a valid dictionary"
-    spent = (config or {}).get("spent_limit_seconds")
-    if spent is not None and not (_number(spent) and 0 <= spent <= longest):
-        return ["config", "spent_limit_seconds"], "must be between 0 and 1e9"
     request = body.get("request") if isinstance(body.get("request"), dict) else {}
     for new, old in (("time_limit_seconds", "timelimit"), ("parallel_solver_count", "num_workers")):
         if new in request and old in request:
-            return ["request"], f"request.{new} and request.{old} are the same field: give one"
+            return [], f"Value error, request.{new} and request.{old} are the same field: give one"
     settings = request.get("settings") if isinstance(request.get("settings"), dict) else {}
-    for where, count in (
-        (["parallel_solver_count"], body.get("parallel_solver_count")),
-        (["config", "parallel_solver_count"], (config or {}).get("parallel_solver_count")),
-        (["request", "parallel_solver_count"], request.get("parallel_solver_count", request.get("num_workers"))),
-        (["request", "settings", "multi_start"], settings.get("multi_start")),
+    for name, count in (
+        ("parallel_solver_count", body.get("parallel_solver_count")),
+        ("config.parallel_solver_count", (config or {}).get("parallel_solver_count")),
+        ("request.parallel_solver_count", request.get("parallel_solver_count", request.get("num_workers"))),
+        ("request.settings.multi_start", settings.get("multi_start")),
     ):
         if count is not None and not (isinstance(count, int) and not isinstance(count, bool) and 1 <= count <= 16):
-            return where, "parallel_solver_count must be between 1 and 16"
-    request_limit = request.get("time_limit_seconds", request.get("timelimit"))
-    if request_limit is not None and not (_number(request_limit) and 0 <= request_limit <= longest):
-        return ["request", "time_limit_seconds"], "must be between 0 and 1e9"
+            return [], f"Value error, {name} must be between 1 and 16"
+    for name, seconds in (
+        ("config.spent_limit_seconds", (config or {}).get("spent_limit_seconds")),
+        ("request.time_limit_seconds", request.get("time_limit_seconds", request.get("timelimit"))),
+    ):
+        if seconds is not None and not (_number(seconds) and 0 <= seconds <= longest):
+            return [], f"Value error, {name} must be between 0 and 1e9 seconds"
     picks = body.get("constraints")
     if picks is None:
         return None
     if not isinstance(picks, list) or not any(isinstance(pick, dict) and pick.get("enabled", True) for pick in picks):
-        return ["constraints"], "at least one enabled constraint is required"
+        return ["constraints"], "Value error, constraints must select at least one enabled constraint"
     for position, pick in enumerate(picks):
         where = ["constraints", position]
         if not isinstance(pick, dict) or not isinstance(pick.get("name"), str) or not pick["name"]:
-            return where, "a constraint needs a name"
+            return [*where, "name"], "Field required"
         if "hard" in pick:
-            return [*where, "hard"], "`hard` was replaced by `level`"
+            return where, "Value error, `hard` was replaced by `level`"
         weight = pick.get("weight")
-        if weight is not None and not (_number(weight) and weight >= 0):
-            return [*where, "weight"], "Input should be a number of 0 or more"
+        if weight is not None and not _number(weight):
+            return [*where, "weight"], "Input should be a valid number"
+        if weight is not None and weight < 0:
+            return [*where, "weight"], "Input should be greater than or equal to 0"
         if pick.get("level") not in (None, "hard", "medium", "soft"):
             return [*where, "level"], "Input should be 'hard', 'medium' or 'soft'"
         exponent = pick.get("exponent")

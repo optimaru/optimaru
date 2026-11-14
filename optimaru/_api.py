@@ -99,11 +99,11 @@ _SOLVE_KEYWORDS = (
 class ApiError(RuntimeError):
     """The optimaru API refused a solve, or failed at it.
 
-    ``status`` is the HTTP status of the response, or None when none came back (the API
-    could not be reached) or when a job that was accepted then failed. ``code`` is the
-    API's error code, such as ``"INVALID_CREDENTIALS"``, ``"PLAN_LIMIT_EXCEEDED"`` or
-    ``"VALIDATION_ERROR"``; ``"JOB_FAILED"`` and ``"JOB_CANCELLED"`` are a job that ended
-    without a result. ``detail`` is what the API sent with the error: for a plan limit,
+    ``status`` is the HTTP status of the response, or None when no response says it: the
+    API could not be reached, or a job that was accepted then failed, was cancelled or did
+    not finish in time. ``code`` is the API's error code, such as ``"INVALID_CREDENTIALS"``,
+    ``"PLAN_LIMIT_EXCEEDED"`` or ``"VALIDATION_ERROR"``; ``"JOB_FAILED"``,
+    ``"JOB_CANCELLED"`` and ``"JOB_TIMEOUT"`` are a job that ended without a result. ``detail`` is what the API sent with the error: for a plan limit,
     a dict with the ``reason`` and the plan's ``entitlements``. ``retry_after`` is the
     number of seconds the API asked to wait before trying again (its ``Retry-After``),
     or None.
@@ -144,9 +144,11 @@ def use_api(key: str | None = None, *, url: str | None = None) -> None:
     at most twice its time limit and ten minutes more, then cancels it. The first solve
     sent to an API is logged at INFO on the ``optimaru`` logger. What cannot be sent is
     refused instead of being solved here without notice: a compiled problem (pass its
-    model), a callback (``on_new_best``, ``select``) and a non-finite number. School timetabling is
-    not on the API and keeps solving on this machine, and so does the compiled ``Solver``
-    class used directly: the setting moves ``solve`` and ``solve_request``.
+    model), a callback (``on_new_best``, ``select``) and a non-finite number. School
+    timetabling keeps solving on this machine (the API takes it in a request of its own),
+    and so does the compiled ``Solver`` class used directly: the setting moves ``solve``
+    and ``solve_request``. The setting applies to this process: a worker process that
+    starts fresh needs its own call, or the environment variable.
 
     Raises ValueError for an empty key, a missing one (no ``key`` and no
     ``OPTIMARU_API_KEY``) and a ``url`` that is not accepted.
@@ -209,7 +211,7 @@ def _checked_url(url: str) -> str:
     if parts.query or parts.fragment:
         raise ValueError(f"the API URL must not have a query or a fragment, not {url!r}")
     # The scheme and host in lower case: `_send` tells plain http by its scheme.
-    return parts._replace(scheme=parts.scheme, netloc=parts.netloc.lower()).geturl()
+    return parts._replace(netloc=parts.netloc.lower()).geturl()  # urlsplit lowered the scheme
 
 
 def _settings() -> tuple[str, str] | None:
@@ -555,6 +557,7 @@ def _send(
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
+        # In any case: _checked_url lowers the scheme, and this check does not rely on it.
         with _opener(url[:7].lower() == "http://").open(request, timeout=timeout) as response:
             text = response.read().decode(errors="replace")
     except urllib.error.HTTPError as error:
@@ -622,7 +625,7 @@ def _wait_limit(body: dict[str, Any]) -> float:
     """Seconds to wait for the job of `body` before giving it up: twice its time limit, and a margin.
 
     The time limit is the one the call asks for (the engine's default when it names none),
-    times its parallel starts where they can run one after another (employee scheduling).
+    and for a request, times its parallel starts, which can run one after another.
     """
 
     def seconds(*values: Any) -> float:
@@ -680,8 +683,8 @@ def _solve_job(settings: tuple[str, str], slug: str, body: dict[str, Any]) -> An
             if time.monotonic() - started > limit:
                 raise ApiError(
                     f"the solve job did not finish within {limit:g} s on the optimaru API "
-                    f"(still {job['status']!r}); it was cancelled. The wait follows the time limit "
-                    "of the call: give time_limit_seconds to wait longer",
+                    f"(still {job['status']!r}); a cancel was sent. The wait follows the time limit "
+                    "of the call: give the call, or the request, a longer time limit to wait longer",
                     code="JOB_TIMEOUT",
                 )
             time.sleep(wait)
@@ -737,11 +740,14 @@ def _check_settings(package: str, keywords: dict[str, Any]) -> None:
 
     from ._solve import solver_config
 
+    config_type = sys.modules[package].SolverConfig
     config = keywords.get("config")
     if callable(getattr(config, "to_core", None)):
         config = config.to_core()
+    if config is not None and not isinstance(config, config_type):
+        raise TypeError(f"config must be a {package}.SolverConfig, not a {type(config).__name__}")
     solver_config(
-        sys.modules[package].SolverConfig,
+        config_type,
         config,
         time_limit_seconds=keywords.get("time_limit_seconds"),
         random_seed=keywords.get("random_seed"),
@@ -838,7 +844,10 @@ def request_solve(
             for name, value in rest.items():
                 if value is not None:
                     raise ValueError(f"{name} cannot be sent to the optimaru API")
-            _check_settings(package, {"random_seed": getattr(request, "random_seed", None)})
+            # The seed it solves with: employee scheduling's request may take it from its settings.
+            effective = getattr(request, "_effective", None)
+            seed = effective("random_seed") if callable(effective) else getattr(request, "random_seed", None)
+            _check_settings(package, {"random_seed": seed})
             body: dict[str, Any] = {}
             if prepare is not None:
                 request = prepare(request, picked)
@@ -889,7 +898,7 @@ def local_solve(use_case: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]
 
                 _said.add(said)
                 warnings.warn(
-                    f"{use_case} is not on the optimaru API: it is solved on this machine",
+                    f"the optimaru API does not take the Python call of {use_case}: it is solved on this machine",
                     RuntimeWarning,
                     stacklevel=2,
                 )

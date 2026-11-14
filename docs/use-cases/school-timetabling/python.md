@@ -62,8 +62,9 @@ result = solve_request(TimetableRequest(model_input=problem_dict, time_limit_sec
 print(result.status, result.penalties)
 ```
 
-School timetabling is not on the optimaru API: with an API key set (`optimaru.use_api`,
-`OPTIMARU_API_KEY`) it still solves on this machine, and says so once in a `RuntimeWarning`.
+School timetabling stays on this machine with an API key set (`optimaru.use_api`,
+`OPTIMARU_API_KEY`): the optimaru API serves it through an endpoint of its own, whose request
+is not this package's call. The solve says so once in a `RuntimeWarning`.
 See [Solving on the optimaru API](../README.md#solving-on-the-optimaru-api).
 
 ## Constraints

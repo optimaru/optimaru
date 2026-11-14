@@ -94,25 +94,31 @@ key nothing is sent.
   request (vehicle routing, pickup and delivery, order picking, employee scheduling: call
   `solve_request`), a callback (`on_new_best`, employee scheduling's `select`) and a
   non-finite number.
-- School timetabling is not on the API. It solves on this machine either way, and says so
-  once in a `RuntimeWarning`.
+- School timetabling stays on this machine. The API serves it through an endpoint of its
+  own, whose request is not this package's Python call, so with a key set it is solved here
+  and says so once in a `RuntimeWarning`.
 - The setting moves `solve` and `solve_request`. The compiled `Solver` class
   (`Solver(config).solve(problem)`, `solve_with_constraints`) is the engine itself and
   always runs on this machine.
 - `config` travels as the `SolverConfig` fields that differ from the defaults and
   `constraints` as the picks in their order, so a solve with the same seed and a step
-  limit gives the same result there as here on the same engine version. A keyword or a
-  field left at its default takes the default of the engine the API runs.
+  limit gives the same result there as here on the same engine version. A `solve` keyword
+  or a `SolverConfig` field left at its default takes the default of the engine the API
+  runs; a request carries all its own fields.
+- `use_api()` applies to the process that calls it. Worker processes that start fresh
+  (spawn, forkserver: the default on macOS and Windows, and on Linux from Python 3.14)
+  need their own call; the environment variable reaches them by itself.
 - What the API refuses or fails at raises `optimaru.ApiError`: the HTTP `status`, the
   API's error `code` (`"INVALID_CREDENTIALS"`, `"PLAN_LIMIT_EXCEEDED"`,
   `"VALIDATION_ERROR"`, ...; `"JOB_FAILED"` carries the engine's own message for an input
   it refused), its `detail`, and `retry_after` when the API said how long to wait.
-- A solve is a job on the API that the call waits for, for at most twice its time limit
-  and ten minutes more; then it is cancelled and `ApiError` says so (`"JOB_TIMEOUT"`). A
-  look at the job that fails for a reason that passes (the network, a 5xx, a 408, a 429)
-  is tried again for a minute, and so is the read of the result. Creating the job is not
-  tried again, since that could solve it twice. Interrupting a solve (Ctrl-C) once its job
-  exists cancels the job.
+- A solve is a job on the API that the call waits for, from when the job is created, for
+  at most twice its time limit (times its parallel starts, for a request) and ten minutes
+  more; then it is cancelled and `ApiError` says so (`"JOB_TIMEOUT"`). A look at the job
+  that fails for a reason that passes (the network, a 5xx, a 408, a 429) is tried again for
+  at least a minute, longer for a long solve but never past its wait, and so is the read of
+  the result. Creating the job is not tried again, since that could solve it twice.
+  Interrupting a solve (Ctrl-C) once its job exists cancels the job.
 - The problem and the settings leave the machine, over https, to the API; the first
   solve sent there is logged at INFO on the `optimaru` logger. No redirect is followed,
   so the key goes to that API only. `calculate_score`, `constraint_costs` and the other
