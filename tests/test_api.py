@@ -154,6 +154,49 @@ def test_the_key_only_travels_over_https_or_to_localhost(monkeypatch, url):
         _api._settings()
 
 
+@pytest.mark.parametrize("key", ["om_live_a\nb", "om live", "om_live_\u00e9"])
+def test_a_key_that_cannot_go_into_a_header_is_refused_without_showing_it(monkeypatch, key):
+    with pytest.raises(ValueError, match="printable ASCII") as raised:
+        optimaru.use_api(key)
+    assert key.strip() not in str(raised.value)
+    monkeypatch.setenv("OPTIMARU_API_KEY", key)
+    with pytest.raises(ValueError, match="OPTIMARU_API_KEY must be printable ASCII") as raised:
+        _api._settings()
+    assert key.strip() not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "url", ["https://user:secret@app.example.com", "https://app.example.com/?k=1", "https://app.example.com/#x"]
+)
+def test_an_url_that_carries_more_than_an_address_is_refused(url):
+    with pytest.raises(ValueError) as raised:
+        optimaru.use_api(KEY, url=url)
+    assert "secret" not in str(raised.value)
+
+
+def test_plain_http_to_localhost_skips_a_proxy_from_the_environment(api, monkeypatch):
+    """Through a proxy the key and the problem would cross the network in the clear."""
+    _api._opener.cache_clear()
+    monkeypatch.setenv("http_proxy", "http://127.0.0.1:9")  # nothing listens there
+    monkeypatch.setenv("no_proxy", "")
+    knapsack = use_case_module("knapsack")
+    try:
+        assert knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05).score_hard == 0
+    finally:
+        _api._opener.cache_clear()
+    assert api.created()
+
+
+def test_an_error_body_of_another_shape_is_still_an_api_error(api):
+    api.refuse = (422, {"code": "VALIDATION_ERROR", "message": "invalid", "detail": [{"loc": "body", "msg": 3}]}, {})
+    knapsack = use_case_module("knapsack")
+    with pytest.raises(optimaru.ApiError, match="422 VALIDATION_ERROR"):
+        knapsack.solve(model_of("knapsack"))
+    api.refuse = (500, b"[" * 100000, {})
+    with pytest.raises(optimaru.ApiError, match="500"):
+        knapsack.solve(model_of("knapsack"))
+
+
 def test_the_settings_are_not_use_cases():
     assert {"use_api", "use_local", "ApiError"} <= set(dir(optimaru))
     assert not {"use_api", "use_local", "ApiError"} & set(optimaru.__all__)
@@ -478,7 +521,7 @@ def test_a_first_feasible_limit_in_a_config_travels_as_the_keyword(api, use_case
 
 
 def test_the_stand_in_refuses_what_the_api_refuses(api):
-    """The stand-in is as strict as the API's request model, so a body it takes is one the API takes."""
+    """The stand-in refuses what the API's request model refuses before a job exists (checked against the server)."""
     knapsack = use_case_module("knapsack")
     problem = _api._model_json(model_of("knapsack"))
     settings = _api._settings()
@@ -486,7 +529,8 @@ def test_the_stand_in_refuses_what_the_api_refuses(api):
         ({"time_limit_seconds": 0}, "time_limit_seconds"),
         ({"parallel_solver_count": 17}, "parallel_solver_count"),
         ({"config": {"parallel_solver_count": 0}}, "config.parallel_solver_count"),
-        ({"full_assert": 1}, "full_assert"),
+        ({"time_limit_seconds": 2e9}, "time_limit_seconds"),
+        ({"config": {"spent_limit_seconds": -1}}, "config.spent_limit_seconds"),
         ({"constraints": []}, "constraints"),
         ({"constraints": [{"name": "knapsack_capacity_cost", "weight": True}]}, "constraints.0.weight"),
         ({"constraints": [{"name": "knapsack_capacity_cost", "clip": None}]}, "constraints.0.clip"),
@@ -756,6 +800,37 @@ def test_a_body_the_api_does_not_take_says_where(api):
         optimaru.ApiError, match="422 VALIDATION_ERROR: parallel_solver_count: must be between 1 and 16"
     ):
         knapsack.solve(model_of("knapsack"), parallel_solver_count=99)
+
+
+def test_a_use_case_the_api_does_not_serve_is_said_so(api):
+    with pytest.raises(optimaru.ApiError, match="does not serve no-such-case, or the API URL is wrong") as raised:
+        _api._solve_job(_api._settings(), "no-such-case", {"problem": {}})
+    assert (raised.value.status, raised.value.code) == (404, "NOT_FOUND")
+
+
+def test_a_time_limit_longer_than_a_job_may_run_says_so(api):
+    message = "the time limit must be at most 840 s"  # the API's own sentence, which follows the hint
+    api.refuse = (422, {"code": "TIME_LIMIT_TOO_LONG", "message": message, "detail": message}, {})
+    with pytest.raises(optimaru.ApiError, match="longer than one job may run on this API"):
+        use_case_module("knapsack").solve(model_of("knapsack"), time_limit_seconds=900)
+
+
+@pytest.mark.parametrize("seed", [-1, 2**64])
+def test_a_seed_the_engine_refuses_is_refused_before_a_job_exists(api, seed):
+    with pytest.raises((TypeError, ValueError)):
+        use_case_module("knapsack").solve(model_of("knapsack"), random_seed=seed)
+    request = request_of("vehicle-routing").model_copy(update={"random_seed": seed})
+    with pytest.raises((TypeError, ValueError)):
+        use_case_module("vehicle_routing").solve_request(request)
+    assert not api.requests
+
+
+def test_a_decimal_travels_as_the_number_it_is(api):
+    from decimal import Decimal
+
+    use_case_module("knapsack").solve(model_of("knapsack"), time_limit_seconds=Decimal("0.5"))
+    (created,) = api.created()
+    assert created.body["time_limit_seconds"] == 0.5
 
 
 def test_an_answer_that_is_not_the_apis_own_is_still_an_api_error(api):

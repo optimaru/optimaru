@@ -199,7 +199,7 @@ class ApiStandIn:
             refusal, self.refuse = self.refuse, None
             return refusal
         if slug not in MODEL_USE_CASES and slug not in REQUEST_USE_CASES:
-            return 404, _error("USE_CASE_NOT_FOUND", f"no such use case: {slug}"), {}
+            return 404, _error("NOT_FOUND", "Not Found"), {}  # the framework's answer: no route
         first, fields = ("problem", _SOLVE_FIELDS) if slug in MODEL_USE_CASES else ("request", _REQUEST_FIELDS)
         if slug == "employee-scheduling":
             fields = fields - {"constraints"}  # its selection is request.model_input.constraints
@@ -302,29 +302,40 @@ def _number(value: Any) -> bool:
 def _refused(body: dict[str, Any]) -> tuple[list[Any], str] | None:
     """What the API's request model refuses before a job exists, as (where, why); None when it takes the body.
 
-    Its rules for the fields beside the problem: a time limit above 0, 1 to 16 parallel
-    starts (in ``config`` too), strict booleans, and for a pick a name, a weight that is a
-    number or null (0 or more), a level by its name, an exponent above 0, a number as
-    offset and a boolean as clip, the last two never null.
+    Its rules for the fields beside the problem: a time limit above 0 and at most 1e9 s
+    (``config.spent_limit_seconds`` from 0), 1 to 16 parallel starts (in ``config`` too),
+    and in a request the same for its time limit and its starts, each given under one name.
+    For a pick: a name, a weight that is a number or null (0 or more), a level by its name,
+    an exponent above 0, a number as offset and a boolean as clip, the last two never null.
+    Its booleans and integers beside the picks are pydantic's lax ones, so they are not
+    checked here.
     """
+    longest = 1e9
     limit = body.get("time_limit_seconds")
-    if limit is not None and not (_number(limit) and limit > 0):
-        return ["time_limit_seconds"], "Input should be greater than 0"
-    seed = body.get("random_seed")
-    if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool)):
-        return ["random_seed"], "Input should be a valid integer"
+    if limit is not None and not (_number(limit) and 0 < limit <= longest):
+        return ["time_limit_seconds"], "Input should be greater than 0 and at most 1e9"
     config = body.get("config")
     if config is not None and not isinstance(config, dict):
         return ["config"], "Input should be a valid dictionary"
+    spent = (config or {}).get("spent_limit_seconds")
+    if spent is not None and not (_number(spent) and 0 <= spent <= longest):
+        return ["config", "spent_limit_seconds"], "must be between 0 and 1e9"
+    request = body.get("request") if isinstance(body.get("request"), dict) else {}
+    for new, old in (("time_limit_seconds", "timelimit"), ("parallel_solver_count", "num_workers")):
+        if new in request and old in request:
+            return ["request"], f"request.{new} and request.{old} are the same field: give one"
+    settings = request.get("settings") if isinstance(request.get("settings"), dict) else {}
     for where, count in (
         (["parallel_solver_count"], body.get("parallel_solver_count")),
         (["config", "parallel_solver_count"], (config or {}).get("parallel_solver_count")),
+        (["request", "parallel_solver_count"], request.get("parallel_solver_count", request.get("num_workers"))),
+        (["request", "settings", "multi_start"], settings.get("multi_start")),
     ):
         if count is not None and not (isinstance(count, int) and not isinstance(count, bool) and 1 <= count <= 16):
             return where, "parallel_solver_count must be between 1 and 16"
-    for name in ("stop_at_first_feasible", "full_assert"):
-        if name in body and not isinstance(body[name], bool):
-            return [name], "Input should be a valid boolean"
+    request_limit = request.get("time_limit_seconds", request.get("timelimit"))
+    if request_limit is not None and not (_number(request_limit) and 0 <= request_limit <= longest):
+        return ["request", "time_limit_seconds"], "must be between 0 and 1e9"
     picks = body.get("constraints")
     if picks is None:
         return None

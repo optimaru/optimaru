@@ -63,11 +63,10 @@ DEFAULT_API_URL = "https://app.optimaru.com"
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
-# What the program chose in code. `_chosen` None = it did not choose, and the environment
-# decides: the API when `API_KEY_VARIABLE` is set, this machine otherwise.
-_chosen: bool | None = None
-_key: str | None = None
-_url: str | None = None
+# What the program chose in code: (on, key, url). `on` None = it did not choose, and the environment
+# decides: the API when `API_KEY_VARIABLE` is set, this machine otherwise. One tuple, replaced as a
+# whole, so that a solve in another thread never pairs one call's key with another's URL.
+_state: tuple[bool | None, str | None, str | None] = (None, None, None)
 
 #: Seconds one HTTP request may take. A solve is a job that is polled, so no request waits for the search.
 _REQUEST_TIMEOUT = 60.0
@@ -152,54 +151,79 @@ def use_api(key: str | None = None, *, url: str | None = None) -> None:
     Raises ValueError for an empty key, a missing one (no ``key`` and no
     ``OPTIMARU_API_KEY``) and a ``url`` that is not accepted.
     """
-    global _chosen, _key, _url
+    global _state
     if key is not None:
         if not isinstance(key, str):
             raise TypeError(f"key must be a string, not {type(key).__name__}")
-        key = key.strip()
-        if not key:
-            raise ValueError("key must not be empty")
+        key = _checked_key(key, "key")
     elif not _environment(API_KEY_VARIABLE):
         raise ValueError(f"no API key: pass one, or set {API_KEY_VARIABLE}")
     if url is not None:
         if not isinstance(url, str):
             raise TypeError(f"url must be a string, not {type(url).__name__}")
         url = _checked_url(url)
-    _chosen, _key, _url = True, key, url
+    _state = (True, key, url)
 
 
 def use_local() -> None:
     """Solve on this machine from now on, in this process, whatever ``OPTIMARU_API_KEY`` says."""
-    global _chosen, _key, _url
-    _chosen, _key, _url = False, None, None
+    global _state
+    _state = (False, None, None)
 
 
 def _environment(name: str) -> str:
     return os.environ.get(name, "").strip()
 
 
+def _checked_key(key: str, where: str) -> str:
+    """`key` without surrounding blanks. Refuses one that is empty or holds a blank or a non-ASCII character.
+
+    Such a key cannot go into an HTTP header as it is, and the error says so without showing it.
+    """
+    import re
+
+    key = key.strip()
+    if not key:
+        raise ValueError(f"{where} must not be empty")
+    if not re.fullmatch(r"[!-~]+", key):
+        raise ValueError(f"{where} must be printable ASCII without spaces or line breaks; check how it was copied")
+    return key
+
+
 def _checked_url(url: str) -> str:
-    """`url` without its trailing slash. Refuses what would send the key in the clear."""
+    """`url` without its trailing slash. Refuses what would send the key in the clear, or another secret along."""
     from urllib.parse import urlsplit
 
     url = url.strip().rstrip("/")
-    parts = urlsplit(url)
-    local = parts.hostname in ("localhost", "127.0.0.1", "::1")
-    if parts.scheme not in ("https", "http") or not parts.hostname or (parts.scheme == "http" and not local):
+    try:
+        parts = urlsplit(url)
+        hostname = parts.hostname
+    except ValueError:
+        parts, hostname = None, None
+    if parts is not None and (parts.username or parts.password):
+        # Not repeated in the error: the password would be.
+        raise ValueError("the API URL must not carry a user name or password")
+    local = hostname in ("localhost", "127.0.0.1", "::1")
+    if parts is None or parts.scheme not in ("https", "http") or not hostname or (parts.scheme == "http" and not local):
         raise ValueError(f"the API URL must be an https URL (http for localhost only), not {url!r}")
+    if parts.query or parts.fragment:
+        raise ValueError(f"the API URL must not have a query or a fragment, not {url!r}")
     return url
 
 
 def _settings() -> tuple[str, str] | None:
     """The key and the URL of the API to solve on, or None to solve on this machine."""
-    if _chosen is False:
+    chosen, key, url = _state
+    if chosen is False:
         return None
-    key = _key or _environment(API_KEY_VARIABLE)
-    if not key:
-        if _chosen:
-            raise ApiError(f"use_api() was called without a key and {API_KEY_VARIABLE} is no longer set")
-        return None
-    return key, _url or _checked_url(_environment(API_URL_VARIABLE) or DEFAULT_API_URL)
+    if key is None:
+        key = _environment(API_KEY_VARIABLE)
+        if not key:
+            if chosen:
+                raise ApiError(f"use_api() was called without a key and {API_KEY_VARIABLE} is no longer set")
+            return None
+        key = _checked_key(key, API_KEY_VARIABLE)
+    return key, url or _checked_url(_environment(API_URL_VARIABLE) or DEFAULT_API_URL)
 
 
 def _api_on() -> bool:
@@ -207,8 +231,9 @@ def _api_on() -> bool:
 
     For a decorator that sends nothing: a setting it would never use must not make it fail.
     """
-    if _chosen is not None:
-        return _chosen
+    chosen = _state[0]
+    if chosen is not None:
+        return chosen
     return bool(_environment(API_KEY_VARIABLE))
 
 
@@ -223,6 +248,7 @@ def _plain(value: Any, where: str) -> Any:
     A member of a compiled enum goes by its name and a tuple as a list, which is how the
     API sets a ``SolverConfig`` field and a constraint parameter from JSON.
     """
+    import decimal
     import enum
     import math
     import numbers
@@ -233,6 +259,8 @@ def _plain(value: Any, where: str) -> Any:
         return value
     if isinstance(value, enum.Enum):
         return _plain(value.value, where)
+    if isinstance(value, decimal.Decimal):
+        value = float(value)  # what the compiled setters read it as
     if isinstance(value, numbers.Integral):
         return int(value)
     if isinstance(value, numbers.Real):
@@ -405,7 +433,7 @@ _ERROR_HINTS: dict[Any, str] = {
     "AUTH_REQUIRED": "the API needs an API key",
     "INVALID_CREDENTIALS": "the API key was not accepted",
     "FORBIDDEN": "the API key may not run solve jobs",
-    "USE_CASE_NOT_FOUND": "the API does not serve this use case",
+    "TIME_LIMIT_TOO_LONG": "the time limit is longer than one job may run on this API",
     401: "the API key was not accepted",
     403: "the request was refused",
     404: "nothing is served at that address: check the API URL",
@@ -429,18 +457,21 @@ def _error_of(status: int, text: str, headers: Any) -> ApiError:
     code, message, detail = None, "", None
     try:
         body = json.loads(text)
-    except ValueError:
+    except (ValueError, RecursionError):
         body = None  # not the API's own answer: a proxy's page, an empty body
     if isinstance(body, dict):
         code = body.get("code") if isinstance(body.get("code"), str) else None
         message = body.get("message") if isinstance(body.get("message"), str) else ""
         detail = body.get("detail")
     reason = detail.get("reason") if isinstance(detail, dict) else None
-    said = _ERROR_HINTS.get(reason) or _ERROR_HINTS.get(code) or _ERROR_HINTS.get(status)
+    # The hints by status are for an answer that is not the API's own: one with a code says what it means.
+    said = _ERROR_HINTS.get(reason) or _ERROR_HINTS.get(code) or (None if code else _ERROR_HINTS.get(status))
     if code == "VALIDATION_ERROR" and isinstance(detail, list) and detail and isinstance(detail[0], dict):
         # pydantic's list of errors: say where the first one is.
-        where = ".".join(str(part) for part in detail[0].get("loc", ()) if part != "body")
-        said = f"{where}: {detail[0].get('msg', '')}".strip(": ") or None
+        loc, msg = detail[0].get("loc"), detail[0].get("msg")
+        parts = loc if isinstance(loc, list) else []
+        where = ".".join(str(part) for part in parts if part != "body")
+        said = f"{where}: {msg if isinstance(msg, str) else ''}".strip(": ") or said
     if 300 <= status < 400:
         target = headers.get("Location") if headers is not None else None
         where = f" to {target}" if target else ""
@@ -461,11 +492,14 @@ def _error_of(status: int, text: str, headers: Any) -> ApiError:
 
 
 @functools.cache
-def _opener() -> Any:
-    """What every request is sent with: it follows no redirect.
+def _opener(direct: bool) -> Any:
+    """What every request is sent with: it follows no redirect, and with `direct` it uses no proxy.
 
     urllib would send the request's headers, the key among them, to wherever a redirect
     points. The API does not redirect, so one is an error, and it names the address.
+    A plain-http request (to localhost only) goes direct: through a proxy from the
+    environment, its key and problem would cross the network in the clear. An https one
+    may use a proxy, which only tunnels the encrypted connection.
     """
     import urllib.request
 
@@ -473,7 +507,10 @@ def _opener() -> Any:
         def redirect_request(self, *args: Any, **keywords: Any) -> None:
             return None
 
-    return urllib.request.build_opener(NoRedirect)
+    handlers: list[Any] = [NoRedirect]
+    if direct:
+        handlers.append(urllib.request.ProxyHandler({}))
+    return urllib.request.build_opener(*handlers)
 
 
 def _send(
@@ -497,7 +534,7 @@ def _send(
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
-        with _opener().open(request, timeout=timeout) as response:
+        with _opener(url.startswith("http://")).open(request, timeout=timeout) as response:
             text = response.read().decode(errors="replace")
     except urllib.error.HTTPError as error:
         with error:
@@ -507,7 +544,7 @@ def _send(
         raise ApiError(f"could not reach the optimaru API at {url}: {reason}") from error
     try:
         return json.loads(text)
-    except ValueError as error:
+    except (ValueError, RecursionError) as error:
         raise ApiError(f"the optimaru API at {url} did not answer with JSON") from error
 
 
@@ -593,6 +630,14 @@ def _solve_job(settings: tuple[str, str], slug: str, body: dict[str, Any]) -> An
     try:
         created = _send("POST", f"{base}/api/use-cases/{slug}/solve/jobs", key, body)
     except ApiError as error:
+        if error.status == 404 and error.code in (None, "NOT_FOUND"):
+            # The API answers a use case it does not serve with the framework's 404, as it would a wrong URL.
+            raise ApiError(
+                f"the optimaru API at {base} does not serve {slug}, or the API URL is wrong ({error})",
+                status=404,
+                code=error.code,
+                detail=error.detail,
+            ) from error
         if error.status is not None:
             raise
         # No answer: the API may have taken the job before the connection failed, and it runs to its
@@ -656,6 +701,28 @@ def _read(model: Any, result: Any, slug: str, base: Any = None) -> Any:
 # ---------------------------------------------------------------------------
 
 
+def _check_settings(package: str, keywords: dict[str, Any]) -> None:
+    """Refuse here what the use case's ``SolverConfig`` refuses, before a job exists.
+
+    The API's request model takes any integer as a seed, and the engine then fails the
+    job without naming it; here the setter names it at once, as a local solve would.
+    """
+    import sys
+
+    from ._solve import solver_config
+
+    config = keywords.get("config")
+    if callable(getattr(config, "to_core", None)):
+        config = config.to_core()
+    solver_config(
+        sys.modules[package].SolverConfig,
+        config,
+        time_limit_seconds=keywords.get("time_limit_seconds"),
+        random_seed=keywords.get("random_seed"),
+        parallel_solver_count=keywords.get("parallel_solver_count"),
+    )
+
+
 def _bound(signature: Any, args: tuple, keywords: dict) -> tuple[Any, dict[str, Any]]:
     """The first argument and the keywords of a call, defaults filled in. A wrong call raises as the function would."""
     call = signature.bind(*args, **keywords)
@@ -695,6 +762,7 @@ def model_solve(slug: str, model: type, *, dicts: bool = False) -> Callable[[Cal
                     f"pass its model ({model.__name__}.from_core(problem)) and use the model that comes back, "
                     "or call optimaru.use_local() to solve on this machine"
                 )
+            _check_settings(solve.__module__, rest)
             body = {"problem": _model_json(problem), **_solve_body(rest)}
             # The caller's own class, so that a subclass of the model comes back as one, as it does here.
             return _read(type(problem), _solve_job(settings, slug, body), slug, model)
@@ -738,6 +806,9 @@ def request_solve(
             for name, value in rest.items():
                 if value is not None:
                     raise ValueError(f"{name} cannot be sent to the optimaru API")
+            _check_settings(
+                solve_request.__module__.rpartition(".")[0], {"random_seed": getattr(request, "random_seed", None)}
+            )
             body: dict[str, Any] = {}
             if prepare is not None:
                 request = prepare(request, picked)
