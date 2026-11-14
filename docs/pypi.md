@@ -135,7 +135,8 @@ built from the compiled classes is solved in place and cannot be sent: pass its 
 School timetabling is not on the API and keeps solving locally, and so does the compiled
 `Solver` class used directly, as in the example above.
 `optimaru.use_local()` turns the API off again, `OPTIMARU_API_URL` names another API,
-and what the API refuses raises `optimaru.ApiError`. The
+and what the API refuses raises `optimaru.ApiError`. A setting left at its default
+takes the default of the engine the API runs, which can be an earlier release than yours. The
 [guide](https://github.com/optimaru/optimaru/blob/main/docs/use-cases/README.md#solving-on-the-optimaru-api)
 has the details.
 

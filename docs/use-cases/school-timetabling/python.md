@@ -62,6 +62,10 @@ result = solve_request(TimetableRequest(model_input=problem_dict, time_limit_sec
 print(result.status, result.penalties)
 ```
 
+School timetabling is not on the optimaru API: with an API key set (`optimaru.use_api`,
+`OPTIMARU_API_KEY`) it still solves on this machine, and says so once in a `RuntimeWarning`.
+See [Solving on the optimaru API](../README.md#solving-on-the-optimaru-api).
+
 ## Constraints
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |

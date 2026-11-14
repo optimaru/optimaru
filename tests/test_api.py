@@ -608,6 +608,66 @@ def test_a_status_the_package_does_not_know_is_a_job_on_its_way(api):
     assert not api.cancelled
 
 
+def test_a_job_that_does_not_finish_in_time_is_given_up_and_cancelled(api, monkeypatch):
+    monkeypatch.setattr(_api, "_WAIT_MARGIN", 0.05)
+    api.looks_while_running = 10**6
+    knapsack = use_case_module("knapsack")
+    with pytest.raises(optimaru.ApiError, match="did not finish within .* s .*'running'.*cancelled") as raised:
+        knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
+    assert raised.value.code == "JOB_TIMEOUT"
+    assert len(api.cancelled) == 1
+
+
+def test_the_wait_follows_the_time_limit_of_the_call(monkeypatch):
+    monkeypatch.setattr(_api, "_WAIT_MARGIN", 100.0)
+    assert _api._wait_limit({"problem": {}}) == 2 * 30 + 100
+    assert _api._wait_limit({"problem": {}, "time_limit_seconds": 5}) == 2 * 5 + 100
+    assert _api._wait_limit({"problem": {}, "config": {"spent_limit_seconds": 7}}) == 2 * 7 + 100
+    assert _api._wait_limit({"problem": {}, "config": {"spent_limit_seconds": 0}}) == 2 * 30 + 100
+    assert _api._wait_limit({"request": {"time_limit_seconds": 4}}) == 2 * 4 + 100
+    assert _api._wait_limit({"request": {"timelimit": 4, "num_workers": 3}}) == 2 * 12 + 100
+    assert _api._wait_limit({"request": {"time_limit_seconds": 2, "settings": {"multi_start": 5}}}) == 2 * 10 + 100
+
+
+def test_a_job_that_may_have_been_created_is_said_so(api, monkeypatch):
+    def unreachable(method, url, key, body=None, *, timeout=None):
+        raise optimaru.ApiError(f"could not reach the optimaru API at {url}: timed out")
+
+    monkeypatch.setattr(_api, "_send", unreachable)
+    knapsack = use_case_module("knapsack")
+    with pytest.raises(optimaru.ApiError, match="timed out; if the request reached the API, a solve job was created"):
+        knapsack.solve(model_of("knapsack"))
+
+
+def test_a_setting_a_local_solve_never_uses_does_not_stop_it(monkeypatch):
+    school = use_case_module("school_timetabling")
+    monkeypatch.setenv("OPTIMARU_API_KEY", KEY)
+    monkeypatch.setenv("OPTIMARU_API_URL", "http://not-local.example")  # refused by a solve that sends
+    with pytest.warns(RuntimeWarning, match="not on the optimaru API"):
+        assert school.solve(small_problem("school_timetabling"), time_limit_seconds=0.2)["lessons"]
+
+
+def test_a_subclass_the_result_cannot_fill_is_named(api):
+    knapsack = use_case_module("knapsack")
+    problem = model_of("knapsack")
+
+    from pydantic import Field
+
+    class Labelled(type(problem)):
+        label: str = Field(exclude=True)  # never sent, so the result has none
+
+    with pytest.raises(optimaru.ApiError, match="not a Labelled: the API returns a KnapsackProblemModel"):
+        knapsack.solve(Labelled.model_validate({**problem.model_dump(), "label": "mine"}), time_limit_seconds=0.05)
+    # A field that is sent is a field the API's model does not take: the job says so.
+    with pytest.raises(optimaru.ApiError, match="tag") as raised:
+        knapsack.solve(
+            type("Tagged", (type(problem),), {"__annotations__": {"tag": str}}).model_validate(
+                {**problem.model_dump(), "tag": "mine"}
+            )
+        )
+    assert raised.value.code == "JOB_FAILED"
+
+
 def test_an_interrupted_solve_cancels_its_job(api, monkeypatch):
     api.looks_while_running = 100
     naps = []

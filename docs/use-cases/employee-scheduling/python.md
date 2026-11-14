@@ -302,6 +302,10 @@ pinned shift the same way:
 
 ## JSON in, JSON out
 
+With an API key set (`optimaru.use_api`, `OPTIMARU_API_KEY`), `solve_request` runs on the
+optimaru API and `solve(plan)` is refused: a compiled plan is solved in place, which the API
+cannot do. See [Solving on the optimaru API](../README.md#solving-on-the-optimaru-api).
+
 ```python
 from optimaru.employee_scheduling.constraints import MaxConsecutiveDaysCost
 from optimaru.employee_scheduling.models import (

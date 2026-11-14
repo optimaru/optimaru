@@ -19,9 +19,9 @@
   and keeps solving here, with a `RuntimeWarning` once; the compiled `Solver` class used
   directly is the engine itself and always runs here. What the API refuses or fails at
   raises `optimaru.ApiError` (`status`, `code`, `detail`, `retry_after`). A solve is a job
-  the call waits for: a look at it that fails for a reason that passes (the network, a 5xx,
-  a 408, a 429) is tried again for a minute, as is the read of its result, and interrupting
-  a solve cancels its job. The key goes to that API only (https, no redirect followed), and
+  the call waits for, for at most twice its time limit and ten minutes more: a look at it
+  that fails for a reason that passes (the network, a 5xx, a 408, a 429) is tried again for
+  a minute, as is the read of its result, and interrupting a solve cancels its job. The key goes to that API only (https, no redirect followed), and
   the first solve sent there is logged at INFO on the `optimaru` logger. No new dependency: the standard library and pydantic. Without a key nothing
   changes and nothing is sent. `solve` and `solve_request` are wrapped for this
   (`__wrapped__` is the function that always solves here); their signatures are unchanged.

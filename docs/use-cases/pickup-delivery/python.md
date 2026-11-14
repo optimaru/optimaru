@@ -139,6 +139,10 @@ pdp.solve(plan, time_limit_seconds=2.0, random_seed=42, constraints=[
 
 ## JSON in, JSON out (pydantic)
 
+With an API key set (`optimaru.use_api`, `OPTIMARU_API_KEY`), `solve_request` runs on the
+optimaru API and `solve(plan)` is refused: a compiled plan is solved in place, which the API
+cannot do. See [Solving on the optimaru API](../README.md#solving-on-the-optimaru-api).
+
 ```python
 from optimaru.pickup_delivery.models import (DeliveryModel, PdpInput, PdpRequest, StopModel,
                                              VehicleModel, solve_request)

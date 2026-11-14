@@ -80,6 +80,11 @@ _POLL_FIRST, _POLL_LONGEST = 0.2, 2.0
 _POLL_PATIENCE = 60.0
 #: The longest a ``Retry-After`` is waited for between two tries, in seconds.
 _RETRY_AFTER_LONGEST = 30.0
+#: Seconds past twice its time limit a job may take to finish, for the queue and the overhead. A job
+#: the API still reports as unfinished then is given up and cancelled (`_wait_limit`).
+_WAIT_MARGIN = 600.0
+#: The time limit of a solve that names none: the engine's default.
+_DEFAULT_TIME_LIMIT = 30.0
 #: The statuses a job ends in. Any other one, known or not, is a job still on its way.
 _FINAL_STATUSES = ("succeeded", "failed", "cancelled")
 #: The keywords every ``solve()`` has that the API takes under the same name.
@@ -136,8 +141,9 @@ def use_api(key: str | None = None, *, url: str | None = None) -> None:
     With the API on, ``solve(model, ...)`` and ``solve_request(request, ...)`` send the
     problem and return what they return on this machine. The settings travel as what was
     given: a keyword or a ``SolverConfig`` field left at its default takes the default of
-    the engine the API runs. The first solve sent to an API is logged at INFO on the
-    ``optimaru`` logger. What cannot be sent is refused
+    the engine the API runs. A solve waits for its job for at most twice its time limit
+    and ten minutes more, then cancels it. The first solve sent to an API is logged at INFO
+    on the ``optimaru`` logger. What cannot be sent is refused
     instead of being solved here without notice: a compiled problem (pass its model), a
     callback (``on_new_best``, ``select``) and a non-finite number. School timetabling is
     not on the API and keeps solving on this machine, and so does the compiled ``Solver``
@@ -196,6 +202,16 @@ def _settings() -> tuple[str, str] | None:
     return key, _url or _checked_url(_environment(API_URL_VARIABLE) or DEFAULT_API_URL)
 
 
+def _api_on() -> bool:
+    """Whether solves go to the API, without checking the key or the URL.
+
+    For a decorator that sends nothing: a setting it would never use must not make it fail.
+    """
+    if _chosen is not None:
+        return _chosen
+    return bool(_environment(API_KEY_VARIABLE))
+
+
 # ---------------------------------------------------------------------------
 # The Python call as the JSON the API takes
 # ---------------------------------------------------------------------------
@@ -213,7 +229,7 @@ def _plain(value: Any, where: str) -> Any:
 
     if type(value).__module__ == "numpy" and callable(getattr(value, "tolist", None)):
         value = value.tolist()  # a numpy scalar or array, without importing numpy
-    if value is None or isinstance(value, (bool, str)) and not isinstance(value, enum.Enum):
+    if value is None or (isinstance(value, (bool, str)) and not isinstance(value, enum.Enum)):
         return value
     if isinstance(value, enum.Enum):
         return _plain(value.value, where)
@@ -272,7 +288,8 @@ def _constraints_json(constraints: Any) -> list[dict[str, Any]]:
 
     ``{"name": ..., <knob>: ..., <parameter>: ...}``, as the API builds each pick back with
     ``dataclasses.replace(<the default spec of that name>, **the rest)``. A None knob or
-    parameter is left out: on both sides it is the default.
+    parameter is left out: on both sides it is the default. That holds as long as a spec
+    field whose value may be None also defaults to None, which every spec does today.
     """
     import dataclasses
 
@@ -304,6 +321,8 @@ def _config_json(config: Any) -> dict[str, Any]:
         raise ValueError("on_new_best is a callback, which cannot be sent to the optimaru API")
     defaults = type(config)()
     fields = {}
+    # Every public attribute of a SolverConfig that is not a method is a field the API sets by
+    # name, and compares by value: tests/test_api.py checks that a default config sends nothing.
     for name in dir(config):
         if name.startswith("_") or name == "on_new_best":
             continue
@@ -352,6 +371,7 @@ def _solve_body(keywords: dict[str, Any]) -> dict[str, Any]:
     fields = {} if config is None else _config_json(config)
     for name in _SOLVE_KEYWORDS:
         value = keywords.pop(name, None)
+        # By identity: a seed of 0 travels. False is the default of the two flags, which only turn on.
         if value is None or value is False:
             continue
         if name == "time_limit_seconds" and value == 0:
@@ -526,6 +546,8 @@ def _patiently(method: str, url: str, key: str) -> Any:
             wait = min(wait * 1.5, _POLL_LONGEST)
 
 
+#: What has been said once in this process: the APIs solves were sent to, and ``local:<use case>``
+#: for a use case that solved here with the API on.
 _said: set[str] = set()
 
 
@@ -538,24 +560,68 @@ def _say_once(base: str) -> None:
         logging.getLogger("optimaru").info("solving on the optimaru API at %s", base)
 
 
+def _wait_limit(body: dict[str, Any]) -> float:
+    """Seconds to wait for the job of `body` before giving it up: twice its time limit, and a margin.
+
+    The time limit is the one the call asks for (the engine's default when it names none),
+    times its parallel starts where they can run one after another (employee scheduling).
+    """
+
+    def seconds(*values: Any) -> float:
+        given = next((value for value in values if isinstance(value, (int, float)) and value > 0), None)
+        return float(given) if given is not None else _DEFAULT_TIME_LIMIT
+
+    if "problem" in body:
+        limit = seconds(body.get("time_limit_seconds"), (body.get("config") or {}).get("spent_limit_seconds"))
+    else:
+        request = body.get("request") or {}
+        settings = request.get("settings") or {}
+        starts = max(
+            int(request.get("parallel_solver_count") or request.get("num_workers") or 1),
+            int(settings.get("multi_start") or 1) if isinstance(settings, dict) else 1,
+        )
+        limit = seconds(request.get("time_limit_seconds"), request.get("timelimit")) * starts
+    return 2 * limit + _WAIT_MARGIN
+
+
 def _solve_job(settings: tuple[str, str], slug: str, body: dict[str, Any]) -> Any:
     """Create the solve job of `body`, wait for it and return its result: the solved model's JSON."""
     import time
 
     key, base = settings
     _say_once(base)
-    job = _job_of(_send("POST", f"{base}/api/use-cases/{slug}/solve/jobs", key, body), base)
+    try:
+        created = _send("POST", f"{base}/api/use-cases/{slug}/solve/jobs", key, body)
+    except ApiError as error:
+        if error.status is not None:
+            raise
+        # No answer: the API may have taken the job before the connection failed, and it runs to its
+        # time limit. Creating it again could solve it twice, so it is not tried again.
+        raise ApiError(
+            f"{error}; if the request reached the API, a solve job was created and runs to its time limit",
+            status=None,
+            code=error.code,
+        ) from error
+    job = _job_of(created, base)
     status_url = base + job["status_url"]
+    limit = _wait_limit(body)
+    started = time.monotonic()
     try:
         wait = _POLL_FIRST
         while job["status"] not in _FINAL_STATUSES:
+            if time.monotonic() - started > limit:
+                raise ApiError(
+                    f"the solve job did not finish within {limit:g} s on the optimaru API "
+                    f"(still {job['status']!r}); it was cancelled",
+                    code="JOB_TIMEOUT",
+                )
             time.sleep(wait)
             wait = min(wait * 1.5, _POLL_LONGEST)
             job = _job_of(_patiently("GET", status_url, key), base)
         if job["status"] == "succeeded":
             return _patiently("GET", base + job["result_url"], key)
     except BaseException:
-        # Interrupted (Ctrl-C) or given up: do not leave the job running on the account.
+        # Interrupted (Ctrl-C), given up or past its time: do not leave the job running on the account.
         # Cancelling a job that has ended changes nothing.
         try:
             _send("POST", f"{status_url}/cancel", key, timeout=_CANCEL_TIMEOUT)
@@ -567,13 +633,18 @@ def _solve_job(settings: tuple[str, str], slug: str, body: dict[str, Any]) -> An
     raise ApiError(job.get("error") or "the solve job failed on the optimaru API", code="JOB_FAILED")
 
 
-def _read(model: Any, result: Any, slug: str) -> Any:
-    """The API's result as the model the local call returns."""
+def _read(model: Any, result: Any, slug: str, base: Any = None) -> Any:
+    """The API's result as `model`, the class the local call returns. `base` is the use case's own model class."""
     from pydantic import ValidationError
 
     try:
         return model.model_validate(result)
     except ValidationError as error:
+        if base is not None and model is not base:
+            raise ApiError(
+                f"the {slug} result of the optimaru API is not a {model.__name__}: the API returns a "
+                f"{base.__name__}, and a field {model.__name__} adds to it is not in the result"
+            ) from error
         raise ApiError(
             f"the optimaru API returned a {slug} result that optimaru {_version()} cannot read; "
             "the API may run another version of the engine"
@@ -626,7 +697,7 @@ def model_solve(slug: str, model: type, *, dicts: bool = False) -> Callable[[Cal
                 )
             body = {"problem": _model_json(problem), **_solve_body(rest)}
             # The caller's own class, so that a subclass of the model comes back as one, as it does here.
-            return _read(type(problem), _solve_job(settings, slug, body), slug)
+            return _read(type(problem), _solve_job(settings, slug, body), slug, model)
 
         return solve_here_or_on_the_api
 
@@ -690,7 +761,7 @@ def compiled_solve(solve: Callable[_P, _R]) -> Callable[_P, _R]:
 
     @functools.wraps(solve)
     def solve_here_only(*args: _P.args, **keywords: _P.kwargs) -> _R:
-        if _settings() is not None:
+        if _api_on():
             raise TypeError(
                 f"with the optimaru API on, {solve.__module__}.solve() cannot run: it solves a compiled "
                 "problem in place, which the API cannot do. Call solve_request() with a request model, or "
@@ -704,20 +775,18 @@ def compiled_solve(solve: Callable[_P, _R]) -> Callable[_P, _R]:
 def local_solve(use_case: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     """The ``solve()`` of a use case the API does not serve: it solves on this machine either way.
 
-    With the API on it says so once, as a warning, so that nobody takes a solve that ran
-    here for one that ran there.
+    With the API on it says so once per process, as a warning, so that nobody takes a solve
+    that ran here for one that ran there.
     """
 
     def decorate(solve: Callable[_P, _R]) -> Callable[_P, _R]:
-        warned = False
-
         @functools.wraps(solve)
         def solve_here(*args: _P.args, **keywords: _P.kwargs) -> _R:
-            nonlocal warned
-            if not warned and _settings() is not None:
+            said = f"local:{use_case}"
+            if said not in _said and _api_on():
                 import warnings
 
-                warned = True
+                _said.add(said)
                 warnings.warn(
                     f"{use_case} is not on the optimaru API: it is solved on this machine",
                     RuntimeWarning,

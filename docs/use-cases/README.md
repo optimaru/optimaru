@@ -241,10 +241,12 @@ key nothing is sent.
   API's error `code` (`"INVALID_CREDENTIALS"`, `"PLAN_LIMIT_EXCEEDED"`,
   `"VALIDATION_ERROR"`, ...; `"JOB_FAILED"` carries the engine's own message for an input
   it refused), its `detail`, and `retry_after` when the API said how long to wait.
-- A solve is a job on the API that the call waits for. A look at it that fails for a
-  reason that passes (the network, a 5xx, a 408, a 429) is tried again for a minute, and
-  so is the read of the result; creating the job is not. Interrupting a solve (Ctrl-C)
-  cancels its job.
+- A solve is a job on the API that the call waits for, for at most twice its time limit
+  and ten minutes more; then it is cancelled and `ApiError` says so (`"JOB_TIMEOUT"`). A
+  look at the job that fails for a reason that passes (the network, a 5xx, a 408, a 429)
+  is tried again for a minute, and so is the read of the result. Creating the job is not
+  tried again, since that could solve it twice. Interrupting a solve (Ctrl-C) cancels its
+  job.
 - The problem and the settings leave the machine, over https, to the API; the first
   solve sent there is logged at INFO on the `optimaru` logger. No redirect is followed,
   so the key goes to that API only. `calculate_score`, `constraint_costs` and the other
