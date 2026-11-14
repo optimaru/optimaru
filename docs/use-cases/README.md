@@ -193,6 +193,84 @@ time limit, which stage a solve reaches depends on the clock. A seeded,
 step-limited solve repeats as long as the step fraction is the larger one;
 give it a time limit generous enough for the steps.
 
+## Solving on the optimaru API
+
+The optimaru API is the Enterprise edition of the engine: the same engine, run as a
+hosted service. The body of its solve request is the Python call (the first argument and
+the keywords of `solve` or `solve_request`, as JSON), so a program that uses this
+package moves onto it with one setting, an API key. Give it in the environment:
+
+```bash
+export OPTIMARU_API_KEY=om_live_...
+```
+
+or in code:
+
+```python
+import optimaru
+
+optimaru.use_api("om_live_...")
+```
+
+With a key, `solve(model, ...)` and `solve_request(request, ...)` send the problem to
+the API, wait for the solve job and return what they return on this machine: a new
+solved model, or the response model. The rest of the program stays as it is. Without a
+key nothing is sent.
+
+- `OPTIMARU_API_URL`, or `optimaru.use_api(key, url=...)`, names another API than
+  `https://app.optimaru.com`. It must be an https URL (http is accepted for localhost).
+  `optimaru.use_api()` without a key reads `OPTIMARU_API_KEY`, and
+  `optimaru.use_local()` solves on this machine again, whatever the environment says.
+- What cannot be sent is refused instead of being solved here without notice: a problem
+  built from the compiled classes (it is solved in place, which a result that comes back
+  as JSON cannot do; pass its model, `Model.from_core(problem)`, and use the model that
+  comes back), the `solve(problem)` of the four use cases whose pydantic layer is a whole
+  request (vehicle routing, pickup and delivery, order picking, employee scheduling: call
+  `solve_request`), a callback (`on_new_best`, employee scheduling's `select`) and a
+  non-finite number.
+- School timetabling stays on this machine. The API serves it through an endpoint of its
+  own, whose request is not this package's Python call, so with a key set it is solved here
+  and says so once in a `RuntimeWarning`.
+- The setting moves `solve` and `solve_request`. The compiled `Solver` class
+  (`Solver(config).solve(problem)`, `solve_with_constraints`) is the engine itself and
+  always runs on this machine.
+- `config` travels as the `SolverConfig` fields that differ from the defaults and
+  `constraints` as the picks in their order, so a solve with the same seed and a step
+  limit gives the same result there as here on the same engine version. A `solve` keyword
+  or a `SolverConfig` field left at its default takes the default of the engine the API
+  runs; a request carries all its own fields.
+- `use_api()` applies to the process that calls it. Worker processes that start fresh
+  (spawn, forkserver: the default on macOS and Windows, and on Linux from Python 3.14)
+  need their own call; the environment variable reaches them by itself.
+- What the API refuses or fails at raises `optimaru.ApiError`: the HTTP `status`, the
+  API's error `code` (`"INVALID_CREDENTIALS"`, `"PLAN_LIMIT_EXCEEDED"`,
+  `"VALIDATION_ERROR"`, ...; `"JOB_FAILED"` carries the engine's own message for an input
+  it refused), its `detail`, and `retry_after` when the API said how long to wait.
+- A solve is a job on the API that the call waits for, from when the job is created, for
+  at most twice its time limit (times its parallel starts, for a request) and ten minutes
+  more; then it is cancelled and `ApiError` says so (`"JOB_TIMEOUT"`). A look at the job
+  that fails for a reason that passes (the network, a 5xx, a 408, a 429) is tried again for
+  a tenth of that wait, and at least a minute, but not past the wait (give or take one
+  request); the read of the result is tried again the same way. Creating the job is not tried again, since that could solve it twice.
+  Interrupting a solve (Ctrl-C) once its job exists cancels the job.
+- The problem and the settings leave the machine, over https, to the API; the first
+  solve sent there is logged at INFO on the `optimaru` logger. No redirect is followed,
+  so the key goes to that API only. `calculate_score`, `constraint_costs` and the other
+  helpers keep running here.
+- A dict in what comes back (routes by vehicle, an assignment by location) has the same
+  entries as here, possibly in another order: the API keeps a JSON object's keys
+  unordered. Read it by key.
+- The API has limits of its own: how long one job may run, how many parallel starts it
+  may take, and what the plan of the key allows. Past one it answers with an `ApiError`
+  that says which.
+- The API runs a released engine. A `SolverConfig` field or a model field that a newer
+  source checkout has and the API's engine does not is refused there by its name.
+
+The request the API takes, endpoint by endpoint, is its REST reference; this section is
+what the package does with it. A new use case decides where it solves when it is added:
+`optimaru/_api.py` has one decorator for each answer (see
+[Layout of a use case](#layout-of-a-use-case)).
+
 ## Constraints: names and knobs
 
 Every constraint is one named component, `<Subject>Cost` in C++ and Python and
@@ -320,6 +398,13 @@ The two steps the `solve()` functions share, the keyword overrides on a copy of 
 config and the solver call, are in [`optimaru/_solve.py`](../../optimaru/_solve.py), and
 what several `models.py` need (the strict model base, the common solver settings, the
 checks of `with_initial_solution`) is in [`optimaru/_models.py`](../../optimaru/_models.py).
+Where a solve runs is decided in [`optimaru/_api.py`](../../optimaru/_api.py): a use
+case decorates its `solve` with `_api.model_solve("<slug>", <Model>)` when the optimaru
+API solves it with `solve`, its `solve_request` with `_api.request_solve("<slug>",
+"<Response>")` and its `solve` with `_api.compiled_solve` when the API solves it with
+`solve_request`, and its `solve` with `_api.local_solve("<name>")` when the API does not
+serve it. `tests/test_api.py` fails until a new use case is in one of the tables of
+`tests/_api_server.py` or among its local use cases.
 
 Build and test one use case, from the repository root:
 

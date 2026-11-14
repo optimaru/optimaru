@@ -36,6 +36,7 @@ The pydantic mirror (for serialization) is in `optimaru.bed_allocation.models`.
 
 from typing import TypeVar
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from ._core import (
     Bed,
@@ -89,6 +90,7 @@ def _build_config(**settings) -> SolverConfig:
 _Problem = TypeVar("_Problem")
 
 
+@_api.model_solve("bed-allocation", BedPlanModel)
 def solve(
     plan: _Problem,
     *,

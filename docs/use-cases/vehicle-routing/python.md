@@ -79,6 +79,10 @@ lower `descent_weight`) when a cheaper sampled neighbourhood is preferred.
 
 ## JSON in, JSON out (pydantic)
 
+With an API key set (`optimaru.use_api`, `OPTIMARU_API_KEY`), `solve_request` runs on the
+optimaru API and `solve(plan)` is refused: a compiled plan is solved in place, which the API
+cannot do. See [Solving on the optimaru API](../README.md#solving-on-the-optimaru-api).
+
 ```python
 from optimaru.vehicle_routing.models import (RoutePlanRequest, RoutingInput, VehicleModel,
                                 VisitModel, solve_request)

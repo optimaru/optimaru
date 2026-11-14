@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- **Solving on the optimaru API with one setting.** The optimaru API is the Enterprise
+  edition: this engine run as a hosted service, whose solve request is the Python call. With
+  an API key, in the environment (`OPTIMARU_API_KEY`) or in code
+  (`optimaru.use_api("om_live_...")`), `solve(model, ...)` and `solve_request(request, ...)`
+  send the problem there, wait for the solve job and return what they return on this
+  machine: a new solved model, or the response model. `OPTIMARU_API_URL` or
+  `use_api(key, url=...)` names another API than `https://app.optimaru.com`, and
+  `optimaru.use_local()` solves here again. `config` travels as the `SolverConfig` fields
+  that differ from the defaults and `constraints` as the picks in their order, so the same
+  seed and step limit give the same result there as here on the same engine version. What
+  cannot be sent is refused, not solved here without notice: a problem built from the
+  compiled classes (pass its model), the `solve(problem)` of vehicle routing, pickup and
+  delivery, order picking and employee scheduling (call `solve_request`), a callback
+  (`on_new_best`, `select`), a non-finite number and a setting the engine refuses. School
+  timetabling keeps solving here, with a `RuntimeWarning` once (the API takes it in a request
+  of its own); the compiled `Solver` class used directly is the engine itself and always
+  runs here. What the API refuses or fails at raises `optimaru.ApiError` (`status`, `code`,
+  `detail`, `retry_after`). A solve is a job the call waits for, for at most twice its time
+  limit (times its parallel starts, for a request) and ten minutes more: a look at it that
+  fails for a reason that passes (the network, a 5xx, a 408, a 429) is tried again for a
+  tenth of that wait and at least a minute, as is the read of its result,
+  and interrupting a solve once its job exists cancels it. The key goes to that API only
+  (https, or http to localhost without a proxy; no redirect followed), and the first solve
+  sent there is logged at INFO on the `optimaru` logger. No new dependency: the standard
+  library and pydantic. Without a key nothing changes and nothing is sent. Every use case's
+  `solve`, and the `solve_request` of the four request use cases and of school timetabling,
+  are wrapped for this (`__wrapped__` is the function that solves here); their signatures
+  are unchanged.
+
 - **CI: benchmarks run when a pull request touches them.** A CP-SAT comparison job (and the
   vehicle routing benchmark job) runs on a pull request that changes its benchmark project or
   its use case, all of them when the shared runner (`benchmarks/cpsat-common/`), `ci.yml` or

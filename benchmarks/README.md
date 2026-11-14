@@ -47,7 +47,9 @@ measures the engine in this checkout. external-solver's pin on the published
 release is overridden (`override-dependencies`), so external-solver builds and
 scores with the same `optimaru.<subpackage>` modules. Importing the project's
 package calls `cpsat_plugins.checkout.use_checkout_engine`, which fails fast if
-`optimaru.<subpackage>` comes from anywhere else. `OPTIMARU_USE_CASES=<subpackage>`
+`optimaru.<subpackage>` comes from anywhere else and removes `OPTIMARU_API_KEY` from the
+environment (with a key the engine would solve on the optimaru API; a benchmark measures
+this machine, and the vehicle routing harness does the same). `OPTIMARU_USE_CASES=<subpackage>`
 before `uv sync` builds only that extension. [`cpsat-common`](cpsat-common) holds
 that check, the comparison runner (`run_cli`) and the results file of the
 public-instance runners (`write_results`). To pick up a new external-solver release,

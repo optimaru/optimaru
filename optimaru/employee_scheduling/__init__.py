@@ -17,6 +17,7 @@ The JSON-friendly request/solution layer is `optimaru.employee_scheduling.models
 `with_initial_solution` restarts a solve from an earlier result.
 """
 
+from .. import _api
 from .._solve import solver_config
 from ._core import (
     CONSTRAINT_NAMES,
@@ -130,6 +131,7 @@ __all__ = [
 ]
 
 
+@_api.compiled_solve
 def solve(
     schedule: EmployeeSchedule,
     *,

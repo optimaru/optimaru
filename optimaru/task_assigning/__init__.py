@@ -41,6 +41,7 @@ The pydantic mirror (for serialization) is in `optimaru.task_assigning.models`.
 
 from typing import TypeVar
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from ._core import (
     Affinity,
@@ -94,6 +95,7 @@ def _build_config(**settings) -> SolverConfig:
 _Problem = TypeVar("_Problem")
 
 
+@_api.model_solve("task-assigning", TaskAssigningSolutionModel)
 def solve(
     solution: _Problem,
     *,

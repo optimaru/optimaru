@@ -6,11 +6,20 @@ Each use case is a subpackage, loaded on first access so that importing
     from optimaru import vehicle_routing
     import optimaru.school_timetabling as st
 
+A solve runs on this machine. With an API key it runs on the optimaru API, the same
+engine as a hosted service, and returns the same thing: set ``OPTIMARU_API_KEY``, or
+call `use_api`; `use_local` turns it off again, and `ApiError` is what the API refusing
+or failing at a solve raises.
+
 See https://optimaru.com and https://github.com/optimaru/optimaru.
 """
 
 import importlib
 from importlib.metadata import PackageNotFoundError, version
+
+from ._api import ApiError as ApiError
+from ._api import use_api as use_api
+from ._api import use_local as use_local
 
 try:
     __version__ = version("optimaru")

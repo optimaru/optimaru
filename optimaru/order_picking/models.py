@@ -30,6 +30,7 @@ from typing import Any, Literal, cast
 
 from pydantic import Field, model_validator
 
+from .. import _api
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
 
@@ -173,6 +174,7 @@ def to_solution(request: OrderPickingRequest) -> "_core.OrderPickingSolution":
     return _core.OrderPickingSolution(orders, trolleys, pick_tasks)
 
 
+@_api.request_solve("order-picking", "OrderPickingResponse")
 def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPickingResponse:
     """Solve the request and shape the response (routes per trolley plus the
     per-trolley travel distance)."""

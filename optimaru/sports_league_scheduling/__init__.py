@@ -26,6 +26,7 @@ The pydantic mirror (for serialization) is in `optimaru.sports_league_scheduling
 
 from typing import TypeVar
 
+from .. import _api
 from .._solve import solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
@@ -68,6 +69,7 @@ __all__ = [
 _Problem = TypeVar("_Problem")
 
 
+@_api.model_solve("sports-league-scheduling", LeagueScheduleModel)
 def solve(
     schedule: _Problem,
     *,

@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import Field, model_validator
 
+from .. import _api
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
 from .constraints import get_constraints
@@ -343,6 +344,7 @@ def vehicle_metrics(plan: _core.PdpRoutePlan, routes: dict[str, list[PdpStop]]) 
     return metrics
 
 
+@_api.request_solve("pickup-delivery", "PdpSolution")
 def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
     """Solve a JSON-friendly request with the metaheuristic backend."""
     plan = to_plan(request.model_input, name=request.name or "plan")
