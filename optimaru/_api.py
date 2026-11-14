@@ -99,12 +99,14 @@ _SOLVE_KEYWORDS = (
 class ApiError(RuntimeError):
     """The optimaru API refused a solve, or failed at it.
 
-    ``status`` is the HTTP status of the response, or None when no response says it: the
-    API could not be reached, or a job that was accepted then failed, was cancelled or did
-    not finish in time. ``code`` is the API's error code, such as ``"INVALID_CREDENTIALS"``,
-    ``"PLAN_LIMIT_EXCEEDED"`` or ``"VALIDATION_ERROR"``; ``"JOB_FAILED"``,
-    ``"JOB_CANCELLED"`` and ``"JOB_TIMEOUT"`` are a job that ended without a result. ``detail`` is what the API sent with the error: for a plan limit,
-    a dict with the ``reason`` and the plan's ``entitlements``. ``retry_after`` is the
+    ``status`` is the HTTP status of the API's error response, or None for any other error:
+    the API could not be reached or answered with something other than a solve job or a
+    result this version can read, or a job that was accepted then failed, was cancelled or
+    did not finish in time. ``code`` is the API's error code, such as
+    ``"INVALID_CREDENTIALS"``, ``"PLAN_LIMIT_EXCEEDED"`` or ``"VALIDATION_ERROR"``;
+    ``"JOB_FAILED"``, ``"JOB_CANCELLED"`` and ``"JOB_TIMEOUT"`` are a job that ended without
+    a result. ``detail`` is what the API sent with the error: for a plan limit, a dict with
+    the ``reason`` and the plan's ``entitlements``. ``retry_after`` is the
     number of seconds the API asked to wait before trying again (its ``Retry-After``),
     or None.
     """
@@ -140,8 +142,9 @@ def use_api(key: str | None = None, *, url: str | None = None) -> None:
     With the API on, ``solve(model, ...)`` and ``solve_request(request, ...)`` send the
     problem and return what they return on this machine. The settings travel as what was
     given: a keyword or a ``SolverConfig`` field left at its default takes the default of
-    the engine the API runs. A solve waits for its job, from when the job is created, for
-    at most twice its time limit and ten minutes more, then cancels it. The first solve
+    the engine the API runs; a request carries all its own fields. A solve waits for its
+    job, from when the job is created, for at most twice its time limit (times its parallel
+    starts, for a request) and ten minutes more, then cancels it. The first solve
     sent to an API is logged at INFO on the ``optimaru`` logger. What cannot be sent is
     refused instead of being solved here without notice: a compiled problem (pass its
     model), a callback (``on_new_best``, ``select``) and a non-finite number. School

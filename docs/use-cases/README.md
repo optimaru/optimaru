@@ -250,8 +250,8 @@ key nothing is sent.
   at most twice its time limit (times its parallel starts, for a request) and ten minutes
   more; then it is cancelled and `ApiError` says so (`"JOB_TIMEOUT"`). A look at the job
   that fails for a reason that passes (the network, a 5xx, a 408, a 429) is tried again for
-  at least a minute, longer for a long solve but never past its wait, and so is the read of
-  the result. Creating the job is not tried again, since that could solve it twice.
+  a tenth of that wait, and at least a minute, but never past the wait; the read of the
+  result is tried again the same way. Creating the job is not tried again, since that could solve it twice.
   Interrupting a solve (Ctrl-C) once its job exists cancels the job.
 - The problem and the settings leave the machine, over https, to the API; the first
   solve sent there is logged at INFO on the `optimaru` logger. No redirect is followed,

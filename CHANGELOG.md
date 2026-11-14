@@ -20,14 +20,16 @@
   of its own); the compiled `Solver` class used directly is the engine itself and always
   runs here. What the API refuses or fails at raises `optimaru.ApiError` (`status`, `code`,
   `detail`, `retry_after`). A solve is a job the call waits for, for at most twice its time
-  limit and ten minutes more: a look at it that fails for a reason that passes (the network,
-  a 5xx, a 408, a 429) is tried again for at least a minute, as is the read of its result,
+  limit (times its parallel starts, for a request) and ten minutes more: a look at it that
+  fails for a reason that passes (the network, a 5xx, a 408, a 429) is tried again for a
+  tenth of that wait and at least a minute, as is the read of its result,
   and interrupting a solve once its job exists cancels it. The key goes to that API only
   (https, or http to localhost without a proxy; no redirect followed), and the first solve
   sent there is logged at INFO on the `optimaru` logger. No new dependency: the standard
   library and pydantic. Without a key nothing changes and nothing is sent. Every use case's
-  `solve`, and the `solve_request` of the four request use cases, are wrapped for this
-  (`__wrapped__` is the function that solves here); their signatures are unchanged.
+  `solve`, and the `solve_request` of the four request use cases and of school timetabling,
+  are wrapped for this (`__wrapped__` is the function that solves here); their signatures
+  are unchanged.
 
 - **CI: benchmarks run when a pull request touches them.** A CP-SAT comparison job (and the
   vehicle routing benchmark job) runs on a pull request that changes its benchmark project or

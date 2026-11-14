@@ -554,9 +554,14 @@ def test_a_dict_goes_where_solve_takes_one(api):
     assert type(solved) is type(problem)
     (created,) = api.created()
     assert created.body["problem"] == problem.model_dump(mode="json")
-    # Elsewhere solve() takes the model or the compiled problem, with the API on as without it.
+
+
+def test_a_dict_is_refused_where_solve_does_not_take_one(api):
+    """Elsewhere solve() takes the model or the compiled problem, with the API on as without it."""
+    knapsack = use_case_module("knapsack")
     with pytest.raises(TypeError, match="takes a KnapsackProblemModel, not a dict"):
-        use_case_module("knapsack").solve(model_of("knapsack").model_dump(mode="json"))
+        knapsack.solve(model_of("knapsack").model_dump(mode="json"))
+    assert not api.requests
 
 
 @pytest.mark.parametrize("use_case", ["conference_scheduling", "flight_crew_scheduling", "sports_league_scheduling"])
