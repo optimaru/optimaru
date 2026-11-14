@@ -197,6 +197,14 @@ def test_an_error_body_of_another_shape_is_still_an_api_error(api):
         knapsack.solve(model_of("knapsack"))
 
 
+def test_an_upper_case_scheme_is_still_plain_http_and_skips_a_proxy(monkeypatch):
+    optimaru.use_api(KEY, url="HTTP://LocalHost:8000")
+    assert _api._settings() == (KEY, "http://localhost:8000")
+    monkeypatch.setenv("OPTIMARU_API_URL", "HTTPS://App.Example.com/")
+    optimaru.use_api(KEY)
+    assert _api._settings() == (KEY, "https://app.example.com")
+
+
 def test_an_ipv6_localhost_is_a_localhost():
     optimaru.use_api(KEY, url="http://[::1]:8000/")
     assert _api._settings() == (KEY, "http://[::1]:8000")
@@ -663,6 +671,7 @@ def test_the_read_of_the_result_is_tried_again(api):
 
 def test_a_job_that_cannot_be_looked_at_is_given_up_and_cancelled(api, monkeypatch):
     monkeypatch.setattr(_api, "_POLL_PATIENCE", 0.05)
+    monkeypatch.setattr(_api, "_WAIT_MARGIN", 0.05)  # the patience grows with the wait
     api.fail_looks = 10**6
     knapsack = use_case_module("knapsack")
     with pytest.raises(optimaru.ApiError) as raised:

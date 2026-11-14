@@ -141,10 +141,10 @@ def use_api(key: str | None = None, *, url: str | None = None) -> None:
     problem and return what they return on this machine. The settings travel as what was
     given: a keyword or a ``SolverConfig`` field left at its default takes the default of
     the engine the API runs. A solve waits for its job, from when the job is created, for
-    at most twice its time limit and ten minutes more, then cancels it. The first solve sent to an API is logged at INFO
-    on the ``optimaru`` logger. What cannot be sent is refused
-    instead of being solved here without notice: a compiled problem (pass its model), a
-    callback (``on_new_best``, ``select``) and a non-finite number. School timetabling is
+    at most twice its time limit and ten minutes more, then cancels it. The first solve
+    sent to an API is logged at INFO on the ``optimaru`` logger. What cannot be sent is
+    refused instead of being solved here without notice: a compiled problem (pass its
+    model), a callback (``on_new_best``, ``select``) and a non-finite number. School timetabling is
     not on the API and keeps solving on this machine, and so does the compiled ``Solver``
     class used directly: the setting moves ``solve`` and ``solve_request``.
 
@@ -208,7 +208,8 @@ def _checked_url(url: str) -> str:
         raise ValueError(f"the API URL must be an https URL (http for localhost only), not {url!r}")
     if parts.query or parts.fragment:
         raise ValueError(f"the API URL must not have a query or a fragment, not {url!r}")
-    return url
+    # The scheme and host in lower case: `_send` tells plain http by its scheme.
+    return parts._replace(scheme=parts.scheme, netloc=parts.netloc.lower()).geturl()
 
 
 def _settings() -> tuple[str, str] | None:
@@ -554,7 +555,7 @@ def _send(
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
-        with _opener(url.startswith("http://")).open(request, timeout=timeout) as response:
+        with _opener(url[:7].lower() == "http://").open(request, timeout=timeout) as response:
             text = response.read().decode(errors="replace")
     except urllib.error.HTTPError as error:
         with error:
@@ -685,7 +686,9 @@ def _solve_job(settings: tuple[str, str], slug: str, body: dict[str, Any]) -> An
                 )
             time.sleep(wait)
             wait = min(wait * 1.5, _POLL_LONGEST)
-            job = _job_of(_patiently("GET", status_url, key, patience), base)
+            # Within the job's own wait: a failing look does not carry the solve past it.
+            left = max(limit - (time.monotonic() - started), _POLL_FIRST)
+            job = _job_of(_patiently("GET", status_url, key, min(patience, left)), base)
         if job["status"] == "succeeded":
             return _patiently("GET", base + job["result_url"], key, patience)
     except BaseException:

@@ -12,7 +12,7 @@ def fake_engine(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     package = repo / "optimaru" / "fake_case"
     package.mkdir(parents=True)
-    (repo / "optimaru" / "__init__.py").write_text("")
+    (repo / "optimaru" / "__init__.py").write_text("calls = []\n\ndef use_local():\n    calls.append('use_local')\n")
     (package / "__init__.py").write_text("")
     monkeypatch.syspath_prepend(str(repo))
     saved = {name: sys.modules.pop(name) for name in list(sys.modules) if name.split(".")[0] == "optimaru"}
@@ -35,6 +35,7 @@ def test_an_api_key_in_the_environment_is_set_aside(fake_engine, monkeypatch):
     checkout.use_checkout_engine("fake_case", repo_root=fake_engine)
 
     assert "OPTIMARU_API_KEY" not in os.environ
+    assert sys.modules["optimaru"].calls == ["use_local"]  # and a key given in code
 
 
 def test_an_engine_from_elsewhere_is_refused(fake_engine, tmp_path):
