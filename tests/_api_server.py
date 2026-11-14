@@ -143,11 +143,12 @@ class ApiStandIn:
     """The API on ``http://127.0.0.1:<port>``, as a context manager.
 
     ``key`` is the one key it accepts. A test steers it through the attributes:
-    ``looks_while_running`` status answers say "running" before the job is solved,
+    ``looks_while_running`` status answers say ``running_as`` before the job is solved,
     ``refuse`` is ``(status, body, headers)`` answered to the next job instead of creating
-    it, ``fail_looks`` status answers are a 503, ``result`` replaces every job's result,
-    and ``end_as`` ends every job in that status without solving it. ``requests`` lists
-    what arrived, ``calls`` the keywords each solve ran with, ``cancelled`` the cancelled jobs.
+    it, ``fail_looks`` status answers and ``fail_results`` result answers are ``fail_with``
+    (a 503 unless set), ``result`` replaces every job's result, and ``end_as`` ends every
+    job in that status without solving it. ``requests`` lists what arrived, ``calls`` the
+    keywords each solve ran with, ``cancelled`` the cancelled jobs.
     """
 
     def __init__(self, key: str = "om_test_key"):
@@ -157,7 +158,10 @@ class ApiStandIn:
         self.cancelled: list[str] = []
         self.jobs: dict[str, dict[str, Any]] = {}
         self.looks_while_running = 0
+        self.running_as = "running"
         self.fail_looks = 0
+        self.fail_results = 0
+        self.fail_with: tuple[int, Any, dict[str, str]] = (503, _error("QUEUE_UNAVAILABLE", "try again"), {})
         self.refuse: tuple[int, Any, dict[str, str]] | None = None
         self.result: Any = None
         self.end_as: tuple[str, str | None] | None = None
@@ -210,12 +214,12 @@ class ApiStandIn:
     def _look(self, job_id: str) -> tuple[int, Any, dict[str, str]]:
         if self.fail_looks > 0:
             self.fail_looks -= 1
-            return 503, _error("QUEUE_UNAVAILABLE", "try again"), {}
+            return self.fail_with
         job = self.jobs[job_id]
         job["looks"] += 1
-        if job["status"] in ("queued", "running"):
+        if job["status"] not in ("succeeded", "failed", "cancelled"):
             if job["looks"] <= self.looks_while_running:
-                job["status"] = "running"
+                job["status"] = self.running_as
             elif self.end_as is not None:
                 job["status"], job["error"] = self.end_as
             else:
@@ -227,6 +231,9 @@ class ApiStandIn:
         return 200, self._document(job_id), {}
 
     def _result(self, job_id: str) -> tuple[int, Any, dict[str, str]]:
+        if self.fail_results > 0:
+            self.fail_results -= 1
+            return self.fail_with
         job = self.jobs[job_id]
         if job["status"] != "succeeded":
             return 409, _error("JOB_HAS_NO_RESULT", f"no result yet (status={job['status']})"), {}
@@ -234,7 +241,7 @@ class ApiStandIn:
 
     def _cancel(self, job_id: str) -> tuple[int, Any, dict[str, str]]:
         job = self.jobs[job_id]
-        if job["status"] in ("queued", "running"):
+        if job["status"] not in ("succeeded", "failed", "cancelled"):
             job["status"] = "cancelled"
             self.cancelled.append(job_id)
         return 200, self._document(job_id), {}

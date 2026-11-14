@@ -15,3 +15,4 @@ def solve_on_this_machine(monkeypatch):
     monkeypatch.delenv(_api.API_URL_VARIABLE, raising=False)
     for setting in ("_chosen", "_key", "_url"):
         monkeypatch.setattr(_api, setting, None)
+    monkeypatch.setattr(_api, "_said", set())

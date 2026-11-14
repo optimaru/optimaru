@@ -478,14 +478,48 @@ def test_a_look_that_fails_is_tried_again(api):
     assert knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05).score_hard == 0
 
 
+def test_a_throttled_look_does_not_cost_the_job(api):
+    api.fail_with = (429, {"code": "RATE_LIMITED", "message": "slow down", "detail": None}, {"Retry-After": "0"})
+    api.fail_looks = 3
+    knapsack = use_case_module("knapsack")
+    assert knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05).score_hard == 0
+    assert not api.cancelled
+
+
+def test_the_read_of_the_result_is_tried_again(api):
+    api.fail_results = 2
+    knapsack = use_case_module("knapsack")
+    assert knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05).score_hard == 0
+    reads = [r for r in api.requests if r.path.endswith("/result")]
+    assert len(reads) == 3
+
+
 def test_a_job_that_cannot_be_looked_at_is_given_up_and_cancelled(api, monkeypatch):
-    monkeypatch.setattr(_api, "_POLL_RETRIES", 2)
-    api.fail_looks = 10
+    monkeypatch.setattr(_api, "_POLL_PATIENCE", 0.05)
+    api.fail_looks = 10**6
     knapsack = use_case_module("knapsack")
     with pytest.raises(optimaru.ApiError) as raised:
         knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
     assert raised.value.status == 503 and raised.value.code == "QUEUE_UNAVAILABLE"
     assert len(api.cancelled) == 1
+
+
+def test_a_look_the_api_refuses_is_not_tried_again(api):
+    api.fail_with = (404, {"code": "JOB_NOT_FOUND", "message": "no such job", "detail": None}, {})
+    api.fail_looks = 10**6
+    knapsack = use_case_module("knapsack")
+    with pytest.raises(optimaru.ApiError) as raised:
+        knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
+    assert raised.value.code == "JOB_NOT_FOUND"
+    looks = [r for r in api.requests if r.method == "GET"]
+    assert len(looks) == 1
+
+
+def test_a_status_the_package_does_not_know_is_a_job_on_its_way(api):
+    api.looks_while_running, api.running_as = 2, "preparing"
+    knapsack = use_case_module("knapsack")
+    assert knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05).score_hard == 0
+    assert not api.cancelled
 
 
 def test_an_interrupted_solve_cancels_its_job(api, monkeypatch):
@@ -563,7 +597,9 @@ def test_too_many_jobs_at_once_says_when_to_retry(api):
     knapsack = use_case_module("knapsack")
     with pytest.raises(optimaru.ApiError, match="jobs running at once is reached.*retry after 7 s") as raised:
         knapsack.solve(model_of("knapsack"))
-    assert raised.value.status == 429
+    assert (raised.value.status, raised.value.retry_after) == (429, 7.0)
+    # Creating a job is not tried again: whether it was created is not known.
+    assert len(api.requests) == 1
 
 
 def test_a_body_the_api_does_not_take_says_where(api):
@@ -626,13 +662,66 @@ def test_a_result_this_version_cannot_read_is_an_api_error(api):
         knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
 
 
-def test_a_non_finite_number_in_the_problem_is_refused(api, monkeypatch):
-    knapsack = use_case_module("knapsack")
-    problem = model_of("knapsack")
-    monkeypatch.setattr(_api, "_model_json", lambda model: {"capacity": float("inf")})
+def test_a_non_finite_number_in_the_problem_is_refused(api):
+    module = use_case_module("facility_location")
+    problem = model_of("facility-location")
+    problem.facilities[0].location.latitude = float("inf")
     with pytest.raises(ValueError, match="non-finite"):
-        knapsack.solve(problem)
+        module.solve(problem)
     assert not api.requests
+
+
+def test_numpy_values_travel_as_plain_numbers(api):
+    numpy = pytest.importorskip("numpy")
+    assert _api._plain(numpy.bool_(True), "x") is True
+    assert _api._plain(numpy.int64(3), "x") == 3 and type(_api._plain(numpy.int64(3), "x")) is int
+    assert _api._plain(numpy.array([1.5, 2.5]), "x") == [1.5, 2.5]
+    knapsack = use_case_module("knapsack")
+    from optimaru.knapsack import constraints as specs
+
+    picks = [specs.KnapsackCapacityCost(weight=numpy.float64(2.0)), specs.SelectedValueCost(exponent=numpy.float32(2))]
+    knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05, random_seed=numpy.int64(4), constraints=picks)
+    (created,) = api.created()
+    assert created.body["random_seed"] == 4
+    assert [(item["name"], item.get("weight"), item["exponent"]) for item in created.body["constraints"]] == [
+        ("knapsack_capacity_cost", 2.0, 1.0),
+        ("selected_value_cost", None, 2.0),
+    ]
+
+
+@pytest.mark.parametrize("use_case", optimaru.__all__)
+def test_a_config_left_at_its_defaults_sends_no_field(use_case):
+    """Every field of every SolverConfig compares equal to its default, so only a changed one travels."""
+    module = use_case_module(use_case)
+    assert _api._config_json(module.SolverConfig()) == {}
+
+
+def test_the_addresses_of_a_job_are_paths_on_the_api(monkeypatch):
+    """The API may sit under a path prefix: every address of a solve is that prefix and a path."""
+    sent = []
+
+    def send(method, url, key, body=None, *, timeout=None):
+        sent.append((method, url))
+        if method == "POST":
+            job = "/api/use-cases/knapsack/solve/jobs/1"
+            return {"id": "1", "status": "succeeded", "status_url": job, "result_url": f"{job}/result"}
+        return _api._model_json(model_of("knapsack"))
+
+    monkeypatch.setattr(_api, "_send", send)
+    optimaru.use_api(KEY, url="https://host.example/prefix/")
+    use_case_module("knapsack").solve(model_of("knapsack"))
+    assert sent == [
+        ("POST", "https://host.example/prefix/api/use-cases/knapsack/solve/jobs"),
+        ("GET", "https://host.example/prefix/api/use-cases/knapsack/solve/jobs/1/result"),
+    ]
+
+
+def test_the_first_solve_sent_to_an_api_is_logged(api, caplog):
+    knapsack = use_case_module("knapsack")
+    with caplog.at_level("INFO", logger="optimaru"):
+        knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
+        knapsack.solve(model_of("knapsack"), time_limit_seconds=0.05)
+    assert [record.getMessage() for record in caplog.records] == [f"solving on the optimaru API at {api.url}"]
 
 
 def test_the_stand_in_reads_json_only():

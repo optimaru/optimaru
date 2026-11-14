@@ -232,13 +232,20 @@ key nothing is sent.
   once in a `RuntimeWarning`.
 - `config` travels as the `SolverConfig` fields that differ from the defaults and
   `constraints` as the picks in their order, so a solve with the same seed and a step
-  limit gives the same result there as here on the same engine version.
+  limit gives the same result there as here on the same engine version. A keyword or a
+  field left at its default takes the default of the engine the API runs.
 - What the API refuses or fails at raises `optimaru.ApiError`: the HTTP `status`, the
   API's error `code` (`"INVALID_CREDENTIALS"`, `"PLAN_LIMIT_EXCEEDED"`,
   `"VALIDATION_ERROR"`, ...; `"JOB_FAILED"` carries the engine's own message for an input
-  it refused) and its `detail`. Interrupting a solve (Ctrl-C) cancels its job.
-- The problem and the settings leave the machine, over https, to the API. `score`,
-  `calculate_score`, `constraint_costs` and the other helpers keep running here.
+  it refused), its `detail`, and `retry_after` when the API said how long to wait.
+- A solve is a job on the API that the call waits for. A look at it that fails for a
+  reason that passes (the network, a 5xx, a 408, a 429) is tried again for a minute, and
+  so is the read of the result; creating the job is not. Interrupting a solve (Ctrl-C)
+  cancels its job.
+- The problem and the settings leave the machine, over https, to the API; the first
+  solve sent there is logged at INFO on the `optimaru` logger. No redirect is followed,
+  so the key goes to that API only. `calculate_score`, `constraint_costs` and the other
+  helpers keep running here.
 - The API runs a released engine. A `SolverConfig` field or a model field that a newer
   source checkout has and the API's engine does not is refused there by its name.
 

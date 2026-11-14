@@ -71,10 +71,17 @@ _url: str | None = None
 
 #: Seconds one HTTP request may take. A solve is a job that is polled, so no request waits for the search.
 _REQUEST_TIMEOUT = 60.0
+#: Seconds the request that cancels a job may take: an interrupted solve should not hang on it.
+_CANCEL_TIMEOUT = 5.0
 #: Seconds between two looks at a job: the first, and the longest the wait grows to.
 _POLL_FIRST, _POLL_LONGEST = 0.2, 2.0
-#: Looks at a job that may fail in a row (the network, a 5xx) before the solve gives up.
-_POLL_RETRIES = 5
+#: Seconds a look at a job, or the read of its result, keeps being tried while it fails for a reason
+#: that passes (the network, a 5xx, a 408, a 429): a job that runs is not given up for a bad moment.
+_POLL_PATIENCE = 60.0
+#: The longest a ``Retry-After`` is waited for between two tries, in seconds.
+_RETRY_AFTER_LONGEST = 30.0
+#: The statuses a job ends in. Any other one, known or not, is a job still on its way.
+_FINAL_STATUSES = ("succeeded", "failed", "cancelled")
 #: The keywords every ``solve()`` has that the API takes under the same name.
 _SOLVE_KEYWORDS = (
     "time_limit_seconds",
@@ -93,14 +100,25 @@ class ApiError(RuntimeError):
     API's error code, such as ``"INVALID_CREDENTIALS"``, ``"PLAN_LIMIT_EXCEEDED"`` or
     ``"VALIDATION_ERROR"``; ``"JOB_FAILED"`` and ``"JOB_CANCELLED"`` are a job that ended
     without a result. ``detail`` is what the API sent with the error: for a plan limit,
-    a dict with the ``reason`` and the plan's ``entitlements``.
+    a dict with the ``reason`` and the plan's ``entitlements``. ``retry_after`` is the
+    number of seconds the API asked to wait before trying again (its ``Retry-After``),
+    or None.
     """
 
-    def __init__(self, message: str, *, status: int | None = None, code: str | None = None, detail: Any = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        code: str | None = None,
+        detail: Any = None,
+        retry_after: float | None = None,
+    ):
         super().__init__(message)
         self.status = status
         self.code = code
         self.detail = detail
+        self.retry_after = retry_after
 
 
 def use_api(key: str | None = None, *, url: str | None = None) -> None:
@@ -116,7 +134,10 @@ def use_api(key: str | None = None, *, url: str | None = None) -> None:
     `use_local` turns the API off again.
 
     With the API on, ``solve(model, ...)`` and ``solve_request(request, ...)`` send the
-    problem and return what they return on this machine. What cannot be sent is refused
+    problem and return what they return on this machine. The settings travel as what was
+    given: a keyword or a ``SolverConfig`` field left at its default takes the default of
+    the engine the API runs. The first solve sent to an API is logged at INFO on the
+    ``optimaru`` logger. What cannot be sent is refused
     instead of being solved here without notice: a compiled problem (pass its model), a
     callback (``on_new_best``, ``select``) and a non-finite number. School timetabling is
     not on the API and keeps solving on this machine.
@@ -189,6 +210,8 @@ def _plain(value: Any, where: str) -> Any:
     import math
     import numbers
 
+    if type(value).__module__ == "numpy" and callable(getattr(value, "tolist", None)):
+        value = value.tolist()  # a numpy scalar or array, without importing numpy
     if value is None or isinstance(value, (bool, str)) and not isinstance(value, enum.Enum):
         return value
     if isinstance(value, enum.Enum):
@@ -361,16 +384,21 @@ def _error_of(status: int, text: str, headers: Any) -> ApiError:
         said = f"{where}: {detail[0].get('msg', '')}".strip(": ") or None
     if 300 <= status < 400:
         target = headers.get("Location") if headers is not None else None
-        said = f"the address redirects{f' to {target}' if target else ''}; the key is not sent along, so set the API URL to where it points"
+        where = f" to {target}" if target else ""
+        said = f"the address redirects{where}; the key is not sent along, so set the API URL to where it points"
     answer = f"the optimaru API answered {status}" + (f" {code}" if code else "")
     if said or message:
         answer += f": {said or message}"
     if said and message:
         answer += f" ({message})"  # the API's own sentence
     retry = headers.get("Retry-After") if headers is not None else None
-    if retry:
-        answer += f"; retry after {retry} s"
-    return ApiError(answer, status=status, code=code, detail=detail)
+    try:
+        retry_after = max(0.0, float(retry)) if retry else None
+    except ValueError:
+        retry_after = None  # a date: left to the caller
+    if retry_after is not None:
+        answer += f"; retry after {retry_after:g} s"
+    return ApiError(answer, status=status, code=code, detail=detail, retry_after=retry_after)
 
 
 @functools.cache
@@ -389,7 +417,9 @@ def _opener() -> Any:
     return urllib.request.build_opener(NoRedirect)
 
 
-def _send(method: str, url: str, key: str, body: dict[str, Any] | None = None) -> Any:
+def _send(
+    method: str, url: str, key: str, body: dict[str, Any] | None = None, *, timeout: float = _REQUEST_TIMEOUT
+) -> Any:
     """One request to the API, and its JSON. Raises `ApiError` for an error response and when the API cannot be reached."""
     import http.client
     import json
@@ -408,8 +438,8 @@ def _send(method: str, url: str, key: str, body: dict[str, Any] | None = None) -
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
-        with _opener().open(request, timeout=_REQUEST_TIMEOUT) as response:
-            text = response.read().decode()
+        with _opener().open(request, timeout=timeout) as response:
+            text = response.read().decode(errors="replace")
     except urllib.error.HTTPError as error:
         with error:
             raise _error_of(error.code, error.read().decode(errors="replace"), error.headers) from None
@@ -435,38 +465,67 @@ def _job_of(answer: Any, url: str) -> dict[str, Any]:
     return answer
 
 
+def _patiently(method: str, url: str, key: str) -> Any:
+    """`_send` for a job that exists: a failure that passes is tried again, for `_POLL_PATIENCE` seconds.
+
+    The network, a 5xx, a 408 and a 429 say nothing about the job, which runs on and is
+    paid for; giving it up for one of them would throw the solve away. What the API says
+    about the request itself (a 401, a 404) is raised at once.
+    """
+    import time
+
+    started = time.monotonic()
+    wait = _POLL_FIRST
+    while True:
+        try:
+            return _send(method, url, key)
+        except ApiError as error:
+            passes = error.status is None or error.status >= 500 or error.status in (408, 429)
+            if not passes or time.monotonic() - started > _POLL_PATIENCE:
+                raise
+            time.sleep(max(wait, min(error.retry_after or 0.0, _RETRY_AFTER_LONGEST)))
+            wait = min(wait * 1.5, _POLL_LONGEST)
+
+
+_said: set[str] = set()
+
+
+def _say_once(base: str) -> None:
+    """Log, once per API, that solves go there: the problem leaves the machine, which a log should show."""
+    if base not in _said:
+        import logging
+
+        _said.add(base)
+        logging.getLogger("optimaru").info("solving on the optimaru API at %s", base)
+
+
 def _solve_job(settings: tuple[str, str], slug: str, body: dict[str, Any]) -> Any:
     """Create the solve job of `body`, wait for it and return its result: the solved model's JSON."""
     import time
 
     key, base = settings
+    _say_once(base)
     job = _job_of(_send("POST", f"{base}/api/use-cases/{slug}/solve/jobs", key, body), base)
     status_url = base + job["status_url"]
     try:
-        wait, failures = _POLL_FIRST, 0
-        while job["status"] in ("queued", "running"):
+        wait = _POLL_FIRST
+        while job["status"] not in _FINAL_STATUSES:
             time.sleep(wait)
             wait = min(wait * 1.5, _POLL_LONGEST)
-            try:
-                job = _job_of(_send("GET", status_url, key), base)
-                failures = 0
-            except ApiError as error:
-                # The job runs on, whatever happened to this look at it: try again unless the API said no.
-                failures += 1
-                if failures > _POLL_RETRIES or (error.status is not None and error.status < 500):
-                    raise
+            job = _job_of(_patiently("GET", status_url, key), base)
+        if job["status"] == "succeeded":
+            return _patiently("GET", base + job["result_url"], key)
     except BaseException:
         # Interrupted (Ctrl-C) or given up: do not leave the job running on the account.
+        # Cancelling a job that has ended changes nothing.
         try:
-            _send("POST", f"{status_url}/cancel", key)
+            _send("POST", f"{status_url}/cancel", key, timeout=_CANCEL_TIMEOUT)
         except Exception:
             pass
         raise
-    if job["status"] == "succeeded":
-        return _send("GET", base + job["result_url"], key)
     if job["status"] == "cancelled":
         raise ApiError("the solve job was cancelled on the optimaru API", code="JOB_CANCELLED")
-    raise ApiError(job.get("error") or f"the solve job ended as {job['status']!r}", code="JOB_FAILED")
+    raise ApiError(job.get("error") or "the solve job failed on the optimaru API", code="JOB_FAILED")
 
 
 def _read(model: Any, result: Any, slug: str) -> Any:
