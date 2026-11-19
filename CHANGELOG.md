@@ -14,7 +14,8 @@
   results block of their own and two homepage data sets, and every homepage data set now names
   the machine it was measured on (`--machine`, so one publish run takes one machine's results). A
   run that is both incomplete and over capacity now prints `n unassigned` rather than `infeasible`,
-  as the publisher already did.
+  as the publisher already did. The publisher refuses a sampled run (`--limit-per-bucket`) of
+  Set X or Gehring & Homberger, whose tables would read as the whole series.
 
 ## 0.5.2
 

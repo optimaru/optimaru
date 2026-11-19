@@ -177,7 +177,8 @@ def _cached(url: str, path: Path, check) -> str:
         try:
             check(text)
             return text
-        except ValueError:
+        except (ValueError, KeyError):
+            # KeyError: a header or section missing from a damaged copy.
             pass
     payload = _download(url)
     text = payload.decode()

@@ -363,7 +363,8 @@ def run_all(
         for future in as_completed(futures):
             finished(futures[future], future.result())
     except BaseException:
-        # A failed run (or Ctrl-C) stops the series now: the queued runs are dropped, not run first.
+        # A failed run (or Ctrl-C) stops the series: the queued runs are dropped, not run first (the runs
+        # already started finish their budget before the processes exit).
         pool.shutdown(wait=False, cancel_futures=True)
         raise
     pool.shutdown()

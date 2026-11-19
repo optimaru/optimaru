@@ -207,3 +207,15 @@ def test_a_corrupt_cached_file_is_fetched_again(tmp_path, monkeypatch) -> None:
     instance = vrptw.load_vrptw(entry, tmp_path)
     assert instance.best_known_distance == OPTIMUM
     assert base.with_suffix(".vrp").read_text() == text
+
+
+def test_a_cached_file_missing_a_section_is_fetched_again(tmp_path, monkeypatch) -> None:
+    entry = vrptw.VrptwEntry("C101", "solomon", "C1", 3)
+    base = tmp_path / "vrptw" / vrptw.MIRROR_COMMIT[:12] / entry.name
+    base.parent.mkdir(parents=True)
+    text = SAMPLE.replace("T-3", "C101")
+    base.with_suffix(".vrp").write_text(text.split("DEPOT_SECTION")[0])  # cut short: KeyError, not ValueError
+    files = {".sol": "Cost 30\n", ".vrp": text}
+    monkeypatch.setattr(vrptw, "_download", lambda url: files[url[-4:]].encode())
+    assert vrptw.load_vrptw(entry, tmp_path).customer_count == 3
+    assert base.with_suffix(".vrp").read_text() == text
