@@ -109,6 +109,66 @@ def test_vrp_dataset_has_gaps_incomplete_runs_and_bucket_means() -> None:
     assert "| 100-200 | 2 | 1.50% (2/2) | 1.00% (1/2) |" in block
 
 
+def test_vrptw_rows_are_in_tenths_and_grouped_by_class_or_size() -> None:
+    def run(instance, backend, cls, customers, gap, **kw):
+        return _vrp(instance, backend, customers, gap, **kw) | {"scale": 10, "instance_class": cls}
+
+    solomon = {
+        "protocol": {"series": "solomon", "seconds": 30.0, "seed": 0, "jobs": 3},
+        "results": [
+            run("C101", "engine", "C1", 100, 0.0, distance=8273, best=8273),
+            run("C101", "ortools", "C1", 100, 0.0, distance=8273, best=8273),
+            run("R101", "engine", "R1", 100, 0.49, distance=16457, best=16377),
+            run("R101", "ortools", "R1", 100, None, feasible=False, distance=16000, best=16377),
+        ],
+    }
+    dataset = publish.vrp_dataset("solomon-vrptw", solomon)
+    section = dataset["sections"][0]
+    c101, r101 = section["rows"]
+    assert c101["reference"] == "827.3" and c101["best"] == ["engine", "ortools"]
+    assert r101["cells"]["engine"] == {"value": 0.49, "detail": "1,645.7"}
+    assert r101["cells"]["ortools"]["status"] == "infeasible" and r101["best"] == ["engine"]
+    assert [row["instance"] for row in section["chart"]] == ["C1", "R1"]
+    assert dataset["command"].endswith("--series solomon --seconds 30 --jobs 3")
+
+    homberger = {
+        "protocol": {"series": "homberger", "seconds": 30.0, "seed": 0, "jobs": 3},
+        "results": [run("C1_2_1", "engine", "C1", 200, 1.0), run("C1_2_1", "ortools", "C1", 200, 3.0)],
+    }
+    big = run("C1_10_1", "engine", "C1", 1000, 2.0)
+    assert (
+        publish.vrp_dataset("homberger-vrptw", {**homberger, "results": [big]})["sections"][0]["chart"][0]["instance"]
+        == "1,000 customers"
+    )
+    chart = publish.vrp_dataset("homberger-vrptw", homberger)["sections"][0]["chart"]
+    assert chart[0]["instance"] == "200 customers" and chart[0]["size"] == "1 instance"
+
+    block = publish.vrptw_block({"solomon": solomon, "homberger": homberger}, ARGS)
+    assert "| R101 | 100 | 1,637.7 | **0.49%** | infeasible |" in block
+    assert "| R1 | 1 | 0.49% (1/1) | - (0/1) |" in block
+    assert "| 200 | 1 | 1.00% (1/1) | 3.00% (1/1) |" in block
+    assert "single-threaded, 3 runs side by side" in block
+    with pytest.raises(SystemExit, match="different jobs"):
+        publish.vrp_block(
+            solomon | {"protocol": solomon["protocol"] | {"series": "x"}},
+            solomon | {"protocol": solomon["protocol"] | {"series": "a", "jobs": 1}},
+            ARGS,
+        )
+    with pytest.raises(SystemExit, match="different seeds"):
+        publish.vrptw_block(
+            {"solomon": solomon, "homberger": homberger | {"protocol": homberger["protocol"] | {"seed": 1}}}, ARGS
+        )
+
+
+def test_every_data_set_names_its_machine(tmp_path) -> None:
+    # A file from before data sets named their machine: its one machine goes into each data set.
+    target = tmp_path / "benchmarks.ts"
+    old = {"slug": "qaplib", "date": "2026-01-01", "sections": []}
+    publish.write_homepage(target, {"ortools": "9.15", "machine": {"en": "old", "ko": "옛"}}, [old])
+    kept = publish._current_datasets(target)["qaplib"]
+    assert kept["machine"] == {"en": "old", "ko": "옛"} and list(kept)[-1] == "sections"
+
+
 def _pdp(instance, requests, total, engine, cpsat=None, best=None):
     def run(solver, outcome):
         if isinstance(outcome, str):
@@ -337,6 +397,9 @@ def test_a_routing_file_of_another_budget_seed_or_of_chosen_instances_is_refused
         }
 
     publish._check_vrp("vehicle-routing (Set X)", series("x"), ARGS)
+    sampled = series("homberger") | {"protocol": series("homberger")["protocol"] | {"limit_per_bucket": 1}}
+    with pytest.raises(SystemExit, match="sampled run"):
+        publish._check_vrp("vehicle-routing (homberger)", sampled, ARGS)
     with pytest.raises(SystemExit, match="10 s, not --seconds 30"):
         publish._check_vrp("vehicle-routing (Set X)", series("x", seconds=10.0), ARGS)
     # A run of --only instances would read as the whole series in the tables and bucket means.
@@ -577,6 +640,13 @@ def test_generated_rcpsp_instances_are_a_second_table_of_the_data_set() -> None:
     # The two tables share one footer, so one seed.
     with pytest.raises(SystemExit, match="different seeds"):
         publish.rcpsp_block(public, ARGS, [makespan("synthetic-30-s0", 30, 1, 1) | {"seed": 4}])
+
+
+def test_the_vrptw_series_are_published_together(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["publish", str(tmp_path), "--date", "d", "--machine", "m", "--machine-ko", "m"])
+    (tmp_path / "vrptw-solomon.json").write_text(json.dumps({"protocol": {"series": "solomon", "seconds": 30.0}}))
+    with pytest.raises(SystemExit, match="published together"):
+        publish.main()
 
 
 def test_the_generated_rcpsp_results_need_the_rg30_ones_and_extra_json_is_refused(tmp_path, monkeypatch) -> None:

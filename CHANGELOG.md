@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- **Benchmarks: vehicle routing with time windows.** `benchmarks/vehicle-routing` runs two new
+  series, `--series solomon` (Solomon's 56 instances of 100 customers) and `--series homberger`
+  (Gehring & Homberger's 300, 200 to 1000 customers), against the OR-Tools Routing solver with a
+  time dimension. They are scored by the DIMACS convention under which CVRPLIB lists its
+  best-known solutions: distance alone, every distance truncated to one decimal (the harness
+  works in tenths). The files and best-known solutions are read at a pinned commit of the
+  PyVRP/Instances repository, and the rescoring replays each route's schedule, so a missed
+  window is reported as infeasible. `--jobs N` runs N single-threaded runs side by side.
+  `scripts/publish_benchmarks.py` reads `vrptw-solomon.json` and `vrptw-homberger.json` into a
+  results block of their own and two homepage data sets, and every homepage data set now names
+  the machine it was measured on (`--machine`, so one publish run takes one machine's results). A
+  run that is both incomplete and over capacity now prints `n unassigned` rather than `infeasible`,
+  as the publisher already did. The publisher refuses a sampled run (`--limit-per-bucket`) of
+  Set X or Gehring & Homberger, whose tables would read as the whole series.
+
 ## 0.5.2
 
 **From 0.5.1.** Two additions: `solve` and `solve_request` can run on the optimaru API with an API

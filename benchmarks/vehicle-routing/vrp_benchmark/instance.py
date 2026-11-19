@@ -1,4 +1,4 @@
-"""CVRP instances and the solver-independent rescoring every backend goes through."""
+"""CVRP and VRPTW instances and the solver-independent rescoring every backend goes through."""
 
 from __future__ import annotations
 
@@ -48,7 +48,8 @@ AUGERAT_A = {
 
 @dataclass(frozen=True)
 class CvrpInstance:
-    """A CVRPLIB EUC_2D instance. Node 0 is the depot, 1..n the customers."""
+    """A CVRPLIB EUC_2D instance, or a VRPTW one (`time_windows`). Node 0 is the
+    depot, 1..n the customers."""
 
     name: str
     vehicle_count: int
@@ -60,10 +61,24 @@ class CvrpInstance:
     distances: tuple[tuple[int, ...], ...]
     best_known_distance: int | None
     proven_optimal: bool
+    # VRPTW only (None on CVRP): per node, the earliest and latest start of
+    # service and the service time, in the unit of `distances` (travel time
+    # equals distance). Node 0's window is the depot's opening hours: routes
+    # leave at its start and must be back by its end.
+    ready_times: tuple[int, ...] | None = None
+    due_times: tuple[int, ...] | None = None
+    service_times: tuple[int, ...] | None = None
+    # Distances and times are integers in 1/scale of the instance's unit: 1 for
+    # CVRPLIB's rounded distances, 10 for VRPTW's tenths (the DIMACS rule).
+    scale: int = 1
 
     @property
     def customer_count(self) -> int:
         return len(self.demands) - 1
+
+    @property
+    def time_windows(self) -> bool:
+        return self.ready_times is not None
 
 
 @dataclass(frozen=True)
@@ -71,8 +86,9 @@ class Rescore:
     used_vehicles: int
     distance: int
     unassigned: int
-    # False when a route exceeds the vehicle capacity: a backend that cannot
-    # leave a customer out returns an over-capacity plan instead.
+    # False when a route exceeds the vehicle capacity or, on VRPTW, starts a
+    # service after its window or returns to the depot after it closes: a
+    # backend that cannot leave a customer out returns such a plan instead.
     feasible: bool
 
 
@@ -189,6 +205,9 @@ def rescore(instance: CvrpInstance, routes: list[list[int]]) -> Rescore:
 
     `routes` lists customer nodes (1..n) per vehicle, depot excluded; every
     route is a round trip from and back to the depot, as CVRPLIB scores it.
+    On VRPTW a route leaves the depot when it opens, waits at a customer
+    reached before its window, and must start every service by the window's
+    end and be back at the depot by its closing time.
     Raises on a duplicate or unknown customer or on more routes than vehicles:
     those are harness or adapter bugs, not solution quality.
     """
@@ -208,9 +227,22 @@ def rescore(instance: CvrpInstance, routes: list[list[int]]) -> Rescore:
             feasible = False
         path = [0, *nodes, 0]
         distance += sum(instance.distances[left][right] for left, right in itertools.pairwise(path))
+        if instance.time_windows and not _on_time(instance, path):
+            feasible = False
     return Rescore(
         used_vehicles=len(used),
         distance=distance,
         unassigned=len(expected - set(seen)),
         feasible=feasible,
     )
+
+
+def _on_time(instance: CvrpInstance, path: list[int]) -> bool:
+    """Whether a depot-to-depot path meets every time window."""
+    assert instance.ready_times is not None and instance.due_times is not None and instance.service_times is not None
+    time = instance.ready_times[0]
+    for left, right in itertools.pairwise(path):
+        time = max(time + instance.service_times[left] + instance.distances[left][right], instance.ready_times[right])
+        if time > instance.due_times[right]:
+            return False
+    return True
