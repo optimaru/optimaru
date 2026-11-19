@@ -20,7 +20,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from functools import partial
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TypeVar
 
 from . import solvers
 from .cvrplib import (
@@ -32,6 +32,8 @@ from .cvrplib import (
 )
 from .instance import AUGERAT_A, CvrpInstance, load_augerat_instance, parse_instance, rescore
 from .vrptw import CLASSES, VrptwEntry, homberger_entries, load_vrptw, solomon_entries
+
+T = TypeVar("T")
 
 DEFAULT_INSTANCE = "A-n32-k5"
 SERIES_TITLES = {
@@ -165,7 +167,7 @@ def group_of(series: str) -> Callable[[BenchmarkResult], str]:
     return lambda result: result.instance_class
 
 
-def even_sample(entries: list, limit: int) -> list:
+def even_sample(entries: list[T], limit: int) -> list[T]:
     if limit <= 0 or limit >= len(entries):
         return entries
     if limit == 1:
@@ -334,30 +336,35 @@ def run_all(
     one loses search time. Results stay in the series' order, then backend
     order, whatever order they finish in.
     """
-    rank = {
-        (name, backend): (index, args.backend.index(backend))
-        for index, (name, _, _) in enumerate(jobs)
-        for backend in args.backend
-    }
+    # Ordered by the run's own index, not by the name a parsed file carries.
+    ranked: list[tuple[int, BenchmarkResult]] = []
     results: list[BenchmarkResult] = []
 
-    def finished(result: BenchmarkResult) -> None:
-        results.append(result)
-        results.sort(key=lambda r: rank[(r.instance, r.backend)])
+    def finished(index: int, result: BenchmarkResult) -> None:
+        ranked.append((index, result))
+        ranked.sort(key=lambda pair: pair[0])
+        results[:] = [r for _, r in ranked]
         write_outputs(args, results, args.backend, catalog_sizes)
         print_result(result)
 
     runs = [(load, backend, cls) for _, load, cls in jobs for backend in args.backend]
     if args.jobs <= 1:
-        for load, backend, cls in runs:
-            finished(_run_one(load, backend, args.seconds, args.seed, cls))
-    else:
-        with ProcessPoolExecutor(max_workers=args.jobs) as pool:
-            futures = [
-                pool.submit(_run_one, load, backend, args.seconds, args.seed, cls) for load, backend, cls in runs
-            ]
-            for future in as_completed(futures):
-                finished(future.result())
+        for index, (load, backend, cls) in enumerate(runs):
+            finished(index, _run_one(load, backend, args.seconds, args.seed, cls))
+        return results
+    pool = ProcessPoolExecutor(max_workers=args.jobs)
+    try:
+        futures = {
+            pool.submit(_run_one, load, backend, args.seconds, args.seed, cls): index
+            for index, (load, backend, cls) in enumerate(runs)
+        }
+        for future in as_completed(futures):
+            finished(futures[future], future.result())
+    except BaseException:
+        # A failed run (or Ctrl-C) stops the series now: the queued runs are dropped, not run first.
+        pool.shutdown(wait=False, cancel_futures=True)
+        raise
+    pool.shutdown()
     return results
 
 
@@ -371,7 +378,8 @@ def _load_x(entry: CatalogEntry, cache_dir: Path) -> CvrpInstance:
 
 
 def _print_groups(title: str, results: list[BenchmarkResult], args, catalog_sizes: dict[str, int]) -> None:
-    print(f"\n{title} mean gap to the CVRPLIB BKS (complete runs / runs)")
+    convention = " (DIMACS convention)" if args.series in ("solomon", "homberger") else ""
+    print(f"\n{title} mean gap to the CVRPLIB BKS{convention} (complete runs / runs)")
     for row in bucket_table(results, args.backend, catalog_sizes, args.series):
         mean = "-" if row["mean_gap"] is None else f"{row['mean_gap']:.2f}%"
         print(f"{row['backend']:8} {row['bucket']:9} {mean:>8} ({row['solved']}/{row['runs']})")

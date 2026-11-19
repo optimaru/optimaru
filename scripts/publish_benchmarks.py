@@ -30,6 +30,10 @@ whose file is missing keeps its README text and its homepage entry.
 - ``timetabling.json``: ``school-timetabling-compare --track2 --sizes ladder --out FILE``
   (track 2 weighted penalties).
 
+``--machine`` / ``--machine-ko`` name the machine of every file in RESULTS_DIR: each data set
+built from it is published as measured there. Put only one machine's results in a directory, and
+publish the results of another machine in a run of their own.
+
 ``--seconds`` and ``--workers`` are what the harnesses were run with: the tables state
 them, and a result that records another budget or worker count is refused. Which instances
 a table holds, and up to which size CP-SAT was run, is read from the results.

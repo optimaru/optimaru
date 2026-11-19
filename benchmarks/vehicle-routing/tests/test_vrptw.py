@@ -135,3 +135,25 @@ def test_the_output_records_jobs_scale_and_class(tmp_path) -> None:
         "catalog": 9,
         "mean_gap": 0.0,
     }
+
+
+def test_a_failed_run_stops_a_parallel_series(monkeypatch) -> None:
+    from vrp_benchmark import run
+
+    args = argparse.Namespace(
+        series="solomon",
+        seconds=0.1,
+        seed=0,
+        only=None,
+        jobs=2,
+        out=None,
+        summary_markdown=None,
+        backend=("engine",),
+    )
+    jobs = [(f"T{i}", _broken_loader, "C1") for i in range(6)]
+    with pytest.raises(ValueError, match="broken instance"):
+        run.run_all(args, jobs, None)
+
+
+def _broken_loader():
+    raise ValueError("broken instance")

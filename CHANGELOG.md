@@ -12,7 +12,9 @@
   window is reported as infeasible. `--jobs N` runs N single-threaded runs side by side.
   `scripts/publish_benchmarks.py` reads `vrptw-solomon.json` and `vrptw-homberger.json` into a
   results block of their own and two homepage data sets, and every homepage data set now names
-  the machine it was measured on.
+  the machine it was measured on (`--machine`, so one publish run takes one machine's results). A
+  run that is both incomplete and over capacity now prints `n unassigned` rather than `infeasible`,
+  as the publisher already did.
 
 ## 0.5.2
 
