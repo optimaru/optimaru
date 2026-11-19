@@ -317,6 +317,11 @@ def _vrp_cell(row: dict | None) -> tuple[float | None, str]:
     return row["gap"], f"{row['gap']:.2f}%"
 
 
+def _customers(label: str) -> str:
+    """A group label as the chart shows it: `100–200`, `1,000`."""
+    return label.replace("-", "–") if "-" in label else f"{int(label):,}"
+
+
 def _instances(count: int) -> str:
     return "1 instance" if count == 1 else f"{count} instances"
 
@@ -922,7 +927,7 @@ def vrp_dataset(slug: str, data: dict) -> dict:
             }
             chart.append(
                 {
-                    "instance": label if series == "solomon" else f"{label.replace('-', '–')} customers",
+                    "instance": label if series == "solomon" else f"{_customers(label)} customers",
                     "size": _instances(max(m[2] for m in means.values())),
                     "cells": cells,
                     "best": _lowest(cells),

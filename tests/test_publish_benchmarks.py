@@ -135,6 +135,11 @@ def test_vrptw_rows_are_in_tenths_and_grouped_by_class_or_size() -> None:
         "protocol": {"series": "homberger", "seconds": 30.0, "seed": 0, "jobs": 3},
         "results": [run("C1_2_1", "engine", "C1", 200, 1.0), run("C1_2_1", "ortools", "C1", 200, 3.0)],
     }
+    big = run("C1_10_1", "engine", "C1", 1000, 2.0)
+    assert (
+        publish.vrp_dataset("homberger-vrptw", {**homberger, "results": [big]})["sections"][0]["chart"][0]["instance"]
+        == "1,000 customers"
+    )
     chart = publish.vrp_dataset("homberger-vrptw", homberger)["sections"][0]["chart"]
     assert chart[0]["instance"] == "200 customers" and chart[0]["size"] == "1 instance"
 
