@@ -157,3 +157,39 @@ def test_a_failed_run_stops_a_parallel_series(monkeypatch) -> None:
 
 def _broken_loader():
     raise ValueError("broken instance")
+
+
+def test_a_route_back_after_the_depot_closes_is_late() -> None:
+    # Depot closes at 25: 0-1-3 serves both on time, but customer 3's service ends at 21
+    # and the depot is 10 away, so the vehicle is back at 31.
+    instance = vrptw.parse_vrptw(SAMPLE.replace("1 0 100", "1 0 25").replace("4 20 40", "4 20 21"))
+    assert not rescore(instance, [[1, 3], [2]]).feasible
+    assert rescore(instance, [[1], [2]]).feasible
+
+
+def test_a_parallel_series_keeps_the_series_order(tmp_path) -> None:
+    from functools import partial
+
+    from vrp_benchmark import run
+
+    args = argparse.Namespace(
+        series="solomon",
+        seconds=0.2,
+        seed=0,
+        only=None,
+        jobs=2,
+        out=tmp_path / "s.json",
+        summary_markdown=None,
+        backend=("engine", "ortools"),
+    )
+    load = partial(vrptw.parse_vrptw, SAMPLE, best_known_distance=OPTIMUM)
+    jobs = [("T-3", load, "C1"), ("T-3", load, "R1")]
+    results = run.run_all(args, jobs, {cls: 1 for cls in vrptw.CLASSES})
+    assert [(r.instance_class, r.backend) for r in results] == [
+        ("C1", "engine"),
+        ("C1", "ortools"),
+        ("R1", "engine"),
+        ("R1", "ortools"),
+    ]
+    assert all(r.distance == OPTIMUM for r in results)
+    assert json.loads(args.out.read_text())["protocol"]["jobs"] == 2
