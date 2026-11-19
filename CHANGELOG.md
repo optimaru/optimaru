@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.5.2
+
+**From 0.5.1.** Two additions: `solve` and `solve_request` can run on the optimaru API with an API
+key, and project job scheduling gets a move that rebuilds the schedule from its order (on by
+default, so its results differ from 0.5.1). The rest is benchmarks, CI, tests and notebooks.
 
 - **Solving on the optimaru API with one setting.** The optimaru API is the Enterprise
   edition: this engine run as a hosted service, whose solve request is the Python call. With
