@@ -112,7 +112,8 @@ uv run python -m vrp_benchmark --series homberger --seconds 30 --jobs 3 --out be
 
 `--jobs N` runs N single-threaded runs at a time in separate processes. Keep
 it below the number of cores, since a run that waits for a core loses search
-time; the JSON records it (`protocol.jobs`).
+time; the JSON records it (`protocol.jobs`). The runs of both backends share one queue, so
+the engine's and OR-Tools' runs are interleaved and meet the same load.
 
 `uv run pytest` checks the parsers, the rescoring (time windows included) and
 that every backend finds the optimum of a tiny CVRP and a tiny VRPTW instance.

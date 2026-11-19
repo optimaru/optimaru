@@ -219,3 +219,12 @@ def test_a_cached_file_missing_a_section_is_fetched_again(tmp_path, monkeypatch)
     monkeypatch.setattr(vrptw, "_download", lambda url: files[url[-4:]].encode())
     assert vrptw.load_vrptw(entry, tmp_path).customer_count == 3
     assert base.with_suffix(".vrp").read_text() == text
+
+
+def test_a_file_of_another_instance_is_refused_and_not_cached(tmp_path, monkeypatch) -> None:
+    entry = vrptw.VrptwEntry("C101", "solomon", "C1", 3)
+    files = {".sol": "Cost 30\n", ".vrp": SAMPLE}  # named T-3, not C101
+    monkeypatch.setattr(vrptw, "_download", lambda url: files[url[-4:]].encode())
+    with pytest.raises(ValueError, match="expected C101"):
+        vrptw.load_vrptw(entry, tmp_path)
+    assert not (tmp_path / "vrptw" / vrptw.MIRROR_COMMIT[:12] / "C101.vrp").exists()

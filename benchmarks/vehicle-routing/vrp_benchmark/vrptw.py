@@ -27,7 +27,7 @@ import math
 import os
 import re
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 
@@ -194,9 +194,14 @@ def _cached(url: str, path: Path, check) -> str:
 def load_vrptw(entry: VrptwEntry, cache_dir: Path) -> CvrpInstance:
     """An instance with its best-known distance, downloaded from the pinned mirror commit and cached."""
     base = cache_dir / "vrptw" / MIRROR_COMMIT[:12] / entry.name
+
+    def of_entry(text: str) -> CvrpInstance:
+        # Checked before caching: a file of another instance is refused, never kept under this name.
+        instance = parse_vrptw(text)
+        if instance.name != entry.name or instance.customer_count != entry.customer_count:
+            raise ValueError(f"{entry.path}: expected {entry.name} with {entry.customer_count} customers")
+        return instance
+
     solution = _cached(f"{MIRROR_BASE_URL}{entry.path}.sol", base.with_suffix(".sol"), parse_solution_cost)
-    text = _cached(f"{MIRROR_BASE_URL}{entry.path}.vrp", base.with_suffix(".vrp"), parse_vrptw)
-    instance = parse_vrptw(text, best_known_distance=parse_solution_cost(solution))
-    if instance.name != entry.name or instance.customer_count != entry.customer_count:
-        raise ValueError(f"{entry.path}: expected {entry.name} with {entry.customer_count} customers")
-    return instance
+    instance = of_entry(_cached(f"{MIRROR_BASE_URL}{entry.path}.vrp", base.with_suffix(".vrp"), of_entry))
+    return replace(instance, best_known_distance=parse_solution_cost(solution))
