@@ -193,3 +193,17 @@ def test_a_parallel_series_keeps_the_series_order(tmp_path) -> None:
     ]
     assert all(r.distance == OPTIMUM for r in results)
     assert json.loads(args.out.read_text())["protocol"]["jobs"] == 2
+
+
+def test_a_corrupt_cached_file_is_fetched_again(tmp_path, monkeypatch) -> None:
+    # Named C101, three customers: the loader checks both against the parsed file.
+    entry = vrptw.VrptwEntry("C101", "solomon", "C1", 3)
+    base = tmp_path / "vrptw" / vrptw.MIRROR_COMMIT[:12] / entry.name
+    base.parent.mkdir(parents=True)
+    base.with_suffix(".vrp").write_text("<html>proxy error</html>")
+    text = SAMPLE.replace("T-3", "C101")
+    files = {".sol": "Route #1: 1 3\nRoute #2: 2\nCost 30\n", ".vrp": text}
+    monkeypatch.setattr(vrptw, "_download", lambda url: files[url[-4:]].encode())
+    instance = vrptw.load_vrptw(entry, tmp_path)
+    assert instance.best_known_distance == OPTIMUM
+    assert base.with_suffix(".vrp").read_text() == text

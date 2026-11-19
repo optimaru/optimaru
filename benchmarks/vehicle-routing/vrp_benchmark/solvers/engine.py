@@ -86,7 +86,8 @@ def _vrptw_windows(instance: CvrpInstance) -> dict[int, tuple[int, int, int]]:
     `max_end_time` bounds arrival + service duration. With the window's end
     moved by the service time the two agree: a vehicle that arrives before
     the window waits and starts on time, so a service starts late exactly
-    when the vehicle arrives after the window's end.
+    when the vehicle arrives after the window's end. The engine counts that
+    lateness in minutes rounded up, so even one tenth late costs a hard point.
     """
     assert instance.ready_times and instance.due_times and instance.service_times
     return {

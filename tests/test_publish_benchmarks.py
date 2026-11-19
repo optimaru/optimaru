@@ -136,7 +136,7 @@ def test_vrptw_rows_are_in_tenths_and_grouped_by_class_or_size() -> None:
         "results": [run("C1_2_1", "engine", "C1", 200, 1.0), run("C1_2_1", "ortools", "C1", 200, 3.0)],
     }
     chart = publish.vrp_dataset("homberger-vrptw", homberger)["sections"][0]["chart"]
-    assert chart[0]["instance"] == "200 customers" and chart[0]["size"] == "1 instances"
+    assert chart[0]["instance"] == "200 customers" and chart[0]["size"] == "1 instance"
 
     block = publish.vrptw_block({"solomon": solomon, "homberger": homberger}, ARGS)
     assert "| R101 | 100 | 1,637.7 | **0.49%** | infeasible |" in block
@@ -386,6 +386,9 @@ def test_a_routing_file_of_another_budget_seed_or_of_chosen_instances_is_refused
         }
 
     publish._check_vrp("vehicle-routing (Set X)", series("x"), ARGS)
+    sampled = series("homberger") | {"protocol": series("homberger")["protocol"] | {"limit_per_bucket": 1}}
+    with pytest.raises(SystemExit, match="sampled run"):
+        publish._check_vrp("vehicle-routing (homberger)", sampled, ARGS)
     with pytest.raises(SystemExit, match="10 s, not --seconds 30"):
         publish._check_vrp("vehicle-routing (Set X)", series("x", seconds=10.0), ARGS)
     # A run of --only instances would read as the whole series in the tables and bucket means.

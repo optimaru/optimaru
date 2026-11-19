@@ -238,6 +238,9 @@ def _check_vrp(what: str, data: dict, args: argparse.Namespace) -> None:
     if only:
         # The tables and the bucket means read as the whole series.
         raise SystemExit(f"{what}: a run of chosen instances ({', '.join(only)}) is not published as the series")
+    if data["protocol"].get("limit_per_bucket"):
+        # A sample would read as the whole series too: its tables have no word for sampling.
+        raise SystemExit(f"{what}: a sampled run (--limit-per-bucket) is not published as the series")
 
 
 def _footer(args: argparse.Namespace, seed: int, *, workers: bool = True) -> str:
@@ -312,6 +315,10 @@ def _vrp_cell(row: dict | None) -> tuple[float | None, str]:
     if not row["feasible"] or row["gap"] is None:
         return None, "infeasible"
     return row["gap"], f"{row['gap']:.2f}%"
+
+
+def _instances(count: int) -> str:
+    return "1 instance" if count == 1 else f"{count} instances"
 
 
 def _vrp_distance(value: int, row: dict) -> str:
@@ -463,6 +470,7 @@ def vrptw_block(sets: dict[str, dict], args: argparse.Namespace) -> str:
         lines += ["", f"### {VRPTW_SERIES[series][1]}", "", *_vrp_group_table(by_instance, series)]
         lines += ["", *_vrp_table(by_instance)]
     protocols = [data["protocol"] for data in sets.values()]
+    # `seconds` is checked per file against --seconds (_check_vrp); seed and jobs have no flag to check against.
     for key in ("seed", "jobs"):
         if len({protocol.get(key) for protocol in protocols}) > 1:
             raise SystemExit(f"vehicle-routing VRPTW: Solomon and Gehring & Homberger were run with different {key}s")
@@ -915,7 +923,7 @@ def vrp_dataset(slug: str, data: dict) -> dict:
             chart.append(
                 {
                     "instance": label if series == "solomon" else f"{label.replace('-', '–')} customers",
-                    "size": f"{max(m[2] for m in means.values())} instances",
+                    "size": _instances(max(m[2] for m in means.values())),
                     "cells": cells,
                     "best": _lowest(cells),
                 }
@@ -1209,6 +1217,7 @@ def _current_datasets(path: Path) -> dict[str, dict]:
     # Reads to the end of the file: write_homepage() writes `datasets` last.
     start = text.index("= [", text.index(marker)) + 2
     current = {entry["slug"]: entry for entry in json.loads(text[start:].rstrip().rstrip(";"))}
+    # write_homepage() writes `meta` as indented JSON followed by ";\n", which its JSON cannot contain.
     meta_start = text.find("export const meta = ")
     if meta_start >= 0:
         body = text[meta_start + len("export const meta = ") : text.index(";\n", meta_start)]

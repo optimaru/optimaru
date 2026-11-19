@@ -164,7 +164,9 @@ def group_of(series: str) -> Callable[[BenchmarkResult], str]:
         return lambda result: bucket(result.customer_count)
     if series == "homberger":
         return lambda result: str(result.customer_count)
-    return lambda result: result.instance_class
+    if series == "solomon":
+        return lambda result: result.instance_class
+    raise ValueError(f"series {series!r} has no summary groups")
 
 
 def even_sample(entries: list[T], limit: int) -> list[T]:
