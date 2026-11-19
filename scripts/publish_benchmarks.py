@@ -14,6 +14,9 @@ whose file is missing keeps its README text and its homepage entry.
   runs, which are joined instance by instance (any other ``*.json`` in ``compare/`` is
   refused, so keep scratch files elsewhere);
 - ``vrp-x.json``, ``vrp-a.json``: ``python -m vrp_benchmark --series x|a --out FILE``;
+- ``vrptw-solomon.json``, ``vrptw-homberger.json``:
+  ``python -m vrp_benchmark --series solomon|homberger --out FILE`` (their own results block
+  in the vehicle-routing README, ``vrptw``, so they can be measured apart from the CVRP sets);
 - ``pdp-li-lim.json``, ``pdp-synthetic.json``: ``pickup-delivery-public-bench --json``
   (the lists of several runs concatenated);
 - ``rcpsp.json``: ``project-job-scheduling-public-bench --all --json``, and
@@ -82,6 +85,13 @@ VRP_BUCKETS = (
     ("600-800", 600, 800),
     ("800-1000", 800, 1_001),
 )
+#: The VRPTW series: homepage slug, README title, how a summary group is labelled.
+VRPTW_SERIES = {
+    "solomon": ("solomon-vrptw", "Solomon (100 customers)"),
+    "homberger": ("homberger-vrptw", "Gehring & Homberger (200 to 1000 customers)"),
+}
+VRPTW_CLASSES = ("C1", "C2", "R1", "R2", "RC1", "RC2")
+VRPTW_SIZES = ("200", "400", "600", "800", "1000")
 SALBP_SETS = (("small", 20), ("medium", 50), ("large", 100), ("very-large", 1000))
 
 
@@ -300,6 +310,12 @@ def _vrp_cell(row: dict | None) -> tuple[float | None, str]:
     return row["gap"], f"{row['gap']:.2f}%"
 
 
+def _vrp_distance(value: int, row: dict) -> str:
+    """A distance as the instance states it: whole numbers on CVRPLIB, tenths on VRPTW (`scale` 10)."""
+    scale = row.get("scale", 1)
+    return f"{value:,}" if scale == 1 else f"{value / scale:,.1f}"
+
+
 def _vrp_instances(data: dict) -> dict[str, dict[str, dict]]:
     by_instance: dict[str, dict[str, dict]] = {}
     for row in data["results"]:
@@ -314,14 +330,31 @@ def _vrp_bucket(customers: int) -> str:
     raise ValueError(f"{customers} customers is outside the Set X size buckets (100 to 1000)")
 
 
-def _vrp_means(runs_by_instance: dict[str, dict[str, dict]], label: str | None) -> dict[str, tuple]:
-    """Per backend: (mean gap over complete runs, complete runs, runs), for one bucket or all."""
+def _vrp_group(series: str, row: dict) -> str:
+    """The summary group of a run: the size bucket (Set X), the class (Solomon) or the size (Homberger)."""
+    if series == "solomon":
+        return row["instance_class"]
+    if series == "homberger":
+        return str(row["customer_count"])
+    return _vrp_bucket(row["customer_count"])
+
+
+def _vrp_groups(series: str) -> tuple[str, ...]:
+    if series == "solomon":
+        return VRPTW_CLASSES
+    if series == "homberger":
+        return VRPTW_SIZES
+    return tuple(label for label, _, _ in VRP_BUCKETS)
+
+
+def _vrp_means(runs_by_instance: dict[str, dict[str, dict]], label: str | None, series: str = "x") -> dict[str, tuple]:
+    """Per backend: (mean gap over complete runs, complete runs, runs), for one group or all."""
     means = {}
     for backend in ("engine", "ortools"):
         rows = [
             runs[backend]
             for runs in runs_by_instance.values()
-            if backend in runs and (label is None or _vrp_bucket(runs[backend]["customer_count"]) == label)
+            if backend in runs and (label is None or _vrp_group(series, runs[backend]) == label)
         ]
         gaps = [value for value, _ in map(_vrp_cell, rows) if value is not None]
         means[backend] = (statistics.fmean(gaps) if gaps else None, len(gaps), len(rows))
@@ -339,9 +372,8 @@ def _vrp_table(by_instance: dict[str, dict[str, dict]]) -> list[str]:
         top = min(values.values()) if values else None
         texts = [f"**{text}**" if value is not None and value == top else text for value, text in cells.values()]
         first = next(iter(runs.values()))
-        lines.append(
-            f"| {instance} | {first['customer_count']} | {first['best_known_distance']:,} | {texts[0]} | {texts[1]} |"
-        )
+        best = _vrp_distance(first["best_known_distance"], first)
+        lines.append(f"| {instance} | {first['customer_count']} | {best} | {texts[0]} | {texts[1]} |")
     return lines
 
 
@@ -393,6 +425,50 @@ def vrp_block(set_x: dict | None, set_a: dict | None, args: argparse.Namespace) 
         "",
         f"Measured {args.date} on {args.machine}, {protocol['seconds']:g} s per run, seed "
         f"{protocol['seed']}, single-threaded. Single runs — a snapshot, not a statistical study.",
+    ]
+    return "\n".join(lines)
+
+
+def _vrp_group_table(by_instance: dict[str, dict[str, dict]], series: str) -> list[str]:
+    head = "Class" if series == "solomon" else "Customers"
+    lines = [f"| {head} | Instances | engine | ortools |", "|---|---:|---:|---:|"]
+    for label in _vrp_groups(series):
+        means = _vrp_means(by_instance, label, series)
+        if means["engine"][2] or means["ortools"][2]:
+            count = max(means["engine"][2], means["ortools"][2])
+            lines.append(f"| {label} | {count} | {_mean_text(means['engine'])} | {_mean_text(means['ortools'])} |")
+    means = _vrp_means(by_instance, None, series)
+    lines.append(f"| all | {len(by_instance)} | {_mean_text(means['engine'])} | {_mean_text(means['ortools'])} |")
+    return lines
+
+
+def vrptw_block(sets: dict[str, dict], args: argparse.Namespace) -> str:
+    """The `vrptw` results block of the vehicle-routing README: Solomon, then Gehring & Homberger."""
+    lines = [
+        "## Results: VRPTW",
+        "",
+        (
+            "Gap to the CVRPLIB best-known solution under the DIMACS convention (distance alone, every "
+            "distance truncated to one decimal); every route is re-verified by the harness, time windows "
+            "included. Lower is better; the best complete run is bold (a run that leaves a customer out or "
+            "misses a window has no gap). A mean gap counts the complete runs only (complete runs / runs)."
+        ),
+    ]
+    for series, data in sets.items():
+        by_instance = _vrp_instances(data)
+        lines += ["", f"### {VRPTW_SERIES[series][1]}", "", *_vrp_group_table(by_instance, series)]
+        lines += ["", *_vrp_table(by_instance)]
+    protocols = [data["protocol"] for data in sets.values()]
+    for key in ("seed", "jobs"):
+        if len({protocol.get(key) for protocol in protocols}) > 1:
+            raise SystemExit(f"vehicle-routing VRPTW: Solomon and Gehring & Homberger were run with different {key}s")
+    protocol = protocols[0]
+    jobs = protocol.get("jobs", 1)
+    side = f", {jobs} runs side by side" if jobs > 1 else ""
+    lines += [
+        "",
+        f"Measured {args.date} on {args.machine}, {protocol['seconds']:g} s per run, seed "
+        f"{protocol['seed']}, single-threaded{side}. Single runs — a snapshot, not a statistical study.",
     ]
     return "\n".join(lines)
 
@@ -807,21 +883,21 @@ def vrp_dataset(slug: str, data: dict) -> dict:
                     "detail": text,
                 }
             else:
-                cells[backend] = {"value": round(value, 2), "detail": f"{row['distance']:,}"}
+                cells[backend] = {"value": round(value, 2), "detail": _vrp_distance(row["distance"], row)}
         rows.append(
             {
                 "instance": instance,
                 "size": f"{first['customer_count']} customers",
-                "reference": f"{first['best_known_distance']:,}",
+                "reference": _vrp_distance(first["best_known_distance"], first),
                 "cells": cells,
                 "best": _lowest(cells),
             }
         )
     section = _section("instances", "gap", rows, unit="%")
-    if series == "x":
+    if series != "a":
         chart = []
-        for label, _, _ in VRP_BUCKETS:
-            means = _vrp_means(by_instance, label)
+        for label in _vrp_groups(series):
+            means = _vrp_means(by_instance, label, series)
             if not (means["engine"][2] or means["ortools"][2]):
                 continue
             cells = {
@@ -834,7 +910,7 @@ def vrp_dataset(slug: str, data: dict) -> dict:
             }
             chart.append(
                 {
-                    "instance": f"{label.replace('-', '–')} customers",
+                    "instance": label if series == "solomon" else f"{label.replace('-', '–')} customers",
                     "size": f"{max(m[2] for m in means.values())} instances",
                     "cells": cells,
                     "best": _lowest(cells),
@@ -844,6 +920,8 @@ def vrp_dataset(slug: str, data: dict) -> dict:
     command = "uv run python -m vrp_benchmark --series {} --seconds {:g}".format(series, data["protocol"]["seconds"])
     if series == "x":
         command += " --catalog-source mirror"
+    if data["protocol"].get("jobs", 1) > 1:
+        command += f" --jobs {data['protocol']['jobs']}"
     return _dataset(slug, "vehicle-routing", "public", "routing", "vehicle-routing", command, [section])
 
 
@@ -1100,6 +1178,8 @@ def timetabling_dataset(results: list[dict], seconds: float, workers: int = 8) -
 ORDER = (
     "cvrplib-x",
     "cvrplib-a",
+    "solomon-vrptw",
+    "homberger-vrptw",
     "li-lim-pdptw",
     "rg30-rcpsp",
     "falkenauer-bin-packing",
@@ -1113,13 +1193,28 @@ ORDER = (
 
 
 def _current_datasets(path: Path) -> dict[str, dict]:
+    """The data sets the homepage file holds, each with the machine it was measured on.
+
+    A file written before data sets named their machine has one machine in `meta`, for all
+    of them; it goes into each data set that has none, so a partial refresh keeps it.
+    """
     text = path.read_text()
     marker = "export const datasets"
     if marker not in text:
         return {}
     # Reads to the end of the file: write_homepage() writes `datasets` last.
     start = text.index("= [", text.index(marker)) + 2
-    return {entry["slug"]: entry for entry in json.loads(text[start:].rstrip().rstrip(";"))}
+    current = {entry["slug"]: entry for entry in json.loads(text[start:].rstrip().rstrip(";"))}
+    meta_start = text.find("export const meta = ")
+    if meta_start >= 0:
+        body = text[meta_start + len("export const meta = ") : text.index(";\n", meta_start)]
+        machine = json.loads(body).get("machine")
+        for entry in current.values():
+            if machine and "machine" not in entry:
+                entry["machine"] = machine
+                # Keep the key order of the TypeScript interface: the tables last.
+                entry["sections"] = entry.pop("sections")
+    return current
 
 
 HEADER = """// GENERATED by optimaru scripts/publish_benchmarks.py — do not edit by hand.
@@ -1181,6 +1276,8 @@ export interface Dataset {
   caveats?: string[];
   date: string;
   seconds: number;
+  /** The machine the data set was measured on (data sets are refreshed apart, on different machines). */
+  machine: { en: string; ko: string };
   sections: Section[];
 }
 
@@ -1316,6 +1413,16 @@ def main() -> None:
     if set_a:
         datasets["cvrplib-a"] = vrp_dataset("cvrplib-a", set_a)
 
+    vrptw = {series: _load(args.results, f"vrptw-{series}.json") for series in VRPTW_SERIES}
+    vrptw = {series: data for series, data in vrptw.items() if data}
+    for series, data in vrptw.items():
+        _check_vrp(f"vehicle-routing ({series})", data, args)
+        if data["protocol"]["series"] != series:
+            raise SystemExit(f"vrptw-{series}.json holds the {data['protocol']['series']} series")
+        datasets[VRPTW_SERIES[series][0]] = vrp_dataset(VRPTW_SERIES[series][0], data)
+    if vrptw:
+        _replace_block(BENCHMARKS / "vehicle-routing" / "README.md", vrptw_block(vrptw, args), "vrptw")
+
     li_lim, synthetic = _load(args.results, "pdp-li-lim.json"), _load(args.results, "pdp-synthetic.json")
     pdp = BENCHMARKS / "pickup-delivery"
     if li_lim:
@@ -1390,6 +1497,7 @@ def main() -> None:
     for dataset in datasets.values():
         dataset.setdefault("date", args.date)
         dataset.setdefault("seconds", int(args.seconds) if float(args.seconds).is_integer() else args.seconds)
+        dataset["machine"] = {"en": args.machine, "ko": args.machine_ko}
         # Keep the key order of the TypeScript interface: the tables last.
         dataset["sections"] = dataset.pop("sections")
 
@@ -1398,11 +1506,7 @@ def main() -> None:
         merged = {**_current_datasets(target), **datasets}
         ordered = [merged[slug] for slug in ORDER if slug in merged]
         ordered += [entry for slug, entry in merged.items() if slug not in ORDER]
-        meta = {
-            "ortools": args.ortools,
-            "workers": args.workers,
-            "machine": {"en": args.machine, "ko": args.machine_ko},
-        }
+        meta = {"ortools": args.ortools, "workers": args.workers}
         write_homepage(target, meta, ordered)
         print(f"homepage: {len(ordered)} data sets ({len(datasets)} from this run)")
 

@@ -9,7 +9,7 @@ taken as the result.
 
 | Benchmark | Compared against | Instances |
 | --- | --- | --- |
-| [vehicle-routing](vehicle-routing) | OR-Tools Routing | CVRPLIB Set X (100), Augerat Set A (27) |
+| [vehicle-routing](vehicle-routing) | OR-Tools Routing | CVRPLIB Set X (100), Augerat Set A (27); VRPTW: Solomon (56), Gehring & Homberger, 200 to 1000 customers (300) |
 | [school-timetabling](school-timetabling) | OR-Tools CP-SAT | generated schools, 3 to 60 classes (20) |
 | [pickup-delivery](pickup-delivery) | OR-Tools CP-SAT | Li & Lim PDPTW, 100 customers (56) + generated, 10 to 400 requests (21) |
 | [project-job-scheduling](project-job-scheduling) | OR-Tools CP-SAT | RG30 RCPSP Pat1–Pat5 (Patterson format) and generated instances of that shape (20) + a generated ladder, 5 sizes (20) |
@@ -173,6 +173,10 @@ side by side, each on its own performance cores: one CP-SAT job at a time
 twelve performance cores, with builds and other work kept to the efficiency
 cores (`taskpolicy -b` on macOS). In the generated comparisons that means the
 engine's runs and CP-SAT's were made at the same time, not one after the other.
+The VRPTW tables of vehicle routing (Solomon, Gehring & Homberger) were measured
+apart, on another machine: a 4-core cloud VM, three single-threaded runs side by
+side (`--jobs 3`). Their results block (`vrptw`) and their homepage data sets name
+it; every homepage data set names the machine it was measured on.
 
 How far a number repeats differs by use case. The 38 instances of the earlier
 generated ladders were measured on two days: the engine's score was the same

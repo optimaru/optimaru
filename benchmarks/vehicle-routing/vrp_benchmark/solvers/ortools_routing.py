@@ -1,5 +1,7 @@
 """Google OR-Tools Routing solver (`pywrapcp`), the library's recommended VRP
-setup: PATH_CHEAPEST_ARC first solution, then guided local search."""
+setup: PATH_CHEAPEST_ARC first solution, then guided local search. On VRPTW a
+time dimension (travel plus service, waiting allowed) carries the windows, as
+in the library's VRPTW example."""
 
 from __future__ import annotations
 
@@ -34,6 +36,8 @@ def solve(instance: CvrpInstance, seconds: float, seed: int) -> SolverOutcome:
         True,
         "Capacity",
     )
+    if instance.time_windows:
+        _add_time_windows(routing, manager, instance)
     # On tightly loaded instances the first-solution heuristic may not find a
     # complete plan; a dropped customer costs more than any route can save,
     # so it is a last resort, and the harness reports it as unassigned.
@@ -68,3 +72,23 @@ def solve(instance: CvrpInstance, seconds: float, seed: int) -> SolverOutcome:
         reported_distance=objective if dropped == 0 else None,
         summary=f"objective={objective} dropped={dropped}",
     )
+
+
+def _add_time_windows(routing, manager, instance: CvrpInstance) -> None:
+    """Service start within each window; every vehicle leaves and returns within the depot's."""
+    assert instance.ready_times and instance.due_times and instance.service_times
+    distances, service = instance.distances, instance.service_times
+    horizon = instance.due_times[0]
+
+    def travel(from_index: int, to_index: int) -> int:
+        node = manager.IndexToNode(from_index)
+        return service[node] + distances[node][manager.IndexToNode(to_index)]
+
+    # Waiting is slack, up to the whole horizon; the cumul is the service start.
+    routing.AddDimension(routing.RegisterTransitCallback(travel), horizon, horizon, False, "Time")
+    time = routing.GetDimensionOrDie("Time")
+    for node in range(1, len(instance.demands)):
+        time.CumulVar(manager.NodeToIndex(node)).SetRange(instance.ready_times[node], instance.due_times[node])
+    for vehicle in range(instance.vehicle_count):
+        time.CumulVar(routing.Start(vehicle)).SetRange(instance.ready_times[0], horizon)
+        time.CumulVar(routing.End(vehicle)).SetRange(instance.ready_times[0], horizon)

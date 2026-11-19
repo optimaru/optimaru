@@ -1,0 +1,137 @@
+import argparse
+import json
+
+import pytest
+
+from vrp_benchmark import solvers, vrptw
+from vrp_benchmark.instance import rescore
+from vrp_benchmark.run import BenchmarkResult, benchmark, main, vrptw_selection, write_outputs
+
+# Customers 1 and 2 lie on opposite sides of the depot and must both be served by time 6,
+# so they need two routes; customer 3 opens at 20, after customer 1 on the same route.
+# Optimum: 0-1-3-0 (5 + 5 + 10) and 0-2-0 (5 + 5) = 30.0, in tenths 300.
+SAMPLE = """\
+NAME : T-3
+TYPE : VRPTW
+DIMENSION : 4
+VEHICLES : 3
+CAPACITY : 10
+SERVICE_TIME : 1
+EDGE_WEIGHT_TYPE : EUC_2D
+NODE_COORD_SECTION
+1 0 0
+2 3 4
+3 -3 -4
+4 6 8
+DEMAND_SECTION
+1 0
+2 1
+3 1
+4 1
+TIME_WINDOW_SECTION
+1 0 100
+2 0 6
+3 0 6
+4 20 40
+DEPOT_SECTION
+1
+-1
+EOF
+"""
+OPTIMUM = 300
+
+
+def test_parse_vrptw_works_in_tenths() -> None:
+    instance = vrptw.parse_vrptw(SAMPLE, best_known_distance=OPTIMUM)
+    assert instance.time_windows and instance.scale == 10
+    assert instance.vehicle_count == 3 and instance.customer_count == 3
+    assert instance.distances[0][1] == 50 and instance.distances[1][3] == 50
+    assert instance.ready_times == (0, 0, 0, 200) and instance.due_times == (1000, 60, 60, 400)
+    # The depot has no service time.
+    assert instance.service_times == (0, 10, 10, 10)
+
+
+def test_dimacs_distances_are_truncated_to_one_decimal() -> None:
+    assert vrptw.dimacs_distance((0, 0), (1, 1)) == 14  # 1.414... -> 1.4
+    assert vrptw.dimacs_distance((0, 0), (2, 1)) == 22  # 2.236... -> 2.2
+    assert vrptw.dimacs_distance((0, 0), (3, 4)) == 50  # exact, not 49
+    assert vrptw.parse_solution_cost("Route #1: 1 2\nCost 1637.7\n") == 16377
+    assert vrptw.parse_solution_cost("Cost 828\n") == 8280
+    assert vrptw.parse_solution_routes("Route #1: 1 3\nRoute #2: 2\nCost 30\n") == [[1, 3], [2]]
+    with pytest.raises(ValueError):
+        vrptw.parse_solution_cost("Cost 1.25\n")
+
+
+def test_rescore_replays_the_schedule() -> None:
+    instance = vrptw.parse_vrptw(SAMPLE)
+    assert rescore(instance, [[1, 3], [2], []]) == rescore(instance, [[1, 3], [2]])
+    best = rescore(instance, [[1, 3], [2]])
+    assert best.feasible and best.distance == OPTIMUM
+    # One route reaches customer 2 at 16, past its window's end at 6.
+    late = rescore(instance, [[1, 2, 3]])
+    assert not late.feasible and late.unassigned == 0
+    # Customer 3 first: waiting for it to open makes customer 1 late.
+    assert not rescore(instance, [[3, 1], [2]]).feasible
+
+
+def test_engine_windows_bound_arrival_plus_service() -> None:
+    from vrp_benchmark.solvers.engine import make_request
+
+    request = make_request(vrptw.parse_vrptw(SAMPLE), seconds=1, seed=0)
+    visits = request.model_input.visits
+    assert [(v.min_start_time, v.max_end_time, v.service_duration) for v in visits] == [
+        (0, 70, 10),
+        (0, 70, 10),
+        (200, 410, 10),
+    ]
+    assert all(v.max_end_time == 1000 and v.return_to_depot for v in request.model_input.vehicles)
+
+
+@pytest.mark.parametrize("backend", solvers.BACKENDS)
+def test_every_backend_finds_the_optimum_of_a_tiny_vrptw_instance(backend: str) -> None:
+    result = benchmark(backend, vrptw.parse_vrptw(SAMPLE, best_known_distance=OPTIMUM), seconds=1, seed=0)
+    assert result.feasible and result.unassigned == 0
+    assert result.distance == OPTIMUM and result.gap == 0 and result.scale == 10
+
+
+def test_the_series_hold_every_instance_once() -> None:
+    solomon, homberger = vrptw.solomon_entries(), vrptw.homberger_entries()
+    assert len(solomon) == 56 and len({entry.name for entry in solomon}) == 56
+    assert len(homberger) == 300 and len({entry.name for entry in homberger}) == 300
+    assert solomon[0].path == "Solomon/C101" and solomon[-1].name == "RC208"
+    assert homberger[0].path == "GH200/C1_2_1" and homberger[-1].path == "RC2_10_10"
+    entries, sizes = vrptw_selection("homberger", 1)
+    # One per class and size: every summary group still has instances.
+    assert len(entries) == 30 and sizes == {"200": 60, "400": 60, "600": 60, "800": 60, "1000": 60}
+    _, classes = vrptw_selection("solomon", 0)
+    assert classes == {"C1": 9, "C2": 8, "R1": 12, "R2": 11, "RC1": 8, "RC2": 8}
+
+
+def test_vrptw_usage_errors() -> None:
+    for argv in (
+        ["--series", "solomon", "--limit-per-bucket", "1"],
+        ["--series", "homberger", "--jobs", "0"],
+        ["--instance", "A-n32-k5", "--jobs", "2"],
+    ):
+        with pytest.raises(SystemExit) as exit_info:
+            main(argv)
+        assert exit_info.value.code == 2
+
+
+def test_the_output_records_jobs_scale_and_class(tmp_path) -> None:
+    args = argparse.Namespace(
+        series="solomon", seconds=1.0, seed=0, only=None, jobs=3, out=tmp_path / "s.json", summary_markdown=None
+    )
+    result = BenchmarkResult("engine", "C101", 100, 10, 8273, 0.0, 0, 1.0, "", scale=10, instance_class="C1")
+    write_outputs(args, [result], ("engine",), {"C1": 9, "C2": 8, "R1": 12, "R2": 11, "RC1": 8, "RC2": 8})
+    data = json.loads(args.out.read_text())
+    assert data["protocol"]["jobs"] == 3
+    assert data["results"][0]["scale"] == 10 and data["results"][0]["instance_class"] == "C1"
+    assert data["buckets"][0] == {
+        "backend": "engine",
+        "bucket": "C1",
+        "runs": 1,
+        "solved": 1,
+        "catalog": 9,
+        "mean_gap": 0.0,
+    }
