@@ -65,7 +65,8 @@ OR-Tools lives here only; it is not part of the use case.
   (`vrptw.MIRROR_COMMIT`), so an instance and its reference cannot change
   under a run. Every one of the 356 best-known solutions, rescored by the
   harness, came to its listed cost and met every window and capacity (checked
-  on 2026-11-19).
+  on 2026-11-19; `VRPTW_BKS_CHECK=1 uv run pytest tests/test_vrptw.py -k every_best_known`
+  downloads them all and checks it again).
 - **Same inputs**: every backend gets the fleet of the file (25 vehicles on
   Solomon, 50 to 250 on Gehring & Homberger; a plan may leave vehicles
   unused), the capacity, the same integer distance matrix and the windows. A

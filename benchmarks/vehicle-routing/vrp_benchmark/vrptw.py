@@ -173,8 +173,8 @@ def _cached(url: str, path: Path, check) -> str:
     fetched again; a fresh download it refuses is an error, and is not kept.
     """
     if path.exists():
-        text = path.read_text()
         try:
+            text = path.read_text()  # UnicodeDecodeError is a ValueError: a binary error page
             check(text)
             return text
         except (ValueError, KeyError):

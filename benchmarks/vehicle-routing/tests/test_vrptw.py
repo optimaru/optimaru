@@ -1,5 +1,7 @@
 import argparse
 import json
+import os
+from pathlib import Path
 
 import pytest
 
@@ -228,3 +230,16 @@ def test_a_file_of_another_instance_is_refused_and_not_cached(tmp_path, monkeypa
     with pytest.raises(ValueError, match="expected C101"):
         vrptw.load_vrptw(entry, tmp_path)
     assert not (tmp_path / "vrptw" / vrptw.MIRROR_COMMIT[:12] / "C101.vrp").exists()
+
+
+@pytest.mark.skipif(not os.environ.get("VRPTW_BKS_CHECK"), reason="downloads 712 files; set VRPTW_BKS_CHECK=1")
+def test_every_best_known_solution_rescores_to_its_cost() -> None:
+    # Guards a MIRROR_COMMIT bump and any change to the rescoring: the harness and the
+    # best-known solutions agree on the DIMACS convention only if this holds for all 356.
+    cache = Path(os.environ.get("VRPTW_CACHE", ".bench-cache"))
+    for entry in vrptw.solomon_entries() + vrptw.homberger_entries():
+        instance = vrptw.load_vrptw(entry, cache)
+        solution = (cache / "vrptw" / vrptw.MIRROR_COMMIT[:12] / f"{entry.name}.sol").read_text()
+        checked = rescore(instance, vrptw.parse_solution_routes(solution))
+        assert checked.feasible and checked.unassigned == 0, entry.name
+        assert checked.distance == instance.best_known_distance, entry.name
