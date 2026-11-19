@@ -73,7 +73,11 @@ OR-Tools lives here only; it is not part of the use case.
   early, must start each service by the end of its window and be back at the
   depot by its closing time. The engine's `max_end_time` bounds arrival plus
   service rather than the start of service, so the harness passes the end of
-  each window plus the service time, which is the same condition.
+  each window plus the service time, which is the same condition. The engine
+  counts lateness in whole minutes, rounded up, of the harness's time unit
+  (a tenth): any lateness costs a hard point, so feasibility is exact, but
+  being 0.1 or 6.0 late costs the same, a coarser signal toward feasibility
+  than OR-Tools' exact time bounds.
 - **Same budget, rescoring, gap**: as for CVRP. The rescoring also replays the
   schedule of every route, and a run that misses a window is reported as
   `infeasible`, with no gap.

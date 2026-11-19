@@ -16,7 +16,8 @@ whose file is missing keeps its README text and its homepage entry.
 - ``vrp-x.json``, ``vrp-a.json``: ``python -m vrp_benchmark --series x|a --out FILE``;
 - ``vrptw-solomon.json``, ``vrptw-homberger.json``:
   ``python -m vrp_benchmark --series solomon|homberger --out FILE`` (their own results block
-  in the vehicle-routing README, ``vrptw``, so they can be measured apart from the CVRP sets);
+  in the vehicle-routing README, ``vrptw``, so they can be measured apart from the CVRP sets;
+  the two are published together, as they share that block);
 - ``pdp-li-lim.json``, ``pdp-synthetic.json``: ``pickup-delivery-public-bench --json``
   (the lists of several runs concatenated);
 - ``rcpsp.json``: ``project-job-scheduling-public-bench --all --json``, and
@@ -433,16 +434,27 @@ def vrp_block(set_x: dict | None, set_a: dict | None, args: argparse.Namespace) 
                 f"ortools {_mean_text(means['ortools'])}."
             )
         lines += ["", *_vrp_table(by_instance)]
-    protocol = (set_x or set_a)["protocol"]
-    seeds = {data["protocol"]["seed"] for data in (set_x, set_a) if data is not None}
-    if len(seeds) > 1:
-        raise SystemExit(f"vehicle-routing: Set X and Set A were run with different seeds {sorted(seeds)}")
-    lines += [
-        "",
-        f"Measured {args.date} on {args.machine}, {protocol['seconds']:g} s per run, seed "
-        f"{protocol['seed']}, single-threaded. Single runs — a snapshot, not a statistical study.",
-    ]
+    protocols = [data["protocol"] for data in (set_x, set_a) if data is not None]
+    lines += ["", _vrp_footer("Set X and Set A", protocols, args)]
     return "\n".join(lines)
+
+
+def _vrp_footer(what: str, protocols: list[dict], args: argparse.Namespace) -> str:
+    """The footer of a routing results block, whose files share one seed and one `--jobs`.
+
+    `seconds` is checked per file against --seconds (_check_vrp); seed and jobs have no flag to check against.
+    """
+    for key, default in (("seed", None), ("jobs", 1)):
+        values = sorted({protocol.get(key, default) for protocol in protocols})
+        if len(values) > 1:
+            raise SystemExit(f"vehicle-routing: {what} were run with different {key}s {values}")
+    protocol = protocols[0]
+    jobs = protocol.get("jobs", 1)
+    side = f", {jobs} runs side by side" if jobs > 1 else ""
+    return (
+        f"Measured {args.date} on {args.machine}, {protocol['seconds']:g} s per run, seed "
+        f"{protocol['seed']}, single-threaded{side}. Single runs — a snapshot, not a statistical study."
+    )
 
 
 def _vrp_group_table(by_instance: dict[str, dict[str, dict]], series: str) -> list[str]:
@@ -475,18 +487,7 @@ def vrptw_block(sets: dict[str, dict], args: argparse.Namespace) -> str:
         lines += ["", f"### {VRPTW_SERIES[series][1]}", "", *_vrp_group_table(by_instance, series)]
         lines += ["", *_vrp_table(by_instance)]
     protocols = [data["protocol"] for data in sets.values()]
-    # `seconds` is checked per file against --seconds (_check_vrp); seed and jobs have no flag to check against.
-    for key in ("seed", "jobs"):
-        if len({protocol.get(key) for protocol in protocols}) > 1:
-            raise SystemExit(f"vehicle-routing VRPTW: Solomon and Gehring & Homberger were run with different {key}s")
-    protocol = protocols[0]
-    jobs = protocol.get("jobs", 1)
-    side = f", {jobs} runs side by side" if jobs > 1 else ""
-    lines += [
-        "",
-        f"Measured {args.date} on {args.machine}, {protocol['seconds']:g} s per run, seed "
-        f"{protocol['seed']}, single-threaded{side}. Single runs — a snapshot, not a statistical study.",
-    ]
+    lines += ["", _vrp_footer("Solomon and Gehring & Homberger", protocols, args)]
     return "\n".join(lines)
 
 
@@ -1433,6 +1434,9 @@ def main() -> None:
 
     vrptw = {series: _load(args.results, f"vrptw-{series}.json") for series in VRPTW_SERIES}
     vrptw = {series: data for series, data in vrptw.items() if data}
+    if vrptw and len(vrptw) < len(VRPTW_SERIES):
+        # One results block holds both: publishing one alone would drop the other's tables.
+        raise SystemExit("vrptw-solomon.json and vrptw-homberger.json are published together")
     for series, data in vrptw.items():
         _check_vrp(f"vehicle-routing ({series})", data, args)
         if data["protocol"]["series"] != series:

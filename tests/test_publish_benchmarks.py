@@ -148,6 +148,12 @@ def test_vrptw_rows_are_in_tenths_and_grouped_by_class_or_size() -> None:
     assert "| R1 | 1 | 0.49% (1/1) | - (0/1) |" in block
     assert "| 200 | 1 | 1.00% (1/1) | 3.00% (1/1) |" in block
     assert "single-threaded, 3 runs side by side" in block
+    with pytest.raises(SystemExit, match="different jobs"):
+        publish.vrp_block(
+            solomon | {"protocol": solomon["protocol"] | {"series": "x"}},
+            solomon | {"protocol": solomon["protocol"] | {"series": "a", "jobs": 1}},
+            ARGS,
+        )
     with pytest.raises(SystemExit, match="different seeds"):
         publish.vrptw_block(
             {"solomon": solomon, "homberger": homberger | {"protocol": homberger["protocol"] | {"seed": 1}}}, ARGS
@@ -634,6 +640,13 @@ def test_generated_rcpsp_instances_are_a_second_table_of_the_data_set() -> None:
     # The two tables share one footer, so one seed.
     with pytest.raises(SystemExit, match="different seeds"):
         publish.rcpsp_block(public, ARGS, [makespan("synthetic-30-s0", 30, 1, 1) | {"seed": 4}])
+
+
+def test_the_vrptw_series_are_published_together(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("sys.argv", ["publish", str(tmp_path), "--date", "d", "--machine", "m", "--machine-ko", "m"])
+    (tmp_path / "vrptw-solomon.json").write_text(json.dumps({"protocol": {"series": "solomon", "seconds": 30.0}}))
+    with pytest.raises(SystemExit, match="published together"):
+        publish.main()
 
 
 def test_the_generated_rcpsp_results_need_the_rg30_ones_and_extra_json_is_refused(tmp_path, monkeypatch) -> None:
