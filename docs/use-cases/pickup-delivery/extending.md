@@ -38,7 +38,7 @@ and over 1,500 random list moves):
 
 | | `pdp.solve(plan)` | `pdp.solve(plan, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/pdp/constraints/` |
+| Scored by | the monolithic calculators, `cpp/pdp/score/score_calculator.cpp` and `cpp/pdp/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/pdp/constraints/` |
 | Constraints | the seven core constraints: `vehicle_capacity_cost`, `max_end_time_cost`, the three coupling constraints, `unassigned_requests_cost`, `travel_time_cost` | the ones you list, with your knobs |
 | Steps per second | 87.3 thousand | 71.2 thousand |
 | Parallel starts | `parallel_solver_count` | `parallel_solver_count`, each start on its own copy of the picks (the C++ overload `Solver::solve(plan, calculator)`: one start) |
@@ -105,7 +105,7 @@ number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
 Fourteen of the sixteen per-route constraints derive from one base in
-[`constraints/common.hpp`](../../../optimaru/pickup_delivery/cpp/include/pdp/constraints/common.hpp),
+[`constraints/common.hpp`](../../../optimaru/pickup_delivery/cpp/pdp/constraints/common.hpp),
 `detail::PerVehicleConstraint`. You write one function, `cost(plan, unit, members)`: the raw cost of
 vehicle `unit` driving the stops `members` in that order. It reads the plan's facts and its
 arguments, and never `Node::vehicleIndex` or `Node::arrivalTime`: those describe the routes as they
@@ -126,7 +126,7 @@ Pick the base by what the constraint reads:
 
 The example reads one route's arrival chain, so it is one function. Four edits:
 
-**1. The component**, `optimaru/pickup_delivery/cpp/include/pdp/constraints/ride_time_cost.hpp`:
+**1. The component**, `optimaru/pickup_delivery/cpp/pdp/constraints/ride_time_cost.hpp`:
 
 ```cpp
 #ifndef PDP_CONSTRAINTS_RIDE_TIME_COST_HPP
@@ -192,7 +192,7 @@ vehicle. The coupling constraints, `requiredVehicleCost` and `requestGroupCost` 
 `ScoreCalculator::kPinnedPenalty` (10^12); a new hard constraint picks its weight against
 those.
 
-**2. The assembly**, `cpp/include/pdp/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/pdp/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -335,10 +335,10 @@ nothing, and what a picked constraint costs is what its `cost()` and its updates
 
 | The constraint is | Use | Per applied move | Example to copy |
 | --- | --- | --- | --- |
-| a function of the arrival times along a route | `detail::PerVehicleConstraint` with `cost()` on `walkRoute` or `routeMetrics` | one walk of each changed route | step 2, [`latency_cost.hpp`](../../../optimaru/pickup_delivery/cpp/include/pdp/constraints/latency_cost.hpp) |
-| a function of the stops alone (load, counts) | the same base, one pass over `members` | one pass over each changed route | [`vehicle_capacity_cost.hpp`](../../../optimaru/pickup_delivery/cpp/include/pdp/constraints/vehicle_capacity_cost.hpp), [`max_stops_cost.hpp`](../../../optimaru/pickup_delivery/cpp/include/pdp/constraints/max_stops_cost.hpp) |
-| a per-request term over both stops | `RequestCouplingConstraint`: `requestCost()` | a pass over all nodes and all requests per changed route | [`paired_request_cost.hpp`](../../../optimaru/pickup_delivery/cpp/include/pdp/constraints/paired_request_cost.hpp) |
-| anything across routes that you can keep up to date | `PdpGlobalConstraint`: your own totals in `reset()` and `on_unit_changed()`, the total in `cost()` | what your update costs | [`request_group_cost.hpp`](../../../optimaru/pickup_delivery/cpp/include/pdp/constraints/request_group_cost.hpp) (on `optimaru::GroupPlacement`) |
+| a function of the arrival times along a route | `detail::PerVehicleConstraint` with `cost()` on `walkRoute` or `routeMetrics` | one walk of each changed route | step 2, [`latency_cost.hpp`](../../../optimaru/pickup_delivery/cpp/pdp/constraints/latency_cost.hpp) |
+| a function of the stops alone (load, counts) | the same base, one pass over `members` | one pass over each changed route | [`vehicle_capacity_cost.hpp`](../../../optimaru/pickup_delivery/cpp/pdp/constraints/vehicle_capacity_cost.hpp), [`max_stops_cost.hpp`](../../../optimaru/pickup_delivery/cpp/pdp/constraints/max_stops_cost.hpp) |
+| a per-request term over both stops | `RequestCouplingConstraint`: `requestCost()` | a pass over all nodes and all requests per changed route | [`paired_request_cost.hpp`](../../../optimaru/pickup_delivery/cpp/pdp/constraints/paired_request_cost.hpp) |
+| anything across routes that you can keep up to date | `PdpGlobalConstraint`: your own totals in `reset()` and `on_unit_changed()`, the total in `cost()` | what your update costs | [`request_group_cost.hpp`](../../../optimaru/pickup_delivery/cpp/pdp/constraints/request_group_cost.hpp) (on `optimaru::GroupPlacement`) |
 
 `request_group_cost.hpp` also has the preview contract (`supports_preview()`,
 `preview_cost()`, and a piecewise answer of 0 for a plan with no group). It is the
@@ -431,7 +431,7 @@ both sides agree.
 **1. The weight.** In the component: `static constexpr double kDefaultWeight = 1.0;`.
 It must be a whole number, because the monolithic calculators add in `int64`.
 
-**2. The full recompute**, `cpp/src/score_calculator.cpp`. Include the header, read
+**2. The full recompute**, `cpp/pdp/score/score_calculator.cpp`. Include the header, read
 the weight off the component into a `kRideWeight` next to `kTravelWeight`, add
 weight and level to the two `static_assert`s, and add the term to
 `ScoreCalculator::score()`, which has the node derived fields and each node's
@@ -454,8 +454,8 @@ position at hand:
     }
 ```
 
-**3. The incremental calculator**, `cpp/include/pdp/incremental_calculator.hpp` and
-`cpp/src/incremental_calculator.cpp`. It keeps the per-route terms of each vehicle
+**3. The incremental calculator**, `cpp/pdp/score/incremental_calculator.hpp` and
+`cpp/pdp/score/incremental_calculator.cpp`. It keeps the per-route terms of each vehicle
 (`RouteTerms`), re-derived in one walk of a changed route (`evaluateRoute()`), and
 the coupling terms per request. Ride time is a per-route term: a `ride` field in
 `RouteTerms`, a `rideTotal_` kept like `drivingTotal_` in `rebuild()`,
@@ -579,7 +579,7 @@ For a constraint on the default path (step 5), `./build/pickup_delivery/pdp_demo
 (requests, vehicles, seconds) solves a generated instance on that path and prints
 every new best: build the tree before and after the change into two build
 directories and run the two binaries in turn. The comments on `Solver::Config` in
-[`solver.hpp`](../../../optimaru/pickup_delivery/cpp/include/pdp/solver.hpp) show
+[`solver.hpp`](../../../optimaru/pickup_delivery/cpp/pdp/solver.hpp) show
 what such comparisons report. Against CP-SAT and on the Li & Lim instances, the
 commands are in the [README](../../../benchmarks/pickup-delivery/README.md) of
 `benchmarks/pickup-delivery`; they score the lists named in step 5, not the
@@ -589,14 +589,14 @@ defaults.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/pdp/constraints/<subject>_cost.hpp` | new | | `on_reset`, slots | weight |
-| `cpp/include/pdp/constraints.hpp` | include, `emplace` | | | |
+| `cpp/pdp/constraints/<subject>_cost.hpp` | new | | `on_reset`, slots | weight |
+| `cpp/pdp/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | the default in the text |
 | `tests/pickup_delivery/cpp/pdp_plugin_test.cpp` | | cases, catalog row | | catalog row, expected soft scores |
 | `tests/pickup_delivery/test_constraint_specs.py` | | lists | | `EXPECTED_INFO` |
 | `docs/use-cases/pickup-delivery/README.md`, `python.md`, `_core.pyi`, the notebook | | table row, counts | | defaults, "seven core constraints" |
-| `cpp/src/score_calculator.cpp` | | | | the term |
-| `cpp/include/pdp/incremental_calculator.hpp`, `cpp/src/incremental_calculator.cpp` | | | | the term, its total |
+| `cpp/pdp/score/score_calculator.cpp` | | | | the term |
+| `cpp/pdp/score/incremental_calculator.hpp`, `cpp/pdp/score/incremental_calculator.cpp` | | | | the term, its total |
 | `tests/pickup_delivery/cpp/pdp_test.cpp`, `pdp_request_moves_test.cpp`, `test_pdp.py` | | | | expected scores |
 | external-solver, `benchmarks/pickup-delivery` | | | | the same constraint, the lists |
 

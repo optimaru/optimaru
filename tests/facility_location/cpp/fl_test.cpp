@@ -17,9 +17,9 @@
 #include <string>
 #include <vector>
 
-#include "fl/domain.hpp"
-#include "fl/incremental_calculator.hpp"
-#include "fl/score_calculator.hpp"
+#include "fl/model/domain.hpp"
+#include "fl/score/incremental_calculator.hpp"
+#include "fl/score/score_calculator.hpp"
 #include "fl/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

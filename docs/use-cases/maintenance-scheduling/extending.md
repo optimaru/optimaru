@@ -33,7 +33,7 @@ There are two scoring paths, and they give the same score for the same schedule
 
 | | `mnt.solve(schedule)` | `mnt.solve(schedule, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/mnt/constraints/` |
+| Scored by | the monolithic calculators, `cpp/mnt/score/score_calculator.cpp` and `cpp/mnt/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/mnt/constraints/` |
 | Constraints | the six, at their defaults | the ones you list, with your knobs |
 | Steps per second | 5.8 million | 3.8 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -43,7 +43,7 @@ The speeds are the benchmark's `large` instance (48 jobs, 5 crews, 80 start date
 2 million steps, one thread of an Apple M4 Max; [step 6](#6-measure) has the script.
 The guided moves (a start date from the job's own window, a job from a tag conflict)
 read live state of the monolithic calculator, so the assembly searches without them
-([`solver.cpp`](../../../optimaru/maintenance_scheduling/cpp/src/solver.cpp)). Steps 1
+([`solver.cpp`](../../../optimaru/maintenance_scheduling/cpp/mnt/solver.cpp)). Steps 1
 to 4 work on the assembly. Step 5 moves a constraint to the monolithic calculators.
 
 ## 1. Change a constraint that exists
@@ -84,13 +84,13 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-[`constraints/common.hpp`](../../../optimaru/maintenance_scheduling/cpp/include/mnt/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/maintenance_scheduling/cpp/mnt/constraints/common.hpp)
 has two bases, one per kind of constraint here. Pick by what the constraint compares:
 
 | The constraint | Base | You write | Example to copy |
 | --- | --- | --- | --- |
-| a sum of one term per job, from the job and its cell (crew, start date, end date) | `PerJobConstraint` | `jobCost(schedule, unit, jobIndex)` | [`before_ideal_end_date_cost.hpp`](../../../optimaru/maintenance_scheduling/cpp/include/mnt/constraints/before_ideal_end_date_cost.hpp) |
-| jobs that share an owner (a crew, a tag) on the same day, which spans cells | `DayOverlapGlobalConstraint` | `ownerCount()`, `ownersOf()` | [`tag_conflict_cost.hpp`](../../../optimaru/maintenance_scheduling/cpp/include/mnt/constraints/tag_conflict_cost.hpp) |
+| a sum of one term per job, from the job and its cell (crew, start date, end date) | `PerJobConstraint` | `jobCost(schedule, unit, jobIndex)` | [`before_ideal_end_date_cost.hpp`](../../../optimaru/maintenance_scheduling/cpp/mnt/constraints/before_ideal_end_date_cost.hpp) |
+| jobs that share an owner (a crew, a tag) on the same day, which spans cells | `DayOverlapGlobalConstraint` | `ownerCount()`, `ownersOf()` | [`tag_conflict_cost.hpp`](../../../optimaru/maintenance_scheduling/cpp/mnt/constraints/tag_conflict_cost.hpp) |
 
 The four date constraints use the first, the two conflict constraints the second. A constraint that
 fits neither is the engine's `UnitConstraint` or `GlobalConstraint` directly ([Extending a use
@@ -100,7 +100,7 @@ ends on the Saturday.
 
 The example is a term per job. Four edits:
 
-**1. The component**, `optimaru/maintenance_scheduling/cpp/include/mnt/constraints/weekend_span_cost.hpp`:
+**1. The component**, `optimaru/maintenance_scheduling/cpp/mnt/constraints/weekend_span_cost.hpp`:
 
 ```cpp
 #ifndef MNT_CONSTRAINTS_WEEKEND_SPAN_COST_HPP
@@ -147,7 +147,7 @@ soft weights of the six constraints make a ladder: a day early costs 1, a tag-co
 weight. A hard constraint returns whole numbers, because a hard contribution is rounded per
 cell, and every constraint here counts days, so the soft total stays exact as well.
 
-**2. The assembly**, `cpp/include/mnt/constraints.hpp`: include the header, and add one
+**2. The assembly**, `cpp/mnt/constraints.hpp`: include the header, and add one
 line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -289,9 +289,9 @@ What one call costs depends on the constraint:
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
 | a sum of per-job terms | `PerJobConstraint` | one `jobCost` call | step 2 |
-| a pair count over jobs that share an owner on a day | `DayOverlapGlobalConstraint`: the base keeps a count per (owner, day) | the days of the job, times its owners | [`crew_conflict_cost.hpp`](../../../optimaru/maintenance_scheduling/cpp/include/mnt/constraints/crew_conflict_cost.hpp) |
-| any other statistic across cells | `MemberChangeGlobalConstraint`: keep your own totals in `on_member_changed()` | what your update costs | `DayOverlapGlobalConstraint` in [`common.hpp`](../../../optimaru/maintenance_scheduling/cpp/include/mnt/constraints/common.hpp) |
-| several per-job constraints that read the same facts | one compiled evaluator for the group (`delta_group_key()`, `create_delta_group()`); not used here | one pass for the group | employee scheduling's [`assignment_delta_group.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/assignment_delta_group.hpp) |
+| a pair count over jobs that share an owner on a day | `DayOverlapGlobalConstraint`: the base keeps a count per (owner, day) | the days of the job, times its owners | [`crew_conflict_cost.hpp`](../../../optimaru/maintenance_scheduling/cpp/mnt/constraints/crew_conflict_cost.hpp) |
+| any other statistic across cells | `MemberChangeGlobalConstraint`: keep your own totals in `on_member_changed()` | what your update costs | `DayOverlapGlobalConstraint` in [`common.hpp`](../../../optimaru/maintenance_scheduling/cpp/mnt/constraints/common.hpp) |
+| several per-job constraints that read the same facts | one compiled evaluator for the group (`delta_group_key()`, `create_delta_group()`); not used here | one pass for the group | employee scheduling's [`assignment_delta_group.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/assignment_delta_group.hpp) |
 
 A pair constraint written as a unit constraint with `cost()` alone would be wrong here, not
 just slow: two jobs of one crew that start on different dates sit in different cells,
@@ -354,7 +354,7 @@ It must be a whole number, because the monolithic calculators add in `int64`.
 for the six: include the header, add `constexpr auto kWeekendWeight =
 static_cast<std::int64_t>(WeekendSpanCost::kDefaultWeight);`, and add the weight and the
 level to the two `static_assert`s. `ScoreCalculator::score()` in
-`cpp/src/score_calculator.cpp` is the full recompute. In its loop over the jobs, after
+`cpp/mnt/score/score_calculator.cpp` is the full recompute. In its loop over the jobs, after
 the ideal-date terms, with `std::int64_t weekendSpan = 0;` declared before the loop:
 
 ```cpp
@@ -364,7 +364,7 @@ the ideal-date terms, with `std::int64_t weekendSpan = 0;` declared before the l
 
 and `+ kWeekendWeight * weekendSpan` in `score.soft`.
 
-`cpp/src/incremental_calculator.cpp` is what a move pays: `insert()` adds a job's terms
+`cpp/mnt/score/incremental_calculator.cpp` is what a move pays: `insert()` adds a job's terms
 when it joins a cell and `retract()` takes them out when it leaves. Add a running total
 `std::int64_t weekendSpan_ = 0;` to `incremental_calculator.hpp` next to `afterIdeal_`,
 zero it in `rebuild()`, and:
@@ -477,13 +477,13 @@ Against CP-SAT: `uv run maintenance-scheduling-compare --seconds 10 --workers 8`
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/mnt/constraints/<subject>_cost.hpp` | new | | table | weight |
-| `cpp/include/mnt/constraints.hpp` | include, `emplace` | | | the list in the comment |
+| `cpp/mnt/constraints/<subject>_cost.hpp` | new | | table | weight |
+| `cpp/mnt/constraints.hpp` | include, `emplace` | | | the list in the comment |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/maintenance_scheduling/cpp/mnt_plugin_test.cpp` | | cases, counts | | catalog row, builder |
 | `tests/maintenance_scheduling/test_constraint_specs.py` | | lists | | defaults |
 | `docs/use-cases/maintenance-scheduling/README.md`, `python.md` | | table row | | defaults, score |
-| `cpp/src/score_calculator.cpp`, `cpp/src/incremental_calculator.cpp`, `incremental_calculator.hpp` | | | | the term |
+| `cpp/mnt/score/score_calculator.cpp`, `cpp/mnt/score/incremental_calculator.cpp`, `incremental_calculator.hpp` | | | | the term |
 | `tests/maintenance_scheduling/cpp/mnt_test.cpp` | | | | expected scores |
 | external-solver, `benchmarks/maintenance-scheduling` | | | | the same constraint, results |
 

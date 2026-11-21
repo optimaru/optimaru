@@ -2,15 +2,15 @@
 # which defines the header-only engine target `optimaru`.
 
 add_library(sls_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/solver.cpp
+    sls/score/score_calculator.cpp
+    sls/score/incremental_calculator.cpp
+    sls/solver.cpp
 )
-target_include_directories(sls_core PUBLIC include)
+target_include_directories(sls_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(sls_core PUBLIC optimaru)
 target_compile_options(sls_core PRIVATE -Wall -Wextra)
 
-add_executable(sls_demo src/main.cpp)
+add_executable(sls_demo main.cpp)
 target_link_libraries(sls_demo PRIVATE sls_core)
 target_compile_options(sls_demo PRIVATE -Wall -Wextra)
 

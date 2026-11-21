@@ -2,17 +2,17 @@
 # which defines the header-only engine target `optimaru`.
 
 add_library(es_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/solver.cpp
+    es/score/score_calculator.cpp
+    es/score/incremental_calculator.cpp
+    es/solver.cpp
 )
-target_include_directories(es_core PUBLIC include)
+target_include_directories(es_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(es_core PUBLIC optimaru)
 target_compile_options(es_core PRIVATE -Wall -Wextra)
 
 # Checks every default constraint in isolation, runs the incremental calculator
 # against a full recompute over a long random walk, then solves a small roster.
-add_executable(es_demo src/main.cpp)
+add_executable(es_demo main.cpp)
 target_link_libraries(es_demo PRIVATE es_core)
 target_compile_options(es_demo PRIVATE -Wall -Wextra)
 

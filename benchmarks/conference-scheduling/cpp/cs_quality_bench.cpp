@@ -29,8 +29,8 @@
 #include <string>
 #include <vector>
 
-#include "cs/domain.hpp"
-#include "cs/score_calculator.hpp"
+#include "cs/model/domain.hpp"
+#include "cs/score/score_calculator.hpp"
 #include "cs/solver.hpp"
 
 using namespace cs;

@@ -19,9 +19,9 @@
 #include <vector>
 
 #include "mnt/constraints.hpp"
-#include "mnt/demo_data.hpp"
-#include "mnt/domain.hpp"
-#include "mnt/score_calculator.hpp"
+#include "mnt/model/demo_data.hpp"
+#include "mnt/model/domain.hpp"
+#include "mnt/score/score_calculator.hpp"
 #include "mnt/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
@@ -121,7 +121,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("crews", &MaintenanceSchedule::crews)
             .def_readwrite("jobs", &MaintenanceSchedule::jobs)
             .def_readonly("score", &MaintenanceSchedule::score)
-            // composite crewDate encoding helpers (see mnt/domain.hpp)
+            // composite crewDate encoding helpers (see mnt/model/domain.hpp)
             .def("crew_count", &MaintenanceSchedule::crewCount)
             .def(
                     "date_count",
@@ -222,7 +222,7 @@ PYBIND11_MODULE(_core, m) {
     config.def(py::init<>())
             .def_readwrite("change_move_weight", &Solver::Config::change_weight)
             .def_readwrite("swap_move_weight", &Solver::Config::swap_weight)
-            // Guided selection (see cpp/src/solver.cpp): change moves draw the
+            // Guided selection (see cpp/mnt/solver.cpp): change moves draw the
             // start date from the job's own [minStart, idealEnd] window, seed on
             // jobs sitting in a tagConflictCost, and prefer a crew that is free
             // for the whole span.

@@ -30,7 +30,7 @@ You need a C++17 compiler, CMake and uv.
 | You want to change | Look in |
 | --- | --- |
 | The search itself (step loop, acceptors, built-in moves, ruin and recreate) | `optimaru/cpp/optimaru/` (header-only engine, no domain code) |
-| One use case's model, constraints, moves | `optimaru/<uc>/cpp/include/<ns>/`, `optimaru/<uc>/cpp/src/` |
+| One use case's model, constraints, moves | `optimaru/<uc>/cpp/<ns>/` (`model/`, `constraints/`, `moves/`; each header next to its source) |
 | What Python sees | `optimaru/<uc>/cpp/bindings.cpp`, `_core.pyi`, `constraints.py`, `models.py` |
 | Tests | `tests/<uc>/` (pytest), `tests/<uc>/cpp/` (C++), `tests/engine/` |
 | Guides | `docs/use-cases/<slug>/`, `docs/extending.md` |
@@ -43,7 +43,7 @@ The README has the full [repository layout](README.md#repository-layout) and
 A constraint is one named cost component. Callers pick it, reweight it and move
 it between hard, medium and soft per solve.
 
-1. **Write the component**: `optimaru/<uc>/cpp/include/<ns>/constraints/<subject>_cost.hpp`,
+1. **Write the component**: `optimaru/<uc>/cpp/<ns>/constraints/<subject>_cost.hpp`,
    a struct `<Subject>Cost` with `kDefaultWeight`, `kDefaultLevel` and a
    `cost(solution, unit, members)` that returns the raw cost of one unit
    (a route, an employee, a bin). `0` means no violation.
@@ -71,7 +71,7 @@ bin".
    `apply()` (do one random move through `ctx.editor`) and `undo_last()`
    (revert it exactly).
 2. **Register it**: `engine.add_move_operator(std::make_unique<MyMove>())` in
-   `optimaru/<uc>/cpp/src/solver.cpp`. The engine picks between it and the
+   `optimaru/<uc>/cpp/<ns>/solver.cpp`. The engine picks between it and the
    built-in moves adaptively.
 3. **Expose a switch**: a `Solver::Config` field, bound in `bindings.cpp` and
    declared in `_core.pyi`, so the move can be turned off for comparison.

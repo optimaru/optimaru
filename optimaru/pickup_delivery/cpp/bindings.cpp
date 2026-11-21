@@ -1,5 +1,5 @@
 // pybind11 bindings for the pickup-and-delivery C++ core.
-// Wraps the pdp::* use case (include/ and src/ beside this file) without modifying it. Compiled
+// Wraps the pdp::* use case (pdp/ beside this file) without modifying it. Compiled
 // independently from the other extensions: one solver, one module
 // (optimaru.pickup_delivery._core).
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
@@ -13,10 +13,10 @@
 #include <tuple>
 
 #include "pdp/constraints.hpp"
-#include "pdp/demo_data.hpp"
-#include "pdp/domain.hpp"
-#include "pdp/haversine.hpp"
-#include "pdp/score_calculator.hpp"
+#include "pdp/model/demo_data.hpp"
+#include "pdp/model/domain.hpp"
+#include "pdp/model/haversine.hpp"
+#include "pdp/score/score_calculator.hpp"
 #include "pdp/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"

@@ -81,15 +81,15 @@ fl.solve(problem, constraints=[
 
 ## C++
 
-- `optimaru/facility_location/cpp/include/fl/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `optimaru/facility_location/cpp/include/fl/constraints/` — one component per constraint: `facility_capacity_cost.hpp`,
+- `optimaru/facility_location/cpp/fl/model/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/facility_location/cpp/fl/constraints/` — one component per constraint: `facility_capacity_cost.hpp`,
   `facility_setup_cost.hpp`, `distance_from_facility_cost.hpp` (+ `common.hpp`);
-  `optimaru/facility_location/cpp/include/fl/constraints.hpp` assembles the default set (`defaultConstraints()`)
+  `optimaru/facility_location/cpp/fl/constraints.hpp` assembles the default set (`defaultConstraints()`)
 - `score_calculator` — full recompute (the reference)
 - `incremental_calculator` — before/after hooks, O(1) per move
 - `solver` — engine wrapper (construction, late acceptance in stages, the macro moves
   `CloseFacilityMove` and `SwapFacilityMove`, adaptive ruin & recreate)
-- `optimaru/facility_location/cpp/src/main.cpp` — demo instance
+- `optimaru/facility_location/cpp/main.cpp` — demo instance
   (30 facilities x capacity 150, 60 consumers x demand 15, London box, setup cost N(50000, 10000²))
 
 ```bash
@@ -125,7 +125,7 @@ The pydantic v2 serialization mirror is `optimaru.facility_location.models`
 The construction gives every consumer its best facility one by one, which opens many
 facilities; late acceptance then works with the engine's change / swap moves, its
 ruin-and-recreate kicks, and two macro moves of the domain
-(`optimaru/facility_location/cpp/src/solver.cpp`). They exist because
+(`optimaru/facility_location/cpp/fl/solver.cpp`). They exist because
 `facility_setup_cost` is a step function: a facility stops costing only when its last
 consumer leaves, and starts costing with its first.
 
@@ -183,12 +183,12 @@ Consumers are matched by id. A consumer the solution leaves out is placed by the
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/facility_location/cpp/include/fl/solver.hpp` + `optimaru/facility_location/cpp/src/solver.cpp`.
+engine is `optimaru/facility_location/cpp/fl/solver.hpp` + `optimaru/facility_location/cpp/fl/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
-(weights in `Solver::Config`). `CloseFacilityMove` (empties a facility by moving all its consumers) and `SwapFacilityMove` (opens one facility and closes another) are defined and registered in `optimaru/facility_location/cpp/src/solver.cpp` (`runEngine`) — use them as the template. A new move is a
+(weights in `Solver::Config`). `CloseFacilityMove` (empties a facility by moving all its consumers) and `SwapFacilityMove` (opens one facility and closes another) are defined and registered in `optimaru/facility_location/cpp/fl/solver.cpp` (`runEngine`) — use them as the template. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/facility_location/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/facility_location/cpp/fl/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set

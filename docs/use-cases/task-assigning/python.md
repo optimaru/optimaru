@@ -67,7 +67,7 @@ while keeping them assigned — so unassigned (soft0) is always 0 in the final s
 This use case scores four levels, one hard and three soft (`hard[0]`, `soft[0]`, `soft[1]`,
 `soft[2]`); the engine only
 has `Score(int64 hard, double soft)`, and its constraints score on three levels
-(hard, medium, soft). The mapping rule (`optimaru/task_assigning/cpp/include/ta/domain.hpp`):
+(hard, medium, soft). The mapping rule (`optimaru/task_assigning/cpp/ta/model/domain.hpp`):
 
 ```
 hard[0] -> hard, soft[0] -> medium, soft[1] and soft[2] -> soft

@@ -153,13 +153,13 @@ integral offsets.
 
 ## C++
 
-- `optimaru/assembly_line_balancing/cpp/include/alb/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `optimaru/assembly_line_balancing/cpp/include/alb/constraints/` — one component per constraint: `station_capacity_cost.hpp`,
+- `optimaru/assembly_line_balancing/cpp/alb/model/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/assembly_line_balancing/cpp/alb/constraints/` — one component per constraint: `station_capacity_cost.hpp`,
   `task_precedence_cost.hpp`, `max_stations_cost.hpp`, `task_station_bounds_cost.hpp`,
   `fixed_task_stations_cost.hpp`, `forbidden_task_stations_cost.hpp`,
   `same_station_groups_cost.hpp`, `different_station_pairs_cost.hpp`,
   `used_stations_cost.hpp`, `workload_imbalance_cost.hpp` (+ `common.hpp`);
-  `optimaru/assembly_line_balancing/cpp/include/alb/constraints.hpp` assembles the default set (`defaultConstraints()`) and
+  `optimaru/assembly_line_balancing/cpp/alb/constraints.hpp` assembles the default set (`defaultConstraints()`) and
   states the catalog order once (`forEachDefaultConstraint`)
 - `construction` — level-synchronous Kahn order, first fit on a station pointer that
   never moves down, fixed-station override (identical to the pure-Python reference in
@@ -168,7 +168,7 @@ integral offsets.
 - `incremental_calculator` — before/after hooks, O(degree) per move
 - `solver` — engine wrapper (construction + Late Acceptance + adaptive ruin & recreate
   + `CloseStationMove` + the precedence-window value recommender)
-- `optimaru/assembly_line_balancing/cpp/src/main.cpp` — a 100-task demo against the trivial lower bound
+- `optimaru/assembly_line_balancing/cpp/main.cpp` — a 100-task demo against the trivial lower bound
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=assembly_line_balancing
@@ -206,16 +206,16 @@ print({task.id: task.station for task in warm.tasks}, warm.stations_used)
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the engine is
-`optimaru/assembly_line_balancing/cpp/include/alb/solver.hpp` + `optimaru/assembly_line_balancing/cpp/src/solver.cpp`.
+`optimaru/assembly_line_balancing/cpp/alb/solver.hpp` + `optimaru/assembly_line_balancing/cpp/alb/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves (weights in
 `Solver::Config`). `CloseStationMove` (empties a station by moving its tasks, in
 topological order, into their precedence windows) is defined and registered in
-`optimaru/assembly_line_balancing/cpp/src/solver.cpp` (`runEngine`) — use it as the template. A new move is an
+`optimaru/assembly_line_balancing/cpp/alb/solver.cpp` (`runEngine`) — use it as the template. A new move is an
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)`; a ruin for
 LNS is a `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
-**Changing the construction heuristic.** `optimaru/assembly_line_balancing/cpp/src/construction.cpp` places every task
+**Changing the construction heuristic.** `optimaru/assembly_line_balancing/cpp/alb/construct/construction.cpp` places every task
 before the engine starts (the engine only fills what is still unassigned). `alb_test`
 and the Python reference-parity tests pin its results.
 

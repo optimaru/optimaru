@@ -185,6 +185,6 @@ optimaru/pickup_delivery/
 ├── constraints.py    the constraint specs (one class per C++ component), built on optimaru/_constraint.py
 ├── models.py         pydantic request/response layer
 ├── _core.pyi         stubs of the compiled module
-└── cpp/              bindings.cpp (the _core module), include/pdp/, src/
+└── cpp/              bindings.cpp (the _core module), pdp/ (the C++ core), main.cpp (the demo)
 tests/pickup_delivery/   pytest suite; cpp/ holds the C++ tests (pdp_test, pdp_plugin_test)
 ```

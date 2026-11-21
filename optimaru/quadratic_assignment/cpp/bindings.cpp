@@ -17,8 +17,8 @@
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
 #include "qap/constraints.hpp"
-#include "qap/domain.hpp"
-#include "qap/score_calculator.hpp"
+#include "qap/model/domain.hpp"
+#include "qap/score/score_calculator.hpp"
 #include "qap/solver.hpp"
 
 namespace py = pybind11;

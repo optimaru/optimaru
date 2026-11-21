@@ -14,8 +14,8 @@
 #include <vector>
 
 #include "mc/constraints.hpp"
-#include "mc/domain.hpp"
-#include "mc/score_calculator.hpp"
+#include "mc/model/domain.hpp"
+#include "mc/score/score_calculator.hpp"
 #include "mc/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"

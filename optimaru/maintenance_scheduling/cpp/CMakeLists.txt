@@ -2,16 +2,16 @@
 # which defines the header-only engine target `optimaru`.
 
 add_library(mnt_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/solver.cpp
-    src/demo_data.cpp
+    mnt/score/score_calculator.cpp
+    mnt/score/incremental_calculator.cpp
+    mnt/solver.cpp
+    mnt/model/demo_data.cpp
 )
-target_include_directories(mnt_core PUBLIC include)
+target_include_directories(mnt_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(mnt_core PUBLIC optimaru)
 target_compile_options(mnt_core PRIVATE -Wall -Wextra)
 
-add_executable(mnt_demo src/main.cpp)
+add_executable(mnt_demo main.cpp)
 target_link_libraries(mnt_demo PRIVATE mnt_core)
 target_compile_options(mnt_demo PRIVATE -Wall -Wextra)
 

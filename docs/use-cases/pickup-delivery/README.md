@@ -182,7 +182,7 @@ route together and come back together.
 
 ### Where a request fits
 
-`pdp/request_insertion.hpp` answers one question: the cheapest feasible way to
+`pdp/moves/request_insertion.hpp` answers one question: the cheapest feasible way to
 add a request to a route. For each pickup slot it walks the dropoff slot forward
 and carries the schedule along. A `RouteTimeline` keeps, per stop, the departure
 time, the latest arrival that still keeps the rest of the route on time and the
@@ -215,7 +215,7 @@ first plan already keeps the vehicle limits.
 
 ### The request moves
 
-`pdp/request_moves.hpp` registers three move operators on that scan. They work
+`pdp/moves/request_moves.hpp` registers three move operators on that scan. They work
 on copies of the routes and write a changed route through the engine once, when
 the whole move is laid out, so a candidate never holds half a request.
 
@@ -440,15 +440,15 @@ A vehicle's `pinned_stops` stay as the request has them: its route in the soluti
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **sequence** shape; the domain solver that configures the
-engine is `optimaru/pickup_delivery/cpp/include/pdp/solver.hpp` + `optimaru/pickup_delivery/cpp/src/solver.cpp`.
+engine is `optimaru/pickup_delivery/cpp/pdp/solver.hpp` + `optimaru/pickup_delivery/cpp/pdp/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
-(weights in `Solver::Config`). `PairRelocateMove` / `PairExchangeMove` (move a pickup together with its drop-off) and the `PairRuin` ruin operator are defined in `optimaru/pickup_delivery/cpp/src/solver.cpp`, the request moves in `optimaru/pickup_delivery/cpp/src/request_moves.cpp` (on the insertion scan of `request_insertion.cpp`) — use them as templates. A new move is a
+(weights in `Solver::Config`). `PairRelocateMove` / `PairExchangeMove` (move a pickup together with its drop-off) and the `PairRuin` ruin operator are defined in `optimaru/pickup_delivery/cpp/pdp/solver.cpp`, the request moves in `optimaru/pickup_delivery/cpp/pdp/moves/request_moves.cpp` (on the insertion scan of `request_insertion.cpp`) — use them as templates. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/pickup_delivery/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/pickup_delivery/cpp/pdp/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
-**Changing the construction heuristic.** Both levers are used: `difficulty` and a domain constructor (`constructPairs`, which inserts each pickup with its drop-off) in `optimaru/pickup_delivery/cpp/src/solver.cpp`; the engine heuristic fills whatever is left. Set
+**Changing the construction heuristic.** Both levers are used: `difficulty` and a domain constructor (`constructPairs`, which inserts each pickup with its drop-off) in `optimaru/pickup_delivery/cpp/pdp/solver.cpp`; the engine heuristic fills whatever is left. Set
 `engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.

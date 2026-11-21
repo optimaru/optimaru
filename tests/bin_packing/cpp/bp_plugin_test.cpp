@@ -22,7 +22,7 @@
 //       (n entries per unit constraint, one for usedBinsCost)
 //   (i) the catalog: info() off the default assembly == the components'
 //       kDefaultWeight / kDefaultLevel; the knob guards
-//   (j) the macro moves (bp/moves.hpp) on the plugin path: EmptyBinMove,
+//   (j) the macro moves (bp/moves/moves.hpp) on the plugin path: EmptyBinMove,
 //       RepackMove and TradeMove driven through the engine's move protocol (apply, score,
 //       keep or roll back) on the default and the shaped assembly; after
 //       every apply and every undo the score and every unit cost equal a
@@ -48,9 +48,9 @@
 #include <vector>
 
 #include "bp/constraints.hpp"
-#include "bp/domain.hpp"
-#include "bp/moves.hpp"
-#include "bp/score_calculator.hpp"
+#include "bp/model/domain.hpp"
+#include "bp/moves/moves.hpp"
+#include "bp/score/score_calculator.hpp"
 #include "bp/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

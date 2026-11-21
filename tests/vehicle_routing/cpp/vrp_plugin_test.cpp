@@ -49,9 +49,9 @@
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "vrp/constraints.hpp"
-#include "vrp/demo_data.hpp"
-#include "vrp/domain.hpp"
-#include "vrp/score_calculator.hpp"
+#include "vrp/model/demo_data.hpp"
+#include "vrp/model/domain.hpp"
+#include "vrp/score/score_calculator.hpp"
 #include "vrp/solver.hpp"
 #include "optimaru/testing/check.hpp"
 

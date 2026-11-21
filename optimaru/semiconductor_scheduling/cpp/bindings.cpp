@@ -1,5 +1,5 @@
 // pybind11 bindings for the semiconductor-scheduling C++ domain (namespace
-// fab). The Python extension links the fab::* implementation in include/ and src/ beside this file
+// fab). The Python extension links the fab::* implementation in fab/ beside this file
 // and imports the generic optimaru engine from optimaru/cpp/optimaru; the engine itself is not
 // modified here.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
@@ -14,9 +14,9 @@
 #include <vector>
 
 #include "fab/constraints.hpp"
-#include "fab/decoder.hpp"
-#include "fab/domain.hpp"
-#include "fab/score_calculator.hpp"
+#include "fab/model/decoder.hpp"
+#include "fab/model/domain.hpp"
+#include "fab/score/score_calculator.hpp"
 #include "fab/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 

@@ -31,7 +31,7 @@ There are two scoring paths, and they give the same score for the same plan
 
 | | `ba.solve(plan)` | `ba.solve(plan, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/ba/constraints/` |
+| Scored by | the monolithic calculators, `cpp/ba/score/score_calculator.cpp` and `cpp/ba/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/ba/constraints/` |
 | Constraints | the twelve, at their defaults | the ones you list, with your knobs |
 | Steps per second | 12.3 million | 1.6 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -79,7 +79,7 @@ number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
 Ten of the twelve constraints are a sum of one term per stay, and
-[`constraints/common.hpp`](../../../optimaru/bed_allocation/cpp/include/ba/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/bed_allocation/cpp/ba/constraints/common.hpp)
 has a base for that. Pick the base by what the term reads:
 
 | The term reads | Base | You write |
@@ -89,7 +89,7 @@ has a base for that. Pick the base by what the term reads:
 
 The example reads the room, so it is one function. Four edits:
 
-**1. The component**, `optimaru/bed_allocation/cpp/include/ba/constraints/unused_room_equipment_cost.hpp`:
+**1. The component**, `optimaru/bed_allocation/cpp/ba/constraints/unused_room_equipment_cost.hpp`:
 
 ```cpp
 #ifndef BA_CONSTRAINTS_UNUSED_ROOM_EQUIPMENT_COST_HPP
@@ -142,7 +142,7 @@ in units of that level. A medium constraint states its weight in medium units
 itself (`kMediumFold` in `domain.hpp`), so no weight carries the 10^9. A hard constraint
 returns whole numbers, because a hard contribution is rounded per bed.
 
-**2. The assembly**, `cpp/include/ba/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/ba/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -268,8 +268,8 @@ and one for the bed it joins. What that call is depends on the constraint:
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
 | a sum of per-stay terms | `PerStayConstraint` / `PerStayRoomConstraint` | one `stayCost` call | step 2 |
-| a sum over pairs of stays in one bed | `BaUnitConstraint` with `cost()`, `supports_delta()` and `delta_cost()` | one pass over the bed's other stays | [`bed_conflict_cost.hpp`](../../../optimaru/bed_allocation/cpp/include/ba/constraints/bed_conflict_cost.hpp) |
-| anything that spans beds (a room, a department, the whole plan) | `MemberChangeGlobalConstraint`: keep your own totals in `on_member_changed()` | what your update costs | [`mixed_gender_room_cost.hpp`](../../../optimaru/bed_allocation/cpp/include/ba/constraints/mixed_gender_room_cost.hpp) |
+| a sum over pairs of stays in one bed | `BaUnitConstraint` with `cost()`, `supports_delta()` and `delta_cost()` | one pass over the bed's other stays | [`bed_conflict_cost.hpp`](../../../optimaru/bed_allocation/cpp/ba/constraints/bed_conflict_cost.hpp) |
+| anything that spans beds (a room, a department, the whole plan) | `MemberChangeGlobalConstraint`: keep your own totals in `on_member_changed()` | what your update costs | [`mixed_gender_room_cost.hpp`](../../../optimaru/bed_allocation/cpp/ba/constraints/mixed_gender_room_cost.hpp) |
 
 A unit constraint with `cost()` alone is correct: the engine then recomputes the
 whole bed on every change, which for a constraint over pairs is quadratic in the stays of
@@ -348,7 +348,7 @@ agree.
 **1. The weight.** In the component: `static constexpr double kDefaultWeight = 2.0;`.
 It must be a whole number, because the monolithic calculators add in `int64`.
 
-**2. The term**, in `cpp/src/score_calculator.cpp`. Include the header, read the
+**2. The term**, in `cpp/ba/score/score_calculator.cpp`. Include the header, read the
 weight off the component, add the level to the `static_assert`, and add the term
 to `ScoreCalculator::singleStayImpact()`:
 
@@ -449,7 +449,7 @@ uv run --project benchmarks/bed-allocation/cpsat \
 `ba_quality_bench` runs the default path only, so it measures a constraint after step 5.
 Build the tree before and after the change into two build directories and run the
 two binaries in turn on the same instances and seeds. The comments on `Solver::Config` in
-[`solver.hpp`](../../../optimaru/bed_allocation/cpp/include/ba/solver.hpp) show what
+[`solver.hpp`](../../../optimaru/bed_allocation/cpp/ba/solver.hpp) show what
 such a comparison reports. Against CP-SAT: `uv run bed-allocation-compare --seconds 10
 --workers 8` in `benchmarks/bed-allocation/cpsat`
 ([README](../../../benchmarks/bed-allocation/README.md)).
@@ -458,13 +458,13 @@ such a comparison reports. Against CP-SAT: `uv run bed-allocation-compare --seco
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/ba/constraints/<subject>_cost.hpp` | new | | table, delta | weight |
-| `cpp/include/ba/constraints.hpp` | include, `emplace` | | | |
+| `cpp/ba/constraints/<subject>_cost.hpp` | new | | table, delta | weight |
+| `cpp/ba/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/bed_allocation/cpp/ba_plugin_test.cpp` | | case, counts | | |
 | `tests/bed_allocation/test_constraint_specs.py` | | lists | | |
 | `docs/use-cases/bed-allocation/README.md`, `python.md` | | table row | | defaults |
-| `cpp/src/score_calculator.cpp` | | | | the term |
+| `cpp/ba/score/score_calculator.cpp` | | | | the term |
 | `tests/bed_allocation/cpp/ba_test.cpp` | | | | expected scores |
 | external-solver, `benchmarks/bed-allocation` | | | | the same constraint, results |
 

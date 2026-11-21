@@ -12,8 +12,8 @@
 #include <vector>
 
 #include "fcs/constraints.hpp"
-#include "fcs/domain.hpp"
-#include "fcs/score_calculator.hpp"
+#include "fcs/model/domain.hpp"
+#include "fcs/score/score_calculator.hpp"
 #include "fcs/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"

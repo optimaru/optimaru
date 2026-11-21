@@ -87,14 +87,14 @@ without assignments / pairs without head-to-heads are not counted).
 ## Score mapping (hard / medium / soft → Score)
 
 The engine score is `Score(hard int64, soft double)`, so the three score levels are
-folded into two (the same as the `optimaru/tournament_scheduling/cpp/include/ts/domain.hpp` comments):
+folded into two (the same as the `optimaru/tournament_scheduling/cpp/ts/model/domain.hpp` comments):
 
 ```
 hard = the hard level as-is                    (0 == feasible)
 soft = -(medium unfairness * 1e6 + soft unfairness)   # MEDIUM_SCALE = 1e6
 ```
 
-The fold is the domain's `kMediumFold = intoSoft(1e6)` (`optimaru/tournament_scheduling/cpp/include/ts/domain.hpp`), applied
+The fold is the domain's `kMediumFold = intoSoft(1e6)` (`optimaru/tournament_scheduling/cpp/ts/model/domain.hpp`), applied
 by the calculators, not carried by the medium constraint's weight.
 
 medium/soft unfairness are 6-significant-digit decimals, so at this domain's instance

@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "mc/domain.hpp"
-#include "mc/score_calculator.hpp"
+#include "mc/model/domain.hpp"
+#include "mc/score/score_calculator.hpp"
 #include "optimaru/testing/check.hpp"
 
 namespace mc_test {

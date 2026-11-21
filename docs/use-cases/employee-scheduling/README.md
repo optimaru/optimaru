@@ -91,18 +91,18 @@ shift the solution moves or unassigns raises `ValueError`. Details:
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/employee_scheduling/cpp/include/es/solver.hpp` + `optimaru/employee_scheduling/cpp/src/solver.cpp`.
+engine is `optimaru/employee_scheduling/cpp/es/solver.hpp` + `optimaru/employee_scheduling/cpp/es/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`), and this use case registers its own on top:
 a smart change move, a window swap between two employees, a hot-employee ruin
 and an optional unassign move, all next to the engine construction in
-`optimaru/employee_scheduling/cpp/src/solver.cpp`. A new move is a `optimaru::MoveOperator<…>` registered
+`optimaru/employee_scheduling/cpp/es/solver.cpp`. A new move is a `optimaru::MoveOperator<…>` registered
 with `engine.add_move_operator(...)` there; a ruin for LNS is a `RuinOperator`
 registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** `seedDayAwareInitialRoster` in
-`optimaru/employee_scheduling/cpp/src/solver.cpp` places shifts day by day, scarce skills first; the engine's
+`optimaru/employee_scheduling/cpp/es/solver.cpp` places shifts day by day, scarce skills first; the engine's
 First Fit then fills whatever is left. Both only touch shifts that are still
 unassigned, so pre-assigning part of the solution (`ShiftModel.worker`, or
 `with_initial_solution`) keeps that part as the starting point.

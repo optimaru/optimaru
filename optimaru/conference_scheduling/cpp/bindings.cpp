@@ -13,8 +13,8 @@
 #include <vector>
 
 #include "cs/constraints.hpp"
-#include "cs/domain.hpp"
-#include "cs/score_calculator.hpp"
+#include "cs/model/domain.hpp"
+#include "cs/score/score_calculator.hpp"
 #include "cs/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
@@ -242,7 +242,7 @@ PYBIND11_MODULE(_core, m) {
                            &ConferenceSchedule::minimumConsecutiveTalksPauseInMinutes)
             .def_readonly("score", &ConferenceSchedule::score)
             .def_readonly("prepared", &ConferenceSchedule::prepared)
-            // composite slotRoom encoding helpers (see cs/domain.hpp)
+            // composite slotRoom encoding helpers (see cs/model/domain.hpp)
             .def("timeslot_count", &ConferenceSchedule::timeslotCount)
             .def("room_count", &ConferenceSchedule::roomCount)
             .def("talk_count", &ConferenceSchedule::talkCount)

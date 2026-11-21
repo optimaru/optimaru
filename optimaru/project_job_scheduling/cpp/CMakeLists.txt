@@ -2,15 +2,15 @@
 # which defines the header-only engine target `optimaru`.
 
 add_library(pjs_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/solver.cpp
+    pjs/score/score_calculator.cpp
+    pjs/score/incremental_calculator.cpp
+    pjs/solver.cpp
 )
-target_include_directories(pjs_core PUBLIC include)
+target_include_directories(pjs_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(pjs_core PUBLIC optimaru)
 target_compile_options(pjs_core PRIVATE -Wall -Wextra)
 
-add_executable(pjs_demo src/main.cpp)
+add_executable(pjs_demo main.cpp)
 target_link_libraries(pjs_demo PRIVATE pjs_core)
 target_compile_options(pjs_demo PRIVATE -Wall -Wextra)
 

@@ -37,10 +37,10 @@ catalog and the medium knobs.
 
 The score has three levels, hard / medium / soft, folded into the engine's `Score`.
 
-`optimaru/project_job_scheduling/cpp/include/pjs/constraints/` holds one component per constraint
+`optimaru/project_job_scheduling/cpp/pjs/constraints/` holds one component per constraint
 (`non_renewable_resource_capacity_cost.hpp`, `renewable_resource_capacity_cost.hpp`,
 `project_delay_cost.hpp`, `makespan_cost.hpp`, plus `common.hpp`);
-`optimaru/project_job_scheduling/cpp/include/pjs/constraints.hpp` assembles the default set (`defaultConstraints()`).
+`optimaru/project_job_scheduling/cpp/pjs/constraints.hpp` assembles the default set (`defaultConstraints()`).
 All four are global constraints (each reads the whole precedence chain or the whole
 stock), so each has one raw total, and the exponent shapes that total.
 
@@ -59,7 +59,7 @@ are scored by default (`default_enabled`).
 
 The medium weight is in **medium units**: the domain folds the medium level into the
 engine's soft level as `engine.soft = medium * 10^9 + soft` (`kMediumFold` in
-`optimaru/project_job_scheduling/cpp/include/pjs/domain.hpp`, reported as `medium_fold: {"kind": "into_soft", "unit": 1e9}`
+`optimaru/project_job_scheduling/cpp/pjs/model/domain.hpp`, reported as `medium_fold: {"kind": "into_soft", "unit": 1e9}`
 on every `constraint_costs()` entry). `level="hard"` makes
 `project_delay_cost` 1 hard unit per day, `level="soft"` 1 soft unit per day (outside the
 fold), and a `weight` is in units of the level in effect — in the
@@ -97,7 +97,7 @@ offsets on every constraint (one term per global total).
 The construction places the allocations one after another; late acceptance then works with
 the engine's change / swap moves on single values (a mode and a delay), its
 ruin-and-recreate kicks, and one move of the domain, `SerialScheduleMove`
-(`serial_schedule_moves`, in `optimaru/project_job_scheduling/cpp/include/pjs/moves.hpp`).
+(`serial_schedule_moves`, in `optimaru/project_job_scheduling/cpp/pjs/moves/moves.hpp`).
 
 A delay counts from the end of an allocation's predecessors, so one changed delay shifts
 every successor. In a schedule whose allocations already start as early as they can, almost
@@ -162,13 +162,13 @@ Allocations are matched by id. An allocation the solution leaves out is placed b
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/project_job_scheduling/cpp/include/pjs/solver.hpp` + `optimaru/project_job_scheduling/cpp/src/solver.cpp`.
+engine is `optimaru/project_job_scheduling/cpp/pjs/solver.hpp` + `optimaru/project_job_scheduling/cpp/pjs/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`), and the use case adds one move of its own, `SerialScheduleMove`
 ([Search](#search)). A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/project_job_scheduling/cpp/src/solver.cpp`, as
+to the engine construction in `optimaru/project_job_scheduling/cpp/pjs/solver.cpp`, as
 `SerialScheduleMove` is; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 

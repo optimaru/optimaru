@@ -11,8 +11,8 @@ one composite assignment variable `slotRoom = timeslotIndex * roomCount + roomIn
   `ScoreCalculator` (+ the C++ per-constraint `Breakdown`, one member per registry name),
   O(delta) incremental calculator, ALNS solver wrapper, a demo
   (`cs_demo`), tests (`cs_test`, `cs_plugin_test`).
-  `optimaru/conference_scheduling/cpp/include/cs/constraints/` holds one component per constraint (`<subject>_cost.hpp`, plus
-  `common.hpp`); `optimaru/conference_scheduling/cpp/include/cs/constraints.hpp` assembles the default set
+  `optimaru/conference_scheduling/cpp/cs/constraints/` holds one component per constraint (`<subject>_cost.hpp`, plus
+  `common.hpp`); `optimaru/conference_scheduling/cpp/cs/constraints.hpp` assembles the default set
   (`defaultConstraints()`).
 - `optimaru/conference_scheduling/` — pybind11 package `conference_scheduling`
   (`_core` extension + pydantic mirror + demo + pytest). For the score and the
@@ -230,15 +230,15 @@ Talks are matched by code. A talk the solution leaves out is placed by the const
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/conference_scheduling/cpp/include/cs/solver.hpp` + `optimaru/conference_scheduling/cpp/src/solver.cpp`.
+engine is `optimaru/conference_scheduling/cpp/cs/solver.hpp` + `optimaru/conference_scheduling/cpp/cs/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/conference_scheduling/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/conference_scheduling/cpp/cs/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
-**Changing the construction heuristic.** `difficulty` is already set in `optimaru/conference_scheduling/cpp/src/solver.cpp` (talks are placed hardest-first). Set
+**Changing the construction heuristic.** `difficulty` is already set in `optimaru/conference_scheduling/cpp/cs/solver.cpp` (talks are placed hardest-first). Set
 `engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.

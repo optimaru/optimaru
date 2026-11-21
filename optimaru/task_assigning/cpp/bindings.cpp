@@ -17,8 +17,8 @@
 #include <vector>
 
 #include "ta/constraints.hpp"
-#include "ta/domain.hpp"
-#include "ta/score_calculator.hpp"
+#include "ta/model/domain.hpp"
+#include "ta/score/score_calculator.hpp"
 #include "ta/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 

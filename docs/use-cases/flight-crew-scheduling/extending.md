@@ -33,7 +33,7 @@ There are two scoring paths, and they give the same score for the same schedule
 
 | | `fc.solve(schedule)` | `fc.solve(schedule, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/fcs/constraints/` |
+| Scored by | the monolithic calculators, `cpp/fcs/score/score_calculator.cpp` and `cpp/fcs/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/fcs/constraints/` |
 | Constraints | the six, at their defaults | the ones you list, with your knobs |
 | Steps per second | 4.4 million | 1.6 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -108,7 +108,7 @@ number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
 All six constraints are unit constraints: each is a function of one employee's seats.
-[`constraints/common.hpp`](../../../optimaru/flight_crew_scheduling/cpp/include/fcs/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/flight_crew_scheduling/cpp/fcs/constraints/common.hpp)
 has two bases. Pick the base by what the constraint reads:
 
 | The constraint reads | Base | You write |
@@ -121,7 +121,7 @@ calculators call too. A new itinerary constraint adds its field and its loop the
 from `FcsUnitConstraint` and writes its own `cost()`. The example judges one seat, so it
 is one function. Four edits:
 
-**1. The component**, `optimaru/flight_crew_scheduling/cpp/include/fcs/constraints/unavailability_buffer_cost.hpp`:
+**1. The component**, `optimaru/flight_crew_scheduling/cpp/fcs/constraints/unavailability_buffer_cost.hpp`:
 
 ```cpp
 #ifndef FCS_CONSTRAINTS_UNAVAILABILITY_BUFFER_COST_HPP
@@ -163,7 +163,7 @@ The name passed to the base, `"unavailabilityBufferCost"`, is the struct name wi
 lower-case first letter. Python derives `unavailability_buffer_cost` from it.
 
 The defaults live in these two constants and nowhere else: Python reads them through
-`fc.constraint_info()`, the monolithic calculators through `cpp/src/monolithic_weights.hpp`.
+`fc.constraint_info()`, the monolithic calculators through `cpp/fcs/score/monolithic_weights.hpp`.
 `kDefaultLevel` is `Hard` or `Soft`. This use case has no medium level, and a pick with
 `level="medium"` is refused with `ValueError`. A hard constraint returns whole numbers, because
 a hard contribution is rounded per employee.
@@ -173,7 +173,7 @@ path that scores calls; `PerAssignmentConstraint::on_reset()` throws if it has n
 The constraint reads `unavailableDays` itself: the table behind `employeeUnavailableOn()` covers
 only the days the flights span, and the day after the last flight is outside it.
 
-**2. The assembly**, `cpp/include/fcs/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/fcs/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -303,9 +303,9 @@ and one for the employee it joins. What that call is depends on the constraint:
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
 | a yes or no per seat | `PerAssignmentConstraint` | one `violated()` call | step 2 |
-| a sum over pairs of one employee's seats | `supports_delta()` and `delta_cost()` next to the full `cost()` | one pass over the employee's other seats | [`flight_conflict_cost.hpp`](../../../optimaru/flight_crew_scheduling/cpp/include/fcs/constraints/flight_conflict_cost.hpp) |
-| anything else about one itinerary (order, first, last) | `ItineraryConstraint` with `select()` alone | the itinerary sorted and `itineraryStats()` run again | [`transfer_between_two_flights_cost.hpp`](../../../optimaru/flight_crew_scheduling/cpp/include/fcs/constraints/transfer_between_two_flights_cost.hpp) |
-| anything that spans employees | `optimaru::MemberChangeGlobalConstraint`: keep your own totals in `on_member_changed()` | what your update costs | none here; bed allocation's [`mixed_gender_room_cost.hpp`](../../../optimaru/bed_allocation/cpp/include/ba/constraints/mixed_gender_room_cost.hpp) |
+| a sum over pairs of one employee's seats | `supports_delta()` and `delta_cost()` next to the full `cost()` | one pass over the employee's other seats | [`flight_conflict_cost.hpp`](../../../optimaru/flight_crew_scheduling/cpp/fcs/constraints/flight_conflict_cost.hpp) |
+| anything else about one itinerary (order, first, last) | `ItineraryConstraint` with `select()` alone | the itinerary sorted and `itineraryStats()` run again | [`transfer_between_two_flights_cost.hpp`](../../../optimaru/flight_crew_scheduling/cpp/fcs/constraints/transfer_between_two_flights_cost.hpp) |
+| anything that spans employees | `optimaru::MemberChangeGlobalConstraint`: keep your own totals in `on_member_changed()` | what your update costs | none here; bed allocation's [`mixed_gender_room_cost.hpp`](../../../optimaru/bed_allocation/cpp/ba/constraints/mixed_gender_room_cost.hpp) |
 
 A unit constraint with `cost()` alone is correct: the engine then recomputes the whole
 employee on every change. `delta_cost()` returns what one seat adds given the others,
@@ -390,16 +390,16 @@ doubles. A hard weight must be whole, because they add the hard level in `int64`
 **2. One definition of the test.** The six constraints keep the definition of each raw cost in
 `ScoreCalculator`, where the components and both calculators read it. Do the same:
 declare `nextToUnavailableDay(schedule, assignmentIndex, employeeIndex)` in
-`cpp/include/fcs/score_calculator.hpp` next to `unavailableEmployee()`, move the body of
-`nextToDayOff()` to `cpp/src/score_calculator.cpp`, and let the component's table call it.
+`cpp/fcs/score/score_calculator.hpp` next to `unavailableEmployee()`, move the body of
+`nextToDayOff()` to `cpp/fcs/score/score_calculator.cpp`, and let the component's table call it.
 
-**3. The weight and the level**, in `cpp/src/monolithic_weights.hpp`: include the header,
+**3. The weight and the level**, in `cpp/fcs/score/monolithic_weights.hpp`: include the header,
 add the level to the second `static_assert`, and read the weight off the component as
 `constexpr double kUnavailabilityBufferWeight = UnavailabilityBufferCost::kDefaultWeight;`.
 
 **4. The term, in both calculators.** `ScoreCalculator::score()` counts
 `nextToUnavailableDay()` in its loop over the seats, next to the two per-seat constraints, and
-adds the count times the weight to `score.soft`. `cpp/src/incremental_calculator.cpp`
+adds the count times the weight to `score.soft`. `cpp/fcs/score/incremental_calculator.cpp`
 keeps a counter (declared in `incremental_calculator.hpp`, set to 0 in `rebuild()`),
 lowers it in `retract()`, adds it in `score()`, and raises it in `insert()`:
 
@@ -494,15 +494,15 @@ path, so they show a constraint after step 5.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/fcs/constraints/<subject>_cost.hpp` | new | | table | weight, shared test |
-| `cpp/include/fcs/constraints.hpp` | include, `emplace` | | | |
+| `cpp/fcs/constraints/<subject>_cost.hpp` | new | | table | weight, shared test |
+| `cpp/fcs/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/flight_crew_scheduling/cpp/fcs_plugin_test.cpp` | | cases, counts | | the default set |
 | `tests/flight_crew_scheduling/test_constraint_specs.py` | | lists | | the row |
 | `docs/use-cases/flight-crew-scheduling/README.md`, `python.md` | | table row | | defaults |
-| `cpp/include/fcs/score_calculator.hpp`, `cpp/src/score_calculator.cpp` | | | | the test, the term |
-| `cpp/src/monolithic_weights.hpp` | | | | weight, level |
-| `cpp/include/fcs/incremental_calculator.hpp`, `cpp/src/incremental_calculator.cpp` | | | | the counter |
+| `cpp/fcs/score/score_calculator.hpp`, `cpp/fcs/score/score_calculator.cpp` | | | | the test, the term |
+| `cpp/fcs/score/monolithic_weights.hpp` | | | | weight, level |
+| `cpp/fcs/score/incremental_calculator.hpp`, `cpp/fcs/score/incremental_calculator.cpp` | | | | the counter |
 | `tests/flight_crew_scheduling/cpp/fcs_test.cpp` | | | | expected scores |
 | external-solver, `benchmarks/flight-crew-scheduling` | | | | the same constraint, results |
 

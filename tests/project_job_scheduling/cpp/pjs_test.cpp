@@ -21,10 +21,10 @@
 #include <string>
 #include <vector>
 
-#include "pjs/domain.hpp"
-#include "pjs/incremental_calculator.hpp"
-#include "pjs/moves.hpp"
-#include "pjs/score_calculator.hpp"
+#include "pjs/model/domain.hpp"
+#include "pjs/score/incremental_calculator.hpp"
+#include "pjs/moves/moves.hpp"
+#include "pjs/score/score_calculator.hpp"
 #include "pjs/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

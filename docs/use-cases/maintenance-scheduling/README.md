@@ -52,11 +52,11 @@ crewDate = startDateIndex * crewCount + crewIndex     # -1 == unassigned
 
 ## C++
 
-- `optimaru/maintenance_scheduling/cpp/include/mnt/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `optimaru/maintenance_scheduling/cpp/include/mnt/constraints/` — one component per constraint: `min_start_date_cost.hpp`,
+- `optimaru/maintenance_scheduling/cpp/mnt/model/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/maintenance_scheduling/cpp/mnt/constraints/` — one component per constraint: `min_start_date_cost.hpp`,
   `max_end_date_cost.hpp`, `before_ideal_end_date_cost.hpp`, `after_ideal_end_date_cost.hpp`,
   `crew_conflict_cost.hpp`, `tag_conflict_cost.hpp` (+ `common.hpp`: the per-job and
-  day-overlap bases); `optimaru/maintenance_scheduling/cpp/include/mnt/constraints.hpp` assembles the default set
+  day-overlap bases); `optimaru/maintenance_scheduling/cpp/mnt/constraints.hpp` assembles the default set
   (`defaultConstraints()`)
 - `score_calculator` — full recompute (the reference)
 - `incremental_calculator` — before/after hooks, O(job calendar length) per move
@@ -156,12 +156,12 @@ Jobs are matched by id. A job the solution leaves out is placed by the construct
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/maintenance_scheduling/cpp/include/mnt/solver.hpp` + `optimaru/maintenance_scheduling/cpp/src/solver.cpp`.
+engine is `optimaru/maintenance_scheduling/cpp/mnt/solver.hpp` + `optimaru/maintenance_scheduling/cpp/mnt/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/maintenance_scheduling/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/maintenance_scheduling/cpp/mnt/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set

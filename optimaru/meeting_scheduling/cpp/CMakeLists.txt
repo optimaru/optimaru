@@ -2,15 +2,15 @@
 # which defines the header-only engine target `optimaru`.
 
 add_library(ms_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/solver.cpp
+    ms/score/score_calculator.cpp
+    ms/score/incremental_calculator.cpp
+    ms/solver.cpp
 )
-target_include_directories(ms_core PUBLIC include)
+target_include_directories(ms_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(ms_core PUBLIC optimaru)
 target_compile_options(ms_core PRIVATE -Wall -Wextra)
 
-add_executable(ms_demo src/main.cpp)
+add_executable(ms_demo main.cpp)
 target_link_libraries(ms_demo PRIVATE ms_core)
 target_compile_options(ms_demo PRIVATE -Wall -Wextra)
 

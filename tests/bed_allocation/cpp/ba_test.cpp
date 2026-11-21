@@ -17,9 +17,9 @@
 #include <string>
 #include <vector>
 
-#include "ba/domain.hpp"
-#include "ba/incremental_calculator.hpp"
-#include "ba/score_calculator.hpp"
+#include "ba/model/domain.hpp"
+#include "ba/score/incremental_calculator.hpp"
+#include "ba/score/score_calculator.hpp"
 #include "ba/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

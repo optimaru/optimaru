@@ -41,7 +41,7 @@ There are two scoring paths:
 
 | | `st.solve(problem)` | `st.solve(problem, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/canonical_score_calculator.cpp` and `cpp/src/canonical_incremental_calculator.cpp` | the assembly: one component per constraint, under `cpp/include/st/constraints/` |
+| Scored by | the monolithic calculators, `cpp/st/score/canonical_score_calculator.cpp` and `cpp/st/score/canonical_incremental_calculator.cpp` | the assembly: one component per constraint, under `cpp/st/constraints/` |
 | Constraints | the seventeen, soft weights from `weights=` | the ones you list, with your knobs |
 | Steps per second | 1.31 million | 0.32 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -130,7 +130,7 @@ The example reads only the slot and the lessons on it, so it is a plain
 group unsupported for anything else, and the engine then drops the group for all six.
 [Step 4](#4-make-it-cheaper-per-move) has the measurement. Four edits:
 
-**1. The component**, `optimaru/school_timetabling/cpp/include/st/constraints/special_room_last_period_cost.hpp`:
+**1. The component**, `optimaru/school_timetabling/cpp/st/constraints/special_room_last_period_cost.hpp`:
 
 ```cpp
 #ifndef ST_CONSTRAINTS_SPECIAL_ROOM_LAST_PERIOD_COST_HPP
@@ -200,7 +200,7 @@ number, because the monolithic calculators add the hard total in `int64` (a
 requires `ScoreCalculator::prepare(table)` to have run, hence `requirePrepared` in
 `on_reset()`.
 
-**2. The assembly**, `cpp/include/st/canonical_constraints.hpp`: include the header, and
+**2. The assembly**, `cpp/st/canonical_constraints.hpp`: include the header, and
 add one line to `detail::buildDefaultSet()`, after `NonPreferredPeriodCost`:
 
 ```cpp
@@ -351,9 +351,9 @@ is depends on the constraint:
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
 | a sum of per-lesson terms on one slot | `CanonUnitConstraint` with `delta_cost()` | one `delta_cost` call | step 2 |
-| one of the six per-slot constraints | `GroupableSlotConstraint`, a branch in `SlotDeltaGroup` | one `evaluate()` for all six | [`slot/slot_delta_group.hpp`](../../../optimaru/school_timetabling/cpp/include/st/constraints/slot/slot_delta_group.hpp) |
-| per course, per block group, per class and day | `MemberChangeGlobalConstraint`: own totals in `on_member_changed()` | what your update costs | [`global/course_max_periods_per_day_cost.hpp`](../../../optimaru/school_timetabling/cpp/include/st/constraints/global/course_max_periods_per_day_cost.hpp) |
-| a metric of a teacher's busy periods in a day | `TeacherDayMaskConstraint` and a new `TeacherMaskHub::Metric` | one fold per mask change, shared by the family | [`teacher/teacher_gap_cost.hpp`](../../../optimaru/school_timetabling/cpp/include/st/constraints/teacher/teacher_gap_cost.hpp) |
+| one of the six per-slot constraints | `GroupableSlotConstraint`, a branch in `SlotDeltaGroup` | one `evaluate()` for all six | [`slot/slot_delta_group.hpp`](../../../optimaru/school_timetabling/cpp/st/constraints/slot/slot_delta_group.hpp) |
+| per course, per block group, per class and day | `MemberChangeGlobalConstraint`: own totals in `on_member_changed()` | what your update costs | [`global/course_max_periods_per_day_cost.hpp`](../../../optimaru/school_timetabling/cpp/st/constraints/global/course_max_periods_per_day_cost.hpp) |
+| a metric of a teacher's busy periods in a day | `TeacherDayMaskConstraint` and a new `TeacherMaskHub::Metric` | one fold per mask change, shared by the family | [`teacher/teacher_gap_cost.hpp`](../../../optimaru/school_timetabling/cpp/st/constraints/teacher/teacher_gap_cost.hpp) |
 
 A unit constraint with `cost()` alone is correct: the engine then recomputes the whole
 slot on every change. `full_assert` (step 3) checks that `delta_cost()` matches it.
@@ -430,7 +430,7 @@ not 0 until both sides agree.
 soft weight may be fractional; a hard one must be whole.
 
 **2. The fast path's weight field.** `st.solve(problem, weights=...)` sets the soft weights of
-the monolithic calculators through `ObjectiveWeights` (`cpp/include/st/objective_weights.hpp`).
+the monolithic calculators through `ObjectiveWeights` (`cpp/st/score/objective_weights.hpp`).
 Add the field, which reads the default from the component:
 
 ```cpp
@@ -561,15 +561,15 @@ nothing about a canonical constraint. Partial timetabling is track 3 (`--track3`
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/st/constraints/<subject>_cost.hpp` | new | | table, scope | weight |
-| `cpp/include/st/canonical_constraints.hpp` | include, `add` | | | |
-| `cpp/include/st/objective_weights.hpp`, `cpp/bindings.cpp`, `_core.pyi` | | | | weight field |
+| `cpp/st/constraints/<subject>_cost.hpp` | new | | table, scope | weight |
+| `cpp/st/canonical_constraints.hpp` | include, `add` | | | |
+| `cpp/st/score/objective_weights.hpp`, `cpp/bindings.cpp`, `_core.pyi` | | | | weight field |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/school_timetabling/cpp/st_canonical_plugin_test.cpp` | | case, catalog | | catalog row |
 | `tests/school_timetabling/test_*.py` (four files) | | names, counts, weight dicts | | expected scores |
 | `docs/use-cases/school-timetabling/python.md`, `README.md` | | table row | | defaults |
-| `cpp/src/canonical_score_calculator.cpp` (+ `.hpp`) | | | | the term, the helper |
-| `cpp/src/canonical_incremental_calculator.cpp` (+ `.hpp`) | | | | the term |
+| `cpp/st/score/canonical_score_calculator.cpp` (+ `.hpp`) | | | | the term, the helper |
+| `cpp/st/score/canonical_incremental_calculator.cpp` (+ `.hpp`) | | | | the term |
 | `benchmarks/school-timetabling/cpsat` | | the plugin, `validate.py` | | results |
 
 Moves and the construction heuristic are a different subject: see

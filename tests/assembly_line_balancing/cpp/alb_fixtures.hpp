@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "alb/domain.hpp"
-#include "alb/score_calculator.hpp"
+#include "alb/model/domain.hpp"
+#include "alb/score/score_calculator.hpp"
 #include "optimaru/testing/check.hpp"
 
 namespace alb_test {

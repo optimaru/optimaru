@@ -32,7 +32,7 @@ checks that on 300 random route layouts):
 
 | | `vrp.solve(plan)` | `vrp.solve(plan, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/vrp/constraints/` |
+| Scored by | the monolithic calculators, `cpp/vrp/score/score_calculator.cpp` and `cpp/vrp/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/vrp/constraints/` |
 | Constraints | the four core constraints: `vehicle_capacity_cost`, `max_end_time_cost`, `unassigned_visits_cost`, `travel_time_cost` | the ones you list, with your knobs |
 | Steps per second, windows that make vehicles wait | 27.6 thousand | 13.1 thousand |
 | Steps per second, every window open all day | 75.3 thousand | 12.8 thousand |
@@ -118,7 +118,7 @@ number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
 Fourteen of the sixteen constraints are a sum of one term per vehicle, and
-[`constraints/common.hpp`](../../../optimaru/vehicle_routing/cpp/include/vrp/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/common.hpp)
 has the base for that, `detail::PerVehicleConstraint`. You write one function,
 `cost(plan, unit, members)`: the raw cost of vehicle `unit` driving the visits
 `members` in that order. It reads the plan's facts and its arguments, and never
@@ -133,7 +133,7 @@ A constraint that belongs to no single route (the unassigned visits, a group spr
 vehicles) is a `VrpGlobalConstraint`; [step 4](#4-make-it-cheaper-per-move) says what
 that takes. The example reads arrival times, so it is one function. Four edits:
 
-**1. The component**, `optimaru/vehicle_routing/cpp/include/vrp/constraints/waiting_time_cost.hpp`:
+**1. The component**, `optimaru/vehicle_routing/cpp/vrp/constraints/waiting_time_cost.hpp`:
 
 ```cpp
 #ifndef VRP_CONSTRAINTS_WAITING_TIME_COST_HPP
@@ -180,7 +180,7 @@ itself, as `medium * 10^9 + soft` (`kMediumFold` in `domain.hpp`), so no weight 
 the 10^9. A hard constraint returns whole numbers, because a hard contribution is rounded per
 vehicle.
 
-**2. The assembly**, `cpp/include/vrp/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/vrp/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -321,10 +321,10 @@ preview costs:
 
 | The constraint is | Use | Per preview | Example to copy |
 | --- | --- | --- | --- |
-| a function of the arrival times along the route | `detail::PerVehicleConstraint` with `cost()` on `walkRoute` or `routeMetrics` | one walk of the candidate route | step 2, [`latency_cost.hpp`](../../../optimaru/vehicle_routing/cpp/include/vrp/constraints/latency_cost.hpp) |
-| a function of the route's load, service or driving totals | `detail::SummedUnitConstraint` with `cost()` and `piecewise_cost()` on the shared sums of [`route_sums.hpp`](../../../optimaru/vehicle_routing/cpp/include/vrp/constraints/route_sums.hpp) | a few array reads per piece, no route written out | [`travel_time_cost.hpp`](../../../optimaru/vehicle_routing/cpp/include/vrp/constraints/travel_time_cost.hpp), [`vehicle_capacity_cost.hpp`](../../../optimaru/vehicle_routing/cpp/include/vrp/constraints/vehicle_capacity_cost.hpp) |
-| 0 on every route of some plans | the same two functions: answer 0 from a fact of the plan, decline otherwise | one test | [`visit_order_cost.hpp`](../../../optimaru/vehicle_routing/cpp/include/vrp/constraints/visit_order_cost.hpp), the example below |
-| anything that spans routes | `VrpGlobalConstraint`: your own totals in `reset()` and `on_unit_changed()`, the total in `cost()`, and `supports_preview()` with `preview_cost()` | what your preview costs | [`unassigned_visits_cost.hpp`](../../../optimaru/vehicle_routing/cpp/include/vrp/constraints/unassigned_visits_cost.hpp), [`visit_group_cost.hpp`](../../../optimaru/vehicle_routing/cpp/include/vrp/constraints/visit_group_cost.hpp) |
+| a function of the arrival times along the route | `detail::PerVehicleConstraint` with `cost()` on `walkRoute` or `routeMetrics` | one walk of the candidate route | step 2, [`latency_cost.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/latency_cost.hpp) |
+| a function of the route's load, service or driving totals | `detail::SummedUnitConstraint` with `cost()` and `piecewise_cost()` on the shared sums of [`route_sums.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/route_sums.hpp) | a few array reads per piece, no route written out | [`travel_time_cost.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/travel_time_cost.hpp), [`vehicle_capacity_cost.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/vehicle_capacity_cost.hpp) |
+| 0 on every route of some plans | the same two functions: answer 0 from a fact of the plan, decline otherwise | one test | [`visit_order_cost.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/visit_order_cost.hpp), the example below |
+| anything that spans routes | `VrpGlobalConstraint`: your own totals in `reset()` and `on_unit_changed()`, the total in `cost()`, and `supports_preview()` with `preview_cost()` | what your preview costs | [`unassigned_visits_cost.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/unassigned_visits_cost.hpp), [`visit_group_cost.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/visit_group_cost.hpp) |
 
 A global without `supports_preview()` is correct and expensive: it switches the
 previews off for the whole assembly. Every candidate is then applied, scored and
@@ -395,7 +395,7 @@ applied score.
 **1. The weight.** In the component: `static constexpr double kDefaultWeight = 1.0;`.
 It must be a whole number, because the monolithic calculators add in `int64`.
 
-**2. The full recompute**, `cpp/src/score_calculator.cpp`. Include the header, read
+**2. The full recompute**, `cpp/vrp/score/score_calculator.cpp`. Include the header, read
 the weight off the component into a `kWaitingWeight` next to `kTravelWeight`, add
 weight and level to the two `static_assert`s, and add the term to
 `ScoreCalculator::score()`:
@@ -412,8 +412,8 @@ weight and level to the two `static_assert`s, and add the term to
     }
 ```
 
-**3. The incremental calculator**, `cpp/include/vrp/incremental_calculator.hpp` and
-`cpp/src/incremental_calculator.cpp`. It keeps one total per constraint and the terms of
+**3. The incremental calculator**, `cpp/vrp/score/incremental_calculator.hpp` and
+`cpp/vrp/score/incremental_calculator.cpp`. It keeps one total per constraint and the terms of
 each route (`RouteTerms`), and prices a candidate route in one of two ways: by
 walking it (`evaluateElements()`), on a plan where some window opens after a vehicle
 leaves and whenever a candidate route may run late; or from per-route prefix sums
@@ -516,7 +516,7 @@ For a constraint on the default path (step 5), `./build/vehicle_routing/vrp_demo
 (visits, vehicles, seconds) solves the C++ demo instance on that path and prints
 every new best: build the tree before and after the change into two build
 directories and run the two binaries in turn. The comments on `Solver::Config` in
-[`solver.hpp`](../../../optimaru/vehicle_routing/cpp/include/vrp/solver.hpp) show what
+[`solver.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/solver.hpp) show what
 such comparisons report. Against OR-Tools Routing, the commands are in the
 [README](../../../benchmarks/vehicle-routing/README.md) of `benchmarks/vehicle-routing`;
 its instances run the default path and have no time windows.
@@ -525,14 +525,14 @@ its instances run the default path and have no time windows.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/vrp/constraints/<subject>_cost.hpp` | new | | base, `piecewise_cost` | weight |
-| `cpp/include/vrp/constraints.hpp` | include, `emplace` | | | |
+| `cpp/vrp/constraints/<subject>_cost.hpp` | new | | base, `piecewise_cost` | weight |
+| `cpp/vrp/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | the default in the text |
 | `tests/vehicle_routing/cpp/vrp_plugin_test.cpp` | | case, catalog row | piecewise count | catalog row, one expected score |
 | `tests/vehicle_routing/test_constraint_specs.py` | | lists | | `EXPECTED_INFO`, opt-in list |
 | `docs/use-cases/vehicle-routing/README.md`, `cpp.md`, `_core.pyi`, the notebook | | table row, counts | | defaults, "four core constraints" |
-| `cpp/src/score_calculator.cpp` | | | | the term |
-| `cpp/include/vrp/incremental_calculator.hpp`, `cpp/src/incremental_calculator.cpp` | | | | the term, its total, the previews |
+| `cpp/vrp/score/score_calculator.cpp` | | | | the term |
+| `cpp/vrp/score/incremental_calculator.hpp`, `cpp/vrp/score/incremental_calculator.cpp` | | | | the term, its total, the previews |
 | `tests/vehicle_routing/cpp/vrp_test.cpp` | | | | expected scores |
 | `benchmarks/vehicle-routing` | | | | nothing for a constraint on time windows |
 

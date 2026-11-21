@@ -36,7 +36,7 @@ moves):
 
 | | `op.solve(solution)` | `op.solve(solution, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/op/constraints/` |
+| Scored by | the monolithic calculators, `cpp/op/score/score_calculator.cpp` and `cpp/op/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/op/constraints/` |
 | Constraints | the four, at their defaults | the ones you list, with your knobs |
 | Steps per second | 0.86 million | 2.20 million |
 | Moves | the built-in list moves and `OrderConsolidateMove` | the built-in list moves |
@@ -98,7 +98,7 @@ number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
 Every constraint here derives from `OpUnitConstraint`
-([`constraints/common.hpp`](../../../optimaru/order_picking/cpp/include/op/constraints/common.hpp)),
+([`constraints/common.hpp`](../../../optimaru/order_picking/cpp/op/constraints/common.hpp)),
 and you write one function, `cost(solution, unit, members)`: the raw cost of trolley
 `unit` picking `members` in that order. It reads the solution's facts and its
 arguments, and never the derived fields of a `PickTask` (`trolleyIndex`,
@@ -111,7 +111,7 @@ says what that costs the assembly.
 
 The example reads one list, so it is one function. Four edits:
 
-**1. The component**, `optimaru/order_picking/cpp/include/op/constraints/order_revisit_cost.hpp`:
+**1. The component**, `optimaru/order_picking/cpp/op/constraints/order_revisit_cost.hpp`:
 
 ```cpp
 #ifndef OP_CONSTRAINTS_ORDER_REVISIT_COST_HPP
@@ -163,7 +163,7 @@ The defaults live in these two constants and nowhere else; Python reads them thr
 in units of that level. A hard constraint returns whole numbers, because a hard contribution
 is rounded per trolley.
 
-**2. The assembly**, `cpp/include/op/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/op/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -309,8 +309,8 @@ move nothing, and what a picked constraint costs is what its `cost()` costs:
 
 | The constraint is | Use | Per preview | Example to copy |
 | --- | --- | --- | --- |
-| a function of the walk along the list | `OpUnitConstraint` with `cost()` over `members` | one pass over each changed list | [`distance_from_previous_pick_task_cost.hpp`](../../../optimaru/order_picking/cpp/include/op/constraints/distance_from_previous_pick_task_cost.hpp) |
-| a function of the orders on the list | the same, with a per-order scratch sized in `on_reset()` | one pass, no allocation | [`order_split_by_trolley_cost.hpp`](../../../optimaru/order_picking/cpp/include/op/constraints/order_split_by_trolley_cost.hpp), [`trolley_capacity_cost.hpp`](../../../optimaru/order_picking/cpp/include/op/constraints/trolley_capacity_cost.hpp), the example below |
+| a function of the walk along the list | `OpUnitConstraint` with `cost()` over `members` | one pass over each changed list | [`distance_from_previous_pick_task_cost.hpp`](../../../optimaru/order_picking/cpp/op/constraints/distance_from_previous_pick_task_cost.hpp) |
+| a function of the orders on the list | the same, with a per-order scratch sized in `on_reset()` | one pass, no allocation | [`order_split_by_trolley_cost.hpp`](../../../optimaru/order_picking/cpp/op/constraints/order_split_by_trolley_cost.hpp), [`trolley_capacity_cost.hpp`](../../../optimaru/order_picking/cpp/op/constraints/trolley_capacity_cost.hpp), the example below |
 | a sum along the list that prefix sums can settle | `piecewise_cost()` on sums kept in a shared context | a few array reads per piece | none here; [`vehicle-routing`](../vehicle-routing/extending.md#4-make-it-cheaper-per-move) has them |
 | anything across trolleys | `OpGlobalConstraint` with `supports_preview()` and `preview_cost()` | what your preview costs | none here; see below |
 
@@ -393,8 +393,8 @@ It must be a whole number: the monolithic calculators add in `int64` and read it
 through `kSoftWeight<OrderRevisitCost>` (`common.hpp`), which fails to compile on a
 fractional weight or another level.
 
-**2. The full recompute**, `cpp/include/op/score_calculator.hpp` and
-`cpp/src/score_calculator.cpp`. A member `orderRevisitCost` in `ConstraintTotals`
+**2. The full recompute**, `cpp/op/score/score_calculator.hpp` and
+`cpp/op/score/score_calculator.cpp`. A member `orderRevisitCost` in `ConstraintTotals`
 (named after the registry name, at the default weight), subtracted in `toScore()`;
 `kRevisitWeight = kSoftWeight<OrderRevisitCost>` next to the other weights; and the
 term at the end of `ScoreCalculator::calculateTotals()`:
@@ -415,8 +415,8 @@ term at the end of `ScoreCalculator::calculateTotals()`:
     }
 ```
 
-**3. The incremental calculator**, `cpp/include/op/incremental_calculator.hpp` and
-`cpp/src/incremental_calculator.cpp`. It keeps each trolley's terms (`shortage_`,
+**3. The incremental calculator**, `cpp/op/score/incremental_calculator.hpp` and
+`cpp/op/score/incremental_calculator.cpp`. It keeps each trolley's terms (`shortage_`,
 `dist_`) and re-derives them from the list in `after_list_edit()`. The constraint is one
 more such term: a `revisit_` per trolley and a `revisitTotal_`, set in `rebuild()`,
 taken off in `before_list_edit()`, set again in `after_list_edit()`, and in
@@ -531,14 +531,14 @@ two build directories and run the two binaries in turn. Against CP-SAT,
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/op/constraints/<subject>_cost.hpp` | new | | `on_reset`, scratch | weight |
-| `cpp/include/op/constraints.hpp` | include, `emplace` | | | |
+| `cpp/op/constraints/<subject>_cost.hpp` | new | | `on_reset`, scratch | weight |
+| `cpp/op/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | the default in the text |
 | `tests/order_picking/cpp/op_plugin_test.cpp` | | case, catalog row, count | | catalog row |
 | `tests/order_picking/test_constraint_specs.py` | | lists | | catalog list, default weights |
 | `docs/use-cases/order-picking/README.md`, `python.md`, `cpp.md`, `_core.pyi`, the notebook | | table row, counts | | defaults, score text |
-| `cpp/include/op/score_calculator.hpp`, `cpp/src/score_calculator.cpp` | | | | `ConstraintTotals` member, the term |
-| `cpp/include/op/incremental_calculator.hpp`, `cpp/src/incremental_calculator.cpp` | | | | the term, its total |
+| `cpp/op/score/score_calculator.hpp`, `cpp/op/score/score_calculator.cpp` | | | | `ConstraintTotals` member, the term |
+| `cpp/op/score/incremental_calculator.hpp`, `cpp/op/score/incremental_calculator.cpp` | | | | the term, its total |
 | external-solver, `benchmarks/order-picking` | | | | the same constraint, results |
 
 Moves and the construction heuristic are a different subject: see

@@ -32,7 +32,7 @@ There are two scoring paths, and they give the same score for the same line
 
 | | `alb.solve(line)` | `alb.solve(line, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/alb/constraints/` |
+| Scored by | the monolithic calculators, `cpp/alb/score/score_calculator.cpp` and `cpp/alb/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/alb/constraints/` |
 | Constraints | the nine that are on by default | the ones you list, with your knobs |
 | Steps per second | 10.5 million | 4.8 million for the same nine, 4.9 million for `get_constraints()` |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -89,7 +89,7 @@ number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
 Four of the ten constraints are a sum of one term per task, and
-[`constraints/common.hpp`](../../../optimaru/assembly_line_balancing/cpp/include/alb/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/assembly_line_balancing/cpp/alb/constraints/common.hpp)
 has a base for that. Pick the base by what the constraint is:
 
 | The constraint is | Base | You write |
@@ -103,7 +103,7 @@ kinds and the one total for the third.
 
 The example is a term per task, so it is one function. Four edits:
 
-**1. The component**, `optimaru/assembly_line_balancing/cpp/include/alb/constraints/late_work_cost.hpp`:
+**1. The component**, `optimaru/assembly_line_balancing/cpp/alb/constraints/late_work_cost.hpp`:
 
 ```cpp
 #ifndef ALB_CONSTRAINTS_LATE_WORK_COST_HPP
@@ -144,7 +144,7 @@ medium level (its `Score` in `domain.hpp` is the engine's two-level score), and 
 pick with `level="medium"` raises `ValueError`. A hard constraint returns whole numbers,
 because a hard contribution is rounded per station.
 
-**2. The assembly**, `cpp/include/alb/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/alb/constraints.hpp`: include the header, and add
 one line to `forEachDefaultConstraint()`, before `WorkloadImbalanceCost`:
 
 ```cpp
@@ -237,7 +237,7 @@ leaves and once for the station it joins. The constraint is already incremental.
 
 **The raw total in the monolithic calculators.** Here they report the raw total of
 every constraint of the catalog, on or off, in `RawCosts`
-(`cpp/include/alb/score_calculator.hpp`). `alb_plugin_test` compares the assembly with
+(`cpp/alb/score/score_calculator.hpp`). `alb_plugin_test` compares the assembly with
 it name by name, and `alb_test` the incremental calculator with the full recompute. So
 an opt-in constraint gets its total there too, unweighted: a field `lateWorkCost` in
 `RawCosts`, one line in the loop over the tasks of `ScoreCalculator::rawCosts()`,
@@ -246,7 +246,7 @@ an opt-in constraint gets its total there too, unweighted: a field `lateWorkCost
         raw.lateWorkCost += task.duration * s;
 ```
 
-and, in `rawCosts()` of `cpp/src/incremental_calculator.cpp`, a scan. The default
+and, in `rawCosts()` of `cpp/alb/score/incremental_calculator.cpp`, a scan. The default
 path keeps nothing per move for a constraint it does not score (`workloadImbalanceCost`,
 the other opt-in constraint, is read from the station loads in the same function):
 
@@ -349,9 +349,9 @@ and one for the station it joins. What that call is depends on the constraint:
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
 | a sum of per-task terms | `PerTaskConstraint` | one `taskCost` call | step 2 |
-| a sum over pairs of tasks on one station | `AlbUnitConstraint` with `cost()`, `supports_delta()` and `delta_cost()` | the pairs of the moved task | [`different_station_pairs_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/include/alb/constraints/different_station_pairs_cost.hpp) |
-| read off the whole station (a clamp) | `AlbUnitConstraint` with `cost()` | one pass over the tasks of the station | [`station_capacity_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/include/alb/constraints/station_capacity_cost.hpp) |
-| anything that spans stations | `MemberChangeGlobalConstraint`: keep your own totals in `on_member_changed()` | what your update costs | [`used_stations_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/include/alb/constraints/used_stations_cost.hpp), [`workload_imbalance_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/include/alb/constraints/workload_imbalance_cost.hpp) |
+| a sum over pairs of tasks on one station | `AlbUnitConstraint` with `cost()`, `supports_delta()` and `delta_cost()` | the pairs of the moved task | [`different_station_pairs_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/alb/constraints/different_station_pairs_cost.hpp) |
+| read off the whole station (a clamp) | `AlbUnitConstraint` with `cost()` | one pass over the tasks of the station | [`station_capacity_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/alb/constraints/station_capacity_cost.hpp) |
+| anything that spans stations | `MemberChangeGlobalConstraint`: keep your own totals in `on_member_changed()` | what your update costs | [`used_stations_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/alb/constraints/used_stations_cost.hpp), [`workload_imbalance_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/alb/constraints/workload_imbalance_cost.hpp) |
 
 A unit constraint with `cost()` alone is correct: the engine then recomputes the
 whole station on every change. `delta_cost()` returns what one task adds given the
@@ -403,7 +403,7 @@ needs nothing.
 
 **Say which units the constraint can charge.** `scoped_units()` returns the stations the constraint
 is ever non-zero for, and the engine skips it on the others.
-[`max_stations_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/include/alb/constraints/max_stations_cost.hpp)
+[`max_stations_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/alb/constraints/max_stations_cost.hpp)
 builds that list in `on_reset()`, which runs when a solve starts: the stations from `max_stations`
 on. A pick with `clip=False` then charges those stations only, and `constraint_costs()` lists them
 as `units`.
@@ -430,12 +430,12 @@ It must be a whole number, because the monolithic calculators add in `int64`.
 **2. The term.** Since step 3 the calculators report the raw total. What is left is
 to weigh it, and to keep it per move.
 
-`cpp/src/score_calculator.cpp`: include the header, add the constraint to the two
+`cpp/alb/score/score_calculator.cpp`: include the header, add the constraint to the two
 `static_assert`s (a whole weight, the soft level), and add
 `weightOf<LateWorkCost>() * raw.lateWorkCost` to the soft sum of
 `ScoreCalculator::score()`.
 
-`cpp/src/incremental_calculator.cpp` and its header: include the component's header,
+`cpp/alb/score/incremental_calculator.cpp` and its header: include the component's header,
 and add a total `lateWork_`, set to 0 in `rebuild()`, returned by `rawCosts()` in place
 of the scan of step 3, weighed in `score()`, and kept in `addTaskTerms()`, which the
 calculator calls once for the station a task leaves and once for the station it joins:
@@ -555,18 +555,18 @@ stations used.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/alb/constraints/<subject>_cost.hpp` | new | | | weight |
-| `cpp/include/alb/constraints.hpp` | include, `visit` | the list in its comment | | the default in that list |
+| `cpp/alb/constraints/<subject>_cost.hpp` | new | | | weight |
+| `cpp/alb/constraints.hpp` | include, `visit` | the list in its comment | | the default in that list |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | lists in the docstring | | defaults in the docstrings |
-| `cpp/include/alb/score_calculator.hpp`, `cpp/src/score_calculator.cpp` | | `RawCosts`, the raw total | | the weight in `score()` |
-| `cpp/src/incremental_calculator.cpp`, its header | | the raw total, scanned | | kept per move, weighed |
+| `cpp/alb/score/score_calculator.hpp`, `cpp/alb/score/score_calculator.cpp` | | `RawCosts`, the raw total | | the weight in `score()` |
+| `cpp/alb/score/incremental_calculator.cpp`, its header | | the raw total, scanned | | kept per move, weighed |
 | `tests/assembly_line_balancing/cpp/alb_fixtures.hpp` | | names, totals | | |
 | `tests/assembly_line_balancing/cpp/alb_plugin_test.cpp`, `alb_test.cpp` | | cases, counts | | expected scores |
 | `tests/assembly_line_balancing/test_constraint_specs.py`, `test_assembly_line_balancing.py` | | lists | | expected scores |
 | `tests/assembly_line_balancing/test_solve.py` | | | | expected scores |
 | `tests/assembly_line_balancing/reference_assembly_line_balancing.py`, `test_reference_parity.py` | | the constraint, weight 0 | | weight, expected score |
-| `cpp/include/alb/constraints/common.hpp`, `_core.pyi` | | counts and lists in the comments | | |
-| `__init__.py`, `_core.pyi`, `cpp/include/alb/domain.hpp` | | | | the score formula |
+| `cpp/alb/constraints/common.hpp`, `_core.pyi` | | counts and lists in the comments | | |
+| `__init__.py`, `_core.pyi`, `cpp/alb/model/domain.hpp` | | | | the score formula |
 | `docs/use-cases/assembly-line-balancing/README.md`, `python.md` | | table row, counts | | defaults |
 | external-solver, `benchmarks/assembly-line-balancing` | | the count in its README | | the same constraint, results |
 

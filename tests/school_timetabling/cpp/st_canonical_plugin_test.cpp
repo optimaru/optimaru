@@ -44,9 +44,9 @@
 #include <vector>
 
 #include "st/canonical_constraints.hpp"
-#include "st/canonical_domain.hpp"
-#include "st/canonical_incremental_calculator.hpp"
-#include "st/canonical_score_calculator.hpp"
+#include "st/model/canonical_domain.hpp"
+#include "st/score/canonical_incremental_calculator.hpp"
+#include "st/score/canonical_score_calculator.hpp"
 #include "st/canonical_solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

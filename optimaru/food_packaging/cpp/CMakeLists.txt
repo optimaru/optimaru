@@ -2,16 +2,16 @@
 # which defines the header-only engine target `optimaru`.
 
 add_library(fp_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/solver.cpp
-    src/demo_data.cpp
+    fp/score/score_calculator.cpp
+    fp/score/incremental_calculator.cpp
+    fp/solver.cpp
+    fp/model/demo_data.cpp
 )
-target_include_directories(fp_core PUBLIC include)
+target_include_directories(fp_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fp_core PUBLIC optimaru)
 target_compile_options(fp_core PRIVATE -Wall -Wextra)
 
-add_executable(fp_demo src/main.cpp)
+add_executable(fp_demo main.cpp)
 target_link_libraries(fp_demo PRIVATE fp_core)
 target_compile_options(fp_demo PRIVATE -Wall -Wextra)
 

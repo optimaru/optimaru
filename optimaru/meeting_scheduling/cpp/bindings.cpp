@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "ms/constraints.hpp"
-#include "ms/demo_data.hpp"
-#include "ms/domain.hpp"
-#include "ms/score_calculator.hpp"
+#include "ms/model/demo_data.hpp"
+#include "ms/model/domain.hpp"
+#include "ms/score/score_calculator.hpp"
 #include "ms/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
@@ -141,7 +141,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("meeting_assignments", &MeetingSchedule::meetingAssignments)
             .def_readonly("score", &MeetingSchedule::score)
             .def_readonly("prepared", &MeetingSchedule::prepared)
-            // composite grainRoom encoding helpers (see ms/domain.hpp)
+            // composite grainRoom encoding helpers (see ms/model/domain.hpp)
             .def("time_grain_count", &MeetingSchedule::timeGrainCount)
             .def("room_count", &MeetingSchedule::roomCount)
             .def("grain_room_count", &MeetingSchedule::grainRoomCount)
@@ -175,7 +175,7 @@ PYBIND11_MODULE(_core, m) {
     m.def("calculate_score", &ScoreCalculator::score, py::arg("schedule"),
           "Full recompute of the score (also stores schedule.score).");
     m.def("generate_demo_data", &buildDemoData,
-          "The demo instance (deterministic; see ms/demo_data.hpp).");
+          "The demo instance (deterministic; see ms/model/demo_data.hpp).");
     m.attr("demo_data") = m.attr("generate_demo_data");  // the name before 0.5.1
 
     optimaru::python::bind_solver_config(

@@ -14,9 +14,9 @@
 #include <string>
 #include <vector>
 
-#include "fcs/domain.hpp"
-#include "fcs/incremental_calculator.hpp"
-#include "fcs/score_calculator.hpp"
+#include "fcs/model/domain.hpp"
+#include "fcs/score/incremental_calculator.hpp"
+#include "fcs/score/score_calculator.hpp"
 #include "fcs/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

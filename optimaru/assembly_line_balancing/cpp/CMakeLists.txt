@@ -2,16 +2,16 @@
 # which defines the header-only engine target `optimaru`.
 
 add_library(alb_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/construction.cpp
-    src/solver.cpp
+    alb/score/score_calculator.cpp
+    alb/score/incremental_calculator.cpp
+    alb/construct/construction.cpp
+    alb/solver.cpp
 )
-target_include_directories(alb_core PUBLIC include)
+target_include_directories(alb_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(alb_core PUBLIC optimaru)
 target_compile_options(alb_core PRIVATE -Wall -Wextra)
 
-add_executable(alb_demo src/main.cpp)
+add_executable(alb_demo main.cpp)
 target_link_libraries(alb_demo PRIVATE alb_core)
 target_compile_options(alb_demo PRIVATE -Wall -Wextra)
 

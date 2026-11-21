@@ -35,8 +35,8 @@
 #include <vector>
 
 #include "mc/constraints.hpp"
-#include "mc/domain.hpp"
-#include "mc/score_calculator.hpp"
+#include "mc/model/domain.hpp"
+#include "mc/score/score_calculator.hpp"
 #include "mc/solver.hpp"
 #include "mc_fixtures.hpp"
 #include "optimaru/model/editor.hpp"
@@ -482,7 +482,7 @@ void verifyRawCostsByHand() {
               "a different self-pair: [0, 1]");
     }
     {
-        // The -1 rules, the same as the monolith's (mc/domain.hpp).
+        // The -1 rules, the same as the monolith's (mc/model/domain.hpp).
         MaxCutProblem p = graph({"A", "B", "C"}, {{0, 1, 4}, {1, 2, 5}});
         p.fixedSide[2] = 1;
         p.samePartitionPairs = {{0, 1}, {1, 0}};

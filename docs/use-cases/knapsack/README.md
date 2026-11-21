@@ -151,13 +151,13 @@ rejects an exponent other than 1).
 
 ## C++
 
-- `optimaru/knapsack/cpp/include/ks/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `optimaru/knapsack/cpp/include/ks/constraints/` — one component per constraint:
+- `optimaru/knapsack/cpp/ks/model/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/knapsack/cpp/ks/constraints/` — one component per constraint:
   `knapsack_capacity_cost.hpp`, `resource_capacity_cost.hpp`,
   `mandatory_items_cost.hpp`, `forbidden_items_cost.hpp`,
   `selection_group_bounds_cost.hpp`, `item_dependency_cost.hpp`,
   `selected_value_cost.hpp` (+ `common.hpp`: the aliases and the unit-1
-  `SelectionConstraint` base); `optimaru/knapsack/cpp/include/ks/constraints.hpp` assembles the default
+  `SelectionConstraint` base); `optimaru/knapsack/cpp/ks/constraints.hpp` assembles the default
   set (`defaultConstraints()`, also the catalog order)
 - `construction` — the greedy construction (stable descending value / weight order,
   weight capacity only; decided items kept), matching the Python reference
@@ -183,7 +183,7 @@ rejects an exponent other than 1).
 - `solver` — engine wrapper (greedy construction + Late Acceptance over flip / swap
   moves and `CoreRepackMove` + adaptive ruin & recreate, also as an ordinary move;
   parallel starts each run their own search)
-- `optimaru/knapsack/cpp/src/main.cpp` — the web demo (camping trip) solved and explained per constraint
+- `optimaru/knapsack/cpp/main.cpp` — the web demo (camping trip) solved and explained per constraint
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=knapsack
@@ -231,18 +231,18 @@ print([item.id for item in warm.items if item.selected], warm.total_value)
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the engine is
-`optimaru/knapsack/cpp/include/ks/solver.hpp` + `optimaru/knapsack/cpp/src/solver.cpp`.
+`optimaru/knapsack/cpp/ks/solver.hpp` + `optimaru/knapsack/cpp/ks/solver.cpp`.
 
 **Adding a move.** The engine already mixes flip (change) and swap moves (weights in
 `Solver::Config`) and runs ruin-and-recreate both on stagnation and as an ordinary
-move, and the domain adds `CoreRepackMove` (`optimaru/knapsack/cpp/include/ks/moves.hpp`).
+move, and the domain adds `CoreRepackMove` (`optimaru/knapsack/cpp/ks/moves/moves.hpp`).
 A new move is an `optimaru::MoveOperator<…>` next to it, registered with
-`engine.add_move_operator(...)` in `optimaru/knapsack/cpp/src/solver.cpp` (`runEngine`).
+`engine.add_move_operator(...)` in `optimaru/knapsack/cpp/ks/solver.cpp` (`runEngine`).
 Registered operators do not reach the engine's multi-start threads, which is why the
 solver runs its parallel starts itself (`optimaru::solve_parallel_starts`). A move
 that costs much more than a flip wants the gate `custom_move_probability` there.
 
-**Changing the construction heuristic.** `optimaru/knapsack/cpp/src/construction.cpp` decides every item
+**Changing the construction heuristic.** `optimaru/knapsack/cpp/ks/construct/construction.cpp` decides every item
 before the engine starts. It is the reference's greedy; `ks_test` and the
 Python reference-parity tests pin its results (and `with_initial_solution` uses it).
 

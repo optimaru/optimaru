@@ -61,15 +61,15 @@ Problems here are dicts, so `solve` takes the earlier `Timetable` dict directly 
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/school_timetabling/cpp/include/st/canonical_solver.hpp` + `optimaru/school_timetabling/cpp/src/canonical_solver.cpp` (the default canonical model; `solver.hpp` is the six-constraint quickstart model).
+engine is `optimaru/school_timetabling/cpp/st/canonical_solver.hpp` + `optimaru/school_timetabling/cpp/st/canonical_solver.cpp` (the default canonical model; `solver.hpp` is the six-constraint quickstart model).
 
 **Adding a move.** The engine already mixes change / swap moves
-(weights in `Solver::Config`). `SmartClassSwapMove`, `ReassignMove` and `UnassignMove` live in `optimaru/school_timetabling/cpp/include/st/moves/` and are registered in `optimaru/school_timetabling/cpp/src/canonical_solver.cpp` — add a new move as another file there. A new move is a
+(weights in `Solver::Config`). `SmartClassSwapMove`, `ReassignMove` and `UnassignMove` live in `optimaru/school_timetabling/cpp/st/moves/` and are registered in `optimaru/school_timetabling/cpp/st/canonical_solver.cpp` — add a new move as another file there. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/school_timetabling/cpp/src/canonical_solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/school_timetabling/cpp/st/canonical_solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
-**Changing the construction heuristic.** `difficulty` is already set in `optimaru/school_timetabling/cpp/src/canonical_solver.cpp`. Set
+**Changing the construction heuristic.** `difficulty` is already set in `optimaru/school_timetabling/cpp/st/canonical_solver.cpp`. Set
 `engineConfig.construction.difficulty` for First Fit
 Decreasing ordering, or pre-assign part of the solution in the domain
 solver's `solve` before the engine runs — the engine only fills what is still unassigned.

@@ -15,9 +15,9 @@
 #include <vector>
 
 #include "ks/constraints.hpp"
-#include "ks/construction.hpp"
-#include "ks/domain.hpp"
-#include "ks/score_calculator.hpp"
+#include "ks/construct/construction.hpp"
+#include "ks/model/domain.hpp"
+#include "ks/score/score_calculator.hpp"
 #include "ks/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"

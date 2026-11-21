@@ -65,7 +65,7 @@ This domain scores four score levels (hard[0], soft[0..2]) on the engine's
 three: hard (``required_skill_cost``), medium (``unassigned_tasks_cost``) and soft
 (the other four). soft[1] and soft[2] share the soft level; the default weight 10^7 of
 ``squared_makespan_cost`` is what keeps the makespan term above the priority end
-times, so a weight you pass is a share within the same level (see `cpp/include/ta/domain.hpp`).
+times, so a weight you pass is a share within the same level (see `cpp/ta/model/domain.hpp`).
 
 Names (`name`) are the C++ component names in snake_case
 (``RequiredSkillCost`` -> ``required_skill_cost``). The core derives them

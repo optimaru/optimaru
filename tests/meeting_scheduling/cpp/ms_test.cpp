@@ -16,10 +16,10 @@
 #include <string>
 #include <vector>
 
-#include "ms/demo_data.hpp"
-#include "ms/domain.hpp"
-#include "ms/incremental_calculator.hpp"
-#include "ms/score_calculator.hpp"
+#include "ms/model/demo_data.hpp"
+#include "ms/model/domain.hpp"
+#include "ms/score/incremental_calculator.hpp"
+#include "ms/score/score_calculator.hpp"
 #include "ms/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

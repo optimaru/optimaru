@@ -12,8 +12,8 @@
 #include <vector>
 
 #include "sls/constraints.hpp"
-#include "sls/domain.hpp"
-#include "sls/score_calculator.hpp"
+#include "sls/model/domain.hpp"
+#include "sls/score/score_calculator.hpp"
 #include "sls/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"

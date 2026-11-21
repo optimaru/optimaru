@@ -37,8 +37,8 @@
 #include <vector>
 
 #include "cs/constraints.hpp"
-#include "cs/domain.hpp"
-#include "cs/score_calculator.hpp"
+#include "cs/model/domain.hpp"
+#include "cs/score/score_calculator.hpp"
 #include "cs/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

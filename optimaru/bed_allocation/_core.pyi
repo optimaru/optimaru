@@ -33,7 +33,7 @@ at the default weights (the C++ components' kDefaultWeight, see constraint_info(
 Internally the engine uses Score(int64 hard, double soft), mapped as
 `engine.soft = medium * 10**9 + soft` (the domain's medium fold, "into_soft" with
 unit 10**9; level priority holds while |soft| < 10**9; see
-cpp/include/ba/domain.hpp for the exact rules). Medium weights are in medium units:
+cpp/ba/model/domain.hpp for the exact rules). Medium weights are in medium units:
 unassigned_stays_cost's default weight is 1, not 10**9.
 """
 

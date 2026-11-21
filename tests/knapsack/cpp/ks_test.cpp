@@ -9,7 +9,7 @@
 //   (3) the greedy construction (the reference expectations, ties, fixed items)
 //   (4) the solver: ScoreChecks::Full, brute-force optima, the zero budget with a
 //       seed, reproducibility under a step limit, multi-start, validation
-//   (5) CoreRepackMove (ks/moves.hpp): a move is worth more and within the
+//   (5) CoreRepackMove (ks/moves/moves.hpp): a move is worth more and within the
 //       capacity, incremental == full recompute after it and after its undo,
 //       and the dynamic-programming optimum of plain knapsacks that the
 //       built-in moves leave short of
@@ -24,11 +24,11 @@
 #include <string>
 #include <vector>
 
-#include "ks/construction.hpp"
-#include "ks/domain.hpp"
-#include "ks/incremental_calculator.hpp"
-#include "ks/moves.hpp"
-#include "ks/score_calculator.hpp"
+#include "ks/construct/construction.hpp"
+#include "ks/model/domain.hpp"
+#include "ks/score/incremental_calculator.hpp"
+#include "ks/moves/moves.hpp"
+#include "ks/score/score_calculator.hpp"
 #include "ks/solver.hpp"
 #include "ks_fixtures.hpp"
 #include "optimaru/model/editor.hpp"

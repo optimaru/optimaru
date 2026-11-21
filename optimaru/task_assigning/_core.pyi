@@ -22,7 +22,7 @@ folds below hard and the soft level packs soft1 above soft2:
   engine.hard = hard * 10**9 + soft0     (medium_fold {"kind": "below_hard", "unit": 1e9})
   engine.soft = soft1 * 10**7 + soft2    (squared_makespan_cost's default weight 10**7)
 (level priority holds while |soft0| < 10**9, |soft2| < 10**7, |soft1| < 9x10**8;
-see cpp/include/ta/domain.hpp for the exact rules).
+see cpp/ta/model/domain.hpp for the exact rules).
 """
 
 from collections.abc import Callable, Iterable

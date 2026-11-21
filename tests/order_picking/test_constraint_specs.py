@@ -56,7 +56,7 @@ def test_default_constraints_reproduce_the_monolithic_cost_function():
 
     Whether both paths reach the same **solution** cannot be checked: the
     order_consolidate_moves operator does not run on the plugin path (it reads
-    the monolithic calculator's live volume table — cpp/include/op/solver.hpp)."""
+    the monolithic calculator's live volume table — cpp/op/solver.hpp)."""
     solution = build_solution()
     op.solve(
         solution,

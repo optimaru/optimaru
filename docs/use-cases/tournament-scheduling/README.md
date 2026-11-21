@@ -41,7 +41,7 @@ reports exactly this table from the C++ components (`kDefaultLevel` / `kDefaultW
 every constraint is flippable onto any of the three levels (`level="hard"`, `"medium"` or
 `"soft"`, or a `Level`), none is a reward and all four are scored by default
 (`default_enabled`). The medium level folds into the engine's soft level as `medium x 1e6`
-(`MEDIUM_SCALE`, `kMediumFold` in `optimaru/tournament_scheduling/cpp/include/ts/domain.hpp`); a weight is in units of the
+(`MEDIUM_SCALE`, `kMediumFold` in `optimaru/tournament_scheduling/cpp/ts/model/domain.hpp`); a weight is in units of the
 level in effect, so a medium weight is in medium units. Any other constraint may move onto
 medium the same way (`ConfrontationCountImbalanceCost(level="medium")` charges one medium
 unit per raw unit of head-to-head unfairness), and a repeated pick carries its own level.
@@ -103,12 +103,12 @@ Assignments are matched by id. An assignment the solution leaves out is placed b
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/tournament_scheduling/cpp/include/ts/solver.hpp` + `optimaru/tournament_scheduling/cpp/src/solver.cpp`.
+engine is `optimaru/tournament_scheduling/cpp/ts/solver.hpp` + `optimaru/tournament_scheduling/cpp/ts/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
-(weights in `Solver::Config`). `TeamCountMove` is defined and registered in `optimaru/tournament_scheduling/cpp/src/solver.cpp` — use it as the template. It runs on both scoring paths: it reads its counts through a small type, the monolithic calculator's live counters on `ts.solve(schedule)` and counts of its own, recounted from the working solution at each move, on `ts.solve(schedule, constraints=[...])`, whose assembly has no such counters. A new move is a
+(weights in `Solver::Config`). `TeamCountMove` is defined and registered in `optimaru/tournament_scheduling/cpp/ts/solver.cpp` — use it as the template. It runs on both scoring paths: it reads its counts through a small type, the monolithic calculator's live counters on `ts.solve(schedule)` and counts of its own, recounted from the working solution at each move, on `ts.solve(schedule, constraints=[...])`, whose assembly has no such counters. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/tournament_scheduling/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/tournament_scheduling/cpp/ts/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set

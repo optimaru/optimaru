@@ -2,15 +2,15 @@
 # which defines the header-only engine target `optimaru`.
 
 add_library(st_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/solver.cpp
+    st/score/score_calculator.cpp
+    st/score/incremental_calculator.cpp
+    st/solver.cpp
 )
-target_include_directories(st_core PUBLIC include)
+target_include_directories(st_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(st_core PUBLIC optimaru)
 target_compile_options(st_core PRIVATE -Wall -Wextra)
 
-add_executable(st_demo src/main.cpp)
+add_executable(st_demo main.cpp)
 target_link_libraries(st_demo PRIVATE st_core)
 target_compile_options(st_demo PRIVATE -Wall -Wextra)
 
@@ -22,11 +22,11 @@ target_compile_options(st_test PRIVATE -Wall -Wextra)
 # soft constraints on the same engine. Kept as a separate library so the quickstart
 # domain above stays byte-identical for the evaluate.py cross-check.
 add_library(st_canon
-    src/canonical_score_calculator.cpp
-    src/canonical_incremental_calculator.cpp
-    src/canonical_solver.cpp
+    st/score/canonical_score_calculator.cpp
+    st/score/canonical_incremental_calculator.cpp
+    st/canonical_solver.cpp
 )
-target_include_directories(st_canon PUBLIC include)
+target_include_directories(st_canon PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(st_canon PUBLIC optimaru)
 target_compile_options(st_canon PRIVATE -Wall -Wextra)
 

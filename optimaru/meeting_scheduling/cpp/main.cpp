@@ -1,0 +1,129 @@
+// Meeting-scheduling demo: builds the demo instance (see
+// ms/model/demo_data.hpp), solves for N seconds (default 10) and prints the
+// resulting schedule. Exits non-zero unless the solution is feasible
+// (hard == 0).
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <vector>
+
+#include "ms/model/demo_data.hpp"
+#include "ms/model/domain.hpp"
+#include "ms/score/score_calculator.hpp"
+#include "ms/solver.hpp"
+
+using namespace ms;
+
+namespace {
+
+std::string minuteToString(int minuteOfDay) {
+    char buf[24];  // room for any two ints, so no output is ever cut short
+    std::snprintf(buf, sizeof(buf), "%02d:%02d", minuteOfDay / 60, minuteOfDay % 60);
+    return buf;
+}
+
+void printSchedule(const MeetingSchedule& schedule) {
+    // Sort assignments by (grain position, room) for a readable listing.
+    std::vector<int> order;
+    for (int i = 0; i < static_cast<int>(schedule.meetingAssignments.size()); ++i) {
+        order.push_back(i);
+    }
+    std::sort(order.begin(), order.end(), [&](int a, int b) {
+        return schedule.meetingAssignments[a].grainRoom < schedule.meetingAssignments[b].grainRoom;
+    });
+
+    std::printf("  %-4s %-6s %-6s %-8s %-6s %-30s %s\n", "day", "start", "end", "room", "grains",
+                "topic", "req+pref");
+    for (int i : order) {
+        const MeetingAssignment& assignment = schedule.meetingAssignments[i];
+        const Meeting& meeting = schedule.meetings[assignment.meeting];
+        if (assignment.grainRoom < 0) {
+            std::printf("  ---- unassigned: %s\n", meeting.topic.c_str());
+            continue;
+        }
+        const int pos = schedule.timeGrainPosOf(assignment.grainRoom);
+        const int room = schedule.roomIndexOf(assignment.grainRoom);
+        const TimeGrain& grain = schedule.timeGrains[pos];
+        const int endMinute =
+                grain.startingMinuteOfDay + meeting.durationInGrains * kGrainLengthInMinutes;
+        std::printf("  %-4d %-6s %-6s %-8s %-6d %-30s %zu+%zu\n", grain.dayOfYear,
+                    minuteToString(grain.startingMinuteOfDay).c_str(),
+                    minuteToString(endMinute).c_str(), schedule.rooms[room].name.c_str(),
+                    meeting.durationInGrains, meeting.topic.c_str(),
+                    meeting.requiredAttendees.size(), meeting.preferredAttendees.size());
+    }
+    std::printf("\n");
+}
+
+void printBreakdown(const Breakdown& b) {
+    // Raw per-constraint totals, labelled with the registry names (the
+    // default weight of each soft term in brackets).
+    const struct {
+        const char* level;
+        const char* name;
+        std::int64_t value;
+    } rows[] = {
+            {"hard", "roomConflictCost", b.roomConflictCost},
+            {"hard", "overtimeCost", b.overtimeCost},
+            {"hard", "requiredAttendanceConflictCost", b.requiredAttendanceConflictCost},
+            {"hard", "roomCapacityCost", b.roomCapacityCost},
+            {"hard", "dayCrossingCost", b.dayCrossingCost},
+            {"medium", "requiredAndPreferredAttendanceConflictCost",
+             b.requiredAndPreferredAttendanceConflictCost},
+            {"medium", "preferredAttendanceConflictCost", b.preferredAttendanceConflictCost},
+            {"soft", "meetingEndTimeCost (x1)", b.meetingEndTimeCost},
+            {"soft", "consecutiveMeetingsCost (x100)", b.consecutiveMeetingsCost},
+            {"soft", "meetingOverlapCost (x10)", b.meetingOverlapCost},
+            {"soft", "largerRoomCapacityCost (x1)", b.largerRoomCapacityCost},
+            {"soft", "roomChangeCost (x1)", b.roomChangeCost},
+    };
+    for (const auto& row : rows) {
+        std::printf("  [%-6s] %-44s %lld\n", row.level, row.name,
+                    static_cast<long long>(row.value));
+    }
+    std::printf("\n");
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    const int seconds = (argc > 1) ? std::atoi(argv[1]) : 10;
+
+    MeetingSchedule schedule = buildDemoData();
+    std::printf(
+            "== meeting scheduling demo (%zu people, %zu time grains (4 days x 40), "
+            "%zu rooms, %zu meetings, %d s) ==\n",
+            schedule.people.size(), schedule.timeGrains.size(), schedule.rooms.size(),
+            schedule.meetings.size(), seconds);
+
+    Solver::Config config;
+    config.time_limit = std::chrono::seconds(seconds);
+    config.seed = 42;
+    config.on_new_best = [](std::int64_t step, const Score& score) {
+        std::printf("    new best @step %-8lld %s\n", static_cast<long long>(step),
+                    score.str().c_str());
+    };
+    Solver solver(config);
+    solver.solve(schedule);
+
+    std::printf("\n  final score: %s  (feasible=%s)\n\n", schedule.score.str().c_str(),
+                schedule.score.feasible() ? "true" : "false");
+    printSchedule(schedule);
+    printBreakdown(ScoreCalculator::computeBreakdown(schedule));
+
+    bool allAssigned = true;
+    for (const MeetingAssignment& assignment : schedule.meetingAssignments) {
+        if (assignment.grainRoom < 0) allAssigned = false;
+    }
+    std::printf("  all meetings assigned: %s\n", allAssigned ? "OK" : "FAIL");
+
+    if (schedule.score.hard == 0 && allAssigned) {
+        std::printf("  reached hard 0: OK\n");
+        return 0;
+    }
+    std::printf("  failed to reach hard 0 (hard=%lld)\n",
+                static_cast<long long>(schedule.score.hard));
+    return 1;
+}
