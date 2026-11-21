@@ -50,6 +50,8 @@ def test_a_use_case_keeps_only_its_sources_under_cpp():
             if len(parts) > 4:
                 trees[parts[1]].add("/".join(parts[4:]))
     top_level = {"solver.hpp", "solver.cpp", "constraints.hpp"}
+    # School timetabling has a second entry point next to solver: the canonical model's own
+    # solver and constraint assembly.
     canonical = {"canonical_solver.hpp", "canonical_solver.cpp", "canonical_constraints.hpp"}
     roles = {"model", "score", "constraints", "moves", "construct", "accept"}
     for name in sorted(USE_CASES):
@@ -67,7 +69,7 @@ def test_a_use_case_keeps_only_its_sources_under_cpp():
         # them by hand. They are the same files.
         cmake = (ROOT / "optimaru" / name / "cpp" / "CMakeLists.txt").read_text()
         libraries = re.findall(r"add_library\(\w+([^)]*)\)", cmake)
-        listed = {source for block in libraries for source in block.split()}
+        listed = {token for block in libraries for token in block.split() if token.endswith(".cpp")}
         compiled = {f"{namespace}/{path}" for path in trees[name] if path.endswith(".cpp")}
         assert listed == compiled, name
 
