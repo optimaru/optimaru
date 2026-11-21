@@ -41,7 +41,13 @@ def sources(name):
     and sources side by side): the same core library the use case's CMakeLists.txt builds.
     cpp/main.cpp, the demo, sits outside that tree and is not compiled."""
     cpp = f"optimaru/{name}/cpp"
-    (tree,) = (p for p in Path(HERE, cpp).iterdir() if p.is_dir())
+    # The tree is the directory that holds solver.hpp, so a stray directory beside it (an
+    # in-tree build, leftovers of an older checkout) does not get in the way.
+    trees = sorted(p.parent for p in Path(HERE, cpp).glob("*/solver.hpp"))
+    if len(trees) != 1:
+        found = [p.name for p in trees]
+        raise SystemExit(f"{cpp}: expected one <ns>/ directory with a solver.hpp, found {found}")
+    (tree,) = trees
     src = sorted(p.relative_to(Path(HERE, cpp)).as_posix() for p in tree.rglob("*.cpp"))
     return [f"{cpp}/bindings.cpp", *(f"{cpp}/{file}" for file in src)]
 
