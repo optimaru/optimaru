@@ -31,7 +31,7 @@ There are two scoring paths, and they give the same score for the same schedule
 
 | | `fp.solve(schedule)` | `fp.solve(schedule, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/fp/constraints/` |
+| Scored by | the monolithic calculators, `cpp/fp/score/score_calculator.cpp` and `cpp/fp/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/fp/constraints/` |
 | Constraints | the five, at their defaults | the ones you list, with your knobs |
 | Steps per second | 2.7 million | 0.26 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -78,18 +78,18 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-[`constraints/common.hpp`](../../../optimaru/food_packaging/cpp/include/fp/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/food_packaging/cpp/fp/constraints/common.hpp)
 has a base for the constraints of one line and a walk that derives the job times. Pick by
 what the constraint reads:
 
 | The constraint | Build on | You write | Example to copy |
 | --- | --- | --- | --- |
-| reads the jobs of one line and their times | `detail::PerLineConstraint` (a `UnitConstraint` of the engine) and `detail::walkChain()` | `cost()` with a callback per job | [`after_ideal_end_time_cost.hpp`](../../../optimaru/food_packaging/cpp/include/fp/constraints/after_ideal_end_time_cost.hpp) |
-| spans lines, or counts the jobs on no line | `FpGlobalConstraint` (the engine's `GlobalConstraint`) | `reset()`, `on_unit_changed()`, `cost()` | [`unassigned_jobs_cost.hpp`](../../../optimaru/food_packaging/cpp/include/fp/constraints/unassigned_jobs_cost.hpp) |
+| reads the jobs of one line and their times | `detail::PerLineConstraint` (a `UnitConstraint` of the engine) and `detail::walkChain()` | `cost()` with a callback per job | [`after_ideal_end_time_cost.hpp`](../../../optimaru/food_packaging/cpp/fp/constraints/after_ideal_end_time_cost.hpp) |
+| spans lines, or counts the jobs on no line | `FpGlobalConstraint` (the engine's `GlobalConstraint`) | `reset()`, `on_unit_changed()`, `cost()` | [`unassigned_jobs_cost.hpp`](../../../optimaru/food_packaging/cpp/fp/constraints/unassigned_jobs_cost.hpp) |
 
 The example reads one line, so it is one function. Four edits:
 
-**1. The component**, `optimaru/food_packaging/cpp/include/fp/constraints/before_ideal_end_time_cost.hpp`:
+**1. The component**, `optimaru/food_packaging/cpp/fp/constraints/before_ideal_end_time_cost.hpp`:
 
 ```cpp
 #ifndef FP_CONSTRAINTS_BEFORE_IDEAL_END_TIME_COST_HPP
@@ -151,7 +151,7 @@ into the engine's score itself (`kMediumFold` in `domain.hpp`:
 `engine.soft = medium * 10^10 + soft`), so no weight carries the 10^10. A hard constraint
 returns whole numbers, because a hard contribution is rounded per line.
 
-**2. The assembly**, `cpp/include/fp/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/fp/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -301,8 +301,8 @@ What each kind of constraint costs, and the one thing that changes the speed of 
 | The constraint is | Use | Per edit of a list | Example to copy |
 | --- | --- | --- | --- |
 | a sum over one line's jobs | `PerLineConstraint` and `walkChain()` | one walk of that line | step 2 |
-| a total over the lines | `FpGlobalConstraint` that keeps one number per line in `on_unit_changed()` | one pass over that line | [`unassigned_jobs_cost.hpp`](../../../optimaru/food_packaging/cpp/include/fp/constraints/unassigned_jobs_cost.hpp) |
-| about pairs of jobs on different lines | `FpGlobalConstraint` that marks itself stale and recomputes in `cost()` | every job, and every pair of jobs, at every score | [`operator_cleaning_conflict_cost.hpp`](../../../optimaru/food_packaging/cpp/include/fp/constraints/operator_cleaning_conflict_cost.hpp) |
+| a total over the lines | `FpGlobalConstraint` that keeps one number per line in `on_unit_changed()` | one pass over that line | [`unassigned_jobs_cost.hpp`](../../../optimaru/food_packaging/cpp/fp/constraints/unassigned_jobs_cost.hpp) |
+| about pairs of jobs on different lines | `FpGlobalConstraint` that marks itself stale and recomputes in `cost()` | every job, and every pair of jobs, at every score | [`operator_cleaning_conflict_cost.hpp`](../../../optimaru/food_packaging/cpp/fp/constraints/operator_cleaning_conflict_cost.hpp) |
 
 **Leave out a constraint that cannot fire.** `operatorCleaningConflictCost` is the third
 kind, and it sets the pace of the whole assembly. It is 0 by construction when every
@@ -343,7 +343,7 @@ both sides agree.
 It must be a whole number, because the monolithic calculators add in `int64`, and it
 must keep the soft total below 10^10, where the medium level starts (`domain.hpp`).
 
-**2. The full recompute**, `cpp/src/score_calculator.cpp` and its header. Include the
+**2. The full recompute**, `cpp/fp/score/score_calculator.cpp` and its header. Include the
 component, read its weight next to the others (`kBeforeIdealEndWeight`), add it and
 its level to the two `static_assert`s, give `ConstraintBreakdown` a member named after
 the constraint, add `kBeforeIdealEndWeight * beforeIdealEndTimeCost` to the soft level in
@@ -355,7 +355,7 @@ the constraint, add `kBeforeIdealEndWeight * beforeIdealEndTimeCost` to the soft
             breakdown.beforeIdealEndTimeCost += job.idealEndTime - job.endDateTime;
 ```
 
-**3. The incremental calculator**, `cpp/src/incremental_calculator.cpp` and its
+**3. The incremental calculator**, `cpp/fp/score/incremental_calculator.cpp` and its
 header. It keeps one `LineState` per line and re-derives it with one walk
 (`deriveLine()`) after every edit. A per-line term is a field of `LineState`
 (`softEarly`) and a running total (`totalSoftEarly_`), in five functions: set to 0 and
@@ -454,14 +454,14 @@ path after step 5, from two checkouts, each with its own build. Against CP-SAT:
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/fp/constraints/<subject>_cost.hpp` | new | | | weight |
-| `cpp/include/fp/constraints.hpp` | include, `emplace` | | | |
+| `cpp/fp/constraints/<subject>_cost.hpp` | new | | | weight |
+| `cpp/fp/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/food_packaging/cpp/fp_plugin_test.cpp` | | cases, counts | | breakdown check, catalog row |
 | `tests/food_packaging/test_constraint_specs.py` | | lists | | defaults |
 | `docs/use-cases/food-packaging/README.md`, `python.md`, `cpp.md` | | table row | | defaults |
-| `cpp/src/score_calculator.cpp`, `cpp/include/fp/score_calculator.hpp` | | | | the term |
-| `cpp/src/incremental_calculator.cpp`, `cpp/include/fp/incremental_calculator.hpp` | | | | the term |
+| `cpp/fp/score/score_calculator.cpp`, `cpp/fp/score/score_calculator.hpp` | | | | the term |
+| `cpp/fp/score/incremental_calculator.cpp`, `cpp/fp/score/incremental_calculator.hpp` | | | | the term |
 | `tests/food_packaging/cpp/fp_test.cpp`, `test_constraints.py`, `test_models.py` | | | | expected scores |
 | external-solver, `benchmarks/food-packaging` | | | | the same constraint, results |
 

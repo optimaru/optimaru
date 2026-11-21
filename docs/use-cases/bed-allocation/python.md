@@ -61,7 +61,7 @@ is always reachable (every hard violation can be resolved by giving up the assig
 ## Score mapping (hard / medium / soft -> engine Score)
 
 The domain scores on three levels (hard / medium / soft); the engine only has `Score(int64 hard,
-double soft)`. The mapping rule (`optimaru/bed_allocation/cpp/include/ba/domain.hpp`):
+double soft)`. The mapping rule (`optimaru/bed_allocation/cpp/ba/model/domain.hpp`):
 
 ```
 engine.hard = hard

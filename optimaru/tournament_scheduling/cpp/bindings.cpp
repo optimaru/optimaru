@@ -15,8 +15,8 @@
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
 #include "ts/constraints.hpp"
-#include "ts/domain.hpp"
-#include "ts/score_calculator.hpp"
+#include "ts/model/domain.hpp"
+#include "ts/score/score_calculator.hpp"
 #include "ts/solver.hpp"
 
 namespace py = pybind11;

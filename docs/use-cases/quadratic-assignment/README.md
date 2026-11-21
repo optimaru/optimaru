@@ -206,19 +206,19 @@ The package is the C++ engine with pybind11 bindings, like the other C++ use cas
 
 ## C++
 
-- `optimaru/quadratic_assignment/cpp/include/qap/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `optimaru/quadratic_assignment/cpp/include/qap/constraints/` — one component per constraint:
+- `optimaru/quadratic_assignment/cpp/qap/model/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/quadratic_assignment/cpp/qap/constraints/` — one component per constraint:
   `pinned_assignments_cost.hpp`, `forbidden_assignments_cost.hpp`,
   `location_capacity_cost.hpp`, `assignment_cost.hpp`, `flow_distance_cost.hpp`
   (+ `common.hpp`: the aliases, the `prepare()` guard and the member-change global
-  base); `optimaru/quadratic_assignment/cpp/include/qap/constraints.hpp` assembles the default set
+  base); `optimaru/quadratic_assignment/cpp/qap/constraints.hpp` assembles the default set
   (`defaultConstraints()`, also the catalog order)
 - `score_calculator` — `prepare()` (validation + flat matrices, the deduplicated
   forbidden mask, the pin lookups) and the full recompute (the reference)
 - `incremental_calculator` — O(n) per moved facility (the flow term), O(1) for the rest
 - `solver` — engine wrapper (identity or warm-start permutation + Late Acceptance over
   swap moves; multi-start through the engine; the bijection asserted after every solve)
-- `optimaru/quadratic_assignment/cpp/src/main.cpp` — the web demo's plant layout and a random 25-facility instance
+- `optimaru/quadratic_assignment/cpp/main.cpp` — the web demo's plant layout and a random 25-facility instance
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=quadratic_assignment
@@ -265,18 +265,18 @@ print(warm.assignment, warm.total_cost)
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the engine is
-`optimaru/quadratic_assignment/cpp/include/qap/solver.hpp` + `optimaru/quadratic_assignment/cpp/src/solver.cpp`.
+`optimaru/quadratic_assignment/cpp/qap/solver.hpp` + `optimaru/quadratic_assignment/cpp/qap/solver.cpp`.
 
 **Adding a move.** The engine runs swap moves only (`change_weight = 0`,
-`swap_weight = 1` in `optimaru/quadratic_assignment/cpp/src/solver.cpp`). A new move must keep the
+`swap_weight = 1` in `optimaru/quadratic_assignment/cpp/qap/solver.cpp`). A new move must keep the
 permutation (a 3-cycle rotation, a best-partner swap): an
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` in
-`optimaru/quadratic_assignment/cpp/src/solver.cpp`, run under ScoreChecks::Full. Registered operators do not reach the
+`optimaru/quadratic_assignment/cpp/qap/solver.cpp`, run under ScoreChecks::Full. Registered operators do not reach the
 engine's multi-start threads, so a solver that registers one runs its own worker
 threads (see facility-location's `CloseFacilityMove`).
 
 **Changing the construction heuristic.** The start is the identity (or the
-warm-start bijection), laid out in `start()` in `optimaru/quadratic_assignment/cpp/src/solver.cpp`; the engine's
+warm-start bijection), laid out in `start()` in `optimaru/quadratic_assignment/cpp/qap/solver.cpp`; the engine's
 construction heuristic finds nothing to place. A different start must still be a
 full bijection.
 

@@ -376,16 +376,21 @@ optimaru/<use case>/
 └── cpp/
     ├── bindings.cpp                 pybind11 module optimaru.<use case>._core
     ├── CMakeLists.txt               core library, demo and C++ tests
-    ├── include/<ns>/
-    │   ├── domain.hpp               problem facts, decision variable, Score,
-    │   │                            SolutionTraits specialization
-    │   ├── score_calculator.hpp     full (reference) score
-    │   ├── incremental_calculator.hpp
-    │   │                            tuned incremental score (default path)
-    │   ├── constraints.hpp          default constraint assembly
-    │   ├── constraints/*_cost.hpp   one plugin component per constraint
-    │   └── solver.hpp               domain Solver: Config -> engine wiring
-    └── src/*.cpp                    main.cpp is the demo
+    ├── main.cpp                     the demo
+    └── <ns>/                        the core library: each header with its source
+        ├── solver.hpp, solver.cpp   domain Solver: Config -> engine wiring
+        ├── constraints.hpp          default constraint assembly
+        ├── model/
+        │   └── domain.hpp           problem facts, decision variable, Score,
+        │                            SolutionTraits specialization
+        │                            (also here: demo data, travel times)
+        ├── score/
+        │   ├── score_calculator.*   full (reference) score
+        │   └── incremental_calculator.*
+        │                            tuned incremental score (default path)
+        ├── constraints/*_cost.hpp   one plugin component per constraint
+        └── moves/, construct/,      only where the use case has its own moves,
+            accept/                  construction or acceptor
 tests/<use case>/
 ├── test_*.py                        pytest suite
 └── cpp/<ns>_test.cpp, <ns>_plugin_test.cpp
@@ -468,8 +473,8 @@ default fast path, with the steps per second measured on the way.
 
 [`setup.py`](../../setup.py) builds one extension per use case
 (`optimaru.<use case>._core`, for every subpackage with a `_core.pyi`) from
-`optimaru/<use case>/cpp/bindings.cpp` and every `cpp/src/*.cpp` except
-`main.cpp`, the same sources as the core library in its `CMakeLists.txt`. `uv sync` installs the package in editable mode and
+`optimaru/<use case>/cpp/bindings.cpp` and every `.cpp` under `cpp/<ns>/`
+(not `cpp/main.cpp`, the demo), the same sources as the core library in its `CMakeLists.txt`. `uv sync` installs the package in editable mode and
 builds the extensions in place, next to the Python files. `OPTIMARU_USE_CASES`
 (comma-separated) limits the build to some use cases. uv rebuilds when a
 `.cpp` / `.hpp` under `optimaru/`, `setup.py`, `pyproject.toml` or

@@ -14,8 +14,8 @@
 #include <vector>
 
 #include "alb/constraints.hpp"
-#include "alb/domain.hpp"
-#include "alb/score_calculator.hpp"
+#include "alb/model/domain.hpp"
+#include "alb/score/score_calculator.hpp"
 #include "alb/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
@@ -164,7 +164,7 @@ PYBIND11_MODULE(_core, m) {
             // default (unrestricted).
             .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             // CloseStationMove: the domain macro move that empties one station in
-            // a single step (see cpp/src/solver.cpp).
+            // a single step (see cpp/alb/solver.cpp).
             .def_readwrite("close_station_moves", &Solver::Config::close_station_moves);
 
     py::class_<Solver>(m, "Solver", py::module_local())

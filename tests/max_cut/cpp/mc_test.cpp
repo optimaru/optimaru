@@ -22,9 +22,9 @@
 #include <string>
 #include <vector>
 
-#include "mc/domain.hpp"
-#include "mc/incremental_calculator.hpp"
-#include "mc/score_calculator.hpp"
+#include "mc/model/domain.hpp"
+#include "mc/score/incremental_calculator.hpp"
+#include "mc/score/score_calculator.hpp"
 #include "mc/solver.hpp"
 #include "mc_fixtures.hpp"
 #include "optimaru/model/editor.hpp"
@@ -154,7 +154,7 @@ void verifyHandCalculated() {
         expectScore(p, 0, 0.0, "within the bounds");
     }
     {
-        // The -1 rules (mc/domain.hpp): an unassigned vertex is in no side.
+        // The -1 rules (mc/model/domain.hpp): an unassigned vertex is in no side.
         MaxCutProblem p = graph({"A", "B", "C"}, {{0, 1, 4}, {1, 2, 5}});
         p.fixedSide[2] = 1;
         p.samePartitionPairs = {{0, 1}, {1, 0}};

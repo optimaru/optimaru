@@ -38,7 +38,7 @@ assembly on 150 random schedules (`cs_plugin_test`), the incremental calculator 
 
 | | `cs.solve(schedule)` | `cs.solve(schedule, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators: `cpp/src/incremental_calculator.cpp` keeps counters per timeslot and updates them for the talk that moves; `cpp/src/score_calculator.cpp` recomputes the final score in full | the assembly: one component per constraint, `cpp/include/cs/constraints/`. All of them read one `Breakdown`, which `ScoreCalculator::breakdownOfPrepared()` recomputes in full, every pair of talks, once per score |
+| Scored by | the monolithic calculators: `cpp/cs/score/incremental_calculator.cpp` keeps counters per timeslot and updates them for the talk that moves; `cpp/cs/score/score_calculator.cpp` recomputes the final score in full | the assembly: one component per constraint, `cpp/cs/constraints/`. All of them read one `Breakdown`, which `ScoreCalculator::breakdownOfPrepared()` recomputes in full, every pair of talks, once per score |
 | Constraints | the 37, at their defaults | the ones you list, with your knobs |
 | Steps per second | 833 thousand | 13.6 thousand |
 | Parallel starts | `parallel_solver_count`; the time limit is split into `restart_segments` (8) runs | one start, one run |
@@ -47,7 +47,7 @@ The speeds are a generated conference (70 talks, 18 timeslots, 8 rooms), 2 milli
 default path and 60,000 on the assembly, one thread of an Apple M4 Max; [step 6](#6-measure) has the
 script. The factor of 60 is by design: this assembly is the path for changing the cost function, not
 the fast one
-([`constraints/common.hpp`](../../../optimaru/conference_scheduling/cpp/include/cs/constraints/common.hpp)
+([`constraints/common.hpp`](../../../optimaru/conference_scheduling/cpp/cs/constraints/common.hpp)
 says why). Steps 1 to 4 work on the assembly. Step 5 moves a constraint to the incremental
 calculator.
 
@@ -91,7 +91,7 @@ number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
 Here the one function is `select`. All 37 components derive from `BreakdownConstraint`
-in [`constraints/common.hpp`](../../../optimaru/conference_scheduling/cpp/include/cs/constraints/common.hpp)
+in [`constraints/common.hpp`](../../../optimaru/conference_scheduling/cpp/cs/constraints/common.hpp)
 and say only which member of the `Breakdown` is theirs. The raw cost itself is computed
 where all the others are, in `ScoreCalculator::breakdownOfPrepared()`. Pick the place
 there by what the term reads:
@@ -104,8 +104,8 @@ there by what the term reads:
 
 The example reads one talk and its room. Five edits:
 
-**1. The term.** A member of `Breakdown` in `cpp/include/cs/score_calculator.hpp`,
-after `speakerMakespanCost`, and its sum in `cpp/src/score_calculator.cpp`, in the
+**1. The term.** A member of `Breakdown` in `cpp/cs/score/score_calculator.hpp`,
+after `speakerMakespanCost`, and its sum in `cpp/cs/score/score_calculator.cpp`, in the
 first loop of `breakdownOfPrepared()`, where `talk`, its room `r` and the timeslot's
 minutes `dur` are at hand:
 
@@ -119,7 +119,7 @@ minutes `dur` are at hand:
         if (overflow > 0) b.roomOverflowCost += overflow * dur;
 ```
 
-**2. The component**, `optimaru/conference_scheduling/cpp/include/cs/constraints/room_overflow_cost.hpp`:
+**2. The component**, `optimaru/conference_scheduling/cpp/cs/constraints/room_overflow_cost.hpp`:
 
 ```cpp
 #ifndef CS_CONSTRAINTS_ROOM_OVERFLOW_COST_HPP
@@ -161,9 +161,9 @@ minutes of the timeslot, so a hard constraint's total is a whole number, as it h
 contribution is rounded. A reward (a quantity to maximize) returns its member negated from `select`
 and sets `reward = true; level_flippable = false;` in its constructor: it is never hard and keeps
 its level
-([`language_diversity_cost.hpp`](../../../optimaru/conference_scheduling/cpp/include/cs/constraints/language_diversity_cost.hpp)).
+([`language_diversity_cost.hpp`](../../../optimaru/conference_scheduling/cpp/cs/constraints/language_diversity_cost.hpp)).
 
-**3. The assembly**, `cpp/include/cs/constraints.hpp`: include the header, and add
+**3. The assembly**, `cpp/cs/constraints.hpp`: include the header, and add
 one line to `defaultConstraints()` after `SpeakerMakespanCost` (the hard constraints come
 first, then the soft penalties, the three rewards last):
 
@@ -392,7 +392,7 @@ It must be a whole number, because the monolithic calculators add in `int64`:
 `kSoftWeight<>` and `kHardWeight<>` in `common.hpp` do not compile otherwise, nor
 when the constraint is on another level than the one it is summed into.
 
-**2. The full recompute**, `cpp/src/score_calculator.cpp`. The term is there since
+**2. The full recompute**, `cpp/cs/score/score_calculator.cpp`. The term is there since
 step 2; give it its weight at the end of `Breakdown::softPenaltyTotal()` (a hard constraint
 goes into `hardTotal()`, a reward into `softRewardTotal()`):
 
@@ -401,7 +401,7 @@ goes into `hardTotal()`, a reward into `softRewardTotal()`):
            kSoftWeight<RoomOverflowCost> * roomOverflowCost;
 ```
 
-**3. The incremental calculator**, `cpp/src/incremental_calculator.cpp`. Read the
+**3. The incremental calculator**, `cpp/cs/score/incremental_calculator.cpp`. Read the
 weight off the component with the others at the top, and add the term to
 `addUnaryContribution()`, which `insert()` and `retract()` call for the talk that
 moves:
@@ -556,14 +556,14 @@ shows what such a comparison reports. Against CP-SAT:
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/cs/score_calculator.hpp`, `cpp/src/score_calculator.cpp` | member, term | | | the weighted total |
-| `cpp/include/cs/constraints/<subject>_cost.hpp` | new | | own total | weight |
-| `cpp/include/cs/constraints.hpp` | include, `emplace` | | | |
+| `cpp/cs/score/score_calculator.hpp`, `cpp/cs/score/score_calculator.cpp` | member, term | | | the weighted total |
+| `cpp/cs/constraints/<subject>_cost.hpp` | new | | own total | weight |
+| `cpp/cs/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/conference_scheduling/cpp/cs_plugin_test.cpp` | | case, row, counts | | the row's weight |
 | `tests/conference_scheduling/test_constraint_specs.py` | | lists | | the row, the explicit defaults |
 | `docs/use-cases/conference-scheduling/README.md`, `python.md` | | table row | | defaults, counts |
-| `cpp/src/incremental_calculator.cpp` | | | | the term |
+| `cpp/cs/score/incremental_calculator.cpp` | | | | the term |
 | `tests/conference_scheduling/cpp/cs_test.cpp` | | | | a case by hand |
 | `benchmarks/conference-scheduling/cpp/cs_quality_bench.cpp` | | | | breakdown row |
 | external-solver, `benchmarks/conference-scheduling` | | the plugin | | results |

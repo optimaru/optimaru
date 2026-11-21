@@ -42,9 +42,9 @@
 #include <vector>
 
 #include "pdp/constraints.hpp"
-#include "pdp/demo_data.hpp"
-#include "pdp/domain.hpp"
-#include "pdp/score_calculator.hpp"
+#include "pdp/model/demo_data.hpp"
+#include "pdp/model/domain.hpp"
+#include "pdp/score/score_calculator.hpp"
 #include "pdp/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/preview_parity.hpp"

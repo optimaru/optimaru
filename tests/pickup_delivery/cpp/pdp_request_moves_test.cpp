@@ -15,11 +15,11 @@
 #include <vector>
 
 #include "pdp/constraints.hpp"
-#include "pdp/demo_data.hpp"
-#include "pdp/domain.hpp"
-#include "pdp/haversine.hpp"
-#include "pdp/request_insertion.hpp"
-#include "pdp/score_calculator.hpp"
+#include "pdp/model/demo_data.hpp"
+#include "pdp/model/domain.hpp"
+#include "pdp/model/haversine.hpp"
+#include "pdp/moves/request_insertion.hpp"
+#include "pdp/score/score_calculator.hpp"
 #include "pdp/solver.hpp"
 #include "optimaru/testing/check.hpp"
 

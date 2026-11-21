@@ -22,12 +22,12 @@
 #include <vector>
 
 #include "st/canonical_constraints.hpp"
-#include "st/canonical_domain.hpp"
-#include "st/canonical_score_calculator.hpp"
+#include "st/model/canonical_domain.hpp"
+#include "st/score/canonical_score_calculator.hpp"
 #include "st/canonical_solver.hpp"
-#include "st/domain.hpp"
-#include "st/objective_weights.hpp"
-#include "st/score_calculator.hpp"
+#include "st/model/domain.hpp"
+#include "st/score/objective_weights.hpp"
+#include "st/score/score_calculator.hpp"
 #include "st/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
@@ -579,7 +579,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("lessons", &Timetable::lessons)
             .def_readwrite("teacher_unavailable", &Timetable::teacherUnavailable)
             .def_readonly("score", &Timetable::score)
-            // composite slotRoom encoding helpers (see st/domain.hpp)
+            // composite slotRoom encoding helpers (see st/model/domain.hpp)
             .def("timeslot_count", &Timetable::timeslotCount)
             .def("room_count", &Timetable::roomCount)
             .def("slot_room_count", &Timetable::slotRoomCount)

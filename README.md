@@ -138,7 +138,7 @@ Both plug into a use case without touching the engine.
 
 | To add | You write | Guide |
 | --- | --- | --- |
-| A constraint (hard, medium or soft cost) | one `<Subject>Cost` component in `optimaru/<use case>/cpp/include/<ns>/constraints/`, a line in `defaultConstraints()`, a spec class in `constraints.py` | [Adding a cost](docs/extending.md#adding-a-cost) |
+| A constraint (hard, medium or soft cost) | one `<Subject>Cost` component in `optimaru/<use case>/cpp/<ns>/constraints/`, a line in `defaultConstraints()`, a spec class in `constraints.py` | [Adding a cost](docs/extending.md#adding-a-cost) |
 | A move | one `MoveOperator` with `apply()` and `undo_last()`, registered with `add_move_operator()` in the use case's `solver.cpp` | [Adding a move](docs/extending.md#adding-a-move) |
 | A ruin operator or a construction heuristic | a `RuinOperator`, or a difficulty order / domain constructor | [A ruin instead of a move](docs/extending.md#a-ruin-instead-of-a-move), [Construction instead of search](docs/extending.md#construction-instead-of-search) |
 
@@ -261,8 +261,9 @@ optimaru/                          the Python package (pip install optimaru)
     │   constraints.py, _core.pyi  constraint specs, stubs of the extension
     └── cpp/
         ├── bindings.cpp           the pybind11 module optimaru.<use case>._core
-        ├── include/<ns>/          domain, calculators, constraints/, solver
-        ├── src/                   the core library sources (main.cpp: demo)
+        ├── <ns>/                  the core library, headers and sources side by side:
+        │                          solver, model/, score/, constraints/, moves/
+        ├── main.cpp               the demo
         └── CMakeLists.txt         core library, demo and C++ tests
 tests/                             mirrors the package
 ├── engine/                        engine tests (C++)
@@ -383,8 +384,8 @@ that Python writes ([benchmarks/README.md](benchmarks/README.md)).
 ## Building and releasing
 
 The distribution is built from this repository by [`setup.py`](setup.py): one
-extension per use case, from its `cpp/bindings.cpp` and every `cpp/src/*.cpp`
-except `main.cpp` (the demo).
+extension per use case, from its `cpp/bindings.cpp` and every `.cpp` under `cpp/<ns>/`
+(`cpp/main.cpp`, the demo, is left out).
 `OPTIMARU_USE_CASES=knapsack,vehicle_routing` builds only those extensions (CI
 tests one use case per job that way); a release builds all of them.
 

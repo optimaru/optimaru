@@ -3,9 +3,7 @@
 include LICENSE NOTICE THIRD-PARTY-LICENSES pyproject.toml setup.py docs/pypi.md
 recursive-include optimaru *.py *.pyi py.typed
 recursive-include optimaru/cpp *.hpp
-recursive-include optimaru/*/cpp/include *.hpp
-recursive-include optimaru/*/cpp/src *.cpp *.hpp
-include optimaru/*/cpp/bindings.cpp
+recursive-include optimaru/*/cpp *.cpp *.hpp
 global-exclude *.so *.pyd __pycache__ *.pyc
 prune tests
 prune benchmarks

@@ -36,7 +36,7 @@ There are two scoring paths, and they give the same score for the same selection
 
 | | `knapsack.solve(problem)` | `knapsack.solve(problem, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/ks/constraints/` |
+| Scored by | the monolithic calculators, `cpp/ks/score/score_calculator.cpp` and `cpp/ks/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/ks/constraints/` |
 | Constraints | the seven, at their defaults | the ones you list, with your knobs |
 | Steps per second | 2.2 million | 1.0 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -88,7 +88,7 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-[`constraints/common.hpp`](../../../optimaru/knapsack/cpp/include/ks/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/knapsack/cpp/ks/constraints/common.hpp)
 has one base, `detail::SelectionConstraint`, and all seven constraints derive from it. It
 is the engine's `MemberChangeGlobalConstraint` narrowed to unit 1, and it asks for
 three functions: `reset()` builds the total from the selection when the objective is
@@ -97,7 +97,7 @@ stops being selected, and `cost()` returns it at every score.
 
 Four edits:
 
-**1. The component**, `optimaru/knapsack/cpp/include/ks/constraints/unused_capacity_cost.hpp`:
+**1. The component**, `optimaru/knapsack/cpp/ks/constraints/unused_capacity_cost.hpp`:
 
 ```cpp
 #ifndef KS_CONSTRAINTS_UNUSED_CAPACITY_COST_HPP
@@ -170,7 +170,7 @@ numbers, because a hard total is rounded once per constraint. A reward, a quanti
 to maximize such as `selectedValueCost`, returns a raw cost of 0 or less and sets
 `reward = true; level_flippable = false;` in its constructor: it can never be hard.
 
-**2. The assembly**, `cpp/include/ks/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/ks/constraints.hpp`: include the header, and add
 one line to `defaultConstraints()`, before `SelectedValueCost`. The order there is
 the order of the catalog; the docs and the tests select defaults by name, not by
 position, so the new entry displaces none of their picks:
@@ -324,10 +324,10 @@ score. So a constraint is cheap when the first two are. What to keep depends on 
 
 | The constraint is | Keep | Per flip | Example to copy |
 | --- | --- | --- | --- |
-| a sum of one number per selected item | one `int64` total | one addition | [`mandatory_items_cost.hpp`](../../../optimaru/knapsack/cpp/include/ks/constraints/mandatory_items_cost.hpp) |
+| a sum of one number per selected item | one `int64` total | one addition | [`mandatory_items_cost.hpp`](../../../optimaru/knapsack/cpp/ks/constraints/mandatory_items_cost.hpp) |
 | a threshold on such a sum | the sum; apply the threshold in `cost()` | one addition | step 2 |
-| a sum over resources or groups of one threshold each | the amount per resource or group, and the summed total: take the old term out, change the amount, put the new term in | the item's resources or groups | [`resource_capacity_cost.hpp`](../../../optimaru/knapsack/cpp/include/ks/constraints/resource_capacity_cost.hpp) |
-| a count over pairs of items | a copy of the selection, and the count | the item's pairs | [`item_dependency_cost.hpp`](../../../optimaru/knapsack/cpp/include/ks/constraints/item_dependency_cost.hpp) |
+| a sum over resources or groups of one threshold each | the amount per resource or group, and the summed total: take the old term out, change the amount, put the new term in | the item's resources or groups | [`resource_capacity_cost.hpp`](../../../optimaru/knapsack/cpp/ks/constraints/resource_capacity_cost.hpp) |
+| a count over pairs of items | a copy of the selection, and the count | the item's pairs | [`item_dependency_cost.hpp`](../../../optimaru/knapsack/cpp/ks/constraints/item_dependency_cost.hpp) |
 
 The example is the second row, and there is nothing left to cut: one addition per
 flip, one comparison per score. What the other way costs: the same constraint with a
@@ -358,7 +358,7 @@ Two more things keep a constraint on the cheap side.
 **Read the per-item indexes.** `ScoreCalculator::prepare()` builds them once, when
 a solve starts: `itemResources`, `itemGroups`, `mandatoryCount`, `forbiddenCount`,
 `dependenciesAsItem` and `dependenciesAsRequired` (`KnapsackProblem` in
-[`domain.hpp`](../../../optimaru/knapsack/cpp/include/ks/domain.hpp)). A flip then
+[`domain.hpp`](../../../optimaru/knapsack/cpp/ks/model/domain.hpp)). A flip then
 visits what the item refers to and nothing else. A constraint that needs another index
 adds it there, where the monolithic calculators can read it too (step 5), or builds
 a table of its own in `reset()`. Under `full_assert` the engine rebuilds at every
@@ -382,14 +382,14 @@ agree.
 It must be a whole number, because the monolithic calculators add in `int64`.
 
 **2. The term**, in three files. Both calculators fill a `RawCosts`
-(`cpp/include/ks/score_calculator.hpp`), and the tests compare the two field by
+(`cpp/ks/score/score_calculator.hpp`), and the tests compare the two field by
 field. Add the field there, and to its `operator==`:
 
 ```cpp
     std::int64_t capacityUnused = 0;     // unusedCapacityCost
 ```
 
-In `cpp/src/score_calculator.cpp`, the full recompute, include the header, read the
+In `cpp/ks/score/score_calculator.cpp`, the full recompute, include the header, read the
 weight off the component (`kUnusedWeight`), and add it to the first `static_assert`
 and its level to the second. Then the total in `rawCosts()`, stored in
 `raw.capacityUnused`, and the term in `score()`:
@@ -403,7 +403,7 @@ and its level to the second. Then the total in `rawCosts()`, stored in
     score.soft = static_cast<double>(kValueWeight * raw.value - kUnusedWeight * raw.capacityUnused);
 ```
 
-In `cpp/src/incremental_calculator.cpp`: the same include, weight and `static_assert`,
+In `cpp/ks/score/incremental_calculator.cpp`: the same include, weight and `static_assert`,
 the same line in `score()`, and the total in `totals()`:
 
 ```cpp
@@ -508,15 +508,15 @@ constraint in the CP-SAT model.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/ks/constraints/<subject>_cost.hpp` | new | | the totals it keeps, `idle_at_weight_zero()` | weight |
-| `cpp/include/ks/constraints.hpp` | include, `emplace` | | | |
+| `cpp/ks/constraints/<subject>_cost.hpp` | new | | the totals it keeps, `idle_at_weight_zero()` | weight |
+| `cpp/ks/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/knapsack/cpp/ks_plugin_test.cpp` | | case, totals, counts | | totals, row |
 | `tests/knapsack/test_constraint_specs.py` | | lists, cases | | row, expected scores |
 | `tests/knapsack/reference_knapsack.py` | | the constraint | | weight |
 | `docs/use-cases/knapsack/README.md`, `python.md` | | table row | | defaults |
-| `cpp/include/ks/score_calculator.hpp` | | | | `RawCosts` field |
-| `cpp/src/score_calculator.cpp`, `incremental_calculator.cpp` | | | | the term |
+| `cpp/ks/score/score_calculator.hpp` | | | | `RawCosts` field |
+| `cpp/ks/score/score_calculator.cpp`, `incremental_calculator.cpp` | | | | the term |
 | `tests/knapsack/cpp/ks_test.cpp` | | | | totals, expected scores |
 | external-solver, `benchmarks/knapsack` | | the same constraint | | results |
 

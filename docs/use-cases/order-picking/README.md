@@ -95,12 +95,12 @@ A pick task id is `<order id>-<item position>`, so keep each order's `items` in 
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **sequence** shape; the domain solver that configures the
-engine is `optimaru/order_picking/cpp/include/op/solver.hpp` + `optimaru/order_picking/cpp/src/solver.cpp`.
+engine is `optimaru/order_picking/cpp/op/solver.hpp` + `optimaru/order_picking/cpp/op/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
-(weights in `Solver::Config`). `OrderConsolidateMove` (pulls an order's items onto one trolley) is defined in `optimaru/order_picking/cpp/src/solver.cpp` and registered there when `order_consolidate_moves` is on — use it as the template. A new move is a
+(weights in `Solver::Config`). `OrderConsolidateMove` (pulls an order's items onto one trolley) is defined in `optimaru/order_picking/cpp/op/solver.cpp` and registered there when `order_consolidate_moves` is on — use it as the template. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/order_picking/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/order_picking/cpp/op/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Elements are placed by cheapest insertion in index order. Set

@@ -33,8 +33,8 @@
 #include <vector>
 
 #include "alb/constraints.hpp"
-#include "alb/domain.hpp"
-#include "alb/score_calculator.hpp"
+#include "alb/model/domain.hpp"
+#include "alb/score/score_calculator.hpp"
 #include "alb/solver.hpp"
 #include "alb_fixtures.hpp"
 #include "optimaru/model/editor.hpp"

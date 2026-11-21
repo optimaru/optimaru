@@ -6,25 +6,25 @@ and its C++ tests are in [`tests/food_packaging/cpp/`](../../../tests/food_packa
 The food-packaging use case implemented on `optimaru/cpp/optimaru/` (the header-only
 engine). Files:
 
-- `include/fp/domain.hpp` — domain structs, the mapping of the three score
+- `fp/model/domain.hpp` — domain structs, the mapping of the three score
   levels (hard / medium / soft) onto the engine's two (`kMediumUnit = 10^10`, declared once as `kMediumFold =
   MediumFold::intoSoft(10^10)` and registered with `MediumFoldOf<PackagingSchedule>`), the
   sequence-shape `SolutionTraits` specialization (including the position translation that hides
   the pinned prefix from the engine view)
-- `include/fp/constraints/*_cost.hpp` — one plugin component per constraint
+- `fp/constraints/*_cost.hpp` — one plugin component per constraint
   (`MaxEndTimeCost`, `AfterIdealEndTimeCost`, `SquaredMakespanCost`,
   `OperatorCleaningConflictCost`, `UnassignedJobsCost`), each declaring its
-  `kDefaultWeight` / `kDefaultLevel`; `include/fp/constraints.hpp` assembles the default set
-- `include/fp/score_calculator.hpp` — the full-recompute reference implementation
+  `kDefaultWeight` / `kDefaultLevel`; `fp/constraints.hpp` assembles the default set
+- `fp/score/score_calculator.hpp` — the full-recompute reference implementation
   (`prepare` / `updateShadowVariables` / `score` / `analyze`, whose
   `ConstraintBreakdown` members carry the registry names; C++ only)
-- `include/fp/incremental_calculator.hpp` — incremental calculator on the before/after
+- `fp/score/incremental_calculator.hpp` — incremental calculator on the before/after
   list hooks, O(changed line length) (re-derives the job times per line)
-- `include/fp/solver.hpp` — engine wrapper. `Line::operator_index` (the second decision
+- `fp/solver.hpp` — engine wrapper. `Line::operator_index` (the second decision
   variable) is optimized alternately by hill climbing between engine legs
-- `src/demo_data.cpp` — the demo plant (5 lines, 100 jobs), drawn
+- `fp/model/demo_data.cpp` — the demo plant (5 lines, 100 jobs), drawn
   from a seeded `std::mt19937_64` (seed 37; Monday 00:00 == minute 0)
-- `src/main.cpp` — runs the demo (default 10 s, non-zero exit when hard 0 is not reached)
+- `cpp/main.cpp` — runs the demo (default 10 s, non-zero exit when hard 0 is not reached)
 - `tests/food_packaging/cpp/fp_test.cpp` — per-constraint hand-computed cases, 2000 random sequence moves
   cross-checked incremental==full, ScoreChecks::Full solve, pinning/pool/operator/
   demo checks

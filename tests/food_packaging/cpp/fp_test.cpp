@@ -29,10 +29,10 @@
 #include <string>
 #include <vector>
 
-#include "fp/demo_data.hpp"
-#include "fp/domain.hpp"
-#include "fp/incremental_calculator.hpp"
-#include "fp/score_calculator.hpp"
+#include "fp/model/demo_data.hpp"
+#include "fp/model/domain.hpp"
+#include "fp/score/incremental_calculator.hpp"
+#include "fp/score/score_calculator.hpp"
 #include "fp/solver.hpp"
 #include "optimaru/construct/construction.hpp"
 #include "optimaru/model/editor.hpp"

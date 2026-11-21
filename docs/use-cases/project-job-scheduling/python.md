@@ -113,7 +113,7 @@ k-th pick `<name>#<k>`: `score(raw, [MakespanCost(), MakespanCost(exponent=2, of
 
 The score has three levels (hard / medium / soft); the engine only knows
 `Score(int64 hard, double soft)`. The same offset mapping as bed-allocation/meeting-scheduling is used, declared once
-as the domain's medium fold (`kMediumFold` in `optimaru/project_job_scheduling/cpp/include/pjs/domain.hpp`; every
+as the domain's medium fold (`kMediumFold` in `optimaru/project_job_scheduling/cpp/pjs/model/domain.hpp`; every
 `constraint_costs()` entry carries it as `medium_fold`, and
 `optimaru.project_job_scheduling.constraints.score()` returns the folded engine-level `(hard, soft)`):
 
@@ -125,7 +125,7 @@ engine.soft = medium * 10^9 + soft      # kMediumUnit = 10^9
 medium (sum of delays) / soft (makespan) are integers and a double is exact up to 2^53, so
 lexicographic order holds while `|medium| < ~9.0x10^6` and `|soft| < 10^9` (both bounded by
 `allocations x (max delay + max duration)` — plenty of headroom on realistic
-instances). Rule details are in `optimaru/project_job_scheduling/cpp/include/pjs/domain.hpp`.
+instances). Rule details are in `optimaru/project_job_scheduling/cpp/pjs/model/domain.hpp`.
 
 ## Caveats
 

@@ -64,7 +64,7 @@ so they match the strings `list_constraints()` prints.
 Two knobs do not apply on the plugin path: `parallel_solver_count`
 (a caller-owned calculator cannot be cloned into workers) and `order_consolidate_moves`
 (that operator reads the monolithic calculator's live volume table). Details are in
-the comments of `cpp/include/op/solver.hpp`.
+the comments of `cpp/op/solver.hpp`.
 """
 
 from .._constraint import Constraint, Level, Score, score_costs, select

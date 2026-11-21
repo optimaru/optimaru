@@ -1,5 +1,5 @@
 // pybind11 bindings for the order-picking C++ core.
-// Wraps the existing op::* use case (include/ and src/ beside this file) without modifying it: one
+// Wraps the existing op::* use case (op/ beside this file) without modifying it: one
 // solver, one module (optimaru.order_picking._core). The generic optimaru engine is
 // imported header-only from optimaru/cpp/optimaru.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
@@ -12,10 +12,10 @@
 #include <vector>
 
 #include "op/constraints.hpp"
-#include "op/demo_data.hpp"
-#include "op/domain.hpp"
-#include "op/incremental_calculator.hpp"
-#include "op/score_calculator.hpp"
+#include "op/model/demo_data.hpp"
+#include "op/model/domain.hpp"
+#include "op/score/incremental_calculator.hpp"
+#include "op/score/score_calculator.hpp"
 #include "op/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"

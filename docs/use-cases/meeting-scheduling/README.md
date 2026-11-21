@@ -46,7 +46,7 @@ shaped as a whole). The rows are in `list_constraints()` order, and
 (`kDefaultLevel` / `kDefaultWeight`): every constraint is flippable to any of the three
 levels (`level="hard"` / `"medium"` / `"soft"`), none is a reward and all twelve are scored
 by default (`default_enabled`). The medium level folds into the engine's soft level as
-`medium x 1e6` (`MEDIUM_SCALE`, `kMediumFold` in `optimaru/meeting_scheduling/cpp/include/ms/domain.hpp`); a weight is
+`medium x 1e6` (`MEDIUM_SCALE`, `kMediumFold` in `optimaru/meeting_scheduling/cpp/ms/model/domain.hpp`); a weight is
 in units of the level in effect, so a medium weight is in medium units.
 
 The two medium constraints default to weight 1 in medium units, so `level="hard"` charges 1
@@ -102,12 +102,12 @@ Assignments are matched by id. An assignment the solution leaves out is placed b
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/meeting_scheduling/cpp/include/ms/solver.hpp` + `optimaru/meeting_scheduling/cpp/src/solver.cpp`.
+engine is `optimaru/meeting_scheduling/cpp/ms/solver.hpp` + `optimaru/meeting_scheduling/cpp/ms/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/meeting_scheduling/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/meeting_scheduling/cpp/ms/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set

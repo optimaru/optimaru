@@ -442,6 +442,6 @@ optimaru/employee_scheduling/
 ├── models.py         pydantic request/response layer, constraint models generated from the specs
 ├── demo.py           generate_demo_data, a made-up sample request
 ├── helpers.py        pure-Python conveniences (list_constraints, make_random_roster, ...)
-└── cpp/              bindings.cpp (the _core module), optimaru/employee_scheduling/cpp/include/es/, src/
+└── cpp/              bindings.cpp (the _core module), es/ (the C++ core), main.cpp (the demo)
 tests/employee_scheduling/   correctness, raw costs by hand, catalog + model tests (pytest)
 ```

@@ -11,11 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "pdp/demo_data.hpp"
-#include "pdp/domain.hpp"
-#include "pdp/haversine.hpp"
-#include "pdp/incremental_calculator.hpp"
-#include "pdp/score_calculator.hpp"
+#include "pdp/model/demo_data.hpp"
+#include "pdp/model/domain.hpp"
+#include "pdp/model/haversine.hpp"
+#include "pdp/score/incremental_calculator.hpp"
+#include "pdp/score/score_calculator.hpp"
 #include "pdp/solver.hpp"
 #include "optimaru/testing/check.hpp"
 

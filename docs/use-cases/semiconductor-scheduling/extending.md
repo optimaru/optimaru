@@ -24,13 +24,13 @@ moves the figures, not the steps.
 
 Each operation row (one per lot and route step) holds one decision value, a decode
 priority and a machine choice folded into one int. The schedule is not stored: the
-decoder ([`decoder.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/decoder.hpp))
+decoder ([`decoder.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/model/decoder.hpp))
 derives it from all the values, and changing one row's priority can move every later
 operation on every machine. So no constraint is a sum over decision values, and all twenty
 constraints are **global** components that read one shared view of the decoded schedule.
 
 The view is the `ScheduleEvaluator`
-([`evaluator.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/evaluator.hpp)).
+([`evaluator.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/score/evaluator.hpp)).
 A move only marks its rows. When a score is asked, the evaluator decodes again from the
 earliest step the marked rows can change, finds the operations whose machine, start or
 end moved, and re-costs only the **units** they touch: their rows, their lots, the old
@@ -43,7 +43,7 @@ There are two scoring paths, and they give the same score for the same values
 
 | | `fab.solve(problem)` | `fab.solve(problem, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | `SemiconductorIncrementalScoreCalculator` (`cpp/src/incremental_calculator.cpp`): the evaluator's totals at the default weights of `ScoreCalculator::scoreOf` | the assembly: one component per constraint, `cpp/include/fab/constraints/`, each reading the same evaluator |
+| Scored by | `SemiconductorIncrementalScoreCalculator` (`cpp/fab/score/incremental_calculator.cpp`): the evaluator's totals at the default weights of `ScoreCalculator::scoreOf` | the assembly: one component per constraint, `cpp/fab/constraints/`, each reading the same evaluator |
 | Constraints | the twenty, at their defaults | the ones you list, with your knobs |
 | Steps per second | 93.6 thousand | 91.1 thousand |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -95,7 +95,7 @@ number that is positive for a violation and 0 for none. Weight and level are app
 by the engine.
 
 All twenty derive from `ScheduleViewConstraint` in
-[`constraints/common.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/constraints/common.hpp).
+[`constraints/common.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/constraints/common.hpp).
 The base binds the shared view, passes every value change to it and returns the view's total for the
 component's `Term` from `cost()`. A component therefore adds no virtual function. It names its
 `Term` and holds its formula as a static function over one unit; the evaluator and the full
@@ -113,7 +113,7 @@ recompute call that function. Pick the unit by what the constraint reads:
 
 The example reads the last step of one lot, so it is a `lotCost`. Six edits:
 
-**1. The component**, `optimaru/semiconductor_scheduling/cpp/include/fab/constraints/late_lots_cost.hpp`:
+**1. The component**, `optimaru/semiconductor_scheduling/cpp/fab/constraints/late_lots_cost.hpp`:
 
 ```cpp
 #ifndef FAB_CONSTRAINTS_LATE_LOTS_COST_HPP
@@ -163,7 +163,7 @@ medium level, and `level="medium"` raises `ValueError`. Hard totals are rounded 
 constraint, so a hard constraint returns whole numbers.
 
 **2. The `Term`**, in
-[`score_terms.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/score_terms.hpp):
+[`score_terms.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/score/score_terms.hpp):
 `LateLotsCost,` in `enum class Term` between `CycleTimeCost` and `MakespanCost`, and
 `kTermCount = 21`. The `Term` order must equal the order of `defaultConstraints()`:
 `constraint_items()` pairs the per-item lists with the catalog names by position.
@@ -171,7 +171,7 @@ The first `kHardTermCount` (14) terms are the hard ones, which `ScoreCalculator:
 adds up by index; a soft constraint goes after them. The docs and the tests select
 defaults by name, not by position, so the new entry displaces none of their picks.
 
-**3. The assembly**, `cpp/include/fab/constraints.hpp`: include the header, and add
+**3. The assembly**, `cpp/fab/constraints.hpp`: include the header, and add
 one line to `defaultConstraints()`, after `CycleTimeCost`:
 
 ```cpp
@@ -183,14 +183,14 @@ A constraint has to be in `defaultConstraints()` for Python to see it. With
 weight.
 
 **4. The two callers of the formula.** The full recompute, `rawCostsOf()` in
-`cpp/src/score_calculator.cpp`, in the loop over the lots:
+`cpp/fab/score/score_calculator.cpp`, in the loop over the lots:
 
 ```cpp
         add(Term::LateLotsCost,
             LateLotsCost::lotCost(schedule, lot, route, list(Term::LateLotsCost)));
 ```
 
-The evaluator, `ScheduleEvaluator::recost()` in `cpp/src/evaluator.cpp`, in the loop
+The evaluator, `ScheduleEvaluator::recost()` in `cpp/fab/score/evaluator.cpp`, in the loop
 over the dirty lots, with a cache field `late` added to `LotCache` in `evaluator.hpp`:
 
 ```cpp
@@ -371,12 +371,12 @@ So a constraint is cheap when its unit is small and its formula reads only that 
 
 | The constraint reads | Re-costed when | Per call | Example to copy |
 | --- | --- | --- | --- |
-| a row | its placement moved | O(1) | [`machine_preference_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/constraints/machine_preference_cost.hpp) |
-| a lot's route | any step of the lot moved | the lot's steps | [`max_queue_time_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/constraints/max_queue_time_cost.hpp) |
-| a machine's sequence | an assignment joined, left or moved on it; the rows come sorted once for all machine constraints | the machine's assignments | [`missing_setup_time_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/constraints/missing_setup_time_cost.hpp) |
-| a resource's users | one of them moved | a sweep over its users | [`auxiliary_resource_capacity_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/constraints/auxiliary_resource_capacity_cost.hpp) |
-| a group of machines | one of its machines changed; each machine's load is cached in `MachineCache` | the group's machines | [`machine_load_imbalance_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/constraints/machine_load_imbalance_cost.hpp) |
-| the whole schedule | any row moved; it reads the lots' cached completions | all lots | [`makespan_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/constraints/makespan_cost.hpp) |
+| a row | its placement moved | O(1) | [`machine_preference_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/constraints/machine_preference_cost.hpp) |
+| a lot's route | any step of the lot moved | the lot's steps | [`max_queue_time_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/constraints/max_queue_time_cost.hpp) |
+| a machine's sequence | an assignment joined, left or moved on it; the rows come sorted once for all machine constraints | the machine's assignments | [`missing_setup_time_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/constraints/missing_setup_time_cost.hpp) |
+| a resource's users | one of them moved | a sweep over its users | [`auxiliary_resource_capacity_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/constraints/auxiliary_resource_capacity_cost.hpp) |
+| a group of machines | one of its machines changed; each machine's load is cached in `MachineCache` | the group's machines | [`machine_load_imbalance_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/constraints/machine_load_imbalance_cost.hpp) |
+| the whole schedule | any row moved; it reads the lots' cached completions | all lots | [`makespan_cost.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/constraints/makespan_cost.hpp) |
 
 A constraint that fits none of these units needs a new cache and dirty list in the
 evaluator, filled in `markRowDirty()` or `markMachineDirty()`, and the same loop in
@@ -386,7 +386,7 @@ evaluator, filled in `markRowDirty()` or `markMachineDirty()`, and the same loop
 `ScoreCalculator::prepare()` builds the derived tables once, before a solve:
 `setupByKey`, `transportByGroup`, `lastOptionOfMachine`, `pinOfRow`,
 `rowsUsingResource`, the group and family indexes (`SemiconductorSchedule` in
-[`domain.hpp`](../../../optimaru/semiconductor_scheduling/cpp/include/fab/domain.hpp)).
+[`domain.hpp`](../../../optimaru/semiconductor_scheduling/cpp/fab/model/domain.hpp)).
 A constraint that needs another table adds it there, where `rawCostsOf()` and the evaluator
 both read it. The components' `reset()` only resets the shared view, once per
 rebuild of the calculator: at the start of a solve, and at every score under
@@ -409,7 +409,7 @@ weight is not 0 until both agree.
 **1. The weight.** In the component: `static constexpr double kDefaultWeight = 50.0;`.
 The soft score is summed in `double`, so a soft weight need not be whole.
 
-**2. The term**, in `cpp/src/score_calculator.cpp`. Read the weight off the component
+**2. The term**, in `cpp/fab/score/score_calculator.cpp`. Read the weight off the component
 with the other soft weights:
 
 ```cpp
@@ -559,11 +559,11 @@ model.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/fab/constraints/<subject>_cost.hpp` | new | | | weight |
-| `cpp/include/fab/score_terms.hpp` | `Term`, `kTermCount` | | | |
-| `cpp/include/fab/constraints.hpp` | include, `emplace` | | | |
-| `cpp/src/score_calculator.cpp` | `rawCostsOf()` | | | `scoreOf()` |
-| `cpp/src/evaluator.cpp`, `evaluator.hpp` | `recost()`, cache field | | a new unit, if any | |
+| `cpp/fab/constraints/<subject>_cost.hpp` | new | | | weight |
+| `cpp/fab/score/score_terms.hpp` | `Term`, `kTermCount` | | | |
+| `cpp/fab/constraints.hpp` | include, `emplace` | | | |
+| `cpp/fab/score/score_calculator.cpp` | `rawCostsOf()` | | | `scoreOf()` |
+| `cpp/fab/score/evaluator.cpp`, `evaluator.hpp` | `recost()`, cache field | | a new unit, if any | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/semiconductor_scheduling/cpp/fab_fixtures.hpp` | | `kTermNames` | | |
 | `tests/semiconductor_scheduling/cpp/fab_test.cpp` | | case, count | | expected score |

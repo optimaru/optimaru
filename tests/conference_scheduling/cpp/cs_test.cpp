@@ -15,9 +15,9 @@
 #include <string>
 #include <vector>
 
-#include "cs/domain.hpp"
-#include "cs/incremental_calculator.hpp"
-#include "cs/score_calculator.hpp"
+#include "cs/model/domain.hpp"
+#include "cs/score/incremental_calculator.hpp"
+#include "cs/score/score_calculator.hpp"
 #include "cs/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

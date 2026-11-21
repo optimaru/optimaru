@@ -40,7 +40,7 @@ There are two scoring paths, and they give the same score for the same schedule
 
 | | `pj.solve(schedule)` | `pj.solve(schedule, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/pjs/constraints/` |
+| Scored by | the monolithic calculators, `cpp/pjs/score/score_calculator.cpp` and `cpp/pjs/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/pjs/constraints/` |
 | Constraints | the four, at their defaults | the ones you list, with your knobs |
 | Steps per second | 4.6 million | 1.6 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -99,7 +99,7 @@ number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
 All four constraints derive from the one base in
-[`constraints/common.hpp`](../../../optimaru/project_job_scheduling/cpp/include/pjs/constraints/common.hpp),
+[`constraints/common.hpp`](../../../optimaru/project_job_scheduling/cpp/pjs/constraints/common.hpp),
 and it asks for one function:
 
 | The constraint reads | Base | You write |
@@ -113,7 +113,7 @@ allocation (`modeDelay == -1`) uses no resource and has delay 0 and duration 0.
 
 The example reads only the modes. Four edits:
 
-**1. The component**, `optimaru/project_job_scheduling/cpp/include/pjs/constraints/non_renewable_resource_usage_cost.hpp`:
+**1. The component**, `optimaru/project_job_scheduling/cpp/pjs/constraints/non_renewable_resource_usage_cost.hpp`:
 
 ```cpp
 #ifndef PJS_CONSTRAINTS_NON_RENEWABLE_RESOURCE_USAGE_COST_HPP
@@ -167,7 +167,7 @@ itself, as `medium * 10^9 + soft` (`kMediumFold` in `domain.hpp`), so no weight 
 the 10^9 and a soft total has to stay below it. A hard constraint returns whole numbers,
 because a hard contribution is rounded.
 
-**2. The assembly**, `cpp/include/pjs/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/pjs/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -307,9 +307,9 @@ constraint does then:
 
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
-| a total that needs the dates (a resource profile, a project end) | `ScheduleAggregateConstraint` | the date chain and `evaluate()`, over the whole schedule | [`renewable_resource_capacity_cost.hpp`](../../../optimaru/project_job_scheduling/cpp/include/pjs/constraints/renewable_resource_capacity_cost.hpp) |
-| a total of the assigned modes alone | the same, with `needsDates()` returning false | `evaluate()` over the whole schedule | [`non_renewable_resource_capacity_cost.hpp`](../../../optimaru/project_job_scheduling/cpp/include/pjs/constraints/non_renewable_resource_capacity_cost.hpp) |
-| a sum of one term per allocation, each from its own mode and delay | `optimaru::MemberChangeGlobalConstraint`: keep the total in `on_member_changed()` | two updates | below; bed allocation's [`mixed_gender_room_cost.hpp`](../../../optimaru/bed_allocation/cpp/include/ba/constraints/mixed_gender_room_cost.hpp) |
+| a total that needs the dates (a resource profile, a project end) | `ScheduleAggregateConstraint` | the date chain and `evaluate()`, over the whole schedule | [`renewable_resource_capacity_cost.hpp`](../../../optimaru/project_job_scheduling/cpp/pjs/constraints/renewable_resource_capacity_cost.hpp) |
+| a total of the assigned modes alone | the same, with `needsDates()` returning false | `evaluate()` over the whole schedule | [`non_renewable_resource_capacity_cost.hpp`](../../../optimaru/project_job_scheduling/cpp/pjs/constraints/non_renewable_resource_capacity_cost.hpp) |
+| a sum of one term per allocation, each from its own mode and delay | `optimaru::MemberChangeGlobalConstraint`: keep the total in `on_member_changed()` | two updates | below; bed allocation's [`mixed_gender_room_cost.hpp`](../../../optimaru/bed_allocation/cpp/ba/constraints/mixed_gender_room_cost.hpp) |
 
 The first two rows are why the assembly falls behind as the instance grows: each of
 the four constraints walks every allocation on every score, and three of them derive the
@@ -414,7 +414,7 @@ agree.
 It must be a whole number on every level, because the monolithic calculators add in
 `int64`.
 
-**2. The term**, in `cpp/src/score_calculator.cpp`. Include the header, read the weight
+**2. The term**, in `cpp/pjs/score/score_calculator.cpp`. Include the header, read the weight
 off the component, add it and the level to the two `static_assert`s, sum the term into a
 new local `std::int64_t nonRenewableTotal` in the loop of `ScoreCalculator::score()` that
 fills `nonRenewableUsage`, and add it to the soft level:
@@ -433,7 +433,7 @@ constexpr auto kNonRenewableUsageWeight =
                   -(kMakespanWeight * makespan + kNonRenewableUsageWeight * nonRenewableTotal)};
 ```
 
-**3. The same in `cpp/src/incremental_calculator.cpp`**, which has its own copy of the
+**3. The same in `cpp/pjs/score/incremental_calculator.cpp`**, which has its own copy of the
 weight constants. It keeps the usage per resource in `applyNonRenewable()`; one line
 there keeps the total as well (a member declared in `incremental_calculator.hpp` and
 set to 0 in `rebuild()`), and `score()` adds it to the soft level:
@@ -548,14 +548,14 @@ default path, so they show a constraint after step 5.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/pjs/constraints/<subject>_cost.hpp` | new | | member-change total, `idle_at_weight_zero()` | weight |
-| `cpp/include/pjs/constraints.hpp` | include, `emplace` | | | |
+| `cpp/pjs/constraints/<subject>_cost.hpp` | new | | member-change total, `idle_at_weight_zero()` | weight |
+| `cpp/pjs/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/project_job_scheduling/cpp/pjs_plugin_test.cpp` | | cases, counts | | the row, expected scores |
 | `tests/project_job_scheduling/test_constraint_specs.py`, `test_constraints.py` | | lists | | the row, expected scores |
 | `docs/use-cases/project-job-scheduling/README.md`, `python.md` | | table row | | defaults |
-| `cpp/src/score_calculator.cpp`, `cpp/include/pjs/score_calculator.hpp` | | | | the term, the list in the comment |
-| `cpp/src/incremental_calculator.cpp`, `cpp/include/pjs/incremental_calculator.hpp` | | | | the total |
+| `cpp/pjs/score/score_calculator.cpp`, `cpp/pjs/score/score_calculator.hpp` | | | | the term, the list in the comment |
+| `cpp/pjs/score/incremental_calculator.cpp`, `cpp/pjs/score/incremental_calculator.hpp` | | | | the total |
 | `tests/project_job_scheduling/cpp/pjs_test.cpp` | | | | expected scores |
 | external-solver, `benchmarks/project-job-scheduling` | | | | the same constraint, results |
 

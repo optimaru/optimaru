@@ -11,9 +11,9 @@
 #include <vector>
 
 #include "fab/constraints.hpp"
-#include "fab/decoder.hpp"
-#include "fab/incremental_calculator.hpp"
-#include "fab/score_calculator.hpp"
+#include "fab/model/decoder.hpp"
+#include "fab/score/incremental_calculator.hpp"
+#include "fab/score/score_calculator.hpp"
 #include "fab/solver.hpp"
 #include "fab_fixtures.hpp"
 #include "optimaru/model/editor.hpp"

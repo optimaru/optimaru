@@ -38,8 +38,8 @@
 #include <string>
 #include <vector>
 
-#include "st/domain.hpp"
-#include "st/score_calculator.hpp"
+#include "st/model/domain.hpp"
+#include "st/score/score_calculator.hpp"
 #include "st/solver.hpp"
 
 using namespace st;

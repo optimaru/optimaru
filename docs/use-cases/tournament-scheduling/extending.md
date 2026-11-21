@@ -38,7 +38,7 @@ incremental calculator with it over 3,000 random moves.
 
 | | `ts.solve(schedule)` | `ts.solve(schedule, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/ts/constraints/` |
+| Scored by | the monolithic calculators, `cpp/ts/score/score_calculator.cpp` and `cpp/ts/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/ts/constraints/` |
 | Constraints | the four, at their defaults | the ones you list, with your knobs |
 | Moves | change, swap, ruin and recreate, and `TeamCountMove` | the same |
 | Steps per second | 2.33 million (3.12 million without `TeamCountMove`) | 1.20 million (1.72 million without) |
@@ -49,7 +49,7 @@ The speeds are the benchmark's `xlarge` instance (800 slots, 20 teams, 100 days)
 Apple M4 Max; [step 6](#6-measure) has the script. Steps 1 to 4 work on the assembly.
 Step 5 moves a constraint to the monolithic calculators.
 
-`TeamCountMove` (`cpp/src/solver.cpp`) empties or refills whole teams in one move. It matters for
+`TeamCountMove` (`cpp/ts/solver.cpp`) empties or refills whole teams in one move. It matters for
 the medium level: on the demo instance, after 1 million seeded steps, both paths end on `0 medium`
 (soft -1.54919), on the same schedule; with `config.team_count_moves = False` both end on a medium
 of 1.19523 (soft -1195232.56348). The move steers by the per-team loads and the per-(team, day)
@@ -99,7 +99,7 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-[`constraints/common.hpp`](../../../optimaru/tournament_scheduling/cpp/include/ts/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/tournament_scheduling/cpp/ts/constraints/common.hpp)
 has no base of its own for a constraint; it names the engine's two. Pick one by what the constraint
 is:
 
@@ -111,7 +111,7 @@ is:
 The example counts pairs inside one team, so it is a unit constraint and one
 function. Four edits:
 
-**1. The component**, `optimaru/tournament_scheduling/cpp/include/ts/constraints/consecutive_days_cost.hpp`:
+**1. The component**, `optimaru/tournament_scheduling/cpp/ts/constraints/consecutive_days_cost.hpp`:
 
 ```cpp
 #ifndef TS_CONSTRAINTS_CONSECUTIVE_DAYS_COST_HPP
@@ -165,11 +165,11 @@ live in the two constants and nowhere else; Python reads them through
 is in units of that level. A medium constraint states its weight in medium units
 (`assignmentCountImbalanceCost`: 1): the domain folds the medium level into the
 engine's soft level itself, as `medium * 1e6` (`kMediumFold` and `kMediumScale` in
-[`domain.hpp`](../../../optimaru/tournament_scheduling/cpp/include/ts/domain.hpp)), so
+[`domain.hpp`](../../../optimaru/tournament_scheduling/cpp/ts/model/domain.hpp)), so
 no weight carries the 10^6. A hard constraint returns whole numbers, because a hard
 contribution is rounded.
 
-**2. The assembly**, `cpp/include/ts/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/ts/constraints.hpp`: include the header, and add
 one line to `defaultConstraints()` after `TeamUnavailabilityCost`:
 
 ```cpp
@@ -321,9 +321,9 @@ that call is depends on the constraint:
 
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
-| a sum per team that is not a sum of per-slot terms (a clamp, a "at least one") | `cost()` alone, `scoped_units()` if only some teams can be charged | `cost()` over the team | [`team_unavailability_cost.hpp`](../../../optimaru/tournament_scheduling/cpp/include/ts/constraints/team_unavailability_cost.hpp) |
-| a sum over pairs of one team's slots | `cost()`, `supports_delta()` and `delta_cost()` | one pass over the team's other slots | [`team_conflict_cost.hpp`](../../../optimaru/tournament_scheduling/cpp/include/ts/constraints/team_conflict_cost.hpp) |
-| a statistic across teams or team pairs | `MemberChangeGlobalConstraint`: keep your own aggregates in `on_member_changed()` | what your update costs | [`assignment_count_imbalance_cost.hpp`](../../../optimaru/tournament_scheduling/cpp/include/ts/constraints/assignment_count_imbalance_cost.hpp), [`confrontation_count_imbalance_cost.hpp`](../../../optimaru/tournament_scheduling/cpp/include/ts/constraints/confrontation_count_imbalance_cost.hpp) |
+| a sum per team that is not a sum of per-slot terms (a clamp, a "at least one") | `cost()` alone, `scoped_units()` if only some teams can be charged | `cost()` over the team | [`team_unavailability_cost.hpp`](../../../optimaru/tournament_scheduling/cpp/ts/constraints/team_unavailability_cost.hpp) |
+| a sum over pairs of one team's slots | `cost()`, `supports_delta()` and `delta_cost()` | one pass over the team's other slots | [`team_conflict_cost.hpp`](../../../optimaru/tournament_scheduling/cpp/ts/constraints/team_conflict_cost.hpp) |
+| a statistic across teams or team pairs | `MemberChangeGlobalConstraint`: keep your own aggregates in `on_member_changed()` | what your update costs | [`assignment_count_imbalance_cost.hpp`](../../../optimaru/tournament_scheduling/cpp/ts/constraints/assignment_count_imbalance_cost.hpp), [`confrontation_count_imbalance_cost.hpp`](../../../optimaru/tournament_scheduling/cpp/ts/constraints/confrontation_count_imbalance_cost.hpp) |
 
 The example is a sum over pairs, and with `cost()` alone the engine compares every
 pair of a touched team on every move: 780 pairs for a team of 40 slots, twice per
@@ -431,7 +431,7 @@ function, after `delta_cost()`:
     }
 ```
 
-**3. The full recompute**, `cpp/src/score_calculator.cpp`, in `ScoreCalculator::score()`
+**3. The full recompute**, `cpp/ts/score/score_calculator.cpp`, in `ScoreCalculator::score()`
 after the confrontation unfairness, from the per-(team, day) counts `cellCnt`; then
 add the weighted total to the soft penalty:
 
@@ -461,8 +461,8 @@ add the weighted total to the soft penalty:
 
 **4. The incremental calculator.** Declare the table
 `std::vector<std::vector<int>> neighbourDays_` and the running total
-`std::int64_t consecutivePairs_ = 0` in `cpp/include/ts/incremental_calculator.hpp`. In
-`cpp/src/incremental_calculator.cpp`, `rebuild()` builds the table
+`std::int64_t consecutivePairs_ = 0` in `cpp/ts/score/incremental_calculator.hpp`. In
+`cpp/ts/score/incremental_calculator.cpp`, `rebuild()` builds the table
 (`neighbourDays_ = ConsecutiveDaysCost::neighbourDays(solution);`) and zeroes the
 total. `insert()` adds, and `retract()` subtracts, the team's slots on the days next
 to this one, after the hard terms of each:
@@ -603,13 +603,13 @@ two builds.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/ts/constraints/<subject>_cost.hpp` | new | | table, delta | weight, `neighbourDays()` |
-| `cpp/include/ts/constraints.hpp` | include, `emplace` | | | |
+| `cpp/ts/constraints/<subject>_cost.hpp` | new | | table, delta | weight, `neighbourDays()` |
+| `cpp/ts/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/tournament_scheduling/cpp/ts_plugin_test.cpp` | | two cases, counts | | the row, medium fixtures, team-count instance |
 | `tests/tournament_scheduling/test_constraint_specs.py` | | lists | | the row, the weights |
 | `docs/use-cases/tournament-scheduling/README.md`, `python.md` | | table row | | defaults, counts |
-| `cpp/src/score_calculator.cpp`, `cpp/src/incremental_calculator.cpp`, `incremental_calculator.hpp` | | | | the term |
+| `cpp/ts/score/score_calculator.cpp`, `cpp/ts/score/incremental_calculator.cpp`, `incremental_calculator.hpp` | | | | the term |
 | `tests/tournament_scheduling/cpp/ts_test.cpp`, `test_constraints.py` | | | | expected scores, team-count instance |
 | external-solver, `benchmarks/tournament-scheduling` | | the plugin | | results |
 

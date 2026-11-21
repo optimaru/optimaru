@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "ks/domain.hpp"
+#include "ks/model/domain.hpp"
 #include "optimaru/testing/check.hpp"
 
 namespace ks_test {

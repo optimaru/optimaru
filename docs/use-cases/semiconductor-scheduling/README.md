@@ -45,7 +45,7 @@ print([(a.lot_id, a.operation_id, a.machine_id, a.start, a.batch_id) for a in pr
   `rank` = the decode priority, `slot % options` = the machine option; `-1` = unassigned
   (the decoder stops the lot there).
 - The **schedule is derived**: the serial schedule-generation decoder
-  (`optimaru/semiconductor_scheduling/cpp/include/fab/decoder.hpp`) places, step by step, the ready operation with the least
+  (`optimaru/semiconductor_scheduling/cpp/fab/model/decoder.hpp`) places, step by step, the ready operation with the least
   (rank, -lot priority, lot id) at its earliest feasible start — past machine and resource
   downtime, resource capacity, unary overlaps, incompatible batch families and setups —
   and pulls compatible ready lots into the same batch run. Pins are obstacles placed
@@ -167,11 +167,11 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
 
 ## C++
 
-- `optimaru/semiconductor_scheduling/cpp/include/fab/domain.hpp` — facts, `OperationRow`, `SemiconductorSchedule`, the
+- `optimaru/semiconductor_scheduling/cpp/fab/model/domain.hpp` — facts, `OperationRow`, `SemiconductorSchedule`, the
   `optimaru::SolutionTraits` specialization
-- `optimaru/semiconductor_scheduling/cpp/include/fab/decoder.hpp` — the serial schedule-generation decoder (incremental:
+- `optimaru/semiconductor_scheduling/cpp/fab/model/decoder.hpp` — the serial schedule-generation decoder (incremental:
   truncate to a step and decode on), `defaultChoices`, `seedState`
-- `optimaru/semiconductor_scheduling/cpp/include/fab/constraints/` — one component per constraint, each owning its unit
+- `optimaru/semiconductor_scheduling/cpp/fab/constraints/` — one component per constraint, each owning its unit
   formula: `machine_eligibility_cost.hpp`, `lot_route_precedence_cost.hpp`,
   `machine_capacity_cost.hpp`, `batch_capacity_cost.hpp`, `batch_family_conflict_cost.hpp`,
   `missing_setup_time_cost.hpp`, `machine_unavailability_cost.hpp`,
@@ -181,14 +181,14 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
   `min_batch_size_cost.hpp`, `machine_load_imbalance_cost.hpp`,
   `weighted_tardiness_cost.hpp`, `cycle_time_cost.hpp`, `makespan_cost.hpp`
   (+ `common.hpp`: the shared `ScheduleView` and the global base);
-  `optimaru/semiconductor_scheduling/cpp/include/fab/constraints.hpp` assembles the default set (`defaultConstraints()`)
+  `optimaru/semiconductor_scheduling/cpp/fab/constraints.hpp` assembles the default set (`defaultConstraints()`)
 - `score_calculator` — the monolithic full recompute (`rawCostsOf`)
 - `evaluator` + `incremental_calculator` — lazy suffix re-decode from the earliest
   `readyStep` of the changed rows, re-costing only the rows, lots, machines, groups,
   resources and pins whose placements moved
 - `moves/priority_swap.hpp`, `solver` — the engine wrapper (simulated annealing, the
   value recommender, the priority swap, multi-start)
-- `optimaru/semiconductor_scheduling/cpp/src/main.cpp` — a 12-lot demo
+- `optimaru/semiconductor_scheduling/cpp/main.cpp` — a 12-lot demo
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=semiconductor_scheduling
@@ -234,15 +234,15 @@ relative order, but its start times are recomputed.
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape (the composite rank x slot value); the domain solver is
-`optimaru/semiconductor_scheduling/cpp/include/fab/solver.hpp` + `optimaru/semiconductor_scheduling/cpp/src/solver.cpp`.
+`optimaru/semiconductor_scheduling/cpp/fab/solver.hpp` + `optimaru/semiconductor_scheduling/cpp/fab/solver.cpp`.
 
 **Adding a move.** The change move's value comes from the value recommender in
-`optimaru/semiconductor_scheduling/cpp/src/solver.cpp` (a machine switch or a priority shift); `PrioritySwapMove`
-(`optimaru/semiconductor_scheduling/cpp/include/fab/moves/priority_swap.hpp`) is a custom `optimaru::MoveOperator`
+`optimaru/semiconductor_scheduling/cpp/fab/solver.cpp` (a machine switch or a priority shift); `PrioritySwapMove`
+(`optimaru/semiconductor_scheduling/cpp/fab/moves/priority_swap.hpp`) is a custom `optimaru::MoveOperator`
 registered with `engine.add_move_operator(...)` — use it as the template.
 
 **Changing the construction.** The start state is built before the engine runs
-(`beginSearch` in `optimaru/semiconductor_scheduling/cpp/src/solver.cpp`: the default machine choices at identity ranks, or
+(`beginSearch` in `optimaru/semiconductor_scheduling/cpp/fab/solver.cpp`: the default machine choices at identity ranks, or
 the seed state of a warm start); the engine's construction heuristic finds nothing to
 assign.
 

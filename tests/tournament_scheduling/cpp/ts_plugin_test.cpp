@@ -45,8 +45,8 @@
 
 #include "optimaru/model/editor.hpp"
 #include "ts/constraints.hpp"
-#include "ts/domain.hpp"
-#include "ts/score_calculator.hpp"
+#include "ts/model/domain.hpp"
+#include "ts/score/score_calculator.hpp"
 #include "ts/solver.hpp"
 #include "optimaru/testing/check.hpp"
 

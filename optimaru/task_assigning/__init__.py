@@ -23,7 +23,7 @@ at the default weights:
 Internally it maps onto Score(int64, double) as
 `engine.hard = hard * 10**9 + soft0` (the medium level folds below hard) and
 `engine.soft = soft1 * 10**7 + soft2` (squared_makespan_cost's default weight is 10**7);
-level order preserved, see cpp/include/ta/domain.hpp for the exact rules.
+level order preserved, see cpp/ta/model/domain.hpp for the exact rules.
 `constraint_info()` lists every constraint with its default level and weight; change one
 through a constraint selection (see `optimaru.task_assigning.constraints`).
 

@@ -15,9 +15,9 @@
 #include <vector>
 
 #include "sls/constraints.hpp"
-#include "sls/domain.hpp"
-#include "sls/incremental_calculator.hpp"
-#include "sls/score_calculator.hpp"
+#include "sls/model/domain.hpp"
+#include "sls/score/incremental_calculator.hpp"
+#include "sls/score/score_calculator.hpp"
 #include "sls/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

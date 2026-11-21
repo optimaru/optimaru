@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Source layout: one C++ tree per use case.** `optimaru/<use case>/cpp/include/<ns>/` and
+  `cpp/src/` are merged into `optimaru/<use case>/cpp/<ns>/`, where a header sits next to its
+  source, filed by role under the engine's folder names: `solver` and `constraints.hpp` at the
+  top, `model/` (`domain.hpp`, demo data, travel times), `score/` (the monolithic calculators),
+  `constraints/`, and `moves/`, `construct/`, `accept/` where a use case has its own. The demo is
+  `cpp/main.cpp`. Nothing changes in the Python package or in what the solvers do; C++ that
+  includes a use case's headers follows the new paths (`"vrp/domain.hpp"` is now
+  `"vrp/model/domain.hpp"`, `"vrp/score_calculator.hpp"` is `"vrp/score/score_calculator.hpp"`),
+  with `optimaru/<use case>/cpp` as the include directory.
 - **Benchmarks: vehicle routing with time windows.** `benchmarks/vehicle-routing` runs two new
   series, `--series solomon` (Solomon's 56 instances of 100 customers) and `--series homberger`
   (Gehring & Homberger's 300, 200 to 1000 customers), against the OR-Tools Routing solver with a

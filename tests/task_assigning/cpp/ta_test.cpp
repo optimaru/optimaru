@@ -18,10 +18,10 @@
 #include <utility>
 #include <vector>
 
-#include "ta/demo_data.hpp"
-#include "ta/domain.hpp"
-#include "ta/incremental_calculator.hpp"
-#include "ta/score_calculator.hpp"
+#include "ta/model/demo_data.hpp"
+#include "ta/model/domain.hpp"
+#include "ta/score/incremental_calculator.hpp"
+#include "ta/score/score_calculator.hpp"
 #include "ta/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

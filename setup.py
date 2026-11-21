@@ -2,7 +2,7 @@
 extension, `optimaru.<use case>._core`, per use case.
 
 Every extension compiles its use case's bindings (optimaru/<use case>/cpp/bindings.cpp)
-and the C++ sources in optimaru/<use case>/cpp/src/ (all but main.cpp, the demo)
+and the C++ sources under optimaru/<use case>/cpp/<ns>/ (cpp/main.cpp, the demo, is left out)
 against the header-only engine (optimaru/cpp/optimaru/).
 
     pip install .            # local build
@@ -37,11 +37,19 @@ def selected_use_cases():
 
 
 def sources(name):
-    """bindings.cpp and every cpp/src/*.cpp except main.cpp (the demo): the same core
-    library the use case's CMakeLists.txt builds."""
+    """bindings.cpp and every .cpp under cpp/<ns>/, the use case's one source tree (headers
+    and sources side by side): the same core library the use case's CMakeLists.txt builds.
+    cpp/main.cpp, the demo, sits outside that tree and is not compiled."""
     cpp = f"optimaru/{name}/cpp"
-    src = sorted(p.name for p in Path(HERE, cpp, "src").glob("*.cpp") if p.name != "main.cpp")
-    return [f"{cpp}/bindings.cpp", *(f"{cpp}/src/{file}" for file in src)]
+    # The tree is the directory that holds solver.hpp, so a stray directory beside it (an
+    # in-tree build, leftovers of an older checkout) does not get in the way.
+    trees = sorted(p.parent for p in Path(HERE, cpp).glob("*/solver.hpp"))
+    if len(trees) != 1:
+        found = [p.name for p in trees]
+        raise SystemExit(f"{cpp}: expected one <ns>/ directory with a solver.hpp, found {found}")
+    (tree,) = trees
+    src = sorted(p.relative_to(Path(HERE, cpp)).as_posix() for p in tree.rglob("*.cpp"))
+    return [f"{cpp}/bindings.cpp", *(f"{cpp}/{file}" for file in src)]
 
 
 def extension(name):
@@ -49,7 +57,7 @@ def extension(name):
     return Pybind11Extension(
         f"optimaru.{name}._core",
         sources=sources(name),
-        include_dirs=[f"{cpp}/include", ENGINE_INCLUDE],
+        include_dirs=[cpp, ENGINE_INCLUDE],
         cxx_std=17,
     )
 

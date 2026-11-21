@@ -106,7 +106,7 @@ mapping is `engine.soft = medium * 10^10 + soft` (the domain's medium fold; ever
 weights are in medium units (default 1): `level="hard"` on a medium constraint costs 1 hard
 per minute, `level="soft"` 1 soft per minute, and `level="medium"` puts a hard or soft
 constraint on medium with its weight in medium units. For the order-preservation conditions and domain
-details see [`cpp.md`](cpp.md) and the `fp/domain.hpp` comments.
+details see [`cpp.md`](cpp.md) and the `fp/model/domain.hpp` comments.
 `Line.operator_index` (each line's operator, the second decision next to the job order)
 is reassigned by the solver with hill climbing between engine legs — exact when there
 are at least as many operators as lines, an alternating heuristic otherwise (caveat).

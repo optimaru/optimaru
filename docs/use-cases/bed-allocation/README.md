@@ -52,7 +52,7 @@ constraint is flippable onto any of the three levels (`level="hard"`, `"medium"`
 (`kDefaultLevel` / `kDefaultWeight`).
 
 The medium level folds into the engine's soft level as `medium * 10^9 + soft`
-(`kMediumFold` in `optimaru/bed_allocation/cpp/include/ba/domain.hpp`); weights are in units of their level, so
+(`kMediumFold` in `optimaru/bed_allocation/cpp/ba/model/domain.hpp`); weights are in units of their level, so
 `unassigned_stays_cost` defaults to weight **1** medium unit per night.
 `UnassignedStaysCost(level="hard")` makes it one hard unit per night,
 `UnassignedStaysCost(level="soft")` one soft unit per night (outside the fold), and an
@@ -112,12 +112,12 @@ Stays are matched by id. A stay the solution leaves out is placed by the constru
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/bed_allocation/cpp/include/ba/solver.hpp` + `optimaru/bed_allocation/cpp/src/solver.cpp`.
+engine is `optimaru/bed_allocation/cpp/ba/solver.hpp` + `optimaru/bed_allocation/cpp/ba/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/bed_allocation/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/bed_allocation/cpp/ba/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set

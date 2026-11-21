@@ -122,7 +122,7 @@ soft = -(medium penalty × 1e6 + raw soft penalty)     # MEDIUM_SCALE == 1e6
 Level priority is preserved as long as the raw soft penalty (sum of grain indices,
 100×adjacent pairs, 10×overlapping grains, capacity differences, room changes) stays
 below 1e6 — always the case on realistic instances. The fold is declared once in C++
-(`kMediumFold = intoSoft(1e6)` in `optimaru/meeting_scheduling/cpp/include/ms/domain.hpp`); both calculators and
+(`kMediumFold = intoSoft(1e6)` in `optimaru/meeting_scheduling/cpp/ms/model/domain.hpp`); both calculators and
 `constraints.score()` (via the `medium_fold` on every `constraint_costs()` entry) apply it.
 
 ## Caveats
@@ -148,7 +148,7 @@ on those: `scaled:N` is an instance of N meetings in the demo's shape (the gener
 `ms_quality_bench.cpp` at the tag `v0.5.0`; it used `std::shuffle`, so an instance was
 another one per standard library).
 
-Adopted defaults (full history in the comments of `optimaru/meeting_scheduling/cpp/include/ms/solver.hpp`):
+Adopted defaults (full history in the comments of `optimaru/meeting_scheduling/cpp/ms/solver.hpp`):
 
 - `late_acceptance_size = 0` → automatic `clamp(128 × assignments, 3200, 6400)`
 - `day_fit_value_probability = 0.8` (steers change moves to grains that fit within a day)

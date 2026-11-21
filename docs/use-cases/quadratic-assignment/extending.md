@@ -36,7 +36,7 @@ There are two scoring paths, and they give the same score for the same assignmen
 
 | | `qap.solve(problem)` | `qap.solve(problem, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/qap/constraints/` |
+| Scored by | the monolithic calculators, `cpp/qap/score/score_calculator.cpp` and `cpp/qap/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/qap/constraints/` |
 | Constraints | the five, at their defaults | the ones you list, with your knobs |
 | Steps per second | 3.7 million | 2.9 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -108,7 +108,7 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-[`constraints/common.hpp`](../../../optimaru/quadratic_assignment/cpp/include/qap/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/quadratic_assignment/cpp/qap/constraints/common.hpp)
 names two bases. Pick the base by what the cost is:
 
 | The cost is | Base | You write |
@@ -120,7 +120,7 @@ The example reads one location and the facility on it, so it is one function. Fo
 edits:
 
 **1. The component**,
-`optimaru/quadratic_assignment/cpp/include/qap/constraints/unused_location_capacity_cost.hpp`:
+`optimaru/quadratic_assignment/cpp/qap/constraints/unused_location_capacity_cost.hpp`:
 
 ```cpp
 #ifndef QAP_CONSTRAINTS_UNUSED_LOCATION_CAPACITY_COST_HPP
@@ -179,7 +179,7 @@ and direct costs are not checked to be 0 or more. A constraint that reads them a
 come out negative on such data overrides `raw_cost_can_be_negative()`, as
 `AssignmentCost` does, and the engine then refuses it on the hard level.
 
-**2. The assembly**, `cpp/include/qap/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/qap/constraints.hpp`: include the header, and add
 one line to `defaultConstraints()`, after `LocationCapacityCost`. The catalog lists
 the unit constraints first and the globals after them; the docs and the tests select
 defaults by name, not by position, so the new entry displaces none of their picks:
@@ -345,10 +345,10 @@ facilities leave and join. What that costs depends on the constraint:
 
 | The constraint is | Use | Per swap | Example to copy |
 | --- | --- | --- | --- |
-| a sum of one term per facility at the location | `QapUnitConstraint` with `cost()`, `supports_delta()` and `delta_cost()` | one lookup per join or leave | [`forbidden_assignments_cost.hpp`](../../../optimaru/quadratic_assignment/cpp/include/qap/constraints/forbidden_assignments_cost.hpp) |
+| a sum of one term per facility at the location | `QapUnitConstraint` with `cost()`, `supports_delta()` and `delta_cost()` | one lookup per join or leave | [`forbidden_assignments_cost.hpp`](../../../optimaru/quadratic_assignment/cpp/qap/constraints/forbidden_assignments_cost.hpp) |
 | a clamp, or another function of the location that does not add up per facility | `QapUnitConstraint` with `cost()` alone | the location's facilities | step 2 |
-| a sum of one number per facility over the whole assignment | `QapMemberChangeGlobalConstraint` with one `int64` total | one addition per join or leave | [`assignment_cost.hpp`](../../../optimaru/quadratic_assignment/cpp/include/qap/constraints/assignment_cost.hpp) |
-| a sum over pairs of facilities | the same, with its own copy of the locations | every facility, four times | [`flow_distance_cost.hpp`](../../../optimaru/quadratic_assignment/cpp/include/qap/constraints/flow_distance_cost.hpp) |
+| a sum of one number per facility over the whole assignment | `QapMemberChangeGlobalConstraint` with one `int64` total | one addition per join or leave | [`assignment_cost.hpp`](../../../optimaru/quadratic_assignment/cpp/qap/constraints/assignment_cost.hpp) |
+| a sum over pairs of facilities | the same, with its own copy of the locations | every facility, four times | [`flow_distance_cost.hpp`](../../../optimaru/quadratic_assignment/cpp/qap/constraints/flow_distance_cost.hpp) |
 
 The example is the second row, and it stays without `delta_cost()`. A delta must equal
 `cost(with the facility) - cost(without it)` exactly. For a clamp that depends on the
@@ -415,14 +415,14 @@ It must be a whole number, because the monolithic calculators add in `int64`. Th
 comment above the struct and the Python spec (its docstring and the last sentence of
 both descriptions) say weight 0; change them with it.
 
-**2. The term**, in four files. `RawCosts` in `cpp/include/qap/score_calculator.hpp`
+**2. The term**, in four files. `RawCosts` in `cpp/qap/score/score_calculator.hpp`
 holds the raw total of every constraint. Add the field, after `locationCapacityCost`:
 
 ```cpp
         std::int64_t unusedLocationCapacityCost = 0;
 ```
 
-In `cpp/src/score_calculator.cpp`, the full recompute, include the header, read the
+In `cpp/qap/score/score_calculator.cpp`, the full recompute, include the header, read the
 weight off the component (`kUnusedWeight`), and add it to the first `static_assert`
 and its level to the second. Then the total in `rawCosts()`, from the loads it has
 summed already, and the term in `score()`:
@@ -443,8 +443,8 @@ summed already, and the term in `score()`:
 
 The incremental calculator keeps one running total per constraint, and retracts and
 inserts a facility's terms when it moves. Declare the member `unused_` and the helper
-`capacitySlack()` in `cpp/include/qap/incremental_calculator.hpp`. In
-`cpp/src/incremental_calculator.cpp`: the same include and weight, `capacitySlack()`
+`capacitySlack()` in `cpp/qap/score/incremental_calculator.hpp`. In
+`cpp/qap/score/incremental_calculator.cpp`: the same include and weight, `capacitySlack()`
 (`capacityPenalty()` with the subtraction turned around), the start value in
 `rebuild()`, the total in `rawCosts()`, the same term in `score()`, and in both
 `insert()` and `retract()` the two lines around the change of the load:
@@ -573,16 +573,16 @@ capacities, so this constraint is 0 on them.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/qap/constraints/<subject>_cost.hpp` | new | | scope | weight |
-| `cpp/include/qap/constraints.hpp` | include, `emplace` | | | |
+| `cpp/qap/constraints/<subject>_cost.hpp` | new | | scope | weight |
+| `cpp/qap/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | the spec's text, counts |
 | `tests/quadratic_assignment/cpp/qap_plugin_test.cpp` | | case, totals, counts | scoped entries | totals, row |
 | `tests/quadratic_assignment/test_constraint_specs.py` | | lists, cases | `units` | row, expected scores |
 | `tests/quadratic_assignment/reference_quadratic_assignment.py` | | the constraint | | weight |
 | `tests/quadratic_assignment/test_reference_parity.py` | | `SPECS` | | |
 | `docs/use-cases/quadratic-assignment/README.md`, `python.md` | | table row | | defaults |
-| `cpp/include/qap/score_calculator.hpp`, `incremental_calculator.hpp` | | | | the fields |
-| `cpp/src/score_calculator.cpp`, `incremental_calculator.cpp` | | | | the term |
+| `cpp/qap/score/score_calculator.hpp`, `incremental_calculator.hpp` | | | | the fields |
+| `cpp/qap/score/score_calculator.cpp`, `incremental_calculator.cpp` | | | | the term |
 | `tests/quadratic_assignment/cpp/qap_test.cpp` | | | | totals, expected scores |
 | external-solver, `benchmarks/quadratic-assignment` | | the same constraint | | results |
 

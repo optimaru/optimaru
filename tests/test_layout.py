@@ -31,17 +31,47 @@ def test_every_subpackage_is_a_use_case():
 def test_a_use_case_keeps_only_its_sources_under_cpp():
     """What the extension and the core library build from. The C++ tests are in
     tests/<use case>/cpp/ and a C++ bench is in benchmarks/<slug>/cpp/. All four entries are
-    required: setup.py compiles cpp/bindings.cpp and cpp/src/*.cpp against cpp/include."""
+    required: setup.py compiles cpp/bindings.cpp and every .cpp of the one directory there,
+    cpp/<ns>/ (headers and sources side by side, included as "<ns>/..."); main.cpp is the demo.
+
+    Inside cpp/<ns>/ every use case files by role, under the names the engine uses in
+    optimaru/cpp/optimaru/: the entry points (solver, constraints.hpp) at the top, model/ (the
+    domain and its data), score/ (the monolithic calculators), constraints/ (one component per
+    file), and, where the use case has its own, moves/, construct/ and accept/."""
     tracked = subprocess.run(["git", "ls-files", "optimaru"], cwd=ROOT, capture_output=True, text=True)
     if tracked.returncode != 0:
         pytest.skip("not a git checkout")
     entries = {name: set() for name in USE_CASES}
+    trees = {name: set() for name in USE_CASES}
     for path in tracked.stdout.splitlines():
         parts = path.split("/")
         if len(parts) > 3 and parts[1] in USE_CASES and parts[2] == "cpp":
             entries[parts[1]].add(parts[3])
+            if len(parts) > 4:
+                trees[parts[1]].add("/".join(parts[4:]))
+    top_level = {"solver.hpp", "solver.cpp", "constraints.hpp"}
+    # School timetabling has a second entry point next to solver: the canonical model's own
+    # solver and constraint assembly.
+    canonical = {"canonical_solver.hpp", "canonical_solver.cpp", "canonical_constraints.hpp"}
+    roles = {"model", "score", "constraints", "moves", "construct", "accept"}
     for name in sorted(USE_CASES):
-        assert entries[name] == {"CMakeLists.txt", "bindings.cpp", "include", "src"}, name
+        extra = entries[name] - {"CMakeLists.txt", "bindings.cpp", "main.cpp"}
+        assert len(extra) == 1, (name, extra)
+        (namespace,) = extra
+        assert entries[name] == {"CMakeLists.txt", "bindings.cpp", "main.cpp", namespace}, name
+        files = {path for path in trees[name] if "/" not in path}
+        folders = {path.split("/")[0] for path in trees[name] if "/" in path}
+        assert {"solver.hpp", "solver.cpp"} <= files, name
+        assert files <= top_level | (canonical if name == "school_timetabling" else set()), (name, files)
+        assert {"model", "score", "constraints"} <= folders <= roles, (name, folders)
+        assert "model/domain.hpp" in trees[name], name
+        # setup.py compiles every .cpp of the tree; the core libraries of CMakeLists.txt list
+        # them by hand. They are the same files.
+        cmake = (ROOT / "optimaru" / name / "cpp" / "CMakeLists.txt").read_text()
+        libraries = re.findall(r"add_library\(\w+([^)]*)\)", cmake)
+        listed = {token for block in libraries for token in block.split() if token.endswith(".cpp")}
+        compiled = {f"{namespace}/{path}" for path in trees[name] if path.endswith(".cpp")}
+        assert listed == compiled, name
 
 
 def test_the_package_lists_every_use_case():

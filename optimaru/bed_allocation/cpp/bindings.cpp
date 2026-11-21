@@ -17,8 +17,8 @@
 #include <vector>
 
 #include "ba/constraints.hpp"
-#include "ba/domain.hpp"
-#include "ba/score_calculator.hpp"
+#include "ba/model/domain.hpp"
+#include "ba/score/score_calculator.hpp"
 #include "ba/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
@@ -206,7 +206,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("nearby_size", &Solver::Config::nearby_size)
             // Early termination once bestScore >= (hard, medium, soft), e.g.
             // (0, -2**63, -2**63) stops at the first feasible solution: INT64_MIN
-            // on medium or soft is "no floor" (toEngineScoreLimit, ba/domain.hpp).
+            // on medium or soft is "no floor" (toEngineScoreLimit, ba/model/domain.hpp).
             .def_property(
                     "best_score_limit",
                     [](const Solver::Config& c) {

@@ -21,10 +21,10 @@
 #include <string>
 #include <vector>
 
-#include "mnt/demo_data.hpp"
-#include "mnt/domain.hpp"
-#include "mnt/incremental_calculator.hpp"
-#include "mnt/score_calculator.hpp"
+#include "mnt/model/demo_data.hpp"
+#include "mnt/model/domain.hpp"
+#include "mnt/score/incremental_calculator.hpp"
+#include "mnt/score/score_calculator.hpp"
 #include "mnt/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

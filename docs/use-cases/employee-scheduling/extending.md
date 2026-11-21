@@ -29,7 +29,7 @@ belongs to no unit. A change or a swap moves one or two shifts, so only the empl
 and join are scored again.
 
 This use case has more constraints than it scores by default. Eight are the **defaults**
-(`es::defaultConstraints()` in `cpp/include/es/constraints.hpp`); the other 22 are **opt-in**:
+(`es::defaultConstraints()` in `cpp/es/constraints.hpp`); the other 22 are **opt-in**:
 they sit only in the second assembly of that file, `catalogConstraints()`, and a caller has to
 pick them. Python builds every pick through the **constraint factory**, `factory()` in
 [`cpp/bindings.cpp`](../../../optimaru/employee_scheduling/cpp/bindings.cpp): one entry per
@@ -40,7 +40,7 @@ There are two scoring paths, and they give the same score for the same schedule
 
 | | `es.solve(schedule)` | `es.solve(schedule, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per pick, `cpp/include/es/constraints/` |
+| Scored by | the monolithic calculators, `cpp/es/score/score_calculator.cpp` and `cpp/es/score/incremental_calculator.cpp` | the assembly: one component per pick, `cpp/es/constraints/` |
 | C++ call | `Solver::solve(schedule)` | `Solver::solve(schedule, calculator)` with a `DecomposedCalculator` |
 | Constraints | the eight defaults | the ones you list, defaults and opt-in alike, with your knobs and parameters |
 | Steps per second | 3.42 million | 2.46 million |
@@ -106,7 +106,7 @@ new constraint takes here. A weight-0 entry in `defaultConstraints()` would stil
 entry to be picked, and the tests require weight 1 of every row.
 
 There is no base that asks for one function per shift. The family bases in
-[`cpp/include/es/constraints/`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/)
+[`cpp/es/constraints/`](../../../optimaru/employee_scheduling/cpp/es/constraints/)
 ask for one function of a different shape:
 
 | The constraint reads | Base | You write |
@@ -119,7 +119,7 @@ ask for one function of a different shape:
 The example is a sum over one employee's shifts, so it is the third row: one function. Five
 edits:
 
-**1. The component**, `cpp/include/es/constraints/unused_skill_cost.hpp`:
+**1. The component**, `cpp/es/constraints/unused_skill_cost.hpp`:
 
 ```cpp
 #ifndef ES_CONSTRAINTS_UNUSED_SKILL_COST_HPP
@@ -172,7 +172,7 @@ because a hard contribution is rounded per employee.
 that scores calls; only skills that some shift requires get a bit. Pinned shifts are settled
 history and are not judged again, as in `RequiredSkillCost`.
 
-**2. The catalog**, `cpp/include/es/constraints.hpp`: include the header, and add one line at
+**2. The catalog**, `cpp/es/constraints.hpp`: include the header, and add one line at
 the end of `catalogConstraints()`:
 
 ```cpp
@@ -320,11 +320,11 @@ and one of the employee it joins. What that is depends on the constraint:
 
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
-| a term per (employee, shift) | a table in `on_reset()`, `delta_cost()`, and a place in the compiled delta group | one table read, inside the group's one pass | [`required_skill_cost.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/required_skill_cost.hpp), [`desired_shift_cost.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/desired_shift_cost.hpp) |
-| a sum over pairs of one employee's shifts | `delta_cost()` over the other shifts; in the group the pair walk is shared | one pass over the employee's shifts | [`shift_overlap_cost.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/shift_overlap_cost.hpp), [`min_rest_cost.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/min_rest_cost.hpp) |
-| runs of days or weekly totals of one employee | `DayPresenceConstraint` / `WeeklyMinutesConstraint`, `cost()` alone | the whole employee again | [`max_consecutive_days_cost.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/max_consecutive_days_cost.hpp), [`max_weekly_minutes_cost.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/max_weekly_minutes_cost.hpp) |
-| a projection several picks share | a `SharedConstraintContext` (`shared_context_key()`, `bind_shared_context()`) | one projection for all of them | [`day_pattern_cost.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/day_pattern_cost.hpp) |
-| anything that spans employees | `EsGlobalConstraint` with `supports_member_change()` and `on_member_changed()` | what your update costs | [`shift_count_imbalance_cost.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/shift_count_imbalance_cost.hpp), [`shift_coverage_cost.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/shift_coverage_cost.hpp) |
+| a term per (employee, shift) | a table in `on_reset()`, `delta_cost()`, and a place in the compiled delta group | one table read, inside the group's one pass | [`required_skill_cost.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/required_skill_cost.hpp), [`desired_shift_cost.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/desired_shift_cost.hpp) |
+| a sum over pairs of one employee's shifts | `delta_cost()` over the other shifts; in the group the pair walk is shared | one pass over the employee's shifts | [`shift_overlap_cost.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/shift_overlap_cost.hpp), [`min_rest_cost.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/min_rest_cost.hpp) |
+| runs of days or weekly totals of one employee | `DayPresenceConstraint` / `WeeklyMinutesConstraint`, `cost()` alone | the whole employee again | [`max_consecutive_days_cost.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/max_consecutive_days_cost.hpp), [`max_weekly_minutes_cost.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/max_weekly_minutes_cost.hpp) |
+| a projection several picks share | a `SharedConstraintContext` (`shared_context_key()`, `bind_shared_context()`) | one projection for all of them | [`day_pattern_cost.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/day_pattern_cost.hpp) |
+| anything that spans employees | `EsGlobalConstraint` with `supports_member_change()` and `on_member_changed()` | what your update costs | [`shift_count_imbalance_cost.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/shift_count_imbalance_cost.hpp), [`shift_coverage_cost.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/shift_coverage_cost.hpp) |
 
 A unit constraint with `cost()` alone is correct: the engine then recomputes the whole employee on
 every change. `delta_cost()` returns what one shift adds given the others, and must equal `cost(with
@@ -375,7 +375,7 @@ constraints (`requiredSkillCost`, `employeeUnavailabilityCost`, `undesiredDayCos
 `desiredDayCost`, `desiredShiftCost`, `shiftOverlapCost`, `maxOneShiftPerDayCost`, `minRestCost`)
 derive from `GroupableAssignmentConstraint` and share one structural key. At reset the calculator
 hands the ones present to `EmployeeAssignmentDeltaGroup` in
-[`assignment_delta_group.hpp`](../../../optimaru/employee_scheduling/cpp/include/es/constraints/assignment_delta_group.hpp),
+[`assignment_delta_group.hpp`](../../../optimaru/employee_scheduling/cpp/es/constraints/assignment_delta_group.hpp),
 which computes all their deltas in one call: table reads for the per-shift terms, one shared walk
 over the employee's other shifts for the pair terms. The group is formed only when at least two of
 the three pair constraints are present, no member is picked twice, and every member is one it knows.
@@ -429,7 +429,7 @@ its line in `catalogConstraints()`: `catalog_info()` checks that both declare it
 not. In `constraints.py`, put `unused_skill_cost` in `_DEFAULTS` at the same place. The weight stays
 1: the monolithic calculator adds every default at weight 1 in `int64`.
 
-**2. The term**, in `cpp/src/score_calculator.cpp`. Include the header and `<bitset>`, add the
+**2. The term**, in `cpp/es/score/score_calculator.cpp`. Include the header and `<bitset>`, add the
 weight and the level to the two `static_assert`s, and add the term to
 `ScoreCalculator::shiftSoftDelta()`:
 
@@ -557,16 +557,16 @@ so on the assembly with each instance's constraints.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/es/constraints/<subject>_cost.hpp` | new | | table, delta, group base | |
-| `cpp/include/es/constraints.hpp` | include, `catalogConstraints()` | | | `defaultConstraints()` |
+| `cpp/es/constraints/<subject>_cost.hpp` | new | | table, delta, group base | |
+| `cpp/es/constraints.hpp` | include, `catalogConstraints()` | | | `defaultConstraints()` |
 | `cpp/bindings.cpp` | factory entry | | | counts in the text |
 | `constraints.py` | spec, instance, `SPEC_CLASSES`, `__all__` | | | `_DEFAULTS` |
-| `cpp/include/es/constraints/assignment_delta_group.hpp` | | | the new member | |
+| `cpp/es/constraints/assignment_delta_group.hpp` | | | the new member | |
 | `tests/employee_scheduling/test_constraint_costs.py` | | hand case | | |
 | `tests/employee_scheduling/cpp/es_plugin_test.cpp` | | `addEveryComponent()`, catalog | | catalog |
 | `tests/employee_scheduling/test_constraint_specs.py` | | `NAMES` | | default lists, scores |
 | `docs/use-cases/employee-scheduling/python.md`, `README.md` | | table row | | defaults |
-| `cpp/src/score_calculator.cpp` | | | | the term, `static_assert`s |
+| `cpp/es/score/score_calculator.cpp` | | | | the term, `static_assert`s |
 | `tests/employee_scheduling/_reference.py`, `test_scheduling.py` | | | | expected scores |
 | external-solver, `benchmarks/employee-scheduling` | | | | the same constraint, results |
 

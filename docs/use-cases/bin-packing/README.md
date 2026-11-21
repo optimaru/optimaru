@@ -133,23 +133,23 @@ monolithic calculator. The CP-SAT reference takes integral offsets.
 
 ## C++
 
-- `optimaru/bin_packing/cpp/include/bp/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
-- `optimaru/bin_packing/cpp/include/bp/constraints/` — one component per constraint: `bin_capacity_cost.hpp`,
+- `optimaru/bin_packing/cpp/bp/model/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/bin_packing/cpp/bp/constraints/` — one component per constraint: `bin_capacity_cost.hpp`,
   `color_conflict_cost.hpp`, `item_conflict_cost.hpp`, `used_bins_cost.hpp`
-  (+ `common.hpp`); `optimaru/bin_packing/cpp/include/bp/constraints.hpp` assembles the default set
+  (+ `common.hpp`); `optimaru/bin_packing/cpp/bp/constraints.hpp` assembles the default set
   (`defaultConstraints()`)
 - `score_calculator` — full recompute (the reference) and `prepare()` (fact checks,
   colour classes, resolved conflict pairs)
 - `incremental_calculator` — before/after hooks, O(1) plus the moved item's conflict
   partners per move
 - `construction` — best-fit decreasing around a seed, compaction
-- `optimaru/bin_packing/cpp/include/bp/moves.hpp` — the domain's macro moves, `EmptyBinMove`, `RepackMove`
+- `optimaru/bin_packing/cpp/bp/moves/moves.hpp` — the domain's macro moves, `EmptyBinMove`, `RepackMove`
   and `TradeMove` (header-only, so the tests drive them directly)
-- `optimaru/bin_packing/cpp/include/bp/fill_late_acceptance.hpp` — late acceptance with the rule for a
+- `optimaru/bin_packing/cpp/bp/accept/fill_late_acceptance.hpp` — late acceptance with the rule for a
   step that keeps the score (`fill_tie_break`)
 - `solver` — engine wrapper (construction + Late Acceptance + the macro moves + adaptive
   ruin & recreate, parallel starts)
-- `optimaru/bin_packing/cpp/src/main.cpp` — demo on the web sample (20 items, colours, conflicts; 8 bins)
+- `optimaru/bin_packing/cpp/main.cpp` — demo on the web sample (20 items, colours, conflicts; 8 bins)
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=bin_packing
@@ -181,7 +181,7 @@ raw costs by hand, the catalog, and the macro-move walk on the plugin path.
 
 Best-fit decreasing builds the start; late acceptance then works on it with the
 engine's change / swap moves, its adaptive ruin-and-recreate kicks, and three macro
-moves of the domain (`optimaru/bin_packing/cpp/include/bp/moves.hpp`). They exist because
+moves of the domain (`optimaru/bin_packing/cpp/bp/moves/moves.hpp`). They exist because
 `used_bins_cost` is a step function: a bin only stops costing when its last item
 leaves, which no single change can show the acceptor.
 
@@ -207,7 +207,7 @@ of bins has the same score, and plain late acceptance takes every step from one 
 next, so the change and swap moves undo what `TradeMove` gains. With `fill_tie_break`
 (the default) such a step is taken when it does not lower the *fill*, the sum of the
 squared bin loads, and otherwise one time in eight
-(`optimaru/bin_packing/cpp/include/bp/fill_late_acceptance.hpp`). The fill is not part
+(`optimaru/bin_packing/cpp/bp/accept/fill_late_acceptance.hpp`). The fill is not part
 of the score: the score, `best_score_limit`, the unimproved limits and `on_new_best` see
 the number of bins alone. A step that changes the score is judged as before.
 
@@ -267,20 +267,20 @@ print(bp.solve(warm, time_limit_seconds=1.0, random_seed=42).score, warm.bin_loa
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/bin_packing/cpp/include/bp/solver.hpp` + `optimaru/bin_packing/cpp/src/solver.cpp`.
+engine is `optimaru/bin_packing/cpp/bp/solver.hpp` + `optimaru/bin_packing/cpp/bp/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves (weights in
 `Solver::Config`; `value_recommender_probability` biases change moves toward bins in
 use). `EmptyBinMove` (moves every item of a light bin into the other bins in one step),
 `RepackMove` (re-places the items of a few light bins without a clash) and `TradeMove`
 (trades items between two bins so that one gets fuller) are defined
-in `optimaru/bin_packing/cpp/include/bp/moves.hpp` and registered in `optimaru/bin_packing/cpp/src/solver.cpp` (`runEngine`) —
+in `optimaru/bin_packing/cpp/bp/moves/moves.hpp` and registered in `optimaru/bin_packing/cpp/bp/solver.cpp` (`runEngine`) —
 use them as the template, and give a new move a walk in `bp_test` (j). A new move is an `optimaru::MoveOperator<…>` registered with
-`engine.add_move_operator(...)` next to the engine construction in `optimaru/bin_packing/cpp/src/solver.cpp`;
+`engine.add_move_operator(...)` next to the engine construction in `optimaru/bin_packing/cpp/bp/solver.cpp`;
 a ruin for LNS is a `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** The domain places every item before the
-engine runs (`optimaru/bin_packing/cpp/src/construction.cpp`: best fit over the items by decreasing
+engine runs (`optimaru/bin_packing/cpp/bp/construct/construction.cpp`: best fit over the items by decreasing
 weight, around the seeded bins); the engine only fills what is still unassigned, so a
 different heuristic is a different `constructBins` order or rule.
 

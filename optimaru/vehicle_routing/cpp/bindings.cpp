@@ -1,5 +1,5 @@
 // pybind11 bindings for the vehicle-routing C++ core.
-// Wraps the existing vrp::* use case (include/ and src/ beside this file) without modifying
+// Wraps the existing vrp::* use case (vrp/ beside this file) without modifying
 // it. One solver, one module (optimaru.vehicle_routing._core).
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
@@ -14,9 +14,9 @@
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
 #include "vrp/constraints.hpp"
-#include "vrp/domain.hpp"
-#include "vrp/haversine.hpp"
-#include "vrp/score_calculator.hpp"
+#include "vrp/model/domain.hpp"
+#include "vrp/model/haversine.hpp"
+#include "vrp/score/score_calculator.hpp"
 #include "vrp/solver.hpp"
 
 namespace py = pybind11;

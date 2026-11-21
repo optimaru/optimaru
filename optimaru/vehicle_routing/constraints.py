@@ -71,7 +71,7 @@ so they match the strings `list_constraints()` prints.
 `parallel_solver_count` applies on the plugin path: every start scores on its own copy
 of the picks (in C++, only the `Solver::solve` overload that takes one caller-owned
 calculator stays a single start). The driving-time-guided selection does not apply there.
-Details are in the comments of `cpp/include/vrp/solver.hpp`.
+Details are in the comments of `cpp/vrp/solver.hpp`.
 """
 
 from .._constraint import Constraint, Level, Score, score_costs, select

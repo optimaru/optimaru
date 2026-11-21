@@ -19,11 +19,11 @@ C++ namespace `<ns>` (such as `vrp`):
 
 | What | Where |
 | --- | --- |
-| Problem facts, decision variable, `SolutionTraits`, and the `Score` it reports: the engine's `optimaru::Score`, or `optimaru::HardMediumSoftScore` with a `MediumFold` where there is a medium level (`score/hard_medium_soft_score.hpp`) | `optimaru/<uc>/cpp/include/<ns>/domain.hpp` |
-| Engine wiring: settings, registered moves, construction | `optimaru/<uc>/cpp/include/<ns>/solver.hpp`, `optimaru/<uc>/cpp/src/solver.cpp` |
-| One file per constraint | `optimaru/<uc>/cpp/include/<ns>/constraints/<subject>_cost.hpp` |
-| The default constraint set | `optimaru/<uc>/cpp/include/<ns>/constraints.hpp` (`defaultConstraints()`) |
-| The fast default-path calculators | `optimaru/<uc>/cpp/src/score_calculator.cpp`, `incremental_calculator.cpp` |
+| Problem facts, decision variable, `SolutionTraits`, and the `Score` it reports: the engine's `optimaru::Score`, or `optimaru::HardMediumSoftScore` with a `MediumFold` where there is a medium level (`score/hard_medium_soft_score.hpp`) | `optimaru/<uc>/cpp/<ns>/model/domain.hpp` |
+| Engine wiring: settings, registered moves, construction | `optimaru/<uc>/cpp/<ns>/solver.hpp`, `optimaru/<uc>/cpp/<ns>/solver.cpp` |
+| One file per constraint | `optimaru/<uc>/cpp/<ns>/constraints/<subject>_cost.hpp` |
+| The default constraint set | `optimaru/<uc>/cpp/<ns>/constraints.hpp` (`defaultConstraints()`) |
+| The fast default-path calculators | `optimaru/<uc>/cpp/<ns>/score/score_calculator.cpp`, `incremental_calculator.cpp` |
 | The Python module `optimaru.<uc>._core` | `optimaru/<uc>/cpp/bindings.cpp`, stubs in `optimaru/<uc>/_core.pyi`. The parts every use case binds come from the engine's helpers: `opy::bind_score<Score>(m)`, `opy::bind_solver_config(...)` and `opy::bind_constraints<Solution>(...)` for `constraint_costs()`, `list_constraints()` and `constraint_info()` |
 | Constraint specs for Python | `optimaru/<uc>/constraints.py` |
 | Python models (`to_core()` / `from_core()`) | `optimaru/<uc>/models.py` |
@@ -93,9 +93,9 @@ station" (assembly-line balancing).
 
 A move is an `optimaru::MoveOperator<Solution>`
 ([`search/operators.hpp`](../optimaru/cpp/optimaru/search/operators.hpp)). Put it in
-the use case's include directory, for example
-`optimaru/<uc>/cpp/include/<ns>/moves.hpp` (bin packing keeps its moves in
-[`bp/moves.hpp`](../optimaru/bin_packing/cpp/include/bp/moves.hpp)):
+the use case's `moves/` folder, for example
+`optimaru/<uc>/cpp/<ns>/moves/moves.hpp` (bin packing keeps its moves in
+[`bp/moves/moves.hpp`](../optimaru/bin_packing/cpp/bp/moves/moves.hpp)):
 
 ```cpp
 #include <random>
@@ -163,7 +163,7 @@ the k-nearest-neighbour lists when the use case configures
 
 ### 2. Register it
 
-In `optimaru/<uc>/cpp/src/solver.cpp`, where the use case builds its
+In `optimaru/<uc>/cpp/<ns>/solver.cpp`, where the use case builds its
 `optimaru::Solver<MyProblem> engine(...)`:
 
 ```cpp
@@ -181,7 +181,7 @@ only, so a custom move would silently vanish from them. A use case with custom
 moves runs its parallel starts through `optimaru::solve_parallel_starts`
 (`optimaru/solver_config.hpp`) instead: every start gets an `optimaru::Solver` of
 its own and registers its own operators.
-`assembly_line_balancing/cpp/src/solver.cpp` shows the pattern. If the use case
+`assembly_line_balancing/cpp/alb/solver.cpp` shows the pattern. If the use case
 you extend calls `solve_multistart` (knapsack does, for example), switch it to
 that pattern before adding a move.
 
@@ -256,7 +256,7 @@ The raw cost is positive for a penalty and `0` for no violation. A reward (a
 quantity to maximize) has a raw cost `<= 0`.
 
 The steps below add a vehicle-routing cost, following
-[`vrp/constraints/latency_cost.hpp`](../optimaru/vehicle_routing/cpp/include/vrp/constraints/latency_cost.hpp).
+[`vrp/constraints/latency_cost.hpp`](../optimaru/vehicle_routing/cpp/vrp/constraints/latency_cost.hpp).
 
 ### 1. Facts (only if the cost needs new input)
 
@@ -267,7 +267,7 @@ they come from the constraint picks and the solver config.
 
 ### 2. The component
 
-Add `optimaru/<uc>/cpp/include/<ns>/constraints/<subject>_cost.hpp`. Most costs
+Add `optimaru/<uc>/cpp/<ns>/constraints/<subject>_cost.hpp`. Most costs
 are a **unit constraint**: a pure function of one unit and its members.
 
 | Shape | Unit | Members |
@@ -327,16 +327,16 @@ struct MyRuleCost final : detail::PerVehicleConstraint {
   all of them, can override `idle_at_weight_zero()` to return `true`: at weight
   0 it is then sent no change, and it is reset before `constraint_costs()`
   reports its raw cost (assembly-line balancing's
-  [`alb/constraints/workload_imbalance_cost.hpp`](../optimaru/assembly_line_balancing/cpp/include/alb/constraints/workload_imbalance_cost.hpp)
+  [`alb/constraints/workload_imbalance_cost.hpp`](../optimaru/assembly_line_balancing/cpp/alb/constraints/workload_imbalance_cost.hpp)
   does). All of
   knapsack's constraints are globals, for example
-  [`ks/constraints/mandatory_items_cost.hpp`](../optimaru/knapsack/cpp/include/ks/constraints/mandatory_items_cost.hpp).
+  [`ks/constraints/mandatory_items_cost.hpp`](../optimaru/knapsack/cpp/ks/constraints/mandatory_items_cost.hpp).
   On the sequence shape, a rule that keeps the elements of a group in one list
   (the visits or requests of one job on one vehicle) forwards to
   `optimaru::GroupPlacement`
   ([`score/group_placement.hpp`](../optimaru/cpp/optimaru/score/group_placement.hpp)),
   which also answers the move previews; see
-  [`vrp/constraints/visit_group_cost.hpp`](../optimaru/vehicle_routing/cpp/include/vrp/constraints/visit_group_cost.hpp).
+  [`vrp/constraints/visit_group_cost.hpp`](../optimaru/vehicle_routing/cpp/vrp/constraints/visit_group_cost.hpp).
 - **Rewards and structural constraints.** A reward sets `reward = true;` in its
   constructor (its raw cost must be `<= 0`, and it can never be hard). A
   structural constraint that must keep its level sets `level_flippable = false;`.

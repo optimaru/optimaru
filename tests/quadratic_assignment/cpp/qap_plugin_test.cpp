@@ -42,8 +42,8 @@
 #include "optimaru/model/editor.hpp"
 #include "optimaru/python/names.hpp"
 #include "qap/constraints.hpp"
-#include "qap/domain.hpp"
-#include "qap/score_calculator.hpp"
+#include "qap/model/domain.hpp"
+#include "qap/score/score_calculator.hpp"
 #include "qap/solver.hpp"
 #include "qap_fixtures.hpp"
 

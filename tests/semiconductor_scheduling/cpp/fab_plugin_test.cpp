@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "fab/constraints.hpp"
-#include "fab/score_calculator.hpp"
+#include "fab/score/score_calculator.hpp"
 #include "fab/solver.hpp"
 #include "fab_fixtures.hpp"
 #include "optimaru/model/editor.hpp"

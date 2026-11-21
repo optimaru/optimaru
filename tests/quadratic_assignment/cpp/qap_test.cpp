@@ -25,9 +25,9 @@
 #include <vector>
 
 #include "optimaru/model/editor.hpp"
-#include "qap/domain.hpp"
-#include "qap/incremental_calculator.hpp"
-#include "qap/score_calculator.hpp"
+#include "qap/model/domain.hpp"
+#include "qap/score/incremental_calculator.hpp"
+#include "qap/score/score_calculator.hpp"
 #include "qap/solver.hpp"
 #include "qap_fixtures.hpp"
 

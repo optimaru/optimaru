@@ -2,15 +2,15 @@
 # which defines the header-only engine target `optimaru`.
 
 add_library(qap_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/solver.cpp
+    qap/score/score_calculator.cpp
+    qap/score/incremental_calculator.cpp
+    qap/solver.cpp
 )
-target_include_directories(qap_core PUBLIC include)
+target_include_directories(qap_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(qap_core PUBLIC optimaru)
 target_compile_options(qap_core PRIVATE -Wall -Wextra)
 
-add_executable(qap_demo src/main.cpp)
+add_executable(qap_demo main.cpp)
 target_link_libraries(qap_demo PRIVATE qap_core)
 target_compile_options(qap_demo PRIVATE -Wall -Wextra)
 

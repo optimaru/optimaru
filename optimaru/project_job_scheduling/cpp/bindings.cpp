@@ -16,8 +16,8 @@
 #include <vector>
 
 #include "pjs/constraints.hpp"
-#include "pjs/domain.hpp"
-#include "pjs/score_calculator.hpp"
+#include "pjs/model/domain.hpp"
+#include "pjs/score/score_calculator.hpp"
 #include "pjs/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
@@ -228,7 +228,7 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             // Early termination once bestScore >= (hard, medium, soft), e.g.
             // (0, -2**63, -2**63) stops at the first feasible solution: INT64_MIN
-            // on medium or soft is "no floor" (toEngineScoreLimit, pjs/domain.hpp).
+            // on medium or soft is "no floor" (toEngineScoreLimit, pjs/model/domain.hpp).
             .def_property(
                     "best_score_limit",
                     [](const Solver::Config& c) {

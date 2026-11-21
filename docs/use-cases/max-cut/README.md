@@ -174,14 +174,14 @@ offsets; it rejects an exponent other than 1).
 
 ## C++
 
-- `optimaru/max_cut/cpp/include/mc/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
+- `optimaru/max_cut/cpp/mc/model/domain.hpp` — domain + `optimaru::SolutionTraits` specialization
   (with `is_pinned` for fixed vertices) and the `-1` rules
-- `optimaru/max_cut/cpp/include/mc/constraints/` — one component per constraint:
+- `optimaru/max_cut/cpp/mc/constraints/` — one component per constraint:
   `fixed_partition_cost.hpp`, `same_partition_pairs_cost.hpp`,
   `different_partition_pairs_cost.hpp`, `partition_size_bounds_cost.hpp`,
   `partition_imbalance_cost.hpp`, `cut_weight_cost.hpp` (+ `common.hpp`: the
   aliases, the prepare guard and the member-change base of the globals);
-  `optimaru/max_cut/cpp/include/mc/constraints.hpp` assembles the default set (`defaultConstraints()`,
+  `optimaru/max_cut/cpp/mc/constraints.hpp` assembles the default set (`defaultConstraints()`,
   also the catalog order)
 - `score_calculator` — `prepare()` (validation + CSR adjacency / pair incidence)
   and the full recompute (the reference, `rawCosts()`)
@@ -190,7 +190,7 @@ offsets; it rejects an exponent other than 1).
   swap moves + adaptive ruin & recreate; swaps only under exact size bounds;
   independent parallel starts on worker threads, an exception in one of them is
   rethrown by `solve()`)
-- `optimaru/max_cut/cpp/src/main.cpp` — the web demo solved and explained per constraint
+- `optimaru/max_cut/cpp/main.cpp` — the web demo solved and explained per constraint
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DOPTIMARU_USE_CASES=max_cut
@@ -239,18 +239,18 @@ print(warm.partition, warm.cut_weight)
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the engine is
-`optimaru/max_cut/cpp/include/mc/solver.hpp` + `optimaru/max_cut/cpp/src/solver.cpp`.
+`optimaru/max_cut/cpp/mc/solver.hpp` + `optimaru/max_cut/cpp/mc/solver.cpp`.
 
 **Adding a move.** The engine already mixes flip (change) and swap moves (weights in
 `Solver::Config`) and runs ruin-and-recreate on stagnation (and, with
 `ruin_recreate_as_move_weight > 0`, as an ordinary move — it moves a cluster of vertices
 chained by same-side pairs at once). A new move (a gain-guided Kernighan–Lin flip,
 say) is an `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)`
-on every engine `optimaru/max_cut/cpp/src/solver.cpp` builds: the one in `searchOneStart()`
+on every engine `optimaru/max_cut/cpp/mc/solver.cpp` builds: the one in `searchOneStart()`
 (the single start and each parallel start) and the one of the constraint-assembly
 overload. Under exact size bounds a move must keep the side sizes.
 
-**Changing the construction heuristic.** `construct()` in `optimaru/max_cut/cpp/src/solver.cpp` gives
+**Changing the construction heuristic.** `construct()` in `optimaru/max_cut/cpp/mc/solver.cpp` gives
 every vertex a side before the engine starts (the alternating start); the
 Python reference-parity tests pin it.
 

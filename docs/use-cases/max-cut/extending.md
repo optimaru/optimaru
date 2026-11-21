@@ -34,7 +34,7 @@ There are two scoring paths, and they give the same score for the same partition
 
 | | `max_cut.solve(problem)` | `max_cut.solve(problem, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/mc/constraints/` |
+| Scored by | the monolithic calculators, `cpp/mc/score/score_calculator.cpp` and `cpp/mc/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/mc/constraints/` |
 | Constraints | the six, at their defaults (`partition_imbalance_cost` at weight 0) | the ones you list, with your knobs |
 | Steps per second | 6.8 million | 4.1 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -92,7 +92,7 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-[`constraints/common.hpp`](../../../optimaru/max_cut/cpp/include/mc/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/max_cut/cpp/mc/constraints/common.hpp)
 names two bases. Pick the base by what the cost is:
 
 | The cost is | Base | You write |
@@ -102,7 +102,7 @@ names two bases. Pick the base by what the cost is:
 
 The example counts the edges inside one side, so it is one function. Four edits:
 
-**1. The component**, `optimaru/max_cut/cpp/include/mc/constraints/uncut_edges_cost.hpp`:
+**1. The component**, `optimaru/max_cut/cpp/mc/constraints/uncut_edges_cost.hpp`:
 
 ```cpp
 #ifndef MC_CONSTRAINTS_UNCUT_EDGES_COST_HPP
@@ -155,7 +155,7 @@ numbers, because a hard contribution is rounded per side. A reward, a quantity t
 maximize such as `cutWeightCost`, returns a raw cost of 0 or less and sets
 `reward = true; level_flippable = false;` in its constructor: it can never be hard.
 
-**2. The assembly**, `cpp/include/mc/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/mc/constraints.hpp`: include the header, and add
 one line to `defaultConstraints()`, after `PartitionSizeBoundsCost`. The catalog
 lists the unit constraints first and the globals after them; the docs and the tests
 select defaults by name, not by position, so the new entry displaces none of their picks:
@@ -311,10 +311,10 @@ vertex leaves and one for the side it joins. What that call is depends on the co
 
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
-| a sum of one term per vertex of the side | `McUnitConstraint` with `cost()`, `supports_delta()` and `delta_cost()` | one lookup | [`fixed_partition_cost.hpp`](../../../optimaru/max_cut/cpp/include/mc/constraints/fixed_partition_cost.hpp) |
+| a sum of one term per vertex of the side | `McUnitConstraint` with `cost()`, `supports_delta()` and `delta_cost()` | one lookup | [`fixed_partition_cost.hpp`](../../../optimaru/max_cut/cpp/mc/constraints/fixed_partition_cost.hpp) |
 | a sum over pairs or edges inside a side | the same, with `delta_cost()` over the vertex's list | the vertex's pairs or edges | this step |
-| a function of the side's size | `McUnitConstraint` with `cost()` alone | `members.size()` | [`partition_size_bounds_cost.hpp`](../../../optimaru/max_cut/cpp/include/mc/constraints/partition_size_bounds_cost.hpp) |
-| one number across both sides | `detail::MemberChangeConstraint`: keep your own totals in `on_member_changed()` | what your update costs | [`cut_weight_cost.hpp`](../../../optimaru/max_cut/cpp/include/mc/constraints/cut_weight_cost.hpp) |
+| a function of the side's size | `McUnitConstraint` with `cost()` alone | `members.size()` | [`partition_size_bounds_cost.hpp`](../../../optimaru/max_cut/cpp/mc/constraints/partition_size_bounds_cost.hpp) |
+| one number across both sides | `detail::MemberChangeConstraint`: keep your own totals in `on_member_changed()` | what your update costs | [`cut_weight_cost.hpp`](../../../optimaru/max_cut/cpp/mc/constraints/cut_weight_cost.hpp) |
 
 A unit constraint with `cost()` alone is correct: the engine then recomputes the
 whole side on every change. For the example that is a pass over all 2,392 edges for
@@ -357,7 +357,7 @@ Three things made the delta short, and they hold for any constraint here.
 solve starts and builds the adjacency of every vertex (`adjStart`, `adjVertex`,
 `adjWeight`, without self-loops) and the pair lists (`sameAsFirst*`, `sameAsSecond*`,
 `diff*`); see `MaxCutProblem` in
-[`domain.hpp`](../../../optimaru/max_cut/cpp/include/mc/domain.hpp). `on_reset()`
+[`domain.hpp`](../../../optimaru/max_cut/cpp/mc/model/domain.hpp). `on_reset()`
 checks that it ran. A constraint that needs another index builds it in `on_reset()`,
 which runs when the objective is rebuilt: twice in a solve, at the start and for the
 final score, and at every step under `full_assert`.
@@ -382,7 +382,7 @@ agree.
 **1. The weight.** In the component: `static constexpr double kDefaultWeight = 1.0;`.
 It must be a whole number, because the monolithic calculators add in `int64`.
 
-**2. The term**, in four files. `RawCosts` in `cpp/include/mc/score_calculator.hpp`
+**2. The term**, in four files. `RawCosts` in `cpp/mc/score/score_calculator.hpp`
 holds the raw cost of every constraint from the full recompute. Add the field, and
 `uncutTotal()` for the sum of the two sides:
 
@@ -390,7 +390,7 @@ holds the raw cost of every constraint from the full recompute. Add the field, a
     std::int64_t uncut[kSideCount] = {0, 0};      // uncutEdgesCost
 ```
 
-In `cpp/src/score_calculator.cpp` include the header, read the weight off the
+In `cpp/mc/score/score_calculator.cpp` include the header, read the weight off the
 component (`kUncutWeight`), and add it to the first `static_assert` and its level to
 the second. Then the cost in `rawCosts()` and the term in `scoreOf()`:
 
@@ -409,8 +409,8 @@ the second. Then the cost in `rawCosts()` and the term in `scoreOf()`:
 ```
 
 The incremental calculator keeps one running total per constraint. Add `uncut` to its
-`Totals` and the member `uncut_` in `cpp/include/mc/incremental_calculator.hpp`. In
-`cpp/src/incremental_calculator.cpp`: the same include, weight and `static_assert`,
+`Totals` and the member `uncut_` in `cpp/mc/score/incremental_calculator.hpp`. In
+`cpp/mc/score/incremental_calculator.cpp`: the same include, weight and `static_assert`,
 `uncut_` set to 0 in `rebuild()` and copied in `totals()`, the same term in
 `score()`, and the count in `apply()`, in the loop that already walks the vertex's
 edges for the cut:
@@ -520,15 +520,15 @@ constraint in the CP-SAT model.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/mc/constraints/<subject>_cost.hpp` | new | | `on_reset`, delta | weight |
-| `cpp/include/mc/constraints.hpp` | include, `emplace` | | | |
+| `cpp/mc/constraints/<subject>_cost.hpp` | new | | `on_reset`, delta | weight |
+| `cpp/mc/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/max_cut/cpp/mc_plugin_test.cpp` | | case, costs, counts | | costs, row |
 | `tests/max_cut/test_constraint_specs.py` | | lists, cases | | row, expected scores |
 | `tests/max_cut/reference_max_cut.py` | | the constraint | | weight |
 | `docs/use-cases/max-cut/README.md`, `python.md` | | table row | | defaults |
-| `cpp/include/mc/score_calculator.hpp`, `incremental_calculator.hpp` | | | | the fields |
-| `cpp/src/score_calculator.cpp`, `incremental_calculator.cpp` | | | | the term |
+| `cpp/mc/score/score_calculator.hpp`, `incremental_calculator.hpp` | | | | the fields |
+| `cpp/mc/score/score_calculator.cpp`, `incremental_calculator.cpp` | | | | the term |
 | `tests/max_cut/cpp/mc_test.cpp` | | | | totals, expected scores |
 | external-solver, `benchmarks/max-cut` | | the same constraint | | results |
 

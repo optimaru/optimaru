@@ -33,8 +33,8 @@
 #include <vector>
 
 #include "fl/constraints.hpp"
-#include "fl/domain.hpp"
-#include "fl/score_calculator.hpp"
+#include "fl/model/domain.hpp"
+#include "fl/score/score_calculator.hpp"
 #include "fl/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

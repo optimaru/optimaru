@@ -2,16 +2,16 @@
 # which defines the header-only engine target `optimaru`.
 
 add_library(ks_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/construction.cpp
-    src/solver.cpp
+    ks/score/score_calculator.cpp
+    ks/score/incremental_calculator.cpp
+    ks/construct/construction.cpp
+    ks/solver.cpp
 )
-target_include_directories(ks_core PUBLIC include)
+target_include_directories(ks_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(ks_core PUBLIC optimaru)
 target_compile_options(ks_core PRIVATE -Wall -Wextra)
 
-add_executable(ks_demo src/main.cpp)
+add_executable(ks_demo main.cpp)
 target_link_libraries(ks_demo PRIVATE ks_core)
 target_compile_options(ks_demo PRIVATE -Wall -Wextra)
 

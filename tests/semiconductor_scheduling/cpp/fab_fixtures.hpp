@@ -17,9 +17,9 @@
 #include <utility>
 #include <vector>
 
-#include "fab/domain.hpp"
-#include "fab/score_calculator.hpp"
-#include "fab/score_terms.hpp"
+#include "fab/model/domain.hpp"
+#include "fab/score/score_calculator.hpp"
+#include "fab/score/score_terms.hpp"
 
 namespace fabtest {
 

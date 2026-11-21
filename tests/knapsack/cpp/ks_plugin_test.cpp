@@ -39,8 +39,8 @@
 #include <vector>
 
 #include "ks/constraints.hpp"
-#include "ks/domain.hpp"
-#include "ks/score_calculator.hpp"
+#include "ks/model/domain.hpp"
+#include "ks/score/score_calculator.hpp"
 #include "ks/solver.hpp"
 #include "ks_fixtures.hpp"
 #include "optimaru/model/editor.hpp"

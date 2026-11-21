@@ -8,13 +8,13 @@ every match (`Match`) of the league (one assignment variable: `Match::round`).
 - `optimaru/sports_league_scheduling/cpp/` — domain (`sls::LeagueSchedule`), full-recompute scorer, O(delta)
   incremental scorer, a thin solver wrapper (LA + ALNS), demo (`sls_demo`),
   tests (`sls_test`, `sls_plugin_test`).
-- `optimaru/sports_league_scheduling/cpp/include/sls/constraints/` — one component per constraint (+ `common.hpp`):
+- `optimaru/sports_league_scheduling/cpp/sls/constraints/` — one component per constraint (+ `common.hpp`):
   `team_conflict_cost.hpp`, `consecutive_home_matches_cost.hpp`,
   `consecutive_away_matches_cost.hpp`, `repeat_match_on_next_day_cost.hpp`,
   `start_to_away_hop_cost.hpp`, `home_to_away_hop_cost.hpp`,
   `away_to_away_hop_cost.hpp`, `away_to_home_hop_cost.hpp`,
   `away_to_end_hop_cost.hpp`, `workday_classic_matches_cost.hpp`;
-  `optimaru/sports_league_scheduling/cpp/include/sls/constraints.hpp` assembles the default set (`defaultConstraints()`).
+  `optimaru/sports_league_scheduling/cpp/sls/constraints.hpp` assembles the default set (`defaultConstraints()`).
 - `optimaru/sports_league_scheduling/` — pybind11 package `optimaru.sports_league_scheduling` (with the pydantic mirror, demo generator
   and type stubs). Details in [`python.md`](python.md).
 
@@ -45,7 +45,7 @@ ctest --test-dir build
 This use case scores hard and soft only, so it maps identically onto the engine's
 `Score(int64 hard, double soft)` (soft stored as an integer value in the double).
 The 10 constraints
-(more detail in [`python.md`](python.md) and the comments in `optimaru/sports_league_scheduling/cpp/include/sls/
+(more detail in [`python.md`](python.md) and the comments in `optimaru/sports_league_scheduling/cpp/sls/
 score_calculator.hpp`):
 
 | Constraint (Python name) | C++ component | Default level | Default weight | Raw cost (0 = no violation) |
@@ -127,12 +127,12 @@ Matches are matched by id. A match the solution leaves out is placed by the cons
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/sports_league_scheduling/cpp/include/sls/solver.hpp` + `optimaru/sports_league_scheduling/cpp/src/solver.cpp`.
+engine is `optimaru/sports_league_scheduling/cpp/sls/solver.hpp` + `optimaru/sports_league_scheduling/cpp/sls/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/sports_league_scheduling/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/sports_league_scheduling/cpp/sls/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set

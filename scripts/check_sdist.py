@@ -4,9 +4,9 @@
     python3 scripts/check_sdist.py dist/optimaru-*.tar.gz
 
 Needed: the build files, the Python package (*.py, *.pyi, py.typed), the engine
-headers and, per use case, cpp/bindings.cpp plus everything under cpp/include/
-and cpp/src/ (setup.py compiles cpp/src/*.cpp but main.cpp; the headers may be
-included from anywhere). The list comes from `git ls-files`, so a new file type
+headers and, per use case, every C++ file under cpp/ (setup.py compiles
+cpp/bindings.cpp and the .cpp files of cpp/<ns>/; the headers may be included
+from anywhere). The list comes from `git ls-files`, so a new file type
 or directory that MANIFEST.in misses fails here instead of at release time.
 """
 
@@ -23,7 +23,7 @@ NEEDED = re.compile(
     r"^(setup\.py|pyproject\.toml|LICENSE|NOTICE|THIRD-PARTY-LICENSES|docs/pypi\.md"
     r"|optimaru/.*\.pyi?|optimaru/(.*/)?py\.typed"
     r"|optimaru/cpp/.+"
-    r"|optimaru/[^/]+/cpp/(bindings\.cpp|include/.+|src/.+))$"
+    r"|optimaru/[^/]+/cpp/.+\.[ch]pp)$"
 )
 FORBIDDEN = re.compile(r"^(tests|benchmarks|examples)/")
 

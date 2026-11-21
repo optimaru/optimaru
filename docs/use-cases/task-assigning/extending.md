@@ -32,7 +32,7 @@ There are two scoring paths, and they give the same score for the same solution
 
 | | `ta.solve(solution)` | `ta.solve(solution, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/ta/constraints/` |
+| Scored by | the monolithic calculators, `cpp/ta/score/score_calculator.cpp` and `cpp/ta/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/ta/constraints/` |
 | Constraints | the six, at their defaults | the ones you list, with your knobs |
 | Steps per second | 7.8 million | 2.1 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -79,21 +79,21 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-[`constraints/common.hpp`](../../../optimaru/task_assigning/cpp/include/ta/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/task_assigning/cpp/ta/constraints/common.hpp)
 has no base that asks for less than the engine's own. A constraint over one employee is a
 `TaUnitConstraint` (the engine's `UnitConstraint`), and the one function you write is
 `cost(solution, unit, members)`. What the file gives you to build on:
 
 | The constraint | Build on | You write | Example to copy |
 | --- | --- | --- | --- |
-| reads the tasks of one employee, in order | `TaUnitConstraint` | `cost()` | [`required_skill_cost.hpp`](../../../optimaru/task_assigning/cpp/include/ta/constraints/required_skill_cost.hpp) |
-| needs start or end times | the same, and `detail::walkChain()` | `cost()` with a callback per task end | [`squared_makespan_cost.hpp`](../../../optimaru/task_assigning/cpp/include/ta/constraints/squared_makespan_cost.hpp) |
-| sums the end times of one priority | `PriorityTaskEndTimeCostBase` | a constructor that names the priority | [`critical_priority_task_end_time_cost.hpp`](../../../optimaru/task_assigning/cpp/include/ta/constraints/critical_priority_task_end_time_cost.hpp) |
-| spans employees, or counts the tasks on no list | `TaGlobalConstraint` (the engine's `GlobalConstraint`) | `reset()`, `on_unit_changed()`, `cost()`, and `preview_cost()` ([step 4](#4-make-it-cheaper-per-move)) | [`unassigned_tasks_cost.hpp`](../../../optimaru/task_assigning/cpp/include/ta/constraints/unassigned_tasks_cost.hpp) |
+| reads the tasks of one employee, in order | `TaUnitConstraint` | `cost()` | [`required_skill_cost.hpp`](../../../optimaru/task_assigning/cpp/ta/constraints/required_skill_cost.hpp) |
+| needs start or end times | the same, and `detail::walkChain()` | `cost()` with a callback per task end | [`squared_makespan_cost.hpp`](../../../optimaru/task_assigning/cpp/ta/constraints/squared_makespan_cost.hpp) |
+| sums the end times of one priority | `PriorityTaskEndTimeCostBase` | a constructor that names the priority | [`critical_priority_task_end_time_cost.hpp`](../../../optimaru/task_assigning/cpp/ta/constraints/critical_priority_task_end_time_cost.hpp) |
+| spans employees, or counts the tasks on no list | `TaGlobalConstraint` (the engine's `GlobalConstraint`) | `reset()`, `on_unit_changed()`, `cost()`, and `preview_cost()` ([step 4](#4-make-it-cheaper-per-move)) | [`unassigned_tasks_cost.hpp`](../../../optimaru/task_assigning/cpp/ta/constraints/unassigned_tasks_cost.hpp) |
 
 The example reads one list in order. Four edits:
 
-**1. The component**, `optimaru/task_assigning/cpp/include/ta/constraints/customer_switch_cost.hpp`:
+**1. The component**, `optimaru/task_assigning/cpp/ta/constraints/customer_switch_cost.hpp`:
 
 ```cpp
 #ifndef TA_CONSTRAINTS_CUSTOMER_SWITCH_COST_HPP
@@ -147,7 +147,7 @@ in units of that level. The score has four levels on those three (`domain.hpp`):
   makespans, which here means the order of each employee's tasks, and its total shows in
   `soft2` (the soft level modulo 10^7).
 
-**2. The assembly**, `cpp/include/ta/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/ta/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -297,7 +297,7 @@ score without applying it: it writes the candidate list out, calls `cost()` on i
 once, and undoes nothing. It does so only when every global constraint that carries a
 weight answers previews too. On `main` the one global here, `UnassignedTasksCost`,
 does not, so the assembly applies, scores and undoes every move. These lines in
-`cpp/include/ta/constraints/unassigned_tasks_cost.hpp` switch previews on for the
+`cpp/ta/constraints/unassigned_tasks_cost.hpp` switch previews on for the
 whole assembly:
 
 ```cpp
@@ -333,7 +333,7 @@ switches previews off again for every constraint.
 **Answer a preview from sums.** A constraint can skip the written-out list and answer from
 prefix sums it keeps per list (`supports_piecewise_preview()`, `piecewise_cost()`), as
 vehicle routing does in
-[`route_sums.hpp`](../../../optimaru/vehicle_routing/cpp/include/vrp/constraints/route_sums.hpp).
+[`route_sums.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/route_sums.hpp).
 That pays on long lists. The demo instance has 3.5 tasks per employee, and no constraint
 here does it.
 
@@ -352,11 +352,11 @@ both sides agree.
 It must be a whole number, because the monolithic calculators add in `int64`.
 
 **2. Where the calculators read it.** They never copy the number. Add
-`customerSwitchWeight()` to `cpp/include/ta/constraints.hpp`, next to `priorityWeight()`
+`customerSwitchWeight()` to `cpp/ta/constraints.hpp`, next to `priorityWeight()`
 and written like it: it returns `CustomerSwitchCost::kDefaultWeight` as an `int64` and
 has a `static_assert` that the weight is whole and the level soft.
 
-**3. The term, twice.** `ScoreCalculator::score()` in `cpp/src/score_calculator.cpp` is
+**3. The term, twice.** `ScoreCalculator::score()` in `cpp/ta/score/score_calculator.cpp` is
 the full recompute. In its loop over an employee's tasks, with
 `const Task* previous = nullptr;` declared before the loop:
 
@@ -368,7 +368,7 @@ the full recompute. In its loop over an employee's tasks, with
             previous = &task;
 ```
 
-`insertList()` in `cpp/src/incremental_calculator.cpp` is what a move pays: it walks a
+`insertList()` in `cpp/ta/score/incremental_calculator.cpp` is what a move pays: it walks a
 list once after every edit and keeps that list's totals. In that walk, with
 `int previousCustomer = -1;` declared before the loop and `first = false;` moved to
 its end:
@@ -466,14 +466,14 @@ path after step 5, from two checkouts, each with its own build. Against CP-SAT:
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/ta/constraints/<subject>_cost.hpp` | new | | | weight |
-| `cpp/include/ta/constraints.hpp` | include, `emplace` | | | the weight for the calculators |
+| `cpp/ta/constraints/<subject>_cost.hpp` | new | | | weight |
+| `cpp/ta/constraints.hpp` | include, `emplace` | | | the weight for the calculators |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/task_assigning/cpp/ta_plugin_test.cpp` | | cases, counts | preview case | catalog row |
 | `tests/task_assigning/test_constraint_specs.py` | | lists | | defaults |
 | `docs/use-cases/task-assigning/README.md`, `python.md` | | table row | | defaults |
-| `cpp/include/ta/constraints/unassigned_tasks_cost.hpp` | | | previews, once | |
-| `cpp/src/score_calculator.cpp`, `cpp/src/incremental_calculator.cpp` | | | | the term |
+| `cpp/ta/constraints/unassigned_tasks_cost.hpp` | | | previews, once | |
+| `cpp/ta/score/score_calculator.cpp`, `cpp/ta/score/incremental_calculator.cpp` | | | | the term |
 | `tests/task_assigning/cpp/ta_test.cpp` | | | | new cases |
 | external-solver, `benchmarks/task-assigning` | | | | the same constraint, results |
 

@@ -33,7 +33,7 @@ There are two scoring paths, and they give the same score for the same packing
 
 | | `bp.solve(problem)` | `bp.solve(problem, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/bp/constraints/` |
+| Scored by | the monolithic calculators, `cpp/bp/score/score_calculator.cpp` and `cpp/bp/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/bp/constraints/` |
 | Constraints | the four, at their defaults | the ones you list, with your knobs |
 | Steps per second | 0.94 million | 0.87 million |
 | Steps per second, macro moves off | 17.4 million | 7.0 million |
@@ -94,7 +94,7 @@ applied by the engine.
 There is no base that asks for one term per item: the bins are alike, so nothing
 depends on one item and its bin alone. The bases are the engine's two, under the
 aliases of
-[`constraints/common.hpp`](../../../optimaru/bin_packing/cpp/include/bp/constraints/common.hpp).
+[`constraints/common.hpp`](../../../optimaru/bin_packing/cpp/bp/constraints/common.hpp).
 Pick the base by what the constraint is:
 
 | The constraint is | Base | You write |
@@ -108,7 +108,7 @@ shapes the bin count.
 
 The example is a cost per bin, so it is one function. Four edits:
 
-**1. The component**, `optimaru/bin_packing/cpp/include/bp/constraints/load_balance_cost.hpp`:
+**1. The component**, `optimaru/bin_packing/cpp/bp/constraints/load_balance_cost.hpp`:
 
 ```cpp
 #ifndef BP_CONSTRAINTS_LOAD_BALANCE_COST_HPP
@@ -163,7 +163,7 @@ pick with `level="medium"` raises `ValueError`. A hard constraint returns whole 
 because a hard contribution is rounded per bin; every constraint here counts weight, items
 or bins, so return `static_cast<double>` of an integer.
 
-**2. The assembly**, `cpp/include/bp/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/bp/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -300,9 +300,9 @@ and one for the bin it joins. What that call is depends on the constraint:
 
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
-| read off the whole bin (a clamp, a threshold) | `BpUnitConstraint` with `cost()` | one pass over the items of the bin | [`bin_capacity_cost.hpp`](../../../optimaru/bin_packing/cpp/include/bp/constraints/bin_capacity_cost.hpp), step 2 |
-| a sum of terms per item or per pair of items in one bin | the same, with `supports_delta()` and `delta_cost()` | one pass over the bin's other items, for the moved item only | [`color_conflict_cost.hpp`](../../../optimaru/bin_packing/cpp/include/bp/constraints/color_conflict_cost.hpp), [`item_conflict_cost.hpp`](../../../optimaru/bin_packing/cpp/include/bp/constraints/item_conflict_cost.hpp) |
-| one number across bins | `BpGlobalConstraint` with `supports_member_change()` and `on_member_changed()`: keep your own totals | what your update costs | [`used_bins_cost.hpp`](../../../optimaru/bin_packing/cpp/include/bp/constraints/used_bins_cost.hpp) |
+| read off the whole bin (a clamp, a threshold) | `BpUnitConstraint` with `cost()` | one pass over the items of the bin | [`bin_capacity_cost.hpp`](../../../optimaru/bin_packing/cpp/bp/constraints/bin_capacity_cost.hpp), step 2 |
+| a sum of terms per item or per pair of items in one bin | the same, with `supports_delta()` and `delta_cost()` | one pass over the bin's other items, for the moved item only | [`color_conflict_cost.hpp`](../../../optimaru/bin_packing/cpp/bp/constraints/color_conflict_cost.hpp), [`item_conflict_cost.hpp`](../../../optimaru/bin_packing/cpp/bp/constraints/item_conflict_cost.hpp) |
+| one number across bins | `BpGlobalConstraint` with `supports_member_change()` and `on_member_changed()`: keep your own totals | what your update costs | [`used_bins_cost.hpp`](../../../optimaru/bin_packing/cpp/bp/constraints/used_bins_cost.hpp) |
 
 A unit constraint with `cost()` alone is correct: the engine then recomputes the
 whole bin on every change. `delta_cost()` returns what one item adds given the
@@ -376,13 +376,13 @@ It must be a whole number, because the monolithic calculators add in `int64`.
 **2. The term**, in both calculators. They read the weight off the component and the
 share from its `evenShare()`, so neither is written twice.
 
-The full recompute, `cpp/src/score_calculator.cpp`: include the header, add
+The full recompute, `cpp/bp/score/score_calculator.cpp`: include the header, add
 `kLoadBalanceWeight` next to the other weights and to their `static_assert`. `RawCosts`
 (`score_calculator.hpp`) gets a field `loadBalance`, before `usedBins`. The loop over
 the bins in `ScoreCalculator::rawCosts()` adds `share - load[b]` for a bin in use
 below the share, and `ScoreCalculator::score()` weighs the field into the soft level.
 
-The incremental one, `cpp/src/incremental_calculator.cpp` and its header. It keeps
+The incremental one, `cpp/bp/score/incremental_calculator.cpp` and its header. It keeps
 the load of every bin, so the constraint is one more term that is taken out before the
 load changes and put back after it, in `insert()` and in `retract()`, the way
 `binCapacityCost` is kept:
@@ -512,15 +512,15 @@ instances, and `bin-packing-public-bench` the one on public instances
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/bp/constraints/<subject>_cost.hpp` | new | | `on_reset` | weight |
-| `cpp/include/bp/constraints.hpp` | include, `emplace` | | | |
+| `cpp/bp/constraints/<subject>_cost.hpp` | new | | `on_reset` | weight |
+| `cpp/bp/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | docstring, counts in the text |
 | `tests/bin_packing/cpp/bp_plugin_test.cpp` | | cases, counts, `sums()` | | `asList()`, `sums()`, expected scores |
 | `tests/bin_packing/test_constraint_specs.py` | | lists | | expected scores |
 | `tests/bin_packing/reference_bin_packing.py`, `test_reference_parity.py` | | the constraint, weight 0 | | weight |
 | `docs/use-cases/bin-packing/README.md`, `python.md` | | table row | | defaults |
-| `cpp/src/score_calculator.cpp`, `cpp/include/bp/score_calculator.hpp` | | | | the term, `RawCosts` |
-| `cpp/src/incremental_calculator.cpp`, `cpp/include/bp/incremental_calculator.hpp` | | | | the term |
+| `cpp/bp/score/score_calculator.cpp`, `cpp/bp/score/score_calculator.hpp` | | | | the term, `RawCosts` |
+| `cpp/bp/score/incremental_calculator.cpp`, `cpp/bp/score/incremental_calculator.hpp` | | | | the term |
 | `tests/bin_packing/cpp/bp_test.cpp`, `test_bin_packing.py`, `test_solve.py` | | | | expected scores, cases |
 | external-solver, `benchmarks/bin-packing` | | | | the same constraint, results |
 

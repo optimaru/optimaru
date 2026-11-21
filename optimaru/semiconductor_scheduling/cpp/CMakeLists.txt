@@ -4,17 +4,17 @@
 find_package(Threads REQUIRED)
 
 add_library(fab_core
-    src/decoder.cpp
-    src/score_calculator.cpp
-    src/evaluator.cpp
-    src/incremental_calculator.cpp
-    src/solver.cpp
+    fab/model/decoder.cpp
+    fab/score/score_calculator.cpp
+    fab/score/evaluator.cpp
+    fab/score/incremental_calculator.cpp
+    fab/solver.cpp
 )
-target_include_directories(fab_core PUBLIC include)
+target_include_directories(fab_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(fab_core PUBLIC optimaru Threads::Threads)
 target_compile_options(fab_core PRIVATE -Wall -Wextra)
 
-add_executable(fab_demo src/main.cpp)
+add_executable(fab_demo main.cpp)
 target_link_libraries(fab_demo PRIVATE fab_core)
 target_compile_options(fab_demo PRIVATE -Wall -Wextra)
 

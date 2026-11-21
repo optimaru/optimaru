@@ -39,7 +39,7 @@ assembly on 400 random schedules (`ms_plugin_test`), the incremental calculator 
 
 | | `ms.solve(schedule)` | `ms.solve(schedule, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/ms/constraints/` |
+| Scored by | the monolithic calculators, `cpp/ms/score/score_calculator.cpp` and `cpp/ms/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/ms/constraints/` |
 | Constraints | the twelve, at their defaults | the ones you list, with your knobs |
 | Steps per second | 2.43 million | 0.86 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -85,7 +85,7 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-[`constraints/common.hpp`](../../../optimaru/meeting_scheduling/cpp/include/ms/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/meeting_scheduling/cpp/ms/constraints/common.hpp)
 has three bases. Pick one by what the constraint compares:
 
 | The constraint compares | Base | You write |
@@ -96,7 +96,7 @@ has three bases. Pick one by what the constraint compares:
 
 The example reads the starting grain, so it is one function. Four edits:
 
-**1. The component**, `optimaru/meeting_scheduling/cpp/include/ms/constraints/late_start_cost.hpp`:
+**1. The component**, `optimaru/meeting_scheduling/cpp/ms/constraints/late_start_cost.hpp`:
 
 ```cpp
 #ifndef MS_CONSTRAINTS_LATE_START_COST_HPP
@@ -146,7 +146,7 @@ medium constraints here: 1): the domain folds the medium level into the engine's
 itself (`kMediumFold` in `domain.hpp`), so no weight carries the 10^6. A hard constraint
 returns whole numbers, because a hard contribution is rounded per cell.
 
-**2. The assembly**, `cpp/include/ms/constraints.hpp`: include the header, and add
+**2. The assembly**, `cpp/ms/constraints.hpp`: include the header, and add
 one line at the end of `defaultConstraints()`:
 
 ```cpp
@@ -282,8 +282,8 @@ leaves and one for the cell it joins. What that call is depends on the base:
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
 | a sum of one term per meeting | `PerAssignmentConstraint` | one `assignmentCost` call | step 2 |
-| a sum over pairs of meetings | `AssignmentPairConstraint` | one pass over the other placed meetings | [`meeting_overlap_cost.hpp`](../../../optimaru/meeting_scheduling/cpp/include/ms/constraints/meeting_overlap_cost.hpp) |
-| a sum over pairs that share an attendee | `AttendanceArcConstraint` | one pass over the arcs of the moved meeting | [`required_attendance_conflict_cost.hpp`](../../../optimaru/meeting_scheduling/cpp/include/ms/constraints/required_attendance_conflict_cost.hpp) |
+| a sum over pairs of meetings | `AssignmentPairConstraint` | one pass over the other placed meetings | [`meeting_overlap_cost.hpp`](../../../optimaru/meeting_scheduling/cpp/ms/constraints/meeting_overlap_cost.hpp) |
+| a sum over pairs that share an attendee | `AttendanceArcConstraint` | one pass over the arcs of the moved meeting | [`required_attendance_conflict_cost.hpp`](../../../optimaru/meeting_scheduling/cpp/ms/constraints/required_attendance_conflict_cost.hpp) |
 
 The two global bases keep their total from joins and leaves alone
 (`optimaru::MemberChangeGlobalConstraint`), so `marginal()` must give the same number
@@ -364,7 +364,7 @@ It must be a whole number, because the monolithic calculators add in `int64`
 otherwise, nor when the constraint is on another level than the one it is summed into).
 
 **2. The full recompute.** A member of `Breakdown` in
-`cpp/include/ms/score_calculator.hpp`, and in `cpp/src/score_calculator.cpp` its
+`cpp/ms/score/score_calculator.hpp`, and in `cpp/ms/score/score_calculator.cpp` its
 weight in `Breakdown::softTotal()` (or `hardTotal()`, `mediumTotal()`) and its term in
 the first loop of `computeBreakdown()`, which has the cell's grain position `pos`:
 
@@ -387,7 +387,7 @@ the first loop of `computeBreakdown()`, which has the cell's grain position `pos
 ```
 
 **3. The incremental calculator.** It keeps one running total per constraint. Declare the
-total and the table in `cpp/include/ms/incremental_calculator.hpp`:
+total and the table in `cpp/ms/score/incremental_calculator.hpp`:
 
 ```cpp
     std::vector<int> grainsIntoDay_;    // per grain pos: LateStartCost::grainsIntoDay
@@ -397,7 +397,7 @@ total and the table in `cpp/include/ms/incremental_calculator.hpp`:
     std::int64_t lateStartCost_ = 0;                               // soft 13
 ```
 
-and in `cpp/src/incremental_calculator.cpp` reset the total and build the table in
+and in `cpp/ms/score/incremental_calculator.cpp` reset the total and build the table in
 `rebuild()`, add the term in `insert()`, subtract it in `retract()`, and weigh the
 total in `score()`:
 
@@ -505,14 +505,14 @@ what such a comparison reports. Against CP-SAT:
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/ms/constraints/<subject>_cost.hpp` | new | | table | weight |
-| `cpp/include/ms/constraints.hpp` | include, `emplace` | | | |
+| `cpp/ms/constraints/<subject>_cost.hpp` | new | | table | weight |
+| `cpp/ms/constraints.hpp` | include, `emplace` | | | |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/meeting_scheduling/cpp/ms_plugin_test.cpp` | | cases, catalog, count | | the row, the medium hand instance |
 | `tests/meeting_scheduling/test_constraint_specs.py` | | six tests | | the row, the weights |
 | `docs/use-cases/meeting-scheduling/README.md`, `python.md` | | table row | | defaults, counts |
-| `cpp/include/ms/score_calculator.hpp`, `cpp/src/score_calculator.cpp` | | | | member, weight, term |
-| `cpp/include/ms/incremental_calculator.hpp`, `cpp/src/incremental_calculator.cpp` | | | | total, table, term |
+| `cpp/ms/score/score_calculator.hpp`, `cpp/ms/score/score_calculator.cpp` | | | | member, weight, term |
+| `cpp/ms/score/incremental_calculator.hpp`, `cpp/ms/score/incremental_calculator.cpp` | | | | total, table, term |
 | `tests/meeting_scheduling/cpp/ms_test.cpp` | | | | a case by hand |
 | `benchmarks/meeting-scheduling/cpp/ms_quality_bench.cpp` | | | | breakdown row |
 | external-solver, `benchmarks/meeting-scheduling` | | the plugin | | results |

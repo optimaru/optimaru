@@ -29,8 +29,8 @@
 #include <string>
 #include <vector>
 
-#include "ms/domain.hpp"
-#include "ms/score_calculator.hpp"
+#include "ms/model/domain.hpp"
+#include "ms/score/score_calculator.hpp"
 #include "ms/solver.hpp"
 
 using namespace ms;

@@ -18,8 +18,8 @@
 #include <stdexcept>
 #include <string>
 
-#include "ba/domain.hpp"
-#include "ba/score_calculator.hpp"
+#include "ba/model/domain.hpp"
+#include "ba/score/score_calculator.hpp"
 #include "ba/solver.hpp"
 
 namespace {

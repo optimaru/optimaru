@@ -34,7 +34,7 @@ There are two scoring paths, and they give the same score for the same schedule
 
 | | `sl.solve(schedule)` | `sl.solve(schedule, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/sls/constraints/` |
+| Scored by | the monolithic calculators, `cpp/sls/score/score_calculator.cpp` and `cpp/sls/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/sls/constraints/` |
 | Constraints | the ten, at their defaults | the ones you list, with your knobs |
 | Steps per second | 2.6 million | 1.3 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -99,7 +99,7 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-[`constraints/common.hpp`](../../../optimaru/sports_league_scheduling/cpp/include/sls/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/sports_league_scheduling/cpp/sls/constraints/common.hpp)
 has a base for each kind of constraint. Pick the base by what the constraint compares:
 
 | The constraint is | Base | You write |
@@ -115,7 +115,7 @@ shape that total and not each round.
 
 The example reads a match and its round, so it is one function. Four edits:
 
-**1. The component**, `optimaru/sports_league_scheduling/cpp/include/sls/constraints/workday_away_trip_cost.hpp`:
+**1. The component**, `optimaru/sports_league_scheduling/cpp/sls/constraints/workday_away_trip_cost.hpp`:
 
 ```cpp
 #ifndef SLS_CONSTRAINTS_WORKDAY_AWAY_TRIP_COST_HPP
@@ -158,7 +158,7 @@ medium level, and a pick with `level="medium"` raises `ValueError`. A hard const
 returns whole numbers, because a hard contribution is rounded per round (or per
 total).
 
-**2. The assembly**, `cpp/include/sls/constraints.hpp`: include the header, name
+**2. The assembly**, `cpp/sls/constraints.hpp`: include the header, name
 the constraint in the comment above `defaultConstraints()`, and add one line at its end:
 
 ```cpp
@@ -296,9 +296,9 @@ and one for the round it joins. What that call is depends on the constraint:
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
 | a sum of per-match terms | `PerMatchConstraint` | one `matchCost` call | step 2 |
-| a sum over pairs of matches on the same or the next round index | `RoundIndexPairConstraint`: the base keeps the matches of every round index, you write `marginal()` | one pass over the matches of the round indices the match can pair with | [`team_conflict_cost.hpp`](../../../optimaru/sports_league_scheduling/cpp/include/sls/constraints/team_conflict_cost.hpp), [`home_to_away_hop_cost.hpp`](../../../optimaru/sports_league_scheduling/cpp/include/sls/constraints/home_to_away_hop_cost.hpp) |
-| a run of round indices per team | `TeamSideRunConstraint` | one pass over that team's round indices | [`consecutive_home_matches_cost.hpp`](../../../optimaru/sports_league_scheduling/cpp/include/sls/constraints/consecutive_home_matches_cost.hpp) |
-| anything else across rounds | `optimaru::MemberChangeGlobalConstraint<LeagueSchedule>`: keep your own counters in `on_member_changed()` | what your update costs | [`repeat_match_on_next_day_cost.hpp`](../../../optimaru/sports_league_scheduling/cpp/include/sls/constraints/repeat_match_on_next_day_cost.hpp) |
+| a sum over pairs of matches on the same or the next round index | `RoundIndexPairConstraint`: the base keeps the matches of every round index, you write `marginal()` | one pass over the matches of the round indices the match can pair with | [`team_conflict_cost.hpp`](../../../optimaru/sports_league_scheduling/cpp/sls/constraints/team_conflict_cost.hpp), [`home_to_away_hop_cost.hpp`](../../../optimaru/sports_league_scheduling/cpp/sls/constraints/home_to_away_hop_cost.hpp) |
+| a run of round indices per team | `TeamSideRunConstraint` | one pass over that team's round indices | [`consecutive_home_matches_cost.hpp`](../../../optimaru/sports_league_scheduling/cpp/sls/constraints/consecutive_home_matches_cost.hpp) |
+| anything else across rounds | `optimaru::MemberChangeGlobalConstraint<LeagueSchedule>`: keep your own counters in `on_member_changed()` | what your update costs | [`repeat_match_on_next_day_cost.hpp`](../../../optimaru/sports_league_scheduling/cpp/sls/constraints/repeat_match_on_next_day_cost.hpp) |
 
 A global's update must be exactly reversible: the engine undoes a rejected move by
 sending the opposite joins and leaves. `RoundIndexPairConstraint` gets that by adding
@@ -371,9 +371,9 @@ The monolithic calculators read it as `kSoftWeight<WorkdayAwayTripCost>`, which
 fails to compile if the weight is not a whole number or the level is not soft
 (`kHardWeight<>` for a hard constraint; both are in `common.hpp`).
 
-**2. The full recompute.** `Breakdown` in `cpp/include/sls/score_calculator.hpp`
+**2. The full recompute.** `Breakdown` in `cpp/sls/score/score_calculator.hpp`
 has one member per constraint, named like the constraint: add
-`std::int64_t workdayAwayTripCost = 0;`. In `cpp/src/score_calculator.cpp`, add
+`std::int64_t workdayAwayTripCost = 0;`. In `cpp/sls/score/score_calculator.cpp`, add
 `kSoftWeight<WorkdayAwayTripCost> * workdayAwayTripCost` to `Breakdown::softTotal()`,
 and the term to the loop over the matches in `computeBreakdown()`:
 
@@ -383,9 +383,9 @@ and the term to the loop over the matches in `computeBreakdown()`:
             b.workdayAwayTripCost += schedule.distance(match.awayTeam, match.homeTeam);
 ```
 
-**3. The incremental calculator**, `cpp/src/incremental_calculator.cpp`, keeps one
+**3. The incremental calculator**, `cpp/sls/score/incremental_calculator.cpp`, keeps one
 running total per constraint. Declare `std::int64_t workdayTrip_ = 0;` in
-`cpp/include/sls/incremental_calculator.hpp`, set it to 0 in `rebuild()`, add
+`cpp/sls/score/incremental_calculator.hpp`, set it to 0 in `rebuild()`, add
 `kWorkdayTripWeight * workdayTrip_` to the soft level in `score()`, and keep it in
 `insert()` (and, with `-=` twice, in `retract()`):
 
@@ -494,14 +494,14 @@ the default path only, so they measure a constraint after step 5.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/sls/constraints/<subject>_cost.hpp` | new | | table | weight |
-| `cpp/include/sls/constraints.hpp` | include, `emplace`, comment | | | comment |
+| `cpp/sls/constraints/<subject>_cost.hpp` | new | | table | weight |
+| `cpp/sls/constraints.hpp` | include, `emplace`, comment | | | comment |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/sports_league_scheduling/cpp/sls_plugin_test.cpp` | | three cases, count, catalog rows | | builder case, catalog row |
 | `tests/sports_league_scheduling/test_constraint_specs.py`, `test_constraints.py` | | list, `CATALOG`, cases with the constraint picked | | default scores |
 | `docs/use-cases/sports-league-scheduling/README.md`, `python.md`, `_core.pyi` | | table row, lists | | defaults, formula |
-| `cpp/include/sls/score_calculator.hpp`, `cpp/src/score_calculator.cpp` | | | | `Breakdown` member, the term |
-| `cpp/include/sls/incremental_calculator.hpp`, `cpp/src/incremental_calculator.cpp` | | | | the running total, `matchCost_` |
+| `cpp/sls/score/score_calculator.hpp`, `cpp/sls/score/score_calculator.cpp` | | | | `Breakdown` member, the term |
+| `cpp/sls/score/incremental_calculator.hpp`, `cpp/sls/score/incremental_calculator.cpp` | | | | the running total, `matchCost_` |
 | `tests/sports_league_scheduling/cpp/sls_test.cpp` | | | | expected scores |
 | external-solver, `benchmarks/sports-league-scheduling` | | | | the same constraint, results |
 

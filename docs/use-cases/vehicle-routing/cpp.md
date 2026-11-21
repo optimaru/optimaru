@@ -38,7 +38,7 @@ cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
 ### The four constraints
 
 The four default constraints, under their
-component names (`include/vrp/constraints/<subject>_cost.hpp`; the
+component names (`vrp/constraints/<subject>_cost.hpp`; the
 registry name is the struct name with a lower-case first letter):
 
 - **Hard** `VehicleCapacityCost` (`vehicleCapacityCost`) — penalize

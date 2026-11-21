@@ -35,7 +35,7 @@ There are two scoring paths, and they give the same score for the same assignmen
 
 | | `fl.solve(problem)` | `fl.solve(problem, constraints=[...])` |
 | --- | --- | --- |
-| Scored by | the monolithic calculators, `cpp/src/score_calculator.cpp` and `cpp/src/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/include/fl/constraints/` |
+| Scored by | the monolithic calculators, `cpp/fl/score/score_calculator.cpp` and `cpp/fl/score/incremental_calculator.cpp` | the assembly: one component per constraint, `cpp/fl/constraints/` |
 | Constraints | the three, at their defaults | the ones you list, with your knobs |
 | Steps per second | 2.8 million | 1.7 million |
 | Parallel starts | `parallel_solver_count` | one start |
@@ -103,7 +103,7 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-[`constraints/common.hpp`](../../../optimaru/facility_location/cpp/include/fl/constraints/common.hpp)
+[`constraints/common.hpp`](../../../optimaru/facility_location/cpp/fl/constraints/common.hpp)
 has two bases and no shortcut on top of them:
 
 | The constraint is | Base | You write |
@@ -114,7 +114,7 @@ has two bases and no shortcut on top of them:
 The three constraints that exist are unit constraints, and so is the example: one
 function. Four edits:
 
-**1. The component**, `optimaru/facility_location/cpp/include/fl/constraints/demand_distance_cost.hpp`:
+**1. The component**, `optimaru/facility_location/cpp/fl/constraints/demand_distance_cost.hpp`:
 
 ```cpp
 #ifndef FL_CONSTRAINTS_DEMAND_DISTANCE_COST_HPP
@@ -162,7 +162,7 @@ The defaults live in the two constants and nowhere else; Python reads them throu
 medium level, and a pick with `level="medium"` is refused. A hard constraint returns
 whole numbers, because a hard contribution is rounded per facility.
 
-**2. The assembly**, `cpp/include/fl/constraints.hpp`: include the header, add its
+**2. The assembly**, `cpp/fl/constraints.hpp`: include the header, add its
 row to the comment that lists the set, and add one line at the end of
 `defaultConstraints()`:
 
@@ -290,9 +290,9 @@ leaves and one for the facility it joins. What that call is depends on the const
 
 | The constraint is | Use | Per move | Example to copy |
 | --- | --- | --- | --- |
-| a function of the whole facility (a clamp, a step) | `FlUnitConstraint` with `cost()` alone | one pass over the facility's consumers | [`facility_capacity_cost.hpp`](../../../optimaru/facility_location/cpp/include/fl/constraints/facility_capacity_cost.hpp), [`facility_setup_cost.hpp`](../../../optimaru/facility_location/cpp/include/fl/constraints/facility_setup_cost.hpp) |
-| a sum of one term per consumer | the same, with `supports_delta()` and `delta_cost()` | one term | [`distance_from_facility_cost.hpp`](../../../optimaru/facility_location/cpp/include/fl/constraints/distance_from_facility_cost.hpp) |
-| a statistic across facilities | `optimaru::MemberChangeGlobalConstraint<FacilityLocationProblem>`: keep your own totals in `on_member_changed()` | what your update costs | none here; assembly-line balancing's [`used_stations_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/include/alb/constraints/used_stations_cost.hpp) counts the units in use |
+| a function of the whole facility (a clamp, a step) | `FlUnitConstraint` with `cost()` alone | one pass over the facility's consumers | [`facility_capacity_cost.hpp`](../../../optimaru/facility_location/cpp/fl/constraints/facility_capacity_cost.hpp), [`facility_setup_cost.hpp`](../../../optimaru/facility_location/cpp/fl/constraints/facility_setup_cost.hpp) |
+| a sum of one term per consumer | the same, with `supports_delta()` and `delta_cost()` | one term | [`distance_from_facility_cost.hpp`](../../../optimaru/facility_location/cpp/fl/constraints/distance_from_facility_cost.hpp) |
+| a statistic across facilities | `optimaru::MemberChangeGlobalConstraint<FacilityLocationProblem>`: keep your own totals in `on_member_changed()` | what your update costs | none here; assembly-line balancing's [`used_stations_cost.hpp`](../../../optimaru/assembly_line_balancing/cpp/alb/constraints/used_stations_cost.hpp) counts the units in use |
 
 The example is a sum of one term per consumer, so it can state what one consumer
 adds:
@@ -379,7 +379,7 @@ constexpr auto kDemandDistanceWeight =
         static_cast<std::int64_t>(DemandDistanceCost::kDefaultWeight);
 ```
 
-`cpp/src/score_calculator.cpp` is the full recompute. Add the weight to the
+`cpp/fl/score/score_calculator.cpp` is the full recompute. Add the weight to the
 `static_assert`, and the sum to the loop over the consumers and to the soft level
 of `ScoreCalculator::score()`:
 
@@ -392,8 +392,8 @@ of `ScoreCalculator::score()`:
                                        kDemandDistanceWeight * demandDistance));
 ```
 
-`cpp/src/incremental_calculator.cpp` keeps one running total per constraint. Declare
-`std::int64_t demandDistance_ = 0;` in `cpp/include/fl/incremental_calculator.hpp`,
+`cpp/fl/score/incremental_calculator.cpp` keeps one running total per constraint. Declare
+`std::int64_t demandDistance_ = 0;` in `cpp/fl/score/incremental_calculator.hpp`,
 set it to 0 in `rebuild()`, add it to the soft level in `score()` as above, and
 keep it in `insert()` (and, with `-=`, in `retract()`):
 
@@ -491,14 +491,14 @@ default path only, so they measure a constraint after step 5.
 
 | File | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- |
-| `cpp/include/fl/constraints/<subject>_cost.hpp` | new | | `delta_cost` | weight |
-| `cpp/include/fl/constraints.hpp` | include, `emplace`, comment row | | | comment row |
+| `cpp/fl/constraints/<subject>_cost.hpp` | new | | `delta_cost` | weight |
+| `cpp/fl/constraints.hpp` | include, `emplace`, comment row | | | comment row |
 | `constraints.py` | spec, instance, `_DEFAULTS`, `__all__` | | | counts in the text |
 | `tests/facility_location/cpp/fl_plugin_test.cpp` | | two cases, count, catalog row | | builder case, catalog row |
 | `tests/facility_location/test_constraint_specs.py` | | lists, info row, cases with the constraint picked | | default scores |
 | `docs/use-cases/facility-location/README.md`, `python.md`, `_core.pyi` | | table row, lists | | defaults, formula |
-| `cpp/src/score_calculator.cpp` | | | | the term |
-| `cpp/src/incremental_calculator.cpp`, `cpp/include/fl/incremental_calculator.hpp` | | | | the running total |
+| `cpp/fl/score/score_calculator.cpp` | | | | the term |
+| `cpp/fl/score/incremental_calculator.cpp`, `cpp/fl/score/incremental_calculator.hpp` | | | | the running total |
 | `tests/facility_location/cpp/fl_test.cpp`, `tests/facility_location/test_solve.py` | | | | expected scores |
 | external-solver, `benchmarks/facility-location` | | | | the same constraint, results |
 

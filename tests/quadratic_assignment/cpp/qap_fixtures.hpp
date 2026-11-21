@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "qap/domain.hpp"
+#include "qap/model/domain.hpp"
 #include "optimaru/testing/check.hpp"
 
 namespace qap_test {

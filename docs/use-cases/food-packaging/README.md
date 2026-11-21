@@ -7,10 +7,10 @@ inserts a cleanup time that depends on the previous product, and the cleaning wi
 lines run by the same operator must not overlap.
 
 - `optimaru/food_packaging/cpp/` — domain + constraints (full/incremental) + solver wrapper + demo/tests.
-  Uses the engine in `include/` (header-only) as-is. `optimaru/food_packaging/cpp/include/fp/constraints/` holds
+  Uses the engine in `optimaru/cpp/optimaru/` (header-only) as-is. `optimaru/food_packaging/cpp/fp/constraints/` holds
   one component per constraint (`max_end_time_cost.hpp`, `after_ideal_end_time_cost.hpp`,
   `squared_makespan_cost.hpp`, `operator_cleaning_conflict_cost.hpp`,
-  `unassigned_jobs_cost.hpp`, plus `common.hpp`); `optimaru/food_packaging/cpp/include/fp/constraints.hpp`
+  `unassigned_jobs_cost.hpp`, plus `common.hpp`); `optimaru/food_packaging/cpp/fp/constraints.hpp`
   assembles the default set (`defaultConstraints()`).
 - `optimaru/food_packaging/` — pybind11 bindings (`optimaru.food_packaging._core`) and the pydantic v2 mirror.
 
@@ -69,7 +69,7 @@ constraint is flippable onto any of the three levels (`level="hard"`, `"medium"`
 
 The medium weights are in **medium units**: the domain folds the medium level into the
 engine's soft level as `engine.soft = medium * 10^10 + soft` (`kMediumFold` in
-`optimaru/food_packaging/cpp/include/fp/domain.hpp`, reported as `medium_fold: {"kind": "into_soft", "unit": 1e10}`
+`optimaru/food_packaging/cpp/fp/model/domain.hpp`, reported as `medium_fold: {"kind": "into_soft", "unit": 1e10}`
 on every `constraint_costs()` entry). `level="hard"` makes a
 medium constraint 1 hard unit per minute, `level="soft"` 1 soft unit per minute (outside the
 fold), and a `weight` is in units of the level in effect — in the
@@ -146,12 +146,12 @@ Two things differ from the other use cases, on the default solve only (without `
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **sequence** shape; the domain solver that configures the
-engine is `optimaru/food_packaging/cpp/include/fp/solver.hpp` + `optimaru/food_packaging/cpp/src/solver.cpp`.
+engine is `optimaru/food_packaging/cpp/fp/solver.hpp` + `optimaru/food_packaging/cpp/fp/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/food_packaging/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/food_packaging/cpp/fp/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Elements are placed by cheapest insertion in index order. Set

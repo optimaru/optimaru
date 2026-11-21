@@ -4,16 +4,16 @@
 find_package(Threads REQUIRED)
 
 add_library(bp_core
-    src/score_calculator.cpp
-    src/incremental_calculator.cpp
-    src/construction.cpp
-    src/solver.cpp
+    bp/score/score_calculator.cpp
+    bp/score/incremental_calculator.cpp
+    bp/construct/construction.cpp
+    bp/solver.cpp
 )
-target_include_directories(bp_core PUBLIC include)
+target_include_directories(bp_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bp_core PUBLIC optimaru Threads::Threads)
 target_compile_options(bp_core PRIVATE -Wall -Wextra)
 
-add_executable(bp_demo src/main.cpp)
+add_executable(bp_demo main.cpp)
 target_link_libraries(bp_demo PRIVATE bp_core)
 target_compile_options(bp_demo PRIVATE -Wall -Wextra)
 

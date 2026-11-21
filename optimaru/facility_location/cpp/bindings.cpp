@@ -13,8 +13,8 @@
 #include <vector>
 
 #include "fl/constraints.hpp"
-#include "fl/domain.hpp"
-#include "fl/score_calculator.hpp"
+#include "fl/model/domain.hpp"
+#include "fl/score/score_calculator.hpp"
 #include "fl/solver.hpp"
 #include "optimaru/python/constraint_binding.hpp"
 #include "optimaru/python/score_binding.hpp"
@@ -152,13 +152,13 @@ PYBIND11_MODULE(_core, m) {
             // on a tenth of it from the first restart on.
             .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             // CloseFacilityMove: the domain macro move that takes one facility
-            // out of service in a single step (see cpp/src/solver.cpp).
+            // out of service in a single step (see cpp/fl/solver.cpp).
             .def_readwrite("close_facility_moves", &Solver::Config::close_facility_moves)
             .def_readwrite("close_facility_keep", &Solver::Config::close_facility_keep)
             .def_readwrite("close_facility_migrate_probability",
                            &Solver::Config::close_facility_migrate_probability)
             // SwapFacilityMove: open a closed facility and close the one that
-            // serves its surroundings in one step (see cpp/src/solver.cpp).
+            // serves its surroundings in one step (see cpp/fl/solver.cpp).
             .def_readwrite("swap_facility_moves", &Solver::Config::swap_facility_moves);
 
     py::class_<Solver>(m, "Solver", py::module_local())

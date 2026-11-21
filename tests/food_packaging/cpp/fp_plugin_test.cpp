@@ -39,9 +39,9 @@
 #include <vector>
 
 #include "fp/constraints.hpp"
-#include "fp/demo_data.hpp"
-#include "fp/domain.hpp"
-#include "fp/score_calculator.hpp"
+#include "fp/model/demo_data.hpp"
+#include "fp/model/domain.hpp"
+#include "fp/score/score_calculator.hpp"
 #include "fp/solver.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/testing/check.hpp"

@@ -117,21 +117,21 @@ seats, ~50 crew members) and reaches feasible (hard 0) within 10 s.
 
 ## Layout
 
-- `optimaru/flight_crew_scheduling/cpp/include/fcs/domain.hpp` — domain + `SolutionTraits` specialization
+- `optimaru/flight_crew_scheduling/cpp/fcs/model/domain.hpp` — domain + `SolutionTraits` specialization
   (including the pinned extension)
-- `optimaru/flight_crew_scheduling/cpp/include/fcs/constraints/` — one component per constraint:
+- `optimaru/flight_crew_scheduling/cpp/fcs/constraints/` — one component per constraint:
   `required_skill_cost.hpp`, `flight_conflict_cost.hpp`,
   `transfer_between_two_flights_cost.hpp`, `employee_unavailability_cost.hpp`,
   `first_assignment_not_departing_from_home_cost.hpp`,
   `last_assignment_not_arriving_at_home_cost.hpp` (+ `common.hpp`);
-  `optimaru/flight_crew_scheduling/cpp/include/fcs/constraints.hpp` assembles the default set (`defaultConstraints()`)
-- `optimaru/flight_crew_scheduling/cpp/src/score_calculator.cpp` — full recompute (the reference)
-- `optimaru/flight_crew_scheduling/cpp/src/incremental_calculator.cpp` — before/after hooks, per-crew-member
+  `optimaru/flight_crew_scheduling/cpp/fcs/constraints.hpp` assembles the default set (`defaultConstraints()`)
+- `optimaru/flight_crew_scheduling/cpp/fcs/score/score_calculator.cpp` — full recompute (the reference)
+- `optimaru/flight_crew_scheduling/cpp/fcs/score/incremental_calculator.cpp` — before/after hooks, per-crew-member
   O(delta) incremental scoring
-- `optimaru/flight_crew_scheduling/cpp/src/monolithic_weights.hpp` — the component defaults both monolithic
+- `optimaru/flight_crew_scheduling/cpp/fcs/score/monolithic_weights.hpp` — the component defaults both monolithic
   calculators read, with compile-time checks that the hard weights are whole
   numbers and the levels match the components
-- `optimaru/flight_crew_scheduling/cpp/src/solver.cpp` — engine wrapper (LA + ALNS)
+- `optimaru/flight_crew_scheduling/cpp/fcs/solver.cpp` — engine wrapper (LA + ALNS)
 - `optimaru/flight_crew_scheduling/` — pybind11 package `optimaru.flight_crew_scheduling` (with the pydantic v2 mirror;
   see [`python.md`](python.md) for usage)
 
@@ -158,12 +158,12 @@ Assignments are matched by id. An assignment the solution leaves out is placed b
 
 Engine contracts and code skeletons: [docs/extending.md](../../extending.md).
 The solution has the **assignment** shape; the domain solver that configures the
-engine is `optimaru/flight_crew_scheduling/cpp/include/fcs/solver.hpp` + `optimaru/flight_crew_scheduling/cpp/src/solver.cpp`.
+engine is `optimaru/flight_crew_scheduling/cpp/fcs/solver.hpp` + `optimaru/flight_crew_scheduling/cpp/fcs/solver.cpp`.
 
 **Adding a move.** The engine already mixes change / swap moves
 (weights in `Solver::Config`). This use case relies on the engine's generic moves only; it has no domain move yet. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
-to the engine construction in `optimaru/flight_crew_scheduling/cpp/src/solver.cpp`; a ruin for LNS is a
+to the engine construction in `optimaru/flight_crew_scheduling/cpp/fcs/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.
 
 **Changing the construction heuristic.** Entities are placed in index order (First Fit). Set
