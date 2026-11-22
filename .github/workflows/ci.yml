@@ -16,6 +16,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.event_name) }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+permissions:
+  contents: read
+
 jobs:
   # The use cases, read off the repository: a subpackage of optimaru/ with a _core.pyi
   # stub, which is what setup.py builds. The three matrices below take their lists from
