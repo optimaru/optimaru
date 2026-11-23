@@ -1,0 +1,5 @@
+/* optimaru's green as the accent (links on hover, the active item), as in the mark. The theme sets
+ * the accent on this attribute, so the rule names it too; it is loaded after the theme's. */
+[data-md-color-accent="green"] {
+  --md-accent-fg-color: #00c25a;
+}
