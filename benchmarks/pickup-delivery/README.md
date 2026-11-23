@@ -34,6 +34,11 @@ The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports
 for it includes building the model.
 
+CP-SAT's 30 s result on these instances moves from run to run, both ways: against the
+table of 2026-11-12, this one is better at 25 and 30 requests and leaves stops unserved
+at 40 requests on seed 0, where that run had `14 / 3,229.4`. Read a CP-SAT row here as
+one draw.
+
 <!-- results:start -->
 ## Results
 
