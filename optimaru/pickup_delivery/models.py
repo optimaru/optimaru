@@ -15,7 +15,7 @@ from typing import Any
 from pydantic import Field, model_validator
 
 from .. import _api, _routing
-from .._constraint import ParameterUse, is_set, require_costs
+from .._constraint import ParameterUse, is_set
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from .._routing import (
     DEFAULT_PROFILE,
@@ -26,6 +26,7 @@ from .._routing import (
     profile_job_rules,
     profile_matrices,
 )
+from .._solve import check_parameters
 from . import _core
 from .constraints import get_constraints
 
@@ -499,8 +500,10 @@ def parameter_uses(model_input: PdpInput) -> list[ParameterUse]:
         for stop in (delivery.pickup, delivery.dropoff):
             if stop.max_end_time != 24 * 3600:
                 uses.append(ParameterUse(f"stop {stop.id}", "max_end_time", 24 * 3600, ("max_end_time_cost",)))
+    driven = {vehicle.profile for vehicle in model_input.vehicles}
     for name, profile in model_input.profiles.items():
-        if profile.preferred_requests:
+        # A profile no vehicle drives on prefers nothing, so it asks for no cost.
+        if profile.preferred_requests and name in driven:
             uses.append(
                 ParameterUse(f"profile {name!r}", "preferred_requests", [], ("profile_preferred_request_cost",))
             )
@@ -514,11 +517,11 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
     A parameter set away from its default whose costs the constraints leave out is refused
     with ValueError (`parameter_uses`): the solve would ignore it."""
     plan = to_plan(request.model_input, name=request.name or "plan")
-    constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
-    require_costs(
+    constraints = check_parameters(
         parameter_uses(request.model_input),
-        get_constraints(constraints),
-        check_picks=lambda: _core.constraint_costs(plan, constraints),
+        constraints,
+        get_constraints,
+        lambda picks: _core.constraint_costs(plan, picks),
     )
     config = _core.SolverConfig()
     config.spent_limit_seconds = request.time_limit_seconds

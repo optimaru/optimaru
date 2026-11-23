@@ -53,8 +53,7 @@ The pydantic mirror (for serialization) is in `optimaru.project_job_scheduling.m
 from typing import TypeVar
 
 from .. import _api
-from .._constraint import require_costs
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     Allocation,
     ConstraintInfo,
@@ -168,11 +167,8 @@ def solve(
             f"schedule must be a ProjectJobSchedule or a models.ProjectJobScheduleModel: {type(schedule)!r}"
         )
     core_schedule = schedule.to_core()
-    constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
-    require_costs(
-        _parameter_uses(schedule),
-        _get_constraints(constraints),
-        check_picks=lambda: constraint_costs(core_schedule, constraints),
+    constraints = check_parameters(
+        _parameter_uses(schedule), constraints, _get_constraints, lambda picks: constraint_costs(core_schedule, picks)
     )
     solve_in_place(Solver(cfg), core_schedule, constraints)
     return ProjectJobScheduleModel.from_core(core_schedule)

@@ -325,8 +325,11 @@ def parameter_uses(problem: "TimetableProblemModel | dict") -> list[ParameterUse
         for item in items:
             for field, default, costs in table:
                 value = item.get(field)
-                # A key left out, or None, is the default (convert.py reads `or 6`, `or 4`).
-                if is_set(default if value is None else value, default):
+                # A key left out, None, or a 0 where the default is a number is the default:
+                # convert.py reads `or 6`, `or 4`, `or 1`.
+                if value is None or (not value and isinstance(default, int)):
+                    value = default
+                if is_set(value, default):
                     uses.append(ParameterUse(f"{kind} {item.get('id')}", field, default, costs))
     for course in problem.get("courses", []):
         if int(course.get("block_periods") or 0) > 1:

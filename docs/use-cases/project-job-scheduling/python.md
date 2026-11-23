@@ -139,3 +139,12 @@ instances). Rule details are in `optimaru/project_job_scheduling/cpp/pjs/model/d
   so `Solver.solve` first fixes uninitialized pinned allocations to (first mode, delay 0).
 - **Demo data**: `generate_demo_data(seed)` draws the instance from a seeded
   `random.Random`.
+
+## Parameters and their costs
+
+A request that sets a field which acts only through a cost, while its constraints leave
+every such cost out, is refused with `ValueError` naming the field and the costs to add;
+a pick at weight 0 counts. `models.parameter_uses(model)` lists the fields an input sets,
+and [Parameters and their costs](../README.md#parameters-and-their-costs) has the table.
+It is checked where the input is the JSON model (`solve_request`, `solve(model)`); a
+compiled problem is solved as given.

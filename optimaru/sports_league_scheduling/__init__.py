@@ -27,8 +27,7 @@ The pydantic mirror (for serialization) is in `optimaru.sports_league_scheduling
 from typing import TypeVar
 
 from .. import _api
-from .._constraint import require_costs
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
     LeagueSchedule,
@@ -129,11 +128,8 @@ def solve(
         return schedule
     if isinstance(schedule, LeagueScheduleModel):
         core = schedule.to_core()
-        constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
-        require_costs(
-            parameter_uses(schedule),
-            get_constraints(constraints),
-            check_picks=lambda: constraint_costs(core, constraints),
+        constraints = check_parameters(
+            parameter_uses(schedule), constraints, get_constraints, lambda picks: constraint_costs(core, picks)
         )
         solve_in_place(Solver(cfg), core, constraints)
         return LeagueScheduleModel.from_core(core)

@@ -270,7 +270,9 @@ def require_costs(
     uses = list(uses)
     if not uses:
         return
-    names = {_snake(str(getattr(pick, "name", pick))) for pick in constraints}
+    names = {
+        _snake(str(pick["name"] if isinstance(pick, Mapping) else getattr(pick, "name", pick))) for pick in constraints
+    }
     missing: dict[tuple[str, tuple[str, ...]], list[ParameterUse]] = {}
     for use in uses:
         if not names.intersection(use.costs):
@@ -282,10 +284,14 @@ def require_costs(
     lines = []
     for (name, costs), found in missing.items():
         more = f" (and {len(found) - 1} more)" if len(found) > 1 else ""
-        cost = " or ".join(costs)
+        what = (
+            f"{costs[0]}, the cost that scores it"
+            if len(costs) == 1
+            else f"{' or '.join(costs)}, the costs that score it"
+        )
         lines.append(
-            f"{found[0].where}{more} sets {name}, but the constraints leave out {cost}, the cost that "
-            f"scores it: add it, or leave {name} at its default ({found[0].default!r})"
+            f"{found[0].where}{more} sets {name}, but the constraints leave out {what}: add one, or "
+            f"leave {name} at its default ({found[0].default!r})"
         )
     raise ValueError("; ".join(lines))
 

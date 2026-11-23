@@ -432,6 +432,17 @@ between two employees, only the change is recomputed
 [README](README.md#extending) for the steps. Weights, level changes and
 exponents need no code.
 
+## Parameters and their costs
+
+A request that sets a field which acts only through a cost, while its constraints leave
+every such cost out, is refused with `ValueError` naming the field and the costs to add;
+a pick at weight 0 counts. `models.parameter_uses(model)` lists the fields an input sets,
+and [Parameters and their costs](../README.md#parameters-and-their-costs) has the table.
+It is checked where the input is the JSON model (`solve_request`, `solve(model)`); a
+compiled problem is solved as given.
+`desired_shift_cost` is not in the default constraints, so a worker's `desired_shifts`
+needs it picked.
+
 ## Files
 
 ```

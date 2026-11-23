@@ -33,8 +33,7 @@ from __future__ import annotations
 from typing import TypeVar
 
 from .. import _api
-from .._constraint import require_costs
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from . import _core
 from ._core import (
     AcceptorType,
@@ -184,11 +183,8 @@ def solve(
     )
     core, model = _core_of(problem)
     if model is not None:
-        constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
-        require_costs(
-            parameter_uses(model),
-            get_constraints(constraints),
-            check_picks=lambda: _core.constraint_costs(core, constraints),
+        constraints = check_parameters(
+            parameter_uses(model), constraints, get_constraints, lambda picks: _core.constraint_costs(core, picks)
         )
     solve_in_place(Solver(cfg), core, constraints)
     if model is None:

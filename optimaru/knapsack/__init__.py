@@ -35,8 +35,7 @@ from __future__ import annotations
 from typing import Any, TypeVar
 
 from .. import _api
-from .._constraint import require_costs
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
     Item,
@@ -175,11 +174,8 @@ def solve(
     )
     core = _core_of(problem)
     if isinstance(problem, KnapsackProblemModel):
-        constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
-        require_costs(
-            parameter_uses(problem),
-            _get_constraints(constraints),
-            check_picks=lambda: _constraint_costs(core, constraints),
+        constraints = check_parameters(
+            parameter_uses(problem), constraints, _get_constraints, lambda picks: _constraint_costs(core, picks)
         )
     solve_in_place(Solver(cfg), core, constraints)
     if isinstance(problem, KnapsackProblemModel):

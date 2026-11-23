@@ -29,8 +29,7 @@ The JSON contract is `optimaru.bin_packing.models` (pydantic).
 from typing import TypeVar
 
 from .. import _api
-from .._constraint import require_costs as _require_costs
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     BinPackingProblem,
     ConstraintInfo,
@@ -126,11 +125,8 @@ def solve(
         return problem
     if isinstance(problem, BinPackingProblemModel):
         core = problem.to_core()
-        constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
-        _require_costs(
-            _parameter_uses(problem),
-            _get_constraints(constraints),
-            check_picks=lambda: constraint_costs(core, constraints),
+        constraints = check_parameters(
+            _parameter_uses(problem), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
         )
         solve_in_place(Solver(cfg), core, constraints)
         return BinPackingProblemModel.from_core(core)

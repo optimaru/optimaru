@@ -74,3 +74,14 @@ def test_fixed_slots_and_parallel_groups_need_no_cost():
     picks = without("fixed_slots_cost", "parallel_groups_cost")
     assert parameter_uses(problem) == []
     st.solve(problem, constraints=picks, **QUICK)
+
+
+def test_a_zero_teacher_cap_is_the_default_as_convert_reads_it():
+    problem = demo_problem()
+    problem["teachers"][0].update(max_periods_per_day=0, max_consecutive_periods=0)
+    assert not [
+        use
+        for use in parameter_uses(problem)
+        if use.where == f"teacher {problem['teachers'][0]['id']}"
+        and use.field in ("max_periods_per_day", "max_consecutive_periods")
+    ]

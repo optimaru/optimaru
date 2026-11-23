@@ -189,3 +189,12 @@ it won. The two rungs are other instances than those were (five and six days whe
 scaled ones had four, fewer rooms, another draw of attendees), and the runs were made on a
 cloud machine, not on the machine the defaults were tuned on. The default is unchanged: it
 needs a sweep on these instances before it moves.
+
+## Parameters and their costs
+
+A request that sets a field which acts only through a cost, while its constraints leave
+every such cost out, is refused with `ValueError` naming the field and the costs to add;
+a pick at weight 0 counts. `models.parameter_uses(model)` lists the fields an input sets,
+and [Parameters and their costs](../README.md#parameters-and-their-costs) has the table.
+It is checked where the input is the JSON model (`solve_request`, `solve(model)`); a
+compiled problem is solved as given.

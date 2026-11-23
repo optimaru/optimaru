@@ -37,8 +37,7 @@ The pydantic mirror (for serialization) is in `optimaru.bed_allocation.models`.
 from typing import TypeVar
 
 from .. import _api
-from .._constraint import require_costs as _require_costs
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     Bed,
     BedPlan,
@@ -148,11 +147,8 @@ def solve(
     if not isinstance(plan, BedPlanModel):
         raise TypeError(f"plan must be a BedPlan or a models.BedPlanModel: {type(plan)!r}")
     core_plan = plan.to_core()
-    constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
-    _require_costs(
-        _parameter_uses(plan),
-        _get_constraints(constraints),
-        check_picks=lambda: constraint_costs(core_plan, constraints),
+    constraints = check_parameters(
+        _parameter_uses(plan), constraints, _get_constraints, lambda picks: constraint_costs(core_plan, picks)
     )
     solve_in_place(Solver(cfg), core_plan, constraints)
     return BedPlanModel.from_core(core_plan)

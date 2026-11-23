@@ -42,8 +42,7 @@ The pydantic mirror (for serialization) is in `optimaru.task_assigning.models`.
 from typing import TypeVar
 
 from .. import _api
-from .._constraint import require_costs
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     Affinity,
     ConstraintInfo,
@@ -148,11 +147,8 @@ def solve(
             f"solution must be a TaskAssigningSolution or a models.TaskAssigningSolutionModel: {type(solution)!r}"
         )
     core_solution = solution.to_core()
-    constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
-    require_costs(
-        parameter_uses(solution),
-        get_constraints(constraints),
-        check_picks=lambda: constraint_costs(core_solution, constraints),
+    constraints = check_parameters(
+        parameter_uses(solution), constraints, get_constraints, lambda picks: constraint_costs(core_solution, picks)
     )
     solve_in_place(Solver(cfg), core_solution, constraints)
     return TaskAssigningSolutionModel.from_core(core_solution)

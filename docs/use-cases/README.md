@@ -380,7 +380,7 @@ effective selection holds none of the costs that read it, is refused with
 
 ```text
 vehicle V1 sets max_end_time, but the constraints leave out vehicle_max_end_time_cost,
-the cost that scores it: add it, or leave max_end_time at its default (0)
+the cost that scores it: add one, or leave max_end_time at its default (0)
 ```
 
 - **The effective selection** is the one the solve scores: the defaults when
@@ -391,7 +391,9 @@ the cost that scores it: add it, or leave max_end_time at its default (0)
 - **Checked where the input is the JSON model**: `solve_request`, and `solve()` given the
   pydantic model (or school timetabling's problem dict). A compiled problem is solved as
   it is given. A pick that the engine refuses (an unknown name, a bad knob) is reported
-  for what it is before the parameter check.
+  for what it is before the parameter check. With an API key set the request is sent
+  as it is and checked where it is solved, by a server on this release (school
+  timetabling also checks before sending).
 - **Not checked**: required fields (they have no unset state); fields that shape times,
   places or quantities every cost reads (durations, dates, locations, service times,
   start times); rules the engine enforces whatever the selection (school timetabling's
@@ -401,7 +403,9 @@ the cost that scores it: add it, or leave max_end_time at its default (0)
   reports as driving meters; school timetabling's `required_room_type`, which the room
   assignment reads); and a field left at a default that already means something
   (pickup-delivery `max_stops=20`, school timetabling's `max_periods_per_day=6`): only a
-  value other than the default is checked.
+  value other than the default is checked. A value that switches something off, such as
+  a demand of 0, is still a value other than the default: drop the field, or keep its
+  cost at weight 0.
 
 The fields each use case checks (`models.parameter_uses(model)` lists the ones an input sets):
 
