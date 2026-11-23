@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
+
+**From 0.6.1. Breaking:** a request that sets a field which acts only through a cost, while its
+constraints leave that cost out, is now refused with `ValueError` instead of solved as if the
+field were not there; default selections are unaffected except employee scheduling's
+`desired_shifts`. Routing profiles gain forbidden and preferred jobs (technician skills) and may
+share travel (`same_travel_as`). The engine's C++ moved to `core/` and local search to `search/`;
+nothing changes in the installed package's import paths.
 
 - **Breaking: a parameter needs its cost.** A request that sets a field which acts only through a
   cost (a vehicle's `max_end_time`, a visit's `max_end_time`, a worker's `unavailable_dates`, a
