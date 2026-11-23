@@ -229,6 +229,27 @@ def _check_mode(mode: str, weights, constraints) -> bool:
     return canonical
 
 
+def _check_selection_weights(constraints, weights) -> None:
+    """Refuses weights other than the defaults next to a selection: a selection carries its own weights.
+
+    `weights` is a ``weights=`` dict or a `canon.ObjectiveWeights`, or None.
+    """
+    if constraints is None or weights is None:
+        return
+    if isinstance(weights, dict):
+        weights = _fast_path_weights(weights)
+    if _soft_weights(weights) != _soft_weights():
+        raise ValueError(
+            "weights / config.weights apply to the default fast path only; with constraints=, give each pick its weight"
+        )
+
+
+def _check_initial(initial) -> None:
+    """Refuses an ``initial_solution`` that is not a dict with ``lessons``."""
+    if initial is not None and not (isinstance(initial, dict) and "lessons" in initial):
+        raise ValueError("initial_solution has no lessons")
+
+
 #: The keywords of ``solve()`` that are fields of the same name in a `models.TimetableRequest`.
 _REQUEST_KEYWORDS = (
     "time_limit_seconds",
@@ -288,17 +309,9 @@ def _api_request(problem: dict, keywords: dict):
             else:
                 parameters[name] = _api._plain(value, f"config.{name}")
     # What a local solve refuses before it starts, refused before anything is sent.
-    if (
-        constraints is not None
-        and weights is not None
-        and _soft_weights(_fast_path_weights(weights)) != _soft_weights()
-    ):
-        raise ValueError(
-            "weights / config.weights apply to the default fast path only; with constraints=, give each pick its weight"
-        )
+    _check_selection_weights(constraints, weights)
     initial = keywords["initial_solution"]
-    if initial is not None and not (isinstance(initial, dict) and "lessons" in initial):
-        raise ValueError("initial_solution has no lessons")
+    _check_initial(initial)
     request = TimetableRequest(
         model_input=TimetableProblemModel.model_validate(problem),
         mode=mode,
@@ -422,13 +435,9 @@ def solve(
         cfg.weights = _fast_path_weights(weights)
     # weights= / config.weights at the defaults (e.g. a full default dict) are harmless next to a
     # selection; anything else would be silently ignored, so it raises.
-    if constraints is not None and canonical and _soft_weights(cfg.weights) != _soft_weights():
-        raise ValueError(
-            "weights / config.weights apply to the default fast path only; with constraints=, give each pick its weight"
-        )
-
-    if initial_solution is not None and not (isinstance(initial_solution, dict) and "lessons" in initial_solution):
-        raise ValueError("initial_solution has no lessons")
+    if canonical:
+        _check_selection_weights(constraints, cfg.weights)
+    _check_initial(initial_solution)
 
     if canonical:
         converted = convert_problem(problem)

@@ -488,16 +488,34 @@ def test_school_timetablings_minimal_start_travels_as_a_local_solve_takes_it(api
     problem = small_problem("school_timetabling")
     start = school.solve.__wrapped__(problem, time_limit_seconds=0.2, random_seed=1)
     # Course and slot only, and a key of another backend's own: what inject_solution reads.
-    minimal = {"lessons": [{"course_id": x["course_id"], "slot": x["slot"]} for x in start["lessons"]], "solver": "x"}
+    # A slot key of its own too, as a CP-SAT result may carry.
+    minimal = {
+        "lessons": [{"course_id": x["course_id"], "slot": {**x["slot"], "slot_index": 0}} for x in start["lessons"]],
+        "solver": "x",
+    }
 
     solved = school.solve(problem, time_limit_seconds=0, initial_solution=minimal)
 
     lessons = api.created()[0].body["request"]["initial_solution"]["lessons"]
-    assert [(x["course_id"], x["slot"]) for x in lessons] == [(x["course_id"], x["slot"]) for x in minimal["lessons"]]
+    assert [(x["course_id"], x["slot"]) for x in lessons] == [
+        (x["course_id"], {"day": x["slot"]["day"], "period": x["slot"]["period"]}) for x in minimal["lessons"]
+    ]
     here = school.solve.__wrapped__(problem, time_limit_seconds=0, initial_solution=minimal)
     assert solved["lessons"] == here["lessons"]
     with pytest.raises(ValueError, match="initial_solution has no lessons"):
         school.solve(problem, initial_solution={"status": "FEASIBLE"})
+
+
+@pytest.mark.parametrize("domain", ["canon", "quickstart"])
+def test_school_timetablings_config_fields_are_plain_but_weights(domain):
+    """The config scan of `_api_request` sends every field that changed: each must be one JSON carries."""
+    school = use_case_module("school_timetabling")
+    config = school.canon.SolverConfig() if domain == "canon" else school.SolverConfig()
+    for name in dir(config):
+        value = getattr(config, name)
+        if name.startswith("_") or name in ("on_new_best", "weights", "best_score_limit") or callable(value):
+            continue  # best_score_limit is infinite by default; only a changed one travels, as a list
+        _api._plain(value, name)
 
 
 def test_school_timetablings_quickstart_mode_travels_with_its_config(api):

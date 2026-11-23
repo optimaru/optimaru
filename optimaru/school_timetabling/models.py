@@ -304,6 +304,15 @@ class TimetableResultModel(StrictModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class StartingSlotModel(BaseModel):
+    """The slot of a starting lesson: a weekday (0 = Monday) and a 1-based period; other keys are ignored."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    day: int = Field(ge=0, le=7)
+    period: int = Field(ge=1)
+
+
 class StartingLessonModel(BaseModel):
     """One placed period of a starting solution: the course and the slot are all a warm start reads.
 
@@ -315,7 +324,7 @@ class StartingLessonModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     course_id: str
-    slot: SlotModel
+    slot: StartingSlotModel
     class_group_id: str | None = None
     subject_id: str | None = None
     teacher_ids: list[str] | None = None
