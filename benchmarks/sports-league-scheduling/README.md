@@ -19,6 +19,12 @@ The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports
 for it includes building the model.
 
+The engine searches in stages of growing late acceptance history, and which stage a
+30 s solve reaches depends on the clock, so a busier machine can end it earlier. In the
+run below `teams6` and `teams6-4` gave -45462 and -46846; two later runs on the same Mac,
+with fewer jobs beside them, gave -44693 and -42239 both times, the values of the table
+before ([how far the numbers repeat](../README.md#publishing-results)).
+
 <!-- results:start -->
 ## Results
 

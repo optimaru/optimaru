@@ -206,6 +206,7 @@ scheduling search in stages of growing late acceptance history, and which stage 
 solve reaches under a time limit depends on the clock, so a busier machine can
 end such a solve in an earlier stage. CP-SAT's result was the same on 225 of the
 340 (eight workers under a time limit; a row without a solution counts as one
-that differs, while the engine returned a solution on every instance). One seed says little about a change of the search.
+that differs, while the engine returned a solution on every instance). One seed
+says little about a change of the search.
 Read a small margin in any table as noise.
 

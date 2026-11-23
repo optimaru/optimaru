@@ -107,12 +107,12 @@ uv run python -m vrp_benchmark --series x --seconds 30 --backend engine,ortools
 # chosen instances of a series
 uv run python -m vrp_benchmark --series x --only X-n101-k25 --only X-n153-k22 --seconds 30
 
-# VRPTW: all 56 Solomon instances, three runs side by side
-uv run python -m vrp_benchmark --series solomon --seconds 30 --jobs 3 --out bench/vrptw-solomon.json
+# VRPTW: all 56 Solomon instances, two runs side by side (as published)
+uv run python -m vrp_benchmark --series solomon --seconds 30 --jobs 2 --out bench/vrptw-solomon.json
 
 # Gehring & Homberger: one instance per class and size (30), or all 300
-uv run python -m vrp_benchmark --series homberger --limit-per-bucket 1 --seconds 30 --jobs 3
-uv run python -m vrp_benchmark --series homberger --seconds 30 --jobs 3 --out bench/vrptw-homberger.json
+uv run python -m vrp_benchmark --series homberger --limit-per-bucket 1 --seconds 30 --jobs 2
+uv run python -m vrp_benchmark --series homberger --seconds 30 --jobs 2 --out bench/vrptw-homberger.json
 ```
 
 `--jobs N` runs N single-threaded runs at a time in separate processes. Keep

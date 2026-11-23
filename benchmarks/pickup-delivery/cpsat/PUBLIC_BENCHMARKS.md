@@ -46,6 +46,11 @@ here, on one thread; `--workers` is CP-SAT's. The CP-SAT circuit model grows
 quadratically per vehicle, so a whole instance (about 50 requests, 25 vehicles)
 is past what it solves in 30 s.
 
+Below that size CP-SAT's 30 s result moves from run to run: on the 25-request rows the
+runs of 2026-11-12, of the model of #140 and of this table (with #144's horizon) each
+came out differently, better on one row and worse on another, so read a CP-SAT row
+there as one draw, not as the effect of a change to the model.
+
 <!-- results:start -->
 Each plan is re-verified independently: every request served, pickup before dropoff on the
 same vehicle, capacity and every time window. Distance is the Li & Lim round trip, with every
