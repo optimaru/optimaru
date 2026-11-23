@@ -15,8 +15,6 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from external_solver.pickup_delivery import solve_request as solve_cpsat_request
-
 from cpsat_plugins.results import seed_list, write_results, write_whole
 from optimaru.pickup_delivery.constraints import (
     max_end_time_cost,
@@ -40,6 +38,7 @@ from optimaru.pickup_delivery.models import (
 from optimaru.pickup_delivery.models import (
     solve_request as solve_engine_request,
 )
+from pickup_delivery_cpsat.model import solve_request as solve_cpsat_request
 
 # The 100-customer Li & Lim set as published on SINTEF's TOP benchmark page
 # (https://www.sintef.no/projectweb/top/pdptw/li-lim-benchmark/).
