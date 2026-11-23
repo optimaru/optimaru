@@ -18,6 +18,8 @@ exclude_docs: |
 
 theme:
   name: material
+  # The optimaru mark, as on optimaru.com, in place of the theme's own icon.
+  favicon: assets/favicon.svg
   features:
     - navigation.sections
     - navigation.indexes
