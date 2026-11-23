@@ -89,6 +89,8 @@ def test_list_constraints_matches_the_spec_names():
         "latency_cost",
         "vehicle_fixed_cost",
         "visit_order_cost",
+        "profile_forbidden_visit_cost",
+        "profile_preferred_visit_cost",
         "visit_group_cost",
         "unassigned_visits_cost",
     ]
@@ -257,6 +259,8 @@ EXPECTED_INFO = [
     ("latency_cost", "soft", 0.0, False),
     ("vehicle_fixed_cost", "soft", 1.0, True),
     ("visit_order_cost", "hard", 1000.0, True),
+    ("profile_forbidden_visit_cost", "hard", 1000.0, True),
+    ("profile_preferred_visit_cost", "soft", 600.0, True),
     ("visit_group_cost", "hard", 1000.0, True),
     ("unassigned_visits_cost", "medium", 1.0, True),
 ]

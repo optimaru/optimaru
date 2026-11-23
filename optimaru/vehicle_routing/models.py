@@ -24,21 +24,24 @@ Times are integer seconds from a common day start; locations are
 ends at its `end_depot`, or at its last visit when there is none (an open route).
 Driving seconds and meters come from the vehicle's travel profile
 (`RoutingInput.profiles`, dicts keyed by depot and visit ids); without one,
-straight lines between the coordinates.
+straight lines between the coordinates. A profile also names the visits its
+vehicles may not serve (`forbidden_visits`) and those they are preferred for
+(`preferred_visits`).
 """
 
 from typing import Any
 
 from pydantic import Field, model_validator
 
-from .. import _api
+from .. import _api, _routing
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from .._routing import (
     DEFAULT_PROFILE,
     MISSING_TRAVEL_VALUE,
     DepotModel,
-    TravelProfile,
     check_depots_and_profiles,
+    check_profile_jobs,
+    profile_job_rules,
     profile_matrices,
 )
 from . import _core
@@ -61,6 +64,32 @@ __all__ = [
     "vehicle_metrics",
     "with_initial_solution",
 ]
+
+
+class TravelProfile(_routing.TravelProfile):
+    """How a kind of vehicle drives (see `optimaru._routing.TravelProfile`), and which visits it takes."""
+
+    forbidden_visits: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ids of visits a vehicle on this profile may not serve: each one it serves costs "
+            "`profile_forbidden_visit_cost` (hard), which every solve scores, listed or not. A "
+            "visit no vehicle may serve stays unassigned."
+        ),
+    )
+    preferred_visits: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ids of visits that should go to a vehicle on this profile: each one served by a "
+            "vehicle whose profile does not prefer it costs `profile_preferred_visit_cost` "
+            "(soft). The constraints of the solve must include that cost."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _check_visits(self):
+        check_profile_jobs(self, "forbidden_visits", "preferred_visits")
+        return self
 
 
 class VehicleModel(StrictModel):
@@ -131,8 +160,9 @@ class RoutingInput(StrictModel):
         default_factory=dict,
         description=(
             "Travel profiles by name: driving seconds and meters between depots and visits, "
-            "keyed by their ids. Empty (the default): every vehicle drives straight lines "
-            "between the coordinates."
+            "keyed by their ids, and the visits each profile's vehicles may not serve or are "
+            "preferred for. Empty (the default): every vehicle drives straight lines between "
+            "the coordinates and may serve any visit."
         ),
     )
 
@@ -143,6 +173,11 @@ class RoutingInput(StrictModel):
             if len(ids) != len(set(ids)):
                 raise ValueError(f"duplicate {kind} ids")
         check_depots_and_profiles(self.depots, (visit.id for visit in self.visits), self.vehicles, self.profiles)
+        known = {visit.id for visit in self.visits}
+        for name, profile in self.profiles.items():
+            for field in ("forbidden_visits", "preferred_visits"):
+                if unknown := sorted(set(getattr(profile, field)) - known):
+                    raise ValueError(f"profile {name!r}: {field} names unknown visits {unknown[:10]}")
         self._check_initial_routes()
         self._check_groups()
         return self
@@ -232,11 +267,17 @@ def to_plan(model_input: RoutingInput) -> "_core.VehicleRoutePlan":
 
     The locations are the depots, then the visits, in input order; each profile's
     dicts become square matrices over them (`profile_matrices`), and the engine
-    fills what a profile does not give from the coordinates."""
+    fills what a profile does not give from the coordinates. The visit lists of
+    the profiles the vehicles drive on become `ProfileVisits` entries, which each
+    vehicle names by `profile_visits_index`."""
     locations = [_core.Location(*depot.location) for depot in model_input.depots]
     depot_index = {depot.id: i for i, depot in enumerate(model_input.depots)}
     profile_index, durations, distances = profile_matrices(
         model_input.profiles, [depot.id for depot in model_input.depots] + [visit.id for visit in model_input.visits]
+    )
+    visit_index = {visit.id: i for i, visit in enumerate(model_input.visits)}
+    profile_visits, visits_index_of = profile_job_rules(
+        model_input.profiles, model_input.vehicles, visit_index, "forbidden_visits", "preferred_visits"
     )
     vehicles = [
         _core.Vehicle(
@@ -253,10 +294,10 @@ def to_plan(model_input: RoutingInput) -> "_core.VehicleRoutePlan":
             v.max_route_radius_meters,
             -1 if v.end_depot is None else depot_index[v.end_depot],
             profile_index[v.profile],
+            profile_visits_index,
         )
-        for v in model_input.vehicles
+        for v, profile_visits_index in zip(model_input.vehicles, visits_index_of, strict=True)
     ]
-    visit_index = {visit.id: i for i, visit in enumerate(model_input.visits)}
     group_index: dict[str, int] = {}
     visits = []
     for visit in model_input.visits:
@@ -279,7 +320,15 @@ def to_plan(model_input: RoutingInput) -> "_core.VehicleRoutePlan":
         vehicle.visit_indices = [visit_index[visit_id] for visit_id in model.initial_route]
     # The pool stays empty on purpose. The constraints= path does not clear it,
     # so a visit parked there would be skipped by construction and stay unrouted.
-    return _core.VehicleRoutePlan("plan", locations, vehicles, visits, durations, distances)
+    return _core.VehicleRoutePlan(
+        "plan",
+        locations,
+        vehicles,
+        visits,
+        durations,
+        distances,
+        [_core.ProfileVisits(forbidden, preferred) for forbidden, preferred in profile_visits],
+    )
 
 
 def vehicle_metrics(plan: "_core.VehicleRoutePlan", routes: dict[str, list[VisitStop]]) -> dict[str, VehicleMetrics]:
@@ -351,8 +400,8 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
         for v in request.model_input.vehicles
     )
     if constraints is None and not has_route_policy:
-        # Visit groups need no entry above: Solver.solve itself scores a plan with a group of
-        # two visits or more on the default constraints.
+        # Visit groups and profile visit lists need no entry above: Solver.solve itself scores
+        # a plan with either on the default constraints.
         solver.solve(plan)
     else:
         if constraints is None:

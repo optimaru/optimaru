@@ -7,10 +7,12 @@ travel profile (`TravelProfile`): pairwise driving seconds and driving meters ke
 those ids, ``{from_id: {to_id: value}}``. A pair the dicts leave out costs the profile's
 ``missing_value``; a place to itself costs 0 unless given. A problem without profiles,
 or a profile without one of the two dicts, drives straight lines between the
-coordinates (haversine meters, at 50 km/h for the seconds).
+coordinates (haversine meters, at 50 km/h for the seconds). A profile may instead
+drive exactly as another one does (``same_travel_as``), so profiles that differ in
+something else, such as the jobs their vehicles may take, share one set of dicts.
 
-The use cases turn the dicts into one square matrix per profile before the solve
-(`profile_matrices`): the engine reads matrices, the JSON stays keyed by id.
+The use cases turn the dicts into one square matrix per distinct travel before the
+solve (`profile_matrices`): the engine reads matrices, the JSON stays keyed by id.
 """
 
 from collections.abc import Iterable, Sequence
@@ -25,6 +27,8 @@ __all__ = [
     "DepotModel",
     "TravelProfile",
     "check_depots_and_profiles",
+    "check_profile_jobs",
+    "profile_job_rules",
     "profile_matrices",
 ]
 
@@ -45,7 +49,11 @@ class DepotModel(StrictModel):
 
 
 class TravelProfile(StrictModel):
-    """Pairwise travel of one kind of vehicle, keyed by place id."""
+    """Pairwise travel of one kind of vehicle, keyed by place id.
+
+    Each use case extends it with the jobs a vehicle on the profile may not take
+    and those it is preferred for (vehicle routing: visits, pickup-delivery:
+    requests)."""
 
     durations: dict[str, dict[str, int]] | None = Field(
         default=None,
@@ -68,9 +76,27 @@ class TravelProfile(StrictModel):
             "What a pair the two dicts leave out costs, in seconds or meters. A place to itself costs 0 unless given."
         ),
     )
+    same_travel_as: str | None = Field(
+        default=None,
+        description=(
+            "Name of another profile whose durations, distances and missing_value this one "
+            "drives on, given instead of its own: profiles that differ only in the jobs their "
+            "vehicles take then share one set of dicts. The named profile gives its own travel."
+        ),
+    )
 
     @model_validator(mode="after")
-    def _non_negative(self):
+    def _check_travel(self):
+        if self.same_travel_as is not None:
+            # By value, not by the fields set: a dumped profile carries every field.
+            given = [field for field in ("durations", "distances") if getattr(self, field) is not None]
+            if self.missing_value != MISSING_TRAVEL_VALUE:
+                given.append("missing_value")
+            if given:
+                raise ValueError(
+                    f"same_travel_as {self.same_travel_as!r} takes the travel of that profile: "
+                    f"leave out {', '.join(given)}"
+                )
         for kind, pairs in (("durations", self.durations), ("distances", self.distances)):
             if pairs is not None and not pairs:
                 # Every pair would cost missing_value; None is the straight-line fallback.
@@ -109,6 +135,18 @@ def check_depots_and_profiles(
             )
         if not profiles and vehicle.profile != DEFAULT_PROFILE:
             raise ValueError(f"vehicle {vehicle.id}: profile {vehicle.profile!r} is given, but no profiles are")
+    for name, profile in profiles.items():
+        source = profile.same_travel_as
+        if source is None:
+            continue
+        if source == name:
+            raise ValueError(f"profile {name!r}: same_travel_as names the profile itself")
+        if source not in profiles:
+            raise ValueError(f"profile {name!r}: same_travel_as names an unknown profile {source!r}")
+        if (further := profiles[source].same_travel_as) is not None:
+            raise ValueError(
+                f"profile {name!r}: same_travel_as names {source!r}, which drives as {further!r}: name {further!r}"
+            )
     places = known_depots.union(stop_ids)
     for name, profile in profiles.items():
         for kind, pairs in (("durations", profile.durations), ("distances", profile.distances)):
@@ -120,6 +158,53 @@ def check_depots_and_profiles(
                     unknown |= row.keys() - places
             if unknown:
                 raise ValueError(f"profile {name!r}: {kind} name unknown places {sorted(unknown)[:10]}")
+
+
+def check_profile_jobs(profile: TravelProfile, forbidden: str, preferred: str) -> None:
+    """Refuse an id named twice in one of a profile's two job lists, or named in both.
+
+    ``forbidden`` and ``preferred`` are the names of the use case's two list fields."""
+    lists = {field: getattr(profile, field) for field in (forbidden, preferred)}
+    for field, ids in lists.items():
+        if len(set(ids)) != len(ids):
+            twice = sorted({job for job in ids if ids.count(job) > 1})
+            raise ValueError(f"{field} names {twice[:10]} twice")
+    if both := sorted(set(lists[forbidden]) & set(lists[preferred])):
+        raise ValueError(f"{both[:10]} are both in {forbidden} and in {preferred}")
+
+
+def profile_job_rules(
+    profiles: dict[str, TravelProfile],
+    vehicles: Sequence,
+    job_index: dict[str, int],
+    forbidden: str,
+    preferred: str,
+) -> tuple[list[tuple[list[int], list[int]]], list[int]]:
+    """The engine's view of the job lists: one entry per profile that has some, and an entry per vehicle.
+
+    An entry is the profile's (forbidden, preferred) job indices, sorted, as the engine
+    wants them; a vehicle's index is its profile's entry, -1 for a profile without lists.
+    Only profiles some vehicle drives on get an entry. Unknown ids raise KeyError: the
+    use case's input model refuses them first."""
+    entries: list[tuple[list[int], list[int]]] = []
+    entry_of: dict[str, int] = {}
+    per_vehicle = []
+    for vehicle in vehicles:
+        name = vehicle.profile
+        if name not in entry_of:
+            profile = profiles.get(name)
+            if profile is None or not (getattr(profile, forbidden) or getattr(profile, preferred)):
+                entry_of[name] = -1
+            else:
+                entry_of[name] = len(entries)
+                entries.append(
+                    (
+                        sorted(job_index[job] for job in getattr(profile, forbidden)),
+                        sorted(job_index[job] for job in getattr(profile, preferred)),
+                    )
+                )
+        per_vehicle.append(entry_of[name])
+    return entries, per_vehicle
 
 
 def _matrix(pairs: dict[str, dict[str, int]], place_ids: Sequence[str], missing: int) -> list[list[int]]:
@@ -137,20 +222,38 @@ def _matrix(pairs: dict[str, dict[str, int]], place_ids: Sequence[str], missing:
 def profile_matrices(
     profiles: dict[str, TravelProfile], place_ids: Sequence[str]
 ) -> tuple[dict[str, int], list[list[list[int]] | None], list[list[list[int]] | None]]:
-    """The engine's view of the profiles: an index per profile name and per-profile matrices.
+    """The engine's view of the profiles: a matrix index per profile name, and the matrices.
 
-    The matrices are square over ``place_ids`` (rows are "from", columns "to"); None for a
-    dict the profile does not give, which the engine fills from the coordinates. Without
-    profiles there is one, `DEFAULT_PROFILE`, on straight lines.
+    One pair of matrices per distinct travel, square over ``place_ids`` (rows are "from",
+    columns "to"); None for a dict the profile does not give, which the engine fills from
+    the coordinates. A profile with ``same_travel_as`` takes the index of the profile it
+    names, and the profiles that give neither dict share one index, on straight lines:
+    they drive alike, so the engine keeps one copy. Without profiles there is one,
+    `DEFAULT_PROFILE`, on straight lines.
     """
     if not profiles:
         return {DEFAULT_PROFILE: 0}, [None], [None]
     durations, distances = [], []
-    for profile in profiles.values():
+    index: dict[str, int] = {}
+    straight = None  # the index of the profiles on straight lines, once one has it
+    for name, profile in profiles.items():
+        if profile.same_travel_as is not None:
+            continue
+        if profile.durations is None and profile.distances is None:
+            if straight is None:
+                straight = len(durations)
+                durations.append(None)
+                distances.append(None)
+            index[name] = straight
+            continue
+        index[name] = len(durations)
         durations.append(
             None if profile.durations is None else _matrix(profile.durations, place_ids, profile.missing_value)
         )
         distances.append(
             None if profile.distances is None else _matrix(profile.distances, place_ids, profile.missing_value)
         )
-    return {name: i for i, name in enumerate(profiles)}, durations, distances
+    for name, profile in profiles.items():
+        if profile.same_travel_as is not None:
+            index[name] = index[profile.same_travel_as]
+    return {name: index[name] for name in profiles}, durations, distances

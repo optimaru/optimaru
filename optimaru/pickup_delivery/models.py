@@ -3,7 +3,9 @@
 A route starts at its vehicle's `start_depot` and ends at its `end_depot`, or at
 its last stop when there is none (an open route). Driving seconds and meters
 come from the vehicle's travel profile (`PdpInput.profiles`, dicts keyed by depot
-and stop ids); without one, straight lines between the coordinates.
+and stop ids); without one, straight lines between the coordinates. A profile also
+names the requests its vehicles may not carry (`forbidden_requests`) and those they
+are preferred for (`preferred_requests`).
 """
 
 from __future__ import annotations
@@ -12,14 +14,15 @@ from typing import Any
 
 from pydantic import Field, model_validator
 
-from .. import _api
+from .. import _api, _routing
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from .._routing import (
     DEFAULT_PROFILE,
     MISSING_TRAVEL_VALUE,
     DepotModel,
-    TravelProfile,
     check_depots_and_profiles,
+    check_profile_jobs,
+    profile_job_rules,
     profile_matrices,
 )
 from . import _core
@@ -43,6 +46,32 @@ __all__ = [
     "vehicle_metrics",
     "with_initial_solution",
 ]
+
+
+class TravelProfile(_routing.TravelProfile):
+    """How a kind of vehicle drives (see `optimaru._routing.TravelProfile`), and which requests it carries."""
+
+    forbidden_requests: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ids of requests a vehicle on this profile may not carry, both stops kept off it: each "
+            "stop of one it carries costs `profile_forbidden_request_cost` (hard), which every solve "
+            "scores, listed or not. A request no vehicle may carry stays unassigned."
+        ),
+    )
+    preferred_requests: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ids of requests that should go to a vehicle on this profile: each stop of one carried by "
+            "a vehicle whose profile does not prefer it costs `profile_preferred_request_cost` (soft). "
+            "The constraints of the solve must include that cost."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _check_requests(self):
+        check_profile_jobs(self, "forbidden_requests", "preferred_requests")
+        return self
 
 
 class VehicleModel(StrictModel):
@@ -137,8 +166,9 @@ class PdpInput(StrictModel):
         default_factory=dict,
         description=(
             "Travel profiles by name: driving seconds and meters between depots and stops, "
-            "keyed by their ids. Empty (the default): every vehicle drives straight lines "
-            "between the coordinates."
+            "keyed by their ids, and the requests each profile's vehicles may not carry or are "
+            "preferred for. Empty (the default): every vehicle drives straight lines between "
+            "the coordinates and may carry every request."
         ),
     )
 
@@ -158,8 +188,34 @@ class PdpInput(StrictModel):
         for delivery in self.deliveries:
             if delivery.required_vehicle and delivery.required_vehicle not in vehicle_ids:
                 raise ValueError(f"request {delivery.id}: unknown vehicle {delivery.required_vehicle!r}")
+        self._check_profile_requests()
         self._check_groups()
         return self
+
+    def _check_profile_requests(self) -> None:
+        """Known request ids, and no request bound to a vehicle whose profile forbids it."""
+        known = {delivery.id for delivery in self.deliveries}
+        for name, profile in self.profiles.items():
+            for field in ("forbidden_requests", "preferred_requests"):
+                if unknown := sorted(set(getattr(profile, field)) - known):
+                    raise ValueError(f"profile {name!r}: {field} names unknown requests {unknown[:10]}")
+        forbidden = {
+            vehicle.id: set(self.profiles[vehicle.profile].forbidden_requests)
+            for vehicle in self.vehicles
+            if vehicle.profile in self.profiles
+        }
+        request_of = {stop.id: d.id for d in self.deliveries for stop in (d.pickup, d.dropoff)}
+        for delivery in self.deliveries:
+            if delivery.required_vehicle and delivery.id in forbidden.get(delivery.required_vehicle, ()):
+                raise ValueError(
+                    f"request {delivery.id} must ride vehicle {delivery.required_vehicle}, whose profile forbids it"
+                )
+        for vehicle in self.vehicles:
+            for stop_id in vehicle.initial_route[: vehicle.pinned_stops]:
+                if request_of[stop_id] in forbidden.get(vehicle.id, ()):
+                    raise ValueError(
+                        f"vehicle {vehicle.id} pins a stop of request {request_of[stop_id]}, which its profile forbids"
+                    )
 
     def _check_groups(self) -> None:
         """The requests of a group ride one vehicle, so two cannot be bound to different ones."""
@@ -255,13 +311,21 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
     The locations are the depots, then each request's pickup and dropoff, in input
     order; each profile's dicts become square matrices over them
     (`profile_matrices`), and the engine fills what a profile does not give from
-    the coordinates."""
+    the coordinates. The request lists of the profiles the vehicles drive on become
+    `ProfileRequests` entries, which each vehicle names by `profile_requests_index`."""
     locations = [_core.Location(*depot.location) for depot in model_input.depots]
     depot_index = {depot.id: i for i, depot in enumerate(model_input.depots)}
     places = [depot.id for depot in model_input.depots]
     for delivery in model_input.deliveries:
         places += [delivery.pickup.id, delivery.dropoff.id]
     profile_index, durations, distances = profile_matrices(model_input.profiles, places)
+    profile_requests, requests_index_of = profile_job_rules(
+        model_input.profiles,
+        model_input.vehicles,
+        {delivery.id: d for d, delivery in enumerate(model_input.deliveries)},
+        "forbidden_requests",
+        "preferred_requests",
+    )
     vehicles = [
         _core.Vehicle(
             vehicle.id,
@@ -277,8 +341,9 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
             vehicle.max_route_radius_meters,
             -1 if vehicle.end_depot is None else depot_index[vehicle.end_depot],
             profile_index[vehicle.profile],
+            profile_requests_index,
         )
-        for vehicle in model_input.vehicles
+        for vehicle, profile_requests_index in zip(model_input.vehicles, requests_index_of, strict=True)
     ]
     vehicle_index = {vehicle.id: i for i, vehicle in enumerate(model_input.vehicles)}
     group_index: dict[str, int] = {}
@@ -327,7 +392,16 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
         route = [node_index[stop_id] for stop_id in model.initial_route]
         vehicle.node_indices = route
         vehicle.pinned_node_indices = route[: model.pinned_stops]
-    plan = _core.PdpRoutePlan(name, locations, vehicles, nodes, deliveries, durations, distances)
+    plan = _core.PdpRoutePlan(
+        name,
+        locations,
+        vehicles,
+        nodes,
+        deliveries,
+        durations,
+        distances,
+        [_core.ProfileRequests(forbidden, preferred) for forbidden, preferred in profile_requests],
+    )
     plan.rebuild_unassigned_pool()
     return plan
 
@@ -411,8 +485,8 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
         for v in request.model_input.vehicles
     ) or any(d.required_vehicle for d in request.model_input.deliveries)
     if constraints is None and not has_route_policy:
-        # Request groups need no entry above: Solver.solve itself scores a plan with a group of
-        # two requests or more on the default constraints.
+        # Request groups and profile request lists need no entry above: Solver.solve itself
+        # scores a plan with either on the default constraints.
         solver.solve(plan)
     else:
         if constraints is None:

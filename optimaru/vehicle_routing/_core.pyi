@@ -90,6 +90,16 @@ class Visit:
     def arrival_time(self) -> int:
         """Derived: arrival seconds; -1 == unassigned."""
 
+class ProfileVisits:
+    """What one kind of vehicle may serve: the visits it may not
+    (profile_forbidden_visit_cost) and those it is preferred for
+    (profile_preferred_visit_cost). A vehicle names its entry with
+    `Vehicle.profile_visits_index`. Both lists hold indices into
+    `VehicleRoutePlan.visits` in strictly increasing order, none in both."""
+    def __init__(self, forbidden_visit_indices: list[int] = ..., preferred_visit_indices: list[int] = ...) -> None: ...
+    forbidden_visit_indices: list[int]
+    preferred_visit_indices: list[int]
+
 class Vehicle:
     def __init__(
         self,
@@ -106,6 +116,7 @@ class Vehicle:
         max_route_radius_meters: float = 0.0,
         end_location_index: int = -1,
         profile_index: int = 0,
+        profile_visits_index: int = -1,
     ) -> None: ...
     id: str
     capacity: int
@@ -117,6 +128,9 @@ class Vehicle:
     stop: no closing leg is driven or timed."""
     profile_index: int
     """Which of the plan's matrices the vehicle drives on."""
+    profile_visits_index: int
+    """Which entry of `VehicleRoutePlan.profile_visits` says what the vehicle may
+    serve; -1 (the default) for none."""
     departure_time: int
     max_travel_time: int
     max_route_duration: int
@@ -132,7 +146,9 @@ class VehicleRoutePlan:
     """The problem and its routes. Constructing it assigns location indices and
     takes one driving-seconds and one driving-meters matrix per profile: as many
     profiles as the longer list holds (one at least); a matrix not given (None,
-    or past the end of its list) is the haversine fallback."""
+    or past the end of its list) is the haversine fallback. `profile_visits` lists
+    what each kind of vehicle may not serve or is preferred for (ValueError for an
+    index out of range, a list out of order, a visit in both lists)."""
     def __init__(
         self,
         name: str,
@@ -141,6 +157,7 @@ class VehicleRoutePlan:
         visits: list[Visit],
         durations: list[list[list[int]] | None] | None = None,
         distances: list[list[list[int]] | None] | None = None,
+        profile_visits: list[ProfileVisits] = ...,
     ) -> None: ...
     @property
     def name(self) -> str: ...
@@ -149,6 +166,8 @@ class VehicleRoutePlan:
     vehicles: list[Vehicle]
     @property
     def visits(self) -> list[Visit]: ...
+    @property
+    def profile_visits(self) -> list[ProfileVisits]: ...
     unassigned_visit_indices: list[int]
     """The unassigned pool: visits the solver chose not to route. Filled by
     solve(); penalized on the medium score level."""
@@ -171,7 +190,7 @@ def calculate_score(plan: VehicleRoutePlan) -> Score:
     """Recompute the derived fields and the score (also stores plan.score).
 
     The score is the one solve(plan) stores: the four core constraints, or the default
-    constraints when the plan has a group of two or more visits.
+    constraints when the plan has a group of two or more visits or a profile visit list.
     """
 
 class SolverConfig:
@@ -309,20 +328,25 @@ class Solver:
     def solve(self, plan: VehicleRoutePlan) -> None:
         """Solve on the four core constraints, which do not include the vehicle limits: for a
         plan that sets one, call solve_with_constraints. A plan with a group of two
-        visits or more (Visit.group_index) is the exception: it is scored with the default
-        constraints, visit_group_cost and visit_order_cost among them, every parallel
+        visits or more (Visit.group_index) or a profile visit list (profile_visits) is the
+        exception: it is scored with the default constraints, visit_group_cost,
+        visit_order_cost and the two profile visit costs among them, every parallel
         start on a set of its own."""
     def solve_with_constraints(self, plan: VehicleRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
         """Score the same solve with a caller-chosen constraint set
         (see optimaru.vehicle_routing.constraints). The given list replaces the default set;
         None keeps the default set. A name may be picked several times: each pick is
         its own instance with its own knobs, and the instances add up. With
-        parallel_solver_count above 1 every start is scored by its own copy of the picks."""
+        parallel_solver_count above 1 every start is scored by its own copy of the picks.
+        profile_forbidden_visit_cost is always on: a plan with forbidden visits is scored
+        on it whether the list holds it or not. A plan with preferred visits needs
+        profile_preferred_visit_cost in the list: ValueError otherwise."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
-    the fourteen per-vehicle constraints (vehicle_capacity_cost ... vehicle_fixed_cost,
-    visit_order_cost), then the two globals (visit_group_cost, unassigned_visits_cost).
+    the sixteen per-vehicle constraints (vehicle_capacity_cost ... vehicle_fixed_cost,
+    visit_order_cost, profile_forbidden_visit_cost, profile_preferred_visit_cost), then
+    the two globals (visit_group_cost, unassigned_visits_cost).
     The same names optimaru.vehicle_routing.constraints uses."""
 
 def constraint_costs(plan: VehicleRoutePlan, constraints: Iterable[Any] | None = ...) -> dict[str, dict[str, Any]]:
@@ -336,7 +360,8 @@ def constraint_costs(plan: VehicleRoutePlan, constraints: Iterable[Any] | None =
     "default_weight": float, "default_level": str, "units": [...],
     "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. None = the default
     constraints; a pick list (as for solve_with_constraints) scores exactly those
-    picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
+    picks (and profile_forbidden_visit_cost on a plan with forbidden visits, which every
+    solve scores), each entry carrying its pick's knobs, the k-th pick of a name keyed
     "<name>#<k>" from the second on. "units" (the per-vehicle constraints only) lists
     the vehicle indices the constraint evaluates, so the literal offset (clip=False)
     charges every vehicle, an idle one included, and not the pool. The medium fold

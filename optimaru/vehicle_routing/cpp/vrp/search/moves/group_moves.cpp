@@ -26,9 +26,9 @@ constexpr int kDetached = -2;
 constexpr int kWaitingPerRepair = 2;
 
 // Whether two vehicles serve any visit identically while they are idle: the
-// same limits, the same depots and the same profile. (Vehicles that share a
-// depot share its location entry; two entries at one point count as two
-// depots here, which only offers both vehicles.)
+// same limits, the same depots, the same profile and the same profile visits. (Vehicles that share
+// a depot share its location entry; two entries at one point count as two depots here, which only
+// offers both vehicles.)
 bool sameService(const Vehicle& a, const Vehicle& b) {
     return a.capacity == b.capacity && a.departureTime == b.departureTime &&
            a.maxTravelTime == b.maxTravelTime && a.maxRouteDuration == b.maxRouteDuration &&
@@ -36,7 +36,8 @@ bool sameService(const Vehicle& a, const Vehicle& b) {
            a.minLoadRatio == b.minLoadRatio && a.fixedCost == b.fixedCost &&
            a.maxRouteRadiusMeters == b.maxRouteRadiusMeters &&
            a.startLocationIndex == b.startLocationIndex &&
-           a.endLocationIndex == b.endLocationIndex && a.profileIndex == b.profileIndex;
+           a.endLocationIndex == b.endLocationIndex && a.profileIndex == b.profileIndex &&
+           a.profileVisitsIndex == b.profileVisitsIndex;
 }
 
 // The vehicles worth offering a unit to: every vehicle with a route and, of
@@ -82,8 +83,8 @@ private:
 };
 
 // The cheapest way to put `visits` on one of `candidates`, each a route of
-// `routes` with its timeline in `timelines`. Leaves `steps` empty when no
-// vehicle takes all of them.
+// `routes` with its timeline in `timelines`, skipping a vehicle whose profile
+// forbids one of them. Leaves `steps` empty when no vehicle takes all of them.
 void bestPlan(const VehicleRoutePlan& plan, const VisitGroups& groups, UnitPlanner& planner,
               const std::vector<RouteTimeline>& timelines,
               const std::vector<std::vector<int>>& routes, const std::vector<int>& candidates,
@@ -92,6 +93,10 @@ void bestPlan(const VehicleRoutePlan& plan, const VisitGroups& groups, UnitPlann
     steps.clear();
     Seconds least = std::numeric_limits<Seconds>::max();
     for (int v : candidates) {
+        // A vehicle whose profile forbids one of the visits is no place for them.
+        if (std::any_of(visits.begin(), visits.end(),
+                        [&plan, v](int visit) { return plan.forbids(v, visit); }))
+            continue;
         trial.clear();
         Seconds added = 0;
         if (planner.plan(plan, groups, timelines[static_cast<std::size_t>(v)],

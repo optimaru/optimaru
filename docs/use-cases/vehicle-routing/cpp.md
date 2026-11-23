@@ -62,8 +62,11 @@ The plugin path adds the optional route policies (`MaxTravelTimeCost`,
 the opt-in weight-0 objectives (`EnclosingCircleRadiusCost`,
 `RouteDurationCost`, `LatencyCost`), and the two constraints of visit groups
 (`VisitGroupCost`, `VisitOrderCost`: `Visit::groupIndex` and
-`Visit::afterVisitIndices`); see the package README for the table and for how
-groups are placed and moved (`visit_insertion.hpp`, `group_moves.hpp`).
+`Visit::afterVisitIndices`), and the two constraints of profile visits
+(`ProfileForbiddenVisitCost`, always on, and `ProfilePreferredVisitCost`:
+`VehicleRoutePlan::profileVisits` and `Vehicle::profileVisitsIndex`); see the
+package README for the table and for how groups are placed and moved
+(`visit_insertion.hpp`, `group_moves.hpp`).
 
 ## How it runs on the generic engine
 

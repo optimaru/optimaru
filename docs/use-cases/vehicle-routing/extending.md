@@ -3,7 +3,7 @@
 Six steps, from a change that needs no build to a constraint on the default fast path.
 Each step is complete by itself, so stop at the first one that does what you need.
 The engine contracts behind the steps are in [Extending a use case](../../extending.md);
-the model and its seventeen constraints are in the [guide](README.md).
+the model and its nineteen constraints are in the [guide](README.md).
 
 | Step | What you do | What it touches |
 | --- | --- | --- |
@@ -26,8 +26,8 @@ vehicle, with the visits of its route, in order, as its **members**. Visits on n
 route sit in one more list, the unassigned pool, which the per-vehicle constraints do not
 evaluate. A move changes one or two routes, so only those are scored again.
 
-There are two scoring paths. The first scores four of the seventeen constraints, so the two
-agree only on a plan with no vehicle limit and no visit group (`vrp_plugin_test`
+There are two scoring paths. The first scores four of the nineteen constraints, so the two
+agree only on a plan with no vehicle limit, no visit group and no profile visit list (`vrp_plugin_test`
 checks that on 300 random route layouts):
 
 | | `vrp.solve(plan)` | `vrp.solve(plan, constraints=[...])` |
@@ -105,11 +105,12 @@ print(score(raw, picks))                 # the (hard, soft) those picks give thi
 
 The knobs (`weight`, `level`, `exponent`, `offset`, `clip`) and picking a constraint twice
 are described in [`constraints.py`](../../../optimaru/vehicle_routing/constraints.py).
-Stop here if the constraint you need is one of the seventeen: four are objectives that
+Stop here if the constraint you need is one of the nineteen: four are objectives that
 wait for a weight (`travel_distance_cost`, `enclosing_circle_radius_cost`,
 `route_duration_cost`, `latency_cost`), and seven cost nothing until a vehicle sets their field
 (`max_travel_time`, `max_route_duration`, `max_end_time`, `max_stops`,
-`max_route_radius_meters`, `min_load_ratio`, `fixed_cost`).
+`max_route_radius_meters`, `min_load_ratio`, `fixed_cost`), and two until a travel profile lists
+visits (`forbidden_visits`, `preferred_visits`).
 
 ## 2. A new constraint from one function
 
@@ -117,7 +118,7 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-Fifteen of the seventeen constraints are a sum of one term per vehicle, and
+Seventeen of the nineteen constraints are a sum of one term per vehicle, and
 [`constraints/common.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/common.hpp)
 has the base for that, `detail::PerVehicleConstraint`. You write one function,
 `cost(plan, unit, members)`: the raw cost of vehicle `unit` driving the visits
@@ -272,12 +273,12 @@ ctest --test-dir build --output-on-failure     # this use case's: vrp_test, vrp_
 uv run pytest -q tests/vehicle_routing tests/test_constraints_contract.py
 ```
 
-**The counts.** An eighteenth constraint fails one check of `vrp_plugin_test` and three
+**The counts.** A twentieth constraint fails one check of `vrp_plugin_test` and three
 Python tests. Update them:
 
-- `vrp_plugin_test.cpp`: `rows.size() == 17` in `verifyCatalog()`. Add the row after
-  `visitOrderCost`, `rowIs<WaitingTimeCost>(rows[15], "waitingTimeCost", Level::Soft,
-  0.0, false)`; the two globals become rows 16 and 17;
+- `vrp_plugin_test.cpp`: `rows.size() == 19` in `verifyCatalog()`. Add the row after
+  `profilePreferredVisitCost`, `rowIs<WaitingTimeCost>(rows[17], "waitingTimeCost", Level::Soft,
+  0.0, false)`; the two globals become rows 18 and 19;
 - `tests/vehicle_routing/test_constraint_specs.py`: the list in
   `test_list_constraints_matches_the_spec_names`, and `EXPECTED_INFO`, which
   `test_constraint_info_reports_the_cpp_defaults` and
@@ -363,7 +364,7 @@ too. Its distance to 13.0 is not all the constraint's walk: with waiting priced 
 finds more to try in a step. The second row is like for like, because a constraint that is 0
 everywhere changes no decision: the constraint took 12% of the steps before and 5% after. One
 count in the tests follows: `verifyPiecewiseByHand()` in `vrp_plugin_test.cpp` counts the unit
-components that answer from pieces, `compared == 4`, now 5.
+components that answer from pieces, `compared == 6`, now 7.
 
 **Keep `on_reset()` light.** `on_reset()` runs whenever the objective is rebuilt,
 and on routes that is not once per solve: a rejected ruin and repair, route
@@ -373,7 +374,8 @@ constraint is costed on every route there, the ones at weight 0 included. The
 count above gave 2,836 calls of `on_reset()` in 30,000 steps, so a table over
 visits and vehicles built there is paid for every eleven steps. The constraints here do at
 most one pass over the visits in `on_reset()` (`visit_order_cost.hpp` looks for an
-order). What is kept per route goes into a shared context: `RouteSumsContext` marks
+order), or one per profile entry (the two profile visit constraints fill a row of visit
+flags per entry, a memset's worth, and nothing on a plan whose profiles list no visits). What is kept per route goes into a shared context: `RouteSumsContext` marks
 a route in `on_list_changed()` and builds its sums on the first preview that reads
 them.
 
@@ -499,8 +501,10 @@ In the first column a picked constraint changes the search as well as the scorin
 second column is the scoring alone. The second and third rows differ by noise only: a
 constraint at weight 0 is asked on no move. That holds for the four opt-in objectives
 that `get_constraints()` carries at weight 0 as well.
-These figures were measured before `travel_distance_cost` joined the catalog: at weight 0
-it is asked on no move, so the assembly of seventeen runs as the sixteen did.
+These figures were measured before `travel_distance_cost` and the two profile visit
+constraints joined the catalog: at weight 0 the first is asked on no move, and on a plan
+whose profiles list no visits the other two answer every move with 0 without reading the
+route, so the assembly of nineteen runs as the sixteen did.
 
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare

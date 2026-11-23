@@ -13,6 +13,8 @@
 // Adding a component is a file plus an include here (and an `emplace` in
 // defaultConstraints() below when it belongs to the default assembly).
 
+#include <stdexcept>
+
 #include "pdp/constraints/common.hpp"
 #include "pdp/constraints/enclosing_circle_radius_cost.hpp"
 #include "pdp/constraints/latency_cost.hpp"
@@ -26,6 +28,9 @@
 #include "pdp/constraints/pickup_before_dropoff_cost.hpp"
 #include "pdp/constraints/pinned_stops_cost.hpp"
 #include "pdp/constraints/request_group_cost.hpp"
+#include "pdp/constraints/profile_forbidden_request_cost.hpp"
+#include "pdp/constraints/profile_preferred_request_cost.hpp"
+#include "pdp/constraints/profile_request_table.hpp"
 #include "pdp/constraints/required_vehicle_cost.hpp"
 #include "pdp/constraints/route_duration_cost.hpp"
 #include "pdp/constraints/same_vehicle_cost.hpp"
@@ -66,12 +71,14 @@ namespace pdp {
 //   vehicleFixedCost             soft, weight 1
 //   pinnedStopsCost              hard, weight 1e12
 //   requiredVehicleCost          hard, weight 1000
+//   profileForbiddenRequestCost  hard, weight 1000 (always on, see below)
+//   profilePreferredRequestCost  soft, weight 300
 //
-// On a plan that sets no route policy, pins nothing, binds no request and
-// groups none, this assembly scores bit-for-bit like ScoreCalculator::score (both
-// read the same kDefaultWeight constants). It is also the domain's constraint
-// catalog: constraint_info() reads the defaults off it, so they live in the
-// component constructors and nowhere else.
+// On a plan that sets no route policy, pins nothing, binds no request,
+// groups none and has no profile request lists, this assembly scores bit-for-bit like
+// ScoreCalculator::score (both read the same kDefaultWeight constants). It is also the domain's
+// constraint catalog: constraint_info() reads the defaults off it, so they live in the component
+// constructors and nowhere else.
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly,
 // so a caller states only what differs from it:
@@ -108,11 +115,33 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<VehicleFixedCost>();
     assembly.emplace<PinnedStopsCost>();
     assembly.emplace<RequiredVehicleCost>();
+    assembly.emplace<ProfileForbiddenRequestCost>();
+    assembly.emplace<ProfilePreferredRequestCost>();
     return assembly;
 }
 
 inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
+}
+
+// A caller's selection as every solve scores it. profileForbiddenRequestCost
+// is always on: a selection that leaves it out gets it at its defaults,
+// since a forbidden request is no preference to weigh but a load the vehicle
+// cannot take (on a plan without forbidden requests it costs 0, so nothing
+// changes there). A plan that prefers requests needs
+// profilePreferredRequestCost in the selection, the only cost that reads
+// those lists: without it they would be silently ignored, so that throws
+// std::invalid_argument.
+inline ConstraintAssembly withAlwaysOnConstraints(ConstraintAssembly assembly,
+                                                  const PdpRoutePlan& plan) {
+    if (!assembly.contains("profileForbiddenRequestCost") && plan.hasForbiddenRequests())
+        assembly.emplace<ProfileForbiddenRequestCost>();
+    if (!assembly.contains("profilePreferredRequestCost") && plan.hasPreferredRequests())
+        throw std::invalid_argument(
+                "a vehicle's profile has preferred requests, but the constraints leave out "
+                "profile_preferred_request_cost, the cost that scores them: add it, or leave the "
+                "preferred requests out");
+    return assembly;
 }
 
 }  // namespace pdp

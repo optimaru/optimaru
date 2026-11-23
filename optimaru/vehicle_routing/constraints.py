@@ -87,6 +87,8 @@ __all__ = [
     "MaxStopsCost",
     "MaxTravelTimeCost",
     "MinCapacityUtilizationCost",
+    "ProfileForbiddenVisitCost",
+    "ProfilePreferredVisitCost",
     "RouteDurationCost",
     "Score",
     "TravelDistanceCost",
@@ -106,6 +108,8 @@ __all__ = [
     "max_stops_cost",
     "max_travel_time_cost",
     "min_capacity_utilization_cost",
+    "profile_forbidden_visit_cost",
+    "profile_preferred_visit_cost",
     "route_duration_cost",
     "score",
     "travel_distance_cost",
@@ -420,6 +424,58 @@ class VisitGroupCost(Constraint):
     )
 
 
+class ProfileForbiddenVisitCost(Constraint):
+    """Visits served by a vehicle whose profile forbids them. Default: hard, weight 1000; always on.
+
+    `TravelProfile.forbidden_visits` names the visits a vehicle on the profile may not
+    serve. Every solve scores this constraint, listed or not: a selection that leaves it
+    out gets it at its defaults (on a plan without forbidden visits it costs 0). Leaving
+    a visit unassigned costs only medium, so one that no vehicle may serve waits.
+    Engine-only (no CP-SAT plugin)."""
+
+    name = "profile_forbidden_visit_cost"
+    label_en = "Forbidden visits"
+    label_ko = "방문 불가 방문지"
+    description_en = (
+        "Visits served by a vehicle whose travel profile lists them in `forbidden_visits`, such as a "
+        "job that needs a skill the technician lacks. One unit of cost is one such visit; 0 means "
+        "every vehicle serves only visits it may. Always scored, even when a constraint list leaves it out."
+    )
+    description_ko = (
+        "이동 프로필의 `forbidden_visits`에 들어 있는 방문지를 그 프로필의 차량이 맡은 경우를 셉니다. "
+        "기사에게 없는 기술이 필요한 작업 같은 경우입니다. 그런 방문지 하나가 비용 1이며, 0이면 모든 "
+        "차량이 맡을 수 있는 방문지만 맡습니다. 제약 목록에서 빠져도 항상 계산됩니다."
+    )
+
+
+class ProfilePreferredVisitCost(Constraint):
+    """Preferred visits served by a vehicle whose profile does not prefer them. Default: soft, weight 600.
+
+    `TravelProfile.preferred_visits` names the visits that should go to a vehicle on the
+    profile. A visit some vehicle's profile prefers costs one unit when a vehicle whose
+    profile does not prefer it serves it; an unassigned visit is left to
+    `unassigned_visits_cost`. At weight 600 against `travel_time_cost`'s 1 per driving
+    second, a vehicle that does not prefer a visit takes it only when that saves more than
+    ten minutes of driving. A request with preferred visits needs this constraint among its
+    constraints (ValueError otherwise). Engine-only (no CP-SAT plugin)."""
+
+    name = "profile_preferred_visit_cost"
+    label_en = "Preferred visits"
+    label_ko = "선호 방문지"
+    description_en = (
+        "Visits that some vehicle's travel profile lists in `preferred_visits` but that a vehicle "
+        "whose profile does not prefer them serves. One unit of cost is one such visit; 0 means every "
+        "preferred visit rides a vehicle that prefers it, or stays unassigned. The default weight, 600, "
+        "trades one such visit for ten minutes of driving."
+    )
+    description_ko = (
+        "어떤 차량의 이동 프로필이 `preferred_visits`로 선호하는 방문지를, 그 방문지를 선호하지 않는 "
+        "프로필의 차량이 맡은 경우를 셉니다. 그런 방문지 하나가 비용 1이며, 0이면 선호 방문지가 모두 "
+        "선호하는 차량에 배정되었거나 미배정으로 남았습니다. 기본 가중치 600은 그런 방문지 하나를 "
+        "운행 10분과 맞바꿉니다."
+    )
+
+
 class UnassignedVisitsCost(Constraint):
     """Penalty minutes of visits left off every route. Default: medium, weight 1.
 
@@ -461,6 +517,8 @@ latency_cost = LatencyCost()
 vehicle_fixed_cost = VehicleFixedCost()
 visit_order_cost = VisitOrderCost()
 visit_group_cost = VisitGroupCost()
+profile_forbidden_visit_cost = ProfileForbiddenVisitCost()
+profile_preferred_visit_cost = ProfilePreferredVisitCost()
 unassigned_visits_cost = UnassignedVisitsCost()
 
 # The default set, in list_constraints() order (unit constraints, then the two globals).
@@ -480,6 +538,8 @@ _DEFAULTS = (
     latency_cost,
     vehicle_fixed_cost,
     visit_order_cost,
+    profile_forbidden_visit_cost,
+    profile_preferred_visit_cost,
     visit_group_cost,
     unassigned_visits_cost,
 )
@@ -520,11 +580,17 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
-    semantics as `get_constraints`. Unknown names raise ValueError.
+    semantics as `get_constraints` — and ``profile_forbidden_visit_cost`` besides
+    when ``costs`` holds it: every solve scores that one, listed or not, and
+    `vrp.constraint_costs` reports it on a plan with forbidden visits. Unknown
+    names raise ValueError.
 
     The returned value is the **engine-level** (hard, soft): the medium level
     (``unassigned_visits_cost``) is folded into soft as ``medium * 10^9``, the
     ``medium_fold`` every entry of ``costs`` carries. To compare with the split
     levels of `plan.score`, fold the same way first.
     """
-    return score_costs(costs, get_constraints(constraints))
+    picks = get_constraints(constraints)
+    if ProfileForbiddenVisitCost.name in costs and all(pick.name != ProfileForbiddenVisitCost.name for pick in picks):
+        picks.append(ProfileForbiddenVisitCost())
+    return score_costs(costs, picks)

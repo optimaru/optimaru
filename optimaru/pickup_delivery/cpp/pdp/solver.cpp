@@ -1,6 +1,7 @@
 #include "pdp/solver.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -658,6 +659,60 @@ void checkRequiredVehicles(const PdpRoutePlan& plan) {
     }
 }
 
+}  // namespace
+
+void checkProfileRequests(const PdpRoutePlan& plan) {
+    const int entries = static_cast<int>(plan.profileRequests.size());
+    const int requests = static_cast<int>(plan.deliveries.size());
+    for (const Vehicle& vehicle : plan.vehicles) {
+        if (vehicle.profileRequestsIndex < -1 || vehicle.profileRequestsIndex >= entries) {
+            throw std::invalid_argument("vehicle " + vehicle.id + ": profileRequestsIndex " +
+                                        std::to_string(vehicle.profileRequestsIndex) +
+                                        " is out of range -1.." + std::to_string(entries - 1));
+        }
+    }
+    for (int e = 0; e < entries; ++e) {
+        const ProfileRequests& entry = plan.profileRequests[static_cast<std::size_t>(e)];
+        const auto check = [&](const std::vector<int>& list, const char* what) {
+            for (std::size_t k = 0; k < list.size(); ++k) {
+                if (list[k] < 0 || list[k] >= requests) {
+                    throw std::invalid_argument("profile requests " + std::to_string(e) + ": " +
+                                                what + " holds " + std::to_string(list[k]) +
+                                                ", out of range 0.." +
+                                                std::to_string(requests - 1));
+                }
+                if (k > 0 && list[k] <= list[k - 1]) {
+                    throw std::invalid_argument("profile requests " + std::to_string(e) + ": " +
+                                                what + " is not in strictly increasing order");
+                }
+            }
+        };
+        check(entry.forbiddenRequestIndices, "forbiddenRequestIndices");
+        check(entry.preferredRequestIndices, "preferredRequestIndices");
+        std::vector<int> both;
+        std::set_intersection(entry.forbiddenRequestIndices.begin(),
+                              entry.forbiddenRequestIndices.end(),
+                              entry.preferredRequestIndices.begin(),
+                              entry.preferredRequestIndices.end(), std::back_inserter(both));
+        if (!both.empty()) {
+            throw std::invalid_argument("profile requests " + std::to_string(e) + ": request " +
+                                        plan.deliveries[static_cast<std::size_t>(both.front())].id +
+                                        " is both forbidden and preferred");
+        }
+    }
+    for (std::size_t d = 0; d < plan.deliveries.size(); ++d) {
+        const int required = plan.deliveries[d].requiredVehicleIndex;
+        if (required >= 0 && required < static_cast<int>(plan.vehicles.size()) &&
+            plan.forbids(required, static_cast<int>(d))) {
+            throw std::invalid_argument("request " + plan.deliveries[d].id + " must ride vehicle " +
+                                        plan.vehicles[static_cast<std::size_t>(required)].id +
+                                        ", whose profile forbids it");
+        }
+    }
+}
+
+namespace {
+
 // The requests of a group ride one vehicle, so two of them cannot be bound to
 // different ones. A request is bound by its required vehicle, else by the
 // vehicle that pins one of its stops. Such a group could never be whole, and
@@ -833,13 +888,15 @@ Score levelScoreOf(const optimaru::DecomposedObjective<PdpRoutePlan>& calculator
 void Solver::solve(PdpRoutePlan& plan) {
     // Refused before anything in the plan is touched, the pool included.
     checkRequiredVehicles(plan);
+    checkProfileRequests(plan);
     const std::shared_ptr<const RequestGroups> groups = requestGroupsOf(plan);
     checkRequestGroups(plan, *groups);
     optimaru::check_config(config_);
-    // The seven core constraints do not price groups, and on them a split group
-    // would end as a feasible plan. A plan with groups is scored with the
-    // whole default assembly instead, every start on one of its own.
-    if (plan.hasRequestGroups()) {
+    // The seven core constraints do not price groups or profile requests, and
+    // on them a split group or a forbidden request would end as a feasible
+    // plan. Such a plan is scored with the whole default assembly instead,
+    // every start on one of its own.
+    if (needsConstraintAssembly(plan)) {
         // The same pool handling as the core path below: without the pair
         // construction, the engine's own construction places every stop.
         if (!config_.pair_construction_heuristic || plan.vehicles.empty())
@@ -886,6 +943,7 @@ void Solver::solve(PdpRoutePlan& plan) {
 
 void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePlan>& calculator) {
     checkRequiredVehicles(plan);
+    checkProfileRequests(plan);
     const std::shared_ptr<const RequestGroups> groups = requestGroupsOf(plan);
     checkRequestGroups(plan, *groups);
     optimaru::check_config(config_);
@@ -927,6 +985,7 @@ void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePla
 void Solver::solve(PdpRoutePlan& plan, const CalculatorFactory& makeCalculator) {
     // Refused before a calculator is made or a start runs.
     checkRequiredVehicles(plan);
+    checkProfileRequests(plan);
     checkRequestGroups(plan, *requestGroupsOf(plan));
     optimaru::check_config(config_);
     // Nothing to search in an empty plan: one start scores it.
@@ -953,8 +1012,8 @@ void Solver::solve(PdpRoutePlan& plan, const CalculatorFactory& makeCalculator) 
 }
 
 Score calculateScore(PdpRoutePlan& plan) {
-    if (!plan.hasRequestGroups()) return ScoreCalculator::score(plan);
-    // As solve(plan) ends on a plan with groups: the derived fields, then the
+    if (!needsConstraintAssembly(plan)) return ScoreCalculator::score(plan);
+    // As solve(plan) ends on a plan with groups or profile requests: the derived fields, then the
     // three levels of the default assembly.
     ScoreCalculator::updateShadowVariables(plan);
     DecomposedCalculator calculator;

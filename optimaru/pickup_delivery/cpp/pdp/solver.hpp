@@ -46,6 +46,13 @@ namespace pdp {
 // solve(plan) hands a plan with groups to the default assembly instead of
 // scoring it on the seven core constraints.
 //
+// A vehicle's ProfileRequests entry names the requests it may not carry and
+// those it is preferred for (profileForbiddenRequestCost,
+// profilePreferredRequestCost). Those two belong to the constraint assembly
+// too, so solve(plan) hands a plan with such lists to the default assembly,
+// and the request-level operators never offer a slot on a vehicle that
+// forbids the request.
+//
 // All join the engine's adaptive selection alongside the built-ins, so their
 // weight is learned rather than fixed.
 class Solver {
@@ -154,7 +161,8 @@ public:
     // Solves in place: mutates plan.vehicles[*].nodeIndices and
     // plan.unassignedNodeIndices, and stores the best score in plan.score.
     // Scored on the seven core constraints, unless the plan has request groups
-    // (PdpRoutePlan::hasRequestGroups): then on the default constraint assembly
+    // or profile request lists (needsConstraintAssembly): then on the default
+    // constraint assembly
     // (pdp/constraints.hpp), every start on an assembly of its own (the
     // factory overload below).
     void solve(PdpRoutePlan& plan);
@@ -191,12 +199,28 @@ private:
     Config config_;
 };
 
+// What a plan may say about profile requests: every
+// Vehicle::profileRequestsIndex is -1 or an entry of plan.profileRequests,
+// and each entry's two lists hold request indices in strictly increasing
+// order, none in both. A request bound to a vehicle (requiredVehicleIndex)
+// is not one its profile forbids. Throws std::invalid_argument otherwise.
+// Every solve runs it.
+void checkProfileRequests(const PdpRoutePlan& plan);
+
+// Whether the seven core constraints leave something of the plan unscored:
+// request groups (hasRequestGroups) or profile request lists
+// (hasProfileRequests). solve(plan) and calculateScore score such a plan on
+// the default assembly.
+inline bool needsConstraintAssembly(const PdpRoutePlan& plan) {
+    return plan.hasRequestGroups() || plan.hasProfileRequests();
+}
+
 // The score of a plan as it stands, the way solve(plan) scores it: on the
 // seven core constraints (ScoreCalculator::score), unless the plan has request
-// groups, which those constraints do not price: then on the default constraint
-// assembly. Refreshes the derived fields and stores the score in plan.score.
-// Does not validate the plan: what solve() refuses (a required vehicle out of
-// range, a group bound to two vehicles) is scored as it stands.
+// groups or profile request lists, which those constraints do not price: then
+// on the default constraint assembly. Refreshes the derived fields and stores the score in
+// plan.score. Does not validate the plan: what solve() refuses (a required vehicle out of range, a
+// group bound to two vehicles) is scored as it stands.
 Score calculateScore(PdpRoutePlan& plan);
 
 }  // namespace pdp
