@@ -228,9 +228,10 @@ key nothing is sent.
   request (vehicle routing, pickup and delivery, order picking, employee scheduling: call
   `solve_request`), a callback (`on_new_best`, employee scheduling's `select`) and a
   non-finite number.
-- School timetabling stays on this machine. The API serves it through an endpoint of its
-  own, whose request is not this package's Python call, so with a key set it is solved here
-  and says so once in a `RuntimeWarning`.
+- School timetabling goes to the API like the others. Its `solve(problem, ...)` takes a
+  dict, so it is sent as the `TimetableRequest` that `solve_request` takes (the problem,
+  the keywords, and `config` as the request's fields and `solver_parameters`), and the
+  result comes back as the dict a local solve returns.
 - The setting moves `solve` and `solve_request`. The compiled `Solver` class
   (`Solver(config).solve(problem)`, `solve_with_constraints`) is the engine itself and
   always runs on this machine.
@@ -407,9 +408,9 @@ Where a solve runs is decided in [`optimaru/_api.py`](../../optimaru/_api.py): a
 case decorates its `solve` with `_api.model_solve("<slug>", <Model>)` when the optimaru
 API solves it with `solve`, its `solve_request` with `_api.request_solve("<slug>",
 "<Response>")` and its `solve` with `_api.compiled_solve` when the API solves it with
-`solve_request`, and its `solve` with `_api.local_solve("<name>")` when the API does not
-serve it. `tests/test_api.py` fails until a new use case is in one of the tables of
-`tests/_api_server.py` or among its local use cases.
+`solve_request` (or with `_api.solve_by_request(...)` when that `solve` takes a dict that
+becomes the request, as in school timetabling). `tests/test_api.py` fails until a new use
+case is in one of the tables of `tests/_api_server.py`.
 
 Build and test one use case, from the repository root:
 

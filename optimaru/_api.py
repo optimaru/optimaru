@@ -27,9 +27,10 @@ What a use case's ``__init__.py`` and ``models.py`` do with this module::
 
 `model_solve` is for a ``solve()`` that takes the use case's pydantic model (the API calls
 ``solve``), `request_solve` for a ``solve_request()`` that the API calls itself,
-`compiled_solve` for a ``solve()`` that takes compiled objects only, and `local_solve`
-for a use case the API does not serve. The decorated function is unchanged while no key
-is set, and ``__wrapped__`` is the function that always solves here.
+`solve_by_request` for a ``solve()`` that takes a dict and is sent as the request of that
+``solve_request()`` (school timetabling), and `compiled_solve` for a ``solve()`` that
+takes compiled objects only. The decorated function is unchanged while no key is set,
+and ``__wrapped__`` is the function that always solves here.
 
 Only the standard library and pydantic are used, and both are imported when a solve is
 sent, so ``import optimaru`` stays as light as it was.
@@ -46,9 +47,9 @@ __all__ = [
     "DEFAULT_API_URL",
     "ApiError",
     "compiled_solve",
-    "local_solve",
     "model_solve",
     "request_solve",
+    "solve_by_request",
     "use_api",
     "use_local",
 ]
@@ -149,10 +150,9 @@ def use_api(key: str | None = None, *, url: str | None = None) -> None:
     starts, for a request) and ten minutes more, then cancels it. The first solve
     sent to an API is logged at INFO on the ``optimaru`` logger. What cannot be sent is
     refused instead of being solved here without notice: a compiled problem (pass its
-    model), a callback (``on_new_best``, ``select``) and a non-finite number. School
-    timetabling keeps solving on this machine (the API takes it in a request of its own),
-    and so does the compiled ``Solver`` class used directly: the setting moves ``solve``
-    and ``solve_request``. The setting applies to this process: a worker process that
+    model), a callback (``on_new_best``, ``select``) and a non-finite number. The compiled
+    ``Solver`` class used directly keeps solving on this machine: the setting moves
+    ``solve`` and ``solve_request``. The setting applies to this process: a worker process that
     starts fresh needs its own call, or the environment variable.
 
     Raises ValueError for an empty key, a missing one (no ``key`` and no
@@ -619,9 +619,8 @@ def _patiently(method: str, url: str, key: str, patience: float = _POLL_PATIENCE
             wait = min(wait * 1.5, _POLL_LONGEST)
 
 
-#: What has been said once in this process: the APIs solves were sent to, and ``local:<use case>``
-#: for a use case that solved here with the API on. No lock: two threads at once can at worst say
-#: a thing twice.
+#: The APIs solves were sent to in this process, each logged once. No lock: two threads at once can
+#: at worst log one twice.
 _said: set[str] = set()
 
 
@@ -851,7 +850,11 @@ def model_solve(slug: str, model: type, *, dicts: bool = False) -> Callable[[Cal
 
 
 def request_solve(
-    slug: str, result: str, *, prepare: Callable[[Any, Any], Any] | None = None
+    slug: str,
+    result: str,
+    *,
+    prepare: Callable[[Any, Any], Any] | None = None,
+    picks: Callable[[Any], Any] | None = None,
 ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     """The ``solve_request()`` of a use case the API solves with ``solve_request``.
 
@@ -862,6 +865,8 @@ def request_solve(
     `prepare` is for a use case whose selection travels inside the request (employee
     scheduling): a function ``(request, constraints) -> request`` that returns the request
     to send, with a ``constraints=`` selection (or None) put where the API reads it.
+    `picks` is for a use case whose ``constraints=`` also takes names or a builder (school
+    timetabling): a function that returns the selection as the specs it stands for.
     """
 
     def decorate(solve_request: Callable[_P, _R]) -> Callable[_P, _R]:
@@ -898,7 +903,7 @@ def request_solve(
             if prepare is not None:
                 request = prepare(request, picked)
             elif picked is not None:
-                body["constraints"] = _constraints_json(picked)
+                body["constraints"] = _constraints_json(picked if picks is None else picks(picked))
             body = {"request": _model_json(request), **body}
             # The seed as sent, which is the one it solves with (employee scheduling's request writes
             # the seed of its settings there while its own is not given).
@@ -931,28 +936,37 @@ def compiled_solve(solve: Callable[_P, _R]) -> Callable[_P, _R]:
     return solve_here_only
 
 
-def local_solve(use_case: str) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
-    """The ``solve()`` of a use case the API does not serve: it solves on this machine either way.
+def solve_by_request(
+    to_request: Callable[[Any, dict[str, Any]], tuple[Any, Any]],
+) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+    """The ``solve()`` of a use case whose problem is a dict and that the API solves with ``solve_request``.
 
-    With the API on it says so once per process, as a warning, so that nobody takes a solve
-    that ran here for one that ran there.
+    With the API on, ``to_request(problem, keywords)`` turns the call (its first argument,
+    and its keywords with the defaults filled in) into the request and the ``constraints=``
+    selection that the use case's ``solve_request`` takes, and that function, decorated with
+    `request_solve`, sends them. That function is the ``solve_request`` of the use case's
+    ``models`` module, next to the decorated ``solve`` (``<package>.<use case>.models``, as
+    `request_solve` requires). The result comes back as the dict the local call returns. A
+    callback (``on_new_best``) cannot travel and is refused.
     """
 
     def decorate(solve: Callable[_P, _R]) -> Callable[_P, _R]:
+        import importlib
+        import inspect
+
+        signature = inspect.signature(solve)
+
         @functools.wraps(solve)
-        def solve_here(*args: _P.args, **keywords: _P.kwargs) -> _R:
-            said = f"local:{use_case}"
-            if said not in _said and _api_on():
-                import warnings
+        def solve_here_or_on_the_api(*args: _P.args, **keywords: _P.kwargs) -> _R:
+            if _settings() is None:
+                return solve(*args, **keywords)
+            problem, rest = _bound(solve, signature, args, keywords)
+            if rest.pop("on_new_best", None) is not None:
+                raise ValueError("on_new_best is a callback, which cannot be sent to the optimaru API")
+            request, constraints = to_request(problem, rest)
+            models = importlib.import_module(f"{solve.__module__}.models")
+            return models.solve_request(request, constraints=constraints).model_dump(mode="json")
 
-                _said.add(said)
-                warnings.warn(
-                    f"the optimaru API does not take the Python call of {use_case}: it is solved on this machine",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-            return solve(*args, **keywords)
-
-        return solve_here
+        return solve_here_or_on_the_api
 
     return decorate

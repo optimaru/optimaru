@@ -133,8 +133,8 @@ With a key, `solve(model, ...)` and `solve_request(request, ...)` send the probl
 the API, wait for the solve job and return what they return on your machine. A problem
 built from the compiled classes is solved in place and cannot be sent: pass its model, or,
 for vehicle routing, pickup and delivery, order picking and employee scheduling, call
-`solve_request` with a request. School timetabling keeps solving locally (the API takes it
-in a request of its own), and so does the compiled `Solver` class used directly, as in the
+`solve_request` with a request. School timetabling's `solve(problem_dict, ...)` is sent as
+its request. The compiled `Solver` class used directly keeps solving locally, as in the
 example above.
 `optimaru.use_local()` turns the API off again, `OPTIMARU_API_URL` names another API,
 and what the API refuses raises `optimaru.ApiError`. A `solve` keyword or a `SolverConfig`

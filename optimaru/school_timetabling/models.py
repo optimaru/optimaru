@@ -13,7 +13,7 @@ store or send the engine's own shape (debug dumps, regression snapshots, ...)::
 
 from typing import Any, Literal
 
-from pydantic import Field, create_model, model_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
 from .. import _api
 from .._models import SolveConfigBase, SolveRequest, StrictModel, apply_solver_parameters
@@ -304,6 +304,41 @@ class TimetableResultModel(StrictModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class StartingSlotModel(BaseModel):
+    """The slot of a starting lesson: a weekday (0 = Monday) and a 1-based period; other keys are ignored."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    day: int = Field(ge=0, le=7)
+    period: int = Field(ge=1)
+
+
+class StartingLessonModel(BaseModel):
+    """One placed period of a starting solution: the course and the slot are all a warm start reads.
+
+    The other fields of a `ScheduledLessonModel` may be there or not, and keys this model does not
+    know are ignored, so a result from another backend (a CP-SAT one, with fields of its own) starts a
+    solve as it is, as it does with ``solve(initial_solution=...)``.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    course_id: str
+    slot: StartingSlotModel
+    class_group_id: str | None = None
+    subject_id: str | None = None
+    teacher_ids: list[str] | None = None
+    room_id: str | None = None
+
+
+class StartingSolutionModel(BaseModel):
+    """A starting solution that is not a whole `TimetableResultModel`: ``{"lessons": [...]}`` and nothing else needed."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    lessons: list[StartingLessonModel]
+
+
 class TimetableRequest(SolveRequest):
     """The timetabling problem with the settings of one solve (see `SolveRequest` for the shared ones).
 
@@ -318,13 +353,23 @@ class TimetableRequest(SolveRequest):
     weights: dict[str, float] | None = Field(
         default=None, description="Soft weights by constraint name, for the default fast path (canonical mode)."
     )
-    initial_solution: TimetableResultModel | None = Field(
-        default=None, description="An earlier result to start from; its lessons are matched by course id."
+    initial_solution: TimetableResultModel | StartingSolutionModel | None = Field(
+        default=None,
+        description=(
+            "An earlier result to start from; its lessons are matched by course id. A lesson needs its "
+            "course_id and slot only."
+        ),
     )
 
 
-# It calls solve(); decorated as well, so that the warning points at the caller of solve_request.
-@_api.local_solve("school timetabling")
+def _picks(constraints):
+    """A ``constraints=`` selection (specs, names or an `Assembly`) as the specs it stands for."""
+    from . import _picks_of
+
+    return _picks_of(constraints)
+
+
+@_api.request_solve("school-timetabling", "TimetableResultModel", picks=_picks)
 def solve_request(request: TimetableRequest, *, constraints=None) -> TimetableResultModel:
     """Solve a pydantic request and return the timetable as a `TimetableResultModel`.
 
@@ -339,7 +384,8 @@ def solve_request(request: TimetableRequest, *, constraints=None) -> TimetableRe
         config = canon.SolverConfig() if request.mode == "canonical" else SolverConfig()
         apply_solver_parameters(config, request.solver_parameters)
     initial = request.initial_solution
-    result = solve(
+    # The function that solves here: this one is what the API's side runs, and it must not send.
+    result = solve.__wrapped__(
         # Unset optional fields are left out, as in a hand-written problem dict.
         request.model_input.model_dump(mode="json", exclude_none=True),
         mode=request.mode,
