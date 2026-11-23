@@ -31,8 +31,9 @@ series for vehicle routing.
   (`MISSING_TRAVEL_VALUE`); a profile without one of the dicts, and every vehicle when `profiles` is
   empty, drives straight lines between the coordinates (haversine meters, at 50 km/h for the
   seconds); an empty dict is refused, since it would make every pair missing. `to_plan` turns the
-  dicts into one square matrix per profile over the depots, then the stops: for 1,000 places with both dicts given, 0.11 s to parse and validate 40 MB of JSON and 0.06 s
-  to build the matrices on an M4 Max, so the JSON stays keyed by id. A new opt-in constraint,
+  dicts into one square matrix per profile over the depots, then the stops: for 1,000 places with
+  both dicts given, 0.11 s to parse and validate 40 MB of JSON and 0.06 s to build the matrices on
+  an M4 Max, so the JSON stays keyed by id. A new opt-in constraint,
   `travel_distance_cost` (soft, weight 0), prices the meters (its previews walk the candidate
   route, where `travel_time_cost` answers from prefix sums); the solutions report
   `total_driving_meters` and each vehicle's `driving_meters`, and `vehicle_metrics` no longer echoes
