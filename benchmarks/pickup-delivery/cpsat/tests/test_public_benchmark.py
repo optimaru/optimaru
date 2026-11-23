@@ -74,17 +74,7 @@ SERVICED = """\
 """
 
 
-CPSAT_ON_0_5 = pytest.mark.xfail(
-    raises=AttributeError,
-    strict=True,
-    reason=(
-        "the pinned CP-SAT library reads the optimaru 0.5 input (home, return_to_depot, one matrix); "
-        "drop this mark when the pin moves to a release that reads depots and travel profiles"
-    ),
-)
-
-
-@pytest.mark.parametrize("backends", [("engine",), pytest.param(("engine", "cpsat"), marks=CPSAT_ON_0_5)])
+@pytest.mark.parametrize("backends", [("engine",), ("engine", "cpsat")])
 def test_run_case_reports_both_backends_in_li_lim_units(backends) -> None:
     instance = parse_instance(SERVICED, name="tiny")
     request, _ = make_request(instance, seconds=1, seed=0, workers=1)

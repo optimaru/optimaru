@@ -6,6 +6,13 @@
   of the repository instead of `optimaru/cpp/optimaru/`, so `optimaru/` holds the Python package and
   its use cases. Includes stay `#include "optimaru/..."`, and nothing changes in the installed
   package or its import paths; a build from source reads the headers from the new place.
+- **Benchmarks: the pickup-delivery CP-SAT lane runs again.** Since 0.6 the lane failed: it solved
+  with external-solver v0.3.0's pickup-delivery model, which reads the 0.5 input, and that library
+  is frozen. The model is now kept in the benchmark (`benchmarks/pickup-delivery/cpsat`,
+  `pickup_delivery_cpsat.model`), ported to depots, `start_depot` / `end_depot` and travel
+  profiles, with a `travel_distance_cost` plugin; the expected-failure mark is gone, and its parity
+  tests (external-solver v0.3.0's, ported, plus `tests/test_model.py` for depots and profiles) check
+  it against the engine.
 
 ## 0.6.1
 
