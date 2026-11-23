@@ -26,6 +26,8 @@ ENGINE_ONLY = {
     "pinned_stops_cost",
     "required_vehicle_cost",
     "request_group_cost",
+    "profile_forbidden_request_cost",
+    "profile_preferred_request_cost",
 }
 
 
@@ -170,3 +172,11 @@ def test_the_bounds_count_only_drivable_legs() -> None:
     body["model_input"]["vehicles"][0]["end_depot"] = "H"
     back_home = to_plan(PdpRequest.model_validate(body).model_input)
     assert _longest_legs(back_home, stops) == (5_000, 5_000)  # P -> H is drivable now, and missing
+
+
+def test_a_profile_that_lists_requests_is_refused() -> None:
+    request = _request()
+    data = request.model_dump()
+    data["model_input"]["profiles"]["default"]["forbidden_requests"] = ["R"]
+    with pytest.raises(ValueError, match="list forbidden or preferred requests"):
+        solve_request(PdpRequest.model_validate(data))

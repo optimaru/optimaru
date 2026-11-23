@@ -3,7 +3,7 @@
 Six steps, from a change that needs no build to a constraint on the default fast path.
 Each step is complete by itself, so stop at the first one that does what you need.
 The engine contracts behind the steps are in [Extending a use case](../../extending.md);
-the model and its twenty-two constraints are in the [guide](README.md).
+the model and its twenty-four constraints are in the [guide](README.md).
 
 | Step | What you do | What it touches |
 | --- | --- | --- |
@@ -31,9 +31,9 @@ constraint that has to see both stops of a request wherever they are (the three 
 constraints, `unassigned_requests_cost`, `request_group_cost`) is a global constraint
 and is told about every changed route.
 
-There are two scoring paths. The first scores seven of the twenty-two constraints, so
+There are two scoring paths. The first scores seven of the twenty-four constraints, so
 the two agree only on a plan that sets no vehicle limit, pins nothing, binds no
-request and groups none (`pdp_plugin_test` checks that on 300 random route layouts
+request, groups none and lists no profile requests (`pdp_plugin_test` checks that on 300 random route layouts
 and over 1,500 random list moves):
 
 | | `pdp.solve(plan)` | `pdp.solve(plan, constraints=[...])` |
@@ -90,13 +90,14 @@ print(score(raw, picks))                 # the (hard, soft) those picks give thi
 
 The knobs (`weight`, `level`, `exponent`, `offset`, `clip`) and picking a constraint twice
 are described in [`constraints.py`](../../../optimaru/pickup_delivery/constraints.py).
-Stop here if the constraint you need is one of the twenty-two: five are objectives that
+Stop here if the constraint you need is one of the twenty-four: five are objectives that
 wait for a weight (`travel_distance_cost`, `enclosing_circle_radius_cost`,
 `route_duration_cost`, `latency_cost`, `squared_order_age_cost`), nine cost nothing until a vehicle or a
 request sets their field (`max_travel_time`, `max_route_duration`, `max_end_time`,
 `max_stops`, `max_route_radius_meters`, `min_load_ratio`, `fixed_cost`,
-`pinned_stops`, `required_vehicle`), and `request_group_cost` until two requests
-share a `group`.
+`pinned_stops`, `required_vehicle`), `request_group_cost` until two requests
+share a `group`, and two until a travel profile lists requests (`forbidden_requests`,
+`preferred_requests`).
 
 ## 2. A new constraint from one function
 
@@ -104,7 +105,7 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-Fifteen of the seventeen per-route constraints derive from one base in
+Seventeen of the nineteen per-route constraints derive from one base in
 [`constraints/common.hpp`](../../../optimaru/pickup_delivery/cpp/pdp/constraints/common.hpp),
 `detail::PerVehicleConstraint`. You write one function, `cost(plan, unit, members)`: the raw cost of
 vehicle `unit` driving the stops `members` in that order. It reads the plan's facts and its
@@ -289,12 +290,12 @@ ctest --test-dir build --output-on-failure     # pdp_test, pdp_plugin_test, pdp_
 uv run pytest -q tests/pickup_delivery tests/test_constraints_contract.py
 ```
 
-**The counts.** A twenty-third constraint fails one check of `pdp_plugin_test` and three
+**The counts.** A twenty-fifth constraint fails one check of `pdp_plugin_test` and three
 Python tests. Update them:
 
-- `pdp_plugin_test.cpp`: `rows.size() == 22` in `verifyCatalog()`. Add the row after
-  `requiredVehicleCost`, `rowIs<RideTimeCost>(rows[17], "rideTimeCost", Level::Soft,
-  0.0, false)`; the five globals become rows 18 to 22;
+- `pdp_plugin_test.cpp`: `rows.size() == 24` in `verifyCatalog()`. Add the row after
+  `profilePreferredRequestCost`, `rowIs<RideTimeCost>(rows[19], "rideTimeCost", Level::Soft,
+  0.0, false)`; the five globals become rows 20 to 24;
 - `tests/pickup_delivery/test_constraint_specs.py`: the list in
   `test_list_constraints_matches_the_spec_names`, and `EXPECTED_INFO`, which
   `test_constraint_info_reports_the_cpp_defaults` and
@@ -315,7 +316,7 @@ check the others; the solve above, with the constraint picked, is what checks it
 
 **The tables.** The constraint tables in [README.md](README.md) and
 [python.md](python.md) must equal `pdp.constraint_info()`; add the row. The constraints are
-also counted or listed in the text under the README table ("the seventeen per-vehicle
+also counted or listed in the text under the README table ("the nineteen per-vehicle
 unit constraints", "the five opt-in objectives"), in the docstrings of
 `constraints.py` and `_core.pyi`, and in the comments of `common.hpp` and
 `constraints.hpp`. The notebook `examples/pickup-delivery.ipynb` prints the
@@ -563,8 +564,10 @@ solves. On a shared machine one solve can come out much slower than the others (
 The second and third rows differ by noise only: a unit constraint at weight 0 is asked on
 no move. That holds for the five opt-in objectives that `get_constraints()` carries at
 weight 0 as well.
-These figures were measured before `travel_distance_cost` joined the catalog: at weight 0
-it is asked on no move, so the assembly of twenty-two runs as the twenty-one did.
+These figures were measured before `travel_distance_cost` and the two profile request
+constraints joined the catalog: at weight 0 the first is asked on no move, and on a plan
+whose profiles list no requests the other two answer every move with 0 without reading
+the route, so the assembly of twenty-four runs as the twenty-one did.
 
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare

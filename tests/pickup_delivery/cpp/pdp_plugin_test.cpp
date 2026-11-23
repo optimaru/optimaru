@@ -637,8 +637,8 @@ void verifyCatalog() {
     std::printf("== (j) Catalog == component constants ==\n");
     using optimaru::Level;
     const auto rows = defaultConstraints().info();
-    check(rows.size() == 22, "22 catalog rows");
-    if (rows.size() != 22) return;
+    check(rows.size() == 24, "24 catalog rows");
+    if (rows.size() != 24) return;
     // Unit constraints first, then the globals, in emplace order: the
     // list_constraints() order.
     check(rowIs<VehicleCapacityCost>(rows[0], "vehicleCapacityCost", Level::Hard, 1.0, false) &&
@@ -667,18 +667,24 @@ void verifyCatalog() {
                   rowIs<PinnedStopsCost>(rows[15], "pinnedStopsCost", Level::Hard, 1e12, false) &&
                   rowIs<RequiredVehicleCost>(rows[16], "requiredVehicleCost", Level::Hard, 1000.0,
                                              false) &&
-                  rowIs<PairedRequestCost>(rows[17], "pairedRequestCost", Level::Hard, 1000.0,
+                  rowIs<ProfileForbiddenRequestCost>(rows[17], "profileForbiddenRequestCost",
+                                                     Level::Hard, 1000.0, false) &&
+                  rowIs<ProfilePreferredRequestCost>(rows[18], "profilePreferredRequestCost",
+                                                     Level::Soft, 300.0, false) &&
+                  rowIs<PairedRequestCost>(rows[19], "pairedRequestCost", Level::Hard, 1000.0,
                                            true) &&
-                  rowIs<SameVehicleCost>(rows[18], "sameVehicleCost", Level::Hard, 1000.0, true) &&
-                  rowIs<PickupBeforeDropoffCost>(rows[19], "pickupBeforeDropoffCost", Level::Hard,
+                  rowIs<SameVehicleCost>(rows[20], "sameVehicleCost", Level::Hard, 1000.0, true) &&
+                  rowIs<PickupBeforeDropoffCost>(rows[21], "pickupBeforeDropoffCost", Level::Hard,
                                                  1000.0, true) &&
-                  rowIs<RequestGroupCost>(rows[20], "requestGroupCost", Level::Hard, 1000.0,
+                  rowIs<RequestGroupCost>(rows[22], "requestGroupCost", Level::Hard, 1000.0,
                                           true) &&
-                  rowIs<UnassignedRequestsCost>(rows[21], "unassignedRequestsCost", Level::Medium,
+                  rowIs<UnassignedRequestsCost>(rows[23], "unassignedRequestsCost", Level::Medium,
                                                 1.0, true),
           "info() == the components' kDefaultWeight / kDefaultLevel");
     check(PairedRequestCost::kDefaultWeight == ScoreCalculator::kCouplingPenalty &&
                   RequiredVehicleCost::kDefaultWeight == ScoreCalculator::kCouplingPenalty &&
+                  ProfileForbiddenRequestCost::kDefaultWeight ==
+                          ScoreCalculator::kCouplingPenalty &&
                   RequestGroupCost::kDefaultWeight == ScoreCalculator::kCouplingPenalty &&
                   PinnedStopsCost::kDefaultWeight == ScoreCalculator::kPinnedPenalty,
           "the penalty defaults are ScoreCalculator's constants");
@@ -1285,6 +1291,68 @@ void verifyNegativeThresholds() {
 }
 }  // namespace
 
+// -------------------------------------------------------------------------
+// (n) Profile requests: forbidden and preferred requests per vehicle.
+// -------------------------------------------------------------------------
+void verifyProfileRequests() {
+    std::printf("== (n) Profile requests ==\n");
+    PdpRoutePlan plan = buildRandomInstance(16, 4, /*seed=*/23);
+    plan.profileRequests = {{{1, 4, 9}, {2, 3}}, {{3, 7}, {1, 10}}, {{}, {5}}};
+    for (std::size_t v = 0; v < plan.vehicles.size(); ++v)
+        plan.vehicles[v].profileRequestsIndex = static_cast<int>(v % 4) - 1;
+    checkProfileRequests(plan);
+    {
+        // The previews of the unit components, the two profile ones among
+        // them, against the applied score (the globals refuse previews).
+        PdpRoutePlan routed = plan;
+        std::mt19937_64 layout(37);
+        randomizeRoutes(routed, layout, /*poolRate=*/0.10);
+        routed.rebuildUnassignedPool();
+        DecomposedCalculator calculator;
+        defaultConstraints()
+                .only({"vehicleCapacityCost", "travelTimeCost", "profileForbiddenRequestCost",
+                       "profilePreferredRequestCost"})
+                .into(calculator);
+        optimaru::Editor<PdpRoutePlan> editor(routed, calculator, optimaru::ScoreChecks::Full);
+        editor.score();
+        optimaru::testing::PreviewParity parity;
+        bool corrupted = false;
+        try {
+            parity = optimaru::testing::run_preview_parity(editor, calculator, /*seed=*/15,
+                                                           /*trials=*/3000);
+        } catch (const optimaru::ScoreMismatchError& error) {
+            corrupted = true;
+            std::printf("    %s\n", error.what());
+        }
+        check(!corrupted && parity.all_equal() && parity.declined == 0 && parity.previewed > 1000,
+              "profile request components: every preview served and equal to the applied score");
+    }
+    {
+        PdpRoutePlan solved = plan;
+        Solver::Config config = stepLimited(5);
+        config.step_limit = 3000;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        bool corrupted = false;
+        try {
+            Solver(config).solve(solved);
+        } catch (const optimaru::ScoreMismatchError& error) {
+            corrupted = true;
+            std::printf("    %s\n", error.what());
+        }
+        int carried = 0;
+        for (std::size_t v = 0; v < solved.vehicles.size(); ++v) {
+            for (int node : solved.vehicles[v].nodeIndices) {
+                const int request = solved.nodes[static_cast<std::size_t>(node)].deliveryIndex;
+                carried += solved.forbids(static_cast<int>(v), request) ? 1 : 0;
+            }
+        }
+        check(!corrupted && carried == 0,
+              "a FULL_ASSERT solve with profile requests carries no request on a vehicle that "
+              "forbids it");
+    }
+    std::printf("\n");
+}
+
 int main() {
     verifyAssemblyParity();
     verifyIncremental();
@@ -1300,6 +1368,7 @@ int main() {
     verifyMediumIncremental();
     verifyRepeatsAndOffsets();
     verifyNegativeThresholds();
+    verifyProfileRequests();
 
     if (failures == 0) {
         std::printf("All pickup-delivery plugin checks PASSED.\n");

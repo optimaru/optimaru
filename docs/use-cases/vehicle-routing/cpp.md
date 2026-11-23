@@ -62,8 +62,16 @@ The plugin path adds the optional route policies (`MaxTravelTimeCost`,
 the opt-in weight-0 objectives (`EnclosingCircleRadiusCost`,
 `RouteDurationCost`, `LatencyCost`), and the two constraints of visit groups
 (`VisitGroupCost`, `VisitOrderCost`: `Visit::groupIndex` and
-`Visit::afterVisitIndices`); see the package README for the table and for how
-groups are placed and moved (`visit_insertion.hpp`, `group_moves.hpp`).
+`Visit::afterVisitIndices`), and the two constraints of profile visits
+(`ProfileForbiddenVisitCost`, always on, and `ProfilePreferredVisitCost`:
+`VehicleRoutePlan::profileVisits` and `Vehicle::profileVisitsIndex`); see the
+package README for the table and for how groups are placed and moved
+(`visit_insertion.hpp`, `group_moves.hpp`). A C++ caller that assembles its own
+constraints for `Solver::solve(plan, calculator)` passes the assembly through
+`withAlwaysOnConstraints(assembly, plan)` (`vrp/constraints.hpp`) first, as the
+Python bindings do: it adds `ProfileForbiddenVisitCost` when the plan forbids
+visits and refuses a plan with preferred visits whose assembly lacks
+`ProfilePreferredVisitCost`; the solve itself scores exactly what it is given.
 
 ## How it runs on the generic engine
 

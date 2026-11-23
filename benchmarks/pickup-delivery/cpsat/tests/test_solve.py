@@ -43,6 +43,8 @@ ENGINE_ONLY = {
     "pinned_stops_cost",
     "required_vehicle_cost",
     "request_group_cost",  # optimaru 0.4.2
+    "profile_forbidden_request_cost",
+    "profile_preferred_request_cost",
 }
 MEDIUM_UNIT = 1_000_000_000  # the engine's medium fold (into soft)
 DEPOTS = [DepotModel(id="depot", location=(37.0, 127.0))]

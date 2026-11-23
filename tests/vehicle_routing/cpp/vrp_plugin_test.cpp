@@ -380,6 +380,48 @@ void verifyPreviews() {
               "two profiles and end depots: every preview equal to the applied score");
     }
     {
+        // Profile visits: three entries, one vehicle on none, forbidden and
+        // preferred visits spread over the routes. The two components answer
+        // from their tables, reading the pieces in place.
+        VehicleRoutePlan listed = plan;
+        listed.profileVisits = {{{1, 4, 9, 16, 25}, {2, 3}}, {{3, 7}, {1, 10, 20, 30}}, {{}, {5}}};
+        for (std::size_t v = 0; v < listed.vehicles.size(); ++v)
+            listed.vehicles[v].profileVisitsIndex = static_cast<int>(v % 4) - 1;
+        checkProfileVisits(listed);
+        DecomposedCalculator calculator;
+        addDefaultConstraints(calculator);
+        optimaru::Editor<VehicleRoutePlan> editor(listed, calculator, optimaru::ScoreChecks::Full);
+        const optimaru::testing::PreviewParity parity = optimaru::testing::run_preview_parity(
+                editor, calculator, /*seed=*/14, /*trials=*/3000);
+        std::printf("    with profile visits: %d moves checked, %d previewed, %d declined\n",
+                    parity.checked, parity.previewed, parity.declined);
+        check(parity.all_equal() && parity.previewed > 1000 && parity.declined == 0,
+              "assembly with profile visits: every preview equal to the applied score");
+
+        // A FULL_ASSERT solve on them keeps every forbidden visit off its vehicle.
+        VehicleRoutePlan solved = listed;
+        Solver::Config config;
+        config.step_limit = 3000;
+        config.time_limit = std::chrono::seconds(60);
+        config.seed = 4;
+        config.score_checks = optimaru::ScoreChecks::Full;
+        bool corrupted = false;
+        try {
+            Solver(config).solve(solved);
+        } catch (const optimaru::ScoreMismatchError& error) {
+            corrupted = true;
+            std::printf("    %s\n", error.what());
+        }
+        int served = 0;
+        for (std::size_t v = 0; v < solved.vehicles.size(); ++v) {
+            for (int visit : solved.vehicles[v].visitIndices)
+                served += solved.forbids(static_cast<int>(v), visit) ? 1 : 0;
+        }
+        check(!corrupted && served == 0,
+              "a FULL_ASSERT solve with profile visits serves no visit on a vehicle that "
+              "forbids it");
+    }
+    {
         // Visit groups with an order inside them: the group global answers
         // through its preview contract, the order component by re-costing the
         // candidate route.
@@ -466,9 +508,12 @@ void verifyPiecewiseByHand() {
               c->name + ": piecewise answer equals cost() of the written-out route");
         ++compared;
     }
-    // The three summed components, and visitOrderCost: this plan states no
-    // order, so its answer is 0 for any candidate route.
-    check(compared == 4, "the three summed unit components and visitOrderCost compared");
+    // The three summed components, visitOrderCost and the two profile visit
+    // components: this plan states no order and no profile visits, so their
+    // answer is 0 for any candidate route.
+    check(compared == 6,
+          "the three summed unit components, visitOrderCost and the two profile visit "
+          "components compared");
     // The pool as a unit: every summed component costs it 0 from pieces too.
     for (const auto& c : constraints) {
         if (!c->supports_piecewise_preview()) continue;
@@ -828,8 +873,8 @@ void verifyCatalog() {
     std::printf("== (k) Catalog == component constants ==\n");
     using optimaru::Level;
     const auto rows = defaultConstraints().info();
-    check(rows.size() == 17, "17 catalog rows");
-    if (rows.size() != 17) return;
+    check(rows.size() == 19, "19 catalog rows");
+    if (rows.size() != 19) return;
     // Unit constraints first, then the globals, in emplace order: the
     // list_constraints() order.
     check(rowIs<VehicleCapacityCost>(rows[0], "vehicleCapacityCost", Level::Hard, 1.0, false) &&
@@ -854,8 +899,12 @@ void verifyCatalog() {
                   rowIs<LatencyCost>(rows[12], "latencyCost", Level::Soft, 0.0, false) &&
                   rowIs<VehicleFixedCost>(rows[13], "vehicleFixedCost", Level::Soft, 1.0, false) &&
                   rowIs<VisitOrderCost>(rows[14], "visitOrderCost", Level::Hard, 1000.0, false) &&
-                  rowIs<VisitGroupCost>(rows[15], "visitGroupCost", Level::Hard, 1000.0, true) &&
-                  rowIs<UnassignedVisitsCost>(rows[16], "unassignedVisitsCost", Level::Medium, 1.0,
+                  rowIs<ProfileForbiddenVisitCost>(rows[15], "profileForbiddenVisitCost",
+                                                   Level::Hard, 1000.0, false) &&
+                  rowIs<ProfilePreferredVisitCost>(rows[16], "profilePreferredVisitCost",
+                                                   Level::Soft, 600.0, false) &&
+                  rowIs<VisitGroupCost>(rows[17], "visitGroupCost", Level::Hard, 1000.0, true) &&
+                  rowIs<UnassignedVisitsCost>(rows[18], "unassignedVisitsCost", Level::Medium, 1.0,
                                               true),
           "info() == the components' kDefaultWeight / kDefaultLevel");
     std::printf("\n");

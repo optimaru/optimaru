@@ -26,7 +26,8 @@ namespace pdp {
 // What counts as feasible is read from the plan, not from the objective: the
 // running load against Vehicle::capacity, every stop's time window, and the
 // vehicle limits that are set (maxEndTime, maxRouteDuration, maxTravelTime,
-// maxStops, the pinned prefix, Delivery::requiredVehicleIndex). Among the
+// maxStops, the pinned prefix, Delivery::requiredVehicleIndex, a profile that
+// forbids the request: ProfileRequests). Among the
 // feasible slots the cheapest in added driving time wins. The objective still
 // judges the result: an operator applies what this search proposes through the
 // editor, and the acceptor sees the real score.

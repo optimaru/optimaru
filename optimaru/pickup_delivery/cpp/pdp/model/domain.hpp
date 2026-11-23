@@ -128,6 +128,20 @@ struct Delivery {
 };
 
 // ---------------------------------------------------------------------------
+// ProfileRequests
+// ---------------------------------------------------------------------------
+// What one kind of vehicle may carry: the requests it may not
+// (profileForbiddenRequestCost, hard) and the requests it is preferred for
+// (profilePreferredRequestCost, soft). A vehicle names its entry with
+// Vehicle::profileRequestsIndex. Both lists hold indices into
+// PdpRoutePlan::deliveries in strictly increasing order, and no index is in
+// both (checkProfileRequests in solver.hpp refuses anything else).
+struct ProfileRequests {
+    std::vector<int> forbiddenRequestIndices;
+    std::vector<int> preferredRequestIndices;
+};
+
+// ---------------------------------------------------------------------------
 // Vehicle
 // ---------------------------------------------------------------------------
 struct Vehicle {
@@ -140,6 +154,10 @@ struct Vehicle {
     int endLocationIndex = -1;
     // Which of the plan's matrices this vehicle drives on (its profile).
     int profileIndex = 0;
+    // Which entry of PdpRoutePlan::profileRequests says what it may carry;
+    // -1 (the default) for none: it may carry every request and is preferred
+    // for none.
+    int profileRequestsIndex = -1;
     Seconds departureTime = 0;
     // Optional route policies. Non-positive means disabled.
     Seconds maxTravelTime = 0;
@@ -192,7 +210,46 @@ struct PdpRoutePlan {
     std::vector<Matrix> durationMatrices;
     std::vector<Matrix> distanceMatrices;
 
+    // The requests each kind of vehicle may not carry or is preferred for (see
+    // ProfileRequests); empty for a plan without such lists.
+    std::vector<ProfileRequests> profileRequests;
+
     Score score;
+
+    // The entry of `vehicle`, or nullptr when it names none.
+    const ProfileRequests* profileRequestsOf(const Vehicle& vehicle) const {
+        return vehicle.profileRequestsIndex < 0
+                       ? nullptr
+                       : &profileRequests[static_cast<std::size_t>(vehicle.profileRequestsIndex)];
+    }
+    // Whether vehicle `vehicleIndex` may not carry request `deliveryIndex`: a
+    // binary search of its sorted forbidden list, for the operators that place
+    // requests from the plan (the constraint components keep a table instead).
+    bool forbids(int vehicleIndex, int deliveryIndex) const {
+        const ProfileRequests* entry =
+                profileRequestsOf(vehicles[static_cast<std::size_t>(vehicleIndex)]);
+        return entry != nullptr &&
+               std::binary_search(entry->forbiddenRequestIndices.begin(),
+                                  entry->forbiddenRequestIndices.end(), deliveryIndex);
+    }
+    // Whether some vehicle's entry forbids a request / prefers one. A plan with
+    // either is scored with the constraint assembly, which holds the two
+    // profile request constraints; the core constraints do not read the lists.
+    bool hasForbiddenRequests() const {
+        for (const Vehicle& vehicle : vehicles) {
+            const ProfileRequests* entry = profileRequestsOf(vehicle);
+            if (entry != nullptr && !entry->forbiddenRequestIndices.empty()) return true;
+        }
+        return false;
+    }
+    bool hasPreferredRequests() const {
+        for (const Vehicle& vehicle : vehicles) {
+            const ProfileRequests* entry = profileRequestsOf(vehicle);
+            if (entry != nullptr && !entry->preferredRequestIndices.empty()) return true;
+        }
+        return false;
+    }
+    bool hasProfileRequests() const { return hasForbiddenRequests() || hasPreferredRequests(); }
 
     const Matrix& durationsOf(const Vehicle& vehicle) const {
         return durationMatrices[static_cast<std::size_t>(vehicle.profileIndex)];

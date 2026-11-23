@@ -107,6 +107,12 @@ def solve_request(
     _fixed_routes: Mapping[str, Sequence[str]] | None = None,
 ) -> PdpSolution:
     data = request.model_input
+    if listed := sorted(
+        name for name, profile in data.profiles.items() if profile.forbidden_requests or profile.preferred_requests
+    ):
+        # Engine-only (profile_forbidden_request_cost, profile_preferred_request_cost): a comparison
+        # on such an input would compare two different problems.
+        raise ValueError(f"profiles {listed} list forbidden or preferred requests, which this model does not read")
     plan = to_plan(data, name=request.name or "plan")
     model = cp_model.CpModel()
     # The engine's medium folds into soft, so a medium pick may take the literal

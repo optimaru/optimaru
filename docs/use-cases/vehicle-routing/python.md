@@ -68,6 +68,12 @@ acceptance by default); its parameters are listed under
   partial order on them (`visit_group_cost`, `visit_order_cost`, both hard;
   `VisitModel.group` and `VisitModel.after` in the JSON layer). See
   [Visit groups](README.md#visit-groups).
+- `VehicleRoutePlan(..., profile_visits=[vrp.ProfileVisits(forbidden, preferred)])`
+  lists, per kind of vehicle, the visits it may not serve and those it is preferred
+  for; `Vehicle.profile_visits_index` picks one (-1 for none). Scored by
+  `profile_forbidden_visit_cost` (hard, always on) and `profile_preferred_visit_cost`
+  (soft); `TravelProfile.forbidden_visits` and `preferred_visits` in the JSON layer.
+  See [Profile visits](README.md#profile-visits).
 - `vrp.constraint_info()` lists every constraint with its default level and
   weight (the C++ components' `kDefaultLevel` / `kDefaultWeight`);
   `optimaru.vehicle_routing.constraints` picks, re-weights and flips them for
@@ -139,8 +145,12 @@ profiles = {
   it would make every pair missing.
 - A vehicle naming a profile that `profiles` does not hold is refused, as is a
   dict keyed by an id that is no depot or visit.
-- `solve_request` turns each profile into one square matrix over the depots, then
-  the visits, before the solve. For 1,000 places with both dicts given (40 MB of
+- `same_travel_as="car"` drives a profile on the travel of the profile `car`, which
+  gives its own: profiles that differ only in their visit lists (`forbidden_visits`,
+  `preferred_visits`, see [Profile visits](README.md#profile-visits)) share one set
+  of dicts and one matrix in the engine.
+- `solve_request` turns each distinct travel into one square matrix over the depots,
+  then the visits, before the solve. For 1,000 places with both dicts given (40 MB of
   JSON), parsing and validating the request took 0.11 s and building the matrices
   0.06 s on an M4 Max.
 - `travel_time_cost` prices the seconds; `travel_distance_cost` (opt-in, weight 0)
