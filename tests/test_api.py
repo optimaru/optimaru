@@ -483,6 +483,60 @@ def test_school_timetablings_initial_solution_travels_in_the_request(api):
     ]
 
 
+def test_school_timetablings_minimal_start_travels_as_a_local_solve_takes_it(api):
+    school = use_case_module("school_timetabling")
+    problem = small_problem("school_timetabling")
+    start = school.solve.__wrapped__(problem, time_limit_seconds=0.2, random_seed=1)
+    # Course and slot only, and a key of another backend's own: what inject_solution reads.
+    minimal = {"lessons": [{"course_id": x["course_id"], "slot": x["slot"]} for x in start["lessons"]], "solver": "x"}
+
+    solved = school.solve(problem, time_limit_seconds=0, initial_solution=minimal)
+
+    lessons = api.created()[0].body["request"]["initial_solution"]["lessons"]
+    assert [(x["course_id"], x["slot"]) for x in lessons] == [(x["course_id"], x["slot"]) for x in minimal["lessons"]]
+    here = school.solve.__wrapped__(problem, time_limit_seconds=0, initial_solution=minimal)
+    assert solved["lessons"] == here["lessons"]
+    with pytest.raises(ValueError, match="initial_solution has no lessons"):
+        school.solve(problem, initial_solution={"status": "FEASIBLE"})
+
+
+def test_school_timetablings_quickstart_mode_travels_with_its_config(api):
+    school = use_case_module("school_timetabling")
+    problem = small_problem("school_timetabling")
+    config = school.SolverConfig()
+    config.step_count_limit = 200
+
+    solved = school.solve(problem, mode="quickstart", config=config, random_seed=2)
+
+    request = api.created()[0].body["request"]
+    assert request["mode"] == "quickstart"
+    assert request["solver_parameters"] == {"step_count_limit": 200}
+    assert request["weights"] is None
+    here = school.solve.__wrapped__(problem, mode="quickstart", config=config, random_seed=2)
+    assert solved["lessons"] == here["lessons"]
+
+
+def test_school_timetablings_own_score_limit_travels_as_a_solver_parameter(api):
+    school = use_case_module("school_timetabling")
+    config = school.canon.SolverConfig()
+    config.best_score_limit = (0, -50.0)
+
+    school.solve(small_problem("school_timetabling"), config=config, time_limit_seconds=0.2)
+
+    request = api.created()[0].body["request"]
+    assert request["solver_parameters"] == {"best_score_limit": [0, -50.0]}
+    assert request["stop_at_first_feasible"] is False
+
+
+def test_school_timetablings_weights_beside_a_selection_are_refused_before_sending(api):
+    school = use_case_module("school_timetabling")
+    with pytest.raises(ValueError, match="default fast path only"):
+        school.solve(
+            small_problem("school_timetabling"), weights={"teacher_gap_cost": 40}, constraints=["teacher_gap_cost"]
+        )
+    assert not api.requests
+
+
 # --- constraints and config as the API reads them back ------------------------------------------
 
 

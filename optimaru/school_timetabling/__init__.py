@@ -248,7 +248,7 @@ def _api_request(problem: dict, keywords: dict):
     fields of those names (a keyword still wins over them, as it does here), the rest as
     ``solver_parameters``.
     """
-    from .models import TimetableProblemModel, TimetableRequest, TimetableResultModel
+    from .models import TimetableProblemModel, TimetableRequest
 
     mode, weights, constraints = keywords["mode"], keywords["weights"], keywords["constraints"]
     canonical = _check_mode(mode, weights, constraints)
@@ -259,6 +259,9 @@ def _api_request(problem: dict, keywords: dict):
         if config.on_new_best is not None:
             raise ValueError("on_new_best is a callback, which cannot be sent to the optimaru API")
         defaults = type(config)()
+        # Every public attribute of a compiled SolverConfig that is not a method is a plain field the
+        # API sets by name and compares by value; `weights` (an ObjectiveWeights) is the one object,
+        # read by its weights. tests/test_api.py checks that a default config sends nothing.
         as_fields = {
             "spent_limit_seconds": "time_limit_seconds",
             "random_seed": "random_seed",
@@ -284,13 +287,24 @@ def _api_request(problem: dict, keywords: dict):
                 fields["stop_at_first_feasible"] = True  # -inf has no JSON: it travels as the flag
             else:
                 parameters[name] = _api._plain(value, f"config.{name}")
+    # What a local solve refuses before it starts, refused before anything is sent.
+    if (
+        constraints is not None
+        and weights is not None
+        and _soft_weights(_fast_path_weights(weights)) != _soft_weights()
+    ):
+        raise ValueError(
+            "weights / config.weights apply to the default fast path only; with constraints=, give each pick its weight"
+        )
     initial = keywords["initial_solution"]
+    if initial is not None and not (isinstance(initial, dict) and "lessons" in initial):
+        raise ValueError("initial_solution has no lessons")
     request = TimetableRequest(
         model_input=TimetableProblemModel.model_validate(problem),
         mode=mode,
         weights=weights,
         solver_parameters=parameters,
-        initial_solution=None if initial is None else TimetableResultModel.model_validate(initial),
+        initial_solution=initial,
         **{name: value for name, value in fields.items() if value is not None},
     )
     return request, constraints

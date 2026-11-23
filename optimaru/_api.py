@@ -944,8 +944,10 @@ def solve_by_request(
     With the API on, ``to_request(problem, keywords)`` turns the call (its first argument,
     and its keywords with the defaults filled in) into the request and the ``constraints=``
     selection that the use case's ``solve_request`` takes, and that function, decorated with
-    `request_solve`, sends them. The result comes back as the dict the local call returns.
-    A callback (``on_new_best``) cannot travel and is refused.
+    `request_solve`, sends them. That function is the ``solve_request`` of the use case's
+    ``models`` module, next to the decorated ``solve`` (``<package>.<use case>.models``, as
+    `request_solve` requires). The result comes back as the dict the local call returns. A
+    callback (``on_new_best``) cannot travel and is refused.
     """
 
     def decorate(solve: Callable[_P, _R]) -> Callable[_P, _R]:

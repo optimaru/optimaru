@@ -51,7 +51,9 @@ serialization mirrors live in `optimaru.school_timetabling.models`.
 `model_input`, with the settings of the solve under the names of `solve`'s keywords
 (`time_limit_seconds`, `random_seed`, `parallel_solver_count`, `stop_at_first_feasible`,
 `full_assert`, `solver_parameters`) and this use case's three more, `mode`, `weights` and
-`initial_solution`. It returns a `models.TimetableResultModel`, the same fields as the
+`initial_solution` (an earlier `TimetableResultModel`, or any `{"lessons": [...]}` whose lessons
+carry a `course_id` and a `slot`, as `solve(initial_solution=...)` takes). It returns a
+`models.TimetableResultModel`, the same fields as the
 result dict, and leaves the request unchanged.
 
 ```python

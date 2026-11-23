@@ -10,6 +10,11 @@
   A `constraints=` selection travels as its picks whether it is specs, names or an
   `Assembly`; `on_new_best` is refused, as everywhere. `_api.local_solve` is gone: every use
   case is served.
+- **School timetabling: `TimetableRequest.initial_solution` takes a minimal start.** Besides a
+  whole `TimetableResultModel`, it takes `{"lessons": [...]}` whose lessons carry only a
+  `course_id` and a `slot`, ignoring keys it does not know (`StartingSolutionModel`), as
+  `solve(initial_solution=...)` always did. A server on this release accepts such a start in
+  `request.initial_solution`.
 - **Routing notebooks on the 0.6 input.** `examples/vehicle-routing.ipynb` and
   `examples/pickup-delivery.ipynb` build their vehicles from depots (`start_location_index` /
   `end_location_index` in the compiled layer, `DepotModel` with `start_depot` / `end_depot` in
