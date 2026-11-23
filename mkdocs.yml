@@ -12,12 +12,22 @@ extra:
   generator: false
 
 docs_dir: docs
+extra_css:
+  - stylesheets/optimaru.css
 exclude_docs: |
   pypi.md
   requirements.txt
 
 theme:
   name: material
+  # The optimaru mark, as on optimaru.com, in place of the theme's own icons. The tab icon's ink
+  # turns light when the browser is dark (assets/favicon.svg). The header's is drawn inline in
+  # the header's text colour (overrides/.icons/optimaru/mark.svg), so it follows this site's own
+  # light/dark toggle; the header is plain white or black with optimaru's green as the accent.
+  custom_dir: overrides
+  favicon: assets/favicon.svg
+  icon:
+    logo: optimaru/mark
   features:
     - navigation.sections
     - navigation.indexes
@@ -27,9 +37,13 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
+      primary: white
+      accent: green
       toggle: { icon: material/weather-night, name: Dark mode }
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
+      primary: black
+      accent: green
       toggle: { icon: material/weather-sunny, name: Light mode }
 
 plugins:
