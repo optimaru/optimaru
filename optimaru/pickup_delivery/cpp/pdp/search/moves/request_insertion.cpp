@@ -138,7 +138,8 @@ void RouteTimeline::improve(const PdpRoutePlan& plan, const Delivery& delivery, 
 
     const Node& pickup = plan.nodes[static_cast<std::size_t>(delivery.pickupNodeIndex)];
     const Node& dropoff = plan.nodes[static_cast<std::size_t>(delivery.dropoffNodeIndex)];
-    // A vehicle whose profile forbids the request offers no slot for it.
+    // A vehicle whose profile forbids the request offers no slot for it. The
+    // index test first is the fast path: a plan without lists skips the search.
     if (vehicle.profileRequestsIndex >= 0 && plan.forbids(vehicle_, pickup.deliveryIndex)) return;
     const Seconds pickupDue = pickup.maxEndTime - pickup.serviceDuration;
     const Seconds dropoffDue = dropoff.maxEndTime - dropoff.serviceDuration;

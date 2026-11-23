@@ -203,6 +203,13 @@ private:
     Config config_;
 };
 
+// The index part of checkProfileRequests below: every
+// Vehicle::profileRequestsIndex is -1 or an entry of plan.profileRequests,
+// each entry's two lists hold request indices in strictly increasing order,
+// none in both, and every stop's deliveryIndex names a request when there
+// are entries. calculateScore runs this part only.
+void checkProfileRequestIndices(const PdpRoutePlan& plan);
+
 // What a plan may say about profile requests: every
 // Vehicle::profileRequestsIndex is -1 or an entry of plan.profileRequests,
 // and each entry's two lists hold request indices in strictly increasing
@@ -225,9 +232,10 @@ inline bool needsConstraintAssembly(const PdpRoutePlan& plan) {
 // groups or profile request lists, which those constraints do not price: then
 // on the default constraint assembly. Refreshes the derived fields and stores the score in
 // plan.score. Does not validate the plan otherwise: what solve() refuses (a required vehicle out
-// of range, a group bound to two vehicles) is scored as it stands. Its profile requests are
-// checked (checkProfileRequests), since they are read as indices: std::invalid_argument for
-// bad ones.
+// of range, a group bound to two vehicles, a request bound or pinned to a vehicle whose profile
+// forbids it) is scored as it stands. Its profile request indices are checked
+// (checkProfileRequestIndices), since they are read as indices: std::invalid_argument for bad
+// ones.
 Score calculateScore(PdpRoutePlan& plan);
 
 }  // namespace pdp

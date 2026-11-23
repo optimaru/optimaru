@@ -253,3 +253,13 @@ def test_a_group_with_a_request_no_vehicle_may_carry_waits_whole(timelimit):
     assert solution.feasible
     assert sorted(solution.unassigned) == ["a", "b"]
     assert "c" in vehicle_of(solution)
+
+
+def test_calculate_score_prices_a_pin_the_profile_forbids_as_it_stands():
+    plan = to_plan(line_input({"basic": {"forbidden_requests": ["a"]}}))
+    vehicles = plan.vehicles
+    vehicles[0].node_indices = [0, 1]  # request a, on v, whose profile forbids it
+    vehicles[0].pinned_node_indices = [0]
+    plan.vehicles = vehicles
+    plan.rebuild_unassigned_pool()
+    assert pdp.calculate_score(plan).hard <= -2000

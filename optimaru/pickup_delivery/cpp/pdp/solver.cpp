@@ -661,7 +661,7 @@ void checkRequiredVehicles(const PdpRoutePlan& plan) {
 
 }  // namespace
 
-void checkProfileRequests(const PdpRoutePlan& plan) {
+void checkProfileRequestIndices(const PdpRoutePlan& plan) {
     const int entries = static_cast<int>(plan.profileRequests.size());
     const int requests = static_cast<int>(plan.deliveries.size());
     // The profile request table reads each stop's request by its index.
@@ -710,6 +710,11 @@ void checkProfileRequests(const PdpRoutePlan& plan) {
                                         " is both forbidden and preferred");
         }
     }
+}
+
+void checkProfileRequests(const PdpRoutePlan& plan) {
+    checkProfileRequestIndices(plan);
+    const int requests = static_cast<int>(plan.deliveries.size());
     for (std::size_t v = 0; v < plan.vehicles.size(); ++v) {
         for (int node : plan.vehicles[v].pinnedNodeIndices) {
             if (node < 0 || node >= static_cast<int>(plan.nodes.size())) continue;
@@ -1034,8 +1039,9 @@ void Solver::solve(PdpRoutePlan& plan, const CalculatorFactory& makeCalculator) 
 }
 
 Score calculateScore(PdpRoutePlan& plan) {
-    // The profile request indices are read as indices before anything else.
-    checkProfileRequests(plan);
+    // The profile request indices are read as indices before anything else;
+    // a binding the profile forbids is scored as it stands, like the rest.
+    checkProfileRequestIndices(plan);
     if (!needsConstraintAssembly(plan)) return ScoreCalculator::score(plan);
     // As solve(plan) ends on a plan with groups or profile requests: the derived fields, then the
     // three levels of the default assembly.
