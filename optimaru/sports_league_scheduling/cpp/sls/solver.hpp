@@ -10,7 +10,7 @@
 
 namespace sls {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/.
+// Thin domain-side wrapper around the generic engine in core/optimaru/.
 // It wires up the
 // incremental score calculator and delegates solving to
 // optimaru::Solver<LeagueSchedule>, with the engine's built-in change/swap

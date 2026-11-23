@@ -2,7 +2,7 @@
 
 Derived from the Timefold Quickstarts `conference-scheduling` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)),
-built on the C++ engine in `optimaru/cpp/optimaru/`. Every talk (`Talk`) gets a timeslot
+built on the C++ engine in `core/optimaru/`. Every talk (`Talk`) gets a timeslot
 and a room at once — the two decisions per talk (timeslot and room) are encoded as
 one composite assignment variable `slotRoom = timeslotIndex * roomCount + roomIndex`
 (the same pattern as school-timetabling).

@@ -1,6 +1,6 @@
 // pybind11 bindings for the employee-scheduling C++ domain wrapper.
 // The Python extension links the existing es::* implementation and imports the
-// generic engine from optimaru/cpp/optimaru; the engine itself is not modified here.
+// generic engine from core/optimaru; the engine itself is not modified here.
 #include <pybind11/functional.h>  // std::function <-> Python callable (on_new_best)
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // std::vector / std::set / std::string conversions

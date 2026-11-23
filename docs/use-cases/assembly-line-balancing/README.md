@@ -1,7 +1,7 @@
 # Assembly-line balancing
 
 Simple assembly-line balancing (SALBP-1) with zoning and station domains, on
-this repository's C++ engine (`optimaru/cpp/optimaru/`): put every task on one
+this repository's C++ engine (`core/optimaru/`): put every task on one
 station of a paced line so that no station exceeds the cycle time, precedences
 run forward, and as few stations as possible are opened. The base model is
 the standard SALBP-1 formulation (Scholl 1999; Otto, Otto & Scholl 2013).

@@ -10,7 +10,7 @@
 
 namespace bp {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/:
+// Thin domain-side wrapper around the generic engine in core/optimaru/:
 // the domain construction (best-fit decreasing, bp/construct/construction.hpp), then
 // optimaru::Solver<BinPackingProblem> with late acceptance over the built-in
 // change/swap moves, the domain's EmptyBinMove, RepackMove and TradeMove

@@ -35,7 +35,7 @@ def test_a_use_case_keeps_only_its_sources_under_cpp():
     cpp/<ns>/ (headers and sources side by side, included as "<ns>/..."); main.cpp is the demo.
 
     Inside cpp/<ns>/ every use case files by role, under the names the engine uses in
-    optimaru/cpp/optimaru/: the entry points (solver, constraints.hpp) at the top, model/ (the
+    core/optimaru/: the entry points (solver, constraints.hpp) at the top, model/ (the
     domain and its data), score/ (the monolithic calculators), constraints/ (one component per
     file), and, where the use case has its own, moves/, construct/ and accept/."""
     tracked = subprocess.run(["git", "ls-files", "optimaru"], cwd=ROOT, capture_output=True, text=True)

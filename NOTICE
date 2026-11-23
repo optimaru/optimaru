@@ -15,7 +15,7 @@ Timefold Solver is a derivative work of OptaPlanner and OptaPy, which include
 copyrights of the original creator, Red Hat, Inc., affiliates, and
 contributors, all licensed under the Apache License, Version 2.0.
 
-The engine in optimaru/cpp/optimaru/ began as a C++ reimplementation, with
+The engine in core/optimaru/ began as a C++ reimplementation, with
 modifications, of parts of the Timefold Solver core. It has since been
 restructured by The optimaru Authors: its file layout, type and function
 names, configuration and public C++ API are optimaru's own and no longer

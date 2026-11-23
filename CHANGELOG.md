@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **The engine's C++ moves to `core/`.** The header-only engine lives in `core/optimaru/` at the top
+  of the repository instead of `optimaru/cpp/optimaru/`, so `optimaru/` holds the Python package and
+  its use cases. Includes stay `#include "optimaru/..."`, and nothing changes in the installed
+  package or its import paths; a build from source reads the headers from the new place.
+
 ## 0.6.1
 
 **From 0.6.0.** School timetabling solves on the optimaru API like every other use case once an

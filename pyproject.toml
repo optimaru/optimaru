@@ -65,6 +65,7 @@ cache-keys = [
   { file = "setup.py" },
   { file = "optimaru/**/*.cpp" },
   { file = "optimaru/**/*.hpp" },
+  { file = "core/**/*.hpp" },
   { env = "OPTIMARU_USE_CASES" },
 ]
 

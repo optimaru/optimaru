@@ -1,7 +1,7 @@
 # Use cases
 
 Each use case is an independent problem built on the engine in
-[`optimaru/cpp/optimaru/`](../../optimaru/cpp/optimaru) and shipped as a subpackage of
+[`core/optimaru/`](../../core/optimaru) and shipped as a subpackage of
 `optimaru`. This directory holds one guide per use case. Competing solvers
 (OR-Tools CP-SAT / Routing) never live in the package; they are in
 [`benchmarks/`](../../benchmarks).

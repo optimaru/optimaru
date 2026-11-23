@@ -287,8 +287,12 @@ setup.py, CMakeLists.txt           the wheel's extensions; the C++ build
 
 ## Engine layout
 
+The engine is header-only C++ in `core/optimaru/`. The name is the engine's alone: the `_core`
+extension module each use case compiles (`optimaru.<use case>._core`) and a use case's own "core
+library" are built from `optimaru/<use case>/cpp/` against these headers.
+
 ```
-optimaru/cpp/optimaru/
+core/optimaru/
 ├── optimaru.hpp                  umbrella include for consumers
 ├── solver.hpp                    Solver: construction, then search; multi-start
 ├── settings.hpp                  Settings, Limits, AcceptanceSettings, MoveMix,

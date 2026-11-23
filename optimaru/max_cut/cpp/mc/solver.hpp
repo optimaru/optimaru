@@ -10,7 +10,7 @@
 
 namespace mc {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/: it
+// Thin domain-side wrapper around the generic engine in core/optimaru/: it
 // builds the start partition (see solve()), wires up the
 // incremental score calculator and delegates the search to
 // optimaru::Solver<MaxCutProblem> — late acceptance over the built-in assignment

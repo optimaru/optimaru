@@ -14,7 +14,7 @@ namespace st {
 // ---------------------------------------------------------------------------
 // Score
 // ---------------------------------------------------------------------------
-// The score type comes from the generic engine (optimaru/cpp/optimaru/). All seven school
+// The score type comes from the generic engine (core/optimaru/). All seven school
 // timetabling constraints count whole lesson pairs / lessons, so both levels
 // stay integral (soft is stored in the engine's double field).
 using Score = optimaru::Score;

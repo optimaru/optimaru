@@ -1,7 +1,7 @@
 """Type stubs for `optimaru.meeting_scheduling._core` — the meeting-scheduling C++ solver.
 
 The compiled module wraps the C++ domain in `optimaru/meeting_scheduling/cpp`,
-which imports the generic engine in `optimaru/cpp/optimaru`.
+which imports the generic engine in `core/optimaru`.
 
 Constraints (hard / medium / soft levels) and the score mapping
 (registry names; default weights per raw unit):

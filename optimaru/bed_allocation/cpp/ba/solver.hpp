@@ -10,7 +10,7 @@
 
 namespace ba {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
+// Thin domain-side wrapper around the generic engine in core/optimaru/. It
 // wires up the incremental score calculator and delegates solving to
 // optimaru::Solver<BedPlan>, with the engine's adaptive ruin-and-recreate
 // (ALNS) kicks enabled by default.

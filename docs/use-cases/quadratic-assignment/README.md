@@ -1,7 +1,7 @@
 # Quadratic assignment
 
 The quadratic assignment problem on this repository's C++ engine
-(`optimaru/cpp/optimaru/`): place `n` facilities on `n` locations, one each,
+(`core/optimaru/`): place `n` facilities on `n` locations, one each,
 minimizing the flow between every pair of facilities times the distance between
 their locations, plus an optional direct facility-location cost, with pinned and
 forbidden placements and facility-demand / location-capacity compatibility as

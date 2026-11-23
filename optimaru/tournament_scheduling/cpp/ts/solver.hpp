@@ -10,7 +10,7 @@
 
 namespace ts {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
+// Thin domain-side wrapper around the generic engine in core/optimaru/. It
 // wires up the incremental score calculator and delegates solving to
 // optimaru::Solver<TournamentSchedule>, with the engine's built-in
 // change/swap moves, adaptive ruin-and-recreate (ALNS) and the domain's

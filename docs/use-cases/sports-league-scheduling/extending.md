@@ -348,7 +348,7 @@ at weight 0 only when a solve starts and when `sl.constraint_costs()` reports it
 `get_constraints()` now returns eleven constraints, and a solve with them ran at 1.34
 million steps per second, as the ten did. A global at weight 0 is still sent every change,
 unless it declares `idle_at_weight_zero()` (see
-[`decomposed_objective.hpp`](../../../optimaru/cpp/optimaru/score/decomposed_objective.hpp));
+[`decomposed_objective.hpp`](../../../core/optimaru/score/decomposed_objective.hpp));
 the example is a unit constraint and needs nothing. `sl.solve(schedule)` is not affected.
 
 **Keep raw costs whole numbers.** Every constraint here counts matches or kilometres, so

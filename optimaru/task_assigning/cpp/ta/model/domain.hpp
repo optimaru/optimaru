@@ -32,7 +32,7 @@ constexpr Minutes kNullTime = -1;  // startTime of an unassigned task
 //   soft[1]  squaredMakespanCost        (employee endTime^2 each)
 //   soft[2]  {critical|major|minor}PriorityTaskEndTimeCost
 //            (endTime x 4 / x 2 / x 1)
-// The generic engine (optimaru/cpp/optimaru/) only knows Score(int64 hard,
+// The generic engine (core/optimaru/) only knows Score(int64 hard,
 // double soft); its constraints score on three levels (hard, medium, soft).
 // Mapping rule (level priority preserved):
 //

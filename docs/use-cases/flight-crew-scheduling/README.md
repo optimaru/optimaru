@@ -2,7 +2,7 @@
 
 Derived from the Timefold Quickstarts `flight-crew-scheduling` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)),
-built on this repository's C++ engine (`optimaru/cpp/optimaru/`). An **assignment-shaped** problem
+built on this repository's C++ engine (`core/optimaru/`). An **assignment-shaped** problem
 that picks a crew member (`employee`) for every crew seat of a flight (`FlightAssignment`).
 
 ## Usage

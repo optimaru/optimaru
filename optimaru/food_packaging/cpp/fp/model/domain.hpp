@@ -31,7 +31,7 @@ constexpr Minutes kNoTime = std::numeric_limits<std::int64_t>::min();
 // Score  (three levels: hard / medium / soft)
 // ---------------------------------------------------------------------------
 // This domain scores on three levels (hard / medium / soft); the generic engine
-// (optimaru/cpp/optimaru/) only knows Score(int64 hard, double soft). Mapping rule
+// (core/optimaru/) only knows Score(int64 hard, double soft). Mapping rule
 // (the bed-allocation use case's convention, with a larger unit because the
 // makespan penalty is quadratic):
 //

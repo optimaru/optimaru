@@ -18,7 +18,7 @@ namespace vrp {
 // ---------------------------------------------------------------------------
 // Solver
 // ---------------------------------------------------------------------------
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/.
+// Thin domain-side wrapper around the generic engine in core/optimaru/.
 //
 // The engine runs, in the usual phase structure:
 //
@@ -107,7 +107,7 @@ public:
 
         // --- adaptive ruin & recreate (ALNS) ------------------------------
         // Search strategies registered as move operators from
-        // optimaru/cpp/optimaru/moves/ and ruin_recreate/.
+        // core/optimaru/moves/ and ruin_recreate/.
         // The weights are deliberately small: all three cost far more than one
         // sampled move (a descent sweep scans a whole list pair, the other two
         // run a repair), so they earn their keep at a few percent of steps and

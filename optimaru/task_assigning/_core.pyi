@@ -1,7 +1,7 @@
 """Type stubs for `optimaru.task_assigning._core` — the task-assigning C++ solver.
 
 The compiled module wraps the C++ domain in `optimaru/task_assigning/cpp`,
-which imports the generic engine in `optimaru/cpp/optimaru`.
+which imports the generic engine in `core/optimaru`.
 
 The decision variable is each `Employee.tasks` (sequence shape): the ordered list of task
 indices the employee performs back to back. A task in no list is unassigned.

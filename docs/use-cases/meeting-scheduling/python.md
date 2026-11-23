@@ -1,7 +1,7 @@
 # optimaru.meeting_scheduling (Python)
 
 The C++ implementation of the meeting-scheduling use case
-(`optimaru/meeting_scheduling/cpp`, generic engine in `optimaru/cpp/optimaru`) with pybind11
+(`optimaru/meeting_scheduling/cpp`, generic engine in `core/optimaru`) with pybind11
 bindings on top. Derived from the Timefold Quickstarts `meeting-scheduling` example
 (Apache-2.0; see the repository NOTICE).
 
