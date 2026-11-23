@@ -16,8 +16,8 @@ need 0.6.0 or later, which takes depots and travel profiles. Each notebook stand
 download a single file and run it.
 
 Most solves stop on a time limit, so your scores and charts can differ a little from the saved outputs,
-depending on your machine. The saved outputs come from optimaru 0.5.1 on macOS (Apple silicon), those of
-the vehicle-routing and pickup-delivery notebooks from 0.6.0.
+depending on your machine. The saved outputs come from optimaru 0.5.1 (the two routing notebooks: 0.6.0)
+on macOS (Apple silicon).
 Regenerate them there, so that a re-run changes only what the engine changed. On another platform the
 same seed can take a different path, even in a solve with a step limit.
 
