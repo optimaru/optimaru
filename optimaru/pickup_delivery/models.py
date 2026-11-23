@@ -491,7 +491,9 @@ def parameter_uses(model_input: PdpInput) -> list[ParameterUse]:
     uses = []
     for vehicle in model_input.vehicles:
         for field, default, costs in _VEHICLE_COSTS:
-            if is_set(getattr(vehicle, field), default):
+            value = getattr(vehicle, field)
+            # max_stops 0 lifts the cap, so it asks for nothing either.
+            if is_set(value, default) and not (field == "max_stops" and value == 0):
                 uses.append(ParameterUse(f"vehicle {vehicle.id}", field, default, costs))
     for delivery in model_input.deliveries:
         for field, default, costs in _REQUEST_COSTS:

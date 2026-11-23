@@ -443,7 +443,7 @@ The fields each use case checks (`models.parameter_uses(model)` lists the ones a
 | | `min_partition_size`, `max_partition_size` (None) | `partition_size_bounds_cost` |
 | meeting scheduling | room `capacity` (0) | `room_capacity_cost` or `larger_room_capacity_cost` |
 | | meeting `required_attendees`, `preferred_attendees` ([]) | any of the attendance costs, `room_capacity_cost`, `room_change_cost` |
-| pickup-delivery | vehicle `max_travel_time`, `max_route_duration`, `max_end_time` (0), `max_stops` (20), `min_load_ratio`, `fixed_cost`, `max_route_radius_meters` (0), `pinned_stops` (0) | the matching vehicle cost, `pinned_stops_cost` |
+| pickup-delivery | vehicle `max_travel_time`, `max_route_duration`, `max_end_time` (0), `max_stops` (20; 0, no cap, needs nothing), `min_load_ratio`, `fixed_cost`, `max_route_radius_meters` (0), `pinned_stops` (0) | the matching vehicle cost, `pinned_stops_cost` |
 | | request `order_time` (0), `required_vehicle`, `group` (None) | `squared_order_age_cost`, `required_vehicle_cost`, `request_group_cost` |
 | | stop `max_end_time` (86400) | `max_end_time_cost` |
 | | profile `preferred_requests` ([]) | `profile_preferred_request_cost` |

@@ -82,6 +82,7 @@ def test_a_stop_window_without_its_cost_is_refused():
 def test_max_stops_at_its_json_default_needs_nothing_and_weight_zero_counts():
     picks = without(get_constraints(), "max_stops_cost")
     solve(pdp_input(), picks)  # max_stops 20, the default
+    solve(pdp_input({"max_stops": 0}), picks)  # no cap: nothing to score
     solve(pdp_input({"max_stops": 6}), [*picks, MaxStopsCost(weight=0)])
 
 
