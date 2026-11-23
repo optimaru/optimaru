@@ -426,7 +426,7 @@ The fields each use case checks (`models.parameter_uses(model)` lists the ones a
 | | stay `patient_preferred_maximum_room_capacity` (None) | `preferred_max_room_capacity_cost` |
 | bin packing | item `color` (None) | `color_conflict_cost` |
 | | `conflicts` ([]) | `item_conflict_cost` |
-| conference scheduling | talk `speakers`, tags, `audience_*`, `content_tags`, `language` ("en"), `favorite_count`, `crowd_control_risk`, `prerequisite_talks`, `mutually_exclusive_talks_tags`; speaker and room `unavailable_timeslots` and tag lists; room `capacity`, `talk_types`; timeslot tags; `minimum_consecutive_talks_pause_in_minutes` (30) | the costs that read each field, listed in `_TALK_COSTS`, `_SPEAKER_COSTS`, `_ROOM_COSTS` and `_TIMESLOT_COSTS` of `conference_scheduling/models.py` |
+| conference scheduling | talk `speakers`, tags, `audience_*`, `content_tags`, `language` ("en"), `favorite_count`, `crowd_control_risk`, `prerequisite_talks`, `mutually_exclusive_talks_tags`; speaker and room `unavailable_timeslots` and tag lists; room `capacity`, `talk_types`; timeslot tags; `minimum_consecutive_talks_pause_in_minutes` (30; 0 needs nothing) | the costs that read each field, listed in `_TALK_COSTS`, `_SPEAKER_COSTS`, `_ROOM_COSTS` and `_TIMESLOT_COSTS` of `conference_scheduling/models.py` |
 | employee scheduling | shift `required_skill` ("") | `required_skill_cost` |
 | | worker `unavailable_dates`, `undesired_dates`, `desired_dates` ([]) | `employee_unavailability_cost`, `undesired_day_cost`, `desired_day_cost` |
 | | worker `desired_shifts` ([]) | `desired_shift_cost` (opt-in: not in the defaults) |

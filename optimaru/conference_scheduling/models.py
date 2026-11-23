@@ -387,7 +387,8 @@ def parameter_uses(schedule: ConferenceScheduleModel) -> list[ParameterUse]:
             for field, default, costs in table:
                 if is_set(getattr(item, field), default):
                     uses.append(ParameterUse(f"{kind} {getattr(item, key)}", field, default, costs))
-    if schedule.minimum_consecutive_talks_pause_in_minutes != 30:
+    # 0 asks for no pause at all, so it needs no cost either.
+    if schedule.minimum_consecutive_talks_pause_in_minutes not in (30, 0):
         uses.append(
             ParameterUse(
                 "the schedule", "minimum_consecutive_talks_pause_in_minutes", 30, ("consecutive_talks_pause_cost",)
