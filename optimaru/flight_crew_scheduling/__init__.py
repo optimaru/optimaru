@@ -119,7 +119,7 @@ def solve(
         fcs.solve(schedule, constraints=get_constraints())
 
     A model (or dict) that sets a parameter whose costs the constraints leave out is refused
-    with ValueError (`models.parameter_uses`): the solve would ignore it. An engine object
+    with ValueError (`models.parameter_uses`): the solve would not score it. An engine object
     is not checked.
     """
     if config is not None and not isinstance(config, SolverConfig):

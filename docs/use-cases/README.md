@@ -373,8 +373,8 @@ component). Python reads them from `<package>.constraint_info()`, one
 Many input fields act only through a cost: a vehicle's `max_end_time` matters only
 because `vehicle_max_end_time_cost` charges the seconds past it, and a worker's
 `unavailable_dates` only because `employee_unavailability_cost` charges a shift on one
-of them. A selection that leaves such a cost out would solve as if the field were not
-there. So a request that sets one of these fields away from its default, while the
+of them. A selection that leaves such a cost out would not score the field at all: at
+most an insertion heuristic still steers by it, and nothing keeps a move from breaking it. So a request that sets one of these fields away from its default, while the
 effective selection holds none of the costs that read it, is refused with
 `ValueError`. The message names the field, where it is set, and the costs to add:
 
@@ -404,10 +404,13 @@ the cost that scores it: add one, or leave max_end_time at its default (0)
   fixed slots and parallel groups, max cut's fixed partition, semiconductor scheduling's
   decoder rules, routing's forbidden visits and requests, which are always on); fields
   with an effect besides their cost (routing profile `distances` and visit `demand`,
-  which the solution reports as driving meters and load; school timetabling's `required_room_type`, which the room
-  assignment reads); and a field left at a default that already means something
+  which the solution reports as driving meters and load; school timetabling's
+  `required_room_type`, which the room assignment reads; semiconductor scheduling's lot
+  `priority` and option `preference_cost`, which the decoder's dispatch order and default
+  machine read); and a field left at a default that already means something
   (pickup-delivery `max_stops=20`, school timetabling's `max_periods_per_day=6`): only a
-  value other than the default is checked. A value that switches something off, such as
+  value other than the default is checked, so a default limit without its cost is still
+  only steered toward by the insertion heuristics, not scored. A value that switches something off, such as
   a tag list emptied of all but one tag, is still a value other than the default: drop the
   field, or keep its cost at weight 0.
 
@@ -462,8 +465,7 @@ The fields each use case checks (`models.parameter_uses(model)` lists the ones a
 | | subject `avoided_periods`, `preferred_periods` ([]) | `avoided_period_cost`, `non_preferred_period_cost` |
 | | course `max_periods_per_day` (1), `block_periods` (0 or 1) | `course_max_periods_per_day_cost`, `block_adjacency_cost` |
 | semiconductor scheduling | machine `minimum_batch_size` (1) | `min_batch_size_cost` |
-| | lot `max_cycle_time` (None), `priority` (1) | `max_cycle_time_cost`, `weighted_tardiness_cost` |
-| | operation `max_queue_time` (None), option `preference_cost` (0) | `max_queue_time_cost`, `machine_preference_cost` |
+| | lot `max_cycle_time` (None), operation `max_queue_time` (None) | `max_cycle_time_cost`, `max_queue_time_cost` |
 | sports league scheduling | match `classic_match`, round `weekend_or_holiday` (False) | `workday_classic_matches_cost` |
 | | `distance_to_team` ([]) | any of the five hop costs |
 | task assigning | task type `required_skills` ([]) | `required_skill_cost` |

@@ -995,7 +995,7 @@ def solve_request(
     approximates. Ignored for a single start.
 
     A request that sets a parameter whose costs its constraints leave out is refused with
-    ValueError (`parameter_uses`): the solve would ignore it. ``es.solve`` on a compiled
+    ValueError (`parameter_uses`): the solve would not score it. ``es.solve`` on a compiled
     schedule is not checked."""
     if constraints is not None:
         request = _with_constraints(request, constraints)

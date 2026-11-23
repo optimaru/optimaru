@@ -185,7 +185,7 @@ def solve(
         problem = max_cut.solve(problem, constraints=get_constraints())
 
     A model that sets a parameter whose costs the constraints leave out is refused with
-    ValueError (`models.parameter_uses`): the solve would ignore it. A compiled problem is
+    ValueError (`models.parameter_uses`): the solve would not score it. A compiled problem is
     not checked.
     """
     cfg = solver_config(

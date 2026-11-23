@@ -147,7 +147,7 @@ def solve(
     The result's score then reports each term on the level the selection gave it.
 
     A model that sets a parameter whose costs the constraints leave out is refused with
-    ValueError (`models.parameter_uses`): the solve would ignore it. A compiled schedule is
+    ValueError (`models.parameter_uses`): the solve would not score it. A compiled schedule is
     not checked.
     """
     cfg = _build_config(

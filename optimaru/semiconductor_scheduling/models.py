@@ -479,7 +479,9 @@ def parameter_uses(problem: SemiconductorScheduleModel) -> list[ParameterUse]:
     costs (`optimaru._constraint.require_costs`); the table is in docs/use-cases/README.md
     ("Parameters and their costs"). What the decoder builds into every schedule (release
     times, downtime, capacities, batch families, setups, transport, minimum queue times,
-    pins) is not here: it holds whatever the constraints are."""
+    pins) is not here: it holds whatever the constraints are. Nor are a lot's `priority` and an
+    option's `preference_cost`: the decoder's dispatch order and default machine read them,
+    whatever the constraints."""
     uses = []
     for machine in problem.machines:
         if machine.minimum_batch_size != 1:
@@ -487,14 +489,10 @@ def parameter_uses(problem: SemiconductorScheduleModel) -> list[ParameterUse]:
     for lot in problem.lots:
         if lot.max_cycle_time is not None:
             uses.append(ParameterUse(f"lot {lot.id}", "max_cycle_time", None, ("max_cycle_time_cost",)))
-        if lot.priority != 1:
-            uses.append(ParameterUse(f"lot {lot.id}", "priority", 1, ("weighted_tardiness_cost",)))
         for operation in lot.operations:
             where = f"operation {lot.id}/{operation.id}"
             if operation.max_queue_time is not None:
                 uses.append(ParameterUse(where, "max_queue_time", None, ("max_queue_time_cost",)))
-            if any(option.preference_cost for option in operation.eligible_machines):
-                uses.append(ParameterUse(where, "preference_cost", 0, ("machine_preference_cost",)))
     return uses
 
 

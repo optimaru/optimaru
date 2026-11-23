@@ -160,7 +160,7 @@ def solve(
         solved = knapsack.solve(problem, constraints=get_constraints())
 
     A model that sets a parameter whose costs the constraints leave out is refused with
-    ValueError (`models.parameter_uses`): the solve would ignore it. An engine object is
+    ValueError (`models.parameter_uses`): the solve would not score it. An engine object is
     not checked.
     """
     cfg = solver_config(

@@ -426,7 +426,7 @@ def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSoluti
     """Solve a routing request end-to-end and return the pydantic solution.
 
     A parameter set away from its default whose costs the constraints leave out is refused
-    with ValueError (`parameter_uses`): the solve would ignore it."""
+    with ValueError (`parameter_uses`): the solve would not score it."""
     plan = to_plan(request.model_input)
     constraints = check_parameters(
         parameter_uses(request.model_input),

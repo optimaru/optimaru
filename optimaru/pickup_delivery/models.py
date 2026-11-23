@@ -517,7 +517,7 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
     """Solve a JSON-friendly request with the metaheuristic backend.
 
     A parameter set away from its default whose costs the constraints leave out is refused
-    with ValueError (`parameter_uses`): the solve would ignore it."""
+    with ValueError (`parameter_uses`): the solve would not score it."""
     plan = to_plan(request.model_input, name=request.name or "plan")
     constraints = check_parameters(
         parameter_uses(request.model_input),

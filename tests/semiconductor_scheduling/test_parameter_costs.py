@@ -25,9 +25,7 @@ def test_the_default_selection_takes_every_parameter():
     assert {use.field for use in parameter_uses(problem())} == {
         "minimum_batch_size",
         "max_cycle_time",
-        "priority",
         "max_queue_time",
-        "preference_cost",
     }
     fab.solve(problem(), **QUICK)
 
@@ -37,9 +35,7 @@ def test_the_default_selection_takes_every_parameter():
     [
         ("minimum_batch_size", "min_batch_size_cost"),
         ("max_cycle_time", "max_cycle_time_cost"),
-        ("priority", "weighted_tardiness_cost"),
         ("max_queue_time", "max_queue_time_cost"),
-        ("preference_cost", "machine_preference_cost"),
     ],
 )
 def test_a_selection_without_the_cost_is_refused(field, cost):
@@ -65,3 +61,11 @@ def test_a_missing_cost_is_fine_when_its_parameter_is_unset():
     model = problem()
     machines = [m.model_copy(update={"minimum_batch_size": 1}) for m in model.machines]
     fab.solve(model.model_copy(update={"machines": machines}), constraints=without("min_batch_size_cost"), **QUICK)
+
+
+def test_priority_and_preference_cost_need_no_cost():
+    # The decoder dispatches by priority and picks the preferred machine first, whatever the costs.
+    picks = [
+        spec for spec in get_constraints() if spec.name not in ("weighted_tardiness_cost", "machine_preference_cost")
+    ]
+    fab.solve(problem(), constraints=picks, **QUICK)
