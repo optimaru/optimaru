@@ -11,11 +11,11 @@
 
 #include "fab/model/decoder.hpp"
 #include "fab/score/incremental_calculator.hpp"
-#include "fab/moves/priority_swap.hpp"
+#include "fab/search/moves/priority_swap.hpp"
 #include "fab/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/accept/acceptors.hpp"
+#include "optimaru/search/accept/acceptors.hpp"
 
 namespace fab {
 

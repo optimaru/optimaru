@@ -13,8 +13,8 @@
 
 #include "pdp/constraints.hpp"
 #include "pdp/score/incremental_calculator.hpp"
-#include "pdp/moves/request_insertion.hpp"
-#include "pdp/moves/request_moves.hpp"
+#include "pdp/search/moves/request_insertion.hpp"
+#include "pdp/search/moves/request_moves.hpp"
 #include "pdp/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
@@ -61,7 +61,7 @@ bool pairIntact(const PdpRoutePlan& plan, const optimaru::OperatorContext<PdpRou
 //
 // A relocate takes its positions from nearby stops rather than from a scan of
 // every slot pair: placing a request at its cheapest slot is what the request
-// moves (pdp/moves/request_moves.hpp) do. This move is here for the first two tiers.
+// moves (pdp/search/moves/request_moves.hpp) do. This move is here for the first two tiers.
 //
 // It moves one request, so a request of a group (Delivery::groupIndex) only
 // goes where another request of its group rides: it leaves the pool to join

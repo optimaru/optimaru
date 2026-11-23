@@ -243,7 +243,7 @@ The solution has the **sequence** shape; the domain solver that configures the
 engine is `optimaru/vehicle_routing/cpp/vrp/solver.hpp` + `optimaru/vehicle_routing/cpp/vrp/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
-(weights in `Solver::Config`). The one domain move is `groupRuinRecreate` in `optimaru/vehicle_routing/cpp/vrp/moves/group_moves.cpp` (on the insertion scan of `visit_insertion.cpp`), registered for plans with [visit groups](#visit-groups) — use it as a template. A new move is a
+(weights in `Solver::Config`). The one domain move is `groupRuinRecreate` in `optimaru/vehicle_routing/cpp/vrp/search/moves/group_moves.cpp` (on the insertion scan of `visit_insertion.cpp`), registered for plans with [visit groups](#visit-groups) — use it as a template. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `optimaru/vehicle_routing/cpp/vrp/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.

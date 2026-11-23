@@ -16,7 +16,7 @@
 #include "optimaru/settings.hpp"
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/model/element_index.hpp"
-#include "optimaru/ruin_recreate/greedy_repair.hpp"
+#include "optimaru/search/ruin_recreate/greedy_repair.hpp"
 #include "optimaru/testing/preview_parity.hpp"
 #include "vrp/model/demo_data.hpp"
 #include "vrp/model/domain.hpp"

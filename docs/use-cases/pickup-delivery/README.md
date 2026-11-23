@@ -447,7 +447,7 @@ The solution has the **sequence** shape; the domain solver that configures the
 engine is `optimaru/pickup_delivery/cpp/pdp/solver.hpp` + `optimaru/pickup_delivery/cpp/pdp/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
-(weights in `Solver::Config`). `PairRelocateMove` / `PairExchangeMove` (move a pickup together with its drop-off) and the `PairRuin` ruin operator are defined in `optimaru/pickup_delivery/cpp/pdp/solver.cpp`, the request moves in `optimaru/pickup_delivery/cpp/pdp/moves/request_moves.cpp` (on the insertion scan of `request_insertion.cpp`) — use them as templates. A new move is a
+(weights in `Solver::Config`). `PairRelocateMove` / `PairExchangeMove` (move a pickup together with its drop-off) and the `PairRuin` ruin operator are defined in `optimaru/pickup_delivery/cpp/pdp/solver.cpp`, the request moves in `optimaru/pickup_delivery/cpp/pdp/search/moves/request_moves.cpp` (on the insertion scan of `request_insertion.cpp`) — use them as templates. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `optimaru/pickup_delivery/cpp/pdp/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.

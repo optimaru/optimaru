@@ -64,7 +64,7 @@ The solution has the **assignment** shape; the domain solver that configures the
 engine is `optimaru/school_timetabling/cpp/st/canonical_solver.hpp` + `optimaru/school_timetabling/cpp/st/canonical_solver.cpp` (the default canonical model; `solver.hpp` is the six-constraint quickstart model).
 
 **Adding a move.** The engine already mixes change / swap moves
-(weights in `Solver::Config`). `SmartClassSwapMove`, `ReassignMove` and `UnassignMove` live in `optimaru/school_timetabling/cpp/st/moves/` and are registered in `optimaru/school_timetabling/cpp/st/canonical_solver.cpp` — add a new move as another file there. A new move is a
+(weights in `Solver::Config`). `SmartClassSwapMove`, `ReassignMove` and `UnassignMove` live in `optimaru/school_timetabling/cpp/st/search/moves/` and are registered in `optimaru/school_timetabling/cpp/st/canonical_solver.cpp` — add a new move as another file there. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `optimaru/school_timetabling/cpp/st/canonical_solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.

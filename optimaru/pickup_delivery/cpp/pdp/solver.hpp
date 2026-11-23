@@ -10,7 +10,7 @@
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/select/schemes.hpp"
+#include "optimaru/search/select/schemes.hpp"
 #include "optimaru/solver_config.hpp"
 
 namespace pdp {
@@ -21,7 +21,7 @@ namespace pdp {
 // The same engine as vehicle-routing, plus the operators a pickup-and-delivery
 // problem needs: ones whose unit is the request, not the stop.
 //
-//   * The request moves (pdp/moves/request_moves.hpp) — requestRuinRecreate takes
+//   * The request moves (pdp/search/moves/request_moves.hpp) — requestRuinRecreate takes
 //     requests out of their routes and puts each back, pickup and dropoff
 //     together, at its cheapest feasible slot pair; bundleRelocate and
 //     bundleExchange carry several requests between two routes in one step.
@@ -106,7 +106,7 @@ public:
         // pull one back out — how the medium level gets optimized at all.
         double pair_assignment_probability = 0.1;
 
-        // --- request-level moves (pdp/moves/request_moves.hpp) ---
+        // --- request-level moves (pdp/search/moves/request_moves.hpp) ---
         // requestRuinRecreate: take up to request_ruin_max_requests requests
         // out and reinsert each at its cheapest feasible slot pair (in random
         // order, or by regret_k; blink_rate applies). A request of a group

@@ -7,8 +7,8 @@ add_library(vrp_core
     vrp/score/incremental_calculator.cpp
     vrp/solver.cpp
     vrp/model/demo_data.cpp
-    vrp/moves/visit_insertion.cpp
-    vrp/moves/group_moves.cpp
+    vrp/search/moves/visit_insertion.cpp
+    vrp/search/moves/group_moves.cpp
 )
 target_include_directories(vrp_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(vrp_core PUBLIC optimaru)
@@ -33,7 +33,7 @@ target_link_libraries(vrp_plugin_test PRIVATE vrp_core)
 target_compile_options(vrp_plugin_test PRIVATE -Wall -Wextra)
 
 # Visit groups: the insertion scan, the order of a group's visits and the group
-# operator (vrp/moves/visit_insertion.hpp, vrp/moves/group_moves.hpp).
+# operator (vrp/search/moves/visit_insertion.hpp, vrp/search/moves/group_moves.hpp).
 add_executable(vrp_group_moves_test ${OPTIMARU_TESTS_DIR}/vehicle_routing/cpp/vrp_group_moves_test.cpp)
 target_link_libraries(vrp_group_moves_test PRIVATE vrp_core)
 target_compile_options(vrp_group_moves_test PRIVATE -Wall -Wextra)

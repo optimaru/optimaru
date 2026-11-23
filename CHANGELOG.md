@@ -6,6 +6,17 @@
   of the repository instead of `optimaru/cpp/optimaru/`, so `optimaru/` holds the Python package and
   its use cases. Includes stay `#include "optimaru/..."`, and nothing changes in the installed
   package or its import paths; a build from source reads the headers from the new place.
+- **Source layout: the parts of local search live under `search/`.** In the engine,
+  `core/optimaru/` keeps `search/local_search.hpp` and `search/operators.hpp` and now also
+  holds what the step loop draws on: `search/moves/`, `search/ruin_recreate/`, `search/accept/`
+  and `search/select/`, which were folders of their own next to `search/`. `construct/`, `stop/`,
+  `score/` and `model/` stay where they were. A use case files its own moves and acceptors the
+  same way: `<ns>/search/moves/` and `<ns>/search/accept/` (bin packing, knapsack,
+  pickup-delivery, project job scheduling, school timetabling, semiconductor scheduling and
+  vehicle routing have them). Nothing changes in the Python package or in what the solvers do; C++
+  that includes these headers follows the new paths (`"optimaru/moves/list_move.hpp"` is now
+  `"optimaru/search/moves/list_move.hpp"`, `"vrp/moves/group_moves.hpp"` is
+  `"vrp/search/moves/group_moves.hpp"`).
 
 ## 0.6.1
 

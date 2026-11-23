@@ -21,7 +21,7 @@
 //   (g) the parallel multi-start returns a consistent best solution
 //   (h) compaction is score-neutral and leaves contiguous labels
 //   (i) the fact checks (capacity, ids, weights, conflicts, bin range)
-//   (j) the macro moves (bp/moves/moves.hpp): RepackMove empties a bin that
+//   (j) the macro moves (bp/search/moves/moves.hpp): RepackMove empties a bin that
 //       EmptyBinMove can only empty into a clash, with and without partner
 //       bins; driven by hand through the engine's move protocol for
 //       thousands of applied and undone moves, the incremental score and
@@ -32,7 +32,7 @@
 //       a bin, fills one, trades between two full bins and finds no trade
 //       where there is none, and never adds a hard violation on a plain
 //       instance
-//   (k) FillLateAcceptance (bp/accept/fill_late_acceptance.hpp): a step that keeps
+//   (k) FillLateAcceptance (bp/search/accept/fill_late_acceptance.hpp): a step that keeps
 //       the score is taken when the fill does not fall and about one time
 //       in eight when it does, a refusal leaves the acceptor's copy as it
 //       was, a step that changes the score follows late acceptance, an
@@ -53,9 +53,9 @@
 
 #include "bp/construct/construction.hpp"
 #include "bp/model/domain.hpp"
-#include "bp/accept/fill_late_acceptance.hpp"
+#include "bp/search/accept/fill_late_acceptance.hpp"
 #include "bp/score/incremental_calculator.hpp"
-#include "bp/moves/moves.hpp"
+#include "bp/search/moves/moves.hpp"
 #include "bp/score/score_calculator.hpp"
 #include "bp/solver.hpp"
 #include "optimaru/model/editor.hpp"

@@ -14,8 +14,8 @@ namespace bp {
 // the domain construction (best-fit decreasing, bp/construct/construction.hpp), then
 // optimaru::Solver<BinPackingProblem> with late acceptance over the built-in
 // change/swap moves, the domain's EmptyBinMove, RepackMove and TradeMove
-// (bp/moves/moves.hpp), ties between equal scores decided by how full the bins are
-// (bp/accept/fill_late_acceptance.hpp) and the engine's adaptive ruin-and-recreate
+// (bp/search/moves/moves.hpp), ties between equal scores decided by how full the bins are
+// (bp/search/accept/fill_late_acceptance.hpp) and the engine's adaptive ruin-and-recreate
 // (ALNS).
 class Solver {
 public:
@@ -60,7 +60,7 @@ public:
         double custom_move_probability = 1.0;
 
         // EmptyBinMove: empty one light bin in a single move (see
-        // bp/moves/moves.hpp). usedBinsCost is a step function no single-item move
+        // bp/search/moves/moves.hpp). usedBinsCost is a step function no single-item move
         // can cross, so without it the search rarely closes a bin.
         bool empty_bin_moves = true;
         // EmptyBinMove and RepackMove empty one of this many lightest
@@ -68,7 +68,7 @@ public:
         // TradeMove takes its first bin from them every second time.
         int empty_bin_candidates = 3;
 
-        // RepackMove (bp/moves/moves.hpp): empty a light bin together with 1 to
+        // RepackMove (bp/search/moves/moves.hpp): empty a light bin together with 1 to
         // repack_partner_bins other light bins and put their items back best
         // fit decreasing, only where they add no capacity, colour or
         // conflict violation. EmptyBinMove checks the capacity only, so on
@@ -77,7 +77,7 @@ public:
         bool repack_moves = true;
         int repack_partner_bins = 2;
 
-        // TradeMove (bp/moves/moves.hpp): trade up to two items of one bin for up
+        // TradeMove (bp/search/moves/moves.hpp): trade up to two items of one bin for up
         // to two of another so that the fuller of the two gets fuller, or,
         // when no trade does that, so that the two keep their loads with
         // other items. usedBinsCost counts bins only, so this is the move
@@ -86,7 +86,7 @@ public:
 
         // Late acceptance takes a step that keeps the score when it does not
         // lower the sum of the squared bin loads, and otherwise one time in
-        // eight (bp/accept/fill_late_acceptance.hpp); false = it takes every such
+        // eight (bp/search/accept/fill_late_acceptance.hpp); false = it takes every such
         // step, as plain late acceptance does. Runs that end above the
         // capacity bound on Falkenauer's 24 sampled instances, two seeds
         // each, 10 s (benchmarks/bin-packing, 2026-11-12):

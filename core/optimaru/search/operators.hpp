@@ -12,7 +12,7 @@
 #include "optimaru/model/editor.hpp"
 // The plugin point only, never the select/schemes.hpp umbrella: that
 // one includes settings.hpp, which includes this header's scheme back.
-#include "optimaru/select/scheme.hpp"
+#include "optimaru/search/select/scheme.hpp"
 
 namespace optimaru {
 

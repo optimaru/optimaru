@@ -238,7 +238,7 @@ The solution has the **assignment** shape (the composite rank x slot value); the
 
 **Adding a move.** The change move's value comes from the value recommender in
 `optimaru/semiconductor_scheduling/cpp/fab/solver.cpp` (a machine switch or a priority shift); `PrioritySwapMove`
-(`optimaru/semiconductor_scheduling/cpp/fab/moves/priority_swap.hpp`) is a custom `optimaru::MoveOperator`
+(`optimaru/semiconductor_scheduling/cpp/fab/search/moves/priority_swap.hpp`) is a custom `optimaru::MoveOperator`
 registered with `engine.add_move_operator(...)` — use it as the template.
 
 **Changing the construction.** The start state is built before the engine runs

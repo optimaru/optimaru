@@ -263,7 +263,7 @@ optimaru/                          the Python package (pip install optimaru)
     └── cpp/
         ├── bindings.cpp           the pybind11 module optimaru.<use case>._core
         ├── <ns>/                  the core library, headers and sources side by side:
-        │                          solver, model/, score/, constraints/, moves/
+        │                          solver, model/, score/, constraints/, search/
         ├── main.cpp               the demo
         └── CMakeLists.txt         core library, demo and C++ tests
 tests/                             mirrors the package
@@ -321,29 +321,30 @@ core/optimaru/
 │                                 repeated instances, info() catalog
 ├── construct/                    the initial solution: first fit (decreasing),
 │                                 cheapest insertion
-├── accept/                       Acceptor and one file per rule: hill climbing,
-│                                 late acceptance, entity tabu, simulated
-│                                 annealing, great deluge, step counting,
-│                                 record-to-record travel; history_stages, late
-│                                 acceptance in stages of growing history
-├── select/                       adaptive operator selection: MoveOutcome,
-│                                 roulette wheel, segmented roulette, alpha-UCB,
-│                                 uniform
 ├── stop/                         when a solve ends (StopCondition) and the
 │                                 throttle long-running moves consult it through
-├── search/                       the step loop (local_search) and the plugin
-│                                 points for custom operators (MoveOperator /
-│                                 RuinOperator)
-├── moves/                        every move the step loop draws: the sequence
-│                                 moves (list_move) and their previews, descent,
-│                                 ejection chain, iterated local search, route
-│                                 elimination
-├── ruin_recreate/                one destroy-and-repair unit: the ruin operators
-│                                 (random, related, worst, SISR, route), the
-│                                 greedy / regret-k recreate, and
-│                                 ruin_recreate_move, which applies them as an
-│                                 ordinary move (the stagnation kick uses the
-│                                 same parts)
+├── search/                       local search: the step loop and its parts
+│   ├── local_search.hpp          the step loop
+│   ├── operators.hpp             the plugin points for custom operators
+│   │                             (MoveOperator / RuinOperator)
+│   ├── moves/                    every move the step loop draws: the sequence
+│   │                             moves (list_move) and their previews, descent,
+│   │                             ejection chain, iterated local search, route
+│   │                             elimination
+│   ├── ruin_recreate/            one destroy-and-repair unit: the ruin operators
+│   │                             (random, related, worst, SISR, route), the
+│   │                             greedy / regret-k recreate, and
+│   │                             ruin_recreate_move, which applies them as an
+│   │                             ordinary move (the stagnation kick uses the
+│   │                             same parts)
+│   ├── accept/                   Acceptor and one file per rule: hill climbing,
+│   │                             late acceptance, entity tabu, simulated
+│   │                             annealing, great deluge, step counting,
+│   │                             record-to-record travel; history_stages, late
+│   │                             acceptance in stages of growing history
+│   └── select/                   adaptive operator selection: MoveOutcome,
+│                                 roulette wheel, segmented roulette, alpha-UCB,
+│                                 uniform
 ├── python/                       pybind11 helpers: constraint specs ->
 │                                 ConstraintAssembly, constraint_info(),
 │                                 constraint_costs(), names, the level guard,

@@ -13,10 +13,10 @@
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
 #include "vrp/constraints.hpp"
-#include "vrp/moves/group_moves.hpp"
+#include "vrp/search/moves/group_moves.hpp"
 #include "vrp/score/incremental_calculator.hpp"
 #include "vrp/score/score_calculator.hpp"
-#include "vrp/moves/visit_insertion.hpp"
+#include "vrp/search/moves/visit_insertion.hpp"
 
 namespace vrp {
 

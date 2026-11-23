@@ -22,7 +22,7 @@
 #include "optimaru/construct/construction.hpp"
 #include "optimaru/model/neighborhoods.hpp"
 #include "optimaru/search/local_search.hpp"
-#include "optimaru/accept/acceptors.hpp"
+#include "optimaru/search/accept/acceptors.hpp"
 #include "optimaru/stop/stop_condition.hpp"
 #include "optimaru/worker_threads.hpp"
 #include "optimaru/search/operators.hpp"

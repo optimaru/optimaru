@@ -16,7 +16,7 @@
 // includes this header back, so including it here would be a cycle. Which
 // side of it wins depends on include order, so it built for some translation
 // units and left SelectionScheme undefined for others.
-#include "optimaru/select/scheme.hpp"
+#include "optimaru/search/select/scheme.hpp"
 
 namespace optimaru {
 

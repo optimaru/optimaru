@@ -8,10 +8,10 @@
 
 #include "st/score/canonical_incremental_calculator.hpp"
 #include "st/score/canonical_score_calculator.hpp"
-#include "st/moves/hot_source.hpp"
-#include "st/moves/reassign.hpp"
-#include "st/moves/smart_class_swap.hpp"
-#include "st/moves/unassign.hpp"
+#include "st/search/moves/hot_source.hpp"
+#include "st/search/moves/reassign.hpp"
+#include "st/search/moves/smart_class_swap.hpp"
+#include "st/search/moves/unassign.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
 
