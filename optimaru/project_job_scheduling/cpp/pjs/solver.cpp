@@ -9,7 +9,7 @@
 #include <utility>
 
 #include "pjs/score/incremental_calculator.hpp"
-#include "pjs/moves/moves.hpp"
+#include "pjs/search/moves/moves.hpp"
 #include "pjs/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"

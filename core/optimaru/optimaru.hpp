@@ -9,11 +9,13 @@
 //   model/      how the engine reads and writes a solution
 //   score/      the score, its levels and the incremental objectives
 //   construct/  the initial solution
-//   accept/     acceptance rules          select/  adaptive operator selection
 //   stop/       when a solve ends
-//   search/         the step loop, and the plugin points for custom operators
-//   moves/          every move the step loop can draw
-//   ruin_recreate/  ruin operators + recreate: one destroy-and-repair unit
+//   search/     local search: the step loop and the plugin points for custom
+//               operators, and its parts:
+//     moves/          every move the step loop can draw
+//     ruin_recreate/  ruin operators + recreate: one destroy-and-repair unit
+//     accept/         acceptance rules
+//     select/         adaptive operator selection
 
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/score.hpp"

@@ -97,7 +97,7 @@ offsets on every constraint (one term per global total).
 The construction places the allocations one after another; late acceptance then works with
 the engine's change / swap moves on single values (a mode and a delay), its
 ruin-and-recreate kicks, and one move of the domain, `SerialScheduleMove`
-(`serial_schedule_moves`, in `optimaru/project_job_scheduling/cpp/pjs/moves/moves.hpp`).
+(`serial_schedule_moves`, in `optimaru/project_job_scheduling/cpp/pjs/search/moves/moves.hpp`).
 
 A delay counts from the end of an allocation's predecessors, so one changed delay shifts
 every successor. In a schedule whose allocations already start as early as they can, almost

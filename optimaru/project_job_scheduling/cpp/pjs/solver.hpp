@@ -40,7 +40,7 @@ public:
         // diversity. 0 disables the guidance entirely.
         double near_current_delay_probability = 0.85;
 
-        // SerialScheduleMove (pjs/moves/moves.hpp): change the order of the
+        // SerialScheduleMove (pjs/search/moves/moves.hpp): change the order of the
         // schedule and place every allocation again in that order, each as
         // early as its predecessors and the renewable resources allow.
         bool serial_schedule_moves = true;

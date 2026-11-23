@@ -10,9 +10,9 @@
 #include <vector>
 
 #include "bp/construct/construction.hpp"
-#include "bp/accept/fill_late_acceptance.hpp"
+#include "bp/search/accept/fill_late_acceptance.hpp"
 #include "bp/score/incremental_calculator.hpp"
-#include "bp/moves/moves.hpp"
+#include "bp/search/moves/moves.hpp"
 #include "bp/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
@@ -45,8 +45,8 @@ void prepareSolve(BinPackingProblem& problem) {
 }
 
 // Shared engine wiring for both solve() overloads: late-acceptance local
-// search (+ ALNS kicks), plus the domain's macro moves (bp/moves/moves.hpp), its
-// rule for steps that keep the score (bp/accept/fill_late_acceptance.hpp) and
+// search (+ ALNS kicks), plus the domain's macro moves (bp/search/moves/moves.hpp), its
+// rule for steps that keep the score (bp/search/accept/fill_late_acceptance.hpp) and
 // value recommender, driven by whichever calculator the caller brought (the monolithic
 // incremental one, or a plugin assembly). The engine's construction heuristic
 // finds nothing left to place: constructBins assigned every item.

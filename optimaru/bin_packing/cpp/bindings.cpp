@@ -163,7 +163,7 @@ PYBIND11_MODULE(_core, m) {
             // RepackMove, TradeMove). 1 = engine default (unrestricted).
             .def_readwrite("custom_move_probability", &Solver::Config::custom_move_probability)
             // EmptyBinMove: the domain macro move that empties one light bin in a
-            // single step (see cpp/bp/moves/moves.hpp).
+            // single step (see cpp/bp/search/moves/moves.hpp).
             .def_readwrite("empty_bin_moves", &Solver::Config::empty_bin_moves)
             .def_property(
                     "empty_bin_candidates",
@@ -175,13 +175,13 @@ PYBIND11_MODULE(_core, m) {
                     })
             // RepackMove: empty a light bin with up to repack_partner_bins other
             // light bins and re-place their items best fit decreasing without a
-            // capacity, colour or conflict clash (cpp/bp/moves/moves.hpp).
+            // capacity, colour or conflict clash (cpp/bp/search/moves/moves.hpp).
             .def_readwrite("repack_moves", &Solver::Config::repack_moves)
             // TradeMove: a trade of up to two items a side between two bins that
-            // leaves the fuller one fuller (cpp/bp/moves/moves.hpp).
+            // leaves the fuller one fuller (cpp/bp/search/moves/moves.hpp).
             .def_readwrite("trade_moves", &Solver::Config::trade_moves)
             // Steps that keep the score: taken when the bins get no less full,
-            // else one time in eight (cpp/bp/accept/fill_late_acceptance.hpp).
+            // else one time in eight (cpp/bp/search/accept/fill_late_acceptance.hpp).
             .def_readwrite("fill_tie_break", &Solver::Config::fill_tie_break)
             .def_property(
                     "repack_partner_bins",

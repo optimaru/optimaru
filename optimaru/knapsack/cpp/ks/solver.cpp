@@ -10,7 +10,7 @@
 
 #include "ks/construct/construction.hpp"
 #include "ks/score/incremental_calculator.hpp"
-#include "ks/moves/moves.hpp"
+#include "ks/search/moves/moves.hpp"
 #include "ks/score/score_calculator.hpp"
 #include "optimaru/solver.hpp"
 #include "optimaru/settings.hpp"
@@ -72,7 +72,7 @@ bool construct(KnapsackProblem& problem) {
 }
 
 // One single-start search of a constructed problem, with the domain's macro
-// move (ks/moves/moves.hpp) registered, driven by whichever calculator the caller
+// move (ks/search/moves/moves.hpp) registered, driven by whichever calculator the caller
 // brought. Returns the engine's best score.
 Score runEngine(const Solver::Config& config, KnapsackProblem& problem,
                 optimaru::Objective<KnapsackProblem>& calculator, bool seeded) {

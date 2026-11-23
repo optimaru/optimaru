@@ -8,7 +8,7 @@
 
 #include "optimaru/model/editor.hpp"
 #include "optimaru/settings.hpp"
-#include "optimaru/select/schemes.hpp"
+#include "optimaru/search/select/schemes.hpp"
 #include "optimaru/score/decomposed_objective.hpp"
 #include "optimaru/solver_config.hpp"
 #include "vrp/model/domain.hpp"
@@ -38,7 +38,7 @@ namespace vrp {
 // together or all wait, in an order that respects Visit::afterVisitIndices.
 // When a plan has groups, they are placed whole before the engine's
 // construction runs and a group operator joins the move mix
-// (vrp/moves/group_moves.hpp), which carries a group between vehicles as one unit.
+// (vrp/search/moves/group_moves.hpp), which carries a group between vehicles as one unit.
 // The two constraints are scored by visitGroupCost and visitOrderCost, which belong
 // to the constraint assembly, so solve(plan) hands a plan with groups to the
 // default assembly instead of scoring it on the four core constraints.
@@ -107,7 +107,7 @@ public:
 
         // --- adaptive ruin & recreate (ALNS) ------------------------------
         // Search strategies registered as move operators from
-        // core/optimaru/moves/ and ruin_recreate/.
+        // core/optimaru/search/moves/ and ruin_recreate/.
         // The weights are deliberately small: all three cost far more than one
         // sampled move (a descent sweep scans a whole list pair, the other two
         // run a repair), so they earn their keep at a few percent of steps and
@@ -172,7 +172,7 @@ public:
         int iterated_local_search_max_segment = 1;
         std::int64_t iterated_local_search_max_evaluations = 5000000;
 
-        // --- visit groups (vrp/moves/group_moves.hpp) -----------------------------
+        // --- visit groups (vrp/search/moves/group_moves.hpp) -----------------------------
         // groupRuinRecreate: take a group out, alone or with up to
         // group_ruin_max_visits more visits (the groups and single visits of
         // nearby stops, or other groups), and put each unit back whole at its

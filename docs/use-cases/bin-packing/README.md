@@ -143,9 +143,9 @@ monolithic calculator. The CP-SAT reference takes integral offsets.
 - `incremental_calculator` — before/after hooks, O(1) plus the moved item's conflict
   partners per move
 - `construction` — best-fit decreasing around a seed, compaction
-- `optimaru/bin_packing/cpp/bp/moves/moves.hpp` — the domain's macro moves, `EmptyBinMove`, `RepackMove`
+- `optimaru/bin_packing/cpp/bp/search/moves/moves.hpp` — the domain's macro moves, `EmptyBinMove`, `RepackMove`
   and `TradeMove` (header-only, so the tests drive them directly)
-- `optimaru/bin_packing/cpp/bp/accept/fill_late_acceptance.hpp` — late acceptance with the rule for a
+- `optimaru/bin_packing/cpp/bp/search/accept/fill_late_acceptance.hpp` — late acceptance with the rule for a
   step that keeps the score (`fill_tie_break`)
 - `solver` — engine wrapper (construction + Late Acceptance + the macro moves + adaptive
   ruin & recreate, parallel starts)
@@ -181,7 +181,7 @@ raw costs by hand, the catalog, and the macro-move walk on the plugin path.
 
 Best-fit decreasing builds the start; late acceptance then works on it with the
 engine's change / swap moves, its adaptive ruin-and-recreate kicks, and three macro
-moves of the domain (`optimaru/bin_packing/cpp/bp/moves/moves.hpp`). They exist because
+moves of the domain (`optimaru/bin_packing/cpp/bp/search/moves/moves.hpp`). They exist because
 `used_bins_cost` is a step function: a bin only stops costing when its last item
 leaves, which no single change can show the acceptor.
 
@@ -207,7 +207,7 @@ of bins has the same score, and plain late acceptance takes every step from one 
 next, so the change and swap moves undo what `TradeMove` gains. With `fill_tie_break`
 (the default) such a step is taken when it does not lower the *fill*, the sum of the
 squared bin loads, and otherwise one time in eight
-(`optimaru/bin_packing/cpp/bp/accept/fill_late_acceptance.hpp`). The fill is not part
+(`optimaru/bin_packing/cpp/bp/search/accept/fill_late_acceptance.hpp`). The fill is not part
 of the score: the score, `best_score_limit`, the unimproved limits and `on_new_best` see
 the number of bins alone. A step that changes the score is judged as before.
 
@@ -274,7 +274,7 @@ engine is `optimaru/bin_packing/cpp/bp/solver.hpp` + `optimaru/bin_packing/cpp/b
 use). `EmptyBinMove` (moves every item of a light bin into the other bins in one step),
 `RepackMove` (re-places the items of a few light bins without a clash) and `TradeMove`
 (trades items between two bins so that one gets fuller) are defined
-in `optimaru/bin_packing/cpp/bp/moves/moves.hpp` and registered in `optimaru/bin_packing/cpp/bp/solver.cpp` (`runEngine`) —
+in `optimaru/bin_packing/cpp/bp/search/moves/moves.hpp` and registered in `optimaru/bin_packing/cpp/bp/solver.cpp` (`runEngine`) —
 use them as the template, and give a new move a walk in `bp_test` (j). A new move is an `optimaru::MoveOperator<…>` registered with
 `engine.add_move_operator(...)` next to the engine construction in `optimaru/bin_packing/cpp/bp/solver.cpp`;
 a ruin for LNS is a `RuinOperator` registered with `engine.add_ruin_operator(...)`.

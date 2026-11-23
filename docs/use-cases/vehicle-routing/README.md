@@ -170,7 +170,7 @@ after (`constructGroups`); a group no vehicle takes is parked unassigned, whole.
 A group partly on a caller's `initial_route` is completed on that vehicle; when
 the rest does not fit there, it waits and the group starts split, for the search
 to mend.
-A domain move operator, `groupRuinRecreate` (`vrp/moves/group_moves.hpp`), then takes a
+A domain move operator, `groupRuinRecreate` (`vrp/search/moves/group_moves.hpp`), then takes a
 group out of its route, alone or with up to `group_ruin_max_visits` more visits
 (the groups and single visits of nearby stops, or other groups), and puts each
 unit back on one vehicle, the larger units first. That is how a group changes
@@ -243,7 +243,7 @@ The solution has the **sequence** shape; the domain solver that configures the
 engine is `optimaru/vehicle_routing/cpp/vrp/solver.hpp` + `optimaru/vehicle_routing/cpp/vrp/solver.cpp`.
 
 **Adding a move.** The engine already mixes relocate / swap / 2-opt / Or-opt / 2-opt\* tail swap moves
-(weights in `Solver::Config`). The one domain move is `groupRuinRecreate` in `optimaru/vehicle_routing/cpp/vrp/moves/group_moves.cpp` (on the insertion scan of `visit_insertion.cpp`), registered for plans with [visit groups](#visit-groups) — use it as a template. A new move is a
+(weights in `Solver::Config`). The one domain move is `groupRuinRecreate` in `optimaru/vehicle_routing/cpp/vrp/search/moves/group_moves.cpp` (on the insertion scan of `visit_insertion.cpp`), registered for plans with [visit groups](#visit-groups) — use it as a template. A new move is a
 `optimaru::MoveOperator<…>` registered with `engine.add_move_operator(...)` next
 to the engine construction in `optimaru/vehicle_routing/cpp/vrp/solver.cpp`; a ruin for LNS is a
 `RuinOperator` registered with `engine.add_ruin_operator(...)`.

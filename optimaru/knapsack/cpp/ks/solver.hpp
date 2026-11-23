@@ -15,7 +15,7 @@ namespace ks {
 // incremental score calculator and delegates the search to
 // optimaru::Solver<KnapsackProblem> — late acceptance over the built-in assignment
 // moves (a change move is a flip, a swap move trades a selected item for an
-// unselected one) and the domain's CoreRepackMove (ks/moves/moves.hpp), with the
+// unselected one) and the domain's CoreRepackMove (ks/search/moves/moves.hpp), with the
 // engine's adaptive ruin-and-recreate (ALNS) on stagnation.
 class Solver {
 public:
@@ -62,7 +62,7 @@ public:
         double nearby_probability = 0.0;
         int nearby_size = 20;
 
-        // CoreRepackMove (ks/moves/moves.hpp): re-decide a window of the density
+        // CoreRepackMove (ks/search/moves/moves.hpp): re-decide a window of the density
         // order around the break item exactly, by dynamic programming over
         // the load. At the capacity boundary the improving exchanges are two
         // for one or larger, which no single flip or swap reaches; without it

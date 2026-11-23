@@ -13,6 +13,17 @@
   profiles, with a `travel_distance_cost` plugin; the expected-failure mark is gone, and its parity
   tests (external-solver v0.3.0's, ported, plus `tests/test_model.py` for depots and profiles) check
   it against the engine.
+- **Source layout: the parts of local search live under `search/`.** In the engine,
+  `core/optimaru/` keeps `search/local_search.hpp` and `search/operators.hpp` and now also
+  holds what the step loop draws on: `search/moves/`, `search/ruin_recreate/`, `search/accept/`
+  and `search/select/`, which were folders of their own next to `search/`. `construct/`, `stop/`,
+  `score/` and `model/` stay where they were. A use case files its own moves and acceptors the
+  same way: `<ns>/search/moves/` and `<ns>/search/accept/` (bin packing, knapsack,
+  pickup-delivery, project job scheduling, school timetabling, semiconductor scheduling and
+  vehicle routing have them). Nothing changes in the Python package or in what the solvers do; C++
+  that includes these headers follows the new paths (`"optimaru/moves/list_move.hpp"` is now
+  `"optimaru/search/moves/list_move.hpp"`, `"vrp/moves/group_moves.hpp"` is
+  `"vrp/search/moves/group_moves.hpp"`).
 
 ## 0.6.1
 

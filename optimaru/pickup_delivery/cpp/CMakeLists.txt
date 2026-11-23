@@ -5,8 +5,8 @@ add_library(pdp_core
     pdp/model/haversine.cpp
     pdp/score/score_calculator.cpp
     pdp/score/incremental_calculator.cpp
-    pdp/moves/request_insertion.cpp
-    pdp/moves/request_moves.cpp
+    pdp/search/moves/request_insertion.cpp
+    pdp/search/moves/request_moves.cpp
     pdp/solver.cpp
     pdp/model/demo_data.cpp
 )
@@ -33,7 +33,7 @@ add_executable(pdp_plugin_test ${OPTIMARU_TESTS_DIR}/pickup_delivery/cpp/pdp_plu
 target_link_libraries(pdp_plugin_test PRIVATE pdp_core)
 target_compile_options(pdp_plugin_test PRIVATE -Wall -Wextra)
 
-# Request-level search (pdp/moves/request_insertion.hpp, pdp/moves/request_moves.hpp): the
+# Request-level search (pdp/search/moves/request_insertion.hpp, pdp/search/moves/request_moves.hpp): the
 # insertion scan against a brute-force enumeration, and the request moves in a
 # solve.
 add_executable(pdp_request_moves_test

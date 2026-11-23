@@ -235,7 +235,7 @@ The solution has the **assignment** shape; the domain solver that configures the
 
 **Adding a move.** The engine already mixes flip (change) and swap moves (weights in
 `Solver::Config`) and runs ruin-and-recreate both on stagnation and as an ordinary
-move, and the domain adds `CoreRepackMove` (`optimaru/knapsack/cpp/ks/moves/moves.hpp`).
+move, and the domain adds `CoreRepackMove` (`optimaru/knapsack/cpp/ks/search/moves/moves.hpp`).
 A new move is an `optimaru::MoveOperator<…>` next to it, registered with
 `engine.add_move_operator(...)` in `optimaru/knapsack/cpp/ks/solver.cpp` (`runEngine`).
 Registered operators do not reach the engine's multi-start threads, which is why the

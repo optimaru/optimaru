@@ -17,10 +17,10 @@
 #include "vrp/constraints.hpp"
 #include "vrp/model/demo_data.hpp"
 #include "vrp/model/domain.hpp"
-#include "vrp/moves/group_moves.hpp"
+#include "vrp/search/moves/group_moves.hpp"
 #include "vrp/score/score_calculator.hpp"
 #include "vrp/solver.hpp"
-#include "vrp/moves/visit_insertion.hpp"
+#include "vrp/search/moves/visit_insertion.hpp"
 
 using namespace vrp;
 
