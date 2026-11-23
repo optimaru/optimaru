@@ -2,19 +2,20 @@
 
 Pickup/dropoff-coupled optional circuits with same-vehicle assignment,
 pickup-first precedence, running capacity, time windows, optional requests,
-and travel minimization. Routes are open by default; in optimaru 0.5 a vehicle with
-`return_to_depot=True` also drives (and is timed) back to its home. The package
-shares `optimaru.pickup_delivery.models` with the C++ backend.
+and travel minimization. A route starts at its vehicle's `start_depot` and is open unless the
+vehicle has an `end_depot`, which it then also drives (and is timed) to; every leg is driven in
+the vehicle's travel profile. The package shares `optimaru.pickup_delivery.models` with the C++
+backend.
 
-The pinned CP-SAT library (`external-solver` v0.3.0) reads the optimaru 0.5 input. The
-engine in this checkout takes depots, `start_depot` / `end_depot` and travel profiles
-instead, so the CP-SAT lane cannot run until the pin moves to a release that reads them;
-`run_case` with the `cpsat` backend raises `AttributeError` until then, and the test that
-runs it is marked to expect that.
+The model is in [`pickup_delivery_cpsat/model`](pickup_delivery_cpsat/model): external-solver
+v0.3.0's `external_solver.pickup_delivery`, kept here and ported to the optimaru 0.6 input
+(depots, `start_depot` / `end_depot`, travel profiles, and a `travel_distance_cost` plugin),
+because that library is frozen at the 0.5 input. Its plugin registry and errors still come from
+the pinned `external-solver` v0.3.0, which reads no routing input itself.
 
 ## Constraints
 
-Each plugin in [`external_solver.pickup_delivery.constraints`](https://github.com/optimaru/external-solver/blob/v0.3.0/src/external_solver/pickup_delivery/constraints.py) subclasses the engine spec of
+Each plugin in [`pickup_delivery_cpsat/model/constraints.py`](pickup_delivery_cpsat/model/constraints.py) subclasses the engine spec of
 the same name (`optimaru.pickup_delivery.constraints`) and only builds its CP-SAT expression; the
 default level and weight come from `optimaru.pickup_delivery.constraint_info()`, so the two
 solvers cannot disagree on a default. Selections use the engine's names and knobs
@@ -41,16 +42,15 @@ own terms with its own knobs, keyed `name`, `name#2`, … like the engine's
 `constraint_costs()`. Every plugin adds one term per engine unit — per vehicle, idle ones
 included (a constant 0 where the vehicle's limit is unset), never the unassigned pool,
 which the engine's route constraints do not evaluate — and the globals one term with
-their total (a constant 0 for the three structural rules), so an integral `offset` shapes
+their total (a constant 0 for the three structural constraints), so an integral `offset` shapes
 each unit exactly as the engine does, in both `clip` modes; a fractional offset is refused
 (`offset must be an integer for CP-SAT`). `max_route_radius_cost`, `vehicle_fixed_cost`
 and `min_capacity_utilization_cost` work on whole numbers here (meters and the load target
 rounded up, the fixed cost rounded), with or without an offset. `clip=False` with an offset
 is refused on hard with the engine's message (`constraint 'vehicle_capacity_cost':
-clip=False with a non-zero offset cannot be hard, ...`), the three structural rules
+clip=False with a non-zero offset cannot be hard, ...`), the three structural constraints
 included, since they stay hard; medium folds into soft, as in the engine, so it takes the
 literal formula.
 
 `catalog()` lists the plugins in `list_constraints()` order;
-external-solver's `tests/pickup_delivery/test_solve.py::test_cpsat_defaults_are_the_engine_defaults` keeps it equal to
-the engine's `constraint_info()` rows.
+`tests/test_solve.py` and `tests/test_model.py` keep it equal to the engine's `constraint_info()` rows.
