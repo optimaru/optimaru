@@ -33,6 +33,9 @@ namespace detail {
 // k-2, zero for k <= 1), so the internal distance of [b, e) is cumDist[e] -
 // cumDist[b + 1]; cumRevDist is the same for the reversed traversal. The leg
 // into a piece's first visit and out of its last are looked up per piece.
+// The legs are in the profile of the list's vehicle (the first profile for
+// the pool); a piece that lands in a vehicle of another profile has its
+// internal legs added up again in that profile, O(piece).
 struct RouteSumsContext final : optimaru::SharedConstraintContext {
     static constexpr const char* kKey = "vrp.route-sums.v1";
 
@@ -51,11 +54,11 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
         bool minEndValid = false;
     };
 
-    // What a candidate route made of pieces adds up to, home leg excluded.
+    // What a candidate route made of pieces adds up to, closing leg excluded.
     struct PieceWalk {
         std::int64_t load = 0;
         std::int64_t service = 0;
-        std::int64_t drive = 0;  // home -> first visit ... -> last visit
+        std::int64_t drive = 0;  // start depot -> first visit ... -> last visit
         Seconds minEnd = std::numeric_limits<Seconds>::max();
         int lastLocation = -1;
         bool any = false;
@@ -70,6 +73,7 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
         if (plan_ == &plan && preparedGeneration_ == generation) return;
         plan_ = &plan;
         preparedGeneration_ = generation;
+        oneProfile_ = plan.durationMatrices.size() == 1;
         lists_.resize(plan.vehicles.size() + 1);  // keeps the vectors' capacity across resets
         dirty_.assign(plan.vehicles.size() + 1, 1);
         Seconds earliestDeparture = std::numeric_limits<Seconds>::max();
@@ -107,7 +111,7 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
     }
 
     // The route `vehicleIndex` would drive holding `pieces` in order: load,
-    // service, driving from home through the last visit and, when `withMinEnd`,
+    // service, driving from the start depot through the last visit and, when `withMinEnd`,
     // the earliest deadline among its visits. O(pieces), except that the
     // the earliest deadline is one sparse-table lookup per piece; a component
     // that does not need it asks without and skips that work.
@@ -115,7 +119,8 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
                    bool withMinEnd) const {
         PieceWalk w;
         const Vehicle& vehicle = plan_->vehicles[static_cast<std::size_t>(vehicleIndex)];
-        int previousLocation = vehicle.homeLocationIndex;
+        const Matrix& drive = plan_->durationsOf(vehicle);
+        int previousLocation = vehicle.startLocationIndex;
         for (int i = 0; i < count; ++i) {
             const optimaru::ListPiece& piece = pieces[i];
             if (piece.size() <= 0) continue;
@@ -127,7 +132,8 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
                 w.load += visit.demand;
                 w.service += visit.serviceDuration;
                 if (withMinEnd) w.minEnd = std::min(w.minEnd, visit.maxEndTime);
-                w.drive += plan_->drivingTime(previousLocation, visit.locationIndex);
+                w.drive += drive[static_cast<std::size_t>(previousLocation)]
+                                [static_cast<std::size_t>(visit.locationIndex)];
                 previousLocation = visit.locationIndex;
                 w.any = true;
                 continue;
@@ -141,10 +147,14 @@ struct RouteSumsContext final : optimaru::SharedConstraintContext {
             if (withMinEnd) w.minEnd = std::min(w.minEnd, minEndOf(s, b, e));
             const int first = elements[piece.reversed ? e - 1 : b];
             const int last = elements[piece.reversed ? b : e - 1];
-            w.drive += plan_->drivingTime(
-                    previousLocation, plan_->visits[static_cast<std::size_t>(first)].locationIndex);
-            w.drive += piece.reversed ? s.cumRevDist[e] - s.cumRevDist[b + 1]
-                                      : s.cumDist[e] - s.cumDist[b + 1];
+            w.drive += drive[static_cast<std::size_t>(previousLocation)][static_cast<std::size_t>(
+                    plan_->visits[static_cast<std::size_t>(first)].locationIndex)];
+            if (oneProfile_ || profileOf(piece.list) == vehicle.profileIndex) {
+                w.drive += piece.reversed ? s.cumRevDist[e] - s.cumRevDist[b + 1]
+                                          : s.cumDist[e] - s.cumDist[b + 1];
+            } else {
+                w.drive += plan_->runLegs(drive, elements, b, e, piece.reversed);
+            }
             previousLocation = plan_->visits[static_cast<std::size_t>(last)].locationIndex;
             w.any = true;
         }
@@ -159,6 +169,12 @@ private:
                                   ? piece.begin
                                   : elementsOf(piece.list)[static_cast<std::size_t>(piece.begin)];
         return plan_->visits[static_cast<std::size_t>(visit)];
+    }
+    // The profile the sums of `list` are in: its vehicle's, the first for the pool.
+    int profileOf(int list) const {
+        return static_cast<std::size_t>(list) >= plan_->vehicles.size()
+                       ? 0
+                       : plan_->vehicles[static_cast<std::size_t>(list)].profileIndex;
     }
     const std::vector<int>& elementsOf(int list) const {
         return static_cast<std::size_t>(list) >= plan_->vehicles.size()
@@ -187,18 +203,17 @@ private:
         s.cumRevDist.assign(n + 1, 0);
         s.maxEnd.resize(n);
         s.minEndValid = false;
+        const Matrix& drive = plan_->durationMatrices[static_cast<std::size_t>(profileOf(list))];
         int previousLocation = -1;
         for (std::size_t k = 0; k < n; ++k) {
             const Visit& visit = plan_->visits[static_cast<std::size_t>(elements[k])];
             s.cumLoad[k + 1] = s.cumLoad[k] + visit.demand;
             s.cumService[k + 1] = s.cumService[k] + visit.serviceDuration;
             s.cumPenalty[k + 1] = s.cumPenalty[k] + visit.unassignedPenalty();
-            s.cumDist[k + 1] =
-                    s.cumDist[k] +
-                    (k == 0 ? 0 : plan_->drivingTime(previousLocation, visit.locationIndex));
-            s.cumRevDist[k + 1] =
-                    s.cumRevDist[k] +
-                    (k == 0 ? 0 : plan_->drivingTime(visit.locationIndex, previousLocation));
+            const auto here = static_cast<std::size_t>(visit.locationIndex);
+            const auto before = static_cast<std::size_t>(previousLocation);
+            s.cumDist[k + 1] = s.cumDist[k] + (k == 0 ? 0 : drive[before][here]);
+            s.cumRevDist[k + 1] = s.cumRevDist[k] + (k == 0 ? 0 : drive[here][before]);
             s.maxEnd[k] = visit.maxEndTime;
             previousLocation = visit.locationIndex;
         }
@@ -238,6 +253,7 @@ private:
     mutable std::vector<ListSums> lists_;
     mutable std::vector<char> dirty_;  // per list: changed since its sums were built
     bool noWaiting_ = false;
+    bool oneProfile_ = true;  // every vehicle drives on one matrix
 };
 
 // A component that reads the shared sums: the shared-context plumbing once,

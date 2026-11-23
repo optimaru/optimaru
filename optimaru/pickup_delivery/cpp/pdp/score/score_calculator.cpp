@@ -56,14 +56,14 @@ void ScoreCalculator::updateShadowVariables(PdpRoutePlan& plan) {
     for (std::size_t v = 0; v < plan.vehicles.size(); ++v) {
         const Vehicle& vehicle = plan.vehicles[v];
         Seconds previousDeparture = vehicle.departureTime;
-        int previousLocation = vehicle.homeLocationIndex;
+        int previousLocation = vehicle.startLocationIndex;
 
         for (int nodeIndex : vehicle.nodeIndices) {
             Node& node = plan.nodes[static_cast<std::size_t>(nodeIndex)];
             node.vehicleIndex = static_cast<int>(v);
 
-            const Seconds arrival =
-                    previousDeparture + plan.drivingTime(previousLocation, node.locationIndex);
+            const Seconds arrival = previousDeparture +
+                                    plan.drivingTime(vehicle, previousLocation, node.locationIndex);
             node.arrivalTime = arrival;
 
             previousDeparture = std::max(arrival, node.minStartTime) + node.serviceDuration;
@@ -145,18 +145,18 @@ Score ScoreCalculator::score(PdpRoutePlan& plan) {
     }
 
     // --- Soft: travelTimeCost, total driving time ---
-    // home -> stops..., plus the leg back home when the vehicle returns to
-    // its depot.
+    // start depot -> stops..., plus the leg to the end depot when the route
+    // has one.
     for (const Vehicle& vehicle : plan.vehicles) {
         if (vehicle.nodeIndices.empty()) continue;
         Seconds total = 0;
-        int previousLocation = vehicle.homeLocationIndex;
+        int previousLocation = vehicle.startLocationIndex;
         for (int nodeIndex : vehicle.nodeIndices) {
             const int location = plan.nodes[static_cast<std::size_t>(nodeIndex)].locationIndex;
-            total += plan.drivingTime(previousLocation, location);
+            total += plan.drivingTime(vehicle, previousLocation, location);
             previousLocation = location;
         }
-        total += vehicle.homeLeg(plan.drivingSeconds, previousLocation);
+        total += vehicle.endLeg(plan.durationsOf(vehicle), previousLocation);
         score.soft -= kTravelWeight * total;
     }
 

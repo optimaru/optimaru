@@ -348,6 +348,38 @@ void verifyPreviews() {
         }
     }
     {
+        // Two profiles (every other vehicle on a slower, non-metric matrix
+        // with distances of its own), routes that end at another vehicle's
+        // depot, and the distance objective weighed in: a run moved between
+        // profiles is re-added in the receiving profile by the shared sums.
+        VehicleRoutePlan profiled = plan;
+        std::mt19937_64 matrixRng(9);
+        Matrix seconds = profiled.durationMatrices.front();
+        Matrix meters = profiled.distanceMatrices.front();
+        for (auto& row : seconds)
+            for (Seconds& cell : row) cell = cell * 2 + static_cast<Seconds>(matrixRng() % 300);
+        for (auto& row : meters)
+            for (Meters& cell : row) cell = cell + static_cast<Meters>(matrixRng() % 500);
+        profiled.durationMatrices.push_back(std::move(seconds));
+        profiled.distanceMatrices.push_back(std::move(meters));
+        const std::size_t count = profiled.vehicles.size();
+        for (std::size_t v = 0; v < count; ++v) {
+            if (v % 2 == 0) profiled.vehicles[v].profileIndex = 1;
+            if (v % 3 == 0)
+                profiled.vehicles[v].endLocationIndex =
+                        profiled.vehicles[(v + 1) % count].startLocationIndex;
+        }
+        DecomposedCalculator calculator;
+        defaultConstraints().weight("travelDistanceCost", 1).into(calculator);
+        optimaru::Editor<VehicleRoutePlan> editor(profiled, calculator);
+        const optimaru::testing::PreviewParity parity = optimaru::testing::run_preview_parity(
+                editor, calculator, /*seed=*/12, /*trials=*/3000);
+        std::printf("    two profiles: %d moves checked, %d previewed, %d declined\n",
+                    parity.checked, parity.previewed, parity.declined);
+        check(parity.all_equal() && parity.previewed > 1000 && parity.declined == 0,
+              "two profiles and end depots: every preview equal to the applied score");
+    }
+    {
         // Visit groups with an order inside them: the group global answers
         // through its preview contract, the order component by re-costing the
         // candidate route.
@@ -406,7 +438,7 @@ void verifyPiecewiseByHand() {
     }
     plan.vehicles[0].visitIndices = {0, 1, 2, 3, 4};
     plan.vehicles[1].visitIndices = {5, 6, 7, 8};
-    plan.vehicles[1].returnToDepot = true;
+    plan.vehicles[1].endLocationIndex = plan.vehicles[1].startLocationIndex;
     plan.unassignedVisitIndices = {9, 10};
     // 11 is in no list at all (the detached element of a repair's insert).
     const int pool = static_cast<int>(plan.vehicles.size());
@@ -560,7 +592,7 @@ VehicleRoutePlan buildHandInstance() {
         Vehicle vehicle;
         vehicle.id = std::to_string(v);
         vehicle.capacity = 10;
-        vehicle.homeLocationIndex = 0;
+        vehicle.startLocationIndex = 0;
         vehicle.departureTime = 0;
         plan.vehicles.push_back(vehicle);
     }
@@ -575,9 +607,11 @@ VehicleRoutePlan buildHandInstance() {
         visit.serviceDuration = 60;
         plan.visits.push_back(visit);
     }
-    plan.drivingSeconds.assign(5, std::vector<Seconds>(5, 0));
+    Matrix seconds(5, std::vector<Seconds>(5, 0));
     for (int a = 0; a < 5; ++a)
-        for (int b = 0; b < 5; ++b) plan.drivingSeconds[a][b] = 100 * std::abs(a - b);
+        for (int b = 0; b < 5; ++b) seconds[a][b] = 100 * std::abs(a - b);
+    plan.durationMatrices = {seconds};
+    plan.distanceMatrices = {seconds};
     return plan;
 }
 
@@ -643,13 +677,16 @@ void verifyRawCostsByHand() {
                 p.visits[3].maxEndTime = 580;
             },
             {3.0, 0.0, 0.0}, [](VehicleRoutePlan& p) { p.visits[3].maxEndTime = 640; }, none);
-    // 4 legs of 100 s, open; returnToDepot adds visit 3 -> home = 400 s.
+    // 4 legs of 100 s, open; an end depot at home adds visit 3 -> home = 400 s.
     byHand("travelTimeCost", keep, {400.0, 0.0, 0.0}, park, none);
     byHand(
-            "travelTimeCost", [](VehicleRoutePlan& p) { p.vehicles[0].returnToDepot = true; },
+            "travelTimeCost",
+            [](VehicleRoutePlan& p) {
+                p.vehicles[0].endLocationIndex = p.vehicles[0].startLocationIndex;
+            },
             {800.0, 0.0, 0.0},
             [](VehicleRoutePlan& p) {
-                p.vehicles[0].returnToDepot = true;
+                p.vehicles[0].endLocationIndex = p.vehicles[0].startLocationIndex;
                 p.vehicles[0].visitIndices.clear();  // a parked vehicle drives 0
             },
             none);
@@ -791,32 +828,34 @@ void verifyCatalog() {
     std::printf("== (k) Catalog == component constants ==\n");
     using optimaru::Level;
     const auto rows = defaultConstraints().info();
-    check(rows.size() == 16, "16 catalog rows");
-    if (rows.size() != 16) return;
+    check(rows.size() == 17, "17 catalog rows");
+    if (rows.size() != 17) return;
     // Unit constraints first, then the globals, in emplace order: the
     // list_constraints() order.
     check(rowIs<VehicleCapacityCost>(rows[0], "vehicleCapacityCost", Level::Hard, 1.0, false) &&
                   rowIs<MaxEndTimeCost>(rows[1], "maxEndTimeCost", Level::Hard, 1.0, false) &&
                   rowIs<TravelTimeCost>(rows[2], "travelTimeCost", Level::Soft, 1.0, false) &&
-                  rowIs<MaxTravelTimeCost>(rows[3], "maxTravelTimeCost", Level::Hard, 1.0, false) &&
-                  rowIs<MaxRouteDurationCost>(rows[4], "maxRouteDurationCost", Level::Hard, 1.0,
-                                              false) &&
-                  rowIs<VehicleMaxEndTimeCost>(rows[5], "vehicleMaxEndTimeCost", Level::Hard, 1.0,
-                                               false) &&
-                  rowIs<MaxStopsCost>(rows[6], "maxStopsCost", Level::Hard, 1.0, false) &&
-                  rowIs<MaxRouteRadiusCost>(rows[7], "maxRouteRadiusCost", Level::Hard, 1.0,
+                  rowIs<TravelDistanceCost>(rows[3], "travelDistanceCost", Level::Soft, 0.0,
                                             false) &&
-                  rowIs<EnclosingCircleRadiusCost>(rows[8], "enclosingCircleRadiusCost",
+                  rowIs<MaxTravelTimeCost>(rows[4], "maxTravelTimeCost", Level::Hard, 1.0, false) &&
+                  rowIs<MaxRouteDurationCost>(rows[5], "maxRouteDurationCost", Level::Hard, 1.0,
+                                              false) &&
+                  rowIs<VehicleMaxEndTimeCost>(rows[6], "vehicleMaxEndTimeCost", Level::Hard, 1.0,
+                                               false) &&
+                  rowIs<MaxStopsCost>(rows[7], "maxStopsCost", Level::Hard, 1.0, false) &&
+                  rowIs<MaxRouteRadiusCost>(rows[8], "maxRouteRadiusCost", Level::Hard, 1.0,
+                                            false) &&
+                  rowIs<EnclosingCircleRadiusCost>(rows[9], "enclosingCircleRadiusCost",
                                                    Level::Soft, 0.0, false) &&
-                  rowIs<MinCapacityUtilizationCost>(rows[9], "minCapacityUtilizationCost",
+                  rowIs<MinCapacityUtilizationCost>(rows[10], "minCapacityUtilizationCost",
                                                     Level::Soft, 1.0, false) &&
-                  rowIs<RouteDurationCost>(rows[10], "routeDurationCost", Level::Soft, 0.0,
+                  rowIs<RouteDurationCost>(rows[11], "routeDurationCost", Level::Soft, 0.0,
                                            false) &&
-                  rowIs<LatencyCost>(rows[11], "latencyCost", Level::Soft, 0.0, false) &&
-                  rowIs<VehicleFixedCost>(rows[12], "vehicleFixedCost", Level::Soft, 1.0, false) &&
-                  rowIs<VisitOrderCost>(rows[13], "visitOrderCost", Level::Hard, 1000.0, false) &&
-                  rowIs<VisitGroupCost>(rows[14], "visitGroupCost", Level::Hard, 1000.0, true) &&
-                  rowIs<UnassignedVisitsCost>(rows[15], "unassignedVisitsCost", Level::Medium, 1.0,
+                  rowIs<LatencyCost>(rows[12], "latencyCost", Level::Soft, 0.0, false) &&
+                  rowIs<VehicleFixedCost>(rows[13], "vehicleFixedCost", Level::Soft, 1.0, false) &&
+                  rowIs<VisitOrderCost>(rows[14], "visitOrderCost", Level::Hard, 1000.0, false) &&
+                  rowIs<VisitGroupCost>(rows[15], "visitGroupCost", Level::Hard, 1000.0, true) &&
+                  rowIs<UnassignedVisitsCost>(rows[16], "unassignedVisitsCost", Level::Medium, 1.0,
                                               true),
           "info() == the components' kDefaultWeight / kDefaultLevel");
     std::printf("\n");

@@ -24,12 +24,12 @@ cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
 
 | Type                                             | What it holds / does                             |
 | ------------------------------------------------ | ------------------------------------------------ |
-| `struct VehicleRoutePlan` (`domain.hpp`)         | the whole problem and its solution: `locations`, `vehicles`, `visits`, the unassigned pool `unassignedVisitIndices`, the `drivingSeconds` matrix and the `score` |
-| `struct Vehicle`                                 | capacity, home location, departure time, the optional route policies, and the decision: `std::vector<int> visitIndices`, the ordered visits it serves |
+| `struct VehicleRoutePlan` (`domain.hpp`)         | the whole problem and its solution: `locations`, `vehicles`, `visits`, the unassigned pool `unassignedVisitIndices`, one `durationMatrices` and one `distanceMatrices` entry per travel profile, and the `score` |
+| `struct Vehicle`                                 | capacity, start location, end location (`-1` = open route), travel profile, departure time, the optional route policies, and the decision: `std::vector<int> visitIndices`, the ordered visits it serves |
 | `struct Visit`                                   | location, demand, time window, service duration, unassigned penalty, group and the visits it comes after (+ derived `vehicleIndex`, `arrivalTime`) |
 | `ScoreCalculator::updateShadowVariables`         | recomputes every visit's derived `vehicleIndex` / `arrivalTime` from the routes |
 | `Score`                                          | the hard / medium / soft levels (lexicographic compare): the engine's `optimaru::HardMediumSoftScore` |
-| `HaversineDrivingTimeCalculator` (`haversine.{hpp,cpp}`) | driving time from the haversine distance at 50 km/h; fills `drivingSeconds` |
+| `HaversineDrivingTimeCalculator` (`haversine.{hpp,cpp}`) | the straight-line fallback: haversine meters, and those meters at 50 km/h for the seconds; `fillMissingMatrices` fills every profile matrix left empty |
 | `ScoreCalculator` (reference) + `VehicleRoutingIncrementalScoreCalculator` (live) | the four default constraints: a full recompute, and the incremental calculator the search calls |
 | `Solver` (`solver.hpp`)                          | wraps `optimaru/cpp/optimaru/`'s `optimaru::Solver`: construction heuristic + local search |
 | `Solver::Config::time_limit`                     | wall-clock budget (default 30 s)                 |
@@ -52,9 +52,9 @@ registry name is the struct name with a lower-case first letter):
   below. Weight 1 in medium units; the domain folds medium into the engine's
   soft level as `medium * 10^9` (`kMediumFold` in `domain.hpp`).
 - **Soft** `TravelTimeCost` (`travelTimeCost`) — penalize each vehicle's total
-  driving seconds (home → visits, plus the leg back home only when
-  `Vehicle::returnToDepot` is set; routes are open by default and end at their
-  last visit).
+  driving seconds (start depot → visits, plus the leg to
+  `Vehicle::endLocationIndex` when it is set; routes are open by default and end
+  at their last visit), on the matrix of the vehicle's profile.
 
 The plugin path adds the optional route policies (`MaxTravelTimeCost`,
 `MaxRouteDurationCost`, `VehicleMaxEndTimeCost`, `MaxStopsCost`,

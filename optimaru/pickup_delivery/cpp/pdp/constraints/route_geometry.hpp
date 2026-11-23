@@ -13,7 +13,7 @@ namespace pdp {
 // The smallest enclosing circle of a route's stop points (Welzl-style
 // incremental construction on an equirectangular projection around the mean
 // latitude), used by enclosingCircleRadiusCost. maxRouteRadiusCost measures
-// haversine distances from home instead (detail::haversineMeters in
+// haversine distances from the start depot instead (detail::haversineMeters in
 // common.hpp).
 namespace detail {
 struct EnclosingPoint {

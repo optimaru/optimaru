@@ -7,8 +7,8 @@
 namespace vrp {
 
 // Hard, weight 1: maxRouteRadiusCost -- how far a route reaches beyond
-// Vehicle::maxRouteRadiusMeters from the vehicle's home. Raw cost per vehicle
-// = max(0, haversine meters from home to its farthest visit -
+// Vehicle::maxRouteRadiusMeters from the vehicle's start depot. Raw cost per
+// vehicle = max(0, haversine meters from the start depot to its farthest visit -
 // maxRouteRadiusMeters) while maxRouteRadiusMeters > 0; 0 = every visit
 // within the radius, or no radius set (the pool list costs 0).
 struct MaxRouteRadiusCost final : detail::PerVehicleConstraint {
@@ -19,7 +19,7 @@ struct MaxRouteRadiusCost final : detail::PerVehicleConstraint {
         : PerVehicleConstraint("maxRouteRadiusCost", weight, kDefaultLevel) {}
     double cost(const VehicleRoutePlan& p, int u, const std::vector<int>& m) const override {
         if (detail::isPool(p, u) || p.vehicles[u].maxRouteRadiusMeters <= 0) return 0;
-        const Location& home = p.locations[p.vehicles[u].homeLocationIndex];
+        const Location& home = p.locations[p.vehicles[u].startLocationIndex];
         double furthest = 0;
         for (int i : m)
             furthest = std::max(furthest, detail::haversineMeters(

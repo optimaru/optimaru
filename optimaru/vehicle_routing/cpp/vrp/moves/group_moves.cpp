@@ -26,32 +26,17 @@ constexpr int kDetached = -2;
 constexpr int kWaitingPerRepair = 2;
 
 // Whether two vehicles serve any visit identically while they are idle: the
-// same limits, and the same driving times between their home and every visit.
-// (Two vehicles of one depot usually have a location entry each.)
-bool sameService(const VehicleRoutePlan& plan, const Vehicle& a, const Vehicle& b) {
-    if (a.capacity != b.capacity || a.departureTime != b.departureTime ||
-        a.maxTravelTime != b.maxTravelTime || a.maxRouteDuration != b.maxRouteDuration ||
-        a.maxEndTime != b.maxEndTime || a.maxStops != b.maxStops ||
-        a.minLoadRatio != b.minLoadRatio || a.fixedCost != b.fixedCost ||
-        a.maxRouteRadiusMeters != b.maxRouteRadiusMeters || a.returnToDepot != b.returnToDepot) {
-        return false;
-    }
-    const auto homeA = static_cast<std::size_t>(a.homeLocationIndex);
-    const auto homeB = static_cast<std::size_t>(b.homeLocationIndex);
-    if (homeA == homeB) return true;
-    if (homeA < plan.locations.size() && homeB < plan.locations.size() &&
-        (plan.locations[homeA].latitude != plan.locations[homeB].latitude ||
-         plan.locations[homeA].longitude != plan.locations[homeB].longitude)) {
-        return false;
-    }
-    for (const Visit& visit : plan.visits) {
-        const auto stop = static_cast<std::size_t>(visit.locationIndex);
-        if (plan.drivingSeconds[homeA][stop] != plan.drivingSeconds[homeB][stop] ||
-            plan.drivingSeconds[stop][homeA] != plan.drivingSeconds[stop][homeB]) {
-            return false;
-        }
-    }
-    return true;
+// same limits, the same depots and the same profile. (Vehicles that share a
+// depot share its location entry; two entries at one point count as two
+// depots here, which only offers both vehicles.)
+bool sameService(const Vehicle& a, const Vehicle& b) {
+    return a.capacity == b.capacity && a.departureTime == b.departureTime &&
+           a.maxTravelTime == b.maxTravelTime && a.maxRouteDuration == b.maxRouteDuration &&
+           a.maxEndTime == b.maxEndTime && a.maxStops == b.maxStops &&
+           a.minLoadRatio == b.minLoadRatio && a.fixedCost == b.fixedCost &&
+           a.maxRouteRadiusMeters == b.maxRouteRadiusMeters &&
+           a.startLocationIndex == b.startLocationIndex &&
+           a.endLocationIndex == b.endLocationIndex && a.profileIndex == b.profileIndex;
 }
 
 // The vehicles worth offering a unit to: every vehicle with a route and, of
@@ -63,7 +48,7 @@ public:
         std::vector<int> representatives;
         for (std::size_t v = 0; v < plan.vehicles.size(); ++v) {
             for (std::size_t c = 0; c < representatives.size(); ++c) {
-                if (sameService(plan, plan.vehicles[static_cast<std::size_t>(representatives[c])],
+                if (sameService(plan.vehicles[static_cast<std::size_t>(representatives[c])],
                                 plan.vehicles[v])) {
                     classOf_[v] = static_cast<int>(c);
                     break;

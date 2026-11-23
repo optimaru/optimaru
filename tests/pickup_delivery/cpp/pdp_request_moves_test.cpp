@@ -43,22 +43,22 @@ Walk walk(const PdpRoutePlan& plan, int vehicleIndex, const std::vector<int>& ro
     if (route.empty()) return result;
     std::int64_t load = 0;
     Seconds departure = vehicle.departureTime;
-    int location = vehicle.homeLocationIndex;
+    int location = vehicle.startLocationIndex;
     for (int nodeIndex : route) {
         const Node& node = plan.nodes[static_cast<std::size_t>(nodeIndex)];
         const Delivery& delivery = plan.deliveries[static_cast<std::size_t>(node.deliveryIndex)];
         load += node.pickup ? delivery.demand : -delivery.demand;
         if (load > vehicle.capacity) result.feasible = false;
-        const Seconds leg = plan.drivingTime(location, node.locationIndex);
+        const Seconds leg = plan.drivingTime(vehicle, location, node.locationIndex);
         result.travel += leg;
         const Seconds arrival = departure + leg;
         if (arrival + node.serviceDuration > node.maxEndTime) result.feasible = false;
         departure = std::max(arrival, node.minStartTime) + node.serviceDuration;
         location = node.locationIndex;
     }
-    const Seconds homeLeg = vehicle.homeLeg(plan.drivingSeconds, location);
-    result.travel += homeLeg;
-    const Seconds end = departure + homeLeg;
+    const Seconds endLeg = vehicle.endLeg(plan.durationsOf(vehicle), location);
+    result.travel += endLeg;
+    const Seconds end = departure + endLeg;
     if (vehicle.maxEndTime > 0 && end > vehicle.maxEndTime) result.feasible = false;
     if (vehicle.maxRouteDuration > 0 && end - vehicle.departureTime > vehicle.maxRouteDuration) {
         result.feasible = false;
@@ -107,24 +107,35 @@ RequestInsertion bruteForce(const PdpRoutePlan& plan, int vehicleIndex,
 // The limits a variant of the random instance sets on its vehicles.
 struct Variant {
     const char* name;
-    bool returnToDepot;
+    bool closed;            // every route ends at its start depot
     Seconds windowMinutes;  // 0 keeps the generator's half-day windows
     Seconds maxEndTime;
     Seconds maxRouteDuration;
     Seconds maxTravelTime;
     int maxStops;
     int capacity;  // 0 keeps the generator's
+    // Vehicle 1 on a second, slower matrix and ending at vehicle 2's depot.
+    bool profiles = false;
 };
 
 PdpRoutePlan buildVariant(const Variant& variant, std::uint64_t seed) {
     PdpRoutePlan plan = buildRandomInstance(14, 3, seed);
     for (Vehicle& vehicle : plan.vehicles) {
-        vehicle.returnToDepot = variant.returnToDepot;
+        vehicle.endLocationIndex = variant.closed ? vehicle.startLocationIndex : -1;
         vehicle.maxEndTime = variant.maxEndTime;
         vehicle.maxRouteDuration = variant.maxRouteDuration;
         vehicle.maxTravelTime = variant.maxTravelTime;
         vehicle.maxStops = variant.maxStops;
         if (variant.capacity > 0) vehicle.capacity = variant.capacity;
+    }
+    if (variant.profiles) {
+        Matrix slower = plan.durationMatrices.front();
+        for (auto& row : slower)
+            for (Seconds& cell : row) cell = cell * 2 + 7;
+        plan.durationMatrices.push_back(std::move(slower));
+        plan.distanceMatrices.push_back(plan.distanceMatrices.front());
+        plan.vehicles[1].profileIndex = 1;
+        plan.vehicles[1].endLocationIndex = plan.vehicles[2].startLocationIndex;
     }
     if (variant.windowMinutes > 0) {
         for (Node& node : plan.nodes) {
@@ -144,6 +155,7 @@ void testScanMatchesBruteForce() {
             {"route duration", false, 0, 0, 3 * 3600, 0, 0, 0},
             {"travel budget", true, 0, 0, 0, 3000, 0, 0},
             {"stop cap", false, 0, 0, 0, 0, 6, 0},
+            {"two profiles, another end depot", false, 0, hourMinute(15, 0), 0, 0, 0, 0, true},
     };
     for (const Variant& variant : variants) {
         int compared = 0;
@@ -286,28 +298,29 @@ void testCandidateVehicles() {
     check(offered == std::vector<int>({0, 1}),
           "idle vehicles with different limits are both offered");
 
-    // Two vehicles of one depot with a location entry each: the same place and
-    // the same driving times make them one class, a different driving time two.
+    // Two vehicles of one depot share its location entry: one class. Another
+    // profile, or another end depot, makes two.
     PdpRoutePlan depot = buildRandomInstance(4, 1, /*seed=*/3);
     depot.vehicles.push_back(depot.vehicles[0]);
-    const Location home =
-            depot.locations[static_cast<std::size_t>(depot.vehicles[0].homeLocationIndex)];
-    depot.vehicles[1].homeLocationIndex = addLocation(depot, home.latitude, home.longitude);
-    HaversineDrivingTimeCalculator::initDrivingTimeMatrix(depot);
     PlanTimelines depotTimelines;
     depotTimelines.rebuild(depot);
     depotTimelines.candidateVehicles(depot, depot.deliveries[0].requiredVehicleIndex, offered);
-    check(offered == std::vector<int>({0}),
-          "two location entries of one depot are one vehicle class");
+    check(offered == std::vector<int>({0}), "two vehicles of one depot are one vehicle class");
 
-    const auto secondHome = static_cast<std::size_t>(depot.vehicles[1].homeLocationIndex);
-    const auto stop = static_cast<std::size_t>(depot.nodes[0].locationIndex);
-    depot.drivingSeconds[secondHome][stop] += 60;
-    PlanTimelines slowerTimelines;
-    slowerTimelines.rebuild(depot);
-    slowerTimelines.candidateVehicles(depot, depot.deliveries[0].requiredVehicleIndex, offered);
-    check(offered == std::vector<int>({0, 1}),
-          "a different driving time from home makes two classes");
+    depot.durationMatrices.push_back(depot.durationMatrices.front());
+    depot.distanceMatrices.push_back(depot.distanceMatrices.front());
+    depot.vehicles[1].profileIndex = 1;
+    PlanTimelines profileTimelines;
+    profileTimelines.rebuild(depot);
+    profileTimelines.candidateVehicles(depot, depot.deliveries[0].requiredVehicleIndex, offered);
+    check(offered == std::vector<int>({0, 1}), "another profile makes two classes");
+
+    depot.vehicles[1].profileIndex = 0;
+    depot.vehicles[1].endLocationIndex = depot.vehicles[1].startLocationIndex;
+    PlanTimelines endTimelines;
+    endTimelines.rebuild(depot);
+    endTimelines.candidateVehicles(depot, depot.deliveries[0].requiredVehicleIndex, offered);
+    check(offered == std::vector<int>({0, 1}), "another end depot makes two classes");
     std::printf("\n");
 }
 
@@ -351,7 +364,7 @@ void testBlinker() {
 PdpRoutePlan tighten(PdpRoutePlan plan, int capacity, Seconds windowMinutes) {
     for (Vehicle& vehicle : plan.vehicles) {
         vehicle.capacity = capacity;
-        vehicle.returnToDepot = true;
+        vehicle.endLocationIndex = vehicle.startLocationIndex;
     }
     for (Node& node : plan.nodes) node.maxEndTime = node.minStartTime + windowMinutes * 60;
     return plan;
@@ -468,7 +481,7 @@ void testFarRouteIsOfferedWhenNearOnesAreFull() {
         Vehicle vehicle;
         vehicle.id = std::to_string(v + 1);
         vehicle.capacity = 10;
-        vehicle.homeLocationIndex = home;
+        vehicle.startLocationIndex = home;
         vehicle.departureTime = hourMinute(7, 0);
         vehicle.maxStops = 4;  // two requests
         plan.vehicles.push_back(vehicle);
@@ -507,7 +520,7 @@ void testFarRouteIsOfferedWhenNearOnesAreFull() {
     // every vehicle, so it is off: the search has to route the request.
     addRequest(43.77, 11.25);
     plan.rebuildUnassignedPool();
-    HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan);
+    HaversineDrivingTimeCalculator::fillMissingMatrices(plan);
 
     Solver::Config config = requestMovesOnly(/*ruinRecreate=*/true, /*bundles=*/false);
     config.pair_construction_heuristic = false;
@@ -748,7 +761,8 @@ void testUnitPlanner() {
         // Tight enough that some units have no room.
         PdpRoutePlan plan = tighten(buildRandomInstance(9, 1, seed), /*capacity=*/5,
                                     /*windowMinutes=*/static_cast<Seconds>(120 + 30 * (seed % 5)));
-        plan.vehicles[0].returnToDepot = seed % 2 == 0;
+        plan.vehicles[0].endLocationIndex =
+                (seed % 2 == 0) ? plan.vehicles[0].startLocationIndex : -1;
         if (seed % 7 == 0) plan.vehicles[0].maxStops = 10;  // room for five requests
         std::vector<int> route;
         for (int d = 0; d < 3; ++d) {

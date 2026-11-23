@@ -3,7 +3,7 @@
 Six steps, from a change that needs no build to a constraint on the default fast path.
 Each step is complete by itself, so stop at the first one that does what you need.
 The engine contracts behind the steps are in [Extending a use case](../../extending.md);
-the model and its sixteen constraints are in the [guide](README.md).
+the model and its seventeen constraints are in the [guide](README.md).
 
 | Step | What you do | What it touches |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ vehicle, with the visits of its route, in order, as its **members**. Visits on n
 route sit in one more list, the unassigned pool, which the per-vehicle constraints do not
 evaluate. A move changes one or two routes, so only those are scored again.
 
-There are two scoring paths. The first scores four of the sixteen constraints, so the two
+There are two scoring paths. The first scores four of the seventeen constraints, so the two
 agree only on a plan with no vehicle limit and no visit group (`vrp_plugin_test`
 checks that on 300 random route layouts):
 
@@ -105,9 +105,9 @@ print(score(raw, picks))                 # the (hard, soft) those picks give thi
 
 The knobs (`weight`, `level`, `exponent`, `offset`, `clip`) and picking a constraint twice
 are described in [`constraints.py`](../../../optimaru/vehicle_routing/constraints.py).
-Stop here if the constraint you need is one of the sixteen: three are objectives that
-wait for a weight (`enclosing_circle_radius_cost`, `route_duration_cost`,
-`latency_cost`), and seven cost nothing until a vehicle sets their field
+Stop here if the constraint you need is one of the seventeen: four are objectives that
+wait for a weight (`travel_distance_cost`, `enclosing_circle_radius_cost`,
+`route_duration_cost`, `latency_cost`), and seven cost nothing until a vehicle sets their field
 (`max_travel_time`, `max_route_duration`, `max_end_time`, `max_stops`,
 `max_route_radius_meters`, `min_load_ratio`, `fixed_cost`).
 
@@ -117,7 +117,7 @@ A constraint is a component: a struct in its own header that returns a **raw cos
 number that is positive for a violation and 0 for none. Weight and level are
 applied by the engine.
 
-Fourteen of the sixteen constraints are a sum of one term per vehicle, and
+Fifteen of the seventeen constraints are a sum of one term per vehicle, and
 [`constraints/common.hpp`](../../../optimaru/vehicle_routing/cpp/vrp/constraints/common.hpp)
 has the base for that, `detail::PerVehicleConstraint`. You write one function,
 `cost(plan, unit, members)`: the raw cost of vehicle `unit` driving the visits
@@ -272,12 +272,12 @@ ctest --test-dir build --output-on-failure     # this use case's: vrp_test, vrp_
 uv run pytest -q tests/vehicle_routing tests/test_constraints_contract.py
 ```
 
-**The counts.** A seventeenth constraint fails one check of `vrp_plugin_test` and three
+**The counts.** An eighteenth constraint fails one check of `vrp_plugin_test` and three
 Python tests. Update them:
 
-- `vrp_plugin_test.cpp`: `rows.size() == 16` in `verifyCatalog()`. Add the row after
-  `visitOrderCost`, `rowIs<WaitingTimeCost>(rows[14], "waitingTimeCost", Level::Soft,
-  0.0, false)`; the two globals become rows 15 and 16;
+- `vrp_plugin_test.cpp`: `rows.size() == 17` in `verifyCatalog()`. Add the row after
+  `visitOrderCost`, `rowIs<WaitingTimeCost>(rows[15], "waitingTimeCost", Level::Soft,
+  0.0, false)`; the two globals become rows 16 and 17;
 - `tests/vehicle_routing/test_constraint_specs.py`: the list in
   `test_list_constraints_matches_the_spec_names`, and `EXPECTED_INFO`, which
   `test_constraint_info_reports_the_cpp_defaults` and
@@ -497,8 +497,11 @@ alike is what `vrp_plugin_test` checks. A figure moves by about 2% between runs.
 
 In the first column a picked constraint changes the search as well as the scoring. The
 second column is the scoring alone. The second and third rows differ by noise only: a
-constraint at weight 0 is asked on no move. That holds for the three opt-in objectives
+constraint at weight 0 is asked on no move. That holds for the four opt-in objectives
 that `get_constraints()` carries at weight 0 as well.
+These figures were measured before `travel_distance_cost` joined the catalog: at weight 0
+it is asked on no move, so the assembly of seventeen runs as the sixteen did.
+
 
 **Quality at a fixed time.** A constraint changes what the search can reach, so compare
 plans at the same budget over several seeds, before and after: the score, and the

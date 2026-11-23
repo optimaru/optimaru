@@ -50,12 +50,13 @@ ctest --test-dir build
 | --- | --- | --- | --- | --- |
 | `vehicle_capacity_cost` | `VehicleCapacityCost` | hard | 1 | per vehicle: the **running load** above the capacity, summed over the stops where it persists |
 | `max_end_time_cost` | `MaxEndTimeCost` | hard | 1 | per vehicle: time-window lateness (arrival + service past the stop's `max_end_time`), in whole minutes rounded up |
-| `travel_time_cost` | `TravelTimeCost` | soft | 1 | per vehicle: driving seconds — home → stops, plus the leg back home only when the vehicle's `returnToDepot` is set |
+| `travel_time_cost` | `TravelTimeCost` | soft | 1 | per vehicle: driving seconds — start depot → stops, plus the leg to the end depot when the vehicle has one (`end_depot`) |
+| `travel_distance_cost` | `TravelDistanceCost` | soft | 0 (opt-in) | per vehicle: driving meters over the same legs, from the distances of the vehicle's travel profile |
 | `max_travel_time_cost` | `MaxTravelTimeCost` | hard | 1 | per vehicle: driving seconds above `max_travel_time` (0 = no limit) |
 | `max_route_duration_cost` | `MaxRouteDurationCost` | hard | 1 | per vehicle: route duration seconds above `max_route_duration` (0 = no limit) |
 | `vehicle_max_end_time_cost` | `VehicleMaxEndTimeCost` | hard | 1 | per vehicle: seconds the route ends after the vehicle's `max_end_time` (0 = no limit) |
 | `max_stops_cost` | `MaxStopsCost` | hard | 1 | per vehicle: stops above `max_stops`, a request counting as two (0 = no cap) |
-| `max_route_radius_cost` | `MaxRouteRadiusCost` | hard | 1 | per vehicle: meters the farthest stop lies beyond `max_route_radius_meters` from home (0 = no limit) |
+| `max_route_radius_cost` | `MaxRouteRadiusCost` | hard | 1 | per vehicle: meters the farthest stop lies beyond `max_route_radius_meters` from the start depot (0 = no limit) |
 | `enclosing_circle_radius_cost` | `EnclosingCircleRadiusCost` | soft | 0 (opt-in) | per vehicle: radius in meters of the smallest circle around its stops (0 with fewer than two) |
 | `min_capacity_utilization_cost` | `MinCapacityUtilizationCost` | soft | 1 | per used vehicle: demand short of `capacity * min_load_ratio` (0 = no target) |
 | `route_duration_cost` | `RouteDurationCost` | soft | 0 (opt-in) | per used vehicle: seconds from departure to the route end |
@@ -70,14 +71,14 @@ ctest --test-dir build
 | `request_group_cost` | `RequestGroupCost` | hard | 1000 | grouped requests that are not where most of their `group` is: on another vehicle, or unassigned while the others ride (see [Request groups](#request-groups)) |
 | `unassigned_requests_cost` | `UnassignedRequestsCost` | medium | 1 | service minutes (rounded down) of the requests left entirely unrouted |
 
-That is the `list_constraints()` order: the sixteen per-vehicle unit constraints
+That is the `list_constraints()` order: the seventeen per-vehicle unit constraints
 (each vehicle, plus the unassigned pool as the last unit; only `required_vehicle_cost`
 and `squared_order_age_cost` price the pool, the others evaluate the vehicles alone),
 then the five request-level globals. `optimaru.pickup_delivery.constraint_info()` reports exactly this table
 from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every constraint is
 flippable onto any of the three levels (`level="hard"`, `"medium"` or `"soft"`, or a
 `Level`), none is a reward, and every one at a weight above 0 is scored by default
-(`default_enabled`); the four opt-in objectives
+(`default_enabled`); the five opt-in objectives
 (weight 0) are measured but move no score until given a weight. The route-policy
 constraints cost 0 while their vehicle field is 0. The seven core constraints
 (`vehicle_capacity_cost`, `max_end_time_cost`, the three coupling constraints,
@@ -138,10 +139,13 @@ vehicle's own end. The model fields keep plain names (`max_stops`, `pinned_stops
 units; `level="soft"` on it moves it to soft in the engine as in CP-SAT, and
 `level="hard"` charges 1 hard unit per minute.
 
-Routes are **open by default**: a vehicle ends its day at its last stop and the
-leg back home is neither driven nor added to the route end time. Set
-`Vehicle::returnToDepot` (`return_to_depot` in the Python models) to charge
-and time a classic round trip; the public Li & Lim benchmark does.
+Routes are **open by default**: a vehicle ends its day at its last stop and no
+closing leg is driven or added to the route end time. Set
+`Vehicle::endLocationIndex` (`end_depot` in the Python models) to charge and time
+the leg to an end depot, the start depot for a classic round trip; the public
+Li & Lim benchmark does. Each vehicle drives on the matrices of its travel profile
+(`Vehicle::profileIndex`, `VehicleModel.profile`); see
+[Depots and travel profiles](python.md#depots-and-travel-profiles).
 
 The JSON contract (`optimaru.pickup_delivery.models.VehicleModel`) also caps each vehicle at
 **20 stops by default** (`max_stops`, a request counts as two); pass `0` to lift

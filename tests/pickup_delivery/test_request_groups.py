@@ -6,9 +6,11 @@ import optimaru.pickup_delivery as pdp
 from optimaru.pickup_delivery.constraints import RequestGroupCost, get_constraints
 from optimaru.pickup_delivery.models import (
     DeliveryModel,
+    DepotModel,
     PdpInput,
     PdpRequest,
     StopModel,
+    TravelProfile,
     VehicleModel,
     solve_request,
     to_plan,
@@ -34,7 +36,7 @@ def vehicle(name: str, route=(), pinned: int = 0, max_stops: int = 0) -> Vehicle
     return VehicleModel(
         id=name,
         capacity=5,
-        home=(37.5, 127.0),
+        start_depot=name,
         max_stops=max_stops,
         initial_route=list(route),
         pinned_stops=pinned,
@@ -42,14 +44,18 @@ def vehicle(name: str, route=(), pinned: int = 0, max_stops: int = 0) -> Vehicle
 
 
 def line_input(vehicles, deliveries, places: dict[str, int]) -> PdpInput:
-    """Everything sits on a line; `places` gives each vehicle and stop its position."""
-    order = [v.id for v in vehicles]
+    """Everything sits on a line; `places` gives each vehicle's depot and each stop its position."""
+    depots = list(dict.fromkeys(v.start_depot for v in vehicles))
+    order = list(depots)
     for delivery in deliveries:
         order += [delivery.pickup.id, delivery.dropoff.id]
     return PdpInput(
+        depots=[DepotModel(id=depot, location=(37.5, 127.0)) for depot in depots],
         vehicles=vehicles,
         deliveries=deliveries,
-        driving_seconds=[[abs(places[a] - places[b]) for b in order] for a in order],
+        profiles={
+            "default": TravelProfile(durations={a: {b: abs(places[a] - places[b]) for b in order} for a in order})
+        },
     )
 
 

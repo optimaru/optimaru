@@ -6,7 +6,7 @@
 namespace pdp {
 
 // Hard, weight 1: vehicleMaxEndTimeCost — the route end (the last stop's
-// departure, or the return home with returnToDepot) after the vehicle's
+// departure, or the arrival at the end depot when there is one) after the vehicle's
 // Vehicle::maxEndTime. Raw cost per vehicle = max(0, endTime - maxEndTime)
 // seconds while maxEndTime > 0; 0 = back in time, or no limit set (the pool
 // list costs 0). A stop's own time window is maxEndTimeCost.

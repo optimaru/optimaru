@@ -15,9 +15,9 @@ uv run pytest -q tests/vehicle_routing
 ```python
 from optimaru import vehicle_routing as vrp
 
-locations = [vrp.Location(37.5665, 126.9780),   # index 0: vehicle home
+locations = [vrp.Location(37.5665, 126.9780),   # index 0: the depot
              vrp.Location(37.5700, 126.9820)]   # index 1: a customer
-vehicles = [vrp.Vehicle("V1", capacity=10, home_location_index=0, departure_time=7 * 3600)]
+vehicles = [vrp.Vehicle("V1", capacity=10, start_location_index=0, departure_time=7 * 3600)]
 visits = [vrp.Visit("C1", "Customer 1", location_index=1, demand=3,
                     min_start_time=8 * 3600, max_end_time=18 * 3600, service_duration=600)]
 plan = vrp.VehicleRoutePlan("demo", locations, vehicles, visits)
@@ -41,12 +41,13 @@ ctest --test-dir build   # vrp_test, vrp_plugin_test (assembly == monolith,
 | --- | --- | --- | --- | --- |
 | `vehicle_capacity_cost` | `VehicleCapacityCost` | hard | 1 | per vehicle: summed visit demand above the capacity |
 | `max_end_time_cost` | `MaxEndTimeCost` | hard | 1 | per vehicle: time-window lateness (arrival + service past the visit's `max_end_time`), in whole minutes rounded up |
-| `travel_time_cost` | `TravelTimeCost` | soft | 1 | per vehicle: driving seconds — home → visits, plus the leg back home only when the vehicle's `return_to_depot` is set |
+| `travel_time_cost` | `TravelTimeCost` | soft | 1 | per vehicle: driving seconds — start depot → visits, plus the leg to the end depot when the vehicle has one (`end_depot`) |
+| `travel_distance_cost` | `TravelDistanceCost` | soft | 0 (opt-in) | per vehicle: driving meters over the same legs, from the distances of the vehicle's travel profile |
 | `max_travel_time_cost` | `MaxTravelTimeCost` | hard | 1 | per vehicle: driving seconds above `max_travel_time` (0 = no limit) |
 | `max_route_duration_cost` | `MaxRouteDurationCost` | hard | 1 | per vehicle: route duration seconds above `max_route_duration` (0 = no limit) |
 | `vehicle_max_end_time_cost` | `VehicleMaxEndTimeCost` | hard | 1 | per vehicle: seconds the route ends after the vehicle's `max_end_time` (0 = no limit) |
 | `max_stops_cost` | `MaxStopsCost` | hard | 1 | per vehicle: visits above `max_stops` (0 = no cap) |
-| `max_route_radius_cost` | `MaxRouteRadiusCost` | hard | 1 | per vehicle: meters the farthest visit lies beyond `max_route_radius_meters` from home (0 = no limit) |
+| `max_route_radius_cost` | `MaxRouteRadiusCost` | hard | 1 | per vehicle: meters the farthest visit lies beyond `max_route_radius_meters` from the start depot (0 = no limit) |
 | `enclosing_circle_radius_cost` | `EnclosingCircleRadiusCost` | soft | 0 (opt-in) | per vehicle: radius in meters of the smallest circle around its visits (0 with fewer than two) |
 | `min_capacity_utilization_cost` | `MinCapacityUtilizationCost` | soft | 1 | per used vehicle: demand short of `capacity * min_load_ratio` (0 = no target) |
 | `route_duration_cost` | `RouteDurationCost` | soft | 0 (opt-in) | per used vehicle: seconds from departure to the route end |
@@ -56,14 +57,14 @@ ctest --test-dir build   # vrp_test, vrp_plugin_test (assembly == monolith,
 | `visit_group_cost` | `VisitGroupCost` | hard | 1000 | grouped visits that are not where most of their `group` is: on another vehicle, or unassigned while the others ride |
 | `unassigned_visits_cost` | `UnassignedVisitsCost` | medium | 1 | penalty minutes of the visits left unrouted (`unassigned_penalty_minutes`, by default the service time in whole minutes) |
 
-That is the `list_constraints()` order: the fourteen per-vehicle unit constraints
+That is the `list_constraints()` order: the fifteen per-vehicle unit constraints
 (each vehicle; `constraint_costs()` lists the unassigned pool as one more cell, always
 0, which no route constraint evaluates), then the two globals, `visit_group_cost` and
 `unassigned_visits_cost`. `optimaru.vehicle_routing.constraint_info()` reports exactly this
 table from the C++ components (`kDefaultLevel` / `kDefaultWeight`). Every
 constraint is flippable onto any of the three levels (`level="hard"`, `"medium"` or
 `"soft"`, or a `Level`), none is a reward, and every one at a weight above 0 is scored
-by default (`default_enabled`); the three opt-in objectives (weight 0) are measured
+by default (`default_enabled`); the four opt-in objectives (weight 0) are measured
 but move no score until given a weight. The route-policy constraints cost 0 while their
 vehicle field is 0. The four core constraints
 (`vehicle_capacity_cost`, `max_end_time_cost`, `unassigned_visits_cost`,

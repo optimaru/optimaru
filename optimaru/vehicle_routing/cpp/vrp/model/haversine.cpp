@@ -1,5 +1,6 @@
 #include "vrp/model/haversine.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 namespace vrp {
@@ -41,22 +42,45 @@ Seconds HaversineDrivingTimeCalculator::metersToDrivingSeconds(long meters) {
     return roundToLong(static_cast<double>(meters) / AVERAGE_SPEED_KMPH * 3.6);
 }
 
-Seconds HaversineDrivingTimeCalculator::calculateDrivingTime(const Location& from,
-                                                             const Location& to) {
+Meters HaversineDrivingTimeCalculator::calculateDistance(const Location& from, const Location& to) {
     if (from.latitude == to.latitude && from.longitude == to.longitude) {
         return 0;
     }
-    return metersToDrivingSeconds(
-            calculateDistanceMeters(locationToCartesian(from), locationToCartesian(to)));
+    return calculateDistanceMeters(locationToCartesian(from), locationToCartesian(to));
 }
 
-void HaversineDrivingTimeCalculator::initDrivingTimeMatrix(VehicleRoutePlan& plan) {
+Seconds HaversineDrivingTimeCalculator::calculateDrivingTime(const Location& from,
+                                                             const Location& to) {
+    return metersToDrivingSeconds(calculateDistance(from, to));
+}
+
+void HaversineDrivingTimeCalculator::fillMissingMatrices(VehicleRoutePlan& plan) {
+    const std::size_t profiles =
+            std::max<std::size_t>({plan.durationMatrices.size(), plan.distanceMatrices.size(), 1});
+    plan.durationMatrices.resize(profiles);
+    plan.distanceMatrices.resize(profiles);
     const std::size_t n = plan.locations.size();
-    plan.drivingSeconds.assign(n, std::vector<Seconds>(n, 0));
-    for (std::size_t i = 0; i < n; ++i) {
-        for (std::size_t j = 0; j < n; ++j) {
-            plan.drivingSeconds[i][j] =
-                    (i == j) ? 0 : calculateDrivingTime(plan.locations[i], plan.locations[j]);
+    Matrix meters;  // computed once, on the first empty matrix
+    auto straightLine = [&]() -> const Matrix& {
+        if (meters.empty() && n > 0) {
+            meters.assign(n, std::vector<std::int64_t>(n, 0));
+            for (std::size_t i = 0; i < n; ++i) {
+                for (std::size_t j = 0; j < n; ++j) {
+                    if (i != j)
+                        meters[i][j] = calculateDistance(plan.locations[i], plan.locations[j]);
+                }
+            }
+        }
+        return meters;
+    };
+    for (std::size_t p = 0; p < profiles; ++p) {
+        if (plan.distanceMatrices[p].empty()) plan.distanceMatrices[p] = straightLine();
+        if (plan.durationMatrices[p].empty()) {
+            Matrix seconds = straightLine();
+            for (auto& row : seconds) {
+                for (auto& value : row) value = metersToDrivingSeconds(value);
+            }
+            plan.durationMatrices[p] = std::move(seconds);
         }
     }
 }

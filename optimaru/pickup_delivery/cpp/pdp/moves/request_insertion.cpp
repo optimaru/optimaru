@@ -16,33 +16,18 @@ constexpr Seconds kNever = std::numeric_limits<Seconds>::min() / 4;
 constexpr std::int64_t kLongestGap = 1'000'000'000'000'000'000;
 
 // Whether two vehicles serve any request identically while they are idle:
-// the same limits, and the same driving times between their home and every
-// stop. (Two vehicles of one depot usually have a location entry each.)
-bool sameService(const PdpRoutePlan& plan, const Vehicle& a, const Vehicle& b) {
-    if (a.capacity != b.capacity || a.departureTime != b.departureTime ||
-        a.maxTravelTime != b.maxTravelTime || a.maxRouteDuration != b.maxRouteDuration ||
-        a.maxEndTime != b.maxEndTime || a.maxStops != b.maxStops ||
-        a.minLoadRatio != b.minLoadRatio || a.fixedCost != b.fixedCost ||
-        a.maxRouteRadiusMeters != b.maxRouteRadiusMeters || a.returnToDepot != b.returnToDepot ||
-        !a.pinnedNodeIndices.empty() || !b.pinnedNodeIndices.empty()) {
-        return false;
-    }
-    const auto homeA = static_cast<std::size_t>(a.homeLocationIndex);
-    const auto homeB = static_cast<std::size_t>(b.homeLocationIndex);
-    if (homeA == homeB) return true;
-    if (homeA < plan.locations.size() && homeB < plan.locations.size() &&
-        (plan.locations[homeA].latitude != plan.locations[homeB].latitude ||
-         plan.locations[homeA].longitude != plan.locations[homeB].longitude)) {
-        return false;
-    }
-    for (const Node& node : plan.nodes) {
-        const auto stop = static_cast<std::size_t>(node.locationIndex);
-        if (plan.drivingSeconds[homeA][stop] != plan.drivingSeconds[homeB][stop] ||
-            plan.drivingSeconds[stop][homeA] != plan.drivingSeconds[stop][homeB]) {
-            return false;
-        }
-    }
-    return true;
+// the same limits, the same depots and the same profile. (Vehicles that share
+// a depot share its location entry; two entries at one point count as two
+// depots here, which only offers both vehicles.)
+bool sameService(const Vehicle& a, const Vehicle& b) {
+    return a.capacity == b.capacity && a.departureTime == b.departureTime &&
+           a.maxTravelTime == b.maxTravelTime && a.maxRouteDuration == b.maxRouteDuration &&
+           a.maxEndTime == b.maxEndTime && a.maxStops == b.maxStops &&
+           a.minLoadRatio == b.minLoadRatio && a.fixedCost == b.fixedCost &&
+           a.maxRouteRadiusMeters == b.maxRouteRadiusMeters &&
+           a.startLocationIndex == b.startLocationIndex &&
+           a.endLocationIndex == b.endLocationIndex && a.profileIndex == b.profileIndex &&
+           a.pinnedNodeIndices.empty() && b.pinnedNodeIndices.empty();
 }
 
 }  // namespace
@@ -86,8 +71,9 @@ void RouteTimeline::rebuild(const PdpRoutePlan& plan, int vehicleIndex,
     }
     if (route.empty()) return;
 
+    const Matrix& drive = plan.durationsOf(vehicle);
     Seconds departure = vehicle.departureTime;
-    int location = vehicle.homeLocationIndex;
+    int location = vehicle.startLocationIndex;
     std::int64_t load = 0;
     for (std::size_t i = 0; i < route.size(); ++i) {
         const Node& node = plan.nodes[static_cast<std::size_t>(route[i])];
@@ -97,7 +83,8 @@ void RouteTimeline::rebuild(const PdpRoutePlan& plan, int vehicleIndex,
         stop.minStart = node.minStartTime;
         stop.service = node.serviceDuration;
         stop.due = node.maxEndTime - node.serviceDuration;
-        const Seconds leg = plan.drivingTime(location, stop.location);
+        const Seconds leg =
+                drive[static_cast<std::size_t>(location)][static_cast<std::size_t>(stop.location)];
         travel_ += leg;
         departure = std::max(departure + leg, stop.minStart) + stop.service;
         stop.departure = departure;
@@ -105,13 +92,13 @@ void RouteTimeline::rebuild(const PdpRoutePlan& plan, int vehicleIndex,
         stop.load = load;
         location = stop.location;
     }
-    const Seconds homeLeg = vehicle.homeLeg(plan.drivingSeconds, location);
-    travel_ += homeLeg;
+    const Seconds endLeg = vehicle.endLeg(drive, location);
+    travel_ += endLeg;
 
     // Backwards: how late each stop may be reached. A stop never starts before
     // its window opens, so one whose earliest finish is already too late for
     // what follows cannot be saved by arriving early.
-    Seconds latestDeparture = endLimit_ == kNoLimit ? kNoLimit : endLimit_ - homeLeg;
+    Seconds latestDeparture = endLimit_ == kNoLimit ? kNoLimit : endLimit_ - endLeg;
     for (std::size_t i = stops_.size(); i-- > 0;) {
         Stop& stop = stops_[i];
         if (latestDeparture == kNever || stop.minStart + stop.service > latestDeparture) {
@@ -123,16 +110,19 @@ void RouteTimeline::rebuild(const PdpRoutePlan& plan, int vehicleIndex,
             latestDeparture =
                     stop.latest == kNever
                             ? kNever
-                            : stop.latest - plan.drivingTime(stops_[i - 1].location, stop.location);
+                            : stop.latest - drive[static_cast<std::size_t>(stops_[i - 1].location)]
+                                                 [static_cast<std::size_t>(stop.location)];
         }
     }
 }
 
 Seconds RouteTimeline::legTo(const PdpRoutePlan& plan, int location, int position) const {
+    const Vehicle& vehicle = plan.vehicles[static_cast<std::size_t>(vehicle_)];
     if (position < size()) {
-        return plan.drivingTime(location, stops_[static_cast<std::size_t>(position)].location);
+        return plan.drivingTime(vehicle, location,
+                                stops_[static_cast<std::size_t>(position)].location);
     }
-    return plan.vehicles[static_cast<std::size_t>(vehicle_)].homeLeg(plan.drivingSeconds, location);
+    return vehicle.endLeg(plan.durationsOf(vehicle), location);
 }
 
 void RouteTimeline::improve(const PdpRoutePlan& plan, const Delivery& delivery, Blinker& blinker,
@@ -151,7 +141,7 @@ void RouteTimeline::improve(const PdpRoutePlan& plan, const Delivery& delivery, 
     const Seconds travelBudget =
             vehicle.maxTravelTime > 0 ? vehicle.maxTravelTime - travel_ : kNoLimit;
     const int firstFree = std::min(static_cast<int>(vehicle.pinnedNodeIndices.size()), count);
-    const auto& drive = plan.drivingSeconds;
+    const Matrix& drive = plan.durationsOf(vehicle);
     const auto pickupLocation = static_cast<std::size_t>(pickup.locationIndex);
     const auto dropoffLocation = static_cast<std::size_t>(dropoff.locationIndex);
     const std::vector<Seconds>& fromDropoff = drive[dropoffLocation];
@@ -159,7 +149,7 @@ void RouteTimeline::improve(const PdpRoutePlan& plan, const Delivery& delivery, 
     for (int i = firstFree; i <= count; ++i) {
         const bool first = i == 0;
         const Stop* previous = first ? nullptr : &stops_[static_cast<std::size_t>(i) - 1];
-        const int previousLocation = first ? vehicle.homeLocationIndex : previous->location;
+        const int previousLocation = first ? vehicle.startLocationIndex : previous->location;
         if ((first ? 0 : previous->load) + demand > capacity) continue;
         const Seconds toPickup = drive[static_cast<std::size_t>(previousLocation)][pickupLocation];
         const Seconds pickupArrival =
@@ -191,7 +181,7 @@ void RouteTimeline::improve(const PdpRoutePlan& plan, const Delivery& delivery, 
                         onward = fromDropoff[static_cast<std::size_t>(next.location)];
                         onTime = dropoffDeparture + onward <= next.latest;
                     } else {
-                        onward = vehicle.homeLeg(drive, dropoff.locationIndex);
+                        onward = vehicle.endLeg(drive, dropoff.locationIndex);
                         onTime = dropoffDeparture + onward <= endLimit_;
                     }
                     if (onTime) {
@@ -229,20 +219,22 @@ Seconds RouteTimeline::removalGain(const PdpRoutePlan& plan, int pickupPosition,
     const Vehicle& vehicle = plan.vehicles[static_cast<std::size_t>(vehicle_)];
     const auto before = [&](int position) {
         return position > 0 ? stops_[static_cast<std::size_t>(position) - 1].location
-                            : vehicle.homeLocationIndex;
+                            : vehicle.startLocationIndex;
     };
     const int pickup = stops_[static_cast<std::size_t>(pickupPosition)].location;
     const int dropoff = stops_[static_cast<std::size_t>(dropoffPosition)].location;
     const int beforePickup = before(pickupPosition);
     if (dropoffPosition == pickupPosition + 1) {
-        return plan.drivingTime(beforePickup, pickup) + plan.drivingTime(pickup, dropoff) +
+        return plan.drivingTime(vehicle, beforePickup, pickup) +
+               plan.drivingTime(vehicle, pickup, dropoff) +
                legTo(plan, dropoff, dropoffPosition + 1) -
                legTo(plan, beforePickup, dropoffPosition + 1);
     }
     const int beforeDropoff = before(dropoffPosition);
-    return plan.drivingTime(beforePickup, pickup) + legTo(plan, pickup, pickupPosition + 1) -
-           legTo(plan, beforePickup, pickupPosition + 1) +
-           plan.drivingTime(beforeDropoff, dropoff) + legTo(plan, dropoff, dropoffPosition + 1) -
+    return plan.drivingTime(vehicle, beforePickup, pickup) +
+           legTo(plan, pickup, pickupPosition + 1) - legTo(plan, beforePickup, pickupPosition + 1) +
+           plan.drivingTime(vehicle, beforeDropoff, dropoff) +
+           legTo(plan, dropoff, dropoffPosition + 1) -
            legTo(plan, beforeDropoff, dropoffPosition + 1);
 }
 
@@ -266,7 +258,7 @@ void PlanTimelines::rebuild(const PdpRoutePlan& plan) {
     for (int v = 0; v < vehicleCount; ++v) {
         int& vehicleClass = vehicleClass_[static_cast<std::size_t>(v)];
         for (std::size_t c = 0; c < representatives.size(); ++c) {
-            if (sameService(plan, plan.vehicles[static_cast<std::size_t>(representatives[c])],
+            if (sameService(plan.vehicles[static_cast<std::size_t>(representatives[c])],
                             plan.vehicles[static_cast<std::size_t>(v)])) {
                 vehicleClass = static_cast<int>(c);
                 break;

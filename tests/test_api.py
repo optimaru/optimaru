@@ -67,10 +67,15 @@ def request_of(slug: str):
         deliveries = [
             models.DeliveryModel(id=f"r{i}", demand=1, pickup=stop(f"r{i}p"), dropoff=stop(f"r{i}d")) for i in range(3)
         ]
-        vehicles = [models.VehicleModel(id="v1", capacity=4, home=(37.5, 127.0))]
-        size = 1 + 2 * len(deliveries)
-        seconds = [[60 * abs(a - b) for b in range(size)] for a in range(size)]
-        model_input = models.PdpInput(vehicles=vehicles, deliveries=deliveries, driving_seconds=seconds)
+        vehicles = [models.VehicleModel(id="v1", capacity=4, start_depot="D")]
+        places = ["D"] + [stop.id for delivery in deliveries for stop in (delivery.pickup, delivery.dropoff)]
+        seconds = {a: {b: 60 * abs(i - j) for j, b in enumerate(places)} for i, a in enumerate(places)}
+        model_input = models.PdpInput(
+            depots=[models.DepotModel(id="D", location=(37.5, 127.0))],
+            vehicles=vehicles,
+            deliveries=deliveries,
+            profiles={"default": models.TravelProfile(durations=seconds)},
+        )
         return models.PdpRequest(time_limit_seconds=0.2, model_input=model_input)
     assert slug == "vehicle-routing"
     visits = [
@@ -79,9 +84,10 @@ def request_of(slug: str):
         )
         for i in range(5)
     ]
-    vehicles = [models.VehicleModel(id=f"V{i}", capacity=6, depot=(37.5, 127.0)) for i in range(2)]
+    vehicles = [models.VehicleModel(id=f"V{i}", capacity=6, start_depot="D") for i in range(2)]
+    depots = [models.DepotModel(id="D", location=(37.5, 127.0))]
     return models.RoutePlanRequest(
-        time_limit_seconds=0.2, model_input=models.RoutingInput(vehicles=vehicles, visits=visits)
+        time_limit_seconds=0.2, model_input=models.RoutingInput(depots=depots, vehicles=vehicles, visits=visits)
     )
 
 

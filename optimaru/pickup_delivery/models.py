@@ -1,4 +1,10 @@
-"""JSON request/response contract shared by PDP solver backends."""
+"""JSON request/response contract shared by PDP solver backends.
+
+A route starts at its vehicle's `start_depot` and ends at its `end_depot`, or at
+its last stop when there is none (an open route). Driving seconds and meters
+come from the vehicle's travel profile (`PdpInput.profiles`, dicts keyed by depot
+and stop ids); without one, straight lines between the coordinates.
+"""
 
 from __future__ import annotations
 
@@ -8,16 +14,28 @@ from pydantic import Field, model_validator
 
 from .. import _api
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
+from .._routing import (
+    DEFAULT_PROFILE,
+    MISSING_TRAVEL_VALUE,
+    DepotModel,
+    TravelProfile,
+    check_depots_and_profiles,
+    profile_matrices,
+)
 from . import _core
 from .constraints import get_constraints
 
 __all__ = [
+    "DEFAULT_PROFILE",
+    "MISSING_TRAVEL_VALUE",
     "DeliveryModel",
+    "DepotModel",
     "PdpInput",
     "PdpRequest",
     "PdpSolution",
     "PdpStop",
     "StopModel",
+    "TravelProfile",
     "VehicleMetrics",
     "VehicleModel",
     "solve_request",
@@ -30,7 +48,19 @@ __all__ = [
 class VehicleModel(StrictModel):
     id: str
     capacity: int = Field(ge=0)
-    home: tuple[float, float]
+    start_depot: str = Field(description="Id of the depot the route starts at.")
+    end_depot: str | None = Field(
+        default=None,
+        description=(
+            "Id of the depot the route ends at, the start depot or another. None (the "
+            "default) is an open route: it ends at its last stop, so no closing leg is "
+            "driven or counted toward the route end time."
+        ),
+    )
+    profile: str = Field(
+        default=DEFAULT_PROFILE,
+        description="Name of the travel profile in `PdpInput.profiles` the vehicle drives on.",
+    )
     departure_time: int = 0
     max_travel_time: int = Field(default=0, ge=0)
     max_route_duration: int = Field(default=0, ge=0)
@@ -47,14 +77,6 @@ class VehicleModel(StrictModel):
     min_load_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
     fixed_cost: float = Field(default=0.0, ge=0.0)
     max_route_radius_meters: float = Field(default=0.0, ge=0.0)
-    return_to_depot: bool = Field(
-        default=False,
-        description=(
-            "Whether the route ends back at the vehicle's start. Off by default: "
-            "the route is open and ends at its last stop, so no closing leg is "
-            "driven or counted toward the route end time."
-        ),
-    )
     initial_route: list[str] = Field(
         default_factory=list,
         description=(
@@ -108,9 +130,17 @@ class DeliveryModel(StrictModel):
 
 
 class PdpInput(StrictModel):
+    depots: list[DepotModel]
     vehicles: list[VehicleModel]
     deliveries: list[DeliveryModel]
-    driving_seconds: list[list[int]] | None = None
+    profiles: dict[str, TravelProfile] = Field(
+        default_factory=dict,
+        description=(
+            "Travel profiles by name: driving seconds and meters between depots and stops, "
+            "keyed by their ids. Empty (the default): every vehicle drives straight lines "
+            "between the coordinates."
+        ),
+    )
 
     @model_validator(mode="after")
     def _unique_ids(self):
@@ -123,12 +153,7 @@ class PdpInput(StrictModel):
             raise ValueError("duplicate delivery ids")
         if len(stop_ids) != len(set(stop_ids)):
             raise ValueError("duplicate stop ids")
-        if self.driving_seconds is not None:
-            size = len(self.vehicles) + 2 * len(self.deliveries)
-            if len(self.driving_seconds) != size or any(len(row) != size for row in self.driving_seconds):
-                raise ValueError("driving_seconds must be a square matrix over vehicles then stops")
-            if any(value < 0 for row in self.driving_seconds for value in row):
-                raise ValueError("driving_seconds values must be non-negative")
+        check_depots_and_profiles(self.depots, stop_ids, self.vehicles, self.profiles)
         self._check_initial_routes()
         for delivery in self.deliveries:
             if delivery.required_vehicle and delivery.required_vehicle not in vehicle_ids:
@@ -197,7 +222,7 @@ class VehicleMetrics(StrictModel):
     """Per-vehicle figures derived from a finished route (post-processing).
 
     Nothing here is scored. The numbers are recomputed from the reported stop
-    order and arrival times with the request's driving matrix, so every
+    order and arrival times with the vehicle's travel profile, so every
     backend reports them identically for the same routes.
     """
 
@@ -206,12 +231,12 @@ class VehicleMetrics(StrictModel):
     peak_load: int = 0  # most demand carried at any one moment
     delivered: int = 0  # total demand dropped off
     driving_seconds: int = 0
+    driving_meters: int = 0
     departure_time: int
-    end_time: int  # departure from the last stop, plus the leg home if it returns
+    end_time: int  # departure from the last stop, plus the leg to the end depot if there is one
     route_duration_seconds: int = 0  # end_time - departure_time
     waiting_seconds: int = 0  # idle time spent before a stop's window opens
     service_seconds: int = 0
-    return_to_depot: bool = False
 
 
 class PdpSolution(StrictModel):
@@ -220,16 +245,28 @@ class PdpSolution(StrictModel):
     score: str
     feasible: bool
     total_driving_seconds: int
+    total_driving_meters: int = 0
     vehicle_metrics: dict[str, VehicleMetrics] = Field(default_factory=dict)
 
 
 def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
-    locations = [_core.Location(*vehicle.home) for vehicle in model_input.vehicles]
+    """Build the C++ PdpRoutePlan from the pydantic input.
+
+    The locations are the depots, then each request's pickup and dropoff, in input
+    order; each profile's dicts become square matrices over them
+    (`profile_matrices`), and the engine fills what a profile does not give from
+    the coordinates."""
+    locations = [_core.Location(*depot.location) for depot in model_input.depots]
+    depot_index = {depot.id: i for i, depot in enumerate(model_input.depots)}
+    places = [depot.id for depot in model_input.depots]
+    for delivery in model_input.deliveries:
+        places += [delivery.pickup.id, delivery.dropoff.id]
+    profile_index, durations, distances = profile_matrices(model_input.profiles, places)
     vehicles = [
         _core.Vehicle(
             vehicle.id,
             vehicle.capacity,
-            i,
+            depot_index[vehicle.start_depot],
             vehicle.departure_time,
             vehicle.max_travel_time,
             vehicle.max_route_duration,
@@ -238,9 +275,10 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
             vehicle.min_load_ratio,
             vehicle.fixed_cost,
             vehicle.max_route_radius_meters,
-            vehicle.return_to_depot,
+            -1 if vehicle.end_depot is None else depot_index[vehicle.end_depot],
+            profile_index[vehicle.profile],
         )
-        for i, vehicle in enumerate(model_input.vehicles)
+        for vehicle in model_input.vehicles
     ]
     vehicle_index = {vehicle.id: i for i, vehicle in enumerate(model_input.vehicles)}
     group_index: dict[str, int] = {}
@@ -289,7 +327,7 @@ def to_plan(model_input: PdpInput, *, name: str = "plan") -> _core.PdpRoutePlan:
         route = [node_index[stop_id] for stop_id in model.initial_route]
         vehicle.node_indices = route
         vehicle.pinned_node_indices = route[: model.pinned_stops]
-    plan = _core.PdpRoutePlan(name, locations, vehicles, nodes, deliveries, model_input.driving_seconds)
+    plan = _core.PdpRoutePlan(name, locations, vehicles, nodes, deliveries, durations, distances)
     plan.rebuild_unassigned_pool()
     return plan
 
@@ -305,9 +343,10 @@ def vehicle_metrics(plan: _core.PdpRoutePlan, routes: dict[str, list[PdpStop]]) 
     metrics: dict[str, VehicleMetrics] = {}
     for vehicle in plan.vehicles:
         stops = routes.get(vehicle.id, [])
+        profile = vehicle.profile_index
         requests = load = peak = delivered = 0
-        driving = waiting = service = 0
-        previous = vehicle.home_location_index
+        driving = meters = waiting = service = 0
+        previous = vehicle.start_location_index
         departure = vehicle.departure_time
         for stop in stops:
             node = node_by_id[stop.stop_id]
@@ -319,14 +358,16 @@ def vehicle_metrics(plan: _core.PdpRoutePlan, routes: dict[str, list[PdpStop]]) 
             else:
                 load -= demand
                 delivered += demand
-            driving += plan.driving_time(previous, node.location_index)
+            driving += plan.driving_time(previous, node.location_index, profile)
+            meters += plan.driving_distance(previous, node.location_index, profile)
             waiting += max(0, node.min_start_time - stop.arrival_time)
             service += node.service_duration
             departure = max(stop.arrival_time, node.min_start_time) + node.service_duration
             previous = node.location_index
-        if stops and vehicle.return_to_depot:
-            leg = plan.driving_time(previous, vehicle.home_location_index)
+        if stops and vehicle.end_location_index >= 0:
+            leg = plan.driving_time(previous, vehicle.end_location_index, profile)
             driving += leg
+            meters += plan.driving_distance(previous, vehicle.end_location_index, profile)
             departure += leg
         metrics[vehicle.id] = VehicleMetrics(
             stops=len(stops),
@@ -334,12 +375,12 @@ def vehicle_metrics(plan: _core.PdpRoutePlan, routes: dict[str, list[PdpStop]]) 
             peak_load=peak,
             delivered=delivered,
             driving_seconds=driving,
+            driving_meters=meters,
             departure_time=vehicle.departure_time,
             end_time=departure,
             route_duration_seconds=departure - vehicle.departure_time,
             waiting_seconds=waiting,
             service_seconds=service,
-            return_to_depot=vehicle.return_to_depot,
         )
     return metrics
 
@@ -400,6 +441,7 @@ def solve_request(request: PdpRequest, *, constraints=None) -> PdpSolution:
         score=str(plan.score),
         feasible=plan.score.is_feasible(),
         total_driving_seconds=sum(m.driving_seconds for m in metrics.values()),
+        total_driving_meters=sum(m.driving_meters for m in metrics.values()),
         vehicle_metrics=metrics,
     )
 

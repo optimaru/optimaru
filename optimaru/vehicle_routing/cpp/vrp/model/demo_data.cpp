@@ -17,10 +17,10 @@ int addLocation(VehicleRoutePlan& plan, double latitude, double longitude) {
 VehicleRoutePlan buildFixturePlan() {
     VehicleRoutePlan plan;
     plan.name = "fixture";
-    addLocation(plan, 49.288087, 16.562172);                 // LOCATION_1 (home)
+    addLocation(plan, 49.288087, 16.562172);                 // LOCATION_1 (depot)
     addLocation(plan, 49.190922, 16.624466);                 // LOCATION_2
     addLocation(plan, 49.1767533245638, 16.50422914190477);  // LOCATION_3
-    HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan);
+    HaversineDrivingTimeCalculator::fillMissingMatrices(plan);
     return plan;
 }
 
@@ -38,11 +38,11 @@ VehicleRoutePlan buildRandomInstance(int visitCount, int vehicleCount, std::uint
     const int serviceMinutes[] = {10, 20, 30, 40};
 
     for (int v = 0; v < vehicleCount; ++v) {
-        const int home = addLocation(plan, latitude(rng), longitude(rng));
+        const int depot = addLocation(plan, latitude(rng), longitude(rng));
         Vehicle vehicle;
         vehicle.id = std::to_string(v + 1);
         vehicle.capacity = capacity(rng);
-        vehicle.homeLocationIndex = home;
+        vehicle.startLocationIndex = depot;
         vehicle.departureTime = hourMinute(7, 30);
         plan.vehicles.push_back(std::move(vehicle));
     }
@@ -57,7 +57,7 @@ VehicleRoutePlan buildRandomInstance(int visitCount, int vehicleCount, std::uint
                                     location, demand(rng), minStart, maxEnd,
                                     serviceMinutes[service(rng)] * 60LL});
     }
-    HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan);
+    HaversineDrivingTimeCalculator::fillMissingMatrices(plan);
     return plan;
 }
 

@@ -42,11 +42,11 @@ Walk walk(const VehicleRoutePlan& plan, int vehicleIndex, const std::vector<int>
     if (route.empty()) return result;
     std::int64_t demand = 0;
     Seconds departure = vehicle.departureTime;
-    int location = vehicle.homeLocationIndex;
+    int location = vehicle.startLocationIndex;
     for (int visitIndex : route) {
         const Visit& visit = plan.visits[static_cast<std::size_t>(visitIndex)];
         demand += visit.demand;
-        const Seconds leg = plan.drivingTime(location, visit.locationIndex);
+        const Seconds leg = plan.drivingTime(vehicle, location, visit.locationIndex);
         result.travel += leg;
         const Seconds arrival = departure + leg;
         if (arrival + visit.serviceDuration > visit.maxEndTime) result.feasible = false;
@@ -54,9 +54,9 @@ Walk walk(const VehicleRoutePlan& plan, int vehicleIndex, const std::vector<int>
         location = visit.locationIndex;
     }
     if (demand > vehicle.capacity) result.feasible = false;
-    const Seconds homeLeg = vehicle.homeLeg(plan.drivingSeconds, location);
-    result.travel += homeLeg;
-    const Seconds end = departure + homeLeg;
+    const Seconds endLeg = vehicle.endLeg(plan.durationsOf(vehicle), location);
+    result.travel += endLeg;
+    const Seconds end = departure + endLeg;
     if (vehicle.maxEndTime > 0 && end > vehicle.maxEndTime) result.feasible = false;
     if (vehicle.maxRouteDuration > 0 && end - vehicle.departureTime > vehicle.maxRouteDuration) {
         result.feasible = false;
@@ -94,7 +94,7 @@ VisitInsertion bruteForce(const VehicleRoutePlan& plan, int vehicleIndex,
 VehicleRoutePlan tighten(VehicleRoutePlan plan, int capacity, Seconds windowMinutes) {
     for (Vehicle& vehicle : plan.vehicles) {
         vehicle.capacity = capacity;
-        vehicle.returnToDepot = true;
+        vehicle.endLocationIndex = vehicle.startLocationIndex;
     }
     for (Visit& visit : plan.visits) visit.maxEndTime = visit.minStartTime + windowMinutes * 60;
     return plan;
@@ -109,7 +109,10 @@ void testScanMatchesBruteForce() {
     std::printf("== Insertion scan vs brute force ==\n");
     const Variant variants[] = {
             {"open routes", [](VehicleRoutePlan&) {}},
-            {"closed routes", [](VehicleRoutePlan& p) { p.vehicles[0].returnToDepot = true; }},
+            {"closed routes",
+             [](VehicleRoutePlan& p) {
+                 p.vehicles[0].endLocationIndex = p.vehicles[0].startLocationIndex;
+             }},
             {"tight windows and seats",
              [](VehicleRoutePlan& p) {
                  p.vehicles[0].capacity = 9;
@@ -117,14 +120,14 @@ void testScanMatchesBruteForce() {
              }},
             {"shift end",
              [](VehicleRoutePlan& p) {
-                 p.vehicles[0].returnToDepot = true;
+                 p.vehicles[0].endLocationIndex = p.vehicles[0].startLocationIndex;
                  p.vehicles[0].maxEndTime = hourMinute(15, 0);
              }},
             {"route duration",
              [](VehicleRoutePlan& p) { p.vehicles[0].maxRouteDuration = 7 * 3600; }},
             {"travel budget",
              [](VehicleRoutePlan& p) {
-                 p.vehicles[0].returnToDepot = true;
+                 p.vehicles[0].endLocationIndex = p.vehicles[0].startLocationIndex;
                  p.vehicles[0].maxTravelTime = 2400;
              }},
             {"stop cap", [](VehicleRoutePlan& p) { p.vehicles[0].maxStops = 7; }},
@@ -344,7 +347,8 @@ void testUnitPlanner() {
         VehicleRoutePlan plan =
                 tighten(buildRandomInstance(12, 1, seed), /*capacity=*/14,
                         /*windowMinutes=*/static_cast<Seconds>(150 + 30 * (seed % 4)));
-        plan.vehicles[0].returnToDepot = seed % 2 == 0;
+        plan.vehicles[0].endLocationIndex =
+                (seed % 2 == 0) ? plan.vehicles[0].startLocationIndex : -1;
         if (seed % 7 == 0) plan.vehicles[0].maxStops = 8;
         // Visits 6..9 are a group: one first, one last, two between in any
         // order (the first and the last by their windows).

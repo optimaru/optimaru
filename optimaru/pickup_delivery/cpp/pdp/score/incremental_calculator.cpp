@@ -166,7 +166,7 @@ PdpIncrementalScoreCalculator::RouteTerms PdpIncrementalScoreCalculator::evaluat
 
     std::int64_t load = 0;
     Seconds previousDeparture = vehicle.departureTime;
-    int previousLocation = vehicle.homeLocationIndex;
+    int previousLocation = vehicle.startLocationIndex;
 
     for (int nodeIndex : vehicle.nodeIndices) {
         const Node& node = plan_->nodes[static_cast<std::size_t>(nodeIndex)];
@@ -175,7 +175,7 @@ PdpIncrementalScoreCalculator::RouteTerms PdpIncrementalScoreCalculator::evaluat
         load += node.pickup ? delivery.demand : -delivery.demand;
         if (load > vehicle.capacity) terms.capacityExcess += load - vehicle.capacity;
 
-        const Seconds drive = plan_->drivingTime(previousLocation, node.locationIndex);
+        const Seconds drive = plan_->drivingTime(vehicle, previousLocation, node.locationIndex);
         terms.driving += drive;
 
         const Seconds arrival = previousDeparture + drive;
@@ -187,7 +187,7 @@ PdpIncrementalScoreCalculator::RouteTerms PdpIncrementalScoreCalculator::evaluat
         previousDeparture = std::max(arrival, node.minStartTime) + node.serviceDuration;
         previousLocation = node.locationIndex;
     }
-    terms.driving += vehicle.homeLeg(plan_->drivingSeconds, previousLocation);
+    terms.driving += vehicle.endLeg(plan_->durationsOf(vehicle), previousLocation);
     return terms;
 }
 

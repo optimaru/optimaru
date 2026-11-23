@@ -24,6 +24,7 @@
 #include "vrp/constraints/route_duration_cost.hpp"
 #include "vrp/constraints/route_geometry.hpp"
 #include "vrp/constraints/route_sums.hpp"
+#include "vrp/constraints/travel_distance_cost.hpp"
 #include "vrp/constraints/travel_time_cost.hpp"
 #include "vrp/constraints/unassigned_visits_cost.hpp"
 #include "vrp/constraints/vehicle_capacity_cost.hpp"
@@ -63,6 +64,7 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<VisitGroupCost>();
     assembly.emplace<UnassignedVisitsCost>();
     assembly.emplace<TravelTimeCost>();
+    assembly.emplace<TravelDistanceCost>();
     assembly.emplace<MaxTravelTimeCost>();
     assembly.emplace<MaxRouteDurationCost>();
     assembly.emplace<VehicleMaxEndTimeCost>();

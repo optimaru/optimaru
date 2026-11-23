@@ -7,8 +7,8 @@ Python bindings for the C++ pickup-and-delivery solver in
 must serve, pickup first, without ever exceeding its capacity in between. Each
 stop has a time window and a service duration. Decide which vehicle serves which
 requests, in what order, driving as little as possible. Routes are open by
-default — a vehicle ends its day at its last stop; set `return_to_depot=True` on
-a vehicle to charge and time the leg back home. The constraints, the request-level
+default — a vehicle ends its day at its last stop; give a vehicle an `end_depot`
+(its start depot or another) to charge and time the leg there. The constraints, the request-level
 operators and the scoring are explained in the [use-case README](README.md).
 
 ## Install and test
@@ -21,10 +21,10 @@ uv run pytest -q tests/pickup_delivery
 ```python
 from optimaru import pickup_delivery as pdp
 
-locations = [pdp.Location(37.5665, 126.9780),   # index 0: vehicle home
+locations = [pdp.Location(37.5665, 126.9780),   # index 0: the depot
              pdp.Location(37.5700, 126.9820),   # index 1: the pickup
              pdp.Location(37.5740, 126.9750)]   # index 2: the dropoff
-vehicles = [pdp.Vehicle("V1", capacity=10, home_location_index=0, departure_time=7 * 3600)]
+vehicles = [pdp.Vehicle("V1", capacity=10, start_location_index=0, departure_time=7 * 3600)]
 nodes = [pdp.Node("R1-pickup", 1, 8 * 3600, 18 * 3600, 300, delivery_index=0, pickup=True),
          pdp.Node("R1-dropoff", 2, 8 * 3600, 18 * 3600, 300, delivery_index=0, pickup=False)]
 deliveries = [pdp.Delivery("R1", pickup_node_index=0, dropoff_node_index=1, demand=3)]
@@ -42,8 +42,12 @@ print(plan.unassigned_delivery_ids())  # []
   (`Node(id, location_index, min_start_time, max_end_time, service_duration,
   delivery_index, pickup)`); a `Delivery` is the request and names its two nodes
   by index.
-- Constructing a `PdpRoutePlan` accepts an explicit `driving_seconds` matrix or
-  precomputes the haversine fallback.
+- `PdpRoutePlan` takes one driving-seconds and one driving-meters matrix per
+  travel profile (`durations=`, `distances=`, lists of square matrices over the
+  locations; `Vehicle.profile_index` picks one). A matrix not given is
+  precomputed from the coordinates: haversine meters, and those meters at 50 km/h
+  for the seconds. `Vehicle.end_location_index` is where the route ends, -1 (the
+  default) for an open route.
 - Each vehicle's ordered `node_indices` (its route) is the decision. A stop in no
   route is unassigned and lands in `plan.unassigned_node_indices`.
 - Score (hard, medium, soft; lexicographic), at the default weights: **hard** =
@@ -101,6 +105,7 @@ print(plan.unassigned_delivery_ids())  # []
 | `vehicle_capacity_cost` | `VehicleCapacityCost` | hard | 1 | yes |
 | `max_end_time_cost` | `MaxEndTimeCost` | hard | 1 | yes |
 | `travel_time_cost` | `TravelTimeCost` | soft | 1 | yes |
+| `travel_distance_cost` | `TravelDistanceCost` | soft | 0 | no (opt-in) |
 | `max_travel_time_cost` | `MaxTravelTimeCost` | hard | 1 | yes |
 | `max_route_duration_cost` | `MaxRouteDurationCost` | hard | 1 | yes |
 | `vehicle_max_end_time_cost` | `VehicleMaxEndTimeCost` | hard | 1 | yes |
@@ -144,13 +149,14 @@ optimaru API and `solve(plan)` is refused: a compiled plan is solved in place, w
 cannot do. See [Solving on the optimaru API](../README.md#solving-on-the-optimaru-api).
 
 ```python
-from optimaru.pickup_delivery.models import (DeliveryModel, PdpInput, PdpRequest, StopModel,
-                                             VehicleModel, solve_request)
+from optimaru.pickup_delivery.models import (DeliveryModel, DepotModel, PdpInput, PdpRequest,
+                                             StopModel, VehicleModel, solve_request)
 
 request = PdpRequest(
     time_limit_seconds=2,
     model_input=PdpInput(
-        vehicles=[VehicleModel(id="V1", capacity=10, home=(37.5665, 126.9780))],
+        depots=[DepotModel(id="D1", location=(37.5665, 126.9780))],
+        vehicles=[VehicleModel(id="V1", capacity=10, start_depot="D1")],
         deliveries=[DeliveryModel(
             id="R1", demand=3,
             pickup=StopModel(id="R1-pickup", location=(37.57, 126.982), service_duration=300),
@@ -169,13 +175,25 @@ print(solution.score, solution.feasible, solution.total_driving_seconds)   # 0ha
   further `SolverConfig` fields by name.
 - `PdpSolution` has `routes` (vehicle id to a list of `PdpStop` with `stop_id`,
   `delivery_id`, `pickup`, `arrival_time`), `unassigned`, `score`, `feasible`,
-  `total_driving_seconds` and `vehicle_metrics`.
+  `total_driving_seconds`, `total_driving_meters` and `vehicle_metrics`.
 - `VehicleModel.max_stops` defaults to 20 here (a request counts as two; `0` lifts
   it), while the compiled `Vehicle` keeps 0, no cap.
 - `with_initial_solution(request, solution)` returns a new request whose solve
   starts from `solution`; see
   [Starting from an existing solution](README.md#starting-from-an-existing-solution).
 - Everything round-trips through JSON (`model_validate_json` / `model_dump_json`).
+
+### Depots and travel profiles
+
+The same as in [vehicle routing](../vehicle-routing/python.md#depots-and-travel-profiles),
+with stops in place of visits: `PdpInput.depots` lists the depots, each vehicle names its
+`start_depot` and, unless its route is open, its `end_depot`; `PdpInput.profiles` holds
+each travel profile's `durations` and `distances` as `{from_id: {to_id: value}}` over
+depot and stop ids (pickup and dropoff ids alike), and `VehicleModel.profile` picks one
+(`"default"` unless set). A pair the dicts leave out costs the profile's
+`missing_value` (10,000,000 by default); a profile without one of the dicts, and every
+vehicle when `profiles` is empty, drives straight lines. The matrices run over the
+depots, then each request's pickup and dropoff, in input order.
 
 ## Files
 

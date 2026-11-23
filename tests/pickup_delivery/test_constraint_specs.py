@@ -85,6 +85,7 @@ def test_list_constraints_matches_the_spec_names():
         "vehicle_capacity_cost",
         "max_end_time_cost",
         "travel_time_cost",
+        "travel_distance_cost",
         "max_travel_time_cost",
         "max_route_duration_cost",
         "vehicle_max_end_time_cost",
@@ -249,11 +250,12 @@ def test_score_reweighting_is_linear_without_rescoring():
 
 def order_age_input(order_times: list[int]) -> pdp.models.PdpInput:
     """One vehicle at 0, and requests whose stops are all at the same place, 100 s away."""
-    size = 1 + 2 * len(order_times)
-    seconds = [[0 if i == j or (i and j) else 100 for j in range(size)] for i in range(size)]
+    places = ["v"] + [f"{kind}{i}" for i in range(len(order_times)) for kind in "pd"]
+    seconds = {a: {b: 0 if a == b or "v" not in (a, b) else 100 for b in places} for a in places}
     stop = lambda name: pdp.models.StopModel(id=name, location=(37.5, 127.0), max_end_time=10**6, service_duration=10)
     return pdp.models.PdpInput(
-        vehicles=[pdp.models.VehicleModel(id="v", capacity=5, home=(37.5, 127.0), max_stops=0)],
+        depots=[pdp.models.DepotModel(id="v", location=(37.5, 127.0))],
+        vehicles=[pdp.models.VehicleModel(id="v", capacity=5, start_depot="v", max_stops=0)],
         deliveries=[
             pdp.models.DeliveryModel(
                 id=f"r{i}",
@@ -264,7 +266,7 @@ def order_age_input(order_times: list[int]) -> pdp.models.PdpInput:
             )
             for i, order in enumerate(order_times)
         ],
-        driving_seconds=seconds,
+        profiles={"default": pdp.models.TravelProfile(durations=seconds)},
     )
 
 
@@ -318,6 +320,7 @@ EXPECTED_INFO = [
     ("vehicle_capacity_cost", "hard", 1.0, True),
     ("max_end_time_cost", "hard", 1.0, True),
     ("travel_time_cost", "soft", 1.0, True),
+    ("travel_distance_cost", "soft", 0.0, False),
     ("max_travel_time_cost", "hard", 1.0, True),
     ("max_route_duration_cost", "hard", 1.0, True),
     ("vehicle_max_end_time_cost", "hard", 1.0, True),
@@ -587,9 +590,10 @@ def _hand_input():
         return pdp.models.StopModel(id=name, location=(37.5, 127.0), service_duration=service.get(request, 0))
 
     return pdp.models.PdpInput(
+        depots=[pdp.models.DepotModel(id=name, location=(37.5, 127.0)) for name in routes],
         vehicles=[
             pdp.models.VehicleModel(
-                id=name, capacity=2 if name == "v" else 10, home=(37.5, 127.0), max_stops=0, initial_route=route
+                id=name, capacity=2 if name == "v" else 10, start_depot=name, max_stops=0, initial_route=route
             )
             for name, route in routes.items()
         ],
@@ -599,7 +603,11 @@ def _hand_input():
             )
             for i in (1, 2, 3)
         ],
-        driving_seconds=[[abs(HAND_PLACES[p] - HAND_PLACES[q]) for q in order] for p in order],
+        profiles={
+            "default": pdp.models.TravelProfile(
+                durations={p: {q: abs(HAND_PLACES[p] - HAND_PLACES[q]) for q in order} for p in order}
+            )
+        },
     )
 
 

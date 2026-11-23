@@ -112,7 +112,7 @@ private:
         std::vector<std::int64_t> cumService;  // service seconds
         std::vector<std::int64_t> cumPenalty;  // unassigned penalty (pool term)
         // Driving along the list: cumDist[k] = drive into element k-1 (from
-        // its predecessor, or from home for k == 1), so the internal distance
+        // its predecessor, or from the start depot for k == 1), so the internal distance
         // of [i, j) is cumDist[j] - cumDist[i + 1]. cumRevDist is the same
         // for the reversed traversal: element k-1 -> element k-2.
         std::vector<std::int64_t> cumDist;
@@ -147,6 +147,7 @@ private:
 
     void rebuildCache(int listIndex);
     bool previewRuns(const Run* runs, int runCount, optimaru::Score& out) const;
+    bool mixesProfiles(const Run* runs, int runCount) const;
     // The exact O(route) path: materialize and walk. Used on a plan with
     // waiting and whenever the cached sums cannot rule lateness out.
     bool previewRunsByWalk(const Run* runs, int runCount, optimaru::Score& out) const;
@@ -155,6 +156,11 @@ private:
     // Earliest deadline among the elements [begin, end) of a cached list.
     Seconds minEndOf(const ListCache& cache, const std::vector<int>& elements, std::size_t begin,
                      std::size_t end) const;
+    // The profile a list's cached legs are in: its vehicle's, the first for the pool.
+    int profileOf(int list) const {
+        return list >= vehicleCount_ ? 0
+                                     : plan_->vehicles[static_cast<std::size_t>(list)].profileIndex;
+    }
     const std::vector<int>& elementsOf(int list) const {
         return list >= vehicleCount_ ? plan_->unassignedVisitIndices
                                      : plan_->vehicles[static_cast<std::size_t>(list)].visitIndices;
@@ -165,7 +171,7 @@ private:
     struct RouteTerms {
         std::int64_t overload = 0;  // hard: max(0, demand - capacity)
         std::int64_t lateness = 0;  // hard: whole minutes past maxEndTime
-        std::int64_t driving = 0;   // soft: seconds, home -> visits (-> home if returnToDepot)
+        std::int64_t driving = 0;   // soft: seconds, start -> visits (-> end depot)
     };
 
     RouteTerms evaluateRoute(int vehicleIndex) const;
@@ -190,6 +196,8 @@ private:
     // the service start and finish times follow from distances alone. Only
     // then are the prefix-sum caches built and the O(1) previews served.
     bool noWaiting_ = false;
+    // Every vehicle drives on one matrix, so the cached legs fit every route.
+    bool oneProfile_ = true;
     mutable std::vector<int> walkScratch_;  // waiting-plan previews: the candidate route
 
     // Running totals, all >= 0 (they are penalties; the score negates them).

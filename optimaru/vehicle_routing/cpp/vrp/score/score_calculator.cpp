@@ -51,13 +51,14 @@ void ScoreCalculator::updateShadowVariables(VehicleRoutePlan& plan) {
     for (std::size_t v = 0; v < plan.vehicles.size(); ++v) {
         const Vehicle& vehicle = plan.vehicles[v];
         Seconds prevDeparture = vehicle.departureTime;
-        int prevLocation = vehicle.homeLocationIndex;
+        int prevLocation = vehicle.startLocationIndex;
 
         for (int visitIdx : vehicle.visitIndices) {
             Visit& visit = plan.visits[visitIdx];
             visit.vehicleIndex = static_cast<int>(v);
 
-            Seconds arrival = prevDeparture + plan.drivingTime(prevLocation, visit.locationIndex);
+            Seconds arrival =
+                    prevDeparture + plan.drivingTime(vehicle, prevLocation, visit.locationIndex);
             visit.arrivalTime = arrival;
 
             Seconds startService = std::max(arrival, visit.minStartTime);
@@ -109,18 +110,19 @@ Score ScoreCalculator::score(VehicleRoutePlan& plan) {
     }
 
     // --- Soft: travelTimeCost ---
-    // penalize each vehicle's total driving time: home -> visits..., plus the
-    // leg back home when the vehicle returns to its depot.
+    // penalize each vehicle's total driving time: start depot -> visits...,
+    // plus the leg to the end depot when the route has one.
     for (const Vehicle& vehicle : plan.vehicles) {
         if (vehicle.visitIndices.empty()) continue;
+        const Matrix& drive = plan.durationsOf(vehicle);
         Seconds total = 0;
-        int prevLocation = vehicle.homeLocationIndex;
+        int prevLocation = vehicle.startLocationIndex;
         for (int visitIdx : vehicle.visitIndices) {
             int loc = plan.visits[visitIdx].locationIndex;
-            total += plan.drivingTime(prevLocation, loc);
+            total += drive[prevLocation][loc];
             prevLocation = loc;
         }
-        total += vehicle.homeLeg(plan.drivingSeconds, prevLocation);
+        total += vehicle.endLeg(drive, prevLocation);
         score.soft -= kTravelWeight * total;
     }
 

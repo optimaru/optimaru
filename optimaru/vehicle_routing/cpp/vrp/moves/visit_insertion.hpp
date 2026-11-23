@@ -56,7 +56,7 @@ public:
     int size() const { return static_cast<int>(stops_.size()); }
     // The vehicle whose route this is.
     int vehicle() const { return vehicle_; }
-    // Driving seconds of the route, the leg home included when it is driven.
+    // Driving seconds of the route, the leg to the end depot included.
     Seconds travel() const { return travel_; }
 
 private:

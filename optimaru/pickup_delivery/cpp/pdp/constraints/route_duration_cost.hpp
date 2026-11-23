@@ -7,8 +7,8 @@ namespace pdp {
 
 // Soft, weight 0 (opt-in, default_enabled = false): routeDurationCost — the
 // working time of each used vehicle. Raw cost per vehicle = endTime -
-// departureTime in seconds (waiting and service included; the leg home only
-// with returnToDepot); 0 for an unused vehicle (and for the pool list).
+// departureTime in seconds (waiting and service included; the leg to the end
+// depot when there is one); 0 for an unused vehicle (and for the pool list).
 struct RouteDurationCost final : detail::PerVehicleConstraint {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;

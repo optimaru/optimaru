@@ -6,11 +6,11 @@
 namespace vrp {
 
 // Soft, weight 1: travelTimeCost -- each vehicle's driving time for the whole
-// route, home -> visits..., plus the leg back home when the vehicle returns
-// to its depot. Raw cost per vehicle = its driving seconds; 0 = a vehicle
+// route, start depot -> visits..., plus the leg to the end depot when the
+// route has one. Raw cost per vehicle = its driving seconds; 0 = a vehicle
 // that stays parked (and the pool list). Previewed in O(pieces): each
 // piece's internal legs come from the shared distance sums, the legs between
-// pieces and home are looked up.
+// pieces and the depots are looked up.
 struct TravelTimeCost final : detail::SummedUnitConstraint {
     static constexpr double kDefaultWeight = 1.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;
@@ -30,8 +30,9 @@ struct TravelTimeCost final : detail::SummedUnitConstraint {
             out = 0.0;
             return true;
         }
-        out = static_cast<double>(
-                walk.drive + plan.vehicles[unit].homeLeg(plan.drivingSeconds, walk.lastLocation));
+        out = static_cast<double>(walk.drive +
+                                  plan.vehicles[unit].endLeg(plan.durationsOf(plan.vehicles[unit]),
+                                                             walk.lastLocation));
         return true;
     }
 

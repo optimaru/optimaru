@@ -5,6 +5,7 @@ import pytest
 from pickup_delivery_cpsat.public_benchmark import (
     BEST_KNOWN,
     DISTANCE_SCALE,
+    SOLVER_NAMES,
     IncompletePlan,
     main,
     make_request,
@@ -28,9 +29,10 @@ def test_parse_and_scale_li_lim_pdptw() -> None:
     request, pairs = make_request(instance, seconds=1, seed=0, workers=1, request_limit=None)
     assert len(request.model_input.vehicles) == 1
     assert request.model_input.vehicles[0].fixed_cost == 0
-    assert request.model_input.vehicles[0].return_to_depot
+    assert request.model_input.vehicles[0].end_depot == "depot"
     assert request.model_input.vehicles[0].max_stops == 0
-    assert request.model_input.driving_seconds[0][1] == 5 * DISTANCE_SCALE
+    pickup_id = request.model_input.deliveries[0].pickup.id
+    assert request.model_input.profiles["default"].durations["depot"][pickup_id] == 5 * DISTANCE_SCALE
     delivery = request.model_input.deliveries[0]
     assert delivery.pickup.max_end_time == 22 * DISTANCE_SCALE
     assert delivery.dropoff.max_end_time == 43 * DISTANCE_SCALE
@@ -72,7 +74,18 @@ SERVICED = """\
 """
 
 
-def test_run_case_reports_both_backends_in_li_lim_units() -> None:
+CPSAT_ON_0_5 = pytest.mark.xfail(
+    raises=AttributeError,
+    strict=True,
+    reason=(
+        "the pinned CP-SAT library reads the optimaru 0.5 input (home, return_to_depot, one matrix); "
+        "drop this mark when the pin moves to a release that reads depots and travel profiles"
+    ),
+)
+
+
+@pytest.mark.parametrize("backends", [("engine",), pytest.param(("engine", "cpsat"), marks=CPSAT_ON_0_5)])
+def test_run_case_reports_both_backends_in_li_lim_units(backends) -> None:
     instance = parse_instance(SERVICED, name="tiny")
     request, _ = make_request(instance, seconds=1, seed=0, workers=1)
     delivery = request.model_input.deliveries[0]
@@ -84,12 +97,12 @@ def test_run_case_reports_both_backends_in_li_lim_units() -> None:
         seconds=1,
         seed=0,
         workers=1,
-        backends=("engine", "cpsat"),
+        backends=backends,
         log=lines.append,
     )
     assert result["requests"] == result["total_requests"] == 1
     assert result["best_known"] is None  # not one of the published instances
-    assert [run["solver"] for run in result["runs"]] == ["engine", "cp-sat"]
+    assert [run["solver"] for run in result["runs"]] == [SOLVER_NAMES[backend] for backend in backends]
     for run in result["runs"]:
         # depot -> (3, 4) -> (6, 8) -> depot is 5 + 5 + 10.
         assert run["outcome"] == "ok" and run["status"] == ""
