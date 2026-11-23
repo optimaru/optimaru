@@ -869,11 +869,14 @@ def request_solve(
         import sys
 
         signature = inspect.signature(solve_request)
-        # Every solve_request is defined in optimaru.<use case>.models; its package holds the SolverConfig.
+        # Every solve_request is defined in <this package>.<use case>.models; its package holds the
+        # SolverConfig. This package is read from this module's own name, not written out, so the
+        # rule also holds for a copy of the package under another name.
         package, _, module = solve_request.__module__.rpartition(".")
-        if module != "models" or not package.startswith("optimaru."):
+        root = __name__.partition(".")[0]
+        if module != "models" or not package.startswith(f"{root}."):
             raise TypeError(
-                f"request_solve decorates a solve_request of optimaru.<use case>.models, not of {solve_request.__module__}"
+                f"request_solve decorates a solve_request of {root}.<use case>.models, not of {solve_request.__module__}"
             )
 
         @functools.wraps(solve_request)

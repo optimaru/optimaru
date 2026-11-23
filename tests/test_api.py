@@ -256,6 +256,25 @@ def test_every_use_case_is_on_the_api_or_declared_local():
     assert not served & LOCAL_USE_CASES
 
 
+def test_a_request_solve_belongs_to_the_package_its_decorator_is_in(monkeypatch):
+    """The decorator names no package: under another name, a copy of this one decorates its own models."""
+
+    def solve_request(request, constraints=None):
+        return request
+
+    solve_request.__module__ = "optimaru.vehicle_routing.models"
+    assert callable(_api.request_solve("vehicle-routing", "VrpResponse")(solve_request))
+
+    monkeypatch.setattr(_api, "__name__", "vendored._api")
+    with pytest.raises(TypeError, match=r"of vendored\.<use case>\.models, not of optimaru\.vehicle_routing\.models"):
+        _api.request_solve("vehicle-routing", "VrpResponse")(solve_request)
+    solve_request.__module__ = "vendored.vehicle_routing.models"
+    assert callable(_api.request_solve("vehicle-routing", "VrpResponse")(solve_request))
+    solve_request.__module__ = "vendored.vehicle_routing.other"
+    with pytest.raises(TypeError, match="request_solve decorates"):
+        _api.request_solve("vehicle-routing", "VrpResponse")(solve_request)
+
+
 @pytest.mark.parametrize("use_case", optimaru.__all__)
 def test_the_function_that_solves_here_stays_reachable(use_case):
     module = use_case_module(use_case)

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **`solve_request` wrappers: the package is no longer written out.** The decorator behind the
+  `solve_request` of the request use cases refused a function that was not under a package
+  spelled `optimaru`. It now reads the package from its own module. Nothing changes for an
+  installed optimaru; a copy of the package under another import name no longer fails when
+  one of those use cases is imported.
 - **Source layout: one C++ tree per use case.** `optimaru/<use case>/cpp/include/<ns>/` and
   `cpp/src/` are merged into `optimaru/<use case>/cpp/<ns>/`, where a header sits next to its
   source, filed by role under the engine's folder names: `solver` and `constraints.hpp` at the
