@@ -65,13 +65,15 @@ ctest --test-dir build
 | `vehicle_fixed_cost` | `VehicleFixedCost` | soft | 1 | per used vehicle: its `fixed_cost` |
 | `pinned_stops_cost` | `PinnedStopsCost` | hard | 1e12 | per vehicle: leading positions that do not hold its `pinned_stops`, in order |
 | `required_vehicle_cost` | `RequiredVehicleCost` | hard | 1000 | per list: bound requests off their `required_vehicle` — 1 when unassigned, 2 on another vehicle |
+| `profile_forbidden_request_cost` | `ProfileForbiddenRequestCost` | hard | 1000 | per vehicle: stops of requests its travel profile lists in `forbidden_requests` (a whole request counts 2); always scored (see [Profile requests](#profile-requests)) |
+| `profile_preferred_request_cost` | `ProfilePreferredRequestCost` | soft | 300 | per vehicle: stops of requests some vehicle's profile lists in `preferred_requests` and its own does not (a whole request counts 2) |
 | `paired_request_cost` | `PairedRequestCost` | hard | 1000 | requests routed only half (one stop in a route, the other not) |
 | `same_vehicle_cost` | `SameVehicleCost` | hard | 1000 | requests whose pickup and dropoff ride different vehicles |
 | `pickup_before_dropoff_cost` | `PickupBeforeDropoffCost` | hard | 1000 | requests whose dropoff comes before the pickup in one route |
 | `request_group_cost` | `RequestGroupCost` | hard | 1000 | grouped requests that are not where most of their `group` is: on another vehicle, or unassigned while the others ride (see [Request groups](#request-groups)) |
 | `unassigned_requests_cost` | `UnassignedRequestsCost` | medium | 1 | service minutes (rounded down) of the requests left entirely unrouted |
 
-That is the `list_constraints()` order: the seventeen per-vehicle unit constraints
+That is the `list_constraints()` order: the nineteen per-vehicle unit constraints
 (each vehicle, plus the unassigned pool as the last unit; only `required_vehicle_cost`
 and `squared_order_age_cost` price the pool, the others evaluate the vehicles alone),
 then the five request-level globals. `optimaru.pickup_delivery.constraint_info()` reports exactly this table
@@ -408,6 +410,42 @@ to mend; through `solve(plan)` it starts from an empty pool, while a list passed
 as `constraints` leaves the stops the caller parked in the pool where they are. Like `required_vehicle_cost`
 and `pinned_stops_cost` the constraint is engine-only: the CP-SAT reference has
 no plugin for it and does not read `group`.
+
+## Profile requests
+
+A travel profile also says which requests its vehicles carry, as in
+[vehicle routing](../vehicle-routing/README.md#profile-visits) with requests in place
+of visits: `forbidden_requests` lists the requests a vehicle on the profile may not
+carry, `preferred_requests` those that should go to a vehicle on it, by request id.
+A profile may consist of these lists alone and drive as another profile does
+(`same_travel_as`).
+
+- `profile_forbidden_request_cost` (hard, weight 1000) counts, per vehicle, the stops
+  it serves of requests its profile forbids, so a forbidden request carried whole
+  costs 2 and each stop counts until both are off. It is **always on**: on a plan with
+  forbidden requests, a constraint list without a hard instance of it at a weight above
+  0 gets one at its defaults, so leaving it out, or picking it soft or at weight 0,
+  never lifts the rule. The request-level operators (the pair construction, the
+  request moves, the pair move) never offer a slot on a vehicle that forbids the
+  request; a request no vehicle may carry stays unassigned.
+- `profile_preferred_request_cost` (soft, weight 300 per stop) counts, per vehicle,
+  the stops of requests that some vehicle's profile prefers and its own does not:
+  600 for a whole request, which a vehicle that does not prefer it takes only when
+  that saves more than ten minutes of driving. A request whose vehicles drive on a
+  profile with preferred requests needs this constraint among its `constraints`
+  (`ValueError` otherwise); the default set has it. A profile no vehicle drives on
+  prefers nothing.
+- A request id must be one of the requests, at most once per list, and not in both
+  lists of one profile. A request whose `required_vehicle` drives on a profile that
+  forbids it is refused, and so is a vehicle that pins a stop of a request its
+  profile forbids.
+- Every entry point scores a plan with such lists on the default constraints, as it
+  does a plan with request groups: the constraint assembly, which takes fewer steps
+  per second than the seven core constraints. On a compiled plan the lists are
+  `pdp.ProfileRequests(forbidden_request_indices, preferred_request_indices)`
+  entries in `PdpRoutePlan(..., profile_requests=[...])`, which a vehicle names by
+  `profile_requests_index`. Both constraints are engine-only: the CP-SAT reference
+  has no plugin for them.
 
 ## Starting from an existing solution
 

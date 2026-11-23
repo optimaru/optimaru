@@ -12,6 +12,8 @@
 // to change. Adding a component is a file plus a line here (and a line in
 // addDefaultConstraints below when it belongs to the default assembly).
 
+#include <stdexcept>
+
 #include "vrp/constraints/common.hpp"
 #include "vrp/constraints/enclosing_circle_radius_cost.hpp"
 #include "vrp/constraints/latency_cost.hpp"
@@ -21,6 +23,9 @@
 #include "vrp/constraints/max_stops_cost.hpp"
 #include "vrp/constraints/max_travel_time_cost.hpp"
 #include "vrp/constraints/min_capacity_utilization_cost.hpp"
+#include "vrp/constraints/profile_forbidden_visit_cost.hpp"
+#include "vrp/constraints/profile_preferred_visit_cost.hpp"
+#include "vrp/constraints/profile_visit_table.hpp"
 #include "vrp/constraints/route_duration_cost.hpp"
 #include "vrp/constraints/route_geometry.hpp"
 #include "vrp/constraints/route_sums.hpp"
@@ -40,10 +45,10 @@ namespace vrp {
 // ---------------------------------------------------------------------------
 // The full provider plus the route policies, each at its component's
 // kDefaultWeight / kDefaultLevel. This assembly scores bit-for-bit like
-// ScoreCalculator::score on a plan without route policies and without
-// visit groups (the policy and group components cost 0 there, the opt-in
-// objectives weigh 0). Units come before the globals in list_constraints() /
-// constraint_info(), so visitGroupCost and unassignedVisitsCost are listed
+// ScoreCalculator::score on a plan without route policies, without
+// visit groups and without profile visit lists (the policy, group and profile
+// components cost 0 there, the opt-in objectives weigh 0). Units come before the globals in
+// list_constraints() / constraint_info(), so visitGroupCost and unassignedVisitsCost are listed
 // last.
 //
 // `defaultConstraints()` hands the whole set back as a ConstraintAssembly,
@@ -76,11 +81,55 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<LatencyCost>();
     assembly.emplace<VehicleFixedCost>();
     assembly.emplace<VisitOrderCost>();
+    assembly.emplace<ProfileForbiddenVisitCost>();
+    assembly.emplace<ProfilePreferredVisitCost>();
     return assembly;
 }
 
 inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
+}
+
+// Whether some instance of profileForbiddenVisitCost in the assembly scores it as the
+// rule it is: hard, at a weight above 0.
+inline bool enforcesForbiddenVisits(const ConstraintAssembly& assembly) {
+    for (std::size_t instance = 0;; ++instance) {
+        const optimaru::ConstraintMetadata* found =
+                assembly.find("profileForbiddenVisitCost", instance);
+        if (found == nullptr) return false;
+        if (found->level == optimaru::Level::Hard && found->weight > 0.0) return true;
+    }
+}
+
+// profileForbiddenVisitCost is always on: on a plan with forbidden visits, a selection that
+// holds no hard instance of it at a weight above 0 gets one at its defaults,
+// beside whatever instance the selection does hold (a soft or weight-0 pick
+// still scores as picked, but no longer switches the rule off). A forbidden
+// visit is no preference to weigh but a job the vehicle cannot do. On a plan
+// without forbidden visits nothing is added. constraint_costs() and every
+// solve of the Python bindings run this. The instance comes after the
+// selection's own, so constraint_costs() keys it "<name>#<k+1>" when the
+// selection holds k (just "<name>" when none): the Python score() reads that
+// key to append the same instance (with_always_on in optimaru/_constraint.py),
+// so keep the two in step.
+inline void addAlwaysOnConstraints(ConstraintAssembly& assembly, const VehicleRoutePlan& plan) {
+    if (plan.hasForbiddenVisits() && !enforcesForbiddenVisits(assembly))
+        assembly.emplace_instance<ProfileForbiddenVisitCost>();
+}
+
+// A caller's selection as every solve scores it: addAlwaysOnConstraints, and
+// a plan that prefers visits needs profilePreferredVisitCost in the selection, the only
+// cost that reads those lists: without it they would be silently ignored, so
+// that throws std::invalid_argument.
+inline ConstraintAssembly withAlwaysOnConstraints(ConstraintAssembly assembly,
+                                                  const VehicleRoutePlan& plan) {
+    addAlwaysOnConstraints(assembly, plan);
+    if (!assembly.contains("profilePreferredVisitCost") && plan.hasPreferredVisits())
+        throw std::invalid_argument(
+                "a vehicle's profile has preferred visits, but the constraints leave out "
+                "profile_preferred_visit_cost, the cost that scores them: add it, or leave the "
+                "preferred visits out");
+    return assembly;
 }
 
 }  // namespace vrp

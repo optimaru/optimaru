@@ -43,6 +43,12 @@ namespace vrp {
 // to the constraint assembly, so solve(plan) hands a plan with groups to the
 // default assembly instead of scoring it on the four core constraints.
 //
+// Profile visits: a vehicle's ProfileVisits entry names the visits it may not
+// serve and those it is preferred for (profileForbiddenVisitCost,
+// profilePreferredVisitCost). Those two belong to the constraint assembly
+// too, so solve(plan) hands a plan with such lists to the default assembly,
+// and the group operators never place a visit on a vehicle that forbids it.
+//
 // Unassigned visits: leaving a visit out of every route is modelled with
 // the plan's virtual unassigned pool (see VehicleRoutePlan). solve() fills the
 // pool for you, so a plan built with visits simply left out of every route is
@@ -224,8 +230,9 @@ public:
     // Solves in place: mutates plan.vehicles[*].visitIndices and
     // plan.unassignedVisitIndices, and stores the best score found in
     // plan.score. Scored on the four core constraints, unless the plan has visit
-    // groups: then on the default constraint assembly (vrp/constraints.hpp),
-    // every start on an assembly of its own (the factory overload below).
+    // groups or profile visit lists (needsConstraintAssembly): then on the
+    // default constraint assembly (vrp/constraints.hpp), every start on an
+    // assembly of its own (the factory overload below).
     void solve(VehicleRoutePlan& plan);
 
     // Solves with a caller-assembled plugin calculator (see
@@ -235,7 +242,11 @@ public:
     // defaults. The final plan.score and every on_new_best score are computed
     // by THIS calculator (its three levels read off level_scores(), before the
     // medium fold) and the calculator is left primed on the final solution,
-    // so constraint_totals() explains exactly that score. Single-start: the
+    // so constraint_totals() explains exactly that score. A plan with
+    // forbidden or preferred visits wants its assembly passed through
+    // withAlwaysOnConstraints(assembly, plan) (vrp/constraints.hpp) first, as
+    // the Python bindings do: this overload scores exactly the components it
+    // is given. Single-start: the
     // caller-owned calculator cannot be cloned, so parallel_solver_count is
     // ignored. The overload below runs the parallel starts.
     void solve(VehicleRoutePlan& plan, optimaru::DecomposedObjective<VehicleRoutePlan>& calculator);
@@ -266,9 +277,23 @@ private:
 // constraint_costs), since visitOrderCost reads those indices.
 void checkVisitGroups(const VehicleRoutePlan& plan);
 
+// What a plan may say about profile visits: every Vehicle::profileVisitsIndex
+// is -1 or an entry of plan.profileVisits, and each entry's two lists hold
+// visit indices in strictly increasing order, none in both. Throws
+// std::invalid_argument otherwise. Run where checkVisitGroups runs.
+void checkProfileVisits(const VehicleRoutePlan& plan);
+
+// Whether the four core constraints leave something of the plan unscored:
+// visit groups (hasVisitGroups) or profile visit lists (hasProfileVisits).
+// solve(plan) and calculateScore score such a plan on the default assembly.
+inline bool needsConstraintAssembly(const VehicleRoutePlan& plan) {
+    return plan.hasVisitGroups() || plan.hasProfileVisits();
+}
+
 // The score of a plan as it stands, the way solve(plan) scores it: on the
-// four core constraints (ScoreCalculator::score), unless the plan has visit groups,
-// which those constraints do not price: then on the default constraint assembly.
+// four core constraints (ScoreCalculator::score), unless the plan has visit groups
+// or profile visit lists, which those constraints do not price: then on the
+// default constraint assembly.
 // Refreshes the derived fields and stores the score in plan.score. Throws
 // std::invalid_argument for the groups and orders solve() refuses.
 Score calculateScore(VehicleRoutePlan& plan);

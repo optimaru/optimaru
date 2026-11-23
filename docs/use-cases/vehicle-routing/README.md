@@ -54,10 +54,12 @@ ctest --test-dir build   # vrp_test, vrp_plugin_test (assembly == monolith,
 | `latency_cost` | `LatencyCost` | soft | 0 (opt-in) | per vehicle: seconds from departure to each visit's arrival, summed |
 | `vehicle_fixed_cost` | `VehicleFixedCost` | soft | 1 | per used vehicle: its `fixed_cost` |
 | `visit_order_cost` | `VisitOrderCost` | hard | 1000 | per vehicle: pairs of its visits served the wrong way round, a visit before one its `after` names (see [Visit groups](#visit-groups)) |
+| `profile_forbidden_visit_cost` | `ProfileForbiddenVisitCost` | hard | 1000 | per vehicle: its visits that its travel profile lists in `forbidden_visits`; always scored (see [Profile visits](#profile-visits)) |
+| `profile_preferred_visit_cost` | `ProfilePreferredVisitCost` | soft | 600 | per vehicle: its visits that some vehicle's profile lists in `preferred_visits` and its own does not |
 | `visit_group_cost` | `VisitGroupCost` | hard | 1000 | grouped visits that are not where most of their `group` is: on another vehicle, or unassigned while the others ride |
 | `unassigned_visits_cost` | `UnassignedVisitsCost` | medium | 1 | penalty minutes of the visits left unrouted (`unassigned_penalty_minutes`, by default the service time in whole minutes) |
 
-That is the `list_constraints()` order: the fifteen per-vehicle unit constraints
+That is the `list_constraints()` order: the seventeen per-vehicle unit constraints
 (each vehicle; `constraint_costs()` lists the unassigned pool as one more cell, always
 0, which no route constraint evaluates), then the two globals, `visit_group_cost` and
 `unassigned_visits_cost`. `optimaru.vehicle_routing.constraint_info()` reports exactly this
@@ -223,6 +225,63 @@ so it returns the score the solve stored and prices a split or reversed group
 on a plan built by hand. Both
 constraints are engine-only: the CP-SAT reference has no plugin for them and
 reads neither `group` nor `after`.
+
+## Profile visits
+
+A travel profile also says which visits its vehicles take. `forbidden_visits` lists
+the visits a vehicle on the profile may not serve (a job that needs a skill the
+technician lacks, a street the truck does not fit); `preferred_visits` lists the
+visits that should go to a vehicle on the profile (the customer's usual technician,
+a job the profile does best). A profile may consist of these lists alone and drive
+on the travel of another profile (`same_travel_as`), so one profile per skill set
+shares one set of travel dicts:
+
+```python
+from optimaru.vehicle_routing.models import TravelProfile
+
+profiles = {
+    "road": TravelProfile(durations=seconds),       # the shared travel
+    "basic": TravelProfile(same_travel_as="road", forbidden_visits=["boiler-3", "gas-7"]),
+    "gas": TravelProfile(same_travel_as="road", preferred_visits=["gas-7"]),
+}
+# VehicleModel(..., profile="basic"), VehicleModel(..., profile="gas")
+```
+
+- `profile_forbidden_visit_cost` (hard, weight 1000) counts, per vehicle, the visits
+  it serves that its profile forbids. It is **always on**: on a plan with forbidden
+  visits, a constraint list without a hard instance of it at a weight above 0 gets one
+  at its defaults, so leaving it out, or picking it soft or at weight 0 (which then
+  scores beside it as picked), never lifts the rule; `constraint_costs(plan, picks)`
+  reports that instance. On a plan without forbidden visits nothing is added. A visit that no vehicle may serve stays unassigned, since that
+  costs only medium.
+- `profile_preferred_visit_cost` (soft, weight 600) counts, per vehicle, the visits
+  that some vehicle's profile prefers and its own does not. A preference of a profile
+  no vehicle drives on counts nowhere, and an unassigned visit is left to
+  `unassigned_visits_cost`. Weight 600 against `travel_time_cost`'s 1 per driving
+  second: a vehicle that does not prefer a visit takes it only when that saves more
+  than ten minutes of driving. A request whose vehicles drive on a profile with
+  preferred visits needs this constraint among its `constraints` (`ValueError`
+  otherwise: the lists would be ignored); the default set has it. A profile no vehicle
+  drives on prefers nothing, so its list asks for nothing either. A forbidden visit in a
+  vehicle's `initial_route` is accepted: the route is only a start, and the search
+  moves the visit off.
+- A visit id must be one of the visits, at most once per list, and not in both lists
+  of one profile (`ValueError`). `same_travel_as` names another profile that gives its
+  own travel; the profile that names it gives no `durations`, `distances` or
+  `missing_value`. Profiles that drive alike share one matrix in the engine, and so
+  do all profiles that give no travel at all (straight lines).
+- Every entry point scores a plan with such lists on the default constraints, as it
+  does a plan with visit groups (the four core constraints read neither). That is the
+  constraint assembly, which takes fewer steps per second than the core path: on a
+  120-visit plan, about a third as many. The group
+  operators never place a visit on a vehicle whose profile forbids it; the engine's
+  own moves are judged by the hard cost. On a plan without lists both constraints
+  cost 0 and the search is the one it was before.
+- On a compiled plan the lists are `vrp.ProfileVisits(forbidden_visit_indices,
+  preferred_visit_indices)` entries (visit indices, strictly increasing) in
+  `VehicleRoutePlan(..., profile_visits=[...])`, which a vehicle names by
+  `profile_visits_index` (-1 for none). Both constraints are engine-only: the CP-SAT
+  reference has no plugin for them.
 
 ## Starting from an existing solution
 

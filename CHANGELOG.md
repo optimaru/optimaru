@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- **Routing: forbidden and preferred jobs per travel profile.** A vehicle routing
+  `TravelProfile` lists the visits its vehicles may not serve (`forbidden_visits`) and those they
+  are preferred for (`preferred_visits`); a pickup-delivery one does the same by request id
+  (`forbidden_requests`, `preferred_requests`, both stops of a request kept together). Two new
+  constraints in each use case score them: `profile_forbidden_visit_cost` /
+  `profile_forbidden_request_cost` (hard, weight 1000, one unit per visit or per stop), which is
+  always on: a constraint list that leaves it out, or picks it soft or at weight 0, still gets
+  it hard at its defaults; and
+  `profile_preferred_visit_cost` (soft, weight 600 per visit) / `profile_preferred_request_cost`
+  (soft, weight 300 per stop), about ten minutes of driving for one job, which a request with
+  preferred jobs on a profile some vehicle drives on must list (`ValueError` otherwise; a
+  profile no vehicle drives on prefers nothing). A plan with such lists is scored on the
+  default constraints, as one with groups is, on the constraint assembly, which takes fewer steps
+  per second than the core path; the group operators and the pickup-delivery
+  request operators never place a job on a vehicle that forbids it, and a job no vehicle may take
+  stays unassigned. Unknown ids, an id twice in a list and an id both forbidden and preferred
+  are refused, and so is a pickup-delivery request required on, or pinned to, a vehicle whose
+  profile forbids it. The compiled plans take the lists as `ProfileVisits` / `ProfileRequests`
+  entries (`profile_visits=` / `profile_requests=`), named per vehicle by
+  `profile_visits_index` / `profile_requests_index`. On a plan without lists the search is the
+  one it was. Engine-only: the CP-SAT reference has no plugin for them.
+- **Routing: a profile may drive as another one does.** `TravelProfile.same_travel_as` names
+  another profile whose `durations`, `distances` and `missing_value` this one uses, so profiles
+  that differ only in their job lists (one per technician skill set, say) share one set of
+  travel dicts. Profiles that drive alike share one matrix in the engine, and so do all the
+  profiles that give no travel (straight lines), where each had a copy before: on a compiled plan
+  such profiles now share one `Vehicle.profile_index`.
 - **The engine's C++ moves to `core/`.** The header-only engine lives in `core/optimaru/` at the top
   of the repository instead of `optimaru/cpp/optimaru/`, so `optimaru/` holds the Python package and
   its use cases. Includes stay `#include "optimaru/..."`, and nothing changes in the installed

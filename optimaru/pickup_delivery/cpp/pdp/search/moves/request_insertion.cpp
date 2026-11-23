@@ -16,7 +16,8 @@ constexpr Seconds kNever = std::numeric_limits<Seconds>::min() / 4;
 constexpr std::int64_t kLongestGap = 1'000'000'000'000'000'000;
 
 // Whether two vehicles serve any request identically while they are idle:
-// the same limits, the same depots and the same profile. (Vehicles that share
+// the same limits, the same depots, the same profile and the same profile
+// requests. (Vehicles that share
 // a depot share its location entry; two entries at one point count as two
 // depots here, which only offers both vehicles.)
 bool sameService(const Vehicle& a, const Vehicle& b) {
@@ -27,7 +28,8 @@ bool sameService(const Vehicle& a, const Vehicle& b) {
            a.maxRouteRadiusMeters == b.maxRouteRadiusMeters &&
            a.startLocationIndex == b.startLocationIndex &&
            a.endLocationIndex == b.endLocationIndex && a.profileIndex == b.profileIndex &&
-           a.pinnedNodeIndices.empty() && b.pinnedNodeIndices.empty();
+           a.profileRequestsIndex == b.profileRequestsIndex && a.pinnedNodeIndices.empty() &&
+           b.pinnedNodeIndices.empty();
 }
 
 }  // namespace
@@ -136,6 +138,9 @@ void RouteTimeline::improve(const PdpRoutePlan& plan, const Delivery& delivery, 
 
     const Node& pickup = plan.nodes[static_cast<std::size_t>(delivery.pickupNodeIndex)];
     const Node& dropoff = plan.nodes[static_cast<std::size_t>(delivery.dropoffNodeIndex)];
+    // A vehicle whose profile forbids the request offers no slot for it. The
+    // index test first is the fast path: a plan without lists skips the search.
+    if (vehicle.profileRequestsIndex >= 0 && plan.forbids(vehicle_, pickup.deliveryIndex)) return;
     const Seconds pickupDue = pickup.maxEndTime - pickup.serviceDuration;
     const Seconds dropoffDue = dropoff.maxEndTime - dropoff.serviceDuration;
     const Seconds travelBudget =

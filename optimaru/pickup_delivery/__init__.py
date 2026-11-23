@@ -35,6 +35,11 @@ what they are worth.
 Requests that share a `group` (`Delivery.group_index`, `DeliveryModel.group`) are
 one job: they ride one vehicle together or all stay unassigned
 (`request_group_cost`), and the request moves carry them as one unit.
+
+A vehicle's profile may list requests it may not carry (`ProfileRequests`,
+`TravelProfile.forbidden_requests`; `profile_forbidden_request_cost`, hard and always
+on) and requests it is preferred for (`TravelProfile.preferred_requests`;
+`profile_preferred_request_cost`, soft).
 """
 
 from .. import _api
@@ -47,6 +52,7 @@ from ._core import (
     Node,
     OperatorSelectionType,
     PdpRoutePlan,
+    ProfileRequests,
     Score,
     Solver,
     SolverConfig,
@@ -68,6 +74,7 @@ __all__ = [
     "Node",
     "OperatorSelectionType",
     "PdpRoutePlan",
+    "ProfileRequests",
     "Score",
     "Solver",
     "SolverConfig",
@@ -117,8 +124,13 @@ def solve(
     otherwise scored on. That is the whole default set, so the vehicle limits, pinned stops
     and required vehicles of such a plan are scored too. The engine does this itself, so
     `Solver(config).solve(plan)` and `calculate_score(plan)` read such a plan the same way.
-    A list passed as ``constraints`` is used as it is. ``parallel_solver_count`` applies on
-    every path: with constraints, each start scores on its own copy of them.
+    So is a plan whose profiles list requests (`PdpRoutePlan.profile_requests`). A list
+    passed as ``constraints`` is used as it is, with one exception:
+    `profile_forbidden_request_cost` is scored on a plan with forbidden requests whether the
+    list holds it or not, and a plan with preferred requests needs
+    `profile_preferred_request_cost` in the list (ValueError otherwise).
+    ``parallel_solver_count`` applies on every path: with constraints, each start scores on
+    its own copy of them.
 
     The score is on the result: ``plan.score``. `solve_request` is the same solve for
     a `models` request (JSON in, JSON out).

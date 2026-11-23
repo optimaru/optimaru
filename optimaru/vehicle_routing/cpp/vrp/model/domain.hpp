@@ -142,6 +142,20 @@ struct Visit {
 };
 
 // ---------------------------------------------------------------------------
+// ProfileVisits
+// ---------------------------------------------------------------------------
+// What one kind of vehicle may serve: the visits it may not
+// (profileForbiddenVisitCost, hard) and the visits it is preferred for
+// (profilePreferredVisitCost, soft). A vehicle names its entry with
+// Vehicle::profileVisitsIndex. Both lists hold indices into
+// VehicleRoutePlan::visits in strictly increasing order, and no index is in
+// both (checkProfileVisits in solver.hpp refuses anything else).
+struct ProfileVisits {
+    std::vector<int> forbiddenVisitIndices;
+    std::vector<int> preferredVisitIndices;
+};
+
+// ---------------------------------------------------------------------------
 // Vehicle  (the list owner)
 // ---------------------------------------------------------------------------
 // visitIndices is the decision: the ordered list of visits this vehicle
@@ -157,6 +171,10 @@ struct Vehicle {
     int endLocationIndex = -1;
     // Which of the plan's matrices this vehicle drives on (its profile).
     int profileIndex = 0;
+    // Which entry of VehicleRoutePlan::profileVisits says what it may serve;
+    // -1 (the default) for none: it may serve every visit and is preferred
+    // for none.
+    int profileVisitsIndex = -1;
     Seconds departureTime = 0;
     // Optional route policies. Non-positive means disabled.
     Seconds maxTravelTime = 0;
@@ -209,7 +227,48 @@ struct VehicleRoutePlan {
     std::vector<Matrix> durationMatrices;
     std::vector<Matrix> distanceMatrices;
 
+    // The visits each kind of vehicle may not serve or is preferred for (see
+    // ProfileVisits); empty for a plan without such lists.
+    std::vector<ProfileVisits> profileVisits;
+
     Score score;
+
+    // The entry of `vehicle`, or nullptr when it names none.
+    const ProfileVisits* profileVisitsOf(const Vehicle& vehicle) const {
+        return vehicle.profileVisitsIndex < 0
+                       ? nullptr
+                       : &profileVisits[static_cast<std::size_t>(vehicle.profileVisitsIndex)];
+    }
+    // Whether vehicle `vehicleIndex` may not serve visit `visitIndex`: a
+    // binary search of its sorted forbidden list, for the operators that place
+    // visits from the plan (the constraint components keep a table instead).
+    bool forbids(int vehicleIndex, int visitIndex) const {
+        const ProfileVisits* entry =
+                profileVisitsOf(vehicles[static_cast<std::size_t>(vehicleIndex)]);
+        return entry != nullptr &&
+               std::binary_search(entry->forbiddenVisitIndices.begin(),
+                                  entry->forbiddenVisitIndices.end(), visitIndex);
+    }
+    // Whether some vehicle names a profile entry with a visit in one of its
+    // lists. Such a plan is scored with the constraint assembly, which holds
+    // the two profile visit constraints; the core constraints do not read the
+    // lists.
+    bool hasProfileVisits() const { return hasForbiddenVisits() || hasPreferredVisits(); }
+    // Whether some vehicle's entry forbids a visit / prefers one.
+    bool hasForbiddenVisits() const {
+        for (const Vehicle& vehicle : vehicles) {
+            const ProfileVisits* entry = profileVisitsOf(vehicle);
+            if (entry != nullptr && !entry->forbiddenVisitIndices.empty()) return true;
+        }
+        return false;
+    }
+    bool hasPreferredVisits() const {
+        for (const Vehicle& vehicle : vehicles) {
+            const ProfileVisits* entry = profileVisitsOf(vehicle);
+            if (entry != nullptr && !entry->preferredVisitIndices.empty()) return true;
+        }
+        return false;
+    }
 
     const Matrix& durationsOf(const Vehicle& vehicle) const {
         return durationMatrices[static_cast<std::size_t>(vehicle.profileIndex)];

@@ -45,6 +45,11 @@ and `after` (`Visit.after_visit_indices`) puts a partial order on them
 (`visit_order_cost`, hard). A group operator moves a group between vehicles as one
 unit (`group_ruin_recreate`).
 
+A vehicle's profile may list visits it may not serve (`ProfileVisits`,
+`TravelProfile.forbidden_visits`; `profile_forbidden_visit_cost`, hard and always on)
+and visits it is preferred for (`TravelProfile.preferred_visits`;
+`profile_preferred_visit_cost`, soft).
+
 Compared lexicographically: hard dominates medium dominates soft.
 `constraint_info()` lists every constraint with its default level and weight;
 `optimaru.vehicle_routing.constraints` picks and re-weights them.
@@ -57,6 +62,7 @@ from ._core import (
     ConstraintInfo,
     Location,
     OperatorSelectionType,
+    ProfileVisits,
     Score,
     Solver,
     SolverConfig,
@@ -75,6 +81,7 @@ __all__ = [
     "ConstraintInfo",
     "Location",
     "OperatorSelectionType",
+    "ProfileVisits",
     "Score",
     "Solver",
     "SolverConfig",
@@ -123,8 +130,14 @@ def solve(
     default constraints even when ``constraints`` is None: `visit_group_cost` and
     `visit_order_cost` are among them, and they are not among the four core constraints a
     plan is otherwise scored on. That is the whole default set, so the vehicle limits of
-    such a plan are scored too. ``parallel_solver_count`` applies there and with
+    such a plan are scored too. So is a plan whose profiles list visits
+    (`VehicleRoutePlan.profile_visits`). ``parallel_solver_count`` applies there and with
     ``constraints`` alike: every start scores on its own copy of the constraints.
+
+    A list passed as ``constraints`` is used as it is, with one exception:
+    `profile_forbidden_visit_cost` is scored on a plan with forbidden visits whether the list
+    holds it or not, and a plan with preferred visits needs `profile_preferred_visit_cost` in
+    the list (ValueError otherwise).
 
     The score is on the result: ``plan.score``. `solve_request` is the same solve for
     a `models` request (JSON in, JSON out).

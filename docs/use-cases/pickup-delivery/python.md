@@ -119,6 +119,8 @@ print(plan.unassigned_delivery_ids())  # []
 | `vehicle_fixed_cost` | `VehicleFixedCost` | soft | 1 | yes |
 | `pinned_stops_cost` | `PinnedStopsCost` | hard | 1e12 | yes |
 | `required_vehicle_cost` | `RequiredVehicleCost` | hard | 1000 | yes |
+| `profile_forbidden_request_cost` | `ProfileForbiddenRequestCost` | hard | 1000 | yes (always on) |
+| `profile_preferred_request_cost` | `ProfilePreferredRequestCost` | soft | 300 | yes |
 | `paired_request_cost` | `PairedRequestCost` | hard | 1000 | yes |
 | `same_vehicle_cost` | `SameVehicleCost` | hard | 1000 | yes |
 | `pickup_before_dropoff_cost` | `PickupBeforeDropoffCost` | hard | 1000 | yes |
@@ -193,7 +195,10 @@ depot and stop ids (pickup and dropoff ids alike), and `VehicleModel.profile` pi
 (`"default"` unless set). A pair the dicts leave out costs the profile's
 `missing_value` (10,000,000 by default); a profile without one of the dicts, and every
 vehicle when `profiles` is empty, drives straight lines. The matrices run over the
-depots, then each request's pickup and dropoff, in input order.
+depots, then each request's pickup and dropoff, in input order. A profile also lists
+the requests its vehicles may not carry (`forbidden_requests`) and those they are
+preferred for (`preferred_requests`), and may drive as another profile does
+(`same_travel_as`): see [Profile requests](README.md#profile-requests).
 
 ## Files
 

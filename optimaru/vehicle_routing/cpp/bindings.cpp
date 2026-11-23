@@ -79,18 +79,31 @@ PYBIND11_MODULE(_core, m) {
             .def_readonly("vehicle_index", &Visit::vehicleIndex)
             .def_readonly("arrival_time", &Visit::arrivalTime);
 
+    py::class_<ProfileVisits>(m, "ProfileVisits", py::module_local())
+            .def(py::init([](std::vector<int> forbidden, std::vector<int> preferred) {
+                     ProfileVisits entry;
+                     entry.forbiddenVisitIndices = std::move(forbidden);
+                     entry.preferredVisitIndices = std::move(preferred);
+                     return entry;
+                 }),
+                 py::arg("forbidden_visit_indices") = std::vector<int>{},
+                 py::arg("preferred_visit_indices") = std::vector<int>{})
+            .def_readwrite("forbidden_visit_indices", &ProfileVisits::forbiddenVisitIndices)
+            .def_readwrite("preferred_visit_indices", &ProfileVisits::preferredVisitIndices);
+
     py::class_<Vehicle>(m, "Vehicle", py::module_local())
             .def(py::init([](std::string id, int capacity, int startLocationIndex,
                              Seconds departureTime, Seconds maxTravelTime, Seconds maxRouteDuration,
                              Seconds maxEndTime, int maxStops, double minLoadRatio,
                              double fixedCost, double maxRouteRadiusMeters, int endLocationIndex,
-                             int profileIndex) {
+                             int profileIndex, int profileVisitsIndex) {
                      Vehicle v;
                      v.id = std::move(id);
                      v.capacity = capacity;
                      v.startLocationIndex = startLocationIndex;
                      v.endLocationIndex = endLocationIndex;
                      v.profileIndex = profileIndex;
+                     v.profileVisitsIndex = profileVisitsIndex;
                      v.departureTime = departureTime;
                      v.maxTravelTime = maxTravelTime;
                      v.maxRouteDuration = maxRouteDuration;
@@ -106,7 +119,8 @@ PYBIND11_MODULE(_core, m) {
                  py::arg("max_route_duration") = 0, py::arg("max_end_time") = 0,
                  py::arg("max_stops") = 0, py::arg("min_load_ratio") = 0.0,
                  py::arg("fixed_cost") = 0.0, py::arg("max_route_radius_meters") = 0.0,
-                 py::arg("end_location_index") = -1, py::arg("profile_index") = 0)
+                 py::arg("end_location_index") = -1, py::arg("profile_index") = 0,
+                 py::arg("profile_visits_index") = -1)
             .def_readwrite("id", &Vehicle::id)
             .def_readwrite("capacity", &Vehicle::capacity)
             .def_readwrite("start_location_index", &Vehicle::startLocationIndex)
@@ -115,6 +129,9 @@ PYBIND11_MODULE(_core, m) {
                            "ends at its last visit.")
             .def_readwrite("profile_index", &Vehicle::profileIndex,
                            "Which of the plan's matrices the vehicle drives on.")
+            .def_readwrite("profile_visits_index", &Vehicle::profileVisitsIndex,
+                           "Which entry of the plan's profile_visits says what the vehicle may "
+                           "serve; -1 for none.")
             .def_readwrite("departure_time", &Vehicle::departureTime)
             .def_readwrite("max_travel_time", &Vehicle::maxTravelTime)
             .def_readwrite("max_route_duration", &Vehicle::maxRouteDuration)
@@ -130,7 +147,8 @@ PYBIND11_MODULE(_core, m) {
     py::class_<VehicleRoutePlan>(m, "VehicleRoutePlan", py::module_local())
             .def(py::init([](std::string name, std::vector<Location> locations,
                              std::vector<Vehicle> vehicles, std::vector<Visit> visits,
-                             OptionalMatrices durations, OptionalMatrices distances) {
+                             OptionalMatrices durations, OptionalMatrices distances,
+                             std::vector<ProfileVisits> profileVisits) {
                      VehicleRoutePlan plan;
                      plan.name = std::move(name);
                      plan.locations = std::move(locations);
@@ -138,6 +156,7 @@ PYBIND11_MODULE(_core, m) {
                          plan.locations[i].index = static_cast<int>(i);
                      plan.vehicles = std::move(vehicles);
                      plan.visits = std::move(visits);
+                     plan.profileVisits = std::move(profileVisits);
                      // Explicit matrices, one per profile: what production
                      // actually has (a road-network router, a benchmark
                      // instance's own metric). A profile left out or None is
@@ -177,16 +196,21 @@ PYBIND11_MODULE(_core, m) {
                                      "vehicle " + v.id +
                                      ": a depot location index is out of range");
                      }
+                     checkProfileVisits(plan);
                      return plan;
                  }),
                  py::arg("name"), py::arg("locations"), py::arg("vehicles"), py::arg("visits"),
                  py::arg("durations") = py::none(), py::arg("distances") = py::none(),
+                 py::arg("profile_visits") = std::vector<ProfileVisits>{},
                  "Profiles: as many as the longer of durations / distances lists (one at "
-                 "least); a matrix not given is filled from the coordinates.")
+                 "least); a matrix not given is filled from the coordinates. profile_visits: "
+                 "what each kind of vehicle may not serve or is preferred for, named by "
+                 "Vehicle.profile_visits_index.")
             .def_readonly("name", &VehicleRoutePlan::name)
             .def_readonly("locations", &VehicleRoutePlan::locations)
             .def_readwrite("vehicles", &VehicleRoutePlan::vehicles)
             .def_readonly("visits", &VehicleRoutePlan::visits)
+            .def_readonly("profile_visits", &VehicleRoutePlan::profileVisits)
             // The unassigned pool: visits the solver chose not to route (the
             // medium-level unassignedVisitsCost penalty). Filled by solve().
             .def_readwrite("unassigned_visit_indices", &VehicleRoutePlan::unassignedVisitIndices)
@@ -239,7 +263,7 @@ PYBIND11_MODULE(_core, m) {
             "Recompute the derived fields (vehicle_index, arrival_time) and the "
             "hard / medium / soft score (also stores plan.score). The score is the "
             "one solve(plan) stores: the four core constraints, or the default constraints "
-            "when the plan has a group of two or more visits.");
+            "when the plan has a group of two or more visits or a profile visit list.");
 
     // The acceptance criteria the engine offers.
     opy::bind_acceptor_type(m);
@@ -340,10 +364,10 @@ PYBIND11_MODULE(_core, m) {
                     "solve",
                     [](Solver& solver, VehicleRoutePlan& plan) {
                         solver.solve(plan);
-                        // A plan with groups was scored with the default
-                        // constraints (Solver::solve); the core score would
-                        // leave the two group constraints out of plan.score.
-                        if (plan.hasVisitGroups()) {
+                        // A plan with groups or profile visits was scored with
+                        // the default constraints (Solver::solve); the core
+                        // score would leave their constraints out of plan.score.
+                        if (needsConstraintAssembly(plan)) {
                             ScoreCalculator::updateShadowVariables(plan);
                         } else {
                             ScoreCalculator::score(plan);
@@ -364,6 +388,11 @@ PYBIND11_MODULE(_core, m) {
             // stored the score THIS calculator computed, and a full recompute
             // would overwrite it with the monolithic default one.
             //
+            // The picks go through withAlwaysOnConstraints: a plan with
+            // forbidden visits is scored on profileForbiddenVisitCost whether
+            // the picks list it or not, and one with preferred visits needs
+            // profilePreferredVisitCost among them (ValueError otherwise).
+            //
             // Every parallel start gets a calculator of its own, built from the
             // same picks. The picks are Python objects, read with the GIL held:
             // the first calculator is built before the solve releases the GIL
@@ -376,9 +405,13 @@ PYBIND11_MODULE(_core, m) {
             .def(
                     "solve_with_constraints",
                     [](Solver& solver, VehicleRoutePlan& plan, const py::object& constraints) {
-                        const auto build = [&constraints] {
+                        checkProfileVisits(plan);
+                        const auto build = [&constraints, &plan] {
                             auto calculator = std::make_unique<DecomposedCalculator>();
-                            opy::apply_constraints([] { return defaultConstraints(); }, constraints)
+                            withAlwaysOnConstraints(
+                                    opy::apply_constraints([] { return defaultConstraints(); },
+                                                           constraints),
+                                    plan)
                                     .into(*calculator);
                             return calculator;
                         };
@@ -394,11 +427,33 @@ PYBIND11_MODULE(_core, m) {
                     py::arg("plan"), py::arg("constraints") = py::none());
 
     // constraint_costs(), list_constraints() and constraint_info(), off the
-    // default assembly. The units of constraint_costs() are the vehicles; a per-vehicle
-    // constraint lists the ones it evaluates as "units". The plan is checked
-    // first, as before a solve: its after_visit_indices are written from
-    // Python and visitOrderCost reads them as indices.
-    opy::bind_constraints<VehicleRoutePlan>(
-            m, "plan", [] { return defaultConstraints(); },
-            [](VehicleRoutePlan& plan) { checkVisitGroups(plan); });
+    // default assembly (opy::bind_constraints, written out here for the one
+    // difference): the picks of constraint_costs() include
+    // profileForbiddenVisitCost on a plan with forbidden visits, as every
+    // solve scores it. Picks without profilePreferredVisitCost are no error
+    // here: a breakdown of what the picks cost refuses nothing. The units of
+    // constraint_costs() are the vehicles; a per-vehicle constraint lists the
+    // ones it evaluates as "units". The plan is checked first, as before a
+    // solve: its after_visit_indices and profile visits are written from
+    // Python and visitOrderCost and the profile components read them as
+    // indices.
+    m.def(
+            "constraint_costs",
+            [](VehicleRoutePlan& plan, const py::object& constraints) {
+                checkVisitGroups(plan);
+                checkProfileVisits(plan);
+                DecomposedCalculator objective;
+                ConstraintAssembly picks =
+                        opy::apply_constraints([] { return defaultConstraints(); }, constraints);
+                addAlwaysOnConstraints(picks, plan);
+                picks.into(objective);
+                return opy::constraint_costs(objective, plan);
+            },
+            py::arg("plan"), py::arg("constraints") = py::none(),
+            "Raw costs of every constraint (one per unit, or one total for a global "
+            "constraint), before weight/exponent/offset/level.");
+    m.def(
+            "list_constraints", [] { return opy::constraint_names(defaultConstraints()); },
+            "The constraint names of this use case, in default-assembly order.");
+    opy::bind_constraint_info(m, [] { return defaultConstraints(); });
 }

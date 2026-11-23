@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -82,12 +83,53 @@ void checkVisitGroups(const VehicleRoutePlan& plan) {
     }
 }
 
+void checkProfileVisits(const VehicleRoutePlan& plan) {
+    const int entries = static_cast<int>(plan.profileVisits.size());
+    const int visits = static_cast<int>(plan.visits.size());
+    for (const Vehicle& vehicle : plan.vehicles) {
+        if (vehicle.profileVisitsIndex < -1 || vehicle.profileVisitsIndex >= entries) {
+            throw std::invalid_argument("vehicle " + vehicle.id + ": profileVisitsIndex " +
+                                        std::to_string(vehicle.profileVisitsIndex) +
+                                        " is out of range -1.." + std::to_string(entries - 1));
+        }
+    }
+    for (int e = 0; e < entries; ++e) {
+        const ProfileVisits& entry = plan.profileVisits[static_cast<std::size_t>(e)];
+        const auto check = [&](const std::vector<int>& list, const char* what) {
+            for (std::size_t k = 0; k < list.size(); ++k) {
+                if (list[k] < 0 || list[k] >= visits) {
+                    throw std::invalid_argument("profile visits " + std::to_string(e) + ": " +
+                                                what + " holds " + std::to_string(list[k]) +
+                                                ", out of range 0.." + std::to_string(visits - 1));
+                }
+                if (k > 0 && list[k] <= list[k - 1]) {
+                    throw std::invalid_argument("profile visits " + std::to_string(e) + ": " +
+                                                what + " is not in strictly increasing order");
+                }
+            }
+        };
+        check(entry.forbiddenVisitIndices, "forbiddenVisitIndices");
+        check(entry.preferredVisitIndices, "preferredVisitIndices");
+        std::vector<int> both;
+        std::set_intersection(entry.forbiddenVisitIndices.begin(),
+                              entry.forbiddenVisitIndices.end(),
+                              entry.preferredVisitIndices.begin(),
+                              entry.preferredVisitIndices.end(), std::back_inserter(both));
+        if (!both.empty()) {
+            throw std::invalid_argument("profile visits " + std::to_string(e) + ": visit " +
+                                        plan.visits[static_cast<std::size_t>(both.front())].id +
+                                        " is both forbidden and preferred");
+        }
+    }
+}
+
 namespace {
 
 // Which visits travel together, worked out once for the solve: construction
 // and the group operators read the same object.
 std::shared_ptr<const VisitGroups> visitGroupsOf(const VehicleRoutePlan& plan) {
     checkVisitGroups(plan);
+    checkProfileVisits(plan);
     auto groups = std::make_shared<VisitGroups>();
     groups->build(plan);
     return groups;
@@ -250,11 +292,13 @@ void Solver::solve(VehicleRoutePlan& plan) {
     // group index below -1, a visit that comes after one outside its group, an
     // order with a cycle.
     checkVisitGroups(plan);
+    checkProfileVisits(plan);
     optimaru::check_config(config_);
-    // The four core constraints do not price groups, and on them a split group
-    // would end as a feasible plan. A plan with groups is scored with the
-    // whole default assembly instead, every start on one of its own.
-    if (plan.hasVisitGroups()) {
+    // The four core constraints do not price groups or profile visits, and on
+    // them a split group or a forbidden visit would end as a feasible plan. Such
+    // a plan is scored with the whole default assembly instead, every start on
+    // one of its own.
+    if (needsConstraintAssembly(plan)) {
         plan.unassignedVisitIndices.clear();
         solve(plan, [] {
             auto calculator = std::make_unique<DecomposedCalculator>();
@@ -263,8 +307,8 @@ void Solver::solve(VehicleRoutePlan& plan) {
         });
         return;
     }
-    // No group of two visits or more from here on, so nothing below places or
-    // moves one.
+    // No group of two visits or more and no profile visit list from here on,
+    // so nothing below places or moves a group or reads a list.
     // Start with an empty pool so the construction heuristic sees every
     // unrouted visit as uninitialized and places it by cheapest insertion.
     // The pool is one of the candidate lists, so "leave this visit
@@ -343,6 +387,7 @@ void Solver::solve(VehicleRoutePlan& plan,
 void Solver::solve(VehicleRoutePlan& plan, const CalculatorFactory& makeCalculator) {
     // Refused before a calculator is made or a start runs.
     checkVisitGroups(plan);
+    checkProfileVisits(plan);
     optimaru::check_config(config_);
     // Nothing to search in an empty plan: one start scores it.
     const bool empty = plan.visits.empty() || plan.vehicles.empty();
@@ -370,8 +415,9 @@ void Solver::solve(VehicleRoutePlan& plan, const CalculatorFactory& makeCalculat
 
 Score calculateScore(VehicleRoutePlan& plan) {
     checkVisitGroups(plan);
-    if (!plan.hasVisitGroups()) return ScoreCalculator::score(plan);
-    // As solve(plan) ends on a plan with groups: the derived fields, then the
+    checkProfileVisits(plan);
+    if (!needsConstraintAssembly(plan)) return ScoreCalculator::score(plan);
+    // As solve(plan) ends on a plan with groups or profile visits: the derived fields, then the
     // three levels of the default assembly.
     ScoreCalculator::updateShadowVariables(plan);
     DecomposedCalculator calculator;

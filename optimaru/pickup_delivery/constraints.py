@@ -83,7 +83,7 @@ those on: with one of them soft or left out, the engine's stop moves are what tr
 that break it.
 """
 
-from .._constraint import Constraint, Level, Score, score_costs, select
+from .._constraint import Constraint, Level, Score, score_costs, select, with_always_on
 
 __all__ = [
     "Constraint",
@@ -99,6 +99,8 @@ __all__ = [
     "PairedRequestCost",
     "PickupBeforeDropoffCost",
     "PinnedStopsCost",
+    "ProfileForbiddenRequestCost",
+    "ProfilePreferredRequestCost",
     "RequestGroupCost",
     "RequiredVehicleCost",
     "RouteDurationCost",
@@ -123,6 +125,8 @@ __all__ = [
     "paired_request_cost",
     "pickup_before_dropoff_cost",
     "pinned_stops_cost",
+    "profile_forbidden_request_cost",
+    "profile_preferred_request_cost",
     "request_group_cost",
     "required_vehicle_cost",
     "route_duration_cost",
@@ -470,6 +474,62 @@ class RequiredVehicleCost(Constraint):
     )
 
 
+class ProfileForbiddenRequestCost(Constraint):
+    """Stops of requests carried by a vehicle whose profile forbids them. Default: hard, weight 1000; always on.
+
+    `TravelProfile.forbidden_requests` names the requests a vehicle on the profile may not
+    carry. A forbidden request carried whole costs 2, one unit per stop. Every solve scores
+    this constraint hard, listed or not: on a plan with forbidden requests, a selection
+    without a hard instance of it at a weight above 0 gets one at its defaults, beside any
+    softer or weight-0 pick, which scores as picked but does not switch the rule off. Leaving a request unassigned costs
+    only medium, so one that no vehicle may carry waits. Engine-only (no CP-SAT plugin)."""
+
+    name = "profile_forbidden_request_cost"
+    label_en = "Forbidden requests"
+    label_ko = "운송 불가 요청"
+    description_en = (
+        "Stops of requests that a vehicle carries although its travel profile lists them in "
+        "`forbidden_requests`, such as a load the vehicle cannot take. One unit of cost is one such stop, "
+        "so a whole request counts 2; 0 means every vehicle carries only requests it may. Always scored, "
+        "even when a constraint list leaves it out."
+    )
+    description_ko = (
+        "이동 프로필의 `forbidden_requests`에 들어 있는 요청을 그 프로필의 차량이 실은 경우, 그 요청의 "
+        "정차지를 셉니다. 차량이 실을 수 없는 화물 같은 경우입니다. 그런 정차지 하나가 비용 1이라 요청 "
+        "하나는 2이며, 0이면 모든 차량이 실을 수 있는 요청만 싣습니다. 제약 목록에서 빠져도 항상 "
+        "계산됩니다."
+    )
+
+
+class ProfilePreferredRequestCost(Constraint):
+    """Stops of preferred requests on a vehicle whose profile does not prefer them. Default: soft, weight 300.
+
+    `TravelProfile.preferred_requests` names the requests that should go to a vehicle on the
+    profile. A request some vehicle's profile prefers costs one unit per stop on a vehicle
+    whose profile does not prefer it, 2 for the whole request; an unassigned request is left
+    to `unassigned_requests_cost`. At weight 300 per stop against `travel_time_cost`'s 1 per
+    driving second, a vehicle that does not prefer a request takes it only when that saves
+    more than ten minutes of driving. A request whose vehicles drive on a profile with
+    preferred requests needs this constraint among its constraints (ValueError otherwise);
+    a profile no vehicle drives on prefers nothing. Engine-only (no CP-SAT plugin)."""
+
+    name = "profile_preferred_request_cost"
+    label_en = "Preferred requests"
+    label_ko = "선호 요청"
+    description_en = (
+        "Stops of requests that some vehicle's travel profile lists in `preferred_requests` but that a "
+        "vehicle whose profile does not prefer them carries. One unit of cost is one such stop, so a whole "
+        "request counts 2; 0 means every preferred request rides a vehicle that prefers it, or stays "
+        "unassigned. The default weight, 300 per stop, trades one such request for ten minutes of driving."
+    )
+    description_ko = (
+        "어떤 차량의 이동 프로필이 `preferred_requests`로 선호하는 요청을, 그 요청을 선호하지 않는 "
+        "프로필의 차량이 실은 경우 그 요청의 정차지를 셉니다. 그런 정차지 하나가 비용 1이라 요청 하나는 "
+        "2이며, 0이면 선호 요청이 모두 선호하는 차량에 배정되었거나 미배정으로 남았습니다. 기본 가중치는 "
+        "정차지당 300으로, 그런 요청 하나를 운행 10분과 맞바꿉니다."
+    )
+
+
 class PairedRequestCost(Constraint):
     """Requests with only one node on a route. Default: hard, weight 1000.
 
@@ -590,6 +650,8 @@ squared_order_age_cost = SquaredOrderAgeCost()
 vehicle_fixed_cost = VehicleFixedCost()
 pinned_stops_cost = PinnedStopsCost()
 required_vehicle_cost = RequiredVehicleCost()
+profile_forbidden_request_cost = ProfileForbiddenRequestCost()
+profile_preferred_request_cost = ProfilePreferredRequestCost()
 paired_request_cost = PairedRequestCost()
 same_vehicle_cost = SameVehicleCost()
 pickup_before_dropoff_cost = PickupBeforeDropoffCost()
@@ -615,6 +677,8 @@ _DEFAULTS = (
     vehicle_fixed_cost,
     pinned_stops_cost,
     required_vehicle_cost,
+    profile_forbidden_request_cost,
+    profile_preferred_request_cost,
     paired_request_cost,
     same_vehicle_cost,
     pickup_before_dropoff_cost,
@@ -659,11 +723,15 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
-    semantics as `get_constraints`. Unknown names raise ValueError.
+    semantics as `get_constraints` — and ``profile_forbidden_request_cost`` at
+    its defaults besides when ``costs`` holds one more instance of it than the
+    picks (`with_always_on`): every solve scores it hard on a plan with forbidden
+    requests, and `pdp.constraint_costs` reports that instance. Unknown names
+    raise ValueError.
 
     The returned value is the **engine-level** (hard, soft): the medium level
     (``unassigned_requests_cost``) is folded into soft as ``medium * 10^9``, the
     ``medium_fold`` every entry of ``costs`` carries. To compare with the split
     levels of `plan.score`, fold the same way first.
     """
-    return score_costs(costs, get_constraints(constraints))
+    return score_costs(costs, with_always_on(get_constraints(constraints), costs, ProfileForbiddenRequestCost))

@@ -105,6 +105,18 @@ class Delivery:
     """The group this request travels in; -1 == none. The requests that share a
     group ride one vehicle together, or all wait (request_group_cost)."""
 
+class ProfileRequests:
+    """What one kind of vehicle may carry: the requests it may not
+    (profile_forbidden_request_cost) and those it is preferred for
+    (profile_preferred_request_cost). A vehicle names its entry with
+    `Vehicle.profile_requests_index`. Both lists hold indices into
+    `PdpRoutePlan.deliveries` in strictly increasing order, none in both."""
+    def __init__(
+        self, forbidden_request_indices: list[int] = ..., preferred_request_indices: list[int] = ...
+    ) -> None: ...
+    forbidden_request_indices: list[int]
+    preferred_request_indices: list[int]
+
 class Vehicle:
     def __init__(
         self,
@@ -121,6 +133,7 @@ class Vehicle:
         max_route_radius_meters: float = 0.0,
         end_location_index: int = -1,
         profile_index: int = 0,
+        profile_requests_index: int = -1,
     ) -> None: ...
     id: str
     capacity: int
@@ -133,6 +146,9 @@ class Vehicle:
     stop: no closing leg is driven or timed."""
     profile_index: int
     """Which of the plan's matrices the vehicle drives on."""
+    profile_requests_index: int
+    """Which entry of `PdpRoutePlan.profile_requests` says what the vehicle may
+    carry; -1 (the default) for none."""
     departure_time: int
     max_travel_time: int
     max_route_duration: int
@@ -149,7 +165,10 @@ class PdpRoutePlan:
     """The problem and its routes. Constructing it assigns location indices and
     takes one driving-seconds and one driving-meters matrix per profile: as many
     profiles as the longer list holds (one at least); a matrix not given (None,
-    or past the end of its list) is the haversine fallback."""
+    or past the end of its list) is the haversine fallback. `profile_requests` lists
+    what each kind of vehicle may not carry or is preferred for (ValueError for an
+    index out of range, a list out of order, a request in both lists, a required
+    vehicle whose profile forbids the request)."""
     def __init__(
         self,
         name: str,
@@ -159,12 +178,15 @@ class PdpRoutePlan:
         deliveries: list[Delivery],
         durations: list[list[list[int]] | None] | None = None,
         distances: list[list[list[int]] | None] | None = None,
+        profile_requests: list[ProfileRequests] = ...,
     ) -> None: ...
     name: str
     locations: list[Location]
     vehicles: list[Vehicle]
     nodes: list[Node]
     deliveries: list[Delivery]
+    @property
+    def profile_requests(self) -> list[ProfileRequests]: ...
     unassigned_node_indices: list[int]
     """The unassigned pool. A request is dropped when BOTH its stops are here;
     exactly one here is a half-assigned request, which is hard-infeasible."""
@@ -187,7 +209,7 @@ def calculate_score(plan: PdpRoutePlan) -> Score:
     """Recompute the derived fields and the score (also stores plan.score).
 
     The score is the one solve(plan) stores: the seven core constraints, or the default
-    constraints when the plan has a group of two or more requests.
+    constraints when the plan has a group of two or more requests or a profile request list.
     """
 
 def build_random_instance(request_count: int, vehicle_count: int, seed: int = 0) -> PdpRoutePlan:
@@ -331,8 +353,9 @@ class Solver:
     def __init__(self, config: SolverConfig = ...) -> None: ...
     def solve(self, plan: PdpRoutePlan) -> None:
         """Solve on the seven core constraints, or on the default constraints when two
-        requests or more share a group (request_group_cost is not a core constraint; every
-        parallel start then has a set of its own). The core constraints do not include required_vehicle_cost,
+        requests or more share a group or a profile lists requests (request_group_cost and
+        the two profile request costs are not core constraints; every parallel start then
+        has a set of its own). The core constraints do not include required_vehicle_cost,
         pinned_stops_cost or the vehicle limits either: for a plan without groups
         that uses any of those, call solve_with_constraints."""
     def solve_with_constraints(self, plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...) -> None:
@@ -342,11 +365,16 @@ class Solver:
         its own instance with its own knobs, and the instances add up. plan.score and
         on_new_best report the three levels unfolded, so a soft total of 10^9 or more
         stays soft. With parallel_solver_count above 1 every start is scored by its own
-        copy of the picks."""
+        copy of the picks. profile_forbidden_request_cost is always on: a plan with
+        forbidden requests is scored on it hard whether the list holds it or not (a soft or
+        weight-0 pick of it scores beside the default instance). A plan with
+        preferred requests needs profile_preferred_request_cost in the list: ValueError
+        otherwise."""
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
-    the sixteen per-vehicle constraints (vehicle_capacity_cost ... required_vehicle_cost),
+    the nineteen per-vehicle constraints (vehicle_capacity_cost ... required_vehicle_cost,
+    profile_forbidden_request_cost, profile_preferred_request_cost),
     then the five request-level globals (paired_request_cost, same_vehicle_cost,
     pickup_before_dropoff_cost, request_group_cost, unassigned_requests_cost).
     The same names optimaru.pickup_delivery.constraints uses."""
@@ -362,7 +390,8 @@ def constraint_costs(plan: PdpRoutePlan, constraints: Iterable[Any] | None = ...
     "default_weight": float, "default_level": str, "units": [...],
     "medium_fold": {"kind": "into_soft", "unit": 1e9}}}. None = the default
     constraints; a pick list (as for solve_with_constraints) scores exactly those
-    picks, each entry carrying its pick's knobs, the k-th pick of a name keyed
+    picks (and profile_forbidden_request_cost on a plan with forbidden requests, which
+    every solve scores), each entry carrying its pick's knobs, the k-th pick of a name keyed
     "<name>#<k>" from the second on. "units" (the per-vehicle constraints) lists the
     vehicle indices the constraint evaluates, so the literal offset (clip=False)
     charges every vehicle, an idle one included, and not the pool;
