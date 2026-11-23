@@ -18,8 +18,10 @@ exclude_docs: |
 
 theme:
   name: material
-  # The optimaru mark, as on optimaru.com, in place of the theme's own icon.
+  # The optimaru mark, as on optimaru.com, in place of the theme's own icons (tab and header).
+  # Its ink turns light under a dark colour scheme, so the header is plain white or black.
   favicon: assets/favicon.svg
+  logo: assets/favicon.svg
   features:
     - navigation.sections
     - navigation.indexes
@@ -29,9 +31,13 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
+      primary: white
+      accent: green
       toggle: { icon: material/weather-night, name: Dark mode }
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
+      primary: black
+      accent: green
       toggle: { icon: material/weather-sunny, name: Light mode }
 
 plugins:
