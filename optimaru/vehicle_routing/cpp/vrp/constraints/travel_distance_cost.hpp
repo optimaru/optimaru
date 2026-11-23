@@ -10,7 +10,8 @@ namespace vrp {
 // end depot when the route has one, read from the distance matrix of the
 // vehicle's profile. Raw cost per vehicle = its driving meters; 0 = a vehicle
 // that stays parked (and the pool list). Give it a weight to price distance
-// beside or instead of travelTimeCost.
+// beside or instead of travelTimeCost. It has no piecewise preview: a move
+// is previewed by writing the candidate route out and walking it.
 struct TravelDistanceCost final : detail::PerVehicleConstraint {
     static constexpr double kDefaultWeight = 0.0;
     static constexpr optimaru::Level kDefaultLevel = optimaru::Level::Soft;

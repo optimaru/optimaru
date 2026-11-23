@@ -178,7 +178,9 @@ class TravelTimeCost(Constraint):
 class TravelDistanceCost(Constraint):
     """Driving meters per vehicle, start depot -> visits (-> end depot). Default: soft, weight 0 (opt-in).
 
-    Read from the distance matrix of the vehicle's travel profile; an idle vehicle drives nothing."""
+    Read from the distance matrix of the vehicle's travel profile; an idle vehicle drives nothing.
+    Its move previews walk the candidate route (``travel_time_cost`` answers from prefix sums),
+    so weighing it in slows the search on long routes."""
 
     name = "travel_distance_cost"
     label_en = "Travel distance"

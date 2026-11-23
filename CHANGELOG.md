@@ -8,16 +8,17 @@
   depot or another). Without an `end_depot` the route is open, as before without
   `return_to_depot`. `VehicleModel.depot` (vehicle routing), `VehicleModel.home` (pickup-delivery),
   `return_to_depot` and the input's `driving_seconds` matrix are gone; old input is refused. Driving
-  comes from travel profiles in the manner of PyVRP: `profiles` maps a name to a `TravelProfile`
+  comes from travel profiles: `profiles` maps a name to a `TravelProfile`
   whose `durations` (seconds) and `distances` (meters) are dicts keyed by depot and stop ids,
   `{from_id: {to_id: value}}`, and `VehicleModel.profile` picks one (`"default"` unless set). A pair
   the dicts leave out costs the profile's `missing_value`, 10,000,000 by default
   (`MISSING_TRAVEL_VALUE`); a profile without one of the dicts, and every vehicle when `profiles` is
   empty, drives straight lines between the coordinates (haversine meters, at 50 km/h for the
-  seconds). `to_plan` turns the dicts into one square matrix per profile over the depots, then the
+  seconds); an empty dict is refused, since it would make every pair missing. `to_plan` turns the dicts into one square matrix per profile over the depots, then the
   stops: for 1,000 places with both dicts given, 0.11 s to parse and validate 40 MB of JSON and 0.06 s
   to build the matrices on an M4 Max, so the JSON stays keyed by id. A new opt-in constraint,
-  `travel_distance_cost` (soft, weight 0), prices the meters; the solutions report
+  `travel_distance_cost` (soft, weight 0), prices the meters (its previews walk the candidate
+  route, where `travel_time_cost` answers from prefix sums); the solutions report
   `total_driving_meters` and each vehicle's `driving_meters`, and `vehicle_metrics` no longer echoes
   `return_to_depot`. In the compiled layer `Vehicle` takes `start_location_index`,
   `end_location_index` (-1 for an open route) and `profile_index`, the plans take

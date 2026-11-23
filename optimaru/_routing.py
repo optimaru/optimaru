@@ -51,14 +51,14 @@ class TravelProfile(StrictModel):
         default=None,
         description=(
             "Driving seconds, `{from_id: {to_id: seconds}}` over depot and stop ids. "
-            "None drives straight lines at 50 km/h."
+            "None drives straight lines at 50 km/h; an empty dict is refused."
         ),
     )
     distances: dict[str, dict[str, int]] | None = Field(
         default=None,
         description=(
             "Driving meters, `{from_id: {to_id: meters}}` over depot and stop ids. "
-            "None drives straight lines (haversine)."
+            "None drives straight lines (haversine); an empty dict is refused."
         ),
     )
     missing_value: int = Field(
@@ -72,6 +72,9 @@ class TravelProfile(StrictModel):
     @model_validator(mode="after")
     def _non_negative(self):
         for kind, pairs in (("durations", self.durations), ("distances", self.distances)):
+            if pairs is not None and not pairs:
+                # Every pair would cost missing_value; None is the straight-line fallback.
+                raise ValueError(f"{kind} is empty: give the pairs, or leave it out for straight lines")
             if pairs and any(row and min(row.values()) < 0 for row in pairs.values()):
                 raise ValueError(f"{kind} values must be non-negative")
         return self

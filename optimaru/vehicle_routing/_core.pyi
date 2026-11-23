@@ -110,6 +110,8 @@ class Vehicle:
     id: str
     capacity: int
     start_location_index: int
+    """Where the route starts. Vehicles of one depot should share its location
+    index: the operators that skip equivalent idle vehicles compare indices."""
     end_location_index: int
     """Where the route ends; -1 (the default) leaves the route open at its last
     stop: no closing leg is driven or timed."""

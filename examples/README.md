@@ -12,7 +12,9 @@ jupyter lab
 ```
 
 Requires Python 3.11+ and optimaru 0.5.1 or later. Each notebook stands alone, so you can download a
-single file and run it.
+single file and run it. The vehicle-routing and pickup-delivery notebooks use the 0.5 input (a depot
+per vehicle, `return_to_depot`, one driving matrix), which 0.6 replaces with depots and travel
+profiles: they ask for `optimaru>=0.5.1,<0.6` until they are ported to 0.6.
 
 Most solves stop on a time limit, so your scores and charts can differ a little from the saved outputs,
 depending on your machine. The saved outputs come from optimaru 0.5.1 on macOS (Apple silicon).

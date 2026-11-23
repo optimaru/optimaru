@@ -50,6 +50,8 @@ acceptance by default); its parameters are listed under
 [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule).
 
 - Times are integer **seconds from a common day start** (`8 * 3600` = 08:00).
+- Vehicles of one depot should share its location index (`start_location_index`):
+  the operators that skip equivalent idle vehicles compare indices.
 - `VehicleRoutePlan` takes one driving-seconds and one driving-meters matrix per
   travel profile (`durations=`, `distances=`, lists of square matrices over the
   locations; `Vehicle.profile_index` picks one). A matrix not given is
@@ -133,7 +135,8 @@ profiles = {
   that leg wherever it can; a place to itself costs 0 unless given.
 - A profile without `durations` or without `distances`, and every vehicle when
   `profiles` is empty, drives straight lines between the coordinates: haversine
-  meters, and those meters at 50 km/h for the seconds.
+  meters, and those meters at 50 km/h for the seconds. An empty dict is refused:
+  it would make every pair missing.
 - A vehicle naming a profile that `profiles` does not hold is refused, as is a
   dict keyed by an id that is no depot or visit.
 - `solve_request` turns each profile into one square matrix over the depots, then
@@ -141,8 +144,10 @@ profiles = {
   JSON), parsing and validating the request took 0.11 s and building the matrices
   0.06 s on an M4 Max.
 - `travel_time_cost` prices the seconds; `travel_distance_cost` (opt-in, weight 0)
-  prices the meters. `RouteSolution.total_driving_meters` and each vehicle's
-  `driving_meters` report the meters either way.
+  prices the meters. Its move previews walk the candidate route, where
+  `travel_time_cost` answers from prefix sums, so it slows the search on long
+  routes. `RouteSolution.total_driving_meters` and each vehicle's `driving_meters`
+  report the meters either way.
 
 Everything round-trips through JSON (`model_validate_json` /
 `model_dump_json`); fields are snake_case, classes PascalCase.

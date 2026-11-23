@@ -172,6 +172,8 @@ def test_unknown_depots_and_profiles_are_refused():
         )
     with pytest.raises(ValueError, match="non-negative"):
         models.TravelProfile(durations={"D": {"C": -1}})
+    with pytest.raises(ValueError, match="durations is empty"):
+        models.TravelProfile(durations={})
     with pytest.raises(ValueError, match="return_to_depot"):
         models.VehicleModel(id="V", capacity=1, start_depot="D", return_to_depot=True)
 
@@ -199,6 +201,26 @@ def test_profiles_become_matrices_and_missing_pairs_cost_the_missing_value():
     assert (plan.driving_distance(0, 1, 0), plan.driving_distance(1, 0, 0)) == (70, models.MISSING_TRAVEL_VALUE)
     # The bike gives no distances: straight lines between the coordinates.
     assert plan.driving_distance(0, 1, 1) == plan.driving_distance(1, 0, 1) > 1_000_000
+
+
+def test_the_compiled_plan_refuses_bad_profiles_and_depots():
+    locations = [vrp.Location(0, 0), vrp.Location(0, 1)]
+    visits = [vrp.Visit("C", "C", 1, 1, 0, 3600, 0)]
+
+    def plan(vehicle, **matrices):
+        return vrp.VehicleRoutePlan("bad", locations, [vehicle], visits, **matrices)
+
+    with pytest.raises(ValueError, match="profile_index 1 is not one of the 1 profiles"):
+        plan(vrp.Vehicle("V", 1, 0, profile_index=1))
+    with pytest.raises(ValueError, match="out of range"):
+        plan(vrp.Vehicle("V", 1, 0, end_location_index=-2))
+    with pytest.raises(ValueError, match="out of range"):
+        plan(vrp.Vehicle("V", 1, 2))
+    with pytest.raises(ValueError, match="square"):
+        plan(vrp.Vehicle("V", 1, 0), durations=[[[0, 1]]])
+    two = plan(vrp.Vehicle("V", 1, 0, profile_index=1), durations=[None, [[0, 5], [6, 0]]])
+    assert two.profile_count == 2
+    assert (two.driving_time(0, 1, 1), two.driving_distance(0, 1, 1)) == (5, two.driving_distance(0, 1, 0))
 
 
 def test_without_profiles_every_vehicle_drives_straight_lines():

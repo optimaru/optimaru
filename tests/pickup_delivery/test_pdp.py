@@ -254,6 +254,12 @@ def test_profiles_become_matrices_over_depots_then_stops():
 
     with pytest.raises(ValueError, match="non-negative"):
         models.TravelProfile(durations={"P": {"D": -1}})
+    with pytest.raises(ValueError, match="distances is empty"):
+        models.TravelProfile(distances={})
+    with pytest.raises(ValueError, match="profile_index 2 is not one of the 1 profiles"):
+        pdp.PdpRoutePlan("bad", [pdp.Location(0, 0)], [pdp.Vehicle("V", 1, 0, profile_index=2)], [], [])
+    with pytest.raises(ValueError, match="out of range"):
+        pdp.PdpRoutePlan("bad", [pdp.Location(0, 0)], [pdp.Vehicle("V", 1, 0, end_location_index=1)], [], [])
     with pytest.raises(ValueError, match="unknown places"):
         models.PdpInput(
             depots=data.depots,
