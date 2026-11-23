@@ -270,8 +270,17 @@ def test_a_request_solve_belongs_to_the_package_its_decorator_is_in(monkeypatch)
         _api.request_solve("vehicle-routing", "VrpResponse")(solve_request)
     solve_request.__module__ = "vendored.vehicle_routing.models"
     assert callable(_api.request_solve("vehicle-routing", "VrpResponse")(solve_request))
-    solve_request.__module__ = "vendored.vehicle_routing.other"
-    with pytest.raises(TypeError, match="request_solve decorates"):
+    for elsewhere in ("vendored.vehicle_routing.other", "vendored.models", "vendored.a.vehicle_routing.models"):
+        solve_request.__module__ = elsewhere
+        with pytest.raises(TypeError, match="request_solve decorates"):
+            _api.request_solve("vehicle-routing", "VrpResponse")(solve_request)
+
+    # A copy nested in another package: the package is the one _api is in, not the top-level name.
+    monkeypatch.setattr(_api, "__name__", "outer.vendored._api")
+    solve_request.__module__ = "outer.vendored.vehicle_routing.models"
+    assert callable(_api.request_solve("vehicle-routing", "VrpResponse")(solve_request))
+    solve_request.__module__ = "outer.other.models"
+    with pytest.raises(TypeError, match=r"of outer\.vendored\.<use case>\.models"):
         _api.request_solve("vehicle-routing", "VrpResponse")(solve_request)
 
 
