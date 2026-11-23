@@ -44,14 +44,14 @@ Every cell is the score of that solver's final solution under the use case's own
 | medium-3 | 336 shifts / 24 workers / 28 days | **0hard/23040soft** | **0hard/23040soft** |
 | medium-4 | 336 shifts / 24 workers / 28 days | **0hard/23040soft** | **0hard/23040soft** |
 | medium-5 | 336 shifts / 24 workers / 28 days | **0hard/23040soft** | **0hard/23040soft** |
-| large | 672 shifts / 48 workers / 28 days | **0hard/46080soft** | 0hard/35029.3713soft |
-| large-2 | 672 shifts / 48 workers / 28 days | **0hard/46080soft** | 0hard/46070.5132soft |
-| large-3 | 672 shifts / 48 workers / 28 days | **0hard/46080soft** | 0hard/46055.5460soft |
-| large-4 | 672 shifts / 48 workers / 28 days | **0hard/46080soft** | 0hard/35986.3713soft |
-| xlarge | 1120 shifts / 80 workers / 28 days | **0hard/76800soft** | -9305hard/59965.2572soft |
-| xlarge-2 | 1120 shifts / 80 workers / 28 days | **0hard/76800soft** | -40904hard/66185.8736soft |
-| xlarge-3 | 1120 shifts / 80 workers / 28 days | **0hard/76800soft** | -5094hard/68611.4590soft |
+| large | 672 shifts / 48 workers / 28 days | **0hard/46080soft** | 0hard/33579.7519soft |
+| large-2 | 672 shifts / 48 workers / 28 days | **0hard/46080soft** | -5hard/31644.0906soft |
+| large-3 | 672 shifts / 48 workers / 28 days | **0hard/46080soft** | 0hard/31649.8689soft |
+| large-4 | 672 shifts / 48 workers / 28 days | **0hard/46080soft** | 0hard/46074.7085soft |
+| xlarge | 1120 shifts / 80 workers / 28 days | **0hard/76800soft** | -478hard/22039.6272soft |
+| xlarge-2 | 1120 shifts / 80 workers / 28 days | **0hard/76800soft** | -40423hard/67144.0603soft |
+| xlarge-3 | 1120 shifts / 80 workers / 28 days | **0hard/76800soft** | -21795hard/65731.8201soft |
 
-Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
+Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 Note: unfairness is sqrt(ssd) rounded to 6 significant figures; the CP-SAT objective holds half the squared loads instead, so it can weigh balance against the other soft constraints differently from the engine, whose calculator scores both answers.
 <!-- results:end -->

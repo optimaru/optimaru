@@ -57,17 +57,17 @@ Every cell is the score of that solver's final solution under the use case's own
 | g80 | 80 vertices / 313 edges | **0hard/1327soft** | **0hard/1327soft** |
 | g80-2 | 80 vertices / 322 edges | **0hard/1316soft** | **0hard/1316soft** |
 | g80-3 | 80 vertices / 307 edges | **0hard/1291soft** | **0hard/1291soft** |
-| g120 | 120 vertices / 567 edges | 0hard/2336soft | **0hard/2341soft** |
-| g120-2 | 120 vertices / 563 edges | **0hard/2351soft** | 0hard/2318soft |
-| g120-3 | 120 vertices / 536 edges | **0hard/2268soft** | 0hard/2246soft |
-| g200 | 200 vertices / 1067 edges | **0hard/4412soft** | 0hard/4353soft |
-| g200-2 | 200 vertices / 977 edges | **0hard/3985soft** | 0hard/3919soft |
-| g200-3 | 200 vertices / 988 edges | **0hard/4127soft** | **0hard/4127soft** |
-| g400 | 400 vertices / 2392 edges | **0hard/9683soft** | 0hard/9388soft |
-| g400-2 | 400 vertices / 2359 edges | **0hard/9576soft** | 0hard/9288soft |
-| g800 | 800 vertices / 4691 edges | **0hard/19140soft** | 0hard/18536soft |
-| g800-2 | 800 vertices / 4863 edges | **0hard/19747soft** | 0hard/19106soft |
-| g1600 | 1600 vertices / 9516 edges | **0hard/38936soft** | 0hard/37224soft |
+| g120 | 120 vertices / 567 edges | **0hard/2343soft** | 0hard/2341soft |
+| g120-2 | 120 vertices / 563 edges | **0hard/2351soft** | 0hard/2342soft |
+| g120-3 | 120 vertices / 536 edges | **0hard/2268soft** | 0hard/2264soft |
+| g200 | 200 vertices / 1067 edges | **0hard/4412soft** | 0hard/4385soft |
+| g200-2 | 200 vertices / 977 edges | **0hard/3985soft** | 0hard/3932soft |
+| g200-3 | 200 vertices / 988 edges | **0hard/4127soft** | 0hard/4124soft |
+| g400 | 400 vertices / 2392 edges | **0hard/9683soft** | 0hard/9386soft |
+| g400-2 | 400 vertices / 2359 edges | **0hard/9576soft** | 0hard/9302soft |
+| g800 | 800 vertices / 4691 edges | **0hard/19140soft** | 0hard/18621soft |
+| g800-2 | 800 vertices / 4863 edges | **0hard/19747soft** | 0hard/19240soft |
+| g1600 | 1600 vertices / 9516 edges | **0hard/38936soft** | 0hard/37208soft |
 
-Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
+Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

@@ -44,25 +44,25 @@ Every cell is the score of that solver's final solution under the use case's own
 | Instance | Size | optimaru engine | OR-Tools CP-SAT |
 | --- | --- | --- | --- |
 | lines2x10 | 2 lines / 10 jobs | 0hard/0medium/-2933284soft | **0hard/0medium/-2930626soft** |
-| lines2 | 2 lines / 20 jobs | **0hard/0medium/-10977133soft** | 0hard/0medium/-11199501soft |
-| lines2x30 | 2 lines / 30 jobs | **0hard/0medium/-23751029soft** | 0hard/-1611medium/-15830618soft |
-| lines3x20 | 3 lines / 20 jobs | **0hard/0medium/-7250891soft** | 0hard/0medium/-7858659soft |
+| lines2 | 2 lines / 20 jobs | **0hard/0medium/-10977133soft** | 0hard/0medium/-11324081soft |
+| lines2x30 | 2 lines / 30 jobs | **0hard/0medium/-23776100soft** | 0hard/-1348medium/-17749700soft |
+| lines3x20 | 3 lines / 20 jobs | **0hard/0medium/-7250891soft** | 0hard/0medium/-7979027soft |
 | lines3x30 | 3 lines / 30 jobs | **0hard/0medium/-15703457soft** | 0hard/-3072medium/-6310706soft |
 | lines3 | 3 lines / 40 jobs | **0hard/0medium/-26711524soft** | 0hard/-6786medium/-2419682soft |
 | lines3x60 | 3 lines / 60 jobs | **0hard/0medium/-62674394soft** | 0hard/-12914medium/0soft |
 | lines4x40 | 4 lines / 40 jobs | **0hard/0medium/-19894044soft** | 0hard/-8443medium/0soft |
-| lines4 | 4 lines / 60 jobs | **0hard/0medium/-46407583soft** | 0hard/-12914medium/0soft |
+| lines4 | 4 lines / 60 jobs | **0hard/0medium/-46384137soft** | 0hard/-12914medium/0soft |
 | lines4x80 | 4 lines / 80 jobs | **0hard/0medium/-79272037soft** | 0hard/-16978medium/0soft |
-| lines5x50 | 5 lines / 50 jobs | **0hard/0medium/-24787729soft** | 0hard/-10573medium/0soft |
+| lines5x50 | 5 lines / 50 jobs | **0hard/0medium/-24769332soft** | 0hard/-10573medium/0soft |
 | lines5x75 | 5 lines / 75 jobs | **0hard/0medium/-56000213soft** | — (no solution in time) |
 | demo | 5 lines / 100 jobs | **0hard/0medium/-96189767soft** | — (no solution in time) |
 | lines6x90 | 6 lines / 90 jobs | **0hard/0medium/-64628549soft** | — (no solution in time) |
 | lines6x120 | 6 lines / 120 jobs | **0hard/0medium/-117158749soft** | — (no solution in time) |
 | lines7x140 | 7 lines / 140 jobs | **0hard/0medium/-134304778soft** | — (no solution in time) |
 | lines8x150 | 8 lines / 150 jobs | **0hard/0medium/-134281075soft** | — (no solution in time) |
-| lines8 | 8 lines / 200 jobs | **0hard/0medium/-233451581soft** | — (no solution in time) |
+| lines8 | 8 lines / 200 jobs | **0hard/0medium/-233512028soft** | — (no solution in time) |
 | lines9x250 | 9 lines / 250 jobs | **0hard/0medium/-326613955soft** | — (no solution in time) |
 | lines10 | 10 lines / 300 jobs | **0hard/0medium/-424357320soft** | — (no solution in time) |
 
-Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
+Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->

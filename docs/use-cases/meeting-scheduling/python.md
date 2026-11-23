@@ -171,24 +171,22 @@ ruin 6/24, fixed LA 3200/12800, polish 2000/15000, change/swap 0.85/0.15,
 dayFit 0.9, smaller kick ruin (0.05-0.15).
 
 On the comparison's instances, which the bench solves now, the default
-`ruin_recreate_as_move_weight = 2e-4` against `asMove=0` (2026-11-12, one 4-vCPU x86-64 Linux
-cloud machine, three runs at a time, 10 s per run; mean objective, hard 0 in every run):
+`ruin_recreate_as_move_weight = 2e-4` against `asMove=0` (2026-11-24, one Apple M4 Max Mac
+(16 cores), single-threaded runs one after another, interleaved by seed, beside the other
+benchmark lanes (at most ten solver threads on the twelve performance cores), 10 s per run;
+mean objective, hard 0 in every run):
 
 | Instance | `asMove=0` | Default (2e-4) | Δ | Seeds | Per-seed win-loss-draw |
 | --- | --- | --- | --- | --- | --- |
-| small (8 meetings, 160 cells) | 356 | **341** | −4.3% | 1-6 | 6-0-0 |
-| medium (16 meetings, 360 cells) | 1,574 | **1,568** | −0.4% | 1-6 | 5-1-0 |
-| demo (24 meetings, 480 cells) | 3,047 | 3,046 | −0.1% (neutral) | 1-6 | 3-2-1 |
-| large (48 meetings, 1000 cells) | **38,347,048** | 40,762,940 | +6.3% | 1-12 | 5-7-0 |
-| xlarge (96 meetings, 1920 cells) | **114,624,415** | 134,707,602 | +17.5% | 1-12 | 4-8-0 |
+| small (8 meetings, 160 cells) | 359 | **338** | −5.9% | 1-6 | 6-0-0 |
+| medium (16 meetings, 360 cells) | 1,583 | **1,566** | −1.1% | 1-6 | 5-1-0 |
+| demo (24 meetings, 480 cells) | 3,048 | 3,047 | −0.03% (neutral) | 1-6 | 3-3-0 |
+| large (48 meetings, 1000 cells) | 40,846,652 | **39,180,279** | −4.1% | 1-12 | 7-5-0 |
+| xlarge (96 meetings, 1920 cells) | 98,709,196 | 98,625,018 | −0.1% (neutral) | 1-12 | 5-7-0 |
 
-The move helps on the three instances that reach medium 0 and does not on `large` and
-`xlarge`, where the medium penalty is still falling when the budget ends (a mean of 38 and
-115 without the move, 41 and 135 with it); on the bench's former `scaled:48` and `scaled:96`
-it won. The two rungs are other instances than those were (five and six days where the
-scaled ones had four, fewer rooms, another draw of attendees), and the runs were made on a
-cloud machine, not on the machine the defaults were tuned on. The default is unchanged: it
-needs a sweep on these instances before it moves.
+The move helps on the three instances that reach medium 0 and on `large`, and is neutral on
+`xlarge`; on the two largest the medium penalty is still falling when the budget ends (a mean
+of 40.8 and 98.7 without the move, 39.2 and 98.6 with it). The default is unchanged.
 
 ## Parameters and their costs
 

@@ -82,37 +82,27 @@ all three tables; the tables below cover tracks 1 and 2.
   and CI always use the fast path. See the plugin section of
   [`docs/use-cases/school-timetabling/python.md`](../../docs/use-cases/school-timetabling/python.md).
 
-## Track 1 on the Python-generated instances (2026-11-12)
+## Track 1 on the Python-generated instances (2026-11-24)
 
 The instances of `gen_quickstart.py`, seed 1 — the ones the harness and CI
-solve now. Environment: one 4-vCPU x86-64 Linux cloud machine (Intel Xeon,
-2.1 GHz), **30 s** per instance per solver, seed 1, one run. CP-SAT is
-OR-Tools 9.15. The cross-check gate passed. Soft: higher is better; every
-rescore == self-report.
+solve now. Environment: one Apple M4 Max Mac (16 cores), **30 s** per instance
+per solver, seed 1, one run, beside the other benchmark lanes (at most ten
+solver threads on the twelve performance cores). CP-SAT is OR-Tools 9.15 with 8
+workers. The cross-check gate passed. Soft: higher is better; every rescore ==
+self-report.
 
 | instance | solver | final (rescored) | first feasible | moves/s |
 | --- | --- | --- | --- | --- |
-| S: 6 classes/12 teachers/7 rooms | **cpp** | **0hard/175soft** | 1 ms | 8,478,047 |
-| S | cpsat (8 workers) | 0hard/-20soft | 6992 ms | n/a |
-| S | cpsat (4 workers) | 0hard/124soft | 4640 ms | n/a |
-| M: 12 classes/20 teachers/13 rooms | **cpp** | **0hard/350soft** | 5 ms | 8,834,942 |
-| M | cpsat (8 workers) | 0hard/-489soft | 20252 ms | n/a |
-| M | cpsat (4 workers) | 0hard/-1387soft | 11730 ms | n/a |
-| L: 24 classes/40 teachers/25 rooms | **cpp** | **0hard/666soft** | 20 ms | 6,207,261 |
+| S: 6 classes/12 teachers/7 rooms | **cpp** | **0hard/175soft** | 1 ms | 14,698,558 |
+| S | cpsat (8 workers) | 0hard/160soft | 2169 ms | n/a |
+| M: 12 classes/20 teachers/13 rooms | **cpp** | **0hard/350soft** | 3 ms | 15,039,135 |
+| M | cpsat (8 workers) | 0hard/127soft | 4119 ms | n/a |
+| L: 24 classes/40 teachers/25 rooms | **cpp** | **0hard/679soft** | 12 ms | 11,209,327 |
 | L | cpsat (8 workers) | n/a (no feasible solution within 30 s, UNKNOWN) | n/a | n/a |
-| L | cpsat (4 workers) | n/a (no feasible solution within 30 s, UNKNOWN) | n/a | n/a |
 
-- The harness ran twice, once with `--workers 8` (the default of every table
-  here) and once with `--workers 4`, the machine's core count: eight workers
-  share four cores on this machine. The cpp rows are of the first run; the
-  second run's cpp scores were the same (175 / 350 / 666).
-- This machine evaluates about half as many moves per second as the Mac of
-  the tables below (8.5M against 16.4M on S) and has a quarter of its cores,
-  which costs CP-SAT more than it costs the single-threaded engine. Do not
-  read these rows against the tables below: those are of other instances
-  (the C++ bench's former generator) and another machine.
-- Reproduce: `uv run school-timetabling-compare --sizes S,M,L --seconds 30`
-  (`--workers 4` for the second set of rows).
+- These are other instances than the tables below (the C++ bench's former
+  generator), so the rows do not compare with them.
+- Reproduce: `uv run school-timetabling-compare --sizes S,M,L --seconds 30`.
 
 ## Track 2 on the 20-school ladder
 
@@ -126,28 +116,28 @@ a timetable that breaks a hard rule has no penalty here. Lower is better; the be
 
 | Classes | Teachers | Courses | engine | CP-SAT |
 | ---: | ---: | ---: | ---: | ---: |
-| 3 | 11 | 39 | 124 | **114** |
-| 6 | 15 | 72 | **231** | 277 |
-| 9 | 20 | 105 | **551** | 672 |
-| 12 | 23 | 138 | **1,151** | 1,359 |
-| 15 | 28 | 171 | **1,457** | 1,634 |
-| 18 | 34 | 204 | **1,725** | 1,890 |
-| 21 | 42 | 237 | **1,797** | 2,361 |
-| 24 | 42 | 270 | **2,606** | 3,328 |
-| 27 | 49 | 303 | **2,699** | 3,633 |
-| 30 | 53 | 336 | **3,237** | 4,177 |
-| 33 | 62 | 369 | **3,208** | 4,404 |
-| 36 | 63 | 402 | **3,878** | 5,387 |
-| 39 | 68 | 435 | **4,238** | 6,066 |
-| 42 | 76 | 468 | **4,145** | 6,553 |
-| 45 | 81 | 501 | **4,672** | 7,207 |
+| 3 | 11 | 39 | 156 | **114** |
+| 6 | 15 | 72 | **231** | **231** |
+| 9 | 20 | 105 | **551** | 575 |
+| 12 | 23 | 138 | **1,151** | 1,208 |
+| 15 | 28 | 171 | **1,457** | 1,622 |
+| 18 | 34 | 204 | **1,737** | 1,788 |
+| 21 | 42 | 237 | **1,797** | 2,149 |
+| 24 | 42 | 270 | **2,606** | 3,144 |
+| 27 | 49 | 303 | **2,699** | 3,660 |
+| 30 | 53 | 336 | **3,237** | 4,281 |
+| 33 | 62 | 369 | **3,208** | 4,406 |
+| 36 | 63 | 402 | **3,878** | 5,094 |
+| 39 | 68 | 435 | **4,238** | 5,726 |
+| 42 | 76 | 468 | **4,145** | 7,593 |
+| 45 | 81 | 501 | **4,672** | 8,224 |
 | 48 | 82 | 534 | **5,639** | no solution in time |
-| 51 | 91 | 567 | **5,499** | 8,534 |
-| 54 | 95 | 600 | **5,967** | 9,670 |
-| 57 | 102 | 633 | **5,974** | 9,239 |
-| 60 | 102 | 666 | **6,836** | 11,418 |
+| 51 | 91 | 567 | **5,499** | 8,344 |
+| 54 | 95 | 600 | **5,967** | 9,413 |
+| 57 | 102 | 633 | **5,974** | 9,576 |
+| 60 | 102 | 666 | **6,837** | 10,759 |
 
-Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
+Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->
 
 ## Latest measurement (local, 2026-11-04)

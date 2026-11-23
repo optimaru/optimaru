@@ -194,21 +194,23 @@ Protocol: 6-seed interleaved A/B; per-seed win/loss is a lexicographic
 hard-then-soft comparison. The measurements are from 2026-08. The raw campaign logs are not checked in.
 
 On the comparison's instances, which the bench solves now, the automatic
-`ruin_recreate_as_move_weight` against `asMove=0` (2026-11-12, one 4-vCPU x86-64 Linux cloud
-machine, three runs at a time, 10 s per run; mean soft, hard 0 in every run):
+`ruin_recreate_as_move_weight` against `asMove=0` (2026-11-24, one Apple M4 Max Mac (16 cores),
+single-threaded runs one after another, interleaved by seed, beside the other benchmark lanes
+(at most ten solver threads on the twelve performance cores), 10 s per run; mean soft, hard 0
+in every run):
 
 | Instance | `asMove=0` | Default (automatic) | Seeds | Per-seed win-loss-draw |
 | --- | --- | --- | --- | --- |
-| demo (15 talks, 30 cells) | -59415 | **-57990** (+2.4%) | 1-6 | 4-0-2 |
-| days2 (30 talks, 60 cells) | -291675 | **-288718** (+1.0%) | 1-6 | 5-1-0 |
-| days3 (70 talks, 144 cells) | -2118845 | **-2113640** (+0.2%) | 1-6 | 4-2-0 |
-| days4 (118 talks, 240 cells) | **-5393152** | -5396882 (-0.07%) | 1-12 | 5-7-0 |
-| days5 (190 talks, 390 cells) | **-15022492** | -15048010 (-0.17%) | 1-12 | 3-9-0 |
+| demo (15 talks, 30 cells) | -58290 | **-57990** (+0.5%) | 1-6 | 2-0-4 |
+| days2 (30 talks, 60 cells) | **-288085** | -289392 (-0.45%) | 1-6 | 3-3-0 |
+| days3 (70 talks, 144 cells) | -2115498 | **-2113512** (+0.09%) | 1-6 | 4-2-0 |
+| days4 (118 talks, 240 cells) | **-5384748** | -5386946 (-0.04%) | 1-12 | 5-7-0 |
+| days5 (190 talks, 390 cells) | **-15039024** | -15041510 (-0.02%) | 1-12 | 6-6-0 |
 
-The rule holds up to `days3` and is no gain on the two largest conferences, whose grids
-(240 and 390 cells) are beyond the 126 cells it was tuned on. The default is unchanged: these
-are runs of one cloud machine, not of the machine the defaults were tuned on, and a rule for
-larger grids needs its own sweep.
+On these instances the rule is within half a percent of `asMove=0` everywhere: a small gain on
+`demo` and `days3`, a small loss on `days2`, and no difference on the two largest conferences,
+whose grids (240 and 390 cells) are beyond the 126 cells it was tuned on. The default is
+unchanged: a rule for larger grids needs its own sweep.
 
 ## Starting from an existing solution
 

@@ -39,19 +39,19 @@ Every cell is the score of that solver's final solution under the use case's own
 | demo | 77 stays / 13 beds / 10 rooms | **0hard/0medium/-6640soft** | **0hard/0medium/-6640soft** |
 | demo-2 | 76 stays / 13 beds / 10 rooms | **0hard/0medium/-7404soft** | **0hard/0medium/-7404soft** |
 | demo-3 | 75 stays / 13 beds / 10 rooms | 0hard/0medium/-9054soft | **0hard/0medium/-9046soft** |
-| demo-4 | 79 stays / 13 beds / 10 rooms | 0hard/0medium/-10434soft | **0hard/0medium/-10282soft** |
-| medium | 183 stays / 30 beds / 24 rooms | **0hard/0medium/-13192soft** | 0hard/0medium/-20144soft |
-| medium-2 | 180 stays / 30 beds / 24 rooms | **0hard/0medium/-15676soft** | 0hard/0medium/-24506soft |
-| medium-3 | 183 stays / 30 beds / 24 rooms | **0hard/0medium/-11178soft** | 0hard/0medium/-18522soft |
-| medium-4 | 182 stays / 30 beds / 24 rooms | **0hard/0medium/-12394soft** | 0hard/0medium/-19800soft |
-| medium-5 | 187 stays / 30 beds / 24 rooms | **0hard/0medium/-13882soft** | 0hard/0medium/-22574soft |
+| demo-4 | 79 stays / 13 beds / 10 rooms | **0hard/0medium/-10434soft** | 0hard/0medium/-10496soft |
+| medium | 183 stays / 30 beds / 24 rooms | **0hard/0medium/-13192soft** | 0hard/0medium/-21298soft |
+| medium-2 | 180 stays / 30 beds / 24 rooms | **0hard/0medium/-15676soft** | 0hard/0medium/-23698soft |
+| medium-3 | 183 stays / 30 beds / 24 rooms | **0hard/0medium/-11178soft** | 0hard/0medium/-16348soft |
+| medium-4 | 182 stays / 30 beds / 24 rooms | **0hard/0medium/-12382soft** | 0hard/0medium/-19144soft |
+| medium-5 | 187 stays / 30 beds / 24 rooms | **0hard/0medium/-13882soft** | 0hard/0medium/-19770soft |
 | large | 551 stays / 61 beds / 48 rooms | **0hard/0medium/-34932soft** | — (no solution in time) |
-| large-2 | 546 stays / 61 beds / 48 rooms | **0hard/0medium/-29166soft** | — (no solution in time) |
+| large-2 | 546 stays / 61 beds / 48 rooms | **0hard/0medium/-29100soft** | — (no solution in time) |
 | large-3 | 550 stays / 61 beds / 48 rooms | **0hard/0medium/-27708soft** | — (no solution in time) |
 | large-4 | 549 stays / 61 beds / 48 rooms | **0hard/0medium/-24552soft** | — (no solution in time) |
-| xlarge | 1233 stays / 104 beds / 80 rooms | **0hard/0medium/-35814soft** | — (no solution in time) |
+| xlarge | 1233 stays / 104 beds / 80 rooms | **0hard/0medium/-35798soft** | — (no solution in time) |
 | xlarge-2 | 1218 stays / 104 beds / 80 rooms | **0hard/0medium/-55276soft** | — (no solution in time) |
 | xlarge-3 | 1216 stays / 104 beds / 80 rooms | **0hard/0medium/-36988soft** | — (no solution in time) |
 
-Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
+Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->
