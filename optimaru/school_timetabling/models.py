@@ -326,7 +326,7 @@ def parameter_uses(problem: "TimetableProblemModel | dict") -> list[ParameterUse
             for field, default, costs in table:
                 value = item.get(field)
                 # A key left out, None, or a 0 where the default is a number is the default:
-                # convert.py reads `or 6`, `or 4`, `or 1`.
+                # convert.py reads `or 6`, `or 4`, `or 1`. Keep the two in step.
                 if value is None or (not value and isinstance(default, int)):
                     value = default
                 if is_set(value, default):

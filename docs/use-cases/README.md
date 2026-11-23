@@ -387,7 +387,11 @@ the cost that scores it: add one, or leave max_end_time at its default (0)
   `constraints` is None, the picks otherwise (employee scheduling: the request's
   `constraints`; school timetabling: the `constraints=` picks, while the fast path with
   `weights=` scores every cost). A pick at weight 0 counts: it is a choice the caller
-  made, not an omission. Where several costs read one field, any one of them is enough.
+  made, not an omission. So does a cost the defaults hold at weight 0 (an opt-in
+  objective): pickup-delivery's `order_time` is accepted with the defaults although
+  `squared_order_age_cost` weighs nothing there, as the owner set the rule ("a default
+  set that includes the cost changes nothing for default requests"); give that cost a
+  weight to use `order_time`. Where several costs read one field, any one of them is enough.
 - **Checked where the input is the JSON model**: `solve_request`, and `solve()` given the
   pydantic model (or school timetabling's problem dict). A compiled problem is solved as
   it is given. A pick that the engine refuses (an unknown name, a bad knob) is reported

@@ -10,9 +10,11 @@
   `constraints` is None, a pick at weight 0 included). It is checked where the input is the JSON
   model (`solve_request`, `solve(model)`); compiled problems are solved as given. With an API key
   set, the request is sent as it is (school timetabling also checks before sending), and the
-  refusal comes from the server once it runs this release. Default
-  selections are unaffected, except employee scheduling's `desired_shifts`, whose
-  `desired_shift_cost` is opt-in: a request that sets it now has to pick that cost. Each use case's
+  refusal comes from the server once it runs this release. Default selections are unaffected
+  (they hold every cost, pickup-delivery's opt-in `squared_order_age_cost` at weight 0, so
+  `order_time` still needs that cost weighted to act), except employee scheduling's
+  `desired_shifts`, whose `desired_shift_cost` is not among the defaults: a request that sets it
+  now has to pick that cost. Each use case's
   `models.parameter_uses(model)` lists what an input sets, and docs/use-cases/README.md
   ("Parameters and their costs") has the table for all 22 use cases.
 - **Routing: forbidden and preferred jobs per travel profile.** A vehicle routing
