@@ -1041,7 +1041,7 @@ about the repository, not the wheel.
   execution mode). No behaviour changes.
 - **Repository layout.** The source tree now has the shape of the package it
   builds. `optimaru/` is the one Python package. The engine headers moved from
-  `include/optimaru/` to `core/optimaru/` (the include path stays
+  `include/optimaru/` to `optimaru/cpp/optimaru/` (the include path stays
   `#include "optimaru/..."`), and each use case moved from
   `use-cases/<slug>/{cpp,python}` into its subpackage `optimaru/<use case>/`,
   with its C++ in `optimaru/<use case>/cpp/`. Tests moved to `tests/` (engine,
