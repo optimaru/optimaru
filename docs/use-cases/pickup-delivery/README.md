@@ -431,9 +431,10 @@ A profile may consist of these lists alone and drive as another profile does
 - `profile_preferred_request_cost` (soft, weight 300 per stop) counts, per vehicle,
   the stops of requests that some vehicle's profile prefers and its own does not:
   600 for a whole request, which a vehicle that does not prefer it takes only when
-  that saves more than ten minutes of driving. A request with preferred requests
-  needs this constraint among its `constraints` (`ValueError` otherwise); the
-  default set has it.
+  that saves more than ten minutes of driving. A request whose vehicles drive on a
+  profile with preferred requests needs this constraint among its `constraints`
+  (`ValueError` otherwise); the default set has it. A profile no vehicle drives on
+  prefers nothing.
 - A request id must be one of the requests, at most once per list, and not in both
   lists of one profile. A request whose `required_vehicle` drives on a profile that
   forbids it is refused, and so is a vehicle that pins a stop of a request its

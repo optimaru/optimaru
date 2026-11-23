@@ -12,7 +12,8 @@
   it hard at its defaults; and
   `profile_preferred_visit_cost` (soft, weight 600 per visit) / `profile_preferred_request_cost`
   (soft, weight 300 per stop), about ten minutes of driving for one job, which a request with
-  preferred jobs must list (`ValueError` otherwise). A plan with such lists is scored on the
+  preferred jobs on a profile some vehicle drives on must list (`ValueError` otherwise; a
+  profile no vehicle drives on prefers nothing). A plan with such lists is scored on the
   default constraints, as one with groups is, on the constraint assembly, which takes fewer steps
   per second than the core path; the group operators and the pickup-delivery
   request operators never place a job on a vehicle that forbids it, and a job no vehicle may take

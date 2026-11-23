@@ -207,6 +207,8 @@ def test_a_preference_of_a_profile_no_vehicle_drives_on_counts_nowhere():
     model_input = RoutingInput.model_validate(data)
     assert to_plan(model_input).profile_visits == []
     assert costs(model_input, "profile_preferred_visit_cost", {"v": ["a"]}) == [0, 0, 0]
+    # Nor does it ask for its cost.
+    solve(model_input, timelimit=0, constraints=[VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost()])
 
 
 def test_the_two_costs_score_with_their_default_weights_and_levels():

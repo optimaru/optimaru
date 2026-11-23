@@ -509,8 +509,9 @@ class ProfilePreferredRequestCost(Constraint):
     whose profile does not prefer it, 2 for the whole request; an unassigned request is left
     to `unassigned_requests_cost`. At weight 300 per stop against `travel_time_cost`'s 1 per
     driving second, a vehicle that does not prefer a request takes it only when that saves
-    more than ten minutes of driving. A request with preferred requests needs this
-    constraint among its constraints (ValueError otherwise). Engine-only (no CP-SAT plugin)."""
+    more than ten minutes of driving. A request whose vehicles drive on a profile with
+    preferred requests needs this constraint among its constraints (ValueError otherwise);
+    a profile no vehicle drives on prefers nothing. Engine-only (no CP-SAT plugin)."""
 
     name = "profile_preferred_request_cost"
     label_en = "Preferred requests"

@@ -458,8 +458,9 @@ class ProfilePreferredVisitCost(Constraint):
     profile does not prefer it serves it; an unassigned visit is left to
     `unassigned_visits_cost`. At weight 600 against `travel_time_cost`'s 1 per driving
     second, a vehicle that does not prefer a visit takes it only when that saves more than
-    ten minutes of driving. A request with preferred visits needs this constraint among its
-    constraints (ValueError otherwise). Engine-only (no CP-SAT plugin)."""
+    ten minutes of driving. A request whose vehicles drive on a profile with preferred visits
+    needs this constraint among its constraints (ValueError otherwise); a profile no vehicle
+    drives on prefers nothing. Engine-only (no CP-SAT plugin)."""
 
     name = "profile_preferred_visit_cost"
     label_en = "Preferred visits"

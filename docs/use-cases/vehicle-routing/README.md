@@ -259,9 +259,12 @@ profiles = {
   no vehicle drives on counts nowhere, and an unassigned visit is left to
   `unassigned_visits_cost`. Weight 600 against `travel_time_cost`'s 1 per driving
   second: a vehicle that does not prefer a visit takes it only when that saves more
-  than ten minutes of driving. A request with preferred visits needs this constraint
-  among its `constraints` (`ValueError` otherwise: the lists would be ignored); the
-  default set has it.
+  than ten minutes of driving. A request whose vehicles drive on a profile with
+  preferred visits needs this constraint among its `constraints` (`ValueError`
+  otherwise: the lists would be ignored); the default set has it. A profile no vehicle
+  drives on prefers nothing, so its list asks for nothing either. A forbidden visit in a
+  vehicle's `initial_route` is accepted: the route is only a start, and the search
+  moves the visit off.
 - A visit id must be one of the visits, at most once per list, and not in both lists
   of one profile (`ValueError`). `same_travel_as` names another profile that gives its
   own travel; the profile that names it gives no `durations`, `distances` or

@@ -64,7 +64,8 @@ class TravelProfile(_routing.TravelProfile):
         description=(
             "Ids of requests that should go to a vehicle on this profile: each stop of one carried by "
             "a vehicle whose profile does not prefer it costs `profile_preferred_request_cost` (soft). "
-            "The constraints of the solve must include that cost."
+            "When a vehicle drives on the profile, the constraints of the solve must include that "
+            "cost; a profile no vehicle drives on prefers nothing."
         ),
     )
 
