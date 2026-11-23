@@ -2,7 +2,7 @@
 
 Each plugin subclasses the engine's spec of the same name and carries only
 ``build()``: the default level and weight come from the engine's
-``pdp_routing.constraint_info()`` (cpsat-common reads the row), so the two
+``optimaru.pickup_delivery.constraint_info()`` (cpsat-common reads the row), so the two
 solvers cannot disagree on a default. The registry follows the
 ``list_constraints()`` order.
 

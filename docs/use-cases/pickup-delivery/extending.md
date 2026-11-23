@@ -512,9 +512,10 @@ With the example at weight 1 these failed, and are expected to:
   constraints" in [README.md](README.md), [python.md](python.md), `constraints.py`,
   `__init__.py`, `_core.pyi`, `bindings.cpp`, `solver.hpp`, `score_calculator.hpp`,
   `incremental_calculator.hpp`, `common.hpp`, `constraints.hpp`, and `CHANGELOG.md`;
-- the CP-SAT model, `external_solver.pickup_delivery` in
-  [external-solver](https://github.com/optimaru/external-solver): a plugin
-  subclassing the spec, with its defaults from `constraint_info()`. The benchmark
+- the CP-SAT model, kept in the benchmark
+  ([`cpsat/pickup_delivery_cpsat/model/constraints.py`](../../../benchmarks/pickup-delivery/cpsat/pickup_delivery_cpsat/model/constraints.py)):
+  a plugin subclassing the spec, with its defaults from `constraint_info()`, added to `REGISTRY`;
+  an engine-only constraint goes into `ENGINE_ONLY` of `cpsat/tests/test_model.py` instead. The benchmark
   ([`benchmarks/pickup-delivery`](../../../benchmarks/pickup-delivery)) is not moved
   by a new default: it passes its own lists (`ENGINE_CONSTRAINTS`,
   `CPSAT_CONSTRAINTS` in `cpsat/pickup_delivery_cpsat/public_benchmark.py`), so a
@@ -601,7 +602,7 @@ defaults.
 | `cpp/pdp/score/score_calculator.cpp` | | | | the term |
 | `cpp/pdp/score/incremental_calculator.hpp`, `cpp/pdp/score/incremental_calculator.cpp` | | | | the term, its total |
 | `tests/pickup_delivery/cpp/pdp_test.cpp`, `pdp_request_moves_test.cpp`, `test_pdp.py` | | | | expected scores |
-| external-solver, `benchmarks/pickup-delivery` | | | | the same constraint, the lists |
+| `benchmarks/pickup-delivery/cpsat` (the model, `tests/test_model.py`, the lists) | | | | the same constraint, the lists |
 
 Moves and the construction heuristic are a different subject: see
 [Extending](README.md#extending) in the guide.

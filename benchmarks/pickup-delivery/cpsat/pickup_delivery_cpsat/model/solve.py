@@ -97,9 +97,14 @@ def solve_request(
 
     depot_count = len(data.depots)  # the locations are the depots, then the stops
     size = depot_count + node_count
-    pairs = [(a, b, p) for p in range(plan.profile_count) for a in range(size) for b in range(size)]
-    max_drive = max((plan.driving_time(a, b, p) for a, b, p in pairs), default=0)
-    max_meters = max((plan.driving_distance(a, b, p) for a, b, p in pairs), default=0)
+    # The longest leg over the profiles the vehicles drive (a profile no vehicle uses would only
+    # loosen the bounds).
+    max_drive = max_meters = 0
+    for p in {vehicle.profile_index for vehicle in plan.vehicles}:
+        for a in range(size):
+            for b in range(size):
+                max_drive = max(max_drive, plan.driving_time(a, b, p))
+                max_meters = max(max_meters, plan.driving_distance(a, b, p))
     legs = node_count + 1  # one leg per stop plus the leg to the end depot
     horizon = (
         max([stop.max_end_time for stop in nodes] + [vehicle.departure_time for vehicle in data.vehicles] + [24 * 3600])
