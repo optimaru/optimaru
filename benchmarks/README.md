@@ -169,7 +169,8 @@ date. Two guides quote their table by hand and are updated with it (the
 
 The published numbers are single runs on one machine, one Apple M4 Max Mac (16
 cores), and every results block and homepage data set names it. The whole set was
-measured again there on 2026-11-23/24, on optimaru 0.6.0, in one session: one
+measured again there from 2026-11-23 22:18 to 2026-11-24 08:00 KST (the results
+blocks carry the publishing date, 2026-11-24), on optimaru 0.6.0, in one session: one
 CP-SAT job at a time (8 workers) beside two single-threaded jobs, at most ten
 solver threads on twelve performance cores, with builds and other work kept to
 the efficiency cores (`taskpolicy -b` on macOS). In the generated comparisons
@@ -184,8 +185,14 @@ changes no search of a published benchmark.
 How far a number repeats differs by use case. Against the tables this run
 replaced (2026-11-10 to 2026-11-12, optimaru 0.5.0 to 0.5.1), the engine's score
 was the same on 305 of the 340 instances of the generated comparisons, on every
-row of the public sets but CVRPLIB Set X (80 of 100 distances the same, the others
-within 0.1% but `X-n200-k36`, 0.8% shorter), and on all 33 QAPLIB results.
+row of the public sets measured on this Mac before but CVRPLIB Set X (80 of 100
+distances the same, the others within 0.1% but `X-n200-k36`, 0.8% shorter), and on
+all 33 QAPLIB results. The VRPTW tables came from a 4-core cloud VM before, so they
+are no repeat: their mean gaps went from 0.99% to 0.96% (engine) and 3.19% to 1.81%
+(OR-Tools) on Solomon, and from 7.13% to 6.22% and 23.93% to 12.92% on Gehring &
+Homberger, OR-Tools gaining most on the faster machine. School timetabling's
+track-1 table came from that VM too: on this Mac its `L` rose from 666 to 679, and
+`S` and `M` repeat 175 and 350.
 School timetabling's ladder, which has a harness of its own, repeated on 17 of its
 20 schools: the 18- and 60-class ones moved by under 1% (1,725 to 1,737, 6,836 to
 6,837), and the 3-class one from 124 to 156, which two more runs repeated, so the

@@ -184,9 +184,11 @@ mean objective, hard 0 in every run):
 | large (48 meetings, 1000 cells) | 40,846,652 | **39,180,279** | −4.1% | 1-12 | 7-5-0 |
 | xlarge (96 meetings, 1920 cells) | 98,709,196 | 98,625,018 | −0.1% (neutral) | 1-12 | 5-7-0 |
 
-The move helps on the three instances that reach medium 0 and on `large`, and is neutral on
-`xlarge`; on the two largest the medium penalty is still falling when the budget ends (a mean
-of 40.8 and 98.7 without the move, 39.2 and 98.6 with it). The default is unchanged.
+The move helps on `small` and `medium` (6-0 and 5-1 across seeds) and is neutral on `demo`;
+on `large` it gives a 4% better mean at 7-5 across seeds, which is little evidence, and on
+`xlarge` it is neutral. On the two largest the medium penalty is still falling when the
+budget ends (a mean of 40.8 and 98.7 without the move, 39.2 and 98.6 with it). The default
+is unchanged.
 
 ## Parameters and their costs
 
