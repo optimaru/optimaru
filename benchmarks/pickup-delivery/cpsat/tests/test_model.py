@@ -158,14 +158,15 @@ def test_the_bounds_count_only_drivable_legs() -> None:
     body = _request(profile="van").model_dump()
     body["model_input"]["profiles"]["van"] = {
         "durations": {"H": {"P": 50, "D": 60}, "P": {"D": 70, "E": 80}, "D": {"P": 75, "E": 90}},
+        "distances": {"H": {"P": 500, "D": 600}, "P": {"D": 700, "E": 800}, "D": {"P": 750, "E": 900}},
         "missing_value": 5_000,
     }
     stops = range(2, 4)  # the locations are H, E, then P, D
     open_route = to_plan(PdpRequest.model_validate(body).model_input)
-    assert _longest_legs(open_route, stops)[0] == 75  # P -> H, D -> H, H -> E, ... are left out
+    assert _longest_legs(open_route, stops) == (75, 750)  # P -> H, D -> H, H -> E, ... are left out
     body["model_input"]["vehicles"][0]["end_depot"] = "E"
     to_e = to_plan(PdpRequest.model_validate(body).model_input)
-    assert _longest_legs(to_e, stops)[0] == 90
+    assert _longest_legs(to_e, stops) == (90, 900)
     body["model_input"]["vehicles"][0]["end_depot"] = "H"
     back_home = to_plan(PdpRequest.model_validate(body).model_input)
-    assert _longest_legs(back_home, stops)[0] == 5_000  # P -> H is drivable now, and missing
+    assert _longest_legs(back_home, stops) == (5_000, 5_000)  # P -> H is drivable now, and missing
