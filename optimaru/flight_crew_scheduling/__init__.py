@@ -53,7 +53,8 @@ from ._core import (
     list_constraints,
 )
 from .constraints import get_constraints as _get_constraints
-from .models import FlightCrewScheduleModel, parameter_uses, solve_request, with_initial_solution
+from .models import FlightCrewScheduleModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "Airport",
@@ -143,7 +144,7 @@ def solve(
     )
     core = model.to_core()
     constraints = check_parameters(
-        parameter_uses(model), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
+        _parameter_uses(model), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
     )
     solve_in_place(Solver(cfg), core, constraints)
     return FlightCrewScheduleModel.from_core(core)

@@ -58,9 +58,10 @@ from ._core import (
 )
 from ._core import calculate_score as _calculate_score
 from ._core import constraint_costs as _constraint_costs
-from .constraints import get_constraints
+from .constraints import get_constraints as _get_constraints
 from .constraints import score as _score
-from .models import QuadraticAssignmentProblemModel, parameter_uses, solve_request, with_initial_solution
+from .models import QuadraticAssignmentProblemModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "AcceptorType",
@@ -194,7 +195,7 @@ def solve(
     core = _core_of(problem)
     if isinstance(problem, QuadraticAssignmentProblemModel):
         constraints = check_parameters(
-            parameter_uses(problem), constraints, get_constraints, lambda picks: _constraint_costs(core, picks)
+            _parameter_uses(problem), constraints, _get_constraints, lambda picks: _constraint_costs(core, picks)
         )
     solve_in_place(Solver(cfg), core, constraints)
     if isinstance(problem, QuadraticAssignmentProblemModel):

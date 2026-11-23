@@ -60,8 +60,9 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .constraints import get_constraints
-from .models import TaskAssigningSolutionModel, parameter_uses, solve_request, with_initial_solution
+from .constraints import get_constraints as _get_constraints
+from .models import TaskAssigningSolutionModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "Affinity",
@@ -148,7 +149,7 @@ def solve(
         )
     core_solution = solution.to_core()
     constraints = check_parameters(
-        parameter_uses(solution), constraints, get_constraints, lambda picks: constraint_costs(core_solution, picks)
+        _parameter_uses(solution), constraints, _get_constraints, lambda picks: constraint_costs(core_solution, picks)
     )
     solve_in_place(Solver(cfg), core_solution, constraints)
     return TaskAssigningSolutionModel.from_core(core_solution)

@@ -54,14 +54,14 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .constraints import get_constraints
+from .constraints import get_constraints as _get_constraints
 from .models import (
     AssignmentModel,
     SemiconductorScheduleModel,
-    parameter_uses,
     solve_request,
     with_initial_solution,
 )
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "AcceptorType",
@@ -184,7 +184,7 @@ def solve(
     core, model = _core_of(problem)
     if model is not None:
         constraints = check_parameters(
-            parameter_uses(model), constraints, get_constraints, lambda picks: _core.constraint_costs(core, picks)
+            _parameter_uses(model), constraints, _get_constraints, lambda picks: _core.constraint_costs(core, picks)
         )
     solve_in_place(Solver(cfg), core, constraints)
     if model is None:

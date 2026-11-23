@@ -42,9 +42,10 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .constraints import get_constraints
+from .constraints import get_constraints as _get_constraints
 from .demo import demo_schedule, generate_demo_data  # demo_schedule: the name before 0.5.1
-from .models import LeagueScheduleModel, parameter_uses, solve_request, with_initial_solution
+from .models import LeagueScheduleModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "ConstraintInfo",
@@ -129,7 +130,7 @@ def solve(
     if isinstance(schedule, LeagueScheduleModel):
         core = schedule.to_core()
         constraints = check_parameters(
-            parameter_uses(schedule), constraints, get_constraints, lambda picks: constraint_costs(core, picks)
+            _parameter_uses(schedule), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
         )
         solve_in_place(Solver(cfg), core, constraints)
         return LeagueScheduleModel.from_core(core)

@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **Breaking: a parameter needs its cost.** A request that sets a field which acts only through a
-  cost (a vehicle's `max_end_time`, a visit's time window, a worker's `unavailable_dates`, a
+  cost (a vehicle's `max_end_time`, a visit's `max_end_time`, a worker's `unavailable_dates`, a
   knapsack's `mandatory_items`, ...) while its constraints leave every such cost out is refused
   with `ValueError`, naming the field, where it is set and the costs to add; before, the solve
   ignored the field without a word. The effective selection counts (the defaults when

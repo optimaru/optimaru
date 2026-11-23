@@ -267,7 +267,9 @@ def require_costs(
     if not uses:
         return
     # A spec or a dict carries its snake_case name; school timetabling also takes the name itself.
-    names = {str(pick["name"] if isinstance(pick, Mapping) else getattr(pick, "name", pick)) for pick in constraints}
+    names = {
+        str(pick.get("name") if isinstance(pick, Mapping) else getattr(pick, "name", pick)) for pick in constraints
+    }
     missing: dict[tuple[str, tuple[str, ...]], list[ParameterUse]] = {}
     for use in uses:
         if not names.intersection(use.costs):

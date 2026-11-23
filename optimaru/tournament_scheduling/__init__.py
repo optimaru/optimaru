@@ -40,8 +40,9 @@ from ._core import (
     list_constraints,
     unfairness,
 )
-from .constraints import get_constraints
-from .models import TournamentScheduleModel, parameter_uses, solve_request, with_initial_solution
+from .constraints import get_constraints as _get_constraints
+from .models import TournamentScheduleModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "MEDIUM_SCALE",
@@ -122,7 +123,7 @@ def solve(
     if isinstance(schedule, TournamentScheduleModel):
         core = schedule.to_core()
         constraints = check_parameters(
-            parameter_uses(schedule), constraints, get_constraints, lambda picks: constraint_costs(core, picks)
+            _parameter_uses(schedule), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
         )
         solve_in_place(Solver(cfg), core, constraints)
         return TournamentScheduleModel.from_core(core)
