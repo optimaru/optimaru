@@ -288,7 +288,7 @@ setup.py, CMakeLists.txt           the wheel's extensions; the C++ build
 ## Engine layout
 
 ```
-optimaru/cpp/optimaru/
+core/optimaru/
 ├── optimaru.hpp                  umbrella include for consumers
 ├── solver.hpp                    Solver: construction, then search; multi-start
 ├── settings.hpp                  Settings, Limits, AcceptanceSettings, MoveMix,

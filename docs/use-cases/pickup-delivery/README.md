@@ -13,7 +13,7 @@ stop drags its partner along. Every part of the solver that differs — the
 constraints, the moves, the ruin operators — follows from that one fact.
 
 Uses adaptive large-neighborhood search, running on the generic
-engine in [`optimaru/cpp/optimaru/`](../../../optimaru/cpp/optimaru).
+engine in [`core/optimaru/`](../../../core/optimaru).
 The Python API is in [`python.md`](python.md).
 
 ```

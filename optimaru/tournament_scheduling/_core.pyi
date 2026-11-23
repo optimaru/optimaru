@@ -1,7 +1,7 @@
 """Type stubs for `optimaru.tournament_scheduling._core` — the tournament-scheduling C++ solver.
 
 The compiled module wraps the C++ domain in `optimaru/tournament_scheduling/cpp`,
-which imports the generic engine in `optimaru/cpp/optimaru`.
+which imports the generic engine in `core/optimaru`.
 
 Constraints (hard / medium / soft levels) and the score mapping
 (registry names; default weights per raw unit, all 1):

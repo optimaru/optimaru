@@ -26,7 +26,7 @@ void assignMissingOperators(PackagingSchedule& schedule);
 // zeroes the conflict).
 bool improveOperatorAssignment(PackagingSchedule& schedule);
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
+// Thin domain-side wrapper around the generic engine in core/optimaru/. It
 // wires up the incremental score calculator and delegates the job-list
 // variable to optimaru::Solver<PackagingSchedule> with the engine's sequence
 // moves (relocate/swap/2-opt/or-opt/tail-swap) and adaptive

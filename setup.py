@@ -3,7 +3,7 @@ extension, `optimaru.<use case>._core`, per use case.
 
 Every extension compiles its use case's bindings (optimaru/<use case>/cpp/bindings.cpp)
 and the C++ sources under optimaru/<use case>/cpp/<ns>/ (cpp/main.cpp, the demo, is left out)
-against the header-only engine (optimaru/cpp/optimaru/).
+against the header-only engine (core/optimaru/).
 
     pip install .            # local build
     uv sync                  # editable build into .venv (extensions built in place)
@@ -22,7 +22,7 @@ import setuptools
 from pybind11.setup_helpers import ParallelCompile, Pybind11Extension, build_ext
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ENGINE_INCLUDE = "optimaru/cpp"
+ENGINE_INCLUDE = "core"
 
 # Every use case: a subpackage optimaru/<use case>/ with a _core.pyi stub and its C++ in cpp/.
 USE_CASES = sorted(p.parent.name for p in Path(HERE, "optimaru").glob("*/_core.pyi"))

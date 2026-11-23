@@ -17,7 +17,7 @@ namespace pjs {
 // Score  (hard / medium / soft)
 // ---------------------------------------------------------------------------
 // The domain scores on hard / medium / soft levels; the generic engine
-// (optimaru/cpp/optimaru/) only knows Score(int64 hard, double soft). Mapping rule
+// (core/optimaru/) only knows Score(int64 hard, double soft). Mapping rule
 // (the bed-allocation / meeting-scheduling precedent):
 //
 //   engine.hard = hard

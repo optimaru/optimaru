@@ -29,7 +29,7 @@ You need a C++17 compiler, CMake and uv.
 
 | You want to change | Look in |
 | --- | --- |
-| The search itself (step loop, acceptors, built-in moves, ruin and recreate) | `optimaru/cpp/optimaru/` (header-only engine, no domain code) |
+| The search itself (step loop, acceptors, built-in moves, ruin and recreate) | `core/optimaru/` (header-only engine, no domain code) |
 | One use case's model, constraints, moves | `optimaru/<uc>/cpp/<ns>/` (`model/`, `constraints/`, `moves/`; each header next to its source) |
 | What Python sees | `optimaru/<uc>/cpp/bindings.cpp`, `_core.pyi`, `constraints.py`, `models.py` |
 | Tests | `tests/<uc>/` (pytest), `tests/<uc>/cpp/` (C++), `tests/engine/` |

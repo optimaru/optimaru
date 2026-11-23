@@ -2,7 +2,7 @@
 
 Uniform-capacity one-dimensional bin packing, based on the standard
 item-to-bin assignment model (Martello & Toth 1990), with optional item colours and conflict pairs, on this repository's C++ engine
-(`optimaru/cpp/optimaru/`).
+(`core/optimaru/`).
 
 ## Usage
 

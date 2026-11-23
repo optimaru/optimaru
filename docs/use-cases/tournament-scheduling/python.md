@@ -1,7 +1,7 @@
 # optimaru.tournament_scheduling (Python)
 
 Tournament scheduling, derived from the Timefold Quickstarts `tournament-scheduling` example
-(Apache-2.0; see the repository NOTICE), on the C++ engine in `optimaru/cpp/optimaru/`. Assigns teams to the daily
+(Apache-2.0; see the repository NOTICE), on the C++ engine in `core/optimaru/`. Assigns teams to the daily
 match slots (`TeamAssignment`) — the C++ domain/calculators are in `optimaru/tournament_scheduling/cpp`; this package
 holds their pybind11 bindings (`optimaru.tournament_scheduling._core`) and the pydantic mirror.
 

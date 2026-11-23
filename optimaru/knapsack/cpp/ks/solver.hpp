@@ -10,7 +10,7 @@
 
 namespace ks {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/: it
+// Thin domain-side wrapper around the generic engine in core/optimaru/: it
 // runs the domain construction (the greedy of construction.hpp), wires up the
 // incremental score calculator and delegates the search to
 // optimaru::Solver<KnapsackProblem> — late acceptance over the built-in assignment

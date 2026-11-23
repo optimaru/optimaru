@@ -11,7 +11,7 @@
 
 namespace fab {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/:
+// Thin domain-side wrapper around the generic engine in core/optimaru/:
 // it builds the search state (the default or the seeded (rank, machine)
 // values), wires the incremental calculator, the guided change move and the
 // priority-swap move, and delegates to optimaru::Solver.

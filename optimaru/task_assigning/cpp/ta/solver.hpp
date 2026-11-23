@@ -10,7 +10,7 @@
 
 namespace ta {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
+// Thin domain-side wrapper around the generic engine in core/optimaru/. It
 // wires up the incremental score calculator and delegates solving to
 // optimaru::Solver<TaskAssigningSolution> (sequence variable: cheapest-insertion
 // construction + relocate/swap/2-opt/or-opt/tail-swap local search), with

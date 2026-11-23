@@ -2,7 +2,7 @@
 
 The compiled module wraps the C++ domain in
 `optimaru/school_timetabling/cpp`, which imports the generic engine in
-`optimaru/cpp/optimaru`. Two domains are exposed:
+`core/optimaru`. Two domains are exposed:
 
 - module top level: the quickstart model (`Timetable`, slotRoom composite
   encoding, the 7 terms below) and the package's constraint catalog

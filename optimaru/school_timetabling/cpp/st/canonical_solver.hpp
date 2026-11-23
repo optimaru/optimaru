@@ -11,7 +11,7 @@
 
 namespace st::canon {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/ for
+// Thin domain-side wrapper around the generic engine in core/optimaru/ for
 // the canonical domain, following the st::Solver pattern. On top of the
 // built-in change/swap moves and the engine's adaptive ruin-and-recreate (ALNS,
 // on by default) it wires the domain guidance adopted on the track-2 bench:

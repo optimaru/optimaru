@@ -10,7 +10,7 @@
 
 namespace op {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/.
+// Thin domain-side wrapper around the generic engine in core/optimaru/.
 // (following the school-timetabling Solver pattern,
 // sequence-shape edition). On top of the built-in list move mix (relocate / swap /
 // 2-opt / or-opt / tail swap) and the engine's adaptive ruin-and-recreate

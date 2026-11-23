@@ -8,13 +8,13 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# The engine: header-only, in optimaru/cpp/optimaru/ (#include "optimaru/...").
+# The engine: header-only, in core/optimaru/ (#include "optimaru/...").
 # Multi-start solves run on std::thread, so consumers link the platform's
 # thread library through the target.
 find_package(Threads REQUIRED)
 add_library(optimaru INTERFACE)
 add_library(optimaru::optimaru ALIAS optimaru)
-target_include_directories(optimaru INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/optimaru/cpp)
+target_include_directories(optimaru INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 target_compile_features(optimaru INTERFACE cxx_std_17)
 target_link_libraries(optimaru INTERFACE Threads::Threads)
 

@@ -10,7 +10,7 @@
 
 namespace alb {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/: it
+// Thin domain-side wrapper around the generic engine in core/optimaru/: it
 // runs the domain construction (a first fit, see
 // construction.hpp), freezes the station value range, wires up the
 // incremental score calculator and the domain's own move (CloseStationMove)

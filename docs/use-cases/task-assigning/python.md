@@ -2,7 +2,7 @@
 
 Skill-based task assignment, derived from the Timefold Quickstarts `task-assigning` example
 (Apache-2.0; see the repository NOTICE): the pybind11 package of the `optimaru/task_assigning/cpp` implementation on
-the generic C++ engine in `optimaru/cpp/optimaru/`. A **sequence-shaped** domain that fills an
+the generic C++ engine in `core/optimaru/`. A **sequence-shaped** domain that fills an
 ordered task list per employee (`Employee.tasks`); a task in no list is unassigned.
 
 ## Install and test

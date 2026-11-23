@@ -1,7 +1,7 @@
 """Type stubs for `optimaru.flight_crew_scheduling._core` — the flight-crew-scheduling C++ solver.
 
 The compiled module wraps the C++ domain in `optimaru/flight_crew_scheduling/cpp`,
-which imports the generic engine in `optimaru/cpp/optimaru`.
+which imports the generic engine in `core/optimaru`.
 
 Domain: a assignment-shaped problem picking a crew member (employee index) for every crew
 seat of a flight (FlightAssignment). Airport/employee/flight references are all list

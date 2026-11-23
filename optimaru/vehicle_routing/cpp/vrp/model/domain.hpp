@@ -38,7 +38,7 @@ using Matrix = std::vector<std::vector<std::int64_t>>;
 // Constraints *penalize*, so scores are <= 0; higher (closer to zero) is
 // better. Comparison is lexicographic: hard dominates medium dominates soft.
 //
-// The generic engine (optimaru/cpp/optimaru/) only knows Score(int64 hard, double
+// The generic engine (core/optimaru/) only knows Score(int64 hard, double
 // soft), so the two lower levels are packed into one (the food-packaging
 // use case's convention):
 //
