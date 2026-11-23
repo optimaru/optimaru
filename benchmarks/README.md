@@ -169,7 +169,7 @@ date. Two guides quote their table by hand and are updated with it (the
 
 The published numbers are single runs on one machine, one Apple M4 Max Mac (16
 cores), and every results block and homepage data set names it. The whole set was
-measured again there on 2026-11-23/24, on optimaru 0.6.x, in one session: one
+measured again there on 2026-11-23/24, on optimaru 0.6.0, in one session: one
 CP-SAT job at a time (8 workers) beside two single-threaded jobs, at most ten
 solver threads on twelve performance cores, with builds and other work kept to
 the efficiency cores (`taskpolicy -b` on macOS). In the generated comparisons
@@ -178,7 +178,7 @@ after the other. The VRPTW tables of vehicle routing (Solomon, Gehring &
 Homberger) were measured in the same session, two single-threaded runs side by
 side (`--jobs 2`), once the CP-SAT jobs had ended. The pickup-delivery CP-SAT
 rows were measured on the CP-SAT model the benchmark carries since 0.7.0 (#140,
-with the horizon of #144), the engine's rows of the same tables on 0.6.x; 0.7.0
+with the horizon of #144), the engine's rows of the same tables on 0.6.0; 0.7.0
 changes no search of a published benchmark.
 
 How far a number repeats differs by use case. Against the tables this run
@@ -186,6 +186,10 @@ replaced (2026-11-10 to 2026-11-12, optimaru 0.5.0 to 0.5.1), the engine's score
 was the same on 305 of the 340 instances of the generated comparisons, on every
 row of the public sets but CVRPLIB Set X (80 of 100 distances the same, the others
 within 0.1% but `X-n200-k36`, 0.8% shorter), and on all 33 QAPLIB results.
+School timetabling's ladder, which has a harness of its own, repeated on 17 of its
+20 schools: the 18- and 60-class ones moved by under 1% (1,725 to 1,737, 6,836 to
+6,837), and the 3-class one from 124 to 156, which two more runs repeated, so the
+engine's changes since that table moved it.
 Of the 35 generated instances that moved, 31 moved by under 1% (bed allocation,
 conference scheduling, food packaging, maintenance scheduling, max-cut) or by up
 to 3.1% (semiconductor scheduling, whose instances move from run to run, see
@@ -202,6 +206,6 @@ scheduling search in stages of growing late acceptance history, and which stage 
 solve reaches under a time limit depends on the clock, so a busier machine can
 end such a solve in an earlier stage. CP-SAT's result was the same on 225 of the
 340 (eight workers under a time limit; a row without a solution counts as one
-that differs). One seed says little about a change of the search.
+that differs, while the engine returned a solution on every instance). One seed says little about a change of the search.
 Read a small margin in any table as noise.
 

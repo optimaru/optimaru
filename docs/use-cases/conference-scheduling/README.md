@@ -209,7 +209,8 @@ in every run):
 
 On these instances the rule is within half a percent of `asMove=0` everywhere: a small gain on
 `demo` and `days3`, a small loss on `days2`, and no difference on the two largest conferences,
-whose grids (240 and 390 cells) are beyond the 126 cells it was tuned on. The default is
+whose grids (240 and 390 cells) are beyond the 126 cells it was tuned on. On `days2`, `days4`
+and `days5` the seeds split evenly, so those rows show no evidence either way. The default is
 unchanged: a rule for larger grids needs its own sweep.
 
 ## Starting from an existing solution
