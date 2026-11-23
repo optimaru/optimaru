@@ -5,10 +5,12 @@ import pytest
 import optimaru.pickup_delivery as pdp
 from optimaru.pickup_delivery.constraints import (
     PairedRequestCost,
+    ProfileForbiddenRequestCost,
     ProfilePreferredRequestCost,
     TravelTimeCost,
     UnassignedRequestsCost,
     VehicleCapacityCost,
+    get_constraints,
     score,
 )
 from optimaru.pickup_delivery.models import (
@@ -263,3 +265,16 @@ def test_calculate_score_prices_a_pin_the_profile_forbids_as_it_stands():
     plan.vehicles = vehicles
     plan.rebuild_unassigned_pool()
     assert pdp.calculate_score(plan).hard <= -2000
+
+
+@pytest.mark.parametrize(
+    "pick", [ProfileForbiddenRequestCost(level="soft"), ProfileForbiddenRequestCost(weight=0)], ids=["soft", "weight 0"]
+)
+def test_a_softer_pick_of_the_forbidden_cost_does_not_lift_the_rule(pick):
+    model_input = line_input({"basic": {"forbidden_requests": ["a"]}})
+    picks = [spec for spec in get_constraints() if spec.name != "profile_forbidden_request_cost"] + [pick]
+
+    assert vehicle_of(solve(model_input, constraints=picks))["a"] == "w"
+    raw = pdp.constraint_costs(routed(model_input, {"v": ["ap", "ad"]}), picks)
+    assert raw["profile_forbidden_request_cost#2"]["level"] == "hard"
+    assert score(raw, picks).hard <= -2000
