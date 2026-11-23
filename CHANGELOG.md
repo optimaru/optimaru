@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
+
+**From 0.5.2.** One breaking change: vehicle routing and pickup-delivery take depots, a start and
+an end depot per vehicle, and travel profiles keyed by id in place of `return_to_depot` and one
+driving matrix, so input written for 0.5 is refused (see the first entry). Everything else keeps
+its input and its results: `solve_request` no longer needs the package to be spelled `optimaru`,
+the C++ sources moved into one tree per use case, and the benchmarks gain time-window series for
+vehicle routing.
 
 - **Vehicle routing and pickup-delivery: depots, start and end depots, travel profiles (breaking).**
   The input names its depots (`depots`, a list of `DepotModel` with an `id` and a `location`), and a
