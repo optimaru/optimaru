@@ -1,9 +1,9 @@
 #include "pdp/solver.hpp"
 
 #include <algorithm>
-#include <iterator>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -664,6 +664,16 @@ void checkRequiredVehicles(const PdpRoutePlan& plan) {
 void checkProfileRequests(const PdpRoutePlan& plan) {
     const int entries = static_cast<int>(plan.profileRequests.size());
     const int requests = static_cast<int>(plan.deliveries.size());
+    // The profile request table reads each stop's request by its index.
+    if (!plan.profileRequests.empty()) {
+        for (const Node& node : plan.nodes) {
+            if (node.deliveryIndex < 0 || node.deliveryIndex >= requests) {
+                throw std::invalid_argument("stop " + node.id + ": deliveryIndex " +
+                                            std::to_string(node.deliveryIndex) +
+                                            " is out of range 0.." + std::to_string(requests - 1));
+            }
+        }
+    }
     for (const Vehicle& vehicle : plan.vehicles) {
         if (vehicle.profileRequestsIndex < -1 || vehicle.profileRequestsIndex >= entries) {
             throw std::invalid_argument("vehicle " + vehicle.id + ": profileRequestsIndex " +

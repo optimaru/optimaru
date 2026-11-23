@@ -339,7 +339,8 @@ class Solver:
         its own instance with its own knobs, and the instances add up. With
         parallel_solver_count above 1 every start is scored by its own copy of the picks.
         profile_forbidden_visit_cost is always on: a plan with forbidden visits is scored
-        on it whether the list holds it or not. A plan with preferred visits needs
+        on it hard whether the list holds it or not (a soft or weight-0 pick of it scores
+        beside the default instance). A plan with preferred visits needs
         profile_preferred_visit_cost in the list: ValueError otherwise."""
 
 def list_constraints() -> list[str]:

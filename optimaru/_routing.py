@@ -182,6 +182,8 @@ def profile_job_rules(
 ) -> tuple[list[tuple[list[int], list[int]]], list[int]]:
     """The engine's view of the job lists: one entry per profile that has some, and an entry per vehicle.
 
+    ``vehicles`` are the use case's vehicle models; only their ``profile`` (a name in
+    ``profiles``, or one ``profiles`` lacks when it is empty) is read.
     An entry is the profile's (forbidden, preferred) job indices, sorted, as the engine
     wants them; a vehicle's index is its profile's entry, -1 for a profile without lists.
     Only profiles some vehicle drives on get an entry. Unknown ids raise KeyError: the

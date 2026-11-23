@@ -366,7 +366,8 @@ class Solver:
         on_new_best report the three levels unfolded, so a soft total of 10^9 or more
         stays soft. With parallel_solver_count above 1 every start is scored by its own
         copy of the picks. profile_forbidden_request_cost is always on: a plan with
-        forbidden requests is scored on it whether the list holds it or not. A plan with
+        forbidden requests is scored on it hard whether the list holds it or not (a soft or
+        weight-0 pick of it scores beside the default instance). A plan with
         preferred requests needs profile_preferred_request_cost in the list: ValueError
         otherwise."""
 

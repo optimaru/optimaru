@@ -212,6 +212,19 @@ def select(constraints: Iterable[Any] | None, defaults: Sequence[Any]) -> list[A
     return picked
 
 
+def with_always_on(picks: list[Any], costs: Mapping[str, Any], spec_type: type) -> list[Any]:
+    """``picks`` with the always-on constraint ``spec_type`` appended where the engine added it.
+
+    A use case whose engine adds a constraint to every selection that does not score it
+    as a rule (routing's forbidden visits and requests: ``addAlwaysOnConstraints``) reports
+    that instance in ``constraint_costs()`` after the picks' own. Its key there is the next
+    instance key of the name, so ``score()`` appends the default spec exactly when
+    ``costs`` holds it."""
+    held = sum(1 for pick in picks if pick.name == spec_type.name)
+    key = spec_type.name if held == 0 else f"{spec_type.name}#{held + 1}"
+    return [*picks, spec_type()] if key in costs else list(picks)
+
+
 def instance_keys(constraints: Iterable[Any]) -> list[str]:
     """The ``constraint_costs()`` key of each pick, in order.
 

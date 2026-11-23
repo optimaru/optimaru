@@ -1,6 +1,7 @@
 #ifndef VRP_CONSTRAINTS_PROFILE_VISIT_TABLE_HPP
 #define VRP_CONSTRAINTS_PROFILE_VISIT_TABLE_HPP
 
+#include <algorithm>
 #include <cstddef>
 #include <vector>
 

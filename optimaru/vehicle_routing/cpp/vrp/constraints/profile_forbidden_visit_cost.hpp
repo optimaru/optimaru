@@ -14,8 +14,9 @@ namespace vrp {
 // weight is far above a typical lateness or overload, and leaving the visit
 // unassigned costs only medium, so a visit that no vehicle may serve waits.
 //
-// Every solve scores it: the Python bindings add it to a constraint
-// selection that leaves it out (withAlwaysOnConstraints in constraints.hpp), and
+// Every solve scores it hard: the Python bindings add it at its defaults to a
+// selection that holds no hard instance of it at a weight above 0
+// (addAlwaysOnConstraints in constraints.hpp), and
 // the operators that place visits from the plan (the group operators) skip
 // a vehicle that forbids one of the visits they place.
 struct ProfileForbiddenVisitCost final : detail::PerVehicleConstraint {

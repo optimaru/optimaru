@@ -17,8 +17,9 @@ namespace pdp {
 // the request unassigned costs only medium, so one that no vehicle may carry
 // waits.
 //
-// Every solve scores it: the Python bindings add it to a constraint
-// selection that leaves it out (withAlwaysOnConstraints in constraints.hpp),
+// Every solve scores it hard: the Python bindings add it at its defaults to a
+// selection that holds no hard instance of it at a weight above 0
+// (addAlwaysOnConstraints in constraints.hpp),
 // and the request-level operators never offer a slot on a vehicle that
 // forbids the request (RouteTimeline::improve).
 struct ProfileForbiddenRequestCost final : detail::PerVehicleConstraint {

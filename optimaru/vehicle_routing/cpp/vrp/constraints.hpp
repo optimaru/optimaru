@@ -90,17 +90,36 @@ inline void addDefaultConstraints(DecomposedCalculator& calculator) {
     defaultConstraints().into(calculator);
 }
 
-// A caller's selection as every solve scores it. profileForbiddenVisitCost
-// is always on: a selection that leaves it out gets it at its defaults,
-// since a forbidden visit is no preference to weigh but a job the vehicle
-// cannot do (on a plan without forbidden visits it costs 0, so nothing
-// changes there). A plan that prefers visits needs profilePreferredVisitCost
-// in the selection, the only cost that reads those lists: without it they
-// would be silently ignored, so that throws std::invalid_argument.
+// Whether some instance of profileForbiddenVisitCost in the assembly scores it as the
+// rule it is: hard, at a weight above 0.
+inline bool enforcesForbiddenVisits(const ConstraintAssembly& assembly) {
+    for (std::size_t instance = 0;; ++instance) {
+        const optimaru::ConstraintMetadata* found =
+                assembly.find("profileForbiddenVisitCost", instance);
+        if (found == nullptr) return false;
+        if (found->level == optimaru::Level::Hard && found->weight > 0.0) return true;
+    }
+}
+
+// profileForbiddenVisitCost is always on: on a plan with forbidden visits, a selection that
+// holds no hard instance of it at a weight above 0 gets one at its defaults,
+// beside whatever instance the selection does hold (a soft or weight-0 pick
+// still scores as picked, but no longer switches the rule off). A forbidden
+// visit is no preference to weigh but a job the vehicle cannot do. On a plan
+// without forbidden visits nothing is added. constraint_costs() and every
+// solve of the Python bindings run this.
+inline void addAlwaysOnConstraints(ConstraintAssembly& assembly, const VehicleRoutePlan& plan) {
+    if (plan.hasForbiddenVisits() && !enforcesForbiddenVisits(assembly))
+        assembly.emplace_instance<ProfileForbiddenVisitCost>();
+}
+
+// A caller's selection as every solve scores it: addAlwaysOnConstraints, and
+// a plan that prefers visits needs profilePreferredVisitCost in the selection, the only
+// cost that reads those lists: without it they would be silently ignored, so
+// that throws std::invalid_argument.
 inline ConstraintAssembly withAlwaysOnConstraints(ConstraintAssembly assembly,
                                                   const VehicleRoutePlan& plan) {
-    if (!assembly.contains("profileForbiddenVisitCost") && plan.hasForbiddenVisits())
-        assembly.emplace<ProfileForbiddenVisitCost>();
+    addAlwaysOnConstraints(assembly, plan);
     if (!assembly.contains("profilePreferredVisitCost") && plan.hasPreferredVisits())
         throw std::invalid_argument(
                 "a vehicle's profile has preferred visits, but the constraints leave out "

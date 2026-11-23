@@ -74,7 +74,7 @@ calculator stays a single start). The driving-time-guided selection does not app
 Details are in the comments of `cpp/vrp/solver.hpp`.
 """
 
-from .._constraint import Constraint, Level, Score, score_costs, select
+from .._constraint import Constraint, Level, Score, score_costs, select, with_always_on
 
 __all__ = [
     "Constraint",
@@ -428,8 +428,10 @@ class ProfileForbiddenVisitCost(Constraint):
     """Visits served by a vehicle whose profile forbids them. Default: hard, weight 1000; always on.
 
     `TravelProfile.forbidden_visits` names the visits a vehicle on the profile may not
-    serve. Every solve scores this constraint, listed or not: a selection that leaves it
-    out gets it at its defaults (on a plan without forbidden visits it costs 0). Leaving
+    serve. Every solve scores this constraint hard, listed or not: on a plan with forbidden
+    visits, a selection without a hard instance of it at a weight above 0 gets one at its
+    defaults, beside any softer or weight-0 pick, which scores as picked but does not
+    switch the rule off (on a plan without forbidden visits nothing is added). Leaving
     a visit unassigned costs only medium, so one that no vehicle may serve waits.
     Engine-only (no CP-SAT plugin)."""
 
@@ -580,17 +582,14 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     constraint reads the same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
-    semantics as `get_constraints` — and ``profile_forbidden_visit_cost`` besides
-    when ``costs`` holds it: every solve scores that one, listed or not, and
-    `vrp.constraint_costs` reports it on a plan with forbidden visits. Unknown
-    names raise ValueError.
+    semantics as `get_constraints` — and ``profile_forbidden_visit_cost`` at its
+    defaults besides when ``costs`` holds one more instance of it than the picks
+    (`with_always_on`): every solve scores it hard on a plan with forbidden visits,
+    and `vrp.constraint_costs` reports that instance. Unknown names raise ValueError.
 
     The returned value is the **engine-level** (hard, soft): the medium level
     (``unassigned_visits_cost``) is folded into soft as ``medium * 10^9``, the
     ``medium_fold`` every entry of ``costs`` carries. To compare with the split
     levels of `plan.score`, fold the same way first.
     """
-    picks = get_constraints(constraints)
-    if ProfileForbiddenVisitCost.name in costs and all(pick.name != ProfileForbiddenVisitCost.name for pick in picks):
-        picks.append(ProfileForbiddenVisitCost())
-    return score_costs(costs, picks)
+    return score_costs(costs, with_always_on(get_constraints(constraints), costs, ProfileForbiddenVisitCost))

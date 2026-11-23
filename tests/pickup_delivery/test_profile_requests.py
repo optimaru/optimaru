@@ -238,3 +238,18 @@ def test_same_travel_as_shares_the_matrix_of_the_named_profile():
     assert plan.profile_count == 1
     assert [v.profile_index for v in plan.vehicles] == [0, 0]
     assert plan.driving_time(0, 2, 0) == PLACES["ap"]  # the road profile's seconds, depot v to ap
+
+
+@pytest.mark.parametrize("timelimit", [0, 0.3])
+def test_a_group_with_a_request_no_vehicle_may_carry_waits_whole(timelimit):
+    # b may ride neither vehicle, so its group with a waits; c is free.
+    model_input = line_input(
+        {"basic": {"forbidden_requests": ["b"]}, "skilled": {"forbidden_requests": ["b"]}},
+        deliveries=[request("a", "g"), request("b", "g"), request("c")],
+    )
+
+    solution = solve(model_input, timelimit)
+
+    assert solution.feasible
+    assert sorted(solution.unassigned) == ["a", "b"]
+    assert "c" in vehicle_of(solution)

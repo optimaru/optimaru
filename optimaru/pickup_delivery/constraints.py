@@ -83,7 +83,7 @@ those on: with one of them soft or left out, the engine's stop moves are what tr
 that break it.
 """
 
-from .._constraint import Constraint, Level, Score, score_costs, select
+from .._constraint import Constraint, Level, Score, score_costs, select, with_always_on
 
 __all__ = [
     "Constraint",
@@ -479,8 +479,9 @@ class ProfileForbiddenRequestCost(Constraint):
 
     `TravelProfile.forbidden_requests` names the requests a vehicle on the profile may not
     carry. A forbidden request carried whole costs 2, one unit per stop. Every solve scores
-    this constraint, listed or not: a selection that leaves it out gets it at its defaults
-    (on a plan without forbidden requests it costs 0). Leaving a request unassigned costs
+    this constraint hard, listed or not: on a plan with forbidden requests, a selection
+    without a hard instance of it at a weight above 0 gets one at its defaults, beside any
+    softer or weight-0 pick, which scores as picked but does not switch the rule off. Leaving a request unassigned costs
     only medium, so one that no vehicle may carry waits. Engine-only (no CP-SAT plugin)."""
 
     name = "profile_forbidden_request_cost"
@@ -721,18 +722,15 @@ def score(costs: dict, constraints: list[Constraint] | None = None) -> Score:
     same raw costs with its own knobs.
 
     When ``constraints`` is given, only those constraints are scored — the same
-    semantics as `get_constraints` — and ``profile_forbidden_request_cost``
-    besides when ``costs`` holds it: every solve scores that one, listed or not,
-    and `pdp.constraint_costs` reports it on a plan with forbidden requests.
-    Unknown names raise ValueError.
+    semantics as `get_constraints` — and ``profile_forbidden_request_cost`` at
+    its defaults besides when ``costs`` holds one more instance of it than the
+    picks (`with_always_on`): every solve scores it hard on a plan with forbidden
+    requests, and `pdp.constraint_costs` reports that instance. Unknown names
+    raise ValueError.
 
     The returned value is the **engine-level** (hard, soft): the medium level
     (``unassigned_requests_cost``) is folded into soft as ``medium * 10^9``, the
     ``medium_fold`` every entry of ``costs`` carries. To compare with the split
     levels of `plan.score`, fold the same way first.
     """
-    picks = get_constraints(constraints)
-    forbidden = ProfileForbiddenRequestCost.name
-    if forbidden in costs and all(pick.name != forbidden for pick in picks):
-        picks.append(ProfileForbiddenRequestCost())
-    return score_costs(costs, picks)
+    return score_costs(costs, with_always_on(get_constraints(constraints), costs, ProfileForbiddenRequestCost))

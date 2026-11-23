@@ -8,11 +8,13 @@
   (`forbidden_requests`, `preferred_requests`, both stops of a request kept together). Two new
   constraints in each use case score them: `profile_forbidden_visit_cost` /
   `profile_forbidden_request_cost` (hard, weight 1000, one unit per visit or per stop), which is
-  always on, so a constraint list that leaves it out still scores it; and
+  always on: a constraint list that leaves it out, or picks it soft or at weight 0, still gets
+  it hard at its defaults; and
   `profile_preferred_visit_cost` (soft, weight 600 per visit) / `profile_preferred_request_cost`
   (soft, weight 300 per stop), about ten minutes of driving for one job, which a request with
   preferred jobs must list (`ValueError` otherwise). A plan with such lists is scored on the
-  default constraints, as one with groups is; the group operators and the pickup-delivery
+  default constraints, as one with groups is, on the constraint assembly, which takes fewer steps
+  per second than the core path; the group operators and the pickup-delivery
   request operators never place a job on a vehicle that forbids it, and a job no vehicle may take
   stays unassigned. Unknown ids, an id twice in a list and an id both forbidden and preferred
   are refused, and so is a pickup-delivery request required on, or pinned to, a vehicle whose

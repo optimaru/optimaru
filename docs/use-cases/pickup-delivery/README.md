@@ -422,9 +422,10 @@ A profile may consist of these lists alone and drive as another profile does
 
 - `profile_forbidden_request_cost` (hard, weight 1000) counts, per vehicle, the stops
   it serves of requests its profile forbids, so a forbidden request carried whole
-  costs 2 and each stop counts until both are off. It is **always on**: a constraint
-  list that leaves it out still scores it at its defaults (0 on a plan without
-  forbidden requests). The request-level operators (the pair construction, the
+  costs 2 and each stop counts until both are off. It is **always on**: on a plan with
+  forbidden requests, a constraint list without a hard instance of it at a weight above
+  0 gets one at its defaults, so leaving it out, or picking it soft or at weight 0,
+  never lifts the rule. The request-level operators (the pair construction, the
   request moves, the pair move) never offer a slot on a vehicle that forbids the
   request; a request no vehicle may carry stays unassigned.
 - `profile_preferred_request_cost` (soft, weight 300 per stop) counts, per vehicle,
@@ -438,7 +439,8 @@ A profile may consist of these lists alone and drive as another profile does
   forbids it is refused, and so is a vehicle that pins a stop of a request its
   profile forbids.
 - Every entry point scores a plan with such lists on the default constraints, as it
-  does a plan with request groups. On a compiled plan the lists are
+  does a plan with request groups: the constraint assembly, which takes fewer steps
+  per second than the seven core constraints. On a compiled plan the lists are
   `pdp.ProfileRequests(forbidden_request_indices, preferred_request_indices)`
   entries in `PdpRoutePlan(..., profile_requests=[...])`, which a vehicle names by
   `profile_requests_index`. Both constraints are engine-only: the CP-SAT reference

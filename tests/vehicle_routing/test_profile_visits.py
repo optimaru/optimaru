@@ -138,6 +138,24 @@ def test_profiles_that_share_travel_share_one_matrix():
     assert [v.profile_index for v in plan.vehicles] == [0, 0, 0]
 
 
+def test_profiles_that_drive_alike_share_one_matrix_and_the_others_keep_theirs():
+    data = line_input({}).model_dump()
+    order = ["v", "w", "a", "b", "c"]
+    data["profiles"] = {
+        "line1": {},
+        "seconds": {"durations": {x: {y: 7 for y in order} for x in order}},
+        "line2": {"forbidden_visits": ["a"]},
+        "like_seconds": {"same_travel_as": "seconds"},
+    }
+    data["vehicles"][0]["profile"] = "line2"
+    data["vehicles"][1]["profile"] = "like_seconds"
+    plan = to_plan(RoutingInput.model_validate(data))
+    # line1 and line2 drive straight lines (one matrix), seconds its own, like_seconds as seconds.
+    assert plan.profile_count == 2
+    assert [v.profile_index for v in plan.vehicles] == [0, 1]
+    assert plan.driving_time(0, 2, 1) == 7
+
+
 def test_profiles_without_lists_give_no_entries():
     plan = to_plan(line_input({}))
     assert plan.profile_visits == []
@@ -275,15 +293,26 @@ def test_forbidden_visits_hold_whether_the_constraints_list_their_cost_or_not():
     assert "profile_forbidden_visit_cost" not in vrp.constraint_costs(to_plan(line_input({})), picks)
 
 
-def test_the_forbidden_cost_listed_with_other_knobs_keeps_them():
+@pytest.mark.parametrize(
+    "pick", [ProfileForbiddenVisitCost(level="soft"), ProfileForbiddenVisitCost(weight=0)], ids=["soft", "weight 0"]
+)
+def test_a_softer_pick_of_the_forbidden_cost_does_not_lift_the_rule(pick):
     model_input = line_input({"basic": {"forbidden_visits": ["a"]}})
-    picks = [*without(get_constraints(), "profile_forbidden_visit_cost"), ProfileForbiddenVisitCost(level="soft")]
+    picks = [*without(get_constraints(), "profile_forbidden_visit_cost"), pick]
 
+    assert vehicle_of(solve(model_input, constraints=picks))["a"] == "w"
     plan = to_plan(model_input)
     plan.vehicles[0].visit_indices = [0]
     plan.vehicles = plan.vehicles
     plan.rebuild_unassigned_pool()
-    assert vrp.constraint_costs(plan, picks)["profile_forbidden_visit_cost"]["level"] == "soft"
+    raw = vrp.constraint_costs(plan, picks)
+    # The pick scores as picked, and the default instance beside it as the rule.
+    assert raw["profile_forbidden_visit_cost"]["level"] == ("soft" if pick.level else "hard")
+    assert raw["profile_forbidden_visit_cost#2"]["level"] == "hard"
+    assert score(raw, picks).hard == -1000
+    # A hard pick at a weight is the rule itself: nothing is added.
+    hard = [*without(get_constraints(), "profile_forbidden_visit_cost"), ProfileForbiddenVisitCost(weight=5)]
+    assert "profile_forbidden_visit_cost#2" not in vrp.constraint_costs(plan, hard)
 
 
 def test_preferences_are_honored_when_they_cost_little_driving():

@@ -445,8 +445,7 @@ PYBIND11_MODULE(_core, m) {
                 DecomposedCalculator objective;
                 ConstraintAssembly picks =
                         opy::apply_constraints([] { return defaultConstraints(); }, constraints);
-                if (!picks.contains("profileForbiddenVisitCost") && plan.hasForbiddenVisits())
-                    picks.emplace<ProfileForbiddenVisitCost>();
+                addAlwaysOnConstraints(picks, plan);
                 picks.into(objective);
                 return opy::constraint_costs(objective, plan);
             },

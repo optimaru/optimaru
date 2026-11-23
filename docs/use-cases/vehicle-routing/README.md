@@ -248,10 +248,11 @@ profiles = {
 ```
 
 - `profile_forbidden_visit_cost` (hard, weight 1000) counts, per vehicle, the visits
-  it serves that its profile forbids. It is **always on**: a constraint list that
-  leaves it out still scores it at its defaults (on a plan without forbidden visits
-  it costs 0, so nothing changes there), and `constraint_costs(plan, picks)` reports
-  it for such a plan. A visit that no vehicle may serve stays unassigned, since that
+  it serves that its profile forbids. It is **always on**: on a plan with forbidden
+  visits, a constraint list without a hard instance of it at a weight above 0 gets one
+  at its defaults, so leaving it out, or picking it soft or at weight 0 (which then
+  scores beside it as picked), never lifts the rule; `constraint_costs(plan, picks)`
+  reports that instance. On a plan without forbidden visits nothing is added. A visit that no vehicle may serve stays unassigned, since that
   costs only medium.
 - `profile_preferred_visit_cost` (soft, weight 600) counts, per vehicle, the visits
   that some vehicle's profile prefers and its own does not. A preference of a profile
@@ -267,7 +268,9 @@ profiles = {
   `missing_value`. Profiles that drive alike share one matrix in the engine, and so
   do all profiles that give no travel at all (straight lines).
 - Every entry point scores a plan with such lists on the default constraints, as it
-  does a plan with visit groups (the four core constraints read neither). The group
+  does a plan with visit groups (the four core constraints read neither). That is the
+  constraint assembly, which takes fewer steps per second than the core path: on a
+  120-visit plan, about a third as many. The group
   operators never place a visit on a vehicle whose profile forbids it; the engine's
   own moves are judged by the hard cost. On a plan without lists both constraints
   cost 0 and the search is the one it was before.

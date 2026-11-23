@@ -253,15 +253,7 @@ struct VehicleRoutePlan {
     // lists. Such a plan is scored with the constraint assembly, which holds
     // the two profile visit constraints; the core constraints do not read the
     // lists.
-    bool hasProfileVisits() const {
-        for (const Vehicle& vehicle : vehicles) {
-            const ProfileVisits* entry = profileVisitsOf(vehicle);
-            if (entry != nullptr &&
-                (!entry->forbiddenVisitIndices.empty() || !entry->preferredVisitIndices.empty()))
-                return true;
-        }
-        return false;
-    }
+    bool hasProfileVisits() const { return hasForbiddenVisits() || hasPreferredVisits(); }
     // Whether some vehicle's entry forbids a visit / prefers one.
     bool hasForbiddenVisits() const {
         for (const Vehicle& vehicle : vehicles) {
