@@ -207,7 +207,11 @@ def test_the_earlier_request_field_names_are_aliases():
     models = use_case_module("vehicle_routing").models
     RoutePlanRequest, RoutingInput = models.RoutePlanRequest, models.RoutingInput
 
-    data = {"model_input": RoutingInput(depots=[], vehicles=[], visits=[]).model_dump(), "timelimit": 2, "num_workers": 3}
+    data = {
+        "model_input": RoutingInput(depots=[], vehicles=[], visits=[]).model_dump(),
+        "timelimit": 2,
+        "num_workers": 3,
+    }
     request = RoutePlanRequest.model_validate(data)
     assert (request.time_limit_seconds, request.parallel_solver_count) == (2, 3)
     assert (request.timelimit, request.num_workers) == (2, 3)
