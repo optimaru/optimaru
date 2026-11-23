@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Routing notebooks on the 0.6 input.** `examples/vehicle-routing.ipynb` and
+  `examples/pickup-delivery.ipynb` build their vehicles from depots (`start_location_index` /
+  `end_location_index` in the compiled layer, `DepotModel` with `start_depot` / `end_depot` in
+  the JSON models), explain travel profiles where they explained the driving matrix, print
+  kilometers next to driving hours, and ask for optimaru 0.6.0 or later. Saved with outputs from
+  0.6.0, they print and draw the same routes, scores and charts as on 0.5.1.
+
 ## 0.6.0
 
 **From 0.5.2.** One breaking change: vehicle routing and pickup-delivery take depots, a start and
