@@ -372,7 +372,7 @@ class Solver:
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
-    the eighteen per-vehicle constraints (vehicle_capacity_cost ... required_vehicle_cost,
+    the nineteen per-vehicle constraints (vehicle_capacity_cost ... required_vehicle_cost,
     profile_forbidden_request_cost, profile_preferred_request_cost),
     then the five request-level globals (paired_request_cost, same_vehicle_cost,
     pickup_before_dropoff_cost, request_group_cost, unassigned_requests_cost).

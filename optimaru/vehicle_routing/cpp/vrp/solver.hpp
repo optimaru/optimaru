@@ -242,7 +242,11 @@ public:
     // defaults. The final plan.score and every on_new_best score are computed
     // by THIS calculator (its three levels read off level_scores(), before the
     // medium fold) and the calculator is left primed on the final solution,
-    // so constraint_totals() explains exactly that score. Single-start: the
+    // so constraint_totals() explains exactly that score. A plan with
+    // forbidden or preferred visits wants its assembly passed through
+    // withAlwaysOnConstraints(assembly, plan) (vrp/constraints.hpp) first, as
+    // the Python bindings do: this overload scores exactly the components it
+    // is given. Single-start: the
     // caller-owned calculator cannot be cloned, so parallel_solver_count is
     // ignored. The overload below runs the parallel starts.
     void solve(VehicleRoutePlan& plan, optimaru::DecomposedObjective<VehicleRoutePlan>& calculator);

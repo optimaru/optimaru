@@ -700,6 +700,18 @@ void checkProfileRequests(const PdpRoutePlan& plan) {
                                         " is both forbidden and preferred");
         }
     }
+    for (std::size_t v = 0; v < plan.vehicles.size(); ++v) {
+        for (int node : plan.vehicles[v].pinnedNodeIndices) {
+            if (node < 0 || node >= static_cast<int>(plan.nodes.size())) continue;
+            const int request = plan.nodes[static_cast<std::size_t>(node)].deliveryIndex;
+            if (request >= 0 && request < requests && plan.forbids(static_cast<int>(v), request)) {
+                throw std::invalid_argument("vehicle " + plan.vehicles[v].id +
+                                            " pins a stop of request " +
+                                            plan.deliveries[static_cast<std::size_t>(request)].id +
+                                            ", which its profile forbids");
+            }
+        }
+    }
     for (std::size_t d = 0; d < plan.deliveries.size(); ++d) {
         const int required = plan.deliveries[d].requiredVehicleIndex;
         if (required >= 0 && required < static_cast<int>(plan.vehicles.size()) &&
@@ -1012,6 +1024,8 @@ void Solver::solve(PdpRoutePlan& plan, const CalculatorFactory& makeCalculator) 
 }
 
 Score calculateScore(PdpRoutePlan& plan) {
+    // The profile request indices are read as indices before anything else.
+    checkProfileRequests(plan);
     if (!needsConstraintAssembly(plan)) return ScoreCalculator::score(plan);
     // As solve(plan) ends on a plan with groups or profile requests: the derived fields, then the
     // three levels of the default assembly.

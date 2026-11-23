@@ -344,7 +344,7 @@ class Solver:
 
 def list_constraints() -> list[str]:
     """Constraint names scored by this domain (default assembly order, snake_case):
-    the sixteen per-vehicle constraints (vehicle_capacity_cost ... vehicle_fixed_cost,
+    the seventeen per-vehicle constraints (vehicle_capacity_cost ... vehicle_fixed_cost,
     visit_order_cost, profile_forbidden_visit_cost, profile_preferred_visit_cost), then
     the two globals (visit_group_cost, unassigned_visits_cost).
     The same names optimaru.vehicle_routing.constraints uses."""

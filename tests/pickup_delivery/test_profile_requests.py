@@ -211,3 +211,30 @@ def test_preferred_requests_need_their_cost_among_the_constraints():
     with pytest.raises(ValueError, match="leave out profile_preferred_request_cost"):
         solve(model_input, constraints=picks)
     solve(model_input, constraints=[*picks, ProfilePreferredRequestCost(weight=0)])
+
+
+def test_calculate_score_refuses_a_profile_requests_index_out_of_range():
+    plan = to_plan(line_input({}))
+    vehicles = plan.vehicles
+    vehicles[0].profile_requests_index = 3
+    plan.vehicles = vehicles
+    with pytest.raises(ValueError, match="profileRequestsIndex 3 is out of range"):
+        pdp.calculate_score(plan)
+
+
+def test_the_compiled_plan_refuses_a_pinned_stop_its_profile_forbids():
+    plan = to_plan(line_input({}))
+    vehicles = plan.vehicles
+    vehicles[0].profile_requests_index = 0
+    vehicles[0].pinned_node_indices = [0]  # the pickup of request a
+    with pytest.raises(ValueError, match="pins a stop of request a, which its profile forbids"):
+        pdp.PdpRoutePlan(
+            "bad", plan.locations, vehicles, plan.nodes, plan.deliveries, profile_requests=[pdp.ProfileRequests([0])]
+        )
+
+
+def test_same_travel_as_shares_the_matrix_of_the_named_profile():
+    plan = to_plan(line_input({"basic": {"forbidden_requests": ["a"]}}))
+    assert plan.profile_count == 1
+    assert [v.profile_index for v in plan.vehicles] == [0, 0]
+    assert plan.driving_time(0, 2, 0) == PLACES["ap"]  # the road profile's seconds, depot v to ap

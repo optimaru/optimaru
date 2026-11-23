@@ -176,7 +176,11 @@ public:
     // fold (level_scores()), so a soft total of 10^9 or more stays soft;
     // on_new_best reports its scores the same way. The calculator is left
     // primed on the final solution, so constraint_totals() explains exactly
-    // that score. Single-start: the caller-owned calculator cannot be cloned,
+    // that score. A plan with forbidden or preferred requests wants its
+    // assembly passed through withAlwaysOnConstraints(assembly, plan)
+    // (pdp/constraints.hpp) first, as the Python bindings do: this overload
+    // scores exactly the components it is given. Single-start: the
+    // caller-owned calculator cannot be cloned,
     // so parallel_solver_count is ignored. The overload below runs the
     // parallel starts.
     void solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePlan>& calculator);
@@ -203,7 +207,8 @@ private:
 // Vehicle::profileRequestsIndex is -1 or an entry of plan.profileRequests,
 // and each entry's two lists hold request indices in strictly increasing
 // order, none in both. A request bound to a vehicle (requiredVehicleIndex)
-// is not one its profile forbids. Throws std::invalid_argument otherwise.
+// or pinned to one (a stop in its pinnedNodeIndices) is not one its profile
+// forbids. Throws std::invalid_argument otherwise.
 // Every solve runs it.
 void checkProfileRequests(const PdpRoutePlan& plan);
 
@@ -219,8 +224,10 @@ inline bool needsConstraintAssembly(const PdpRoutePlan& plan) {
 // seven core constraints (ScoreCalculator::score), unless the plan has request
 // groups or profile request lists, which those constraints do not price: then
 // on the default constraint assembly. Refreshes the derived fields and stores the score in
-// plan.score. Does not validate the plan: what solve() refuses (a required vehicle out of range, a
-// group bound to two vehicles) is scored as it stands.
+// plan.score. Does not validate the plan otherwise: what solve() refuses (a required vehicle out
+// of range, a group bound to two vehicles) is scored as it stands. Its profile requests are
+// checked (checkProfileRequests), since they are read as indices: std::invalid_argument for
+// bad ones.
 Score calculateScore(PdpRoutePlan& plan);
 
 }  // namespace pdp

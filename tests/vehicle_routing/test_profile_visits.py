@@ -129,6 +129,13 @@ def test_profiles_that_share_travel_share_one_matrix():
         profiles={"p": TravelProfile(forbidden_visits=["a"]), "q": TravelProfile()},
     )
     assert to_plan(straight).profile_count == 1
+    # A profile driving as one on straight lines shares that matrix too.
+    data = straight.model_dump()
+    data["vehicles"].append({"id": "r", "capacity": 1, "start_depot": "D", "profile": "r"})
+    data["profiles"]["r"] = {"same_travel_as": "q", "preferred_visits": ["a"]}
+    plan = to_plan(RoutingInput.model_validate(data))
+    assert plan.profile_count == 1
+    assert [v.profile_index for v in plan.vehicles] == [0, 0, 0]
 
 
 def test_profiles_without_lists_give_no_entries():

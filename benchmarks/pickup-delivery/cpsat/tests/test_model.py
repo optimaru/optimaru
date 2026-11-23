@@ -26,6 +26,8 @@ ENGINE_ONLY = {
     "pinned_stops_cost",
     "required_vehicle_cost",
     "request_group_cost",
+    "profile_forbidden_request_cost",
+    "profile_preferred_request_cost",
 }
 
 
