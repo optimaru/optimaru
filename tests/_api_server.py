@@ -49,8 +49,12 @@ REQUEST_USE_CASES = {
     "employee-scheduling": ("ScheduleRequest", "ScheduleSolution"),
     "order-picking": ("OrderPickingRequest", "OrderPickingResponse"),
     "pickup-delivery": ("PdpRequest", "PdpSolution"),
+    "school-timetabling": ("TimetableRequest", "TimetableResultModel"),
     "vehicle-routing": ("RoutePlanRequest", "RouteSolution"),
 }
+
+#: Request use cases whose ``solve()`` takes a dict and is sent as the request (`_api.solve_by_request`).
+DICT_USE_CASES = {"school-timetabling"}
 
 #: The body of a ``solve`` call beside ``problem``, and of a ``solve_request`` call beside ``request``.
 _SOLVE_FIELDS = {

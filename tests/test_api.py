@@ -7,20 +7,17 @@ way the hosted API does, so what the client sends is checked against what a serv
 import importlib
 import re
 import socket
-import warnings
 
 import pytest
 
 import optimaru
 from optimaru import _api
 
-from ._api_server import MODEL_USE_CASES, REQUEST_USE_CASES, ApiStandIn, package_of
+from ._api_server import DICT_USE_CASES, MODEL_USE_CASES, REQUEST_USE_CASES, ApiStandIn, package_of
 from ._build import use_case_module
 from ._problems import score_of, small_problem
 
 KEY = "om_test_key"
-#: The use case the API does not serve: it solves on this machine either way.
-LOCAL_USE_CASES = {"school_timetabling"}
 
 
 @pytest.fixture
@@ -59,6 +56,8 @@ def request_of(slug: str):
             trolleys=[models.TrolleyModel(id="1", bucket_count=4, bucket_capacity=48000, location=start)],
             orders=[models.OrderModel(id="order1", items=items)],
         )
+    if slug == "school-timetabling":
+        return models.TimetableRequest(model_input=small_problem(package), time_limit_seconds=0.2)
     if slug == "pickup-delivery":
 
         def stop(name):
@@ -253,13 +252,12 @@ def test_the_settings_are_not_use_cases():
     assert not {"use_api", "use_local", "ApiError"} & set(optimaru.__all__)
 
 
-# --- every use case, on the API or declared local -----------------------------------------------
+# --- every use case is on the API ------------------------------------------------------------------
 
 
-def test_every_use_case_is_on_the_api_or_declared_local():
-    served = {package_of(slug) for slug in (*MODEL_USE_CASES, *REQUEST_USE_CASES)}
-    assert served | LOCAL_USE_CASES == set(optimaru.__all__)
-    assert not served & LOCAL_USE_CASES
+def test_every_use_case_is_on_the_api():
+    served = [package_of(slug) for slug in (*MODEL_USE_CASES, *REQUEST_USE_CASES)]
+    assert sorted(served) == sorted(optimaru.__all__)
 
 
 def test_a_request_solve_belongs_to_the_package_its_decorator_is_in(monkeypatch):
@@ -294,7 +292,7 @@ def test_a_request_solve_belongs_to_the_package_its_decorator_is_in(monkeypatch)
 def test_the_function_that_solves_here_stays_reachable(use_case):
     module = use_case_module(use_case)
     assert callable(module.solve.__wrapped__)
-    if use_case not in LOCAL_USE_CASES and package_of(use_case) not in map(package_of, MODEL_USE_CASES):
+    if package_of(use_case) not in map(package_of, MODEL_USE_CASES):
         assert callable(module.solve_request.__wrapped__)
 
 
@@ -382,7 +380,7 @@ def test_solve_request_returns_the_response_model(api, slug):
     assert set(solution.model_dump(mode="json")) == set(here.model_dump(mode="json"))
 
 
-@pytest.mark.parametrize("slug", REQUEST_USE_CASES)
+@pytest.mark.parametrize("slug", sorted(set(REQUEST_USE_CASES) - DICT_USE_CASES))
 def test_solve_of_a_compiled_problem_names_solve_request(api, slug):
     package = package_of(slug)
     module = use_case_module(package)
@@ -391,27 +389,98 @@ def test_solve_of_a_compiled_problem_names_solve_request(api, slug):
     assert not api.requests
 
 
-def test_school_timetabling_solves_here_and_says_so_once(api):
+def test_school_timetablings_solve_sends_its_call_as_the_request(api):
+    school = use_case_module("school_timetabling")
+    from optimaru.school_timetabling.models import TimetableProblemModel
+
+    problem = small_problem("school_timetabling")
+    before = dict(problem)
+    keywords = {"time_limit_seconds": 30, "random_seed": 3, "weights": {"teacher_gap_cost": 40}}
+    config = school.canon.SolverConfig()
+    config.step_count_limit = 300
+
+    solved = school.solve(problem, config=config, **keywords)
+
+    assert problem == before
+    (created,) = api.created()
+    assert created.path == "/api/use-cases/school-timetabling/solve/jobs"
+    request = created.body["request"]
+    assert request["model_input"] == TimetableProblemModel.model_validate(problem).model_dump(mode="json")
+    assert {name: request[name] for name in ("time_limit_seconds", "random_seed", "weights", "mode")} == {
+        "time_limit_seconds": 30.0,
+        "random_seed": 3,
+        "weights": {"teacher_gap_cost": 40.0},
+        "mode": "canonical",
+    }
+    assert request["solver_parameters"] == {"step_count_limit": 300}
+    assert "constraints" not in created.body
+    here = school.solve.__wrapped__(problem, config=config, **keywords)
+    assert set(solved) == set(here)
+    assert solved["lessons"] == here["lessons"] and solved["penalties"] == here["penalties"]
+
+
+def test_school_timetablings_config_travels_as_the_request_fields(api):
+    school = use_case_module("school_timetabling")
+    config = school.canon.SolverConfig()
+    config.spent_limit_seconds = 7
+    config.random_seed = 5
+    config.step_count_limit = 100
+    config.best_score_limit = (0, float("-inf"))
+    config.weights = school.canon.ObjectiveWeights()
+    config.weights.teacher_gap_cost = 33
+
+    school.solve(small_problem("school_timetabling"), config=config, random_seed=9)
+
+    request = api.created()[0].body["request"]
+    assert request["time_limit_seconds"] == 7.0
+    assert request["random_seed"] == 9  # the keyword wins over the config, as it does here
+    assert request["stop_at_first_feasible"] is True
+    assert request["solver_parameters"] == {"step_count_limit": 100}
+    assert request["weights"]["teacher_gap_cost"] == 33.0
+
+
+def test_school_timetablings_selection_travels_as_its_picks(api):
+    school = use_case_module("school_timetabling")
+    from optimaru.school_timetabling.constraints import Assembly
+
+    problem = small_problem("school_timetabling")
+    picks = Assembly().add("teacher_gap_cost", weight=40).drop("teacher_workday_cost")
+    school.solve(problem, time_limit_seconds=0.2, constraints=picks)
+    school.solve(problem, time_limit_seconds=0.2, constraints=["class_conflict_cost", "teacher_gap_cost"])
+
+    first, second = (created.body["constraints"] for created in api.created())
+    assert [item["name"] for item in first] == [spec.name for spec in picks]
+    assert next(item for item in first if item["name"] == "teacher_gap_cost")["weight"] == 40
+    assert [item["name"] for item in second] == ["class_conflict_cost", "teacher_gap_cost"]
+    assert [[pick.name for pick in keywords["constraints"]] for _, keywords in api.calls] == [
+        [spec.name for spec in picks],
+        ["class_conflict_cost", "teacher_gap_cost"],
+    ]
+
+
+def test_school_timetablings_solve_refuses_what_cannot_travel(api):
     school = use_case_module("school_timetabling")
     problem = small_problem("school_timetabling")
-    with pytest.warns(RuntimeWarning, match="does not take the Python call of school timetabling"):
-        first = school.solve(problem, time_limit_seconds=0.2, random_seed=1)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        school.solve(problem, time_limit_seconds=0.2, random_seed=1)
-    assert first["lessons"]
+    with pytest.raises(ValueError, match="on_new_best is a callback"):
+        school.solve(problem, on_new_best=lambda *_: None)
+    with pytest.raises(ValueError, match="canonical mode only"):
+        school.solve(problem, mode="quickstart", weights={"teacher_gap_cost": 1})
+    with pytest.raises(ValueError, match="unknown mode"):
+        school.solve(problem, mode="fast")
     assert not api.requests
 
 
-def test_school_timetablings_solve_request_warns_at_its_caller(api):
-    use_case_module("school_timetabling")
-    from optimaru.school_timetabling.models import TimetableRequest, solve_request
+def test_school_timetablings_initial_solution_travels_in_the_request(api):
+    school = use_case_module("school_timetabling")
+    problem = small_problem("school_timetabling")
+    start = school.solve.__wrapped__(problem, time_limit_seconds=0.2, random_seed=1)
 
-    request = TimetableRequest(model_input=small_problem("school_timetabling"), time_limit_seconds=0.2)
-    with pytest.warns(RuntimeWarning, match="does not take the Python call") as caught:
-        solve_request(request)
-    assert [warning.filename for warning in caught] == [__file__]
-    assert not api.requests
+    school.solve(problem, time_limit_seconds=0, initial_solution=start)
+
+    request = api.created()[0].body["request"]
+    assert [lesson["course_id"] for lesson in request["initial_solution"]["lessons"]] == [
+        lesson["course_id"] for lesson in start["lessons"]
+    ]
 
 
 # --- constraints and config as the API reads them back ------------------------------------------
@@ -809,14 +878,6 @@ def test_a_job_that_may_have_been_created_is_said_so(api, monkeypatch):
     knapsack = use_case_module("knapsack")
     with pytest.raises(optimaru.ApiError, match="timed out; if the request reached the API, a solve job was created"):
         knapsack.solve(model_of("knapsack"))
-
-
-def test_a_setting_a_local_solve_never_uses_does_not_stop_it(monkeypatch):
-    school = use_case_module("school_timetabling")
-    monkeypatch.setenv("OPTIMARU_API_KEY", KEY)
-    monkeypatch.setenv("OPTIMARU_API_URL", "http://not-local.example")  # refused by a solve that sends
-    with pytest.warns(RuntimeWarning, match="does not take the Python call"):
-        assert school.solve(small_problem("school_timetabling"), time_limit_seconds=0.2)["lessons"]
 
 
 def test_a_subclass_the_result_cannot_fill_is_named(api):

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **School timetabling solves on the optimaru API too.** With an API key set, `solve_request`
+  sends its `TimetableRequest` to `POST /api/use-cases/school-timetabling/solve/jobs`, as the
+  other request use cases do, and `solve(problem_dict, ...)` is sent as that request (the
+  keywords, and `config` as the request's fields and `solver_parameters`) and returns the
+  dict a local solve returns. Until now both solved on this machine with a `RuntimeWarning`.
+  A `constraints=` selection travels as its picks whether it is specs, names or an
+  `Assembly`; `on_new_best` is refused, as everywhere. `_api.local_solve` is gone: every use
+  case is served.
 - **Routing notebooks on the 0.6 input.** `examples/vehicle-routing.ipynb` and
   `examples/pickup-delivery.ipynb` build their vehicles from depots (`start_location_index` /
   `end_location_index` in the compiled layer, `DepotModel` with `start_depot` / `end_depot` in

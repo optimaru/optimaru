@@ -323,8 +323,14 @@ class TimetableRequest(SolveRequest):
     )
 
 
-# It calls solve(); decorated as well, so that the warning points at the caller of solve_request.
-@_api.local_solve("school timetabling")
+def _picks(constraints):
+    """A ``constraints=`` selection (specs, names or an `Assembly`) as the specs it stands for."""
+    from . import _picks_of
+
+    return _picks_of(constraints)
+
+
+@_api.request_solve("school-timetabling", "TimetableResultModel", picks=_picks)
 def solve_request(request: TimetableRequest, *, constraints=None) -> TimetableResultModel:
     """Solve a pydantic request and return the timetable as a `TimetableResultModel`.
 
@@ -339,7 +345,8 @@ def solve_request(request: TimetableRequest, *, constraints=None) -> TimetableRe
         config = canon.SolverConfig() if request.mode == "canonical" else SolverConfig()
         apply_solver_parameters(config, request.solver_parameters)
     initial = request.initial_solution
-    result = solve(
+    # The function that solves here: this one is what the API's side runs, and it must not send.
+    result = solve.__wrapped__(
         # Unset optional fields are left out, as in a hand-written problem dict.
         request.model_input.model_dump(mode="json", exclude_none=True),
         mode=request.mode,

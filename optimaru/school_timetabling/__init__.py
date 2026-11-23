@@ -42,7 +42,7 @@ serialization) live in `optimaru.school_timetabling.models` too.
 import time
 
 from .. import _api
-from .._solve import solver_config
+from .._solve import FIRST_FEASIBLE_LIMIT, solver_config
 from . import quickstart
 from ._core import (
     ConstraintInfo,
@@ -217,7 +217,86 @@ def _resolve_config(config, *, canonical: bool):
     raise ValueError("a quickstart-mode config must be a SolverConfig or an object with to_core()")
 
 
-@_api.local_solve("school timetabling")
+def _check_mode(mode: str, weights, constraints) -> bool:
+    """Whether `mode` is canonical. Refuses an unknown mode, and weights or constraints in quickstart mode."""
+    if mode not in ("canonical", "quickstart"):
+        raise ValueError(f"unknown mode: {mode!r} (canonical | quickstart)")
+    canonical = mode == "canonical"
+    if weights is not None and not canonical:
+        raise ValueError("weights are supported in canonical mode only")
+    if constraints is not None and not canonical:
+        raise ValueError("constraints are supported in canonical mode only")
+    return canonical
+
+
+#: The keywords of ``solve()`` that are fields of the same name in a `models.TimetableRequest`.
+_REQUEST_KEYWORDS = (
+    "time_limit_seconds",
+    "random_seed",
+    "parallel_solver_count",
+    "stop_at_first_feasible",
+    "full_assert",
+)
+
+
+def _api_request(problem: dict, keywords: dict):
+    """A ``solve()`` call as the `models.TimetableRequest` and the selection that ``solve_request`` takes.
+
+    For the optimaru API, which solves this use case with ``solve_request``. ``config``
+    travels as the fields that differ from the mode's defaults: its time limit, seed,
+    parallel starts, ``full_assert``, first-feasible limit and weights as the request's
+    fields of those names (a keyword still wins over them, as it does here), the rest as
+    ``solver_parameters``.
+    """
+    from .models import TimetableProblemModel, TimetableRequest, TimetableResultModel
+
+    mode, weights, constraints = keywords["mode"], keywords["weights"], keywords["constraints"]
+    canonical = _check_mode(mode, weights, constraints)
+    fields = {name: keywords[name] for name in _REQUEST_KEYWORDS}
+    parameters: dict = {}
+    config = _resolve_config(keywords["config"], canonical=canonical)
+    if config is not None:
+        if config.on_new_best is not None:
+            raise ValueError("on_new_best is a callback, which cannot be sent to the optimaru API")
+        defaults = type(config)()
+        as_fields = {
+            "spent_limit_seconds": "time_limit_seconds",
+            "random_seed": "random_seed",
+            "parallel_solver_count": "parallel_solver_count",
+        }
+        for name in dir(config):
+            if name.startswith("_") or name == "on_new_best" or callable(getattr(config, name)):
+                continue
+            value = getattr(config, name)
+            if name == "weights" and canonical:
+                # An ObjectiveWeights compares by identity: by its weights, then.
+                if weights is None and _soft_weights(value) != _soft_weights():
+                    weights = _soft_weights(value)
+                continue
+            if value == getattr(defaults, name):
+                continue
+            if name in as_fields:
+                if fields[as_fields[name]] is None:
+                    fields[as_fields[name]] = value
+            elif name == "full_assert":
+                fields["full_assert"] = fields["full_assert"] or value
+            elif name == "best_score_limit" and tuple(value) == tuple(FIRST_FEASIBLE_LIMIT):
+                fields["stop_at_first_feasible"] = True  # -inf has no JSON: it travels as the flag
+            else:
+                parameters[name] = _api._plain(value, f"config.{name}")
+    initial = keywords["initial_solution"]
+    request = TimetableRequest(
+        model_input=TimetableProblemModel.model_validate(problem),
+        mode=mode,
+        weights=weights,
+        solver_parameters=parameters,
+        initial_solution=None if initial is None else TimetableResultModel.model_validate(initial),
+        **{name: value for name, value in fields.items() if value is not None},
+    )
+    return request, constraints
+
+
+@_api.solve_by_request(_api_request)
 def solve(
     problem: dict,
     *,
@@ -313,13 +392,7 @@ def solve(
     constraint names and objective_value the weighted penalty sum — the same
     unit as the cpsat backend.
     """
-    if mode not in ("canonical", "quickstart"):
-        raise ValueError(f"unknown mode: {mode!r} (canonical | quickstart)")
-    canonical = mode == "canonical"
-    if weights is not None and not canonical:
-        raise ValueError("weights are supported in canonical mode only")
-    if constraints is not None and not canonical:
-        raise ValueError("constraints are supported in canonical mode only")
+    canonical = _check_mode(mode, weights, constraints)
 
     cfg = solver_config(
         canon.SolverConfig if canonical else SolverConfig,

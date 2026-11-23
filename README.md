@@ -94,9 +94,10 @@ key nothing is sent.
   request (vehicle routing, pickup and delivery, order picking, employee scheduling: call
   `solve_request`), a callback (`on_new_best`, employee scheduling's `select`) and a
   non-finite number.
-- School timetabling stays on this machine. The API serves it through an endpoint of its
-  own, whose request is not this package's Python call, so with a key set it is solved here
-  and says so once in a `RuntimeWarning`.
+- School timetabling goes to the API like the others. Its `solve(problem, ...)` takes a
+  dict, so it is sent as the `TimetableRequest` that `solve_request` takes (the problem,
+  the keywords, and `config` as the request's fields and `solver_parameters`), and the
+  result comes back as the dict a local solve returns.
 - The setting moves `solve` and `solve_request`. The compiled `Solver` class
   (`Solver(config).solve(problem)`, `solve_with_constraints`) is the engine itself and
   always runs on this machine.

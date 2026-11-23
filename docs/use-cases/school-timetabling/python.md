@@ -62,9 +62,13 @@ result = solve_request(TimetableRequest(model_input=problem_dict, time_limit_sec
 print(result.status, result.penalties)
 ```
 
-School timetabling stays on this machine with an API key set (`optimaru.use_api`,
-`OPTIMARU_API_KEY`): the optimaru API serves it through an endpoint of its own, whose request
-is not this package's call. The solve says so once in a `RuntimeWarning`.
+With an API key set (`optimaru.use_api`, `OPTIMARU_API_KEY`), `solve_request` sends the request
+to the optimaru API (`POST /api/use-cases/school-timetabling/solve/jobs`) and returns the
+`TimetableResultModel` it reads back. `solve(problem, ...)` goes the same way: the dict and the
+keywords become a `TimetableRequest` (`config` travels as the request's fields and
+`solver_parameters`; `on_new_best`, a callback, is refused), and the result comes back as the
+dict a local solve returns. A `constraints=` selection travels as its picks, whether it was
+given as specs, names or an `Assembly`.
 See [Solving on the optimaru API](../README.md#solving-on-the-optimaru-api).
 
 ## Constraints
