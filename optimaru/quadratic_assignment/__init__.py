@@ -41,6 +41,7 @@ from __future__ import annotations
 from typing import Any, TypeVar
 
 from .. import _api
+from .._constraint import require_costs
 from .._solve import solve_in_place, solver_config
 from ._core import (
     AcceptorType,
@@ -58,8 +59,9 @@ from ._core import (
 )
 from ._core import calculate_score as _calculate_score
 from ._core import constraint_costs as _constraint_costs
+from .constraints import get_constraints
 from .constraints import score as _score
-from .models import QuadraticAssignmentProblemModel, solve_request, with_initial_solution
+from .models import QuadraticAssignmentProblemModel, parameter_uses, solve_request, with_initial_solution
 
 __all__ = [
     "AcceptorType",
@@ -176,6 +178,9 @@ def solve(
 
         from optimaru.quadratic_assignment.constraints import get_constraints
         problem = quadratic_assignment.solve(problem, constraints=get_constraints())
+
+    On the model, a parameter set away from its default whose costs the constraints leave out
+    is refused with ValueError (`models.parameter_uses`); an engine object is solved as given.
     """
     cfg = solver_config(
         SolverConfig,
@@ -188,6 +193,13 @@ def solve(
         on_new_best=on_new_best,
     )
     core = _core_of(problem)
+    if isinstance(problem, QuadraticAssignmentProblemModel):
+        constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
+        require_costs(
+            parameter_uses(problem),
+            get_constraints(constraints),
+            check_picks=lambda: _constraint_costs(core, constraints),
+        )
     solve_in_place(Solver(cfg), core, constraints)
     if isinstance(problem, QuadraticAssignmentProblemModel):
         # A model is not solved in place: the caller's stays the problem it was. A copy

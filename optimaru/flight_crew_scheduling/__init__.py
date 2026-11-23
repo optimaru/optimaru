@@ -36,6 +36,7 @@ and uses `Solver`. The pydantic mirror is in `optimaru.flight_crew_scheduling.mo
 from typing import TypeVar
 
 from .. import _api
+from .._constraint import require_costs
 from .._solve import solve_in_place, solver_config
 from ._core import (
     Airport,
@@ -52,7 +53,8 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .models import FlightCrewScheduleModel, solve_request, with_initial_solution
+from .constraints import get_constraints as _get_constraints
+from .models import FlightCrewScheduleModel, parameter_uses, solve_request, with_initial_solution
 
 __all__ = [
     "Airport",
@@ -115,6 +117,10 @@ def solve(
 
         from optimaru.flight_crew_scheduling.constraints import get_constraints
         fcs.solve(schedule, constraints=get_constraints())
+
+    A model (or dict) that sets a parameter whose costs the constraints leave out is refused
+    with ValueError (`models.parameter_uses`): the solve would ignore it. An engine object
+    is not checked.
     """
     if config is not None and not isinstance(config, SolverConfig):
         if not hasattr(config, "to_core"):
@@ -137,5 +143,9 @@ def solve(
         schedule if isinstance(schedule, FlightCrewScheduleModel) else FlightCrewScheduleModel.model_validate(schedule)
     )
     core = model.to_core()
+    constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
+    require_costs(
+        parameter_uses(model), _get_constraints(constraints), check_picks=lambda: constraint_costs(core, constraints)
+    )
     solve_in_place(Solver(cfg), core, constraints)
     return FlightCrewScheduleModel.from_core(core)

@@ -192,7 +192,7 @@ def test_a_group_of_one_and_two_groups_cost_nothing_by_themselves():
     assert apart(two_ends(deliveries, vehicles)) == 0
 
 
-def test_the_group_constraint_can_be_made_soft_or_left_out():
+def test_the_group_constraint_can_be_made_soft_but_not_left_out():
     # Each vehicle takes one request, so the group cannot ride together. Kept hard it waits whole;
     # soft at a weight below what an unassigned request costs, it is split over the two vehicles.
     vehicles = [vehicle("v", max_stops=2), vehicle("w", max_stops=2)]
@@ -204,11 +204,11 @@ def test_the_group_constraint_can_be_made_soft_or_left_out():
         PdpRequest(model_input=model_input, timelimit=0.3),
         constraints=[*others, RequestGroupCost(weight=1, level="soft")],
     )
-    without = solve_request(PdpRequest(model_input=model_input, timelimit=0.3), constraints=others)
-
-    for solution in (soft, without):
-        assert solution.feasible and not solution.unassigned
-        assert vehicle_of(solution) == {"a": "v", "b": "w"}
+    assert soft.feasible and not soft.unassigned
+    assert vehicle_of(soft) == {"a": "v", "b": "w"}
+    # Left out, the groups would be ignored: refused.
+    with pytest.raises(ValueError, match="sets group, but the constraints leave out request_group_cost"):
+        solve_request(PdpRequest(model_input=model_input, timelimit=0.3), constraints=others)
 
 
 def test_requests_of_one_group_cannot_require_different_vehicles():

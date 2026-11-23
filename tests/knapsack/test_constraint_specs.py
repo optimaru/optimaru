@@ -29,7 +29,7 @@ from optimaru.knapsack.constraints import (
     selected_value_cost,
     selection_group_bounds_cost,
 )
-from optimaru.knapsack.models import ItemModel, KnapsackProblemModel, SelectionGroupModel
+from optimaru.knapsack.models import ItemModel, KnapsackProblemModel, SelectionGroupModel, parameter_uses
 
 NAMES = [
     "knapsack_capacity_cost",
@@ -69,6 +69,22 @@ def basic() -> KnapsackProblemModel:
             ItemModel(id="C", weight=5, value=8),
         ],
     )
+
+
+def with_its_costs(problem: KnapsackProblemModel, picks) -> list:
+    """`picks`, plus at weight 0 every cost a parameter of `problem` needs that they leave out.
+
+    A model's solve refuses a selection without the costs its parameters need
+    (`models.parameter_uses`); the tests of a pick's own refusal add them, so the pick is
+    what the solve refuses."""
+    picks = list(picks)
+    named = {pick.name for pick in picks}
+    defaults = {spec.name: spec for spec in get_constraints()}
+    for use in parameter_uses(problem):
+        if not named.intersection(use.costs):
+            picks.append(type(defaults[use.costs[0]])(weight=0))
+            named.add(use.costs[0])
+    return picks
 
 
 def solved(constraints=None, problem=None) -> KnapsackProblemModel:
@@ -242,7 +258,7 @@ def test_the_reward_refuses_level_hard_on_every_path(level):
     with pytest.raises(ValueError, match="is a reward"):
         knapsack.calculate_score(problem, [pick])
     with pytest.raises(ValueError, match="is a reward"):
-        knapsack.solve(problem, time_limit_seconds=0, constraints=[pick])
+        knapsack.solve(problem, time_limit_seconds=0, constraints=with_its_costs(problem, [pick]))
     with pytest.raises(ValueError, match="is a reward"):
         knapsack.constraint_costs(problem, [pick])
     duck = SimpleNamespace(name="selected_value_cost", weight=None, level="hard", exponent=1.0)
@@ -433,7 +449,7 @@ def test_a_second_pick_of_the_reward_still_refuses_hard():
     with pytest.raises(ValueError, match="is a reward"):
         score(knapsack.constraint_costs(shifted()), picks)
     with pytest.raises(ValueError, match="is a reward"):
-        knapsack.solve(shifted(), time_limit_seconds=0, constraints=picks)
+        knapsack.solve(shifted(), time_limit_seconds=0, constraints=with_its_costs(shifted(), picks))
 
 
 @pytest.mark.parametrize(
@@ -591,7 +607,7 @@ def test_medium_is_refused_without_a_medium_level(level):
         with pytest.raises(ValueError, match=message):
             engine_solve(shifted(), picks)
         with pytest.raises(ValueError, match=message):
-            solved(picks)
+            solved(with_its_costs(extended(), picks))
         with pytest.raises(ValueError, match=message):
             knapsack.constraint_costs(shifted(), picks)
         with pytest.raises(ValueError, match=message):
@@ -646,8 +662,9 @@ def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
     spec = pick(offset)
     message = HARD_REFUSAL.format(q=repr(spec.name))
     picks = [*get_constraints(), spec]  # a repeat next to the defaults
-    assert _refusal(lambda: knapsack.solve(shifted(), time_limit_seconds=0, constraints=[spec])) == message
-    assert _refusal(lambda: solved([spec])) == message
+    covered = with_its_costs(shifted(), [spec])
+    assert _refusal(lambda: knapsack.solve(shifted(), time_limit_seconds=0, constraints=covered)) == message
+    assert _refusal(lambda: solved(with_its_costs(extended(), [spec]))) == message
     assert _refusal(lambda: engine_solve(shifted(), [spec])) == message
     assert _refusal(lambda: engine_solve(shifted(), picks)) == message
     assert _refusal(lambda: knapsack.constraint_costs(shifted(), [spec])) == message

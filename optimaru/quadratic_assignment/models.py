@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
+from .._constraint import ParameterUse, is_set
 from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
@@ -24,6 +25,7 @@ __all__ = [
     "ForbiddenAssignmentModel",
     "QuadraticAssignmentProblemModel",
     "QuadraticAssignmentRequest",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -190,6 +192,29 @@ class QuadraticAssignmentProblemModel(StrictModel):
         else:
             self.total_cost = self.score_hard = self.score_soft = None
         self.warm_start = problem.warm_start
+
+
+# The parameters that act only through a cost: (model field, default, the costs that read it).
+_PROBLEM_COSTS = (
+    ("assignment_costs", None, ("assignment_cost",)),
+    ("fixed_assignments", {}, ("pinned_assignments_cost",)),
+    ("forbidden_assignments", [], ("forbidden_assignments_cost",)),
+    ("facility_demands", {}, ("location_capacity_cost",)),
+    ("location_capacities", {}, ("location_capacity_cost",)),
+)
+
+
+def parameter_uses(problem: QuadraticAssignmentProblemModel) -> list[ParameterUse]:
+    """The parameters `problem` sets away from their defaults that act only through a cost.
+
+    `quadratic_assignment.solve` refuses a selection that holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is in docs/use-cases/README.md
+    ("Parameters and their costs")."""
+    return [
+        ParameterUse("the problem", field, default, costs)
+        for field, default, costs in _PROBLEM_COSTS
+        if is_set(getattr(problem, field), default)
+    ]
 
 
 def with_initial_solution(problem, solution):

@@ -19,6 +19,7 @@ the ordered list of task ids that employee performs. The task side carries the c
 
 from pydantic import Field, model_validator
 
+from .._constraint import ParameterUse
 from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
@@ -31,6 +32,7 @@ __all__ = [
     "TaskAssigningSolutionModel",
     "TaskModel",
     "TaskTypeModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -241,6 +243,29 @@ def with_initial_solution(
     for employee in data["employees"]:
         employee["tasks"] = list(solved[employee["id"]].tasks) if employee["id"] in solved else []
     return TaskAssigningSolutionModel.model_validate(data)
+
+
+# The end-time cost a task's priority files it under, for the priorities other than the default.
+_PRIORITY_COSTS = {
+    "MAJOR": "major_priority_task_end_time_cost",
+    "CRITICAL": "critical_priority_task_end_time_cost",
+}
+
+
+def parameter_uses(solution: TaskAssigningSolutionModel) -> list[ParameterUse]:
+    """The parameters `solution` sets away from their defaults that act only through a cost.
+
+    `task_assigning.solve` refuses a selection that holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is in docs/use-cases/README.md
+    ("Parameters and their costs")."""
+    uses = []
+    for task_type in solution.task_types:
+        if task_type.required_skills:
+            uses.append(ParameterUse(f"task type {task_type.code}", "required_skills", [], ("required_skill_cost",)))
+    for task in solution.tasks:
+        if task.priority in _PRIORITY_COSTS:
+            uses.append(ParameterUse(f"task {task.id}", "priority", "MINOR", (_PRIORITY_COSTS[task.priority],)))
+    return uses
 
 
 class TaskAssigningRequest(SolveRequest):

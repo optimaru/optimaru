@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
+from .._constraint import ParameterUse, is_set
 from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
@@ -29,6 +30,7 @@ __all__ = [
     "TaskGroupModel",
     "TaskModel",
     "TaskPairModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -188,6 +190,39 @@ class AssemblyLineBalancingProblemModel(StrictModel):
         self.score_hard = problem.score.hard
         self.score_soft = problem.score.soft
         self.warm_start = problem.warm_start
+
+
+# The task fields that act only through a cost: (field, default, the costs that read it).
+_TASK_COSTS = (
+    ("min_station", 0, ("task_station_bounds_cost",)),
+    ("max_station", None, ("task_station_bounds_cost",)),
+    ("fixed_station", None, ("fixed_task_stations_cost",)),
+    ("forbidden_stations", [], ("forbidden_task_stations_cost",)),
+)
+_PROBLEM_COSTS = (
+    ("precedences", [], ("task_precedence_cost",)),
+    ("max_stations", None, ("max_stations_cost",)),
+    ("same_station_groups", [], ("same_station_groups_cost",)),
+    ("different_station_pairs", [], ("different_station_pairs_cost",)),
+)
+
+
+def parameter_uses(problem: AssemblyLineBalancingProblemModel) -> list[ParameterUse]:
+    """The parameters `problem` sets away from their defaults that act only through a cost.
+
+    `solve` refuses a model whose selection holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
+    docs/use-cases/README.md. `cycle_time` and the durations are required, so never "set"."""
+    uses = [
+        ParameterUse("the problem", field, default, costs)
+        for field, default, costs in _PROBLEM_COSTS
+        if is_set(getattr(problem, field), default)
+    ]
+    for task in problem.tasks:
+        for field, default, costs in _TASK_COSTS:
+            if is_set(getattr(task, field), default):
+                uses.append(ParameterUse(f"task {task.id}", field, default, costs))
+    return uses
 
 
 def with_initial_solution(problem, solution):

@@ -26,6 +26,7 @@ The pydantic mirror (for serialization) is in `optimaru.conference_scheduling.mo
 from typing import TypeVar
 
 from .. import _api
+from .._constraint import require_costs as _require_costs
 from .._solve import solve_in_place, solver_config
 from ._core import (
     ConferenceSchedule,
@@ -43,8 +44,10 @@ from ._core import (
     list_constraints,
     prepare,
 )
+from .constraints import get_constraints as _get_constraints
 from .demo import demo_conference, generate_demo_data  # demo_conference: the name before 0.5.1
 from .models import ConferenceScheduleModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "ConferenceSchedule",
@@ -106,6 +109,9 @@ def solve(
 
         from optimaru.conference_scheduling.constraints import get_constraints
         cs.solve(schedule, constraints=get_constraints())
+
+    A model that sets a parameter whose costs the selection leaves out is refused with
+    ValueError (`models.parameter_uses`); an engine object is solved as it is.
     """
     if config is not None and not isinstance(config, SolverConfig):
         if not hasattr(config, "to_core"):
@@ -126,6 +132,12 @@ def solve(
         return schedule
     if isinstance(schedule, ConferenceScheduleModel):
         core = schedule.to_core()
+        constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
+        _require_costs(
+            _parameter_uses(schedule),
+            _get_constraints(constraints),
+            check_picks=lambda: constraint_costs(core, constraints),
+        )
         solve_in_place(Solver(cfg), core, constraints)
         return ConferenceScheduleModel.from_core(core)
     raise TypeError(f"schedule must be a ConferenceSchedule or a models.ConferenceScheduleModel: {type(schedule)!r}")

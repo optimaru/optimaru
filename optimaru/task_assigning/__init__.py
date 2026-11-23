@@ -42,6 +42,7 @@ The pydantic mirror (for serialization) is in `optimaru.task_assigning.models`.
 from typing import TypeVar
 
 from .. import _api
+from .._constraint import require_costs
 from .._solve import solve_in_place, solver_config
 from ._core import (
     Affinity,
@@ -60,7 +61,8 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .models import TaskAssigningSolutionModel, solve_request, with_initial_solution
+from .constraints import get_constraints
+from .models import TaskAssigningSolutionModel, parameter_uses, solve_request, with_initial_solution
 
 __all__ = [
     "Affinity",
@@ -125,6 +127,9 @@ def solve(
 
         from optimaru.task_assigning.constraints import get_constraints
         ta.solve(solution, constraints=get_constraints())
+
+    On the model, a parameter set away from its default whose costs the constraints leave out
+    is refused with ValueError (`models.parameter_uses`); an engine object is solved as given.
     """
     cfg = _build_config(
         time_limit_seconds=time_limit_seconds,
@@ -143,5 +148,11 @@ def solve(
             f"solution must be a TaskAssigningSolution or a models.TaskAssigningSolutionModel: {type(solution)!r}"
         )
     core_solution = solution.to_core()
+    constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
+    require_costs(
+        parameter_uses(solution),
+        get_constraints(constraints),
+        check_picks=lambda: constraint_costs(core_solution, constraints),
+    )
     solve_in_place(Solver(cfg), core_solution, constraints)
     return TaskAssigningSolutionModel.from_core(core_solution)

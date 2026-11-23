@@ -16,6 +16,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
 from .. import _api
+from .._constraint import ParameterUse, is_set
 from .._models import SolveConfigBase, SolveRequest, StrictModel, apply_solver_parameters
 from . import _core, convert
 from .constraints import default_weights, soft_specs
@@ -38,6 +39,7 @@ __all__ = [
     "TimetableProblemModel",
     "TimetableRequest",
     "TimetableResultModel",
+    "parameter_uses",
     "solve_request",
 ]
 
@@ -279,6 +281,57 @@ class TimetableProblemModel(StrictModel):
     class_groups: list[ClassGroupModel]
     rooms: list[ClassroomModel] = Field(default_factory=list)
     courses: list[CourseModel]
+
+
+# The parameters that act only through a cost: (field, default, the costs that read it), per
+# part of the problem. fixed_slots and parallel_group are not here: the engine pins and merges
+# them, whatever the constraints.
+_TEACHER_COSTS = (
+    ("unavailable", [], ("disallowed_slot_cost",)),
+    ("max_periods_per_week", None, ("teacher_max_periods_cost",)),
+    ("max_periods_per_day", 6, ("teacher_max_periods_cost",)),
+    ("max_consecutive_periods", 4, ("teacher_max_consecutive_periods_cost",)),
+    ("preferred_free_days", [], ("teacher_free_day_cost",)),
+)
+_CLASS_COSTS = (("unavailable", [], ("disallowed_slot_cost",)),)
+# required_room_type is not here either: the room assignment after the solve reads it too.
+_SUBJECT_COSTS = (
+    ("avoided_periods", [], ("avoided_period_cost",)),
+    ("preferred_periods", [], ("non_preferred_period_cost",)),
+)
+_COURSE_COSTS = (
+    ("forbidden_slots", [], ("disallowed_slot_cost",)),
+    ("max_periods_per_day", 1, ("course_max_periods_per_day_cost",)),
+)
+
+
+def parameter_uses(problem: "TimetableProblemModel | dict") -> list[ParameterUse]:
+    """The parameters `problem` sets away from their defaults that act only through a cost.
+
+    `problem` is a `TimetableProblemModel` or the `TimetableProblem` dict `solve()` takes.
+    `solve()` refuses a ``constraints=`` selection that holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the default fast path scores every cost. The table
+    is in docs/use-cases/README.md ("Parameters and their costs")."""
+    if isinstance(problem, BaseModel):
+        problem = problem.model_dump(mode="json")
+    uses = []
+    parts = (
+        ("teacher", problem.get("teachers", []), _TEACHER_COSTS),
+        ("class group", problem.get("class_groups", []), _CLASS_COSTS),
+        ("subject", problem.get("subjects", []), _SUBJECT_COSTS),
+        ("course", problem.get("courses", []), _COURSE_COSTS),
+    )
+    for kind, items, table in parts:
+        for item in items:
+            for field, default, costs in table:
+                value = item.get(field)
+                # A key left out, or None, is the default (convert.py reads `or 6`, `or 4`).
+                if is_set(default if value is None else value, default):
+                    uses.append(ParameterUse(f"{kind} {item.get('id')}", field, default, costs))
+    for course in problem.get("courses", []):
+        if int(course.get("block_periods") or 0) > 1:
+            uses.append(ParameterUse(f"course {course.get('id')}", "block_periods", 0, ("block_adjacency_cost",)))
+    return uses
 
 
 class ScheduledLessonModel(StrictModel):

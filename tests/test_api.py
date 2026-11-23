@@ -446,15 +446,26 @@ def test_school_timetablings_selection_travels_as_its_picks(api):
     problem = small_problem("school_timetabling")
     picks = Assembly().add("teacher_gap_cost", weight=40).drop("teacher_workday_cost")
     school.solve(problem, time_limit_seconds=0.2, constraints=picks)
-    school.solve(problem, time_limit_seconds=0.2, constraints=["class_conflict_cost", "teacher_gap_cost"])
+    # Names, with the costs of what the problem sets (unavailable times, period preferences):
+    # a selection without them is refused before anything is sent.
+    names = [
+        "class_conflict_cost",
+        "teacher_gap_cost",
+        "disallowed_slot_cost",
+        "avoided_period_cost",
+        "non_preferred_period_cost",
+    ]
+    school.solve(problem, time_limit_seconds=0.2, constraints=names)
+    with pytest.raises(ValueError, match="sets unavailable, but the constraints leave out disallowed_slot_cost"):
+        school.solve(problem, time_limit_seconds=0.2, constraints=["class_conflict_cost", "teacher_gap_cost"])
 
     first, second = (created.body["constraints"] for created in api.created())
     assert [item["name"] for item in first] == [spec.name for spec in picks]
     assert next(item for item in first if item["name"] == "teacher_gap_cost")["weight"] == 40
-    assert [item["name"] for item in second] == ["class_conflict_cost", "teacher_gap_cost"]
+    assert [item["name"] for item in second] == names
     assert [[pick.name for pick in keywords["constraints"]] for _, keywords in api.calls] == [
         [spec.name for spec in picks],
-        ["class_conflict_cost", "teacher_gap_cost"],
+        names,
     ]
 
 

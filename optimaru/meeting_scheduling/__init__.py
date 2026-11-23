@@ -24,6 +24,7 @@ The pydantic mirror (for serialization) is in `optimaru.meeting_scheduling.model
 from typing import TypeVar
 
 from .. import _api
+from .._constraint import require_costs
 from .._solve import solve_in_place, solver_config
 from ._core import (
     GRAIN_LENGTH_IN_MINUTES,
@@ -45,7 +46,9 @@ from ._core import (
     generate_demo_data,
     list_constraints,
 )
+from .constraints import get_constraints as _get_constraints
 from .models import MeetingScheduleModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "GRAIN_LENGTH_IN_MINUTES",
@@ -112,6 +115,10 @@ def solve(
 
         from optimaru.meeting_scheduling.constraints import get_constraints
         ms.solve(schedule, constraints=get_constraints())
+
+    A model that sets a parameter whose costs the constraints leave out is refused with
+    ValueError (`models.parameter_uses`): the solve would ignore it. A compiled schedule is
+    not checked.
     """
     cfg = solver_config(
         SolverConfig,
@@ -128,6 +135,12 @@ def solve(
         return schedule
     if isinstance(schedule, MeetingScheduleModel):
         core = schedule.to_core()
+        constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
+        require_costs(
+            _parameter_uses(schedule),
+            _get_constraints(constraints),
+            check_picks=lambda: constraint_costs(core, constraints),
+        )
         solve_in_place(Solver(cfg), core, constraints)
         return MeetingScheduleModel.from_core(core)
     raise TypeError(f"schedule must be a MeetingSchedule or a MeetingScheduleModel: {type(schedule)!r}")

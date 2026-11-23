@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
+from .._constraint import ParameterUse
 from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
@@ -17,6 +18,7 @@ __all__ = [
     "SetupTimeModel",
     "TimeWindowModel",
     "TransportTimeModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -468,6 +470,32 @@ def with_initial_solution(problem, solution):
     seeded.score_hard = seeded.score_soft = None
     seeded.warm_start = True
     return seeded
+
+
+def parameter_uses(problem: SemiconductorScheduleModel) -> list[ParameterUse]:
+    """The parameters `problem` sets away from their defaults that act only through a cost.
+
+    `semiconductor_scheduling.solve` refuses a selection that holds none of a parameter's
+    costs (`optimaru._constraint.require_costs`); the table is in docs/use-cases/README.md
+    ("Parameters and their costs"). What the decoder builds into every schedule (release
+    times, downtime, capacities, batch families, setups, transport, minimum queue times,
+    pins) is not here: it holds whatever the constraints are."""
+    uses = []
+    for machine in problem.machines:
+        if machine.minimum_batch_size != 1:
+            uses.append(ParameterUse(f"machine {machine.id}", "minimum_batch_size", 1, ("min_batch_size_cost",)))
+    for lot in problem.lots:
+        if lot.max_cycle_time is not None:
+            uses.append(ParameterUse(f"lot {lot.id}", "max_cycle_time", None, ("max_cycle_time_cost",)))
+        if lot.priority != 1:
+            uses.append(ParameterUse(f"lot {lot.id}", "priority", 1, ("weighted_tardiness_cost",)))
+        for operation in lot.operations:
+            where = f"operation {lot.id}/{operation.id}"
+            if operation.max_queue_time is not None:
+                uses.append(ParameterUse(where, "max_queue_time", None, ("max_queue_time_cost",)))
+            if any(option.preference_cost for option in operation.eligible_machines):
+                uses.append(ParameterUse(where, "preference_cost", 0, ("machine_preference_cost",)))
+    return uses
 
 
 class SemiconductorScheduleRequest(SolveRequest):

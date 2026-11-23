@@ -214,7 +214,15 @@ def test_default_solve_equals_explicit_default_constraints():
 def test_picks_score_the_result_and_the_totals_stay_complete():
     given = _problem(8)
     before = given.model_dump()
-    picks = [specs.machine_eligibility_cost, WeightedTardinessCost(weight=3)]
+    # The instance sets cycle-time limits, queue-time limits and machine preferences: their
+    # costs are picked at weight 0, which scores nothing (a selection without them is refused).
+    picks = [
+        specs.machine_eligibility_cost,
+        WeightedTardinessCost(weight=3),
+        specs.MaxCycleTimeCost(weight=0),
+        MaxQueueTimeCost(weight=0),
+        specs.MachinePreferenceCost(weight=0),
+    ]
     problem = fab.solve(given, time_limit_seconds=5, random_seed=1, config=_steps(200), constraints=picks)
     assert isinstance(problem, SemiconductorScheduleModel) and problem is not given
     assert given.model_dump() == before  # a model is not solved in place
@@ -433,6 +441,7 @@ def test_score_equals_the_engine_with_repeats_and_offsets():
             specs.MakespanCost(weight=0.25, exponent=2, offset=10),
             WeightedTardinessCost(offset=-3),
             specs.CycleTimeCost(weight=0.5, offset=20, clip=False),
+            specs.MachinePreferenceCost(weight=0),  # the instance sets machine preferences
         ],
         [
             *get_constraints(),

@@ -33,7 +33,9 @@ SMALL_PROBLEMS = {
     "food_packaging": _call("optimaru.food_packaging", "generate_demo_data", line_count=2, job_count=8),
     "knapsack": _call(".knapsack.test_solve", "demo"),
     "maintenance_scheduling": _call("optimaru.maintenance_scheduling", "generate_demo_data", "SMALL", 18659),
-    "max_cut": _call(".max_cut.test_solve", "demo"),
+    # Compiled: the model sets parameters whose costs a single-pick selection leaves out, which a
+    # model solve refuses before the engine reads the pick (models.parameter_uses).
+    "max_cut": _core(_call(".max_cut.test_solve", "demo")),
     "meeting_scheduling": _call("optimaru.meeting_scheduling", "generate_demo_data"),
     "order_picking": _call("optimaru.order_picking", "generate_demo_data"),
     "pickup_delivery": _call(

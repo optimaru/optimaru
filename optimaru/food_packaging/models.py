@@ -19,6 +19,7 @@ from itertools import pairwise
 
 from pydantic import Field
 
+from .._constraint import ParameterUse
 from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
@@ -31,6 +32,7 @@ __all__ = [
     "ProductModel",
     "datetime_to_minute",
     "minute_to_datetime",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -327,3 +329,15 @@ def solve_request(request: PackagingScheduleRequest, *, constraints=None) -> Pac
     from . import SolverConfig, solve
 
     return solve_model_request(solve, SolverConfig, request, constraints=constraints)
+
+
+def parameter_uses(schedule: PackagingScheduleModel) -> list[ParameterUse]:
+    """The parameters `schedule` sets away from their defaults that act only through a cost.
+
+    None in this use case: a job's time window and ideal end are required fields, and a
+    line's operator is a decision. (`JobModel.min_start_time` and `priority` are read by no
+    constraint at all.) `fp.solve` still runs the check, so the rule reads the same in every
+    use case; the table is in the use-case guide ("Parameters and their costs",
+    docs/use-cases/README.md)."""
+    del schedule
+    return []

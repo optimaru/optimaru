@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Breaking: a parameter needs its cost.** A request that sets a field which acts only through a
+  cost (a vehicle's `max_end_time`, a visit's time window, a worker's `unavailable_dates`, a
+  knapsack's `mandatory_items`, ...) while its constraints leave every such cost out is refused
+  with `ValueError`, naming the field, where it is set and the costs to add; before, the solve
+  ignored the field without a word. The effective selection counts (the defaults when
+  `constraints` is None, a pick at weight 0 included). It is checked where the input is the JSON
+  model (`solve_request`, `solve(model)`); compiled problems are solved as given. Default
+  selections are unaffected, except employee scheduling's `desired_shifts`, whose
+  `desired_shift_cost` is opt-in: a request that sets it now has to pick that cost. Each use case's
+  `models.parameter_uses(model)` lists what an input sets, and docs/use-cases/README.md
+  ("Parameters and their costs") has the table for all 22 use cases.
 - **Routing: forbidden and preferred jobs per travel profile.** A vehicle routing
   `TravelProfile` lists the visits its vehicles may not serve (`forbidden_visits`) and those they
   are preferred for (`preferred_visits`); a pickup-delivery one does the same by request id

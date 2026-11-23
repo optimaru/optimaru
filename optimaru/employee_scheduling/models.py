@@ -65,7 +65,7 @@ from pydantic import (
 )
 
 from .. import _api
-from .._constraint import _check_literal_offset
+from .._constraint import ParameterUse, _check_literal_offset, require_costs
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
 from . import constraints as _specs
@@ -89,6 +89,7 @@ __all__ = [
     "constraint_model",
     "default_constraints",
     "default_rules",
+    "parameter_uses",
     "rule_model",
     "solve_request",
     "to_schedule",
@@ -906,6 +907,34 @@ def _solve_in_processes(jobs: list, max_workers: int) -> list[ScheduleSolution] 
             return None
 
 
+# The worker parameters that act only through a cost: (field, the cost that reads it).
+_WORKER_COSTS = (
+    ("unavailable_dates", "employee_unavailability_cost"),
+    ("undesired_dates", "undesired_day_cost"),
+    ("desired_dates", "desired_day_cost"),
+    ("desired_shifts", "desired_shift_cost"),
+)
+
+
+def parameter_uses(model_input: SchedulingInput) -> list[ParameterUse]:
+    """The parameters `model_input` sets away from their defaults that act only through a cost.
+
+    `solve_request` refuses a request whose constraints (``model_input.constraints``, or the
+    ``constraints`` it is given) hold none of a parameter's costs
+    (`optimaru._constraint.require_costs`). `desired_shift_cost` is off by default, so a
+    worker's `desired_shifts` needs it picked. The table is in the use-case guide
+    ("Parameters and their costs", docs/use-cases/README.md)."""
+    uses = []
+    for worker in model_input.workers:
+        for field, cost in _WORKER_COSTS:
+            if getattr(worker, field):
+                uses.append(ParameterUse(f"worker {worker.id}", field, [], (cost,)))
+    for shift in model_input.shifts:
+        if shift.required_skill:
+            uses.append(ParameterUse(f"shift {shift.id}", "required_skill", "", ("required_skill_cost",)))
+    return uses
+
+
 def _with_constraints(request: ScheduleRequest, constraints) -> ScheduleRequest:
     """`request` with ``constraints`` as its ``model_input.constraints``. The request given is not changed."""
     if isinstance(constraints, _core.DecomposedCalculator):
@@ -963,9 +992,14 @@ def solve_request(
     ``select`` lets the caller pick the best-of-n candidate itself (given the
     full list of solutions) instead of the built-in faithful-score key -- e.g.
     to rank candidates on an external objective the internal score only
-    approximates. Ignored for a single start."""
+    approximates. Ignored for a single start.
+
+    A request that sets a parameter whose costs its constraints leave out is refused with
+    ValueError (`parameter_uses`): the solve would ignore it. ``es.solve`` on a compiled
+    schedule is not checked."""
     if constraints is not None:
         request = _with_constraints(request, constraints)
+    require_costs(parameter_uses(request.model_input), request.model_input.constraints)
     n = max(request.parallel_solver_count, request.settings.multi_start)
     if n <= 1:
         return _build_and_solve(request, request._effective("random_seed"))

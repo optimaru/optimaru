@@ -20,6 +20,7 @@ import random
 
 from pydantic import Field, model_validator
 
+from .._constraint import ParameterUse
 from .._models import (
     SolveRequest,
     StrictModel,
@@ -39,6 +40,7 @@ __all__ = [
     "TournamentScheduleRequest",
     "UnavailabilityPenaltyModel",
     "generate_demo_data",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -218,6 +220,17 @@ def with_initial_solution(problem, solution):
                 f"team assignment {assignment.id!r}: team {value!r} is out of range {valid_positions(value_count)}"
             )
     return seeded
+
+
+def parameter_uses(schedule: TournamentScheduleModel) -> list[ParameterUse]:
+    """The parameters `schedule` sets away from their defaults that act only through a cost.
+
+    `tournament_scheduling.solve` refuses a selection that holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is in docs/use-cases/README.md
+    ("Parameters and their costs")."""
+    if not schedule.unavailability_penalties:
+        return []
+    return [ParameterUse("the schedule", "unavailability_penalties", [], ("team_unavailability_cost",))]
 
 
 class TournamentScheduleRequest(SolveRequest):

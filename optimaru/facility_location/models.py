@@ -13,6 +13,7 @@ to store or transfer the engine shape as-is (debug dumps, regression snapshots,
 
 from pydantic import Field, model_validator
 
+from .._constraint import ParameterUse
 from .._models import SolveRequest, StrictModel, entities_by_id, require_same_order, solution_dict, solve_model_request
 from . import _core
 
@@ -22,6 +23,7 @@ __all__ = [
     "FacilityLocationRequest",
     "FacilityModel",
     "LocationModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -128,6 +130,15 @@ class FacilityLocationProblemModel(StrictModel):
             score_hard=problem.score.hard,
             score_soft=problem.score.soft,
         )
+
+
+def parameter_uses(problem: FacilityLocationProblemModel) -> list[ParameterUse]:
+    """The parameters `problem` sets away from their defaults that act only through a cost: none.
+
+    Every field a cost reads (setup costs, capacities, demands, locations) is required, and the
+    two corners are read by nothing; the table is "Parameters and their costs" in
+    docs/use-cases/README.md. Kept so every use case answers the same question."""
+    return []
 
 
 def with_initial_solution(problem, solution):

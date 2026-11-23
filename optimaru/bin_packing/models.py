@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
+from .._constraint import ParameterUse
 from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
@@ -26,6 +27,7 @@ __all__ = [
     "BinPackingRequest",
     "ConflictModel",
     "ItemModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -104,6 +106,20 @@ class BinPackingProblemModel(StrictModel):
             bin_loads=problem.bin_loads(),
             warm_start=problem.warm_start,
         )
+
+
+def parameter_uses(problem: BinPackingProblemModel) -> list[ParameterUse]:
+    """The parameters `problem` sets away from their defaults that act only through a cost.
+
+    `solve` refuses a model whose selection holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
+    docs/use-cases/README.md. `bin_capacity` and the weights are required, so never "set"."""
+    uses = [
+        ParameterUse(f"item {item.id}", "color", None, ("color_conflict_cost",)) for item in problem.items if item.color
+    ]
+    if problem.conflicts:
+        uses.append(ParameterUse("the problem", "conflicts", [], ("item_conflict_cost",)))
+    return uses
 
 
 def with_initial_solution(problem, solution):

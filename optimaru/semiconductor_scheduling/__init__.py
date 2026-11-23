@@ -33,6 +33,7 @@ from __future__ import annotations
 from typing import TypeVar
 
 from .. import _api
+from .._constraint import require_costs
 from .._solve import solve_in_place, solver_config
 from . import _core
 from ._core import (
@@ -54,7 +55,14 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
-from .models import AssignmentModel, SemiconductorScheduleModel, solve_request, with_initial_solution
+from .constraints import get_constraints
+from .models import (
+    AssignmentModel,
+    SemiconductorScheduleModel,
+    parameter_uses,
+    solve_request,
+    with_initial_solution,
+)
 
 __all__ = [
     "AcceptorType",
@@ -160,6 +168,9 @@ def solve(
     ``constraints`` picks the cost function (see `optimaru.semiconductor_scheduling.constraints`):
     only the listed constraints are scored, a name picked several times once per pick, by a
     single start; None scores all 20 defaults.
+
+    On the model, a parameter set away from its default whose costs the constraints leave out
+    is refused with ValueError (`models.parameter_uses`); an engine object is solved as given.
     """
     cfg = solver_config(
         SolverConfig,
@@ -172,6 +183,13 @@ def solve(
         on_new_best=on_new_best,
     )
     core, model = _core_of(problem)
+    if model is not None:
+        constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
+        require_costs(
+            parameter_uses(model),
+            get_constraints(constraints),
+            check_picks=lambda: _core.constraint_costs(core, constraints),
+        )
     solve_in_place(Solver(cfg), core, constraints)
     if model is None:
         return problem

@@ -368,6 +368,110 @@ component). Python reads them from `<package>.constraint_info()`, one
 - `constraints.score(costs, picks)` re-prices them in pure Python with the
   engine's arithmetic.
 
+### Parameters and their costs
+
+Many input fields act only through a cost: a vehicle's `max_end_time` matters only
+because `vehicle_max_end_time_cost` charges the seconds past it, and a worker's
+`unavailable_dates` only because `employee_unavailability_cost` charges a shift on one
+of them. A selection that leaves such a cost out would solve as if the field were not
+there. So a request that sets one of these fields away from its default, while the
+effective selection holds none of the costs that read it, is refused with
+`ValueError`. The message names the field, where it is set, and the costs to add:
+
+```text
+vehicle V1 sets max_end_time, but the constraints leave out vehicle_max_end_time_cost,
+the cost that scores it: add it, or leave max_end_time at its default (0)
+```
+
+- **The effective selection** is the one the solve scores: the defaults when
+  `constraints` is None, the picks otherwise (employee scheduling: the request's
+  `constraints`; school timetabling: the `constraints=` picks, while the fast path with
+  `weights=` scores every cost). A pick at weight 0 counts: it is a choice the caller
+  made, not an omission. Where several costs read one field, any one of them is enough.
+- **Checked where the input is the JSON model**: `solve_request`, and `solve()` given the
+  pydantic model (or school timetabling's problem dict). A compiled problem is solved as
+  it is given. A pick that the engine refuses (an unknown name, a bad knob) is reported
+  for what it is before the parameter check.
+- **Not checked**: required fields (they have no unset state); fields that shape times,
+  places or quantities every cost reads (durations, dates, locations, service times,
+  start times); rules the engine enforces whatever the selection (school timetabling's
+  fixed slots and parallel groups, max cut's fixed partition, semiconductor scheduling's
+  decoder rules, routing's forbidden visits and requests, which are always on); fields
+  with an effect besides their cost (routing profile `distances`, which the solution
+  reports as driving meters; school timetabling's `required_room_type`, which the room
+  assignment reads); and a field left at a default that already means something
+  (pickup-delivery `max_stops=20`, school timetabling's `max_periods_per_day=6`): only a
+  value other than the default is checked.
+
+The fields each use case checks (`models.parameter_uses(model)` lists the ones an input sets):
+
+| Use case | Field (default) | Cost(s) |
+| --- | --- | --- |
+| assembly line balancing | `precedences` ([]) | `task_precedence_cost` |
+| | `max_stations` (None) | `max_stations_cost` |
+| | `same_station_groups` ([]) | `same_station_groups_cost` |
+| | `different_station_pairs` ([]) | `different_station_pairs_cost` |
+| | task `min_station` (0), `max_station` (None) | `task_station_bounds_cost` |
+| | task `fixed_station` (None) | `fixed_task_stations_cost` |
+| | task `forbidden_stations` ([]) | `forbidden_task_stations_cost` |
+| bed allocation | department `minimum_age`, `maximum_age` (None) | `department_min_age_cost`, `department_max_age_cost` |
+| | department `specialty_to_priority` ({}), stay `specialty` ("") | `department_specialty_cost` or `department_specialty_priority_cost` |
+| | room `gender_limitation` (ANY_GENDER) | the gender cost of the value set |
+| | room `equipment` ([]) | `required_patient_equipment_cost` or `preferred_patient_equipment_cost` |
+| | stay `patient_required_equipment`, `patient_preferred_equipment` ([]) | `required_patient_equipment_cost`, `preferred_patient_equipment_cost` |
+| | stay `patient_preferred_maximum_room_capacity` (None) | `preferred_max_room_capacity_cost` |
+| bin packing | item `color` (None) | `color_conflict_cost` |
+| | `conflicts` ([]) | `item_conflict_cost` |
+| conference scheduling | talk `speakers`, tags, `audience_*`, `content_tags`, `language` ("en"), `favorite_count`, `crowd_control_risk`, `prerequisite_talks`, `mutually_exclusive_talks_tags`; speaker and room `unavailable_timeslots` and tag lists; room `capacity`, `talk_types`; timeslot tags; `minimum_consecutive_talks_pause_in_minutes` (30) | the costs that read each field, listed in `_TALK_COSTS`, `_SPEAKER_COSTS`, `_ROOM_COSTS` and `_TIMESLOT_COSTS` of `conference_scheduling/models.py` |
+| employee scheduling | shift `required_skill` ("") | `required_skill_cost` |
+| | worker `unavailable_dates`, `undesired_dates`, `desired_dates` ([]) | `employee_unavailability_cost`, `undesired_day_cost`, `desired_day_cost` |
+| | worker `desired_shifts` ([]) | `desired_shift_cost` (opt-in: not in the defaults) |
+| flight crew scheduling | assignment `required_skill` ("") | `required_skill_cost` |
+| | employee `unavailable_days` ([]) | `employee_unavailability_cost` |
+| knapsack | `resource_capacities`, item `resource_usage` ({}) | `resource_capacity_cost` |
+| | `mandatory_items`, `forbidden_items` ([]) | `mandatory_items_cost`, `forbidden_items_cost` |
+| | item `requires` ([]) | `item_dependency_cost` |
+| | selection group `min_selected` (0), `max_selected` (None) | `selection_group_bounds_cost` |
+| maintenance scheduling | job `min_start_date`, `max_end_date` (None) | `min_start_date_cost`, `max_end_date_cost` |
+| | job `ideal_end_date` (None) | `before_ideal_end_date_cost` or `after_ideal_end_date_cost` |
+| | job `tags` ([]) | `tag_conflict_cost` |
+| max cut | `same_partition_pairs`, `different_partition_pairs` ([]) | their costs |
+| | `min_partition_size`, `max_partition_size` (None) | `partition_size_bounds_cost` |
+| meeting scheduling | room `capacity` (0) | `room_capacity_cost` or `larger_room_capacity_cost` |
+| | meeting `required_attendees`, `preferred_attendees` ([]) | any of the attendance costs, `room_capacity_cost`, `room_change_cost` |
+| pickup-delivery | vehicle `max_travel_time`, `max_route_duration`, `max_end_time` (0), `max_stops` (20), `min_load_ratio`, `fixed_cost`, `max_route_radius_meters` (0), `pinned_stops` (0) | the matching vehicle cost, `pinned_stops_cost` |
+| | request `order_time` (0), `required_vehicle`, `group` (None) | `squared_order_age_cost`, `required_vehicle_cost`, `request_group_cost` |
+| | stop `max_end_time` (86400) | `max_end_time_cost` |
+| | profile `preferred_requests` ([]) | `profile_preferred_request_cost` |
+| project job scheduling | project `release_date`, `critical_path_duration` (0) | `project_delay_cost` |
+| | resource `renewable` (True) set to False | `non_renewable_resource_capacity_cost` |
+| quadratic assignment | `assignment_costs` (None) | `assignment_cost` |
+| | `fixed_assignments` ({}), `forbidden_assignments` ([]) | `pinned_assignments_cost`, `forbidden_assignments_cost` |
+| | `facility_demands`, `location_capacities` ({}) | `location_capacity_cost` |
+| school timetabling | teacher and class `unavailable`, course `forbidden_slots` ([]) | `disallowed_slot_cost` |
+| | teacher `max_periods_per_week` (None), `max_periods_per_day` (6) | `teacher_max_periods_cost` |
+| | teacher `max_consecutive_periods` (4), `preferred_free_days` ([]) | `teacher_max_consecutive_periods_cost`, `teacher_free_day_cost` |
+| | subject `avoided_periods`, `preferred_periods` ([]) | `avoided_period_cost`, `non_preferred_period_cost` |
+| | course `max_periods_per_day` (1), `block_periods` (0 or 1) | `course_max_periods_per_day_cost`, `block_adjacency_cost` |
+| semiconductor scheduling | machine `minimum_batch_size` (1) | `min_batch_size_cost` |
+| | lot `max_cycle_time` (None), `priority` (1) | `max_cycle_time_cost`, `weighted_tardiness_cost` |
+| | operation `max_queue_time` (None), option `preference_cost` (0) | `max_queue_time_cost`, `machine_preference_cost` |
+| sports league scheduling | match `classic_match`, round `weekend_or_holiday` (False) | `workday_classic_matches_cost` |
+| | `distance_to_team` ([]) | any of the five hop costs |
+| task assigning | task type `required_skills` ([]) | `required_skill_cost` |
+| | task `priority` MAJOR or CRITICAL (MINOR) | `major_` / `critical_priority_task_end_time_cost` |
+| tournament scheduling | `unavailability_penalties` ([]) | `team_unavailability_cost` |
+| vehicle routing | vehicle `max_travel_time`, `max_route_duration`, `max_end_time`, `max_stops` (0), `min_load_ratio`, `fixed_cost`, `max_route_radius_meters` (0) | the matching vehicle cost |
+| | visit `max_end_time` (86400), `demand` (1), `unassigned_penalty_minutes` (-1) | `max_end_time_cost`, `vehicle_capacity_cost` or `min_capacity_utilization_cost`, `unassigned_visits_cost` |
+| | visit `group` (None), `after` ([]) | `visit_group_cost`, `visit_order_cost` |
+| | profile `preferred_visits` ([]) | `profile_preferred_visit_cost` |
+
+Facility location, food packaging and order picking check nothing: every field a cost
+reads there is required. Some fields are read by nothing at all, so no selection can
+give them an effect: food packaging's job `min_start_time` and `priority`, meeting
+scheduling's `entire_group_meeting`, school timetabling's `subject_ids`,
+`homeroom_class_id` and `grade`, and facility location's map corners.
+
 ## Layout of a use case
 
 ```

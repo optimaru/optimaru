@@ -32,6 +32,7 @@ Usage::
 from typing import TypeVar
 
 from .. import _api
+from .._constraint import require_costs
 from .._solve import solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
@@ -48,7 +49,9 @@ from ._core import (
     list_constraints,
     plus_business_days,
 )
+from .constraints import get_constraints as _get_constraints
 from .models import MaintenanceScheduleModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "ConstraintInfo",
@@ -108,6 +111,10 @@ def solve(
 
         from optimaru.maintenance_scheduling.constraints import get_constraints
         mnt.solve(schedule, constraints=get_constraints())
+
+    A model that sets a parameter whose costs the constraints leave out is refused with
+    ValueError (`models.parameter_uses`): the solve would ignore it. A compiled schedule is
+    not checked.
     """
     cfg = solver_config(
         SolverConfig,
@@ -124,6 +131,12 @@ def solve(
         return schedule
     if isinstance(schedule, MaintenanceScheduleModel):
         core = schedule.to_core()
+        constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
+        require_costs(
+            _parameter_uses(schedule),
+            _get_constraints(constraints),
+            check_picks=lambda: constraint_costs(core, constraints),
+        )
         solve_in_place(Solver(cfg), core, constraints)
         return MaintenanceScheduleModel.from_core(core)
     raise TypeError(f"schedule must be a MaintenanceSchedule or a models.MaintenanceScheduleModel: {type(schedule)!r}")

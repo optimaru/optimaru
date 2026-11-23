@@ -31,8 +31,10 @@ from typing import Any, Literal, cast
 from pydantic import Field, model_validator
 
 from .. import _api
+from .._constraint import ParameterUse, require_costs
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from . import _core
+from .constraints import get_constraints
 
 __all__ = [
     "LocationModel",
@@ -42,6 +44,7 @@ __all__ = [
     "PickStop",
     "ProductModel",
     "TrolleyModel",
+    "parameter_uses",
     "solve_request",
     "to_solution",
     "with_initial_solution",
@@ -174,10 +177,24 @@ def to_solution(request: OrderPickingRequest) -> "_core.OrderPickingSolution":
     return _core.OrderPickingSolution(orders, trolleys, pick_tasks)
 
 
+def parameter_uses(request: OrderPickingRequest) -> list[ParameterUse]:
+    """The parameters `request` sets away from their defaults that act only through a cost.
+
+    None here: every field that a cost reads is required (bucket count and capacity,
+    volumes, locations), so none has a default to leave it off, and `initial_route` is a
+    starting point. Kept so `solve_request` checks this use case as it checks the others;
+    the table is "Parameters and their costs" in docs/use-cases/README.md."""
+    return []
+
+
 @_api.request_solve("order-picking", "OrderPickingResponse")
 def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPickingResponse:
     """Solve the request and shape the response (routes per trolley plus the
-    per-trolley travel distance)."""
+    per-trolley travel distance).
+
+    A parameter set away from its default whose costs the constraints leave out would be
+    refused with ValueError (`parameter_uses`, empty for this use case)."""
+    require_costs(parameter_uses(request), get_constraints(constraints))
     solution = to_solution(request)
     config = _core.SolverConfig()
     config.spent_limit_seconds = request.time_limit_seconds

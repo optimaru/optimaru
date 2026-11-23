@@ -34,6 +34,7 @@ from typing import Any
 from pydantic import Field, model_validator
 
 from .. import _api, _routing
+from .._constraint import ParameterUse, is_set, require_costs
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
 from .._routing import (
     DEFAULT_PROFILE,
@@ -59,6 +60,7 @@ __all__ = [
     "VehicleModel",
     "VisitModel",
     "VisitStop",
+    "parameter_uses",
     "solve_request",
     "to_plan",
     "vehicle_metrics",
@@ -375,10 +377,60 @@ def vehicle_metrics(plan: "_core.VehicleRoutePlan", routes: dict[str, list[Visit
     return metrics
 
 
+# The parameters that act only through a cost: (model field, default, the costs that read it).
+_VEHICLE_COSTS = (
+    ("max_travel_time", 0, ("max_travel_time_cost",)),
+    ("max_route_duration", 0, ("max_route_duration_cost",)),
+    ("max_end_time", 0, ("vehicle_max_end_time_cost",)),
+    ("max_stops", 0, ("max_stops_cost",)),
+    ("min_load_ratio", 0.0, ("min_capacity_utilization_cost",)),
+    ("fixed_cost", 0.0, ("vehicle_fixed_cost",)),
+    ("max_route_radius_meters", 0.0, ("max_route_radius_cost",)),
+)
+_VISIT_COSTS = (
+    ("max_end_time", 24 * 3600, ("max_end_time_cost",)),
+    ("demand", 1, ("vehicle_capacity_cost", "min_capacity_utilization_cost")),
+    ("unassigned_penalty_minutes", -1, ("unassigned_visits_cost",)),
+    ("group", None, ("visit_group_cost",)),
+    ("after", [], ("visit_order_cost",)),
+)
+
+
+def parameter_uses(model_input: RoutingInput) -> list[ParameterUse]:
+    """The parameters `model_input` sets away from their defaults that act only through a cost.
+
+    `solve_request` refuses a selection that holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`). The table is in the use-case guide
+    ("Parameters and their costs"). Forbidden visits are not here (their cost is always on), nor profile distances
+    (the solution reports driving meters from them, whatever the constraints)."""
+    uses = []
+    for vehicle in model_input.vehicles:
+        for field, default, costs in _VEHICLE_COSTS:
+            if is_set(getattr(vehicle, field), default):
+                uses.append(ParameterUse(f"vehicle {vehicle.id}", field, default, costs))
+    for visit in model_input.visits:
+        for field, default, costs in _VISIT_COSTS:
+            if is_set(getattr(visit, field), default):
+                uses.append(ParameterUse(f"visit {visit.id}", field, default, costs))
+    for name, profile in model_input.profiles.items():
+        if profile.preferred_visits:
+            uses.append(ParameterUse(f"profile {name!r}", "preferred_visits", [], ("profile_preferred_visit_cost",)))
+    return uses
+
+
 @_api.request_solve("vehicle-routing", "RouteSolution")
 def solve_request(request: RoutePlanRequest, *, constraints=None) -> RouteSolution:
-    """Solve a routing request end-to-end and return the pydantic solution."""
+    """Solve a routing request end-to-end and return the pydantic solution.
+
+    A parameter set away from its default whose costs the constraints leave out is refused
+    with ValueError (`parameter_uses`): the solve would ignore it."""
     plan = to_plan(request.model_input)
+    constraints = None if constraints is None else list(constraints)  # read twice: the check, then the solve
+    require_costs(
+        parameter_uses(request.model_input),
+        get_constraints(constraints),
+        check_picks=lambda: _core.constraint_costs(plan, constraints),
+    )
 
     cfg = _core.SolverConfig()
     cfg.spent_limit_seconds = request.time_limit_seconds

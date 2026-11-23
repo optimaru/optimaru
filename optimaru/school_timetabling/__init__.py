@@ -42,6 +42,7 @@ serialization) live in `optimaru.school_timetabling.models` too.
 import time
 
 from .. import _api
+from .._constraint import require_costs
 from .._solve import FIRST_FEASIBLE_LIMIT, solver_config
 from . import quickstart
 from ._core import (
@@ -93,7 +94,7 @@ from .convert import (
     convert_solution,
     inject_solution,
 )
-from .models import solve_request
+from .models import parameter_uses, solve_request
 
 #: The raw per-constraint costs of a `canon.Timetable` (the canonical domain):
 #: ``{name: {costs, weight, exponent, hard, global, level, reward,
@@ -310,6 +311,8 @@ def _api_request(problem: dict, keywords: dict):
                 parameters[name] = _api._plain(value, f"config.{name}")
     # What a local solve refuses before it starts, refused before anything is sent.
     _check_selection_weights(constraints, weights)
+    if canonical and constraints is not None:
+        require_costs(parameter_uses(problem), _picks_of(constraints))
     initial = keywords["initial_solution"]
     _check_initial(initial)
     request = TimetableRequest(
@@ -413,6 +416,10 @@ def solve(
     ``full_assert`` re-verifies every incremental score against a full recompute
     (a debugging aid; much slower).
 
+    With ``constraints``, a parameter set away from its default whose costs the selection
+    leaves out is refused with ValueError (`models.parameter_uses`): the solve would ignore
+    it. The default fast path scores every cost, ``weights`` of 0 included.
+
     The returned dict follows API_SPEC.md's response shape (status/lessons/
     objective_value/best_objective_bound/wall_time_seconds/penalties/notes).
     In canonical mode penalties are the raw soft counts keyed by the soft
@@ -454,6 +461,8 @@ def solve(
             # Plugin path: search with the assembled calculator; the rescoring
             # weights (convert_solution's objective_value) mirror the selection.
             calculator, report_weights, unassigned_weight = _assemble_plugin(constraints)
+            # After the picks' own checks (_assemble_plugin), so a bad pick is refused for what it is.
+            require_costs(parameter_uses(problem), _picks_of(constraints))
             start = time.perf_counter()
             canon.Solver(cfg).solve(converted.table, calculator)
             wall = time.perf_counter() - start

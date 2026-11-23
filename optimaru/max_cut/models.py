@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
+from .._constraint import ParameterUse, is_set
 from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
@@ -24,6 +25,7 @@ __all__ = [
     "MaxCutProblemModel",
     "MaxCutRequest",
     "VertexPairModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -184,6 +186,29 @@ def with_initial_solution(problem, solution):
     seeded.cut_weight = seeded.score_hard = seeded.score_soft = None
     seeded.warm_start = True
     return seeded
+
+
+# The parameters that act only through a cost: (problem field, default, the costs that read it).
+# fixed_partition is not here: its vertices are pinned, so it holds whatever the selection.
+_PROBLEM_COSTS = (
+    ("same_partition_pairs", [], ("same_partition_pairs_cost",)),
+    ("different_partition_pairs", [], ("different_partition_pairs_cost",)),
+    ("min_partition_size", None, ("partition_size_bounds_cost",)),
+    ("max_partition_size", None, ("partition_size_bounds_cost",)),
+)
+
+
+def parameter_uses(model: MaxCutProblemModel) -> list[ParameterUse]:
+    """The parameters `model` sets away from their defaults that act only through a cost.
+
+    `solve` refuses a selection that holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
+    docs/use-cases/README.md."""
+    return [
+        ParameterUse("the problem", field, default, costs)
+        for field, default, costs in _PROBLEM_COSTS
+        if is_set(getattr(model, field), default)
+    ]
 
 
 class MaxCutRequest(SolveRequest):

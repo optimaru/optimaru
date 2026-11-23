@@ -13,6 +13,7 @@ store or transfer the engine shape as-is (debug dumps, regression snapshots,
 
 from pydantic import Field, model_validator
 
+from .._constraint import ParameterUse, is_set
 from .._models import (
     SolveConfigBase,
     SolveRequest,
@@ -31,6 +32,7 @@ __all__ = [
     "RoundModel",
     "SolveConfig",
     "TeamModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -163,6 +165,35 @@ def with_initial_solution(problem, solution):
             raise ValueError(f"match {match.id!r}: round {value!r} is out of range -1..{value_count - 1}")
         match.round = value
     return seeded
+
+
+_HOP_COSTS = (
+    "start_to_away_hop_cost",
+    "away_to_end_hop_cost",
+    "home_to_away_hop_cost",
+    "away_to_away_hop_cost",
+    "away_to_home_hop_cost",
+)
+
+
+def parameter_uses(schedule: LeagueScheduleModel) -> list[ParameterUse]:
+    """The parameters `schedule` sets away from their defaults that act only through a cost.
+
+    `sports_league_scheduling.solve` refuses a selection that holds none of a parameter's
+    costs (`optimaru._constraint.require_costs`); the table is in docs/use-cases/README.md
+    ("Parameters and their costs")."""
+    uses = []
+    for match in schedule.matches:
+        if match.classic_match:
+            uses.append(ParameterUse(f"match {match.id}", "classic_match", False, ("workday_classic_matches_cost",)))
+    for round_ in schedule.rounds:
+        if round_.weekend_or_holiday:
+            uses.append(
+                ParameterUse(f"round {round_.index}", "weekend_or_holiday", False, ("workday_classic_matches_cost",))
+            )
+    if is_set(schedule.distance_to_team, []):
+        uses.append(ParameterUse("the schedule", "distance_to_team", [], _HOP_COSTS))
+    return uses
 
 
 class LeagueScheduleRequest(SolveRequest):

@@ -22,6 +22,7 @@ pinned, and when passed uninitialized the solver fixes them to (first mode, dela
 
 from pydantic import Field, model_validator
 
+from .._constraint import ParameterUse, is_set
 from .._models import SolveRequest, StrictModel, entities_by_id, solution_dict, solve_model_request
 from . import _core
 
@@ -35,6 +36,7 @@ __all__ = [
     "ProjectModel",
     "ResourceModel",
     "ResourceRequirementModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -371,6 +373,36 @@ def with_initial_solution(problem, solution):
                 f"allocation {allocation.id!r}: delay {delay!r} is out of range 0..{problem.delay_range_size - 1}"
             )
     return seeded
+
+
+# The parameters that act only through a cost: (field, default, the costs that read it).
+_PROJECT_COSTS = (
+    ("release_date", 0, ("project_delay_cost",)),
+    ("critical_path_duration", 0, ("project_delay_cost",)),
+)
+_RESOURCE_COSTS = (("renewable", True, ("non_renewable_resource_capacity_cost",)),)
+
+
+def parameter_uses(model: ProjectJobScheduleModel) -> list[ParameterUse]:
+    """The parameters `model` sets away from their defaults that act only through a cost.
+
+    `solve` refuses a selection that holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
+    docs/use-cases/README.md. A resource with ``renewable=False`` is read by
+    non_renewable_resource_capacity_cost alone."""
+    uses = [
+        ParameterUse(f"project {project.id}", field, default, costs)
+        for project in model.projects
+        for field, default, costs in _PROJECT_COSTS
+        if is_set(getattr(project, field), default)
+    ]
+    uses += [
+        ParameterUse(f"resource {resource.id}", field, default, costs)
+        for resource in model.resources
+        for field, default, costs in _RESOURCE_COSTS
+        if is_set(getattr(resource, field), default)
+    ]
+    return uses
 
 
 class ProjectJobScheduleRequest(SolveRequest):
