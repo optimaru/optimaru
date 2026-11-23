@@ -87,3 +87,10 @@ from optimaru.facility_location.models import FacilityLocationRequest
 request = FacilityLocationRequest.model_validate_json(text)  # or FacilityLocationRequest(model_input=model, time_limit_seconds=5.0)
 solved = solve_request(request)
 ```
+
+## Parameters and their costs
+
+A request is refused when it sets a field that acts only through a cost while its
+constraints leave that cost out ([Parameters and their costs](../README.md#parameters-and-their-costs)).
+This use case has no such field: every field a cost reads is required, so
+`models.parameter_uses(model)` is always empty.

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
+from .._constraint import ParameterUse, is_set
 from .._models import SolveRequest, StrictModel, solve_model_request
 from . import _core
 
@@ -24,6 +25,7 @@ __all__ = [
     "KnapsackProblemModel",
     "KnapsackRequest",
     "SelectionGroupModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -240,3 +242,34 @@ def solve_request(request: KnapsackRequest, *, constraints=None) -> KnapsackProb
     from . import SolverConfig, solve
 
     return solve_model_request(solve, SolverConfig, request, constraints=constraints)
+
+
+def parameter_uses(problem: KnapsackProblemModel) -> list[ParameterUse]:
+    """The parameters `problem` sets away from their defaults that act only through a cost.
+
+    `knapsack.solve` (and so `solve_request`) refuses a selection that holds none of a
+    parameter's costs (`optimaru._constraint.require_costs`). The table is in the use-case
+    guide ("Parameters and their costs", docs/use-cases/README.md)."""
+    uses = []
+    if problem.resource_capacities:
+        uses.append(ParameterUse("the problem", "resource_capacities", {}, ("resource_capacity_cost",)))
+    for field, cost in (("mandatory_items", "mandatory_items_cost"), ("forbidden_items", "forbidden_items_cost")):
+        if getattr(problem, field):
+            uses.append(ParameterUse("the problem", field, [], (cost,)))
+    for item in problem.items:
+        if is_set(item.resource_usage, {}):
+            uses.append(ParameterUse(f"item {item.id}", "resource_usage", {}, ("resource_capacity_cost",)))
+        if is_set(item.requires, []):
+            uses.append(ParameterUse(f"item {item.id}", "requires", [], ("item_dependency_cost",)))
+    for group in problem.selection_groups:
+        # A group with neither bound set asks nothing: 0 to all of its items.
+        if group.min_selected > 0 or group.max_selected is not None:
+            uses.append(
+                ParameterUse(
+                    f"selection group {group.id}",
+                    "min_selected / max_selected",
+                    "0 / None",
+                    ("selection_group_bounds_cost",),
+                )
+            )
+    return uses

@@ -134,3 +134,12 @@ Caveats:
 (the default seed) laid out sequentially along each room's timeline, with gender/age/equipment
 distributions drawn from a seeded `random.Random`. The C++ demo (`build/bed_allocation/ba_demo`, built as shown in
 ../README.md) reaches hard 0 / medium 0 (everyone assigned) within 10 s.
+
+## Parameters and their costs
+
+A request that sets a field which acts only through a cost, while its constraints leave
+every such cost out, is refused with `ValueError` naming the field and the costs to add;
+a pick at weight 0 counts. `models.parameter_uses(model)` lists the fields an input sets,
+and [Parameters and their costs](../README.md#parameters-and-their-costs) has the table.
+It is checked where the input is the JSON model (`solve_request`, `solve(model)`); a
+compiled problem is solved as given.

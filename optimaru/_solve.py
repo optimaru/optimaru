@@ -22,7 +22,7 @@ import copy
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-__all__ = ["FIRST_FEASIBLE_LIMIT", "solve_in_place", "solver_config"]
+__all__ = ["FIRST_FEASIBLE_LIMIT", "check_parameters", "solve_in_place", "solver_config"]
 
 _Config = TypeVar("_Config")
 
@@ -84,3 +84,28 @@ def solve_in_place(solver: Any, problem: Any, constraints: Any = None) -> None:
         solver.solve(problem)
     else:
         solver.solve_with_constraints(problem, constraints)
+
+
+def check_parameters(
+    uses: Any,
+    constraints: Any,
+    get_constraints: Callable[[Any], Any],
+    check_picks: Callable[[Any], Any] | None = None,
+) -> list | None:
+    """Refuse parameters the selection gives no effect; return ``constraints`` to hand on to the solve.
+
+    ``uses`` is the use case's ``models.parameter_uses(model)``, ``get_constraints`` its
+    ``constraints.get_constraints`` (the effective selection: the defaults when None), and
+    ``check_picks(picks)`` scores the picks once with its ``constraint_costs``, so a pick the
+    engine refuses is reported as itself first (`optimaru._constraint.require_costs`).
+    ``constraints`` is read once, into a list, which the caller passes on in its place: a
+    generator would be used up by the check."""
+    from ._constraint import require_costs
+
+    constraints = None if constraints is None else list(constraints)
+    require_costs(
+        uses,
+        get_constraints(constraints),
+        check_picks=None if check_picks is None else (lambda: check_picks(constraints)),
+    )
+    return constraints

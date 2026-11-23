@@ -22,7 +22,7 @@ objects (`TournamentSchedule`). The pydantic mirror (for serialization) is in
 from typing import TypeVar
 
 from .. import _api
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     MEDIUM_SCALE,
     ConstraintInfo,
@@ -40,7 +40,9 @@ from ._core import (
     list_constraints,
     unfairness,
 )
+from .constraints import get_constraints as _get_constraints
 from .models import TournamentScheduleModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "MEDIUM_SCALE",
@@ -100,6 +102,10 @@ def solve(
 
         from optimaru.tournament_scheduling.constraints import get_constraints
         ts.solve(schedule, constraints=get_constraints())
+
+    On the model, a parameter set away from its default whose costs the constraints leave out
+    is refused with ValueError (`models.parameter_uses`); a `TournamentSchedule` is solved as
+    given.
     """
     cfg = solver_config(
         SolverConfig,
@@ -116,6 +122,9 @@ def solve(
         return schedule
     if isinstance(schedule, TournamentScheduleModel):
         core = schedule.to_core()
+        constraints = check_parameters(
+            _parameter_uses(schedule), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
+        )
         solve_in_place(Solver(cfg), core, constraints)
         return TournamentScheduleModel.from_core(core)
     raise TypeError(f"schedule must be a TournamentSchedule or a TournamentScheduleModel: {type(schedule)!r}")

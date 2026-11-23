@@ -47,6 +47,15 @@ def _small_input(**kwargs):
     return SchedulingInput(workers=workers, shifts=shifts, **kwargs)
 
 
+def _plain_input(**kwargs):
+    """`_small_input` without the parameters that need a cost of their own (no undesired date,
+    no required skill), for selections that leave those costs out."""
+    model_input = _small_input()
+    workers = [worker.model_copy(update={"undesired_dates": []}) for worker in model_input.workers]
+    shifts = [shift.model_copy(update={"required_skill": ""}) for shift in model_input.shifts]
+    return SchedulingInput(workers=workers, shifts=shifts, **kwargs)
+
+
 def test_solve_request_end_to_end():
     request = ScheduleRequest(
         timelimit=0.3,
@@ -70,6 +79,7 @@ def test_json_round_trip():
                 RequiredSkillCost(weight=2),
                 MaxConsecutiveDaysCost(value=2, level="soft", weight=3),
                 AssignmentCost(cost_per_hour=10.0, shift_costs={"Worker 01": {"Shift 0": 5.0}}),
+                UndesiredDayCost(),  # Worker 02's undesired date needs it
             ]
         ),
     )
@@ -410,7 +420,7 @@ def test_spec_instances_and_json_dicts_are_both_rules():
 def test_a_rule_may_repeat_with_other_parameters():
     request = ScheduleRequest(
         timelimit=0.05,
-        model_input=_small_input(constraints=[DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="OFF,WORK")]),
+        model_input=_plain_input(constraints=[DayPatternCost(pattern="WORK,WORK"), DayPatternCost(pattern="OFF,WORK")]),
     )
     solution = solve_request(request)
     assert [(t.name, t.label, t.level) for t in solution.constraint_totals] == [
@@ -496,7 +506,7 @@ def test_no_generated_model_is_named_rule():
 
 def test_assigning_specs_to_rules_is_validated():
     """input.constraints = [specs] after construction goes through the validators (it skipped them)."""
-    model_input = _small_input()
+    model_input = _plain_input()
     model_input.constraints = [RequiredSkillCost(), MaxConsecutiveDaysCost(value=2)]
     assert [constraint.to_spec() for constraint in model_input.constraints] == [
         RequiredSkillCost(),
@@ -540,7 +550,7 @@ def test_an_empty_rule_list_is_refused():
 )
 def test_a_repeated_rule_is_one_instance_per_entry(constraints):
     """The same constraint may repeat with the same parameters: each entry is scored."""
-    model_input = _small_input(constraints=constraints)
+    model_input = _plain_input(constraints=constraints)
     assert len(model_input.constraints) == 2
     solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
     assert [total.name for total in solution.constraint_totals] == [constraints[0].name] * 2
@@ -552,7 +562,7 @@ def test_each_repeated_rule_keeps_its_own_level():
         MaxConsecutiveDaysCost(value=2),
         {"name": "max_consecutive_days_cost", "value": 2, "level": "soft", "weight": 3, "offset": 1},
     ]
-    model_input = _small_input(constraints=constraints)
+    model_input = _plain_input(constraints=constraints)
     assert [constraint.level for constraint in model_input.constraints] == [None, "soft"]
     solution = solve_request(ScheduleRequest(timelimit=0.05, model_input=model_input))
     assert [(total.name, total.level) for total in solution.constraint_totals] == [
@@ -678,7 +688,7 @@ def test_solve_request_refuses_a_literal_hard_rule_added_in_place(offset):
 def test_the_allowed_literal_and_threshold_rules_solve(constraint):
     request = ScheduleRequest(
         timelimit=0.05,
-        model_input=SchedulingInput.model_validate({**_small_input().model_dump(), "constraints": [constraint]}),
+        model_input=SchedulingInput.model_validate({**_plain_input().model_dump(), "constraints": [constraint]}),
     )
     solution = solve_request(request)
     (total,) = solution.constraint_totals
@@ -728,8 +738,12 @@ def test_solve_request_takes_constraints_in_place_of_the_request_s_own():
 
     request = generate_demo_data(workers=6, days=4).model_copy(update={"time_limit_seconds": 0.0})
     before = request.model_dump()
-    solved = solve_request(request, constraints=[RequiredSkillCost()])
-    assert [total.name for total in solved.constraint_totals] == ["required_skill_cost"]
+    # The costs the demo's parameters need join at weight 0 (models.parameter_uses).
+    defaults = {spec.name: type(spec) for spec in get_constraints()}
+    needed = sorted({use.costs[0] for use in models.parameter_uses(request.model_input)} - {"required_skill_cost"})
+    picks = [RequiredSkillCost(), *(defaults[name](weight=0) for name in needed)]
+    solved = solve_request(request, constraints=picks)
+    assert [total.name for total in solved.constraint_totals] == [pick.name for pick in picks]
     assert request.model_dump() == before
     assert len(solve_request(request).constraint_totals) == len(request.model_input.constraints)
     with pytest.raises(TypeError, match="DecomposedCalculator"):

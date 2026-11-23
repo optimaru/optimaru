@@ -73,6 +73,12 @@ def plain() -> MaxCutProblemModel:
     )
 
 
+# The costs of the parameters fixture_h() sets (models.parameter_uses): a solve of the model
+# refuses a selection without them before it reads the picks' knobs, so the refusal tests
+# keep them next to the pick they test.
+COSTED = [SamePartitionPairsCost(), DifferentPartitionPairsCost(), PartitionSizeBoundsCost()]
+
+
 def solved(constraints=None, problem=None) -> MaxCutProblemModel:
     problem = problem if problem is not None else fixture_h()
     config = max_cut.SolverConfig()
@@ -253,7 +259,7 @@ def test_the_reward_refuses_level_hard_on_every_path(level):
     with pytest.raises(ValueError, match="is a reward"):
         max_cut.calculate_score(problem, [pick])
     with pytest.raises(ValueError, match="is a reward"):
-        max_cut.solve(problem, time_limit_seconds=0, constraints=[pick])
+        max_cut.solve(problem, time_limit_seconds=0, constraints=[*COSTED, pick])
     with pytest.raises(ValueError, match="is a reward"):
         max_cut.constraint_costs(problem, [pick])
     duck = SimpleNamespace(name="cut_weight_cost", weight=None, level="hard", exponent=1.0)
@@ -431,7 +437,7 @@ def test_a_second_pick_of_the_reward_still_refuses_hard():
     with pytest.raises(ValueError, match="is a reward"):
         score(max_cut.constraint_costs(fixture_h()), picks)
     with pytest.raises(ValueError, match="is a reward"):
-        max_cut.solve(fixture_h(), time_limit_seconds=0, constraints=picks)
+        max_cut.solve(fixture_h(), time_limit_seconds=0, constraints=[*COSTED, *picks])
 
 
 @pytest.mark.parametrize(
@@ -593,7 +599,7 @@ def test_medium_is_refused_without_a_medium_level(level):
             with pytest.raises(ValueError, match=message):
                 engine_solve(fixture_h(), picks)
             with pytest.raises(ValueError, match=message):
-                solved(picks)
+                solved([*COSTED, *picks])
             with pytest.raises(ValueError, match=message):
                 max_cut.constraint_costs(fixture_h(), picks)
             with pytest.raises(ValueError, match=message):
@@ -640,8 +646,8 @@ def test_the_literal_offset_is_refused_on_hard_on_every_path(pick, offset):
     spec = pick(offset)
     message = HARD_REFUSAL.format(q=repr(spec.name))
     picks = [*get_constraints(), spec]  # a repeat next to the defaults
-    assert _refusal(lambda: max_cut.solve(fixture_h(), time_limit_seconds=0, constraints=[spec])) == message
-    assert _refusal(lambda: solved([spec])) == message
+    assert _refusal(lambda: max_cut.solve(fixture_h(), time_limit_seconds=0, constraints=[*COSTED, spec])) == message
+    assert _refusal(lambda: solved([*COSTED, spec])) == message
     assert _refusal(lambda: engine_solve(fixture_h(), [spec])) == message
     assert _refusal(lambda: engine_solve(fixture_h(), picks)) == message
     assert _refusal(lambda: max_cut.constraint_costs(fixture_h(), [spec])) == message

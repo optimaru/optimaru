@@ -37,7 +37,7 @@ The pydantic mirror (for serialization) is in `optimaru.bed_allocation.models`.
 from typing import TypeVar
 
 from .. import _api
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     Bed,
     BedPlan,
@@ -55,7 +55,9 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .constraints import get_constraints as _get_constraints
 from .models import BedPlanModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "Bed",
@@ -126,6 +128,9 @@ def solve(
 
     The result's score then reports each term on the level the selection gave it, and so
     does every score passed to ``on_new_best``.
+
+    A model that sets a parameter whose costs the selection leaves out is refused with
+    ValueError (`models.parameter_uses`); an engine object is solved as it is.
     """
     cfg = _build_config(
         time_limit_seconds=time_limit_seconds,
@@ -142,5 +147,8 @@ def solve(
     if not isinstance(plan, BedPlanModel):
         raise TypeError(f"plan must be a BedPlan or a models.BedPlanModel: {type(plan)!r}")
     core_plan = plan.to_core()
+    constraints = check_parameters(
+        _parameter_uses(plan), constraints, _get_constraints, lambda picks: constraint_costs(core_plan, picks)
+    )
     solve_in_place(Solver(cfg), core_plan, constraints)
     return BedPlanModel.from_core(core_plan)

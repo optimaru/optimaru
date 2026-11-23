@@ -35,7 +35,7 @@ from __future__ import annotations
 from typing import Any, TypeVar
 
 from .. import _api
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
     Item,
@@ -50,8 +50,10 @@ from ._core import (
 )
 from ._core import calculate_score as _calculate_score
 from ._core import constraint_costs as _constraint_costs
+from .constraints import get_constraints as _get_constraints
 from .constraints import score as _score
 from .models import KnapsackProblemModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "ConstraintInfo",
@@ -156,6 +158,10 @@ def solve(
 
         from optimaru.knapsack.constraints import get_constraints
         solved = knapsack.solve(problem, constraints=get_constraints())
+
+    A model that sets a parameter whose costs the constraints leave out is refused with
+    ValueError (`models.parameter_uses`): the solve would not score it. An engine object is
+    not checked.
     """
     cfg = solver_config(
         SolverConfig,
@@ -168,6 +174,10 @@ def solve(
         on_new_best=on_new_best,
     )
     core = _core_of(problem)
+    if isinstance(problem, KnapsackProblemModel):
+        constraints = check_parameters(
+            _parameter_uses(problem), constraints, _get_constraints, lambda picks: _constraint_costs(core, picks)
+        )
     solve_in_place(Solver(cfg), core, constraints)
     if isinstance(problem, KnapsackProblemModel):
         # A model is not solved in place: the caller's stays the problem it was. A copy

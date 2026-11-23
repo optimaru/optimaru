@@ -17,6 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from pydantic import Field, model_validator
 
+from .._constraint import ParameterUse
 from .._models import SolveConfigBase, SolveRequest, StrictModel, entities_by_id, solution_dict, solve_model_request
 from . import _core
 
@@ -30,6 +31,7 @@ __all__ = [
     "SolveConfig",
     "datetime_to_minutes",
     "minutes_to_datetime",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -275,3 +277,23 @@ def solve_request(request: FlightCrewScheduleRequest, *, constraints=None) -> Fl
     from . import SolverConfig, solve
 
     return solve_model_request(solve, SolverConfig, request, constraints=constraints)
+
+
+def parameter_uses(schedule: FlightCrewScheduleModel) -> list[ParameterUse]:
+    """The parameters `schedule` sets away from their defaults that act only through a cost.
+
+    `fcs.solve` (and so `solve_request`) refuses a selection that holds none of a
+    parameter's costs (`optimaru._constraint.require_costs`). The table is in the use-case
+    guide ("Parameters and their costs", docs/use-cases/README.md)."""
+    uses = []
+    for employee in schedule.employees:
+        if employee.unavailable_days:
+            uses.append(
+                ParameterUse(f"employee {employee.id}", "unavailable_days", [], ("employee_unavailability_cost",))
+            )
+    for assignment in schedule.flight_assignments:
+        if assignment.required_skill:
+            uses.append(
+                ParameterUse(f"flight assignment {assignment.id}", "required_skill", "", ("required_skill_cost",))
+            )
+    return uses

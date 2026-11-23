@@ -18,6 +18,7 @@ Score mapping (hard / medium / soft -> engine Score):
 
 from pydantic import Field, model_validator
 
+from .._constraint import ParameterUse, is_set
 from .._models import (
     SolveRequest,
     StrictModel,
@@ -38,6 +39,7 @@ __all__ = [
     "RoomModel",
     "TimeGrainModel",
     "generate_demo_data",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -233,6 +235,53 @@ def with_initial_solution(problem, solution):
                 f"meeting assignment {assignment.id!r}: grain_room {value!r} is out of range {valid_values}"
             )
     return seeded
+
+
+# The parameters that act only through a cost: (field, default, the costs that read it).
+_ROOM_COSTS = (("capacity", 0, ("room_capacity_cost", "larger_room_capacity_cost")),)
+_MEETING_COSTS = (
+    (
+        "required_attendees",
+        [],
+        (
+            "room_capacity_cost",
+            "required_attendance_conflict_cost",
+            "required_and_preferred_attendance_conflict_cost",
+            "room_change_cost",
+        ),
+    ),
+    (
+        "preferred_attendees",
+        [],
+        (
+            "room_capacity_cost",
+            "required_and_preferred_attendance_conflict_cost",
+            "preferred_attendance_conflict_cost",
+            "room_change_cost",
+        ),
+    ),
+)
+
+
+def parameter_uses(model: MeetingScheduleModel) -> list[ParameterUse]:
+    """The parameters `model` sets away from their defaults that act only through a cost.
+
+    `solve` refuses a selection that holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
+    docs/use-cases/README.md."""
+    uses = [
+        ParameterUse(f"room {room.id}", field, default, costs)
+        for room in model.rooms
+        for field, default, costs in _ROOM_COSTS
+        if is_set(getattr(room, field), default)
+    ]
+    uses += [
+        ParameterUse(f"meeting {meeting.id}", field, default, costs)
+        for meeting in model.meetings
+        for field, default, costs in _MEETING_COSTS
+        if is_set(getattr(meeting, field), default)
+    ]
+    return uses
 
 
 class MeetingScheduleRequest(SolveRequest):

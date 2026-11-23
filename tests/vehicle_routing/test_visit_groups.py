@@ -232,7 +232,7 @@ def test_a_group_of_one_costs_nothing_by_itself():
     assert costs(two_ends([visit("a", "g"), visit("b", "h"), visit("c")], vehicles), "visit_group_cost") == 0
 
 
-def test_the_group_constraint_can_be_made_soft_or_left_out():
+def test_the_group_constraint_can_be_made_soft_but_not_left_out():
     # Each vehicle takes one visit, so the group cannot ride together. Kept hard it waits whole;
     # soft at a weight below what an unassigned visit costs, it is split over the two vehicles.
     vehicles = [vehicle("v", max_stops=1), vehicle("w", max_stops=1)]
@@ -240,11 +240,12 @@ def test_the_group_constraint_can_be_made_soft_or_left_out():
     others = [spec for spec in get_constraints() if spec.name != "visit_group_cost"]
 
     soft = solve(model_input, constraints=[*others, VisitGroupCost(weight=1, level="soft")])
-    without = solve(model_input, constraints=others)
 
-    for solution in (soft, without):
-        assert solution.feasible and not solution.unassigned
-        assert vehicle_of(solution) == {"a": "v", "b": "w"}
+    assert soft.feasible and not soft.unassigned
+    assert vehicle_of(soft) == {"a": "v", "b": "w"}
+    # Left out, the groups would be ignored: refused.
+    with pytest.raises(ValueError, match="sets group, but the constraints leave out visit_group_cost"):
+        solve(model_input, constraints=others)
 
 
 def test_the_order_constraint_can_be_made_soft():

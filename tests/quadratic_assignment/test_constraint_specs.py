@@ -235,12 +235,17 @@ def test_weights_steer_the_solve():
     problem.fixed_assignments = {}
     problem.forbidden_assignments = []
     problem.location_capacities = {}
-    problem.assignment_costs = [[0, 100], [100, 0]]  # identity is direct-cheap, flow-dear (22 vs 23)
+    problem.facility_demands = {}
+    problem.assignment_costs = None
+    # Flow alone: a selection without assignment_cost is refused while assignment_costs is set.
     problem = qap.solve(problem, time_limit_seconds=0.2, random_seed=1, constraints=[flow_distance_cost])
     assert problem.assignment == {"L1": "F1", "L2": "F2"}  # flow alone prefers 22 over 23
     problem.flows = [[0, 2], [3, 0]]  # now the identity costs 23 in flow, the swap 22
     problem = qap.solve(problem, time_limit_seconds=0.2, random_seed=1, constraints=[flow_distance_cost])
     assert problem.assignment == {"L1": "F2", "L2": "F1"}
+    problem.assignment_costs = [[0, 100], [100, 0]]  # identity is direct-cheap (0 vs 200)
+    with pytest.raises(ValueError, match="sets assignment_costs, but the constraints leave out assignment_cost"):
+        qap.solve(problem, time_limit_seconds=0.2, random_seed=1, constraints=[flow_distance_cost])
     problem = qap.solve(
         problem, time_limit_seconds=0.2, random_seed=1, constraints=[flow_distance_cost, assignment_cost]
     )

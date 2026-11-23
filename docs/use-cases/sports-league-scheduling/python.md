@@ -122,3 +122,12 @@ a 5% classic draw from a seeded `random.Random` (+ symmetric closure, 18 matches
 Round 0 is pinned to a Wednesday, so the instance is the same on every run. (The C++ demo
 `sls_demo` draws its classic matches with `std::mt19937_64`, so its instance differs.) Its name before
 0.5.1, `demo_schedule()`, still works (an alias of the same function).
+
+## Parameters and their costs
+
+A request that sets a field which acts only through a cost, while its constraints leave
+every such cost out, is refused with `ValueError` naming the field and the costs to add;
+a pick at weight 0 counts. `models.parameter_uses(model)` lists the fields an input sets,
+and [Parameters and their costs](../README.md#parameters-and-their-costs) has the table.
+It is checked where the input is the JSON model (`solve_request`, `solve(model)`); a
+compiled problem is solved as given.

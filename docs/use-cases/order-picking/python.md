@@ -83,3 +83,10 @@ op.solve(solution, constraints=[TrolleyCapacityCost(), OrderSplitByTrolleyCost(w
 raw = op.constraint_costs(solution)
 score(raw, [DistanceFromPreviousPickTaskCost(), DistanceFromPreviousPickTaskCost(weight=0.1, exponent=2, offset=100)])
 ```
+
+## Parameters and their costs
+
+A request is refused when it sets a field that acts only through a cost while its
+constraints leave that cost out ([Parameters and their costs](../README.md#parameters-and-their-costs)).
+This use case has no such field: every field a cost reads is required, so
+`models.parameter_uses(model)` is always empty.

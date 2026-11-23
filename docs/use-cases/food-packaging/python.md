@@ -110,3 +110,10 @@ details see [`cpp.md`](cpp.md) and the `fp/model/domain.hpp` comments.
 `Line.operator_index` (each line's operator, the second decision next to the job order)
 is reassigned by the solver with hill climbing between engine legs — exact when there
 are at least as many operators as lines, an alternating heuristic otherwise (caveat).
+
+## Parameters and their costs
+
+A request is refused when it sets a field that acts only through a cost while its
+constraints leave that cost out ([Parameters and their costs](../README.md#parameters-and-their-costs)).
+This use case has no such field: every field a cost reads is required, so
+`models.parameter_uses(model)` is always empty.

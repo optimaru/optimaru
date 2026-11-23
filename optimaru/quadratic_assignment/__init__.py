@@ -41,7 +41,7 @@ from __future__ import annotations
 from typing import Any, TypeVar
 
 from .. import _api
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     AcceptorType,
     ConstraintInfo,
@@ -58,8 +58,10 @@ from ._core import (
 )
 from ._core import calculate_score as _calculate_score
 from ._core import constraint_costs as _constraint_costs
+from .constraints import get_constraints as _get_constraints
 from .constraints import score as _score
 from .models import QuadraticAssignmentProblemModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "AcceptorType",
@@ -176,6 +178,9 @@ def solve(
 
         from optimaru.quadratic_assignment.constraints import get_constraints
         problem = quadratic_assignment.solve(problem, constraints=get_constraints())
+
+    On the model, a parameter set away from its default whose costs the constraints leave out
+    is refused with ValueError (`models.parameter_uses`); an engine object is solved as given.
     """
     cfg = solver_config(
         SolverConfig,
@@ -188,6 +193,10 @@ def solve(
         on_new_best=on_new_best,
     )
     core = _core_of(problem)
+    if isinstance(problem, QuadraticAssignmentProblemModel):
+        constraints = check_parameters(
+            _parameter_uses(problem), constraints, _get_constraints, lambda picks: _constraint_costs(core, picks)
+        )
     solve_in_place(Solver(cfg), core, constraints)
     if isinstance(problem, QuadraticAssignmentProblemModel):
         # A model is not solved in place: the caller's stays the problem it was. A copy

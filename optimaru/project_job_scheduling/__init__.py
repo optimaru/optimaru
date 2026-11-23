@@ -53,7 +53,7 @@ The pydantic mirror (for serialization) is in `optimaru.project_job_scheduling.m
 from typing import TypeVar
 
 from .. import _api
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     Allocation,
     ConstraintInfo,
@@ -72,7 +72,9 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .constraints import get_constraints as _get_constraints
 from .models import ProjectJobScheduleModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "Allocation",
@@ -143,6 +145,10 @@ def solve(
         pjs.solve(schedule, constraints=[*others, ProjectDelayCost(level="soft")])
 
     The result's score then reports each term on the level the selection gave it.
+
+    A model that sets a parameter whose costs the constraints leave out is refused with
+    ValueError (`models.parameter_uses`): the solve would not score it. A compiled schedule is
+    not checked.
     """
     cfg = _build_config(
         time_limit_seconds=time_limit_seconds,
@@ -161,5 +167,8 @@ def solve(
             f"schedule must be a ProjectJobSchedule or a models.ProjectJobScheduleModel: {type(schedule)!r}"
         )
     core_schedule = schedule.to_core()
+    constraints = check_parameters(
+        _parameter_uses(schedule), constraints, _get_constraints, lambda picks: constraint_costs(core_schedule, picks)
+    )
     solve_in_place(Solver(cfg), core_schedule, constraints)
     return ProjectJobScheduleModel.from_core(core_schedule)

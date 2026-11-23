@@ -16,6 +16,7 @@ from datetime import date, timedelta
 
 from pydantic import Field, TypeAdapter
 
+from .._constraint import ParameterUse, is_set
 from .._models import SolveRequest, StrictModel, entities_by_id, solution_dict, solve_model_request
 from . import _core
 
@@ -26,6 +27,7 @@ __all__ = [
     "MaintenanceScheduleRequest",
     "date_to_epoch",
     "epoch_to_date",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -198,6 +200,29 @@ def with_initial_solution(problem, solution):
             raise ValueError(f"job {job.id}: unknown crew_id {job.crew_id!r}")
     seeded.to_core()  # rejects a start_date that is not a weekday inside the work calendar
     return seeded
+
+
+# The parameters that act only through a cost: (job field, default, the costs that read it).
+_JOB_COSTS = (
+    ("min_start_date", None, ("min_start_date_cost",)),
+    ("max_end_date", None, ("max_end_date_cost",)),
+    ("ideal_end_date", None, ("before_ideal_end_date_cost", "after_ideal_end_date_cost")),
+    ("tags", [], ("tag_conflict_cost",)),
+)
+
+
+def parameter_uses(model: MaintenanceScheduleModel) -> list[ParameterUse]:
+    """The parameters `model` sets away from their defaults that act only through a cost.
+
+    `solve` refuses a selection that holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
+    docs/use-cases/README.md."""
+    return [
+        ParameterUse(f"job {job.id}", field, default, costs)
+        for job in model.jobs
+        for field, default, costs in _JOB_COSTS
+        if is_set(getattr(job, field), default)
+    ]
 
 
 class MaintenanceScheduleRequest(SolveRequest):

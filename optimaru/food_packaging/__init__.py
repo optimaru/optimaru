@@ -54,7 +54,7 @@ Usage::
 from typing import TypeVar
 
 from .. import _api
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
     Job,
@@ -73,7 +73,9 @@ from ._core import (
     improve_operator_assignment,
     list_constraints,
 )
+from .constraints import get_constraints as _get_constraints
 from .models import PackagingScheduleModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "ConstraintInfo",
@@ -140,6 +142,10 @@ def solve(
         fp.solve(schedule, constraints=[*others, UnassignedJobsCost(level="soft")])
 
     The result's score then reports each term on the level the selection gave it.
+
+    A model that sets a parameter whose costs the constraints leave out is refused with
+    ValueError (`models.parameter_uses`, which finds none in this use case). An engine
+    object is not checked.
     """
     cfg = solver_config(
         SolverConfig,
@@ -156,6 +162,9 @@ def solve(
         return schedule
     if isinstance(schedule, PackagingScheduleModel):
         core = schedule.to_core()
+        constraints = check_parameters(
+            _parameter_uses(schedule), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
+        )
         solve_in_place(Solver(cfg), core, constraints)
         return PackagingScheduleModel.from_core(core)
     raise TypeError(f"schedule must be a PackagingSchedule or a models.PackagingScheduleModel: {type(schedule)!r}")

@@ -29,7 +29,7 @@ The JSON contract is `optimaru.bin_packing.models` (pydantic).
 from typing import TypeVar
 
 from .. import _api
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     BinPackingProblem,
     ConstraintInfo,
@@ -42,7 +42,9 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .constraints import get_constraints as _get_constraints
 from .models import BinPackingProblemModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "BinPackingProblem",
@@ -104,6 +106,9 @@ def solve(
 
         from optimaru.bin_packing.constraints import get_constraints
         bp.solve(problem, constraints=get_constraints())
+
+    A model that sets a parameter whose costs the selection leaves out is refused with
+    ValueError (`models.parameter_uses`); an engine object is solved as it is.
     """
     cfg = solver_config(
         SolverConfig,
@@ -120,6 +125,9 @@ def solve(
         return problem
     if isinstance(problem, BinPackingProblemModel):
         core = problem.to_core()
+        constraints = check_parameters(
+            _parameter_uses(problem), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
+        )
         solve_in_place(Solver(cfg), core, constraints)
         return BinPackingProblemModel.from_core(core)
     raise TypeError(f"problem must be a BinPackingProblem or a models.BinPackingProblemModel: {type(problem)!r}")

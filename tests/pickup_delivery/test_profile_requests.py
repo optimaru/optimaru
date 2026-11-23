@@ -4,6 +4,8 @@ import pytest
 
 import optimaru.pickup_delivery as pdp
 from optimaru.pickup_delivery.constraints import (
+    MaxEndTimeCost,
+    MaxStopsCost,
     PairedRequestCost,
     ProfileForbiddenRequestCost,
     ProfilePreferredRequestCost,
@@ -181,7 +183,14 @@ def test_a_group_goes_to_a_vehicle_that_may_carry_all_of_it():
 
 def test_forbidden_requests_hold_whether_the_constraints_list_their_cost_or_not():
     model_input = line_input({"basic": {"forbidden_requests": ["a"]}})
-    picks = [VehicleCapacityCost(), UnassignedRequestsCost(), TravelTimeCost(), PairedRequestCost()]
+    picks = [
+        VehicleCapacityCost(),
+        UnassignedRequestsCost(),
+        TravelTimeCost(),
+        PairedRequestCost(),
+        MaxStopsCost(),
+        MaxEndTimeCost(),
+    ]
 
     solution = solve(model_input, constraints=picks)
 
@@ -208,7 +217,14 @@ def test_preferences_give_way_to_a_long_drive():
 
 def test_preferred_requests_need_their_cost_among_the_constraints():
     model_input = line_input({"skilled": {"preferred_requests": ["a"]}})
-    picks = [VehicleCapacityCost(), UnassignedRequestsCost(), TravelTimeCost(), PairedRequestCost()]
+    picks = [
+        VehicleCapacityCost(),
+        UnassignedRequestsCost(),
+        TravelTimeCost(),
+        PairedRequestCost(),
+        MaxStopsCost(),
+        MaxEndTimeCost(),
+    ]
 
     with pytest.raises(ValueError, match="leave out profile_preferred_request_cost"):
         solve(model_input, constraints=picks)

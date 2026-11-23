@@ -77,7 +77,7 @@ instance of a name ``"<name>#<k>"`` (the first keeps the plain name), and
 
 import math
 import numbers
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from enum import StrEnum
 from typing import Any, ClassVar, NamedTuple
@@ -223,6 +223,74 @@ def with_always_on(picks: list[Any], costs: Mapping[str, Any], spec_type: type) 
     held = sum(1 for pick in picks if pick.name == spec_type.name)
     key = spec_type.name if held == 0 else f"{spec_type.name}#{held + 1}"
     return [*picks, spec_type()] if key in costs else list(picks)
+
+
+class ParameterUse(NamedTuple):
+    """An input parameter set away from its default, and the costs that give it an effect.
+
+    ``where`` names what carries it ("vehicle V1"), ``field`` the parameter, ``default``
+    the value that leaves it unset, and ``costs`` the constraint names that read it: the
+    selection must hold at least one of them, at any weight."""
+
+    where: str
+    field: str
+    default: Any
+    costs: tuple[str, ...]
+
+
+def is_set(value: Any, default: Any) -> bool:
+    """Whether a parameter is away from its default. For a default of None or empty (no group,
+    no list), any empty value (None, "", []) leaves it unset too."""
+    if default is None or (isinstance(default, (list, tuple, dict, str)) and not default):
+        return bool(value)
+    return value != default
+
+
+def require_costs(
+    uses: Iterable[ParameterUse], constraints: Iterable[Any], *, check_picks: Callable[[], Any] | None = None
+) -> None:
+    """Refuse parameters that the selection gives no effect: ValueError naming each one.
+
+    ``uses`` are the parameters an input sets away from their defaults, with the costs
+    that read them (``models.parameter_uses`` of a use case); ``constraints`` is the
+    effective selection (``get_constraints(constraints)``: the defaults when None). A
+    parameter whose costs are all missing would be silently ignored by the solve, so it
+    is an error: add one of its costs (a weight of 0 is an explicit choice and counts), or
+    leave the parameter at its default. Each missing pair is named once, with the first
+    place that sets it and how many more do.
+
+    ``check_picks`` runs the engine's own checks of the picks (scoring them once with
+    ``constraint_costs``) before a refusal, so a misspelt name or a bad knob is reported
+    as what it is. ``constraints`` is read once: pass a list, and hand the same list on to
+    the solve (``get_constraints`` would use up a generator)."""
+    uses = list(uses)
+    if not uses:
+        return
+    # A spec or a dict carries its snake_case name; school timetabling also takes the name itself.
+    names = {
+        str(pick.get("name") if isinstance(pick, Mapping) else getattr(pick, "name", pick)) for pick in constraints
+    }
+    missing: dict[tuple[str, tuple[str, ...]], list[ParameterUse]] = {}
+    for use in uses:
+        if not names.intersection(use.costs):
+            missing.setdefault((use.field, use.costs), []).append(use)
+    if not missing:
+        return
+    if check_picks is not None:
+        check_picks()
+    lines = []
+    for (name, costs), found in missing.items():
+        more = f" (and {len(found) - 1} more)" if len(found) > 1 else ""
+        what = (
+            f"{costs[0]}, the cost that scores it"
+            if len(costs) == 1
+            else f"{' or '.join(costs)}, the costs that score it"
+        )
+        lines.append(
+            f"{found[0].where}{more} sets {name}, but the constraints leave out {what}: add one, or "
+            f"leave {name} at its default ({found[0].default!r})"
+        )
+    raise ValueError("; ".join(lines))
 
 
 def instance_keys(constraints: Iterable[Any]) -> list[str]:

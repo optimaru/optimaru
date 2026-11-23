@@ -27,7 +27,7 @@ The pydantic mirror (for serialization) is in `optimaru.facility_location.models
 from typing import TypeVar
 
 from .. import _api
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
     Consumer,
@@ -42,7 +42,9 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .constraints import get_constraints as _get_constraints
 from .models import FacilityLocationProblemModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "ConstraintInfo",
@@ -101,6 +103,10 @@ def solve(
 
         from optimaru.facility_location.constraints import get_constraints
         fl.solve(problem, constraints=get_constraints())
+
+    A model that sets a parameter whose costs the selection leaves out is refused with
+    ValueError (`models.parameter_uses`, empty here: every such field is required); an engine
+    object is solved as it is.
     """
     cfg = solver_config(
         SolverConfig,
@@ -117,6 +123,9 @@ def solve(
         return problem
     if isinstance(problem, FacilityLocationProblemModel):
         core = problem.to_core()
+        constraints = check_parameters(
+            _parameter_uses(problem), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
+        )
         solve_in_place(Solver(cfg), core, constraints)
         return FacilityLocationProblemModel.from_core(core)
     raise TypeError(

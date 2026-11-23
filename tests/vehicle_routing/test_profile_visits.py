@@ -4,6 +4,7 @@ import pytest
 
 import optimaru.vehicle_routing as vrp
 from optimaru.vehicle_routing.constraints import (
+    MaxEndTimeCost,
     ProfileForbiddenVisitCost,
     ProfilePreferredVisitCost,
     TravelTimeCost,
@@ -208,7 +209,11 @@ def test_a_preference_of_a_profile_no_vehicle_drives_on_counts_nowhere():
     assert to_plan(model_input).profile_visits == []
     assert costs(model_input, "profile_preferred_visit_cost", {"v": ["a"]}) == [0, 0, 0]
     # Nor does it ask for its cost.
-    solve(model_input, timelimit=0, constraints=[VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost()])
+    solve(
+        model_input,
+        timelimit=0,
+        constraints=[VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(), MaxEndTimeCost()],
+    )
 
 
 def test_the_two_costs_score_with_their_default_weights_and_levels():
@@ -277,7 +282,7 @@ def test_a_forbidden_visit_in_an_initial_route_is_moved_off():
 
 def test_forbidden_visits_hold_whether_the_constraints_list_their_cost_or_not():
     model_input = line_input({"basic": {"forbidden_visits": ["a"]}})
-    picks = [VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost()]
+    picks = [VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(), MaxEndTimeCost()]
 
     solution = solve(model_input, constraints=picks)
 
@@ -288,7 +293,13 @@ def test_forbidden_visits_hold_whether_the_constraints_list_their_cost_or_not():
     plan.rebuild_unassigned_pool()
     raw = vrp.constraint_costs(plan, picks)
     assert sorted(raw) == sorted(
-        ["vehicle_capacity_cost", "unassigned_visits_cost", "travel_time_cost", "profile_forbidden_visit_cost"]
+        [
+            "vehicle_capacity_cost",
+            "unassigned_visits_cost",
+            "travel_time_cost",
+            "max_end_time_cost",
+            "profile_forbidden_visit_cost",
+        ]
     )
     assert score(raw, picks).hard == -1000
     # Without forbidden visits the picks are scored as they are.
@@ -339,7 +350,7 @@ def test_preferences_give_way_to_a_long_drive():
 
 def test_preferred_visits_need_their_cost_among_the_constraints():
     model_input = line_input({"skilled": {"preferred_visits": ["a"]}})
-    picks = [VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost()]
+    picks = [VehicleCapacityCost(), UnassignedVisitsCost(), TravelTimeCost(), MaxEndTimeCost()]
 
     with pytest.raises(ValueError, match="leave out profile_preferred_visit_cost"):
         solve(model_input, constraints=picks)

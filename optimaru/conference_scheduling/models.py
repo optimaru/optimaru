@@ -13,6 +13,7 @@ snapshots, ...)::
 
 from pydantic import Field, model_validator
 
+from .._constraint import ParameterUse, is_set
 from .._models import (
     SolveRequest,
     StrictModel,
@@ -32,6 +33,7 @@ __all__ = [
     "SpeakerModel",
     "TalkModel",
     "TimeslotModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -307,6 +309,92 @@ class SolveConfig(StrictModel):
         if self.best_score_limit is not None:
             cfg.best_score_limit = self.best_score_limit
         return cfg
+
+
+_TAG_KINDS = ("required", "preferred", "prohibited", "undesired")
+# The fields that act only through a cost: (field, default, the costs that read it).
+_TALK_COSTS = (
+    (
+        "speakers",
+        [],
+        (
+            "speaker_conflict_cost",
+            "speaker_unavailability_cost",
+            "consecutive_talks_pause_cost",
+            "speaker_makespan_cost",
+        )
+        + tuple(f"speaker_{kind}_{place}_tags_cost" for kind in _TAG_KINDS for place in ("timeslot", "room")),
+    ),
+    (
+        "theme_track_tags",
+        [],
+        (
+            "theme_track_conflict_cost",
+            "theme_track_room_change_cost",
+            "audience_type_theme_track_conflict_cost",
+            "different_day_talks_cost",
+        ),
+    ),
+    ("sector_tags", [], ("sector_conflict_cost",)),
+    ("audience_types", [], ("audience_type_theme_track_conflict_cost", "audience_type_diversity_cost")),
+    ("audience_level", 0, ("content_audience_level_flow_violation_cost", "audience_level_diversity_cost")),
+    (
+        "content_tags",
+        [],
+        ("content_conflict_cost", "content_audience_level_flow_violation_cost", "different_day_talks_cost"),
+    ),
+    ("language", "en", ("language_diversity_cost",)),
+    ("mutually_exclusive_talks_tags", [], ("talk_mutually_exclusive_talks_tags_cost",)),
+    ("prerequisite_talks", [], ("talk_prerequisite_talks_cost",)),
+    ("favorite_count", 0, ("popular_talks_room_size_cost",)),
+    ("crowd_control_risk", 0, ("crowd_control_risk_cost",)),
+) + tuple(
+    (f"{kind}_{place}_tags", [], (f"talk_{kind}_{place}_tags_cost",))
+    for kind in _TAG_KINDS
+    for place in ("timeslot", "room")
+)
+_SPEAKER_COSTS = (("unavailable_timeslots", [], ("speaker_unavailability_cost",)),) + tuple(
+    (f"{kind}_{place}_tags", [], (f"speaker_{kind}_{place}_tags_cost",))
+    for kind in _TAG_KINDS
+    for place in ("timeslot", "room")
+)
+_ROOM_COSTS = (
+    ("capacity", 0, ("popular_talks_room_size_cost",)),
+    ("talk_types", [], ("talk_type_incompatibility_cost",)),
+    ("unavailable_timeslots", [], ("room_unavailability_cost",)),
+    ("tags", [], tuple(f"{who}_{kind}_room_tags_cost" for who in ("talk", "speaker") for kind in _TAG_KINDS)),
+)
+_TIMESLOT_COSTS = (
+    ("tags", [], tuple(f"{who}_{kind}_timeslot_tags_cost" for who in ("talk", "speaker") for kind in _TAG_KINDS)),
+)
+
+
+def parameter_uses(schedule: ConferenceScheduleModel) -> list[ParameterUse]:
+    """The parameters `schedule` sets away from their defaults that act only through a cost.
+
+    `solve` refuses a model whose selection holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
+    docs/use-cases/README.md. The timeslots' `talk_types`, their times and a talk's
+    `talk_type` describe the problem itself and are not checked; neither are pins."""
+    uses = []
+    for kind, items, key, table in (
+        ("talk", schedule.talks, "code", _TALK_COSTS),
+        ("speaker", schedule.speakers, "id", _SPEAKER_COSTS),
+        ("room", schedule.rooms, "id", _ROOM_COSTS),
+        ("timeslot", schedule.timeslots, "id", _TIMESLOT_COSTS),
+    ):
+        for item in items:
+            for field, default, costs in table:
+                if is_set(getattr(item, field), default):
+                    uses.append(ParameterUse(f"{kind} {getattr(item, key)}", field, default, costs))
+    # 0 asks for no pause at all, so it needs no cost either.
+    if schedule.minimum_consecutive_talks_pause_in_minutes not in (30, 0):
+        uses.append(
+            ParameterUse(
+                "the schedule", "minimum_consecutive_talks_pause_in_minutes", 30, ("consecutive_talks_pause_cost",)
+            )
+        )
+    return uses
 
 
 def with_initial_solution(problem, solution):

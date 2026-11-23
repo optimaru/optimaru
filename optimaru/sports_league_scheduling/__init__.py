@@ -27,7 +27,7 @@ The pydantic mirror (for serialization) is in `optimaru.sports_league_scheduling
 from typing import TypeVar
 
 from .. import _api
-from .._solve import solve_in_place, solver_config
+from .._solve import check_parameters, solve_in_place, solver_config
 from ._core import (
     ConstraintInfo,
     LeagueSchedule,
@@ -42,8 +42,10 @@ from ._core import (
     constraint_info,
     list_constraints,
 )
+from .constraints import get_constraints as _get_constraints
 from .demo import demo_schedule, generate_demo_data  # demo_schedule: the name before 0.5.1
 from .models import LeagueScheduleModel, solve_request, with_initial_solution
+from .models import parameter_uses as _parameter_uses
 
 __all__ = [
     "ConstraintInfo",
@@ -104,6 +106,9 @@ def solve(
 
         from optimaru.sports_league_scheduling.constraints import get_constraints
         sl.solve(schedule, constraints=get_constraints())
+
+    On the model, a parameter set away from its default whose costs the constraints leave out
+    is refused with ValueError (`models.parameter_uses`); a `LeagueSchedule` is solved as given.
     """
     if config is not None and not isinstance(config, SolverConfig):
         if not hasattr(config, "to_core"):
@@ -124,6 +129,9 @@ def solve(
         return schedule
     if isinstance(schedule, LeagueScheduleModel):
         core = schedule.to_core()
+        constraints = check_parameters(
+            _parameter_uses(schedule), constraints, _get_constraints, lambda picks: constraint_costs(core, picks)
+        )
         solve_in_place(Solver(cfg), core, constraints)
         return LeagueScheduleModel.from_core(core)
     raise TypeError(f"schedule must be a LeagueSchedule or a models.LeagueScheduleModel: {type(schedule)!r}")

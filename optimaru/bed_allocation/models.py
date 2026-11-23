@@ -19,6 +19,7 @@ from datetime import date
 
 from pydantic import Field, model_validator
 
+from .._constraint import ParameterUse, is_set
 from .._models import SolveRequest, StrictModel, entities_by_id, solution_dict, solve_model_request
 from . import _core
 
@@ -31,6 +32,7 @@ __all__ = [
     "DepartmentModel",
     "RoomModel",
     "StayModel",
+    "parameter_uses",
     "solve_request",
     "with_initial_solution",
 ]
@@ -237,6 +239,50 @@ class BedPlanModel(StrictModel):
             score_medium=plan.score.medium,
             score_soft=plan.score.soft,
         )
+
+
+# The fields that act only through a cost: (field, default, the costs that read it).
+_DEPARTMENT_COSTS = (
+    ("minimum_age", None, ("department_min_age_cost",)),
+    ("maximum_age", None, ("department_max_age_cost",)),
+    ("specialty_to_priority", {}, ("department_specialty_cost", "department_specialty_priority_cost")),
+)
+_ROOM_COSTS = (("equipment", [], ("required_patient_equipment_cost", "preferred_patient_equipment_cost")),)
+_STAY_COSTS = (
+    ("patient_preferred_maximum_room_capacity", None, ("preferred_max_room_capacity_cost",)),
+    ("patient_required_equipment", [], ("required_patient_equipment_cost",)),
+    ("patient_preferred_equipment", [], ("preferred_patient_equipment_cost",)),
+    ("specialty", "", ("department_specialty_cost", "department_specialty_priority_cost")),
+)
+# A room's gender_limitation, by value: the cost that reads it.
+_GENDER_LIMITATION_COSTS = {
+    "MALE_ONLY": ("female_in_male_room_cost",),
+    "FEMALE_ONLY": ("male_in_female_room_cost",),
+    "SAME_GENDER": ("mixed_gender_room_cost",),
+}
+
+
+def parameter_uses(plan: BedPlanModel) -> list[ParameterUse]:
+    """The parameters `plan` sets away from their defaults that act only through a cost.
+
+    `solve` refuses a model whose selection holds none of a parameter's costs
+    (`optimaru._constraint.require_costs`); the table is "Parameters and their costs" in
+    docs/use-cases/README.md. A room's `gender_limitation` needs the cost of its value."""
+    uses = []
+    for kind, items, table in (
+        ("department", plan.departments, _DEPARTMENT_COSTS),
+        ("room", plan.rooms, _ROOM_COSTS),
+        ("stay", plan.stays, _STAY_COSTS),
+    ):
+        for item in items:
+            for field, default, costs in table:
+                if is_set(getattr(item, field), default):
+                    uses.append(ParameterUse(f"{kind} {item.id}", field, default, costs))
+    for room in plan.rooms:
+        if room.gender_limitation in _GENDER_LIMITATION_COSTS:
+            costs = _GENDER_LIMITATION_COSTS[room.gender_limitation]
+            uses.append(ParameterUse(f"room {room.id}", "gender_limitation", "ANY_GENDER", costs))
+    return uses
 
 
 def with_initial_solution(problem, solution):
