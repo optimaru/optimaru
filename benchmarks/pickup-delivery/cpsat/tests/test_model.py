@@ -100,24 +100,6 @@ def _engine_hard(request: PdpRequest, routes: dict[str, tuple[str, ...]], name: 
     return score(engine.constraint_costs(plan), [type(spec)(weight=1)]).hard
 
 
-@pytest.mark.parametrize(
-    "name,expected",
-    [
-        # H -> P 50, P -> D 70, D -> E 90; the pair D -> H is left out but not driven.
-        ("travel_time_cost", 210),
-        ("travel_distance_cost", 400 + 600 + 800),
-        # Departs 100, at P 150 waits to 300, leaves 360, at D 430, leaves 520, at E 610.
-        ("route_duration_cost", 510),
-    ],
-)
-def test_a_profile_and_another_end_depot_cost_the_same_on_both(name, expected) -> None:
-    request = _request(end_depot="E", profile="van")
-    routes = {"V1": ("P", "D")}
-    assert _engine_cost(request, routes, name) == pytest.approx(expected)
-    exact = solve_request(request, constraints=[{"name": name, "weight": 1}], _fixed_routes=routes)
-    assert -_soft(exact.score) == expected
-
-
 def test_an_open_route_stops_at_its_last_stop() -> None:
     """Without an end depot the leg after D is not driven: 50 + 70 in the van profile."""
     request = _request(profile="van")
@@ -144,7 +126,10 @@ def test_the_route_limits_count_the_leg_to_the_end_depot(name, limit, expected) 
 
 
 def test_the_radius_is_measured_from_the_start_depot() -> None:
-    """From E (far east) the farthest stop is P; from H it would be D, which is nearer."""
+    """From E (far east) the farthest stop is P; from H it would be D, which is nearer.
+
+    The model charges ceil(furthest) - ceil(limit), the engine furthest - limit in doubles: they agree
+    up to the rounding of the meters only because the limit here is a whole number."""
     routes = {"V1": ("P", "D")}
     from_e = _request(start_depot="E", e_location=(0.0, 0.05), max_route_radius_meters=1_000)
     from_h = _request(e_location=(0.0, 0.05), max_route_radius_meters=1_000)

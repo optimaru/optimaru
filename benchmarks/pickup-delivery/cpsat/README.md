@@ -42,15 +42,15 @@ own terms with its own knobs, keyed `name`, `name#2`, … like the engine's
 `constraint_costs()`. Every plugin adds one term per engine unit — per vehicle, idle ones
 included (a constant 0 where the vehicle's limit is unset), never the unassigned pool,
 which the engine's route constraints do not evaluate — and the globals one term with
-their total (a constant 0 for the three structural rules), so an integral `offset` shapes
+their total (a constant 0 for the three structural constraints), so an integral `offset` shapes
 each unit exactly as the engine does, in both `clip` modes; a fractional offset is refused
 (`offset must be an integer for CP-SAT`). `max_route_radius_cost`, `vehicle_fixed_cost`
 and `min_capacity_utilization_cost` work on whole numbers here (meters and the load target
 rounded up, the fixed cost rounded), with or without an offset. `clip=False` with an offset
 is refused on hard with the engine's message (`constraint 'vehicle_capacity_cost':
-clip=False with a non-zero offset cannot be hard, ...`), the three structural rules
+clip=False with a non-zero offset cannot be hard, ...`), the three structural constraints
 included, since they stay hard; medium folds into soft, as in the engine, so it takes the
 literal formula.
 
 `catalog()` lists the plugins in `list_constraints()` order;
-`tests/test_model.py` keeps it equal to the engine's `constraint_info()` rows.
+`tests/test_solve.py` and `tests/test_model.py` keep it equal to the engine's `constraint_info()` rows.

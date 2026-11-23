@@ -5,7 +5,8 @@ The [`pickup-delivery`](../../docs/use-cases/pickup-delivery) use case against *
 same constraints under the same names and units, so both answers are
 rescored by the use case's own evaluator. The model is kept here
 (`cpsat/pickup_delivery_cpsat/model`, external-solver v0.3.0's ported to the 0.6 input), and
-`cpsat/tests/test_model.py` keeps the two cost definitions identical.
+the parity tests in `cpsat/tests/` (external-solver v0.3.0's `test_constraint_parity.py` and
+`test_solve.py`, ported, and `test_model.py` for the 0.6 input) keep the two cost definitions identical.
 
 ```sh
 cd benchmarks/pickup-delivery/cpsat

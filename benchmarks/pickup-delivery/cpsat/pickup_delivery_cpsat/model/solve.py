@@ -192,7 +192,8 @@ def solve_request(
         vehicle_distance[v] = sum(distance_terms)
         vehicle_end[v] = route_end
         vehicle_latency[v] = sum(latency_terms)
-        home = data.depots[start].location  # the engine measures the radius from the start depot
+        origin = plan.locations[start]  # the engine measures the radius from the start location
+        home = (origin.latitude, origin.longitude)
         radius_values = [_haversine_meters(home, stop.location) for stop in nodes]
         radii = [radius_values[i] * assigned[v, node_delivery[i]] for i in range(node_count)]
         furthest = model.new_int_var(0, max(radius_values, default=0), f"vehicle_{v}_route_radius")
