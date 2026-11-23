@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Benchmarks: the pickup-delivery CP-SAT lane runs again.** Since 0.6 the lane failed: it solved
+  with external-solver v0.3.0's pickup-delivery model, which reads the 0.5 input, and that library
+  is frozen. The model is now kept in the benchmark (`benchmarks/pickup-delivery/cpsat`,
+  `pickup_delivery_cpsat.model`), ported to depots, `start_depot` / `end_depot` and travel
+  profiles, with a `travel_distance_cost` plugin; the expected-failure mark is gone, and
+  `tests/test_model.py` checks it against the engine.
+
 ## 0.6.1
 
 **From 0.6.0.** School timetabling solves on the optimaru API like every other use case once an
