@@ -1,7 +1,7 @@
 """Type stubs for `optimaru.maintenance_scheduling._core` — the maintenance-scheduling C++ solver.
 
 The compiled module wraps the C++ domain in `optimaru/maintenance_scheduling/cpp`,
-which imports the generic engine in `optimaru/cpp/optimaru`.
+which imports the generic engine in `core/optimaru`.
 
 The two decisions per job (crew, start date) are composite-encoded
 into one assignment-shape int variable per entity (Job)::

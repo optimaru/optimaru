@@ -1,7 +1,7 @@
 # optimaru.school_timetabling (Python)
 
 The Python package wrapping the school-timetabling C++ core (`optimaru/school_timetabling/cpp`, built on
-the engine in `optimaru/cpp/optimaru/`) with pybind11. It moves API_SPEC.md's
+the engine in `core/optimaru/`) with pybind11. It moves API_SPEC.md's
 canonical `TimetableProblem` JSON into the canonical C++ domain (`st::canon`),
 solves it, and returns a canonical `Timetable` JSON.
 

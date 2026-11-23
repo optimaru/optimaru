@@ -2,7 +2,7 @@
 
 The compiled module wraps the C++ employee-scheduling domain implementation in
 `optimaru/employee_scheduling/cpp`; that implementation imports the generic
-engine from `optimaru/cpp/optimaru`. Times are integer minutes from
+engine from `core/optimaru`. Times are integer minutes from
 an arbitrary "day 0, 00:00" reference; a calendar day is
 `t // MINUTES_PER_DAY`.
 

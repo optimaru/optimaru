@@ -3,7 +3,7 @@
 Multi-project / multi-mode RCPSP, derived from the Timefold Quickstarts
 `project-job-scheduling` example (Apache-2.0; see the repository NOTICE): pybind11 bindings of
 the `optimaru/project_job_scheduling/cpp` implementation on the generic C++ engine in
-`optimaru/cpp/optimaru/`.
+`core/optimaru/`.
 
 ## Install and test
 

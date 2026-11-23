@@ -2,7 +2,7 @@
 
 Derived from the Timefold Quickstarts `sports-league-scheduling` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)), with modifications,
-on the generic C++ engine in `optimaru/cpp/optimaru/`. Assigns a round (`Round`) to
+on the generic C++ engine in `core/optimaru/`. Assigns a round (`Round`) to
 every match (`Match`) of the league (one assignment variable: `Match::round`).
 
 - `optimaru/sports_league_scheduling/cpp/` — domain (`sls::LeagueSchedule`), full-recompute scorer, O(delta)

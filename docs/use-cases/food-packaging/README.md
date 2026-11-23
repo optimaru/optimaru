@@ -7,7 +7,7 @@ inserts a cleanup time that depends on the previous product, and the cleaning wi
 lines run by the same operator must not overlap.
 
 - `optimaru/food_packaging/cpp/` — domain + constraints (full/incremental) + solver wrapper + demo/tests.
-  Uses the engine in `optimaru/cpp/optimaru/` (header-only) as-is. `optimaru/food_packaging/cpp/fp/constraints/` holds
+  Uses the engine in `core/optimaru/` (header-only) as-is. `optimaru/food_packaging/cpp/fp/constraints/` holds
   one component per constraint (`max_end_time_cost.hpp`, `after_ideal_end_time_cost.hpp`,
   `squared_makespan_cost.hpp`, `operator_cleaning_conflict_cost.hpp`,
   `unassigned_jobs_cost.hpp`, plus `common.hpp`); `optimaru/food_packaging/cpp/fp/constraints.hpp`

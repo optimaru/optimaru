@@ -7,7 +7,7 @@ decides **who works which shift** without breaking the constraints, while keepin
 everyone as happy as possible.
 
 The search runs in C++: the domain wrapper in `optimaru/employee_scheduling/cpp` is built on the generic
-engine in `optimaru/cpp/optimaru`, and pybind11 exposes it to Python. A
+engine in `core/optimaru`, and pybind11 exposes it to Python. A
 pydantic layer (`optimaru.employee_scheduling.models`) adds JSON-friendly requests and solutions.
 
 ```

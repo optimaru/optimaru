@@ -60,7 +60,7 @@ jobs:
           # it changes (a renamed file counts at both paths), and all of them when it changes
           # the shared runner, this file, or the Python and build files every benchmark project
           # installs (optimaru/*.py, setup.py, pyproject.toml, CMakeLists.txt). A change to the
-          # C++ engine (optimaru/cpp/) runs only the three jobs whose C++ bench checks scores
+          # C++ engine (core/) runs only the three jobs whose C++ bench checks scores
           # against Python (conference and meeting scheduling's --check, school timetabling's
           # cross-check gate); the others' smoke runs are left out on purpose, and the use-case
           # C++ and Python jobs run on every pull request. A manual or weekly run: all. A push to main: all of the
@@ -77,7 +77,7 @@ jobs:
           esac
           touched='def touches($slug): ($slug | gsub("-"; "_")) as $name
             | any($changed[]; startswith("benchmarks/\($slug)/") or startswith("optimaru/\($name)/")
-              or (startswith("optimaru/cpp/") and ($slug | IN("conference-scheduling", "meeting-scheduling", "school-timetabling"))));
+              or (startswith("core/") and ($slug | IN("conference-scheduling", "meeting-scheduling", "school-timetabling"))));
             def everything: $all or any($changed[]; startswith("benchmarks/cpsat-common/")
               or test("^optimaru/[^/]+\\.py$") or IN(".github/workflows/ci.yml", "setup.py", "pyproject.toml", "CMakeLists.txt"));'
           benchmarks=$(jq -c --argjson changed "$changed" --argjson all "$all" "$touched"' [.[] | select(everything or touches(.))]' <<<"$benchmarks")

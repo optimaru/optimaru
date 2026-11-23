@@ -6,7 +6,7 @@ and its C++ tests are in [`tests/vehicle_routing/cpp/`](../../../tests/vehicle_r
 The C++17 optimization **core** of the vehicle-routing use case, derived from the
 Timefold Quickstarts `vehicle-routing` example (Apache-2.0; see the repository NOTICE): the
 domain model, the scoring (hard / medium / soft levels) and the
-solve, running on the generic engine in [`optimaru/cpp/optimaru/`](../../../optimaru/cpp/optimaru).
+solve, running on the generic engine in [`core/optimaru/`](../../../core/optimaru).
 
 Scope: optimization core only — no REST layer, no web UI.
 
@@ -31,7 +31,7 @@ cmake -B build -DOPTIMARU_USE_CASES=vehicle_routing && cmake --build build -j
 | `Score`                                          | the hard / medium / soft levels (lexicographic compare): the engine's `optimaru::HardMediumSoftScore` |
 | `HaversineDrivingTimeCalculator` (`haversine.{hpp,cpp}`) | the straight-line fallback: haversine meters, and those meters at 50 km/h for the seconds; `fillMissingMatrices` fills every profile matrix left empty |
 | `ScoreCalculator` (reference) + `VehicleRoutingIncrementalScoreCalculator` (live) | the four default constraints: a full recompute, and the incremental calculator the search calls |
-| `Solver` (`solver.hpp`)                          | wraps `optimaru/cpp/optimaru/`'s `optimaru::Solver`: construction heuristic + local search |
+| `Solver` (`solver.hpp`)                          | wraps `core/optimaru/`'s `optimaru::Solver`: construction heuristic + local search |
 | `Solver::Config::time_limit`                     | wall-clock budget (default 30 s)                 |
 | `Solver::Config::target_score`                   | stop early once the best score reaches it; `{0, kNoLevelFloor, kNoLevelFloor}` stops at the first feasible solution, which may still leave visits unassigned |
 

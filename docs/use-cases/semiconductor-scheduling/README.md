@@ -5,7 +5,7 @@ sequence-dependent recipe setups, simultaneous batches, inter-tool transport,
 queue-time limits, preventive maintenance, priorities and due dates. It also
 models reusable operators/reticles/fixtures, their capacities and calendars,
 frozen assignments for replanning, minimum hold times and maximum lot cycle
-times. It runs on this repository's C++ engine (`optimaru/cpp/optimaru/`):
+times. It runs on this repository's C++ engine (`core/optimaru/`):
 `optimaru/semiconductor_scheduling/cpp/` holds the domain, the decoder, the 20 constraint components, the
 calculators and the solver; `optimaru/semiconductor_scheduling/` is the pybind11 package with the Pydantic
 models. The exact CP-SAT reference is external-solver's `external_solver.semiconductor_scheduling`;

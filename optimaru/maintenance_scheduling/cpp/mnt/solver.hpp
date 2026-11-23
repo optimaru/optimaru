@@ -10,7 +10,7 @@
 
 namespace mnt {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/. It
+// Thin domain-side wrapper around the generic engine in core/optimaru/. It
 // wires up the incremental score calculator and delegates solving to
 // optimaru::Solver<MaintenanceSchedule>, with the engine's built-in
 // change/swap moves and adaptive ruin-and-recreate (ALNS) enabled (the

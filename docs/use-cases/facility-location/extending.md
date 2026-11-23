@@ -324,7 +324,7 @@ the calls shows why. On the first, 10 million `cost()` calls read 182 million
 consumers, and the delta replaced them with 87 million `delta_cost()` calls: one
 call saves two reads. On the second, 10.6 million `delta_cost()` calls replaced 404
 million reads: one call saves 38. The delta is asked that often for two reasons
-(see [`decomposed_objective.hpp`](../../../optimaru/cpp/optimaru/score/decomposed_objective.hpp)).
+(see [`decomposed_objective.hpp`](../../../core/optimaru/score/decomposed_objective.hpp)).
 `CloseFacilityMove` moves a whole facility in one batch: a constraint with `cost()` alone
 is asked once per touched facility when the batch ends, a delta constraint for every
 consumer that moves. And when a move is rejected, the engine puts back the saved
@@ -349,7 +349,7 @@ at weight 0 only when a solve starts and when `fl.constraint_costs()` reports it
 `get_constraints()` now returns four constraints, and a solve with them ran at
 1.69 million steps per second where the three ran at 1.68 million. A global at
 weight 0 is still sent every change, unless it declares `idle_at_weight_zero()` (see
-[`decomposed_objective.hpp`](../../../optimaru/cpp/optimaru/score/decomposed_objective.hpp));
+[`decomposed_objective.hpp`](../../../core/optimaru/score/decomposed_objective.hpp));
 the example is a unit constraint and needs nothing. `fl.solve(problem)` is not affected.
 
 **Keep raw costs whole numbers.** Demand, capacity, setup cost and meters are

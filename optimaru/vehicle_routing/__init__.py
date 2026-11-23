@@ -9,7 +9,7 @@ and ends up in `plan.unassigned_visit_indices` after solving. `solve(plan, ...)`
 solves a plan in place and returns it; `solve_request` does the same for a
 `models` request.
 
-The solver is the shared engine in `optimaru/cpp/optimaru/`: a cheapest-insertion construction
+The solver is the shared engine in `core/optimaru/`: a cheapest-insertion construction
 heuristic, then local search over relocate / swap / 2-opt / or-opt / tail-swap
 moves, interleaved with adaptive ruin & recreate (ALNS) — random, related,
 worst, SISR substring and whole-route ruins under an adaptive operator

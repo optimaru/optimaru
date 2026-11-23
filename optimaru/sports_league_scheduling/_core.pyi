@@ -1,7 +1,7 @@
 """Type stubs for `optimaru.sports_league_scheduling._core` — the sports-league-scheduling C++ solver.
 
 The compiled module wraps the C++ domain in `optimaru/sports_league_scheduling/cpp`,
-which imports the generic engine in `optimaru/cpp/optimaru`.
+which imports the generic engine in `core/optimaru`.
 
 Domain: assign a round (Round) to every match of the league (Match).
 `Match.round` is the decision variable and holds a position in the

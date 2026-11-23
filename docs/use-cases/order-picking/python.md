@@ -1,7 +1,7 @@
 # optimaru.order_picking (Python)
 
 The Python package wrapping, with pybind11, the C++ implementation of the
-**order-picking** use case (`optimaru/order_picking/cpp`, on the generic engine `optimaru/cpp/optimaru/`).
+**order-picking** use case (`optimaru/order_picking/cpp`, on the generic engine `core/optimaru/`).
 Derived from the Timefold Quickstarts `order-picking` example (Apache-2.0; see the repository NOTICE).
 
 ## Problem

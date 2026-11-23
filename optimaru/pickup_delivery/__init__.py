@@ -22,7 +22,7 @@ Score (hard / medium / soft, lexicographic), at the default weights:
 `constraint_info()` lists every constraint with its default level and weight;
 `optimaru.pickup_delivery.constraints` picks and re-weights them.
 
-The solver is the shared engine in `optimaru/cpp/optimaru/`, with operators
+The solver is the shared engine in `core/optimaru/`, with operators
 registered on top of it whose unit is the request, not the stop. The request
 moves take requests out of their routes and put each back, pickup and dropoff
 together, at its cheapest feasible slot pair (`request_ruin_recreate`), or carry

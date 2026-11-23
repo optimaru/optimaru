@@ -1,7 +1,7 @@
 """Type stubs for `optimaru.bed_allocation._core` — the bed-allocation C++ solver.
 
 The compiled module wraps the C++ domain in `optimaru/bed_allocation/cpp`,
-which imports the generic engine in `optimaru/cpp/optimaru`.
+which imports the generic engine in `core/optimaru`.
 
 The only decision variable is `Stay.bed` (assignment-shape int)::
 

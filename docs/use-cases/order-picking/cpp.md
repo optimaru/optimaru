@@ -4,7 +4,7 @@ The C++ lives in [`optimaru/order_picking/cpp/`](../../../optimaru/order_picking
 and its C++ tests are in [`tests/order_picking/cpp/`](../../../tests/order_picking/cpp).
 
 Derived from the Timefold Quickstarts `order-picking` example (Apache-2.0; see the repository NOTICE).
-Only the domain and constraints are implemented here, on top of the generic engine (`optimaru/cpp/optimaru`, header-only).
+Only the domain and constraints are implemented here, on top of the generic engine (`core/optimaru`, header-only).
 
 - `op/model/domain.hpp` — warehouse layout (5 shelf columns x 3 rows, left/right sides, rows 0-10),
   `calculateDistance`, domain structs, the sequence-shape `SolutionTraits` specialization

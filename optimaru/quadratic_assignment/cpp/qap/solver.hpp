@@ -11,7 +11,7 @@
 
 namespace qap {
 
-// Thin domain-side wrapper around the generic engine in optimaru/cpp/optimaru/: it
+// Thin domain-side wrapper around the generic engine in core/optimaru/: it
 // starts from a complete permutation (the identity, or a warm-start seed that
 // must be a bijection), wires up the incremental score calculator and
 // delegates the search to optimaru::Solver<QuadraticAssignmentProblem> —

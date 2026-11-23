@@ -361,7 +361,7 @@ The gates run in `ci.yml`. The C++ tests run in the `school_timetabling (C++)` j
 pull request. The cross-check gate runs in the `school-timetabling (CP-SAT benchmark)` job
 (track 1 at size S for one second, then track 2 at size S) on every pull request that
 touches `optimaru/school_timetabling/`, `benchmarks/school-timetabling/`, the C++ engine
-(`optimaru/cpp/`) or the shared Python and build files (`optimaru/*.py`, `setup.py`,
+(`core/`) or the shared Python and build files (`optimaru/*.py`, `setup.py`,
 `pyproject.toml`, `CMakeLists.txt`), and in the weekly run.
 
 - Trigger: `workflow_dispatch` only (per-instance budget `seconds`, default 10).

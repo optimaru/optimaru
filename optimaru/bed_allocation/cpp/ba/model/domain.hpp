@@ -19,7 +19,7 @@ namespace ba {
 // Score  (hard / medium / soft)
 // ---------------------------------------------------------------------------
 // The domain scores on hard / medium / soft levels; the generic engine
-// (optimaru/cpp/optimaru/) only knows Score(int64 hard, double soft). Mapping rule:
+// (core/optimaru/) only knows Score(int64 hard, double soft). Mapping rule:
 //
 //   engine.hard = hard
 //   engine.soft = medium * kMediumUnit + soft      (kMediumUnit = 10^9)

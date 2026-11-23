@@ -3,7 +3,7 @@
 Derived from the Timefold Quickstarts `maintenance-scheduling` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)), with modifications:
 assigns a crew (Crew) and a start date to maintenance jobs (Job) to minimize early/late
-maintenance. A C++ domain on top of the generic engine in `optimaru/cpp/optimaru/` (late acceptance
+maintenance. A C++ domain on top of the generic engine in `core/optimaru/` (late acceptance
 + ALNS), with a Python package (`maintenance_scheduling`) via pybind11.
 
 ## Usage

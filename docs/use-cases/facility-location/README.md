@@ -2,7 +2,7 @@
 
 Derived from the Timefold Quickstarts `facility-location` example
 (Apache-2.0; see the repository [NOTICE](../../../NOTICE)),
-built on this repository's C++ engine (`optimaru/cpp/optimaru/`).
+built on this repository's C++ engine (`core/optimaru/`).
 The classic FLP: pick one facility for every consumer.
 
 ## Usage

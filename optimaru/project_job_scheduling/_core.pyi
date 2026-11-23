@@ -1,7 +1,7 @@
 """Type stubs for `optimaru.project_job_scheduling._core` — the project-job-scheduling C++ solver.
 
 The compiled module wraps the C++ domain in `optimaru/project_job_scheduling/cpp`,
-which imports the generic engine in `optimaru/cpp/optimaru`.
+which imports the generic engine in `core/optimaru`.
 
 The only decision variable is `Allocation.mode_delay` (assignment-shape int) — a composite
 encoding of the two decisions per allocation (execution mode, delay∈[0, delay_range_size))::

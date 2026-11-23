@@ -3,7 +3,7 @@
 The C++ lives in [`optimaru/food_packaging/cpp/`](../../../optimaru/food_packaging/cpp); the paths below are relative to it,
 and its C++ tests are in [`tests/food_packaging/cpp/`](../../../tests/food_packaging/cpp).
 
-The food-packaging use case implemented on `optimaru/cpp/optimaru/` (the header-only
+The food-packaging use case implemented on `core/optimaru/` (the header-only
 engine). Files:
 
 - `fp/model/domain.hpp` — domain structs, the mapping of the three score

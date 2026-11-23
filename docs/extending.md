@@ -44,7 +44,7 @@ Where a use case differs from the table:
   picks as a calculator. The package-level `solve(x, constraints=picks)` is the
   same for all 22.
 
-The engine is header-only, in `optimaru/cpp/optimaru/`. You never edit it to add a
+The engine is header-only, in `core/optimaru/`. You never edit it to add a
 move or a cost: both plug in from the use case.
 
 ## The edit, build, test loop
@@ -92,7 +92,7 @@ station" (assembly-line balancing).
 ### 1. Write the operator
 
 A move is an `optimaru::MoveOperator<Solution>`
-([`search/operators.hpp`](../optimaru/cpp/optimaru/search/operators.hpp)). Put it in
+([`search/operators.hpp`](../core/optimaru/search/operators.hpp)). Put it in
 the use case's `moves/` folder, for example
 `optimaru/<uc>/cpp/<ns>/moves/moves.hpp` (bin packing keeps its moves in
 [`bp/moves/moves.hpp`](../optimaru/bin_packing/cpp/bp/moves/moves.hpp)):
@@ -310,7 +310,7 @@ struct MyRuleCost final : detail::PerVehicleConstraint {
 - **The base class.** Each use case's `constraints/common.hpp` has its own base
   for unit constraints (`detail::PerVehicleConstraint` here). In general it is an
   `optimaru::UnitConstraint<Solution>`
-  ([`score/decomposed_objective.hpp`](../optimaru/cpp/optimaru/score/decomposed_objective.hpp)).
+  ([`score/decomposed_objective.hpp`](../core/optimaru/score/decomposed_objective.hpp)).
 - **What `cost()` may read.** Only `(solution, unit, members)`: no derived
   values, because move previews evaluate candidate members before the move. To
   precompute lookup tables, override `on_reset(solution)`. For assignment-shape
@@ -334,7 +334,7 @@ struct MyRuleCost final : detail::PerVehicleConstraint {
   On the sequence shape, a rule that keeps the elements of a group in one list
   (the visits or requests of one job on one vehicle) forwards to
   `optimaru::GroupPlacement`
-  ([`score/group_placement.hpp`](../optimaru/cpp/optimaru/score/group_placement.hpp)),
+  ([`score/group_placement.hpp`](../core/optimaru/score/group_placement.hpp)),
   which also answers the move previews; see
   [`vrp/constraints/visit_group_cost.hpp`](../optimaru/vehicle_routing/cpp/vrp/constraints/visit_group_cost.hpp).
 - **Rewards and structural constraints.** A reward sets `reward = true;` in its

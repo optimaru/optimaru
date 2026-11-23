@@ -2,7 +2,7 @@
 
 Hospital bed allocation (PAS), derived from the Timefold Quickstarts `bed-allocation` example
 (Apache-2.0; see the repository NOTICE): the pybind11 package of the `optimaru/bed_allocation/cpp` implementation
-on the generic C++ engine in `optimaru/cpp/optimaru/`. An assignment-shaped domain that picks one bed (Bed) per stay (Stay).
+on the generic C++ engine in `core/optimaru/`. An assignment-shaped domain that picks one bed (Bed) per stay (Stay).
 
 ## Install and test
 
