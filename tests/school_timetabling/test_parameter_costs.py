@@ -85,3 +85,7 @@ def test_a_zero_teacher_cap_is_the_default_as_convert_reads_it():
         if use.where == f"teacher {problem['teachers'][0]['id']}"
         and use.field in ("max_periods_per_day", "max_consecutive_periods")
     ]
+
+
+def test_a_generator_of_picks_is_read_once():
+    st.solve(full_problem(), constraints=(pick for pick in get_constraints()), **QUICK)

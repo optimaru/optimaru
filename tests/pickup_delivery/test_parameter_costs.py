@@ -83,3 +83,13 @@ def test_max_stops_at_its_json_default_needs_nothing_and_weight_zero_counts():
     picks = without(get_constraints(), "max_stops_cost")
     solve(pdp_input(), picks)  # max_stops 20, the default
     solve(pdp_input({"max_stops": 6}), [*picks, MaxStopsCost(weight=0)])
+
+
+def test_the_tables_hold_the_model_defaults():
+    from optimaru.pickup_delivery import models
+
+    for table, model in ((models._VEHICLE_COSTS, VehicleModel), (models._REQUEST_COSTS, DeliveryModel)):
+        for field, default, _ in table:
+            info = model.model_fields[field]
+            assert (info.default_factory() if info.default_factory else info.default) == default, field
+    assert StopModel.model_fields["max_end_time"].default == 24 * 3600

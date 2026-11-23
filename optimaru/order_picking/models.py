@@ -31,8 +31,9 @@ from typing import Any, Literal, cast
 from pydantic import Field, model_validator
 
 from .. import _api
-from .._constraint import ParameterUse, require_costs
+from .._constraint import ParameterUse
 from .._models import SolveRequest, StrictModel, apply_solver_parameters
+from .._solve import check_parameters
 from . import _core
 from .constraints import get_constraints
 
@@ -194,7 +195,7 @@ def solve_request(request: OrderPickingRequest, *, constraints=None) -> OrderPic
 
     A parameter set away from its default whose costs the constraints leave out would be
     refused with ValueError (`parameter_uses`, empty for this use case)."""
-    require_costs(parameter_uses(request), get_constraints(constraints))
+    constraints = check_parameters(parameter_uses(request), constraints, get_constraints)
     solution = to_solution(request)
     config = _core.SolverConfig()
     config.spent_limit_seconds = request.time_limit_seconds

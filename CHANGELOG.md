@@ -8,7 +8,9 @@
   with `ValueError`, naming the field, where it is set and the costs to add; before, the solve
   ignored the field without a word. The effective selection counts (the defaults when
   `constraints` is None, a pick at weight 0 included). It is checked where the input is the JSON
-  model (`solve_request`, `solve(model)`); compiled problems are solved as given. Default
+  model (`solve_request`, `solve(model)`); compiled problems are solved as given. With an API key
+  set, the request is sent as it is (school timetabling also checks before sending), and the
+  refusal comes from the server once it runs this release. Default
   selections are unaffected, except employee scheduling's `desired_shifts`, whose
   `desired_shift_cost` is opt-in: a request that sets it now has to pick that cost. Each use case's
   `models.parameter_uses(model)` lists what an input sets, and docs/use-cases/README.md

@@ -999,6 +999,7 @@ def solve_request(
     schedule is not checked."""
     if constraints is not None:
         request = _with_constraints(request, constraints)
+    # No check_picks: the picks of a request are validated with its model already.
     require_costs(parameter_uses(request.model_input), request.model_input.constraints)
     n = max(request.parallel_solver_count, request.settings.multi_start)
     if n <= 1:

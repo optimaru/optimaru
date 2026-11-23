@@ -147,6 +147,14 @@ __all__ = [
 ]
 
 
+def _read_once(constraints):
+    """``constraints`` as a list unless it is None or an `Assembly`: the picks are read more than
+    once (the parameter check, then the solve or the request), which a generator would not survive."""
+    if constraints is None or isinstance(constraints, Assembly):
+        return constraints
+    return list(constraints)
+
+
 def _picks_of(constraints) -> list[Constraint]:
     """`solve(constraints=...)`'s argument as a list of specs.
 
@@ -273,6 +281,7 @@ def _api_request(problem: dict, keywords: dict):
     from .models import TimetableProblemModel, TimetableRequest
 
     mode, weights, constraints = keywords["mode"], keywords["weights"], keywords["constraints"]
+    constraints = _read_once(constraints)
     canonical = _check_mode(mode, weights, constraints)
     fields = {name: keywords[name] for name in _REQUEST_KEYWORDS}
     parameters: dict = {}
@@ -426,6 +435,7 @@ def solve(
     constraint names and objective_value the weighted penalty sum — the same
     unit as the cpsat backend.
     """
+    constraints = _read_once(constraints)
     canonical = _check_mode(mode, weights, constraints)
 
     cfg = solver_config(

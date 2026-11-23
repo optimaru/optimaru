@@ -246,10 +246,6 @@ def is_set(value: Any, default: Any) -> bool:
     return value != default
 
 
-def _snake(name: str) -> str:
-    return "".join("_" + c.lower() if c.isupper() else c for c in name).lstrip("_")
-
-
 def require_costs(
     uses: Iterable[ParameterUse], constraints: Iterable[Any], *, check_picks: Callable[[], Any] | None = None
 ) -> None:
@@ -270,9 +266,8 @@ def require_costs(
     uses = list(uses)
     if not uses:
         return
-    names = {
-        _snake(str(pick["name"] if isinstance(pick, Mapping) else getattr(pick, "name", pick))) for pick in constraints
-    }
+    # A spec or a dict carries its snake_case name; school timetabling also takes the name itself.
+    names = {str(pick["name"] if isinstance(pick, Mapping) else getattr(pick, "name", pick)) for pick in constraints}
     missing: dict[tuple[str, tuple[str, ...]], list[ParameterUse]] = {}
     for use in uses:
         if not names.intersection(use.costs):

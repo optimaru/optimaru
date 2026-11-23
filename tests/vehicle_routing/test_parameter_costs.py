@@ -7,7 +7,6 @@ from optimaru.vehicle_routing.constraints import (
     MaxStopsCost,
     TravelTimeCost,
     UnassignedVisitsCost,
-    VehicleCapacityCost,
     get_constraints,
 )
 from optimaru.vehicle_routing.models import (
@@ -80,11 +79,18 @@ def test_a_visit_field_without_its_cost_is_refused(field):
         solve(routing(visit={field: value}), without(get_constraints(), cost))
 
 
-def test_demand_needs_one_of_its_two_costs():
-    picks = [UnassignedVisitsCost(), TravelTimeCost(), MaxEndTimeCost()]
-    with pytest.raises(ValueError, match="sets demand, but the constraints leave out vehicle_capacity_cost or"):
-        solve(routing(visit={"demand": 3}), picks)
-    solve(routing(visit={"demand": 3}), [*picks, VehicleCapacityCost()])
+def test_demand_needs_no_cost():
+    # The solution reports each vehicle's load from it, whatever the constraints.
+    solve(routing(visit={"demand": 3}), [UnassignedVisitsCost(), TravelTimeCost(), MaxEndTimeCost()])
+
+
+def test_the_tables_hold_the_model_defaults():
+    from optimaru.vehicle_routing import models
+
+    for table, model in ((models._VEHICLE_COSTS, VehicleModel), (models._VISIT_COSTS, VisitModel)):
+        for field, default, _ in table:
+            info = model.model_fields[field]
+            assert (info.default_factory() if info.default_factory else info.default) == default, field
 
 
 def test_after_needs_the_order_cost():

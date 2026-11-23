@@ -390,7 +390,6 @@ _VEHICLE_COSTS = (
 )
 _VISIT_COSTS = (
     ("max_end_time", 24 * 3600, ("max_end_time_cost",)),
-    ("demand", 1, ("vehicle_capacity_cost", "min_capacity_utilization_cost")),
     ("unassigned_penalty_minutes", -1, ("unassigned_visits_cost",)),
     ("group", None, ("visit_group_cost",)),
     ("after", [], ("visit_order_cost",)),
@@ -402,8 +401,9 @@ def parameter_uses(model_input: RoutingInput) -> list[ParameterUse]:
 
     `solve_request` refuses a selection that holds none of a parameter's costs
     (`optimaru._constraint.require_costs`). The table is in the use-case guide
-    ("Parameters and their costs"). Forbidden visits are not here (their cost is always on), nor profile distances
-    (the solution reports driving meters from them, whatever the constraints)."""
+    ("Parameters and their costs"). Forbidden visits are not here (their cost is always on), nor demand and profile
+    distances (the solution reports the load and the driving meters from them, whatever the
+    constraints)."""
     uses = []
     for vehicle in model_input.vehicles:
         for field, default, costs in _VEHICLE_COSTS:

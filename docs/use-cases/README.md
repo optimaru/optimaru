@@ -399,13 +399,13 @@ the cost that scores it: add one, or leave max_end_time at its default (0)
   start times); rules the engine enforces whatever the selection (school timetabling's
   fixed slots and parallel groups, max cut's fixed partition, semiconductor scheduling's
   decoder rules, routing's forbidden visits and requests, which are always on); fields
-  with an effect besides their cost (routing profile `distances`, which the solution
-  reports as driving meters; school timetabling's `required_room_type`, which the room
+  with an effect besides their cost (routing profile `distances` and visit `demand`,
+  which the solution reports as driving meters and load; school timetabling's `required_room_type`, which the room
   assignment reads); and a field left at a default that already means something
   (pickup-delivery `max_stops=20`, school timetabling's `max_periods_per_day=6`): only a
   value other than the default is checked. A value that switches something off, such as
-  a demand of 0, is still a value other than the default: drop the field, or keep its
-  cost at weight 0.
+  a tag list emptied of all but one tag, is still a value other than the default: drop the
+  field, or keep its cost at weight 0.
 
 The fields each use case checks (`models.parameter_uses(model)` lists the ones an input sets):
 
@@ -466,7 +466,7 @@ The fields each use case checks (`models.parameter_uses(model)` lists the ones a
 | | task `priority` MAJOR or CRITICAL (MINOR) | `major_` / `critical_priority_task_end_time_cost` |
 | tournament scheduling | `unavailability_penalties` ([]) | `team_unavailability_cost` |
 | vehicle routing | vehicle `max_travel_time`, `max_route_duration`, `max_end_time`, `max_stops` (0), `min_load_ratio`, `fixed_cost`, `max_route_radius_meters` (0) | the matching vehicle cost |
-| | visit `max_end_time` (86400), `demand` (1), `unassigned_penalty_minutes` (-1) | `max_end_time_cost`, `vehicle_capacity_cost` or `min_capacity_utilization_cost`, `unassigned_visits_cost` |
+| | visit `max_end_time` (86400), `unassigned_penalty_minutes` (-1) | `max_end_time_cost`, `unassigned_visits_cost` |
 | | visit `group` (None), `after` ([]) | `visit_group_cost`, `visit_order_cost` |
 | | profile `preferred_visits` ([]) | `profile_preferred_visit_cost` |
 
