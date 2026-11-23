@@ -148,3 +148,24 @@ def test_each_vehicle_drives_its_own_profile(carrier) -> None:
     assert (cost == pytest.approx(210)) == (carrier == "V1")
     exact = solve_request(request, constraints=[{"name": "travel_time_cost", "weight": 1}], _fixed_routes=routes)
     assert -_soft(exact.score) == round(cost)
+
+
+def test_the_bounds_count_only_drivable_legs() -> None:
+    """Start depot to a stop, stop to stop and stop to end depot count; a depot pair or a leg back
+    to the start of an open route does not, though the profile leaves it at the missing value."""
+    from pickup_delivery_cpsat.model.solve import _longest_legs
+
+    body = _request(profile="van").model_dump()
+    body["model_input"]["profiles"]["van"] = {
+        "durations": {"H": {"P": 50, "D": 60}, "P": {"D": 70, "E": 80}, "D": {"P": 75, "E": 90}},
+        "missing_value": 5_000,
+    }
+    stops = range(2, 4)  # the locations are H, E, then P, D
+    open_route = to_plan(PdpRequest.model_validate(body).model_input)
+    assert _longest_legs(open_route, stops)[0] == 75  # P -> H, D -> H, H -> E, ... are left out
+    body["model_input"]["vehicles"][0]["end_depot"] = "E"
+    to_e = to_plan(PdpRequest.model_validate(body).model_input)
+    assert _longest_legs(to_e, stops)[0] == 90
+    body["model_input"]["vehicles"][0]["end_depot"] = "H"
+    back_home = to_plan(PdpRequest.model_validate(body).model_input)
+    assert _longest_legs(back_home, stops)[0] == 5_000  # P -> H is drivable now, and missing

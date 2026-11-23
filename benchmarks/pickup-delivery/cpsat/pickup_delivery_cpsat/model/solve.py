@@ -69,6 +69,37 @@ def _fix_routes(
             model.add(literal == int((tail, head) in expected))
 
 
+def _longest_legs(plan, stops: Sequence[int]) -> tuple[int, int]:
+    """The longest leg any route can drive, in seconds and in meters.
+
+    Only legs a route can take count: a vehicle's start depot to a stop, a stop to another stop,
+    and a stop to the vehicle's end depot (none on an open route), each in that vehicle's travel
+    profile. Pairs no route drives (depot to depot, a stop back to the start of an open route, a
+    profile no vehicle uses) are left out, so the missing value a sparse profile gives them does
+    not loosen the horizon and the travel bounds. A drivable leg the profile leaves out still
+    counts, so the bound holds for every route.
+    """
+    drive = meters = 0
+    measured: set[int] = set()
+    for vehicle in plan.vehicles:
+        profile = vehicle.profile_index
+        if profile not in measured:
+            measured.add(profile)
+            for a in stops:
+                for b in stops:
+                    if a != b:
+                        drive = max(drive, plan.driving_time(a, b, profile))
+                        meters = max(meters, plan.driving_distance(a, b, profile))
+        start, end = vehicle.start_location_index, vehicle.end_location_index
+        for stop in stops:
+            drive = max(drive, plan.driving_time(start, stop, profile))
+            meters = max(meters, plan.driving_distance(start, stop, profile))
+            if end >= 0:
+                drive = max(drive, plan.driving_time(stop, end, profile))
+                meters = max(meters, plan.driving_distance(stop, end, profile))
+    return drive, meters
+
+
 def solve_request(
     request: PdpRequest,
     *,
@@ -97,14 +128,7 @@ def solve_request(
 
     depot_count = len(data.depots)  # the locations are the depots, then the stops
     size = depot_count + node_count
-    # The longest leg over the profiles the vehicles drive (a profile no vehicle uses would only
-    # loosen the bounds).
-    max_drive = max_meters = 0
-    for p in {vehicle.profile_index for vehicle in plan.vehicles}:
-        for a in range(size):
-            for b in range(size):
-                max_drive = max(max_drive, plan.driving_time(a, b, p))
-                max_meters = max(max_meters, plan.driving_distance(a, b, p))
+    max_drive, max_meters = _longest_legs(plan, range(depot_count, size))
     legs = node_count + 1  # one leg per stop plus the leg to the end depot
     horizon = (
         max([stop.max_end_time for stop in nodes] + [vehicle.departure_time for vehicle in data.vehicles] + [24 * 3600])
