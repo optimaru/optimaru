@@ -107,7 +107,11 @@ inline bool enforcesForbiddenVisits(const ConstraintAssembly& assembly) {
 // still scores as picked, but no longer switches the rule off). A forbidden
 // visit is no preference to weigh but a job the vehicle cannot do. On a plan
 // without forbidden visits nothing is added. constraint_costs() and every
-// solve of the Python bindings run this.
+// solve of the Python bindings run this. The instance comes after the
+// selection's own, so constraint_costs() keys it "<name>#<k+1>" when the
+// selection holds k (just "<name>" when none): the Python score() reads that
+// key to append the same instance (with_always_on in optimaru/_constraint.py),
+// so keep the two in step.
 inline void addAlwaysOnConstraints(ConstraintAssembly& assembly, const VehicleRoutePlan& plan) {
     if (plan.hasForbiddenVisits() && !enforcesForbiddenVisits(assembly))
         assembly.emplace_instance<ProfileForbiddenVisitCost>();

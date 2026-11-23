@@ -455,7 +455,9 @@ PYBIND11_MODULE(_core, m) {
     m.def(
             "constraint_costs",
             [](PdpRoutePlan& plan, const py::object& constraints) {
-                checkProfileRequests(plan);
+                // The indices only: a binding the profile forbids is priced as
+                // it stands, as calculate_score does.
+                checkProfileRequestIndices(plan);
                 DecomposedCalculator objective;
                 ConstraintAssembly picks =
                         opy::apply_constraints([] { return defaultConstraints(); }, constraints);

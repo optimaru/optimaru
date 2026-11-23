@@ -150,3 +150,11 @@ def test_each_vehicle_drives_its_own_profile(carrier) -> None:
     assert (cost == pytest.approx(210)) == (carrier == "V1")
     exact = solve_request(request, constraints=[{"name": "travel_time_cost", "weight": 1}], _fixed_routes=routes)
     assert -_soft(exact.score) == round(cost)
+
+
+def test_a_profile_that_lists_requests_is_refused() -> None:
+    request = _request()
+    data = request.model_dump()
+    data["model_input"]["profiles"]["default"]["forbidden_requests"] = ["R"]
+    with pytest.raises(ValueError, match="list forbidden or preferred requests"):
+        solve_request(PdpRequest.model_validate(data))

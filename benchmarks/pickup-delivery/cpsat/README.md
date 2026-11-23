@@ -35,7 +35,8 @@ engine's default in medium units.
   `required_vehicle_cost`, `request_group_cost`, `profile_forbidden_request_cost` and
   `profile_preferred_request_cost` have no CP-SAT plugin (engine-only); naming them here is
   an unknown-constraint error. The model does not read a request's `group`, so it places
-  grouped requests one by one, nor a profile's `forbidden_requests` / `preferred_requests`.
+  grouped requests one by one. It refuses a profile that lists `forbidden_requests` or
+  `preferred_requests` (`ValueError`), since it would solve another problem.
 
 **Repeats, `offset` and `clip`.** A constraint may be picked several times (as
 specs or as `{"name", "weight", "level", "offset", "clip"}` mappings): each pick builds its

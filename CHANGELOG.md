@@ -27,7 +27,8 @@
   another profile whose `durations`, `distances` and `missing_value` this one uses, so profiles
   that differ only in their job lists (one per technician skill set, say) share one set of
   travel dicts. Profiles that drive alike share one matrix in the engine, and so do all the
-  profiles that give no travel (straight lines), where each had a copy before.
+  profiles that give no travel (straight lines), where each had a copy before: on a compiled plan
+  such profiles now share one `Vehicle.profile_index`.
 - **The engine's C++ moves to `core/`.** The header-only engine lives in `core/optimaru/` at the top
   of the repository instead of `optimaru/cpp/optimaru/`, so `optimaru/` holds the Python package and
   its use cases. Includes stay `#include "optimaru/..."`, and nothing changes in the installed
