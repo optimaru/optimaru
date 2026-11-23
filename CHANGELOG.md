@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.6.1
+
+**From 0.6.0.** School timetabling solves on the optimaru API like every other use case once an
+API key is set, and its request takes a minimal starting solution. Nothing changes for a solve on
+this machine; the routing notebooks follow the 0.6 input, and the docs site carries the optimaru
+mark.
 
 - **School timetabling solves on the optimaru API too.** With an API key set, `solve_request`
   sends its `TimetableRequest` to `POST /api/use-cases/school-timetabling/solve/jobs`, as the
@@ -15,6 +20,9 @@
   `course_id` and a `slot`, ignoring keys it does not know (`StartingSolutionModel`), as
   `solve(initial_solution=...)` always did. A server on this release accepts such a start in
   `request.initial_solution`.
+- **Docs site: the optimaru mark.** The engine docs (GitHub Pages and optimaru.com/engine-docs/)
+  show the optimaru mark as their favicon and header icon, on a plain white or black header with
+  optimaru's green as the accent.
 - **Routing notebooks on the 0.6 input.** `examples/vehicle-routing.ipynb` and
   `examples/pickup-delivery.ipynb` build their vehicles from depots (`start_location_index` /
   `end_location_index` in the compiled layer, `DepotModel` with `start_depot` / `end_depot` in
