@@ -66,5 +66,5 @@ it, otherwise the best its authors' solver found in 100 s.
 | very-large | instance_n=1000_375 | 1000 | 229 | 233 | not run (size cap) |
 | very-large | instance_n=1000_500 | 1000 | 591 | 555 | not run (size cap) |
 
-CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, 100 tasks). Measured 2026-11-10 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
+CP-SAT runs only up to the exact-model size cap (`--exact-max-size`, 100 tasks). Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->

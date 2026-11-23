@@ -96,17 +96,17 @@ Every cell is the score of that solver's final solution under the use case's own
 | random12-2 | 12 facilities | **0hard/-2048soft** | **0hard/-2048soft** |
 | random12-3 | 12 facilities | **0hard/-2520soft** | **0hard/-2520soft** |
 | random14 | 14 facilities | **0hard/-3666soft** | **0hard/-3666soft** |
-| random14-2 | 14 facilities | **0hard/-3522soft** | 0hard/-3524soft |
-| random14-3 | 14 facilities | **0hard/-3332soft** | 0hard/-3402soft |
-| random16 | 16 facilities | **0hard/-4020soft** | **0hard/-4020soft** |
-| random16-2 | 16 facilities | **0hard/-4836soft** | 0hard/-4878soft |
-| random16-3 | 16 facilities | **0hard/-3912soft** | 0hard/-3964soft |
-| random20 | 20 facilities | **0hard/-7632soft** | 0hard/-7836soft |
-| random20-2 | 20 facilities | **0hard/-7404soft** | 0hard/-7494soft |
-| random25 | 25 facilities | **0hard/-10644soft** | 0hard/-10988soft |
-| random25-2 | 25 facilities | **0hard/-12290soft** | 0hard/-12670soft |
+| random14-2 | 14 facilities | **0hard/-3522soft** | **0hard/-3522soft** |
+| random14-3 | 14 facilities | **0hard/-3332soft** | 0hard/-3436soft |
+| random16 | 16 facilities | **0hard/-4020soft** | 0hard/-4070soft |
+| random16-2 | 16 facilities | **0hard/-4836soft** | **0hard/-4836soft** |
+| random16-3 | 16 facilities | **0hard/-3912soft** | 0hard/-3960soft |
+| random20 | 20 facilities | **0hard/-7632soft** | 0hard/-7856soft |
+| random20-2 | 20 facilities | **0hard/-7404soft** | 0hard/-7562soft |
+| random25 | 25 facilities | **0hard/-10644soft** | 0hard/-10950soft |
+| random25-2 | 25 facilities | **0hard/-12290soft** | 0hard/-12678soft |
 
-Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
+Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — treat small differences as noise. How the runs were made: [benchmarks/README.md](../README.md#publishing-results).
 <!-- results:end -->
 
 <!-- qaplib:start -->
@@ -154,5 +154,5 @@ The archive has no solution file for esc32a, esc32b, esc32c, esc32d, esc32h, so 
 | tho40 | 40 | 240,516 | 240,632 | 0.05% |
 | wil50 | 50 | 48,816 | 48,842 | 0.05% |
 
-Mean gap 0.26%, median 0.00%, worst 1.63%. Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. Single runs — a snapshot, not a statistical study.
+Mean gap 0.26%, median 0.00%, worst 1.63%. Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. Single runs — a snapshot, not a statistical study.
 <!-- qaplib:end -->

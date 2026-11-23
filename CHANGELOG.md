@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Benchmarks: every table measured again, on one machine.** All 29 published data sets were run
+  again on 2026-11-23/24 on the Apple M4 Max Mac the other tables came from, on optimaru 0.6.0,
+  which searches as 0.7.0 does (the pickup-delivery CP-SAT rows on the model the benchmark now
+  carries, with #144's horizon). The two VRPTW tables, school timetabling's track-1 table and the
+  `ruin_recreate_as_move_weight` A/B runs in the meeting and conference scheduling guides came from
+  a 4-core cloud machine before and now come from the Mac too, so no table or guide names another
+  machine. `benchmarks/README.md` says how far the numbers repeated against the tables they
+  replace.
+
 ## 0.7.0
 
 **From 0.6.1. Breaking:** a request that sets a field which acts only through a cost, while its

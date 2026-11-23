@@ -46,6 +46,11 @@ here, on one thread; `--workers` is CP-SAT's. The CP-SAT circuit model grows
 quadratically per vehicle, so a whole instance (about 50 requests, 25 vehicles)
 is past what it solves in 30 s.
 
+Below that size CP-SAT's 30 s result moves from run to run: on the 25-request rows the
+runs of 2026-11-12, of the model of #140 and of this table (with #144's horizon) each
+came out differently, better on one row and worse on another, so read a CP-SAT row
+there as one draw, not as the effect of a change to the model.
+
 <!-- results:start -->
 Each plan is re-verified independently: every request served, pickup before dropoff on the
 same vehicle, capacity and every time window. Distance is the Li & Lim round trip, with every
@@ -69,15 +74,15 @@ leg rounded to a tenth of a unit; lower is better. Cells are vehicles / distance
 | lr101 | all 53 requests | **19 / 1,650.8** | no solution in time |
 | lr201 | first 10 of 51 requests | **3 / 332.6** | **3 / 332.6** |
 | lr201 | first 15 of 51 requests | **4 / 471.8** | **4 / 471.8** |
-| lr201 | first 25 of 51 requests | **5 / 733.8** | 7 / 866.4 |
+| lr201 | first 25 of 51 requests | **5 / 733.8** | 9 / 1,057.9 |
 | lr201 | all 51 requests | **4 / 1,252.8** | incomplete (leaves stops unserved) |
 | lrc101 | first 10 of 53 requests | **4 / 425.7** | **4 / 425.7** |
 | lrc101 | first 15 of 53 requests | **6 / 644.6** | **6 / 644.6** |
-| lrc101 | first 25 of 53 requests | **9 / 1,018.2** | **9 / 1,018.2** |
-| lrc101 | all 53 requests | **15 / 1,703** | incomplete (leaves stops unserved) |
+| lrc101 | first 25 of 53 requests | **9 / 1,018.2** | 10 / 1,139.9 |
+| lrc101 | all 53 requests | **15 / 1,703** | no solution in time |
 | lrc201 | first 10 of 51 requests | **2 / 315.1** | **2 / 315.1** |
 | lrc201 | first 15 of 51 requests | **4 / 609.6** | **4 / 609.6** |
-| lrc201 | first 25 of 51 requests | **4 / 933.7** | 5 / 1,128.4 |
+| lrc201 | first 25 of 51 requests | **4 / 933.7** | 6 / 1,423.9 |
 | lrc201 | all 51 requests | **4 / 1,406.5** | incomplete (leaves stops unserved) |
 
 **Engine on 56 whole instances**, beside the best-known solution (which ranks by
@@ -143,7 +148,7 @@ harness's objective):
 | lrc207 | 51 | 3 / 1,062.05 | 3 / 1,061.8 | 0.0% |
 | lrc208 | 51 | 3 / 852.76 | 3 / 852.7 | 0.0% |
 
-Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
+Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->
 
 The independent scorer verifies every stop exactly once, same vehicle,

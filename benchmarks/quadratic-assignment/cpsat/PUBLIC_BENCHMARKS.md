@@ -54,7 +54,7 @@ The archive has no solution file for esc32a, esc32b, esc32c, esc32d, esc32h, so 
 | tho40 | 40 | 240,516 | 240,632 | 0.05% |
 | wil50 | 50 | 48,816 | 48,842 | 0.05% |
 
-Mean gap 0.26%, median 0.00%, worst 1.63%. Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. Single runs — a snapshot, not a statistical study.
+Mean gap 0.26%, median 0.00%, worst 1.63%. Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 1. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->
 
 The table is the benchmark's whole QAPLIB selection (every instance with 30 to

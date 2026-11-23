@@ -48,23 +48,23 @@ of them, and a wide, shallow precedence network (a layer per eight activities).
 | synthetic-30-s2 | 30 | 23 | **77** | **77** |
 | synthetic-30-s3 | 30 | 25 | **93** | **93** |
 | synthetic-30-s4 | 30 | 22 | 63 | **62** |
-| synthetic-60-s0 | 60 | 54 | **165** | 168 |
+| synthetic-60-s0 | 60 | 54 | **165** | 169 |
 | synthetic-60-s1 | 60 | 59 | **153** | 154 |
-| synthetic-60-s2 | 60 | 55 | 163 | **161** |
-| synthetic-60-s3 | 60 | 57 | **189** | 194 |
+| synthetic-60-s2 | 60 | 55 | **163** | **163** |
+| synthetic-60-s3 | 60 | 57 | **189** | 198 |
 | synthetic-60-s4 | 60 | 45 | **160** | **160** |
-| synthetic-90-s0 | 90 | 80 | **238** | 242 |
-| synthetic-90-s1 | 90 | 86 | **247** | 250 |
-| synthetic-90-s2 | 90 | 91 | **256** | 275 |
-| synthetic-90-s3 | 90 | 78 | **246** | 248 |
-| synthetic-90-s4 | 90 | 71 | **245** | 250 |
-| synthetic-120-s0 | 120 | 108 | **327** | 356 |
-| synthetic-120-s1 | 120 | 120 | **341** | 377 |
-| synthetic-120-s2 | 120 | 105 | **307** | 338 |
-| synthetic-120-s3 | 120 | 113 | **317** | 342 |
-| synthetic-120-s4 | 120 | 97 | **308** | 325 |
+| synthetic-90-s0 | 90 | 80 | **238** | **238** |
+| synthetic-90-s1 | 90 | 86 | **247** | 249 |
+| synthetic-90-s2 | 90 | 91 | **256** | 273 |
+| synthetic-90-s3 | 90 | 78 | 246 | **243** |
+| synthetic-90-s4 | 90 | 71 | **245** | 249 |
+| synthetic-120-s0 | 120 | 108 | **327** | 366 |
+| synthetic-120-s1 | 120 | 120 | **341** | 376 |
+| synthetic-120-s2 | 120 | 105 | **307** | 345 |
+| synthetic-120-s3 | 120 | 113 | **317** | 353 |
+| synthetic-120-s4 | 120 | 97 | **308** | 339 |
 
-Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
+Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->
 
 The comparison exposed and fixed an exact-backend scaling issue: its old time

@@ -34,6 +34,11 @@ The engine runs single-threaded. CP-SAT gets `--workers` search workers;
 its budget starts once its model is built, and the time the runner reports
 for it includes building the model.
 
+CP-SAT's 30 s result on these instances moves from run to run, both ways: against the
+table of 2026-11-12, this one is better at 25 and 30 requests and leaves stops unserved
+at 40 requests on seed 0, where that run had `14 / 3,229.4`. Read a CP-SAT row here as
+one draw.
+
 <!-- results:start -->
 ## Results
 
@@ -49,11 +54,11 @@ requests. Cells are vehicles / distance.
 | 15 | 1 | **5 / 1,180** | **5 / 1,180** |
 | 20 | 0 | **7 / 1,477.6** | **7 / 1,477.6** |
 | 20 | 1 | **6 / 1,512.1** | **6 / 1,512.1** |
-| 25 | 0 | **8 / 1,636.5** | 9 / 1,658.1 |
-| 25 | 1 | **8 / 1,775.2** | 9 / 1,776.8 |
-| 30 | 0 | **8 / 1,996.9** | 9 / 2,057.4 |
-| 30 | 1 | **10 / 2,383** | 10 / 2,471 |
-| 40 | 0 | **11 / 2,776** | 14 / 3,229.4 |
+| 25 | 0 | **8 / 1,636.5** | 8 / 1,653.3 |
+| 25 | 1 | **8 / 1,775.2** | 8 / 1,775.6 |
+| 30 | 0 | **8 / 1,996.9** | 8 / 2,011.7 |
+| 30 | 1 | **10 / 2,383** | 10 / 2,395.4 |
+| 40 | 0 | **11 / 2,776** | incomplete (leaves stops unserved) |
 | 40 | 1 | **14 / 2,722.4** | incomplete (leaves stops unserved) |
 | 50 | 0 | **13 / 3,369.6** | incomplete (leaves stops unserved) |
 | 50 | 1 | **15 / 3,409** | incomplete (leaves stops unserved) |
@@ -69,5 +74,5 @@ CP-SAT is not run at 400 requests: its model takes minutes and gigabytes to buil
 
 The Li & Lim results are in [`cpsat/PUBLIC_BENCHMARKS.md`](cpsat/PUBLIC_BENCHMARKS.md).
 
-Measured 2026-11-12 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
+Measured 2026-11-24 on one Apple M4 Max Mac (16 cores), 30 s per solver and instance, seed 0. The engine runs single-threaded; CP-SAT uses 8 workers and its budget starts once its model is built. Single runs — a snapshot, not a statistical study.
 <!-- results:end -->

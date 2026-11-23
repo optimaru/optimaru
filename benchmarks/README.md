@@ -167,48 +167,59 @@ date. Two guides quote their table by hand and are updated with it (the
 "Latest run" line of `docs/use-cases/knapsack/README.md` and of
 `docs/use-cases/max-cut/README.md`).
 
-The published numbers are single runs on one machine. The harnesses were run
-side by side, each on its own performance cores: one CP-SAT job at a time
-(8 workers) beside two single-threaded jobs, at most ten solver threads on
-twelve performance cores, with builds and other work kept to the efficiency
-cores (`taskpolicy -b` on macOS). In the generated comparisons that means the
-engine's runs and CP-SAT's were made at the same time, not one after the other.
-The VRPTW tables of vehicle routing (Solomon, Gehring & Homberger) were measured
-apart, on another machine: a 4-core cloud VM, three single-threaded runs side by
-side (`--jobs 3`). Their results block (`vrptw`) and their homepage data sets name
-it; every homepage data set names the machine it was measured on.
+The published numbers are single runs on one machine, one Apple M4 Max Mac (16
+cores), and every results block and homepage data set names it. The whole set was
+measured again there from 2026-11-23 22:18 to 2026-11-24 08:00 KST (the results
+blocks carry the publishing date, 2026-11-24), on optimaru 0.6.0, in one session: one
+CP-SAT job at a time (8 workers) beside two single-threaded jobs, at most ten
+solver threads on twelve performance cores, with builds and other work kept to
+the efficiency cores (`taskpolicy -b` on macOS). In the generated comparisons
+that means the engine's runs and CP-SAT's were made at the same time, not one
+after the other. The VRPTW tables of vehicle routing (Solomon, Gehring &
+Homberger) were measured in the same session, two single-threaded runs side by
+side (`--jobs 2`), once the CP-SAT jobs had ended. The pickup-delivery CP-SAT
+rows were measured on the CP-SAT model the benchmark carries since 0.7.0 (#140,
+with the horizon of #144), the engine's rows of the same tables on 0.6.0; 0.7.0
+changes no search of a published benchmark.
 
-How far a number repeats differs by use case. The 38 instances of the earlier
-generated ladders were measured on two days: the engine's score was the same
-both times on all of them, and CP-SAT's differed on 8 (eight workers under a
-time limit). The `v0.2.2` run on 2026-11-11 measured 25 instances again (the
-five comparisons that use the level-by-level solve, on a later build of the
-engine): the engine's score was the same on 24 of them (the 24-meeting
-instance of meeting scheduling moved by half a percent, `-3049soft` to
-`-3035soft`, on engine code that had changed in between), and CP-SAT's result
-on 18. The engine's own result does move elsewhere: by a few percent on the
-larger semiconductor instances (see that README), and on the 400-request
-synthetic pickup-delivery instance it did with the stop-granular search those
-days measured (54 vehicles one day, 55 the other; the request-level search
-that replaced it returned the same plan in two runs on 2026-11-11). Bed
-allocation, facility location (since its table of 2026-11-12), food packaging,
-knapsack, maintenance scheduling, max-cut, quadratic assignment and sports
-league scheduling search in stages of growing late acceptance history, and
-which stage a solve reaches under a time limit
-depends on the clock: of the 35 instances of five of them, measured twice on
-2026-11-11 with an earlier build, the engine's score was the same on 32
-(the 10-line plant of food packaging moved by 0.01%, the 400-vertex max-cut by
-0.1%, the 18-team league by 5%), and all 33 QAPLIB results were the same.
-QAPLIB's table is of one run on 2026-11-12. One seed says little about a
-change of the search: QAPLIB's `tai30b` is 1.4% above its best known value in
-that run where the run before reached it.
-The 20-instance tables of the generated comparisons are of one run on
-2026-11-12, three engine lanes beside one CP-SAT lane. On the 102 instances
-that the tables had before, the engine's score was the same as in the tables it
-replaced on 91; the 11 that moved are bed allocation `xlarge`, conference
-`days5`, facility location `medium`, food packaging `lines8`, maintenance
-`medium` and `medium-2`, max-cut `g120` and the semiconductor instances of 18
-to 48 lots, all by under 1% except maintenance `medium` (8% better) and the
-semiconductor ones (up to 2.4%).
+How far a number repeats differs by use case. Against the tables this run
+replaced (2026-11-10 to 2026-11-12, optimaru 0.5.0 to 0.5.1):
+
+- Generated comparisons: the engine's score was the same on 305 of the 340
+  instances (17 × 20). 31 of the 35 that moved did so by under 1% (bed allocation,
+  conference scheduling, food packaging, maintenance scheduling, max-cut) or by up
+  to 3.1% (semiconductor scheduling, whose instances move from run to run, see
+  that README). Two instances repeated their new score in two more runs, so the
+  engine's changes since those tables moved them: maintenance scheduling `medium`
+  (`-11236soft` to `-12237soft`) and meeting scheduling `large-2` (`-12616soft`
+  to `-13406soft` at the same `-40medium`). Two moved with the load: sports
+  league scheduling `teams6` and `teams6-4` (`-45462soft` and `-46846soft` in the
+  run) gave the scores of the tables before, `-44693soft` and `-42239soft`, in two
+  runs made while fewer jobs ran beside them.
+- Public sets measured on this Mac before: the engine's result was the same on
+  every row of CVRPLIB Set A (27), Li & Lim (56), RG30 and the generated RCPSP
+  ladder (25), Falkenauer bin packing (24), SALBP-1 (20) and QAPLIB (33). On
+  CVRPLIB Set X 80 of 100 distances were the same, the others within 0.1% but
+  `X-n200-k36`, 0.8% shorter.
+- School timetabling's ladder, which has a harness of its own, repeated on 17 of
+  its 20 schools: the 18- and 60-class ones moved by under 1% (1,725 to 1,737,
+  6,836 to 6,837), and the 3-class one went from 124 to 156, which two more runs
+  repeated, so the engine's changes since that table moved it.
+- The VRPTW tables and school timetabling's track-1 table came from a 4-core cloud
+  VM before, so they are no repeat. The VRPTW mean gaps went from 0.99% to 0.96%
+  (engine) and 3.19% to 1.81% (OR-Tools) on Solomon, and from 7.13% to 6.22% and
+  23.93% to 12.92% on Gehring & Homberger: OR-Tools gains most on the faster
+  machine. Track 1's `L` rose from 666 to 679; `S` and `M` repeat 175 and 350.
+- CP-SAT's result was the same on 225 of the 340 generated instances (eight
+  workers under a time limit; a row without a solution counts as one that
+  differs, while the engine returned a solution on every instance). Its
+  pickup-delivery rows move both ways from run to run (see
+  `pickup-delivery/cpsat/PUBLIC_BENCHMARKS.md`).
+
+Bed allocation, facility location, food packaging, knapsack, maintenance
+scheduling, max-cut, quadratic assignment and sports league scheduling search in
+stages of growing late acceptance history, and which stage a solve reaches under
+a time limit depends on the clock, so a busier machine can end such a solve in an
+earlier stage. One seed says little about a change of the search.
 Read a small margin in any table as noise.
 
