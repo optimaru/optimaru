@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
+
+**From 0.5.2.** One breaking change: vehicle routing and pickup-delivery take depots, a start and
+an end depot per vehicle, and travel profiles keyed by id in place of `return_to_depot` and one
+driving matrix, so input written for 0.5 is refused (see the first entry). Nothing else changes
+the package's input or results: `solve_request` no longer needs the package to be spelled
+`optimaru`, the C++ sources moved into one tree per use case, and the benchmarks gain time-window
+series for vehicle routing.
 
 - **Vehicle routing and pickup-delivery: depots, start and end depots, travel profiles (breaking).**
   The input names its depots (`depots`, a list of `DepotModel` with an `id` and a `location`), and a
@@ -14,8 +21,8 @@
   the dicts leave out costs the profile's `missing_value`, 10,000,000 by default
   (`MISSING_TRAVEL_VALUE`); a profile without one of the dicts, and every vehicle when `profiles` is
   empty, drives straight lines between the coordinates (haversine meters, at 50 km/h for the
-  seconds); an empty dict is refused, since it would make every pair missing. `to_plan` turns the dicts into one square matrix per profile over the depots, then the
-  stops: for 1,000 places with both dicts given, 0.11 s to parse and validate 40 MB of JSON and 0.06 s
+  seconds); an empty dict is refused, since it would make every pair missing. `to_plan` turns the
+  dicts into one square matrix per profile over the depots, then the stops: for 1,000 places with both dicts given, 0.11 s to parse and validate 40 MB of JSON and 0.06 s
   to build the matrices on an M4 Max, so the JSON stays keyed by id. A new opt-in constraint,
   `travel_distance_cost` (soft, weight 0), prices the meters (its previews walk the candidate
   route, where `travel_time_cost` answers from prefix sums); the solutions report
@@ -26,8 +33,9 @@
   fallback), and `driving_time` / the new `driving_distance` take an optional `profile`. With one
   profile the solvers search exactly as before (seeded, step-limited solves of both use cases,
   open and closed routes, both scoring paths, return the same routes and scores as before). The
-  pinned CP-SAT library still reads the 0.5 input, so the CP-SAT lane of the pickup-delivery
-  benchmark waits for a release of it that reads depots and profiles.
+  public CP-SAT library the pickup-delivery benchmark pins (external-solver v0.3.0) is frozen and
+  reads the 0.5 input, so that benchmark's CP-SAT lane is marked as an expected failure. The two
+  routing notebooks ask for `optimaru<0.6` until they are ported to the new input.
 - **`solve_request` wrappers: the package is no longer written out.** The decorator behind the
   `solve_request` of the request use cases refused a function that was not under a package
   spelled `optimaru`. It now reads the package from its own module. Nothing changes for an
