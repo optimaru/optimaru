@@ -1,5 +1,5 @@
-#ifndef PDP_REQUEST_MOVES_HPP
-#define PDP_REQUEST_MOVES_HPP
+#ifndef PDP_SEARCH_MOVES_REQUEST_MOVES_HPP
+#define PDP_SEARCH_MOVES_REQUEST_MOVES_HPP
 
 #include <memory>
 #include <vector>

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_MOVES_LIST_MOVE_HPP
-#define OPTIMARU_MOVES_LIST_MOVE_HPP
+#ifndef OPTIMARU_SEARCH_MOVES_LIST_MOVE_HPP
+#define OPTIMARU_SEARCH_MOVES_LIST_MOVE_HPP
 
 #include "optimaru/model/solution_traits.hpp"
 #include "optimaru/score/objective.hpp"
@@ -164,4 +164,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_MOVES_LIST_MOVE_HPP
+#endif  // OPTIMARU_SEARCH_MOVES_LIST_MOVE_HPP

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_RUIN_RECREATE_RUIN_RECREATE_MOVE_HPP
-#define OPTIMARU_RUIN_RECREATE_RUIN_RECREATE_MOVE_HPP
+#ifndef OPTIMARU_SEARCH_RUIN_RECREATE_RUIN_RECREATE_MOVE_HPP
+#define OPTIMARU_SEARCH_RUIN_RECREATE_RUIN_RECREATE_MOVE_HPP
 
 #include <algorithm>
 #include <cstdint>
@@ -104,4 +104,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_RUIN_RECREATE_RUIN_RECREATE_MOVE_HPP
+#endif  // OPTIMARU_SEARCH_RUIN_RECREATE_RUIN_RECREATE_MOVE_HPP

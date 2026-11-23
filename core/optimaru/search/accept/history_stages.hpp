@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_ACCEPT_HISTORY_STAGES_HPP
-#define OPTIMARU_ACCEPT_HISTORY_STAGES_HPP
+#ifndef OPTIMARU_SEARCH_ACCEPT_HISTORY_STAGES_HPP
+#define OPTIMARU_SEARCH_ACCEPT_HISTORY_STAGES_HPP
 
 #include <algorithm>
 #include <cmath>
@@ -135,4 +135,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_ACCEPT_HISTORY_STAGES_HPP
+#endif  // OPTIMARU_SEARCH_ACCEPT_HISTORY_STAGES_HPP

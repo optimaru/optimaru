@@ -170,7 +170,7 @@ after (`constructGroups`); a group no vehicle takes is parked unassigned, whole.
 A group partly on a caller's `initial_route` is completed on that vehicle; when
 the rest does not fit there, it waits and the group starts split, for the search
 to mend.
-A domain move operator, `groupRuinRecreate` (`vrp/moves/group_moves.hpp`), then takes a
+A domain move operator, `groupRuinRecreate` (`vrp/search/moves/group_moves.hpp`), then takes a
 group out of its route, alone or with up to `group_ruin_max_visits` more visits
 (the groups and single visits of nearby stops, or other groups), and puts each
 unit back on one vehicle, the larger units first. That is how a group changes

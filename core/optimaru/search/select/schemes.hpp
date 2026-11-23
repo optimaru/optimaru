@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_SELECT_SCHEMES_HPP
-#define OPTIMARU_SELECT_SCHEMES_HPP
+#ifndef OPTIMARU_SEARCH_SELECT_SCHEMES_HPP
+#define OPTIMARU_SEARCH_SELECT_SCHEMES_HPP
 
 // ---------------------------------------------------------------------------
 // Adaptive operator selection — umbrella header
@@ -45,4 +45,4 @@ inline std::unique_ptr<OperatorSelectionScheme> make_operator_selection_scheme(
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_SELECT_SCHEMES_HPP
+#endif  // OPTIMARU_SEARCH_SELECT_SCHEMES_HPP

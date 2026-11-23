@@ -1,5 +1,5 @@
-#ifndef VRP_VISIT_INSERTION_HPP
-#define VRP_VISIT_INSERTION_HPP
+#ifndef VRP_SEARCH_MOVES_VISIT_INSERTION_HPP
+#define VRP_SEARCH_MOVES_VISIT_INSERTION_HPP
 
 #include <cstdint>
 #include <limits>

@@ -186,7 +186,7 @@ constraints; its twelve structural ones refuse an offset like a weight or a leve
 - `evaluator` + `incremental_calculator` — lazy suffix re-decode from the earliest
   `readyStep` of the changed rows, re-costing only the rows, lots, machines, groups,
   resources and pins whose placements moved
-- `moves/priority_swap.hpp`, `solver` — the engine wrapper (simulated annealing, the
+- `search/moves/priority_swap.hpp`, `solver` — the engine wrapper (simulated annealing, the
   value recommender, the priority swap, multi-start)
 - `optimaru/semiconductor_scheduling/cpp/main.cpp` — a 12-lot demo
 

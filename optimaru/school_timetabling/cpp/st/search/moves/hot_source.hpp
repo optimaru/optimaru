@@ -1,5 +1,5 @@
-#ifndef ST_MOVES_HOT_SOURCE_HPP
-#define ST_MOVES_HOT_SOURCE_HPP
+#ifndef ST_SEARCH_MOVES_HOT_SOURCE_HPP
+#define ST_SEARCH_MOVES_HOT_SOURCE_HPP
 
 #include <vector>
 
@@ -60,4 +60,4 @@ bool allowsUnassigned(const optimaru::DecomposedObjective<Timetable>& calculator
 
 }  // namespace st::canon
 
-#endif  // ST_MOVES_HOT_SOURCE_HPP
+#endif  // ST_SEARCH_MOVES_HOT_SOURCE_HPP

@@ -1,5 +1,5 @@
-#ifndef ST_MOVES_SMART_CLASS_SWAP_HPP
-#define ST_MOVES_SMART_CLASS_SWAP_HPP
+#ifndef ST_SEARCH_MOVES_SMART_CLASS_SWAP_HPP
+#define ST_SEARCH_MOVES_SMART_CLASS_SWAP_HPP
 
 #include <algorithm>
 #include <cstdint>
@@ -168,4 +168,4 @@ private:
 
 }  // namespace st::canon
 
-#endif  // ST_MOVES_SMART_CLASS_SWAP_HPP
+#endif  // ST_SEARCH_MOVES_SMART_CLASS_SWAP_HPP

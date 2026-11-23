@@ -1,5 +1,5 @@
-#ifndef BP_MOVES_HPP
-#define BP_MOVES_HPP
+#ifndef BP_SEARCH_MOVES_HPP
+#define BP_SEARCH_MOVES_HPP
 
 #include <algorithm>
 #include <cstddef>
@@ -567,4 +567,4 @@ private:
 
 }  // namespace bp
 
-#endif  // BP_MOVES_HPP
+#endif  // BP_SEARCH_MOVES_HPP

@@ -1,5 +1,5 @@
-#ifndef KS_MOVES_HPP
-#define KS_MOVES_HPP
+#ifndef KS_SEARCH_MOVES_HPP
+#define KS_SEARCH_MOVES_HPP
 
 #include <algorithm>
 #include <cstddef>
@@ -172,4 +172,4 @@ private:
 
 }  // namespace ks
 
-#endif  // KS_MOVES_HPP
+#endif  // KS_SEARCH_MOVES_HPP

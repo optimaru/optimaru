@@ -1,5 +1,5 @@
-#ifndef FAB_MOVES_PRIORITY_SWAP_HPP
-#define FAB_MOVES_PRIORITY_SWAP_HPP
+#ifndef FAB_SEARCH_MOVES_PRIORITY_SWAP_HPP
+#define FAB_SEARCH_MOVES_PRIORITY_SWAP_HPP
 
 #include <random>
 #include <vector>
@@ -75,4 +75,4 @@ private:
 
 }  // namespace fab
 
-#endif  // FAB_MOVES_PRIORITY_SWAP_HPP
+#endif  // FAB_SEARCH_MOVES_PRIORITY_SWAP_HPP

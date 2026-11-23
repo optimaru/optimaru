@@ -95,7 +95,7 @@ A move is an `optimaru::MoveOperator<Solution>`
 ([`search/operators.hpp`](../core/optimaru/search/operators.hpp)). Put it in
 the use case's `search/moves/` folder, for example
 `optimaru/<uc>/cpp/<ns>/search/moves/moves.hpp` (bin packing keeps its moves in
-[`bp/moves/moves.hpp`](../optimaru/bin_packing/cpp/bp/search/moves/moves.hpp)):
+[`bp/search/moves/moves.hpp`](../optimaru/bin_packing/cpp/bp/search/moves/moves.hpp)):
 
 ```cpp
 #include <random>

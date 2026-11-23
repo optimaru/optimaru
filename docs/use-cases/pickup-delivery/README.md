@@ -186,7 +186,7 @@ route together and come back together.
 
 ### Where a request fits
 
-`pdp/moves/request_insertion.hpp` answers one question: the cheapest feasible way to
+`pdp/search/moves/request_insertion.hpp` answers one question: the cheapest feasible way to
 add a request to a route. For each pickup slot it walks the dropoff slot forward
 and carries the schedule along. A `RouteTimeline` keeps, per stop, the departure
 time, the latest arrival that still keeps the rest of the route on time and the
@@ -219,7 +219,7 @@ first plan already keeps the vehicle limits.
 
 ### The request moves
 
-`pdp/moves/request_moves.hpp` registers three move operators on that scan. They work
+`pdp/search/moves/request_moves.hpp` registers three move operators on that scan. They work
 on copies of the routes and write a changed route through the engine once, when
 the whole move is laid out, so a candidate never holds half a request.
 

@@ -1,5 +1,5 @@
-#ifndef VRP_GROUP_MOVES_HPP
-#define VRP_GROUP_MOVES_HPP
+#ifndef VRP_SEARCH_MOVES_GROUP_MOVES_HPP
+#define VRP_SEARCH_MOVES_GROUP_MOVES_HPP
 
 #include <memory>
 #include <vector>

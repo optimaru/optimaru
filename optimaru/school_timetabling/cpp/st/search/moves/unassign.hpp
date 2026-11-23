@@ -1,5 +1,5 @@
-#ifndef ST_MOVES_UNASSIGN_HPP
-#define ST_MOVES_UNASSIGN_HPP
+#ifndef ST_SEARCH_MOVES_UNASSIGN_HPP
+#define ST_SEARCH_MOVES_UNASSIGN_HPP
 
 #include <cstdint>
 #include <random>
@@ -90,4 +90,4 @@ private:
 
 }  // namespace st::canon
 
-#endif  // ST_MOVES_UNASSIGN_HPP
+#endif  // ST_SEARCH_MOVES_UNASSIGN_HPP

@@ -1,5 +1,5 @@
-#ifndef ST_MOVES_REASSIGN_HPP
-#define ST_MOVES_REASSIGN_HPP
+#ifndef ST_SEARCH_MOVES_REASSIGN_HPP
+#define ST_SEARCH_MOVES_REASSIGN_HPP
 
 #include <algorithm>
 #include <cstdint>
@@ -146,4 +146,4 @@ private:
 
 }  // namespace st::canon
 
-#endif  // ST_MOVES_REASSIGN_HPP
+#endif  // ST_SEARCH_MOVES_REASSIGN_HPP

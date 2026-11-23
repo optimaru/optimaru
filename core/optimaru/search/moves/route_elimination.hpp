@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Part of the optimaru engine; portions derive from Timefold Solver (Apache-2.0). See NOTICE.
 
-#ifndef OPTIMARU_MOVES_ROUTE_ELIMINATION_HPP
-#define OPTIMARU_MOVES_ROUTE_ELIMINATION_HPP
+#ifndef OPTIMARU_SEARCH_MOVES_ROUTE_ELIMINATION_HPP
+#define OPTIMARU_SEARCH_MOVES_ROUTE_ELIMINATION_HPP
 
 #include <algorithm>
 #include <cstddef>
@@ -129,4 +129,4 @@ private:
 
 }  // namespace optimaru
 
-#endif  // OPTIMARU_MOVES_ROUTE_ELIMINATION_HPP
+#endif  // OPTIMARU_SEARCH_MOVES_ROUTE_ELIMINATION_HPP

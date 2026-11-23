@@ -1,5 +1,5 @@
-#ifndef PJS_MOVES_HPP
-#define PJS_MOVES_HPP
+#ifndef PJS_SEARCH_MOVES_HPP
+#define PJS_SEARCH_MOVES_HPP
 
 #include <algorithm>
 #include <cstdint>
@@ -434,4 +434,4 @@ private:
 
 }  // namespace pjs
 
-#endif  // PJS_MOVES_HPP
+#endif  // PJS_SEARCH_MOVES_HPP
