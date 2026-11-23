@@ -11,6 +11,7 @@ import pytest
 
 import optimaru.pickup_delivery as pdp
 from optimaru.pickup_delivery import models
+from optimaru.pickup_delivery.constraints import TravelDistanceCost, get_constraints
 
 
 def test_request_solver_parameters_are_applied():
@@ -223,67 +224,84 @@ def test_soft_time_windows_are_broken_by_the_stop_moves_not_the_request_moves():
     assert pdp.calculate_score(plan).hard < 0
 
 
-def test_request_uses_explicit_driving_matrix():
+def _request(name="R", pickup="P", dropoff="D"):
+    return models.DeliveryModel(
+        id=name,
+        demand=1,
+        # Service minutes make dropping the request cost medium.
+        pickup=models.StopModel(id=pickup, location=(0, 1), service_duration=60),
+        dropoff=models.StopModel(id=dropoff, location=(0, 2), service_duration=60),
+    )
+
+
+def test_profiles_become_matrices_over_depots_then_stops():
     data = models.PdpInput(
-        vehicles=[models.VehicleModel(id="V", capacity=1, home=(0, 0))],
-        deliveries=[
-            models.DeliveryModel(
-                id="R",
-                demand=1,
-                pickup=models.StopModel(id="P", location=(80, 170)),
-                dropoff=models.StopModel(id="D", location=(-80, -170)),
+        depots=[models.DepotModel(id="H", location=(0, 0))],
+        vehicles=[models.VehicleModel(id="V", capacity=1, start_depot="H")],
+        deliveries=[_request()],
+        profiles={
+            "default": models.TravelProfile(
+                durations={"H": {"P": 3, "D": 5}, "P": {"H": 7, "D": 11}, "D": {"H": 13, "P": 17}},
+                distances={"H": {"P": 30}},
+                missing_value=500,
             )
-        ],
-        driving_seconds=[[0, 3, 5], [7, 0, 11], [13, 17, 0]],
+        },
     )
     plan = models.to_plan(data)
-    assert plan.driving_time(0, 1) == 3
-    assert plan.driving_time(1, 2) == 11
+    assert plan.profile_count == 1
+    assert (plan.driving_time(0, 1), plan.driving_time(1, 2), plan.driving_time(2, 0)) == (3, 11, 13)
+    assert (plan.driving_distance(0, 1), plan.driving_distance(1, 0), plan.driving_distance(1, 1)) == (30, 500, 0)
 
     with pytest.raises(ValueError, match="non-negative"):
+        models.TravelProfile(durations={"P": {"D": -1}})
+    with pytest.raises(ValueError, match="unknown places"):
         models.PdpInput(
+            depots=data.depots,
             vehicles=data.vehicles,
             deliveries=data.deliveries,
-            driving_seconds=[[0, 3, 5], [7, 0, -1], [13, 17, 0]],
+            profiles={"default": models.TravelProfile(durations={"H": {"X": 1}})},
         )
+    with pytest.raises(ValueError, match="unknown end_depot"):
+        models.PdpInput(
+            depots=data.depots,
+            vehicles=[models.VehicleModel(id="V", capacity=1, start_depot="H", end_depot="X")],
+            deliveries=data.deliveries,
+        )
+    with pytest.raises(ValueError, match="share the ids"):
+        models.PdpInput(depots=[models.DepotModel(id="P", location=(0, 0))], vehicles=[], deliveries=[_request()])
 
 
 def test_json_vehicles_default_to_twenty_stops_and_open_routes():
     """JSON contract defaults: 20-stop limit, one-way. C++ vehicles have both off."""
-    vehicle = models.VehicleModel(id="V", capacity=1, home=(0, 0))
+    vehicle = models.VehicleModel(id="V", capacity=1, start_depot="H")
     assert vehicle.max_stops == 20
-    assert vehicle.return_to_depot is False
-    core = models.to_plan(models.PdpInput(vehicles=[vehicle], deliveries=[])).vehicles[0]
-    assert core.max_stops == 20
+    assert vehicle.end_depot is None
+    depots = [models.DepotModel(id="H", location=(0, 0))]
+    core = models.to_plan(models.PdpInput(depots=depots, vehicles=[vehicle], deliveries=[])).vehicles[0]
+    assert (core.max_stops, core.end_location_index, core.profile_index) == (20, -1, 0)
     assert pdp.Vehicle("V", 1, 0).max_stops == 0
 
 
-def test_routes_are_open_unless_the_vehicle_returns_to_depot():
-    """One-way by default: the route ends at the dropoff and no return leg is scored."""
+def _solve(vehicle_fields, durations, *, depots=("H",), distances=None, constraints=None):
+    request = models.PdpRequest(
+        timelimit=0.2,
+        model_input=models.PdpInput(
+            depots=[models.DepotModel(id=name, location=(0, 0)) for name in depots],
+            vehicles=[models.VehicleModel(id="V", capacity=1, start_depot="H", **vehicle_fields)],
+            deliveries=[_request()],
+            profiles={"default": models.TravelProfile(durations=durations, distances=distances)},
+        ),
+    )
+    return models.solve_request(request, constraints=constraints)
 
-    def solve(return_to_depot: bool):
-        request = models.PdpRequest(
-            timelimit=0.2,
-            model_input=models.PdpInput(
-                vehicles=[models.VehicleModel(id="V", capacity=1, home=(0, 0), return_to_depot=return_to_depot)],
-                deliveries=[
-                    models.DeliveryModel(
-                        id="R",
-                        demand=1,
-                        # Service minutes make dropping the request cost medium.
-                        pickup=models.StopModel(id="P", location=(0, 1), service_duration=60),
-                        dropoff=models.StopModel(id="D", location=(0, 2), service_duration=60),
-                    )
-                ],
-                # home -> P 10, P -> D 20, D -> home 100 (asymmetric on purpose).
-                driving_seconds=[[0, 10, 30], [10, 0, 20], [100, 20, 0]],
-            ),
-        )
-        plan = models.to_plan(request.model_input)
-        assert plan.vehicles[0].return_to_depot is return_to_depot
-        return models.solve_request(request)
 
-    one_way = solve(False)
+# start -> P 10, P -> D 20, D -> start 100 (asymmetric on purpose).
+LEGS = {"H": {"P": 10, "D": 30}, "P": {"H": 10, "D": 20}, "D": {"H": 100, "P": 20}}
+
+
+def test_routes_are_open_unless_the_vehicle_has_an_end_depot():
+    """One-way by default: the route ends at the dropoff and no closing leg is scored."""
+    one_way = _solve({}, LEGS)
     assert one_way.feasible and not one_way.unassigned
     assert [stop.stop_id for stop in one_way.routes["V"]] == ["P", "D"]
     assert one_way.total_driving_seconds == 30
@@ -296,30 +314,71 @@ def test_routes_are_open_unless_the_vehicle_returns_to_depot():
         "peak_load": 1,
         "delivered": 1,
         "driving_seconds": 30,
+        "driving_meters": one_way.total_driving_meters,
         "departure_time": 0,
         "end_time": 150,
         "route_duration_seconds": 150,
         "waiting_seconds": 0,
         "service_seconds": 120,
-        "return_to_depot": False,
     }
 
-    round_trip = solve(True)
+    round_trip = _solve({"end_depot": "H"}, LEGS)
     assert round_trip.feasible and not round_trip.unassigned
     assert [stop.stop_id for stop in round_trip.routes["V"]] == ["P", "D"]
     assert round_trip.total_driving_seconds == 130
     assert round_trip.score == "0hard/0medium/-130soft"
     closed = round_trip.vehicle_metrics["V"]
-    assert (closed.driving_seconds, closed.end_time, closed.return_to_depot) == (
-        130,
-        250,
-        True,
-    )
+    assert (closed.driving_seconds, closed.end_time) == (130, 250)
 
     vehicle = pdp.Vehicle("V", 1, 0)
-    assert vehicle.return_to_depot is False
-    vehicle.return_to_depot = True
-    assert vehicle.return_to_depot is True
+    assert (vehicle.end_location_index, vehicle.profile_index) == (-1, 0)
+    vehicle.end_location_index = 0
+    assert vehicle.end_location_index == 0
+
+
+def test_a_route_may_end_at_another_depot():
+    durations = LEGS | {"D": {"H": 100, "P": 20, "E": 4}}
+    solution = _solve({"end_depot": "E"}, durations, depots=("H", "E"))
+    assert solution.total_driving_seconds == 10 + 20 + 4
+    assert solution.vehicle_metrics["V"].end_time == 10 + 60 + 20 + 60 + 4
+
+
+def test_a_request_reachable_only_over_a_missing_pair_stays_unassigned():
+    # P -> D is not given: it costs the missing value, which no time window of the day
+    # survives, so the request waits rather than arrive days late.
+    solution = _solve({}, {"H": {"P": 10}})
+    assert solution.feasible and solution.unassigned == ["R"]
+
+
+def test_travel_distance_cost_reads_the_distance_matrix():
+    picks = [*get_constraints(), TravelDistanceCost(weight=1)]
+    solution = _solve({}, LEGS, distances={"H": {"P": 5}, "P": {"D": 6}}, constraints=picks)
+    assert solution.total_driving_meters == 11
+    assert solution.score == "0hard/0medium/-41soft"  # 30 seconds, 11 meters
+
+
+def test_each_vehicle_drives_on_its_profile():
+    places = ["H", "P", "D", "Q", "E"]
+    request = models.PdpRequest(
+        timelimit=0.2,
+        model_input=models.PdpInput(
+            depots=[models.DepotModel(id="H", location=(0, 0))],
+            vehicles=[
+                models.VehicleModel(id="bike", capacity=5, start_depot="H", profile="bike"),
+                models.VehicleModel(id="car", capacity=5, start_depot="H", profile="car"),
+            ],
+            deliveries=[_request(), _request("S", "Q", "E")],
+            profiles={
+                "car": models.TravelProfile(durations={a: {b: 10 for b in places} for a in places}),
+                "bike": models.TravelProfile(durations={a: {b: 40 for b in places} for a in places}),
+            },
+        ),
+    )
+    for constraints in (None, get_constraints()):
+        solution = models.solve_request(request, constraints=constraints)
+        assert solution.routes["bike"] == []
+        assert len(solution.routes["car"]) == 4
+        assert solution.total_driving_seconds == 40
 
 
 def _steps(steps):

@@ -30,8 +30,13 @@ namespace pdp {
 // the engine's element-granular built-ins alone.
 
 using Seconds = std::int64_t;
+using Meters = std::int64_t;
 
 constexpr Seconds NULL_TIME = -1;
+
+// A square matrix over the plan's locations, indexed by Location::index:
+// driving seconds or driving meters from row to column.
+using Matrix = std::vector<std::vector<std::int64_t>>;
 
 // ---------------------------------------------------------------------------
 // Score
@@ -128,7 +133,13 @@ struct Delivery {
 struct Vehicle {
     std::string id;
     int capacity = 0;
-    int homeLocationIndex = -1;
+    // Where the route starts, and where it ends: -1 for an open route, which
+    // ends at its last stop, so no closing leg is driven or counted toward
+    // the route end time. Two vehicles may share a depot's location.
+    int startLocationIndex = -1;
+    int endLocationIndex = -1;
+    // Which of the plan's matrices this vehicle drives on (its profile).
+    int profileIndex = 0;
     Seconds departureTime = 0;
     // Optional route policies. Non-positive means disabled.
     Seconds maxTravelTime = 0;
@@ -138,24 +149,23 @@ struct Vehicle {
     double minLoadRatio = 0.0;
     double fixedCost = 0.0;
     double maxRouteRadiusMeters = 0.0;
-    // Does the route end back at home? Off by default: the route is open and
-    // ends at its last stop, so the last-stop -> home leg counts toward
-    // neither driving time nor the route end time. On, the leg is charged
-    // like a classic round trip.
-    bool returnToDepot = false;
     std::vector<int> nodeIndices;  // ordered route of stops
     // Stops the route must start with, in order. A solve keeps any route already
     // in nodeIndices as its starting point, so these are normally its prefix.
     std::vector<int> pinnedNodeIndices;
 
-    // The driving seconds from the last stop back home, or 0 for an open
-    // route. Every scoring path charges the closing leg through this one
-    // helper so the monolithic, incremental and plugin costs cannot drift.
-    Seconds homeLeg(const std::vector<std::vector<Seconds>>& drivingSeconds,
-                    int lastLocation) const {
-        return returnToDepot ? drivingSeconds[static_cast<std::size_t>(lastLocation)]
-                                             [static_cast<std::size_t>(homeLocationIndex)]
-                             : 0;
+    bool returnsToDepot() const { return endLocationIndex >= 0; }
+
+    // The closing leg from the last stop to the end depot in `matrix` (one of
+    // this vehicle's profile), or 0 for an open route. Callers charge it only
+    // for a route with stops: an idle vehicle drives nothing, even when its
+    // two depots differ. Every scoring path charges the closing leg through
+    // this one helper so the monolithic, incremental and plugin costs cannot
+    // drift.
+    std::int64_t endLeg(const Matrix& matrix, int lastLocation) const {
+        return returnsToDepot() ? matrix[static_cast<std::size_t>(lastLocation)]
+                                        [static_cast<std::size_t>(endLocationIndex)]
+                                : 0;
     }
 };
 
@@ -176,12 +186,23 @@ struct PdpRoutePlan {
     // which is hard-penalized (see ScoreCalculator).
     std::vector<int> unassignedNodeIndices;
 
-    std::vector<std::vector<Seconds>> drivingSeconds;
+    // One driving-seconds and one driving-meters matrix per profile
+    // (Vehicle::profileIndex), each square over the locations. Given by the
+    // caller, or filled from the coordinates by HaversineDrivingTimeCalculator.
+    std::vector<Matrix> durationMatrices;
+    std::vector<Matrix> distanceMatrices;
 
     Score score;
 
-    Seconds drivingTime(int fromLocation, int toLocation) const {
-        return drivingSeconds[fromLocation][toLocation];
+    const Matrix& durationsOf(const Vehicle& vehicle) const {
+        return durationMatrices[static_cast<std::size_t>(vehicle.profileIndex)];
+    }
+    const Matrix& distancesOf(const Vehicle& vehicle) const {
+        return distanceMatrices[static_cast<std::size_t>(vehicle.profileIndex)];
+    }
+    Seconds drivingTime(const Vehicle& vehicle, int fromLocation, int toLocation) const {
+        return durationsOf(vehicle)[static_cast<std::size_t>(fromLocation)]
+                                   [static_cast<std::size_t>(toLocation)];
     }
 
     // The partner node of a pickup/dropoff.

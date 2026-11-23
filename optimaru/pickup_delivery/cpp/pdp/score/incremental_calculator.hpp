@@ -51,7 +51,7 @@ private:
     struct RouteTerms {
         std::int64_t capacityExcess = 0;  // hard: summed over-capacity along the route
         std::int64_t lateness = 0;        // hard: whole minutes past maxEndTime
-        // soft: seconds, home -> stops (-> home if returnToDepot)
+        // soft: seconds, start -> stops (-> end depot)
         std::int64_t driving = 0;
     };
 

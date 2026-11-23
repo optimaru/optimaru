@@ -95,7 +95,7 @@ class Vehicle:
         self,
         id: str,
         capacity: int,
-        home_location_index: int,
+        start_location_index: int,
         departure_time: int = 0,
         max_travel_time: int = 0,
         max_route_duration: int = 0,
@@ -104,11 +104,17 @@ class Vehicle:
         min_load_ratio: float = 0.0,
         fixed_cost: float = 0.0,
         max_route_radius_meters: float = 0.0,
-        return_to_depot: bool = False,
+        end_location_index: int = -1,
+        profile_index: int = 0,
     ) -> None: ...
     id: str
     capacity: int
-    home_location_index: int
+    start_location_index: int
+    end_location_index: int
+    """Where the route ends; -1 (the default) leaves the route open at its last
+    stop: no closing leg is driven or timed."""
+    profile_index: int
+    """Which of the plan's matrices the vehicle drives on."""
     departure_time: int
     max_travel_time: int
     max_route_duration: int
@@ -117,22 +123,22 @@ class Vehicle:
     min_load_ratio: float
     fixed_cost: float
     max_route_radius_meters: float
-    return_to_depot: bool
-    """Whether the route ends back home. False (the default) leaves the route
-    open at its last stop: no closing leg is driven or timed."""
     visit_indices: list[int]
     """The decision: the ordered route (indices into visits)."""
 
 class VehicleRoutePlan:
     """The problem and its routes. Constructing it assigns location indices and
-    accepts an explicit matrix or precomputes the haversine fallback."""
+    takes one driving-seconds and one driving-meters matrix per profile: as many
+    profiles as the longer list holds (one at least); a matrix not given (None,
+    or past the end of its list) is the haversine fallback."""
     def __init__(
         self,
         name: str,
         locations: list[Location],
         vehicles: list[Vehicle],
         visits: list[Visit],
-        driving_seconds: list[list[int]] | None = None,
+        durations: list[list[list[int]] | None] | None = None,
+        distances: list[list[list[int]] | None] | None = None,
     ) -> None: ...
     @property
     def name(self) -> str: ...
@@ -146,8 +152,12 @@ class VehicleRoutePlan:
     solve(); penalized on the medium score level."""
     @property
     def score(self) -> Score: ...
-    def driving_time(self, from_location: int, to_location: int) -> int:
-        """Precomputed driving seconds between two location indices."""
+    @property
+    def profile_count(self) -> int: ...
+    def driving_time(self, from_location: int, to_location: int, profile: int = 0) -> int:
+        """Driving seconds between two location indices in a profile."""
+    def driving_distance(self, from_location: int, to_location: int, profile: int = 0) -> int:
+        """Driving meters between two location indices in a profile."""
     def routes(self) -> dict[str, list[str]]:
         """Vehicle id -> ordered visit ids (convenience view)."""
     def unassigned_visit_ids(self) -> list[str]:
@@ -347,4 +357,5 @@ def constraint_info() -> list[ConstraintInfo]:
     visit_order_cost hard at 1000; travel_time_cost,
     min_capacity_utilization_cost and vehicle_fixed_cost soft at 1). All
     flippable, none a reward; default_enabled is False for the opt-in weight-0
-    objectives (enclosing_circle_radius_cost, route_duration_cost, latency_cost)."""
+    objectives (travel_distance_cost, enclosing_circle_radius_cost, route_duration_cost,
+    latency_cost)."""

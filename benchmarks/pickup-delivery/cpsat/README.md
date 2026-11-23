@@ -2,9 +2,15 @@
 
 Pickup/dropoff-coupled optional circuits with same-vehicle assignment,
 pickup-first precedence, running capacity, time windows, optional requests,
-and travel minimization. Routes are open by default; a vehicle with
+and travel minimization. Routes are open by default; in optimaru 0.5 a vehicle with
 `return_to_depot=True` also drives (and is timed) back to its home. The package
 shares `optimaru.pickup_delivery.models` with the C++ backend.
+
+The pinned CP-SAT library (`external-solver` v0.3.0) reads the optimaru 0.5 input. The
+engine in this checkout takes depots, `start_depot` / `end_depot` and travel profiles
+instead, so the CP-SAT lane cannot run until the pin moves to a release that reads them;
+`run_case` with the `cpsat` backend raises `AttributeError` until then, and the test that
+runs it is marked to expect that.
 
 ## Constraints
 

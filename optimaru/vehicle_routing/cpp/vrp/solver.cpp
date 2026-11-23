@@ -206,12 +206,21 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
 
     // Driving-time nearby neighborhoods over the visits. The meter reads a
     // snapshot of the visits' location indices plus the precomputed matrix —
-    // a pure lookup, safe to share with the engine for the whole solve.
+    // a pure lookup, safe to share with the engine for the whole solve. With
+    // several profiles, two visits are as near as the fastest profile makes them.
     if (config.driving_time_nearby && plan.visits.size() > 1) {
         auto locationOfVisit = std::make_shared<std::vector<int>>();
         locationOfVisit->reserve(plan.visits.size());
         for (const Visit& visit : plan.visits) locationOfVisit->push_back(visit.locationIndex);
-        auto matrix = std::make_shared<std::vector<std::vector<Seconds>>>(plan.drivingSeconds);
+        auto matrix = std::make_shared<Matrix>(plan.durationMatrices.front());
+        for (std::size_t p = 1; p < plan.durationMatrices.size(); ++p) {
+            const Matrix& other = plan.durationMatrices[p];
+            for (std::size_t i = 0; i < matrix->size(); ++i) {
+                for (std::size_t j = 0; j < (*matrix)[i].size(); ++j) {
+                    (*matrix)[i][j] = std::min((*matrix)[i][j], other[i][j]);
+                }
+            }
+        }
         engineConfig.search.nearby.distance = [locationOfVisit, matrix](int a, int b) {
             return static_cast<double>((*matrix)[static_cast<std::size_t>((*locationOfVisit)[a])]
                                                 [static_cast<std::size_t>((*locationOfVisit)[b])]);

@@ -8,9 +8,11 @@ import optimaru.pickup_delivery as pdp
 from optimaru.pickup_delivery.constraints import TravelTimeCost, get_constraints
 from optimaru.pickup_delivery.models import (
     DeliveryModel,
+    DepotModel,
     PdpInput,
     PdpRequest,
     StopModel,
+    TravelProfile,
     VehicleModel,
     solve_request,
     with_initial_solution,
@@ -32,14 +34,18 @@ def request(name: str, service: int = 60) -> DeliveryModel:
 
 
 def line_input(vehicles, deliveries, places: dict[str, int]) -> PdpInput:
-    """Everything sits on a line; `places` gives each vehicle and stop its position."""
-    order = [v.id for v in vehicles]
+    """Everything sits on a line; `places` gives each vehicle's depot and each stop its position."""
+    depots = list(dict.fromkeys(v.start_depot for v in vehicles))
+    order = list(depots)
     for delivery in deliveries:
         order += [delivery.pickup.id, delivery.dropoff.id]
     return PdpInput(
+        depots=[DepotModel(id=depot, location=(37.5, 127.0)) for depot in depots],
         vehicles=vehicles,
         deliveries=deliveries,
-        driving_seconds=[[abs(places[a] - places[b]) for b in order] for a in order],
+        profiles={
+            "default": TravelProfile(durations={a: {b: abs(places[a] - places[b]) for b in order} for a in order})
+        },
     )
 
 
@@ -53,7 +59,7 @@ def vehicle(name: str, route=(), pinned: int = 0) -> VehicleModel:
     return VehicleModel(
         id=name,
         capacity=5,
-        home=(37.5, 127.0),
+        start_depot=name,
         initial_route=list(route),
         pinned_stops=pinned,
     )
@@ -233,7 +239,7 @@ def test_construction_places_a_required_request_before_a_free_one_takes_its_slot
             dropoff=timed_stop("d", close + 2000),
         )
 
-    vehicles = [VehicleModel(id=name, capacity=1, home=(37.5, 127.0)) for name in ("v", "w")]
+    vehicles = [VehicleModel(id=name, capacity=1, start_depot=name) for name in ("v", "w")]
     places = {"v": 0, "w": 100, "ap": 0, "ad": 0, "bp": 0, "bd": 0}
     # `a` has the tighter window and `v` is closest, but `v` has room for only one of them.
     model_input = line_input(vehicles, [timed("a", 1200), timed("b", 1300, "v")], places)
@@ -280,7 +286,7 @@ def chained_requests(vehicle_count: int, per_vehicle: int, seed: int) -> PdpInpu
             positions[f"{name}p"], positions[f"{name}d"] = pickup, dropoff
             clock, here = at_dropoff + 60, dropoff
     rng.shuffle(deliveries)
-    vehicles = [VehicleModel(id=f"v{v}", capacity=2, home=(37.5, 127.0)) for v in range(vehicle_count)]
+    vehicles = [VehicleModel(id=f"v{v}", capacity=2, start_depot=f"v{v}") for v in range(vehicle_count)]
     return line_input(vehicles, deliveries, positions)
 
 

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from optimaru.vehicle_routing.models import (
+    DepotModel,
     RoutePlanRequest,
     RoutingInput,
+    TravelProfile,
     VehicleModel,
     VisitModel,
     solve_request,
@@ -17,10 +19,18 @@ from . import SolverOutcome
 SERVICE_SECONDS = 60
 
 
-def _expanded_matrix(instance: CvrpInstance) -> list[list[int]]:
-    # The request orders one depot location per vehicle, then all customers.
-    original = [0] * instance.vehicle_count + list(range(1, len(instance.demands)))
-    return [[instance.distances[i][j] for j in original] for i in original]
+DEPOT = "depot"
+
+
+def _place(node: int) -> str:
+    """The request's id of an instance node: the depot, or the customer's number."""
+    return DEPOT if node == 0 else str(node)
+
+
+def _durations(instance: CvrpInstance) -> dict[str, dict[str, int]]:
+    # Travel time is the instance's distance, keyed by place id.
+    nodes = range(len(instance.demands))
+    return {_place(i): {_place(j): instance.distances[i][j] for j in nodes} for i in nodes}
 
 
 def make_request(instance: CvrpInstance, *, seconds: float, seed: int) -> RoutePlanRequest:
@@ -37,13 +47,14 @@ def make_request(instance: CvrpInstance, *, seconds: float, seed: int) -> RouteP
         random_seed=seed,
         parallel_solver_count=1,
         model_input=RoutingInput(
+            depots=[DepotModel(id=DEPOT, location=(float(depot[1]), float(depot[0])))],
             vehicles=[
                 VehicleModel(
                     id=f"V{i + 1}",
                     capacity=instance.capacity,
-                    depot=(float(depot[1]), float(depot[0])),
+                    start_depot=DEPOT,
                     # Both sets score the round trip, so close every route.
-                    return_to_depot=True,
+                    end_depot=DEPOT,
                     departure_time=departure,
                     # 0 is no limit (CVRP); on VRPTW the depot's closing time.
                     max_end_time=closing,
@@ -62,7 +73,7 @@ def make_request(instance: CvrpInstance, *, seconds: float, seed: int) -> RouteP
                 )
                 for i, (x, y) in enumerate(instance.coordinates[1:], start=1)
             ],
-            driving_seconds=_expanded_matrix(instance),
+            profiles={"default": TravelProfile(durations=_durations(instance))},
         ),
     )
 

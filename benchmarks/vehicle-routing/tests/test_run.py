@@ -79,10 +79,10 @@ def test_engine_request_mirrors_the_instance() -> None:
     from vrp_benchmark.solvers.engine import make_request
 
     request = make_request(parse_instance(SAMPLE), seconds=1, seed=3)
-    assert request.model_input.driving_seconds[0][2] == 5
-    assert request.model_input.driving_seconds[1][2] == 5
+    durations = request.model_input.profiles["default"].durations
+    assert durations["depot"]["1"] == durations["1"]["depot"] == 5
     assert [visit.demand for visit in request.model_input.visits] == [2, 1, 3]
-    assert all(vehicle.return_to_depot for vehicle in request.model_input.vehicles)
+    assert all(vehicle.end_depot == "depot" for vehicle in request.model_input.vehicles)
 
 
 def test_parse_backends() -> None:

@@ -8,9 +8,11 @@ import pytest
 from optimaru import vehicle_routing
 from optimaru.vehicle_routing.constraints import get_constraints
 from optimaru.vehicle_routing.models import (
+    DepotModel,
     RoutePlanRequest,
     RouteSolution,
     RoutingInput,
+    TravelProfile,
     VehicleModel,
     VisitModel,
     VisitStop,
@@ -33,9 +35,12 @@ def problem(timelimit: float = 0, **vehicle_fields) -> RoutePlanRequest:
     return RoutePlanRequest(
         timelimit=timelimit,
         model_input=RoutingInput(
-            vehicles=[VehicleModel(id=name, capacity=10, depot=(37.5, 127.0), **vehicle_fields) for name in "vw"],
+            depots=[DepotModel(id=name, location=(37.5, 127.0)) for name in "vw"],
+            vehicles=[VehicleModel(id=name, capacity=10, start_depot=name, **vehicle_fields) for name in "vw"],
             visits=[VisitModel(id=name, location=(37.5, 127.0), service_duration=60) for name in VISITS],
-            driving_seconds=[[abs(PLACES[a] - PLACES[b]) for b in order] for a in order],
+            profiles={
+                "default": TravelProfile(durations={a: {b: abs(PLACES[a] - PLACES[b]) for b in order} for a in order})
+            },
         ),
     )
 

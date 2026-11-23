@@ -86,7 +86,7 @@ def test_engine_windows_bound_arrival_plus_service() -> None:
         (0, 70, 10),
         (200, 410, 10),
     ]
-    assert all(v.max_end_time == 1000 and v.return_to_depot for v in request.model_input.vehicles)
+    assert all(v.max_end_time == 1000 and v.end_depot == "depot" for v in request.model_input.vehicles)
 
 
 @pytest.mark.parametrize("backend", solvers.BACKENDS)

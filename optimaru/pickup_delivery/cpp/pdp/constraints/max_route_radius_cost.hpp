@@ -6,7 +6,7 @@
 namespace pdp {
 
 // Hard, weight 1: maxRouteRadiusCost — the farthest stop's straight-line
-// (haversine) distance from the vehicle's home beyond
+// (haversine) distance from the vehicle's start depot beyond
 // Vehicle::maxRouteRadiusMeters. Raw cost per vehicle = max(0, farthest
 // distance - limit) meters while the limit > 0; 0 = every stop within the
 // radius, or no limit set (the pool list costs 0).
@@ -18,7 +18,7 @@ struct MaxRouteRadiusCost final : detail::PerVehicleConstraint {
         : PerVehicleConstraint("maxRouteRadiusCost", weight, kDefaultLevel) {}
     double cost(const PdpRoutePlan& p, int u, const std::vector<int>& m) const override {
         if (detail::isPool(p, u) || p.vehicles[u].maxRouteRadiusMeters <= 0) return 0;
-        const Location& home = p.locations[p.vehicles[u].homeLocationIndex];
+        const Location& home = p.locations[p.vehicles[u].startLocationIndex];
         double furthest = 0;
         for (int i : m)
             furthest = std::max(

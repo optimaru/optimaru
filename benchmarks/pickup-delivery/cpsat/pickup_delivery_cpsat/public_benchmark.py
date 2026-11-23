@@ -30,9 +30,11 @@ from optimaru.pickup_delivery.constraints import (
 )
 from optimaru.pickup_delivery.models import (
     DeliveryModel,
+    DepotModel,
     PdpInput,
     PdpRequest,
     StopModel,
+    TravelProfile,
     VehicleModel,
 )
 from optimaru.pickup_delivery.models import (
@@ -41,6 +43,9 @@ from optimaru.pickup_delivery.models import (
 
 # The 100-customer Li & Lim set as published on SINTEF's TOP benchmark page
 # (https://www.sintef.no/projectweb/top/pdptw/li-lim-benchmark/).
+# The request's id of the depot; the stops keep their instance numbers.
+DEPOT = "depot"
+
 ARCHIVE_URL = "https://www.sintef.no/contentassets/1338af68996841d3922bc8e87adc430c/pdp_100.zip"
 ARCHIVE_SHA256 = "d106694e9e18cebc32b63c322e1000620238392c1b9d98d92de82ef7e4b43cd9"
 ARCHIVE_PREFIX = "pdp_100/"
@@ -257,8 +262,8 @@ def make_request(
         raise ValueError("request_limit selected no requests")
     stop_nodes = tuple(node for pair in requests for node in pair)
     vehicle_count = min(instance.vehicle_count, len(requests))
-    ordered = (instance.depot,) * vehicle_count + stop_nodes
-    driving = [[_distance(left, right) for right in ordered] for left in ordered]
+    places = {DEPOT: instance.depot} | {str(node.id): node for node in stop_nodes}
+    driving = {a: {b: _distance(left, right) for b, right in places.items()} for a, left in places.items()}
     depot_location = (instance.depot.y / 1_000, instance.depot.x / 1_000)
     return (
         PdpRequest(
@@ -267,17 +272,18 @@ def make_request(
             random_seed=seed,
             parallel_solver_count=workers,
             model_input=PdpInput(
+                depots=[DepotModel(id=DEPOT, location=depot_location)],
                 vehicles=[
                     VehicleModel(
                         id=f"V{i + 1}",
                         capacity=instance.capacity,
-                        home=depot_location,
+                        start_depot=DEPOT,
                         max_end_time=instance.depot.due * DISTANCE_SCALE,
                         # Li & Lim has no stop cap: lift the contract's default.
                         max_stops=0,
                         # Li & Lim scores the round trip and the depot's due
                         # time applies to the return, so close every route.
-                        return_to_depot=True,
+                        end_depot=DEPOT,
                     )
                     for i in range(vehicle_count)
                 ],
@@ -302,7 +308,7 @@ def make_request(
                     )
                     for pickup, dropoff in requests
                 ],
-                driving_seconds=driving,
+                profiles={"default": TravelProfile(durations=driving)},
             ),
         ),
         requests,

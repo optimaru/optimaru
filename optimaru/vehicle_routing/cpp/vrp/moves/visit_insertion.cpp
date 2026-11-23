@@ -31,8 +31,9 @@ void RouteTimeline::rebuild(const VehicleRoutePlan& plan, int vehicleIndex,
     }
     if (route.empty()) return;
 
+    const Matrix& drive = plan.durationsOf(vehicle);
     Seconds departure = vehicle.departureTime;
-    int location = vehicle.homeLocationIndex;
+    int location = vehicle.startLocationIndex;
     for (std::size_t i = 0; i < route.size(); ++i) {
         const Visit& visit = plan.visits[static_cast<std::size_t>(route[i])];
         Stop& stop = stops_[i];
@@ -40,20 +41,21 @@ void RouteTimeline::rebuild(const VehicleRoutePlan& plan, int vehicleIndex,
         stop.minStart = visit.minStartTime;
         stop.service = visit.serviceDuration;
         stop.due = visit.maxEndTime - visit.serviceDuration;
-        const Seconds leg = plan.drivingTime(location, stop.location);
+        const Seconds leg =
+                drive[static_cast<std::size_t>(location)][static_cast<std::size_t>(stop.location)];
         travel_ += leg;
         departure = std::max(departure + leg, stop.minStart) + stop.service;
         stop.departure = departure;
         demand_ += visit.demand;
         location = stop.location;
     }
-    const Seconds homeLeg = vehicle.homeLeg(plan.drivingSeconds, location);
-    travel_ += homeLeg;
+    const Seconds endLeg = vehicle.endLeg(drive, location);
+    travel_ += endLeg;
 
     // Backwards: how late each stop may be reached. A stop never starts before
     // its window opens, so one whose earliest finish is already too late for
     // what follows cannot be saved by arriving early.
-    Seconds latestDeparture = endLimit_ == kNoLimit ? kNoLimit : endLimit_ - homeLeg;
+    Seconds latestDeparture = endLimit_ == kNoLimit ? kNoLimit : endLimit_ - endLeg;
     for (std::size_t i = stops_.size(); i-- > 0;) {
         Stop& stop = stops_[i];
         if (latestDeparture == kNever || stop.minStart + stop.service > latestDeparture) {
@@ -65,7 +67,8 @@ void RouteTimeline::rebuild(const VehicleRoutePlan& plan, int vehicleIndex,
             latestDeparture =
                     stop.latest == kNever
                             ? kNever
-                            : stop.latest - plan.drivingTime(stops_[i - 1].location, stop.location);
+                            : stop.latest - drive[static_cast<std::size_t>(stops_[i - 1].location)]
+                                                 [static_cast<std::size_t>(stop.location)];
         }
     }
 }
@@ -80,12 +83,12 @@ void RouteTimeline::improve(const VehicleRoutePlan& plan, const Visit& visit, in
     const Seconds due = visit.maxEndTime - visit.serviceDuration;
     const Seconds travelBudget =
             vehicle.maxTravelTime > 0 ? vehicle.maxTravelTime - travel_ : kNoLimit;
-    const auto& drive = plan.drivingSeconds;
+    const Matrix& drive = plan.durationsOf(vehicle);
     const auto here = static_cast<std::size_t>(visit.locationIndex);
     for (int i = std::max(first, 0); i <= std::min(last, count); ++i) {
         const bool front = i == 0;
         const Stop* previous = front ? nullptr : &stops_[static_cast<std::size_t>(i) - 1];
-        const int previousLocation = front ? vehicle.homeLocationIndex : previous->location;
+        const int previousLocation = front ? vehicle.startLocationIndex : previous->location;
         const Seconds toVisit = drive[static_cast<std::size_t>(previousLocation)][here];
         const Seconds arrival = (front ? vehicle.departureTime : previous->departure) + toVisit;
         if (arrival > due) continue;
@@ -101,8 +104,8 @@ void RouteTimeline::improve(const VehicleRoutePlan& plan, const Visit& visit, in
                              [static_cast<std::size_t>(next.location)];
             onTime = departure + onward <= next.latest;
         } else {
-            onward = vehicle.homeLeg(drive, visit.locationIndex);
-            brokenLeg = count == 0 ? 0 : vehicle.homeLeg(drive, previousLocation);
+            onward = vehicle.endLeg(drive, visit.locationIndex);
+            brokenLeg = count == 0 ? 0 : vehicle.endLeg(drive, previousLocation);
             onTime = departure + onward <= endLimit_;
         }
         if (!onTime) continue;

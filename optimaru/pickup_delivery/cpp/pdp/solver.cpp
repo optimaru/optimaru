@@ -762,7 +762,16 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
         auto locationOfNode = std::make_shared<std::vector<int>>();
         locationOfNode->reserve(plan.nodes.size());
         for (const Node& node : plan.nodes) locationOfNode->push_back(node.locationIndex);
-        auto matrix = std::make_shared<std::vector<std::vector<Seconds>>>(plan.drivingSeconds);
+        // With several profiles, two stops are as near as the fastest profile makes them.
+        auto matrix = std::make_shared<Matrix>(plan.durationMatrices.front());
+        for (std::size_t p = 1; p < plan.durationMatrices.size(); ++p) {
+            const Matrix& other = plan.durationMatrices[p];
+            for (std::size_t i = 0; i < matrix->size(); ++i) {
+                for (std::size_t j = 0; j < (*matrix)[i].size(); ++j) {
+                    (*matrix)[i][j] = std::min((*matrix)[i][j], other[i][j]);
+                }
+            }
+        }
         engineConfig.search.nearby.distance = [locationOfNode, matrix](int a, int b) {
             return static_cast<double>((*matrix)[static_cast<std::size_t>((*locationOfNode)[a])]
                                                 [static_cast<std::size_t>((*locationOfNode)[b])]);

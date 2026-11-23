@@ -6,7 +6,7 @@
 namespace vrp {
 
 // Hard, weight 1: maxRouteDurationCost -- route duration (departure to the
-// route's end: the last visit's departure, or back home with returnToDepot)
+// route's end: the last visit's departure, or the arrival at the end depot)
 // above Vehicle::maxRouteDuration. Raw cost per vehicle = max(0, end time -
 // departure time - maxRouteDuration) seconds while maxRouteDuration > 0;
 // 0 = within the limit, or no limit set (the pool list costs 0).

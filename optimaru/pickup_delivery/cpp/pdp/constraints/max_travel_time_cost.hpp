@@ -6,7 +6,7 @@
 namespace pdp {
 
 // Hard, weight 1: maxTravelTimeCost — driving seconds above the vehicle's
-// Vehicle::maxTravelTime (the leg home counts only with returnToDepot). Raw
+// Vehicle::maxTravelTime (the leg to the end depot counts when there is one). Raw
 // cost per vehicle = max(0, driving seconds - maxTravelTime) while
 // maxTravelTime > 0; 0 = within the limit, or no limit set (the pool list
 // costs 0).

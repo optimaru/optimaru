@@ -7,11 +7,11 @@ Python bindings for the C++ vehicle-routing example in
 customer visits have demands, time windows and service durations. Decide
 which vehicle serves which visits, in what order, driving as little as
 possible. Routes are open by default — a vehicle ends its day at its last
-visit; set `return_to_depot=True` on a vehicle to charge and time the leg
-back to its depot. `RouteSolution.vehicle_metrics` reports per-vehicle stops,
-load, driving / waiting / service seconds and the route end time; these are
-post-processed from the finished routes (`vehicle_metrics()`) and never
-scored.
+visit; give a vehicle an `end_depot` (its start depot or another) to charge
+and time the leg there. `RouteSolution.vehicle_metrics` reports per-vehicle stops,
+load, driving seconds and meters, waiting and service seconds and the route end
+time; these are post-processed from the finished routes (`vehicle_metrics()`)
+and never scored.
 
 ## Install and test
 
@@ -25,9 +25,9 @@ uv run pytest -q tests/vehicle_routing
 ```python
 from optimaru import vehicle_routing as vrp
 
-locations = [vrp.Location(37.5665, 126.9780),   # index 0: vehicle home
+locations = [vrp.Location(37.5665, 126.9780),   # index 0: the depot
              vrp.Location(37.5700, 126.9820)]   # index 1: a customer
-vehicles = [vrp.Vehicle("V1", capacity=10, home_location_index=0,
+vehicles = [vrp.Vehicle("V1", capacity=10, start_location_index=0,
                         departure_time=7 * 3600)]
 visits = [vrp.Visit("C1", "Customer 1", location_index=1, demand=3,
                     min_start_time=8 * 3600, max_end_time=18 * 3600,
@@ -50,8 +50,12 @@ acceptance by default); its parameters are listed under
 [Choosing the acceptance rule](../README.md#choosing-the-acceptance-rule).
 
 - Times are integer **seconds from a common day start** (`8 * 3600` = 08:00).
-- The driving-time matrix is precomputed from the haversine distance when the
-  plan is constructed.
+- `VehicleRoutePlan` takes one driving-seconds and one driving-meters matrix per
+  travel profile (`durations=`, `distances=`, lists of square matrices over the
+  locations; `Vehicle.profile_index` picks one). A matrix not given is
+  precomputed from the coordinates when the plan is constructed: haversine
+  meters, and those meters at 50 km/h for the seconds. `Vehicle.end_location_index`
+  is where the route ends, -1 (the default) for an open route.
 - Score (hard, medium, soft; lexicographic), at the default weights: **hard** =
   capacity excess (`vehicle_capacity_cost`) + time-window lateness
   (`max_end_time_cost`) (0 = feasible), **medium** = −(penalty minutes of
@@ -84,13 +88,14 @@ optimaru API and `solve(plan)` is refused: a compiled plan is solved in place, w
 cannot do. See [Solving on the optimaru API](../README.md#solving-on-the-optimaru-api).
 
 ```python
-from optimaru.vehicle_routing.models import (RoutePlanRequest, RoutingInput, VehicleModel,
-                                VisitModel, solve_request)
+from optimaru.vehicle_routing.models import (DepotModel, RoutePlanRequest, RoutingInput,
+                                VehicleModel, VisitModel, solve_request)
 
 request = RoutePlanRequest(
     time_limit_seconds=2,
     model_input=RoutingInput(
-        vehicles=[VehicleModel(id="V1", capacity=10, depot=(37.5665, 126.9780))],
+        depots=[DepotModel(id="D1", location=(37.5665, 126.9780))],
+        vehicles=[VehicleModel(id="V1", capacity=10, start_depot="D1")],
         visits=[VisitModel(id="C1", location=(37.57, 126.982), demand=3,
                            min_start_time=8 * 3600, max_end_time=18 * 3600,
                            service_duration=600)],
@@ -99,6 +104,45 @@ request = RoutePlanRequest(
 solution = solve_request(request)      # -> RouteSolution
 print(solution.routes, solution.score, solution.total_driving_seconds)
 ```
+
+### Depots and travel profiles
+
+A route starts at its vehicle's `start_depot` and ends at its `end_depot`; without
+one (the default) the route is open and ends at its last visit. Depots and visits
+share one id space: no depot may have a visit's id. An idle vehicle drives nothing,
+even when its two depots differ.
+
+Driving comes from the vehicle's travel profile (`VehicleModel.profile`, `"default"`
+unless set). `RoutingInput.profiles` names each profile's pairwise driving seconds
+(`durations`) and meters (`distances`), keyed by depot and visit ids,
+`{from_id: {to_id: value}}`:
+
+```python
+from optimaru.vehicle_routing.models import TravelProfile
+
+profiles = {
+    "car": TravelProfile(durations={"D1": {"C1": 300}, "C1": {"D1": 320}},
+                         distances={"D1": {"C1": 2_100}, "C1": {"D1": 2_300}}),
+    "bike": TravelProfile(durations={"D1": {"C1": 700}, "C1": {"D1": 720}}),
+}
+# RoutingInput(..., profiles=profiles), and VehicleModel(..., profile="bike")
+```
+
+- A pair the dicts leave out costs the profile's `missing_value`, 10,000,000 by
+  default (`MISSING_TRAVEL_VALUE`: about 116 days or 10,000 km), so a route avoids
+  that leg wherever it can; a place to itself costs 0 unless given.
+- A profile without `durations` or without `distances`, and every vehicle when
+  `profiles` is empty, drives straight lines between the coordinates: haversine
+  meters, and those meters at 50 km/h for the seconds.
+- A vehicle naming a profile that `profiles` does not hold is refused, as is a
+  dict keyed by an id that is no depot or visit.
+- `solve_request` turns each profile into one square matrix over the depots, then
+  the visits, before the solve. For 1,000 places with both dicts given (40 MB of
+  JSON), parsing and validating the request took 0.11 s and building the matrices
+  0.06 s on an M4 Max.
+- `travel_time_cost` prices the seconds; `travel_distance_cost` (opt-in, weight 0)
+  prices the meters. `RouteSolution.total_driving_meters` and each vehicle's
+  `driving_meters` report the meters either way.
 
 Everything round-trips through JSON (`model_validate_json` /
 `model_dump_json`); fields are snake_case, classes PascalCase.

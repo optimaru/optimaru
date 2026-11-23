@@ -375,7 +375,7 @@ void verifyPinnedAndBoundUnderPressure() {
         // allowed to take it.
         PdpRoutePlan bound = buildRandomInstance(1, 2, /*seed=*/23);
         bound.deliveries[0].requiredVehicleIndex = 1;
-        for (Seconds& seconds : bound.drivingSeconds[1]) seconds = 10000000;
+        for (Seconds& seconds : bound.durationMatrices.front()[1]) seconds = 10000000;
         DecomposedCalculator boundCalculator;
         addDefaultConstraints(boundCalculator);
         Solver(stepLimited(seed)).solve(bound, boundCalculator);
@@ -403,7 +403,7 @@ PdpRoutePlan buildHandInstance() {
         Vehicle vehicle;
         vehicle.id = std::to_string(v);
         vehicle.capacity = 10;
-        vehicle.homeLocationIndex = 0;
+        vehicle.startLocationIndex = 0;
         plan.vehicles.push_back(vehicle);
     }
     const char* ids[] = {"p1", "d1", "p2", "d2"};
@@ -411,9 +411,11 @@ PdpRoutePlan buildHandInstance() {
         plan.nodes.push_back(
                 Node{ids[n], n + 1, 0, 24 * 3600, 60, n / 2, n % 2 == 0, -1, NULL_TIME});
     plan.deliveries = {Delivery{"r1", 0, 1, 4, 0, -1}, Delivery{"r2", 2, 3, 4, 0, -1}};
-    plan.drivingSeconds.assign(5, std::vector<Seconds>(5, 0));
+    Matrix seconds(5, std::vector<Seconds>(5, 0));
     for (int a = 0; a < 5; ++a)
-        for (int b = 0; b < 5; ++b) plan.drivingSeconds[a][b] = 100 * std::abs(a - b);
+        for (int b = 0; b < 5; ++b) seconds[a][b] = 100 * std::abs(a - b);
+    plan.durationMatrices = {seconds};
+    plan.distanceMatrices = {seconds};
     return plan;
 }
 
@@ -478,15 +480,18 @@ void verifyRawCostsByHand() {
                 p.nodes[3].maxEndTime = 580;
             },
             {3.0, 0.0, 0.0}, [](PdpRoutePlan& p) { p.nodes[3].maxEndTime = 640; }, none);
-    // 4 legs of 100 s, open; returnToDepot adds d2 -> home = 400 s.
+    // 4 legs of 100 s, open; an end depot at home adds d2 -> home = 400 s.
     byHand(
             "travelTimeCost", keep, {400.0, 0.0, 0.0},
             [](PdpRoutePlan& p) { p.vehicles[0].nodeIndices.clear(); }, none);
     byHand(
-            "travelTimeCost", [](PdpRoutePlan& p) { p.vehicles[0].returnToDepot = true; },
+            "travelTimeCost",
+            [](PdpRoutePlan& p) {
+                p.vehicles[0].endLocationIndex = p.vehicles[0].startLocationIndex;
+            },
             {800.0, 0.0, 0.0},
             [](PdpRoutePlan& p) {
-                p.vehicles[0].returnToDepot = true;
+                p.vehicles[0].endLocationIndex = p.vehicles[0].startLocationIndex;
                 p.vehicles[0].nodeIndices.clear();  // a parked vehicle drives 0
             },
             none);
@@ -632,42 +637,44 @@ void verifyCatalog() {
     std::printf("== (j) Catalog == component constants ==\n");
     using optimaru::Level;
     const auto rows = defaultConstraints().info();
-    check(rows.size() == 21, "21 catalog rows");
-    if (rows.size() != 21) return;
+    check(rows.size() == 22, "22 catalog rows");
+    if (rows.size() != 22) return;
     // Unit constraints first, then the globals, in emplace order: the
     // list_constraints() order.
     check(rowIs<VehicleCapacityCost>(rows[0], "vehicleCapacityCost", Level::Hard, 1.0, false) &&
                   rowIs<MaxEndTimeCost>(rows[1], "maxEndTimeCost", Level::Hard, 1.0, false) &&
                   rowIs<TravelTimeCost>(rows[2], "travelTimeCost", Level::Soft, 1.0, false) &&
-                  rowIs<MaxTravelTimeCost>(rows[3], "maxTravelTimeCost", Level::Hard, 1.0, false) &&
-                  rowIs<MaxRouteDurationCost>(rows[4], "maxRouteDurationCost", Level::Hard, 1.0,
-                                              false) &&
-                  rowIs<VehicleMaxEndTimeCost>(rows[5], "vehicleMaxEndTimeCost", Level::Hard, 1.0,
-                                               false) &&
-                  rowIs<MaxStopsCost>(rows[6], "maxStopsCost", Level::Hard, 1.0, false) &&
-                  rowIs<MaxRouteRadiusCost>(rows[7], "maxRouteRadiusCost", Level::Hard, 1.0,
+                  rowIs<TravelDistanceCost>(rows[3], "travelDistanceCost", Level::Soft, 0.0,
                                             false) &&
-                  rowIs<EnclosingCircleRadiusCost>(rows[8], "enclosingCircleRadiusCost",
+                  rowIs<MaxTravelTimeCost>(rows[4], "maxTravelTimeCost", Level::Hard, 1.0, false) &&
+                  rowIs<MaxRouteDurationCost>(rows[5], "maxRouteDurationCost", Level::Hard, 1.0,
+                                              false) &&
+                  rowIs<VehicleMaxEndTimeCost>(rows[6], "vehicleMaxEndTimeCost", Level::Hard, 1.0,
+                                               false) &&
+                  rowIs<MaxStopsCost>(rows[7], "maxStopsCost", Level::Hard, 1.0, false) &&
+                  rowIs<MaxRouteRadiusCost>(rows[8], "maxRouteRadiusCost", Level::Hard, 1.0,
+                                            false) &&
+                  rowIs<EnclosingCircleRadiusCost>(rows[9], "enclosingCircleRadiusCost",
                                                    Level::Soft, 0.0, false) &&
-                  rowIs<MinCapacityUtilizationCost>(rows[9], "minCapacityUtilizationCost",
+                  rowIs<MinCapacityUtilizationCost>(rows[10], "minCapacityUtilizationCost",
                                                     Level::Soft, 1.0, false) &&
-                  rowIs<RouteDurationCost>(rows[10], "routeDurationCost", Level::Soft, 0.0,
+                  rowIs<RouteDurationCost>(rows[11], "routeDurationCost", Level::Soft, 0.0,
                                            false) &&
-                  rowIs<LatencyCost>(rows[11], "latencyCost", Level::Soft, 0.0, false) &&
-                  rowIs<SquaredOrderAgeCost>(rows[12], "squaredOrderAgeCost", Level::Soft, 0.0,
+                  rowIs<LatencyCost>(rows[12], "latencyCost", Level::Soft, 0.0, false) &&
+                  rowIs<SquaredOrderAgeCost>(rows[13], "squaredOrderAgeCost", Level::Soft, 0.0,
                                              false) &&
-                  rowIs<VehicleFixedCost>(rows[13], "vehicleFixedCost", Level::Soft, 1.0, false) &&
-                  rowIs<PinnedStopsCost>(rows[14], "pinnedStopsCost", Level::Hard, 1e12, false) &&
-                  rowIs<RequiredVehicleCost>(rows[15], "requiredVehicleCost", Level::Hard, 1000.0,
+                  rowIs<VehicleFixedCost>(rows[14], "vehicleFixedCost", Level::Soft, 1.0, false) &&
+                  rowIs<PinnedStopsCost>(rows[15], "pinnedStopsCost", Level::Hard, 1e12, false) &&
+                  rowIs<RequiredVehicleCost>(rows[16], "requiredVehicleCost", Level::Hard, 1000.0,
                                              false) &&
-                  rowIs<PairedRequestCost>(rows[16], "pairedRequestCost", Level::Hard, 1000.0,
+                  rowIs<PairedRequestCost>(rows[17], "pairedRequestCost", Level::Hard, 1000.0,
                                            true) &&
-                  rowIs<SameVehicleCost>(rows[17], "sameVehicleCost", Level::Hard, 1000.0, true) &&
-                  rowIs<PickupBeforeDropoffCost>(rows[18], "pickupBeforeDropoffCost", Level::Hard,
+                  rowIs<SameVehicleCost>(rows[18], "sameVehicleCost", Level::Hard, 1000.0, true) &&
+                  rowIs<PickupBeforeDropoffCost>(rows[19], "pickupBeforeDropoffCost", Level::Hard,
                                                  1000.0, true) &&
-                  rowIs<RequestGroupCost>(rows[19], "requestGroupCost", Level::Hard, 1000.0,
+                  rowIs<RequestGroupCost>(rows[20], "requestGroupCost", Level::Hard, 1000.0,
                                           true) &&
-                  rowIs<UnassignedRequestsCost>(rows[20], "unassignedRequestsCost", Level::Medium,
+                  rowIs<UnassignedRequestsCost>(rows[21], "unassignedRequestsCost", Level::Medium,
                                                 1.0, true),
           "info() == the components' kDefaultWeight / kDefaultLevel");
     check(PairedRequestCost::kDefaultWeight == ScoreCalculator::kCouplingPenalty &&

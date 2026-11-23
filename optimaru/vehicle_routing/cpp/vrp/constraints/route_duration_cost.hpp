@@ -7,7 +7,7 @@ namespace vrp {
 
 // Soft, weight 0 (opt-in, default_enabled = false): routeDurationCost -- how
 // long each used route takes. Raw cost per vehicle = route end time (the last
-// visit's departure, or back home with returnToDepot) - departure time, in
+// visit's departure, or the arrival at the end depot) - departure time, in
 // seconds; 0 = an unused vehicle (and the pool list). Give it a weight to
 // prefer short working days.
 struct RouteDurationCost final : detail::PerVehicleConstraint {

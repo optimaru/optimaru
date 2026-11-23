@@ -114,27 +114,45 @@ private:
 //   startService = max(arrival, minStartTime)
 //   departure    = startService + serviceDuration
 // Calls onVisit(visitIndex, arrival) in order and returns the driving time of
-// the whole route, home -> visits... and back home only when the vehicle
-// returns to its depot (0 for an empty route).
+// the whole route, start depot -> visits... and on to the end depot when the
+// route has one (0 for an empty route).
 template <typename F>
 inline Seconds walkRoute(const VehicleRoutePlan& plan, int vehicleIndex,
                          const std::vector<int>& members, F&& onVisit) {
     if (members.empty()) return 0;
     const Vehicle& vehicle = plan.vehicles[vehicleIndex];
+    const Matrix& drive = plan.durationsOf(vehicle);
     Seconds previousDeparture = vehicle.departureTime;
-    int previousLocation = vehicle.homeLocationIndex;
+    int previousLocation = vehicle.startLocationIndex;
     Seconds driving = 0;
     for (int visitIndex : members) {
         const Visit& visit = plan.visits[visitIndex];
-        const Seconds leg = plan.drivingTime(previousLocation, visit.locationIndex);
+        const Seconds leg = drive[previousLocation][visit.locationIndex];
         const Seconds arrival = previousDeparture + leg;
         driving += leg;
         onVisit(visitIndex, arrival);
         previousDeparture = std::max(arrival, visit.minStartTime) + visit.serviceDuration;
         previousLocation = visit.locationIndex;
     }
-    driving += vehicle.homeLeg(plan.drivingSeconds, previousLocation);
+    driving += vehicle.endLeg(drive, previousLocation);
     return driving;
+}
+
+// The driving meters of the route, start depot -> visits... and on to the
+// end depot when the route has one (0 for an empty route).
+inline Meters routeMeters(const VehicleRoutePlan& plan, int vehicleIndex,
+                          const std::vector<int>& members) {
+    if (members.empty()) return 0;
+    const Vehicle& vehicle = plan.vehicles[vehicleIndex];
+    const Matrix& meters = plan.distancesOf(vehicle);
+    int previousLocation = vehicle.startLocationIndex;
+    Meters total = 0;
+    for (int visitIndex : members) {
+        const int location = plan.visits[visitIndex].locationIndex;
+        total += meters[previousLocation][location];
+        previousLocation = location;
+    }
+    return total + vehicle.endLeg(meters, previousLocation);
 }
 
 inline RouteMetrics routeMetrics(const VehicleRoutePlan& plan, int vehicleIndex,
@@ -142,11 +160,12 @@ inline RouteMetrics routeMetrics(const VehicleRoutePlan& plan, int vehicleIndex,
     const Vehicle& vehicle = plan.vehicles[vehicleIndex];
     RouteMetrics metrics{0, vehicle.departureTime, 0};
     if (members.empty()) return metrics;
+    const Matrix& drive = plan.durationsOf(vehicle);
     Seconds previousDeparture = vehicle.departureTime;
-    int previousLocation = vehicle.homeLocationIndex;
+    int previousLocation = vehicle.startLocationIndex;
     for (int visitIndex : members) {
         const Visit& visit = plan.visits[visitIndex];
-        const Seconds leg = plan.drivingTime(previousLocation, visit.locationIndex);
+        const Seconds leg = drive[previousLocation][visit.locationIndex];
         const Seconds arrival = previousDeparture + leg;
         metrics.driving += leg;
         metrics.latency += std::max<Seconds>(0, arrival - vehicle.departureTime);
@@ -154,10 +173,10 @@ inline RouteMetrics routeMetrics(const VehicleRoutePlan& plan, int vehicleIndex,
         previousLocation = visit.locationIndex;
     }
     // An open route ends at its last visit's departure; a closed one after
-    // the drive back home.
-    const Seconds homeLeg = vehicle.homeLeg(plan.drivingSeconds, previousLocation);
-    metrics.driving += homeLeg;
-    metrics.endTime = previousDeparture + homeLeg;
+    // the drive to its end depot.
+    const Seconds endLeg = vehicle.endLeg(drive, previousLocation);
+    metrics.driving += endLeg;
+    metrics.endTime = previousDeparture + endLeg;
     return metrics;
 }
 

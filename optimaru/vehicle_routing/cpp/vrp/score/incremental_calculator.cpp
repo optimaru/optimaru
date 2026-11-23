@@ -36,6 +36,7 @@ inline Score weightedScore(std::int64_t overload, std::int64_t lateness, std::in
 void VehicleRoutingIncrementalScoreCalculator::rebuild(VehicleRoutePlan& solution) {
     plan_ = &solution;
     vehicleCount_ = static_cast<int>(plan_->vehicles.size());
+    oneProfile_ = plan_->durationMatrices.size() == 1;
 
     terms_.assign(static_cast<std::size_t>(vehicleCount_), RouteTerms{});
     caches_.assign(static_cast<std::size_t>(vehicleCount_) + 1, ListCache{});
@@ -110,14 +111,16 @@ VehicleRoutingIncrementalScoreCalculator::evaluateElements(int vehicleIndex,
     if (elements.empty()) return terms;
 
     std::int64_t totalDemand = 0;
+    const Matrix& matrix = plan_->durationsOf(vehicle);
     Seconds previousDeparture = vehicle.departureTime;
-    int previousLocation = vehicle.homeLocationIndex;
+    int previousLocation = vehicle.startLocationIndex;
 
     for (int visitIndex : elements) {
         const Visit& visit = plan_->visits[static_cast<std::size_t>(visitIndex)];
         totalDemand += visit.demand;
 
-        const Seconds drive = plan_->drivingTime(previousLocation, visit.locationIndex);
+        const Seconds drive = matrix[static_cast<std::size_t>(previousLocation)]
+                                    [static_cast<std::size_t>(visit.locationIndex)];
         terms.driving += drive;
 
         const Seconds arrival = previousDeparture + drive;
@@ -130,7 +133,7 @@ VehicleRoutingIncrementalScoreCalculator::evaluateElements(int vehicleIndex,
         previousDeparture = std::max(arrival, visit.minStartTime) + visit.serviceDuration;
         previousLocation = visit.locationIndex;
     }
-    terms.driving += vehicle.homeLeg(plan_->drivingSeconds, previousLocation);
+    terms.driving += vehicle.endLeg(matrix, previousLocation);
 
     if (totalDemand > vehicle.capacity) terms.overload = totalDemand - vehicle.capacity;
     return terms;
@@ -149,7 +152,7 @@ VehicleRoutingIncrementalScoreCalculator::termsFromCache(int vehicleIndex) const
     RouteTerms terms;
     const int lastLocation =
             plan_->visits[static_cast<std::size_t>(vehicle.visitIndices[size - 1])].locationIndex;
-    terms.driving = c.cumDist[size] + vehicle.homeLeg(plan_->drivingSeconds, lastLocation);
+    terms.driving = c.cumDist[size] + vehicle.endLeg(plan_->durationsOf(vehicle), lastLocation);
     terms.overload = std::max<std::int64_t>(0, c.cumLoad[size] - vehicle.capacity);
     terms.lateness = c.lateness;
     return terms;
@@ -193,19 +196,17 @@ void VehicleRoutingIncrementalScoreCalculator::rebuildCache(int listIndex) {
     const Seconds departure =
             pool ? 0 : plan_->vehicles[static_cast<std::size_t>(listIndex)].departureTime;
     int previousLocation =
-            pool ? -1 : plan_->vehicles[static_cast<std::size_t>(listIndex)].homeLocationIndex;
+            pool ? -1 : plan_->vehicles[static_cast<std::size_t>(listIndex)].startLocationIndex;
+    const Matrix& matrix = plan_->durationMatrices[static_cast<std::size_t>(profileOf(listIndex))];
     for (std::size_t k = 0; k < n; ++k) {
         const Visit& visit = plan_->visits[static_cast<std::size_t>(elements[k])];
         cache.cumLoad[k + 1] = cache.cumLoad[k] + visit.demand;
         cache.cumService[k + 1] = cache.cumService[k] + visit.serviceDuration;
         cache.cumPenalty[k + 1] = cache.cumPenalty[k] + visit.unassignedPenalty();
-        cache.cumDist[k + 1] =
-                cache.cumDist[k] +
-                (previousLocation < 0 ? 0
-                                      : plan_->drivingTime(previousLocation, visit.locationIndex));
-        cache.cumRevDist[k + 1] =
-                cache.cumRevDist[k] +
-                (k == 0 ? 0 : plan_->drivingTime(visit.locationIndex, previousLocation));
+        const auto here = static_cast<std::size_t>(visit.locationIndex);
+        const auto before = static_cast<std::size_t>(previousLocation);
+        cache.cumDist[k + 1] = cache.cumDist[k] + (previousLocation < 0 ? 0 : matrix[before][here]);
+        cache.cumRevDist[k + 1] = cache.cumRevDist[k] + (k == 0 ? 0 : matrix[here][before]);
         cache.prefixMinEnd[k + 1] = std::min(cache.prefixMinEnd[k], visit.maxEndTime);
         if (!pool) {
             // No visit ever waits (noWaiting_), so arrival = departure +
@@ -307,10 +308,27 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRunsByWalk(const Run* runs
     return true;
 }
 
+// Whether some run puts a piece of two visits or more into a vehicle of
+// another profile than the piece's list: its cached legs are in the wrong
+// matrix, so the run is walked instead.
+bool VehicleRoutingIncrementalScoreCalculator::mixesProfiles(const Run* runs, int runCount) const {
+    for (int t = 0; t < runCount; ++t) {
+        const Run& run = runs[t];
+        if (run.list >= vehicleCount_) continue;  // the pool reads penalties only
+        const int profile = plan_->vehicles[static_cast<std::size_t>(run.list)].profileIndex;
+        for (int i = 0; i < run.count; ++i) {
+            const Piece& piece = run.pieces[i];
+            if (piece.end - piece.begin >= 2 && profileOf(piece.list) != profile) return true;
+        }
+    }
+    return false;
+}
+
 // Score the solution with each run's list replaced by the run's pieces.
 bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run* runs, int runCount,
                                                            optimaru::Score& out) const {
-    if (!noWaiting_) return previewRunsByWalk(runs, runCount, out);
+    if (!noWaiting_ || (!oneProfile_ && mixesProfiles(runs, runCount)))
+        return previewRunsByWalk(runs, runCount, out);
     std::int64_t overload = overloadTotal_;
     std::int64_t lateness = latenessTotal_;
     std::int64_t driving = drivingTotal_;
@@ -338,7 +356,8 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run* runs, int 
 
         std::int64_t load = 0, service = 0, drive = 0;
         Seconds minMaxEnd = std::numeric_limits<Seconds>::max();
-        int previousLocation = vehicle.homeLocationIndex;
+        const Matrix& matrix = plan_->durationsOf(vehicle);
+        int previousLocation = vehicle.startLocationIndex;
         bool any = false;
         for (int i = 0; i < run.count; ++i) {
             const Piece& piece = run.pieces[i];
@@ -354,7 +373,8 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run* runs, int 
             const int lastElement = elements[piece.reversed ? b : e - 1];
             const int firstLocation =
                     plan_->visits[static_cast<std::size_t>(firstElement)].locationIndex;
-            drive += plan_->drivingTime(previousLocation, firstLocation);
+            drive += matrix[static_cast<std::size_t>(previousLocation)]
+                           [static_cast<std::size_t>(firstLocation)];
             drive += piece.reversed ? c.cumRevDist[e] - c.cumRevDist[b + 1]
                                     : c.cumDist[e] - c.cumDist[b + 1];
             previousLocation = plan_->visits[static_cast<std::size_t>(lastElement)].locationIndex;
@@ -367,7 +387,7 @@ bool VehicleRoutingIncrementalScoreCalculator::previewRuns(const Run* runs, int 
             // exact) rather than the preview declined.
             const Seconds finish = vehicle.departureTime + drive + service;
             if (finish > minMaxEnd) return previewRunsByWalk(runs, runCount, out);
-            drive += vehicle.homeLeg(plan_->drivingSeconds, previousLocation);
+            drive += vehicle.endLeg(matrix, previousLocation);
             if (load > vehicle.capacity) overload += load - vehicle.capacity;
             driving += drive;
         }
@@ -504,15 +524,17 @@ bool VehicleRoutingIncrementalScoreCalculator::preview_insert(int list, int pos,
     auto locationOf = [&](std::size_t k) {
         return plan_->visits[static_cast<std::size_t>(elements[k])].locationIndex;
     };
-    const int previousLocation = at == 0 ? vehicle.homeLocationIndex : locationOf(at - 1);
+    const int previousLocation = at == 0 ? vehicle.startLocationIndex : locationOf(at - 1);
+    const Matrix& matrix = plan_->durationsOf(vehicle);
+    auto leg = [&](int from, int to) {
+        return matrix[static_cast<std::size_t>(from)][static_cast<std::size_t>(to)];
+    };
 
-    std::int64_t drive =
-            c.cumDist[size] + plan_->drivingTime(previousLocation, visit.locationIndex);
+    std::int64_t drive = c.cumDist[size] + leg(previousLocation, visit.locationIndex);
     int lastLocation;
     if (at < size) {
         const int nextLocation = locationOf(at);
-        drive += plan_->drivingTime(visit.locationIndex, nextLocation) -
-                 plan_->drivingTime(previousLocation, nextLocation);
+        drive += leg(visit.locationIndex, nextLocation) - leg(previousLocation, nextLocation);
         lastLocation = locationOf(size - 1);
     } else {
         lastLocation = visit.locationIndex;
@@ -522,7 +544,7 @@ bool VehicleRoutingIncrementalScoreCalculator::preview_insert(int list, int pos,
     const Seconds minMaxEnd = std::min(c.prefixMinEnd[size], visit.maxEndTime);
     if (vehicle.departureTime + drive + service > minMaxEnd)  // may be late: walk it
         return previewInsertByWalk(list, pos, element, out);
-    drive += vehicle.homeLeg(plan_->drivingSeconds, lastLocation);
+    drive += vehicle.endLeg(matrix, lastLocation);
 
     // The check above established the new route has no lateness, so the old
     // route's lateness (non-zero only for a non-metric matrix) goes too.

@@ -30,7 +30,7 @@ from optimaru.vehicle_routing.constraints import (
     unassigned_visits_cost,
     vehicle_capacity_cost,
 )
-from optimaru.vehicle_routing.models import RoutingInput, VehicleModel, VisitModel, to_plan
+from optimaru.vehicle_routing.models import DepotModel, RoutingInput, TravelProfile, VehicleModel, VisitModel, to_plan
 
 MEDIUM_UNIT = 1_000_000_000  # the domain's medium fold (into soft)
 
@@ -38,8 +38,8 @@ MEDIUM_UNIT = 1_000_000_000  # the domain's medium fold (into soft)
 def small_plan():
     """2 vehicles / 6 visits around Seoul; capacities force a split."""
     locations = [
-        vrp.Location(37.5665, 126.9780),  # 0: V1 home
-        vrp.Location(37.4979, 127.0276),  # 1: V2 home
+        vrp.Location(37.5665, 126.9780),  # 0: V1 depot
+        vrp.Location(37.4979, 127.0276),  # 1: V2 depot
     ]
     visit_coords = [
         (37.5700, 126.9820),
@@ -77,6 +77,7 @@ def test_list_constraints_matches_the_spec_names():
         "vehicle_capacity_cost",
         "max_end_time_cost",
         "travel_time_cost",
+        "travel_distance_cost",
         "max_travel_time_cost",
         "max_route_duration_cost",
         "vehicle_max_end_time_cost",
@@ -244,6 +245,7 @@ EXPECTED_INFO = [
     ("vehicle_capacity_cost", "hard", 1.0, True),
     ("max_end_time_cost", "hard", 1.0, True),
     ("travel_time_cost", "soft", 1.0, True),
+    ("travel_distance_cost", "soft", 0.0, False),
     ("max_travel_time_cost", "hard", 1.0, True),
     ("max_route_duration_cost", "hard", 1.0, True),
     ("vehicle_max_end_time_cost", "hard", 1.0, True),
@@ -489,15 +491,20 @@ def _hand_plan():
     order = list(HAND_PLACES)
     routes = {"v": ["a", "b"], "w": ["c"], "x": []}
     model = RoutingInput(
+        depots=[DepotModel(id=name, location=(37.5, 127.0)) for name in routes],
         vehicles=[
-            VehicleModel(id=name, capacity=1 if name == "v" else 5, depot=(37.5, 127.0), initial_route=route)
+            VehicleModel(id=name, capacity=1 if name == "v" else 5, start_depot=name, initial_route=route)
             for name, route in routes.items()
         ],
         visits=[
             VisitModel(id=name, location=(37.5, 127.0), unassigned_penalty_minutes={"d": 5, "e": 3}.get(name, -1))
             for name in "abcde"
         ],
-        driving_seconds=[[abs(HAND_PLACES[p] - HAND_PLACES[q]) for q in order] for p in order],
+        profiles={
+            "default": TravelProfile(
+                durations={p: {q: abs(HAND_PLACES[p] - HAND_PLACES[q]) for q in order} for p in order}
+            )
+        },
     )
     plan = to_plan(model)
     plan.rebuild_unassigned_pool()

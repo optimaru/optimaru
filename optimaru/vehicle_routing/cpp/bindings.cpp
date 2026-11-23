@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 
 #include "optimaru/python/constraint_binding.hpp"
@@ -79,14 +80,17 @@ PYBIND11_MODULE(_core, m) {
             .def_readonly("arrival_time", &Visit::arrivalTime);
 
     py::class_<Vehicle>(m, "Vehicle", py::module_local())
-            .def(py::init([](std::string id, int capacity, int homeLocationIndex,
+            .def(py::init([](std::string id, int capacity, int startLocationIndex,
                              Seconds departureTime, Seconds maxTravelTime, Seconds maxRouteDuration,
                              Seconds maxEndTime, int maxStops, double minLoadRatio,
-                             double fixedCost, double maxRouteRadiusMeters, bool returnToDepot) {
+                             double fixedCost, double maxRouteRadiusMeters, int endLocationIndex,
+                             int profileIndex) {
                      Vehicle v;
                      v.id = std::move(id);
                      v.capacity = capacity;
-                     v.homeLocationIndex = homeLocationIndex;
+                     v.startLocationIndex = startLocationIndex;
+                     v.endLocationIndex = endLocationIndex;
+                     v.profileIndex = profileIndex;
                      v.departureTime = departureTime;
                      v.maxTravelTime = maxTravelTime;
                      v.maxRouteDuration = maxRouteDuration;
@@ -95,18 +99,22 @@ PYBIND11_MODULE(_core, m) {
                      v.minLoadRatio = minLoadRatio;
                      v.fixedCost = fixedCost;
                      v.maxRouteRadiusMeters = maxRouteRadiusMeters;
-                     v.returnToDepot = returnToDepot;
                      return v;
                  }),
-                 py::arg("id"), py::arg("capacity"), py::arg("home_location_index"),
+                 py::arg("id"), py::arg("capacity"), py::arg("start_location_index"),
                  py::arg("departure_time") = 0, py::arg("max_travel_time") = 0,
                  py::arg("max_route_duration") = 0, py::arg("max_end_time") = 0,
                  py::arg("max_stops") = 0, py::arg("min_load_ratio") = 0.0,
                  py::arg("fixed_cost") = 0.0, py::arg("max_route_radius_meters") = 0.0,
-                 py::arg("return_to_depot") = false)
+                 py::arg("end_location_index") = -1, py::arg("profile_index") = 0)
             .def_readwrite("id", &Vehicle::id)
             .def_readwrite("capacity", &Vehicle::capacity)
-            .def_readwrite("home_location_index", &Vehicle::homeLocationIndex)
+            .def_readwrite("start_location_index", &Vehicle::startLocationIndex)
+            .def_readwrite("end_location_index", &Vehicle::endLocationIndex,
+                           "Where the route ends; -1 for an open route (the default), which "
+                           "ends at its last visit.")
+            .def_readwrite("profile_index", &Vehicle::profileIndex,
+                           "Which of the plan's matrices the vehicle drives on.")
             .def_readwrite("departure_time", &Vehicle::departureTime)
             .def_readwrite("max_travel_time", &Vehicle::maxTravelTime)
             .def_readwrite("max_route_duration", &Vehicle::maxRouteDuration)
@@ -115,15 +123,14 @@ PYBIND11_MODULE(_core, m) {
             .def_readwrite("min_load_ratio", &Vehicle::minLoadRatio)
             .def_readwrite("fixed_cost", &Vehicle::fixedCost)
             .def_readwrite("max_route_radius_meters", &Vehicle::maxRouteRadiusMeters)
-            .def_readwrite("return_to_depot", &Vehicle::returnToDepot,
-                           "Whether the route ends back home (default: open route).")
             // The decision: the ordered visit indices of the route.
             .def_readwrite("visit_indices", &Vehicle::visitIndices);
 
+    using OptionalMatrices = std::optional<std::vector<std::optional<Matrix>>>;
     py::class_<VehicleRoutePlan>(m, "VehicleRoutePlan", py::module_local())
             .def(py::init([](std::string name, std::vector<Location> locations,
                              std::vector<Vehicle> vehicles, std::vector<Visit> visits,
-                             std::optional<std::vector<std::vector<Seconds>>> drivingSeconds) {
+                             OptionalMatrices durations, OptionalMatrices distances) {
                      VehicleRoutePlan plan;
                      plan.name = std::move(name);
                      plan.locations = std::move(locations);
@@ -131,31 +138,51 @@ PYBIND11_MODULE(_core, m) {
                          plan.locations[i].index = static_cast<int>(i);
                      plan.vehicles = std::move(vehicles);
                      plan.visits = std::move(visits);
-                     if (drivingSeconds) {
-                         // An explicit matrix: what production actually has
-                         // (OSRM / Google / a benchmark instance's own
-                         // metric). Haversine is only the fallback for when
-                         // the caller has nothing but coordinates.
-                         const std::size_t n = plan.locations.size();
-                         if (drivingSeconds->size() != n)
-                             throw std::invalid_argument(
-                                     "driving_seconds must be a square matrix over "
-                                     "locations");
-                         for (const auto& row : *drivingSeconds) {
-                             if (row.size() != n)
-                                 throw std::invalid_argument(
-                                         "driving_seconds must be a square matrix "
-                                         "over locations");
+                     // Explicit matrices, one per profile: what production
+                     // actually has (a road-network router, a benchmark
+                     // instance's own metric). A profile left out or None is
+                     // filled from the coordinates (haversine).
+                     const std::size_t n = plan.locations.size();
+                     auto take = [n](OptionalMatrices& given, std::vector<Matrix>& into,
+                                     const char* what) {
+                         if (!given) return;
+                         for (std::optional<Matrix>& matrix : *given) {
+                             if (matrix) {
+                                 bool square = matrix->size() == n;
+                                 for (const auto& row : *matrix) square = square && row.size() == n;
+                                 if (!square)
+                                     throw std::invalid_argument(
+                                             std::string(what) +
+                                             " must be square matrices over the locations");
+                                 into.push_back(std::move(*matrix));
+                             } else {
+                                 into.emplace_back();
+                             }
                          }
-                         plan.drivingSeconds = std::move(*drivingSeconds);
-                     } else {
-                         // The haversine driving-time matrix, precomputed once.
-                         HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan);
+                     };
+                     take(durations, plan.durationMatrices, "durations");
+                     take(distances, plan.distanceMatrices, "distances");
+                     HaversineDrivingTimeCalculator::fillMissingMatrices(plan);
+                     const int profiles = static_cast<int>(plan.durationMatrices.size());
+                     const int locationCount = static_cast<int>(n);
+                     for (const Vehicle& v : plan.vehicles) {
+                         if (v.profileIndex < 0 || v.profileIndex >= profiles)
+                             throw std::invalid_argument("vehicle " + v.id + ": profile_index " +
+                                                         std::to_string(v.profileIndex) +
+                                                         " is not one of the " +
+                                                         std::to_string(profiles) + " profiles");
+                         if (v.startLocationIndex < 0 || v.startLocationIndex >= locationCount ||
+                             v.endLocationIndex < -1 || v.endLocationIndex >= locationCount)
+                             throw std::invalid_argument(
+                                     "vehicle " + v.id +
+                                     ": a depot location index is out of range");
                      }
                      return plan;
                  }),
                  py::arg("name"), py::arg("locations"), py::arg("vehicles"), py::arg("visits"),
-                 py::arg("driving_seconds") = py::none())
+                 py::arg("durations") = py::none(), py::arg("distances") = py::none(),
+                 "Profiles: as many as the longer of durations / distances lists (one at "
+                 "least); a matrix not given is filled from the coordinates.")
             .def_readonly("name", &VehicleRoutePlan::name)
             .def_readonly("locations", &VehicleRoutePlan::locations)
             .def_readwrite("vehicles", &VehicleRoutePlan::vehicles)
@@ -166,9 +193,27 @@ PYBIND11_MODULE(_core, m) {
             .def("rebuild_unassigned_pool", &VehicleRoutePlan::rebuildUnassignedPool,
                  "Recompute unassigned_visit_indices from the current routes.")
             .def_readonly("score", &VehicleRoutePlan::score)
-            .def("driving_time", &VehicleRoutePlan::drivingTime, py::arg("from_location"),
-                 py::arg("to_location"),
-                 "Precomputed driving seconds between two location indices.")
+            .def_property_readonly(
+                    "profile_count",
+                    [](const VehicleRoutePlan& plan) { return plan.durationMatrices.size(); })
+            .def(
+                    "driving_time",
+                    [](const VehicleRoutePlan& plan, int from, int to, int profile) {
+                        return plan.durationMatrices.at(static_cast<std::size_t>(profile))
+                                .at(static_cast<std::size_t>(from))
+                                .at(static_cast<std::size_t>(to));
+                    },
+                    py::arg("from_location"), py::arg("to_location"), py::arg("profile") = 0,
+                    "Driving seconds between two location indices in a profile.")
+            .def(
+                    "driving_distance",
+                    [](const VehicleRoutePlan& plan, int from, int to, int profile) {
+                        return plan.distanceMatrices.at(static_cast<std::size_t>(profile))
+                                .at(static_cast<std::size_t>(from))
+                                .at(static_cast<std::size_t>(to));
+                    },
+                    py::arg("from_location"), py::arg("to_location"), py::arg("profile") = 0,
+                    "Driving meters between two location indices in a profile.")
             // Convenience: routes as lists of visit ids, per vehicle.
             .def("routes",
                  [](const VehicleRoutePlan& plan) {

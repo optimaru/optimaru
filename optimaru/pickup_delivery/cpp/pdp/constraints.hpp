@@ -30,6 +30,7 @@
 #include "pdp/constraints/route_duration_cost.hpp"
 #include "pdp/constraints/same_vehicle_cost.hpp"
 #include "pdp/constraints/squared_order_age_cost.hpp"
+#include "pdp/constraints/travel_distance_cost.hpp"
 #include "pdp/constraints/travel_time_cost.hpp"
 #include "pdp/constraints/unassigned_requests_cost.hpp"
 #include "pdp/constraints/vehicle_capacity_cost.hpp"
@@ -93,6 +94,7 @@ inline ConstraintAssembly defaultConstraints() {
     assembly.emplace<MaxEndTimeCost>();
     assembly.emplace<UnassignedRequestsCost>();
     assembly.emplace<TravelTimeCost>();
+    assembly.emplace<TravelDistanceCost>();
     assembly.emplace<MaxTravelTimeCost>();
     assembly.emplace<MaxRouteDurationCost>();
     assembly.emplace<VehicleMaxEndTimeCost>();

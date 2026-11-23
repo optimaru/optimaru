@@ -46,7 +46,7 @@ Vehicle vehicleAt(std::string id, int capacity, int home, Seconds departure) {
     Vehicle vehicle;
     vehicle.id = std::move(id);
     vehicle.capacity = capacity;
-    vehicle.homeLocationIndex = home;
+    vehicle.startLocationIndex = home;
     vehicle.departureTime = departure;
     return vehicle;
 }
@@ -61,9 +61,14 @@ void testFixtures() {
     const int home = 0, loc2 = 1, loc3 = 2;
 
     // The fixture's known driving times.
-    checkEqual("drivingTime L1->L2", plan.drivingTime(home, loc2), 843);
-    checkEqual("drivingTime L2->L3", plan.drivingTime(loc2, loc3), 639);
-    checkEqual("drivingTime L1->L3", plan.drivingTime(home, loc3), 941);
+    const Matrix& seconds = plan.durationMatrices.front();
+    checkEqual("drivingTime L1->L2", seconds[home][loc2], 843);
+    checkEqual("drivingTime L2->L3", seconds[loc2][loc3], 639);
+    checkEqual("drivingTime L1->L3", seconds[home][loc3], 941);
+    checkEqual("one profile", static_cast<long long>(plan.distanceMatrices.size()), 1);
+    checkEqual("drivingTime = meters at 50 km/h", seconds[home][loc2],
+               HaversineDrivingTimeCalculator::metersToDrivingSeconds(
+                       plan.distanceMatrices.front()[home][loc2]));
 
     // vehicleCapacityCost: capacity 100, demands 80 + 40 -> 20 over.
     plan.vehicles = {vehicleAt("1", 100, home, hourMinute(7, 0))};
@@ -77,19 +82,19 @@ void testFixtures() {
     // travelTimeCost: the route is open by default, so only
     // home->L2->L3 = 843 + 639 = 1482 is driven.
     checkEqual("travelTimeCost soft penalty (open route)", -s.soft, 1482);
-    // With returnToDepot the round trip home->L2->L3->home is charged:
+    // With an end depot at home the round trip home->L2->L3->home is charged:
     // 843 + 639 + 941 = 2423.
-    plan.vehicles[0].returnToDepot = true;
+    plan.vehicles[0].endLocationIndex = plan.vehicles[0].startLocationIndex;
     s = ScoreCalculator::score(plan);
     checkEqual("travelTimeCost soft penalty (return to depot)", -s.soft, 2423);
-    plan.vehicles[0].returnToDepot = false;
+    plan.vehicles[0].endLocationIndex = -1;
 
     // unassignedVisitsCost: one unassigned visit with a 30-minute service
     // duration is penalized by 30 on the medium level.
     VehicleRoutePlan plan2;
     addLocation(plan2, 49.288087, 16.562172);
     addLocation(plan2, 49.190922, 16.624466);
-    HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan2);
+    HaversineDrivingTimeCalculator::fillMissingMatrices(plan2);
     plan2.vehicles = {vehicleAt("1", 100, 0, hourMinute(7, 0))};
     plan2.visits = {Visit{"2", "John", 1, 80, hourMinute(8, 0), hourMinute(10, 0), 30 * 60}};
     // Left out of every route == unassigned.
@@ -480,7 +485,7 @@ void testEjectionChainFillsTightPool() {
         visit.unassignedPenaltyMinutes = 1000;
         plan.visits.push_back(visit);
     }
-    HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan);
+    HaversineDrivingTimeCalculator::fillMissingMatrices(plan);
     for (int v = 0; v < 3; ++v) plan.vehicles.push_back(vehicleAt(std::to_string(v), 10, home, 0));
     plan.vehicles[0].visitIndices = {0, 1};
     plan.vehicles[1].visitIndices = {2, 3};
@@ -529,10 +534,15 @@ void testEjectionChainFillsTightPool() {
 // (the same walk the cached pass falls back to when a route may be late).
 // `staggered` gives every vehicle its own departure time and sends every
 // other vehicle back home, so the per-list departure offset and the
-// return-to-depot leg of a candidate route are exercised too.
-void testPreviewsMatchAppliedScore(bool nonMetric, bool waiting = false, bool staggered = false) {
+// end-depot leg of a candidate route are exercised too.
+// `profiles` puts every other vehicle on a second, slower and non-metric
+// matrix and ends one route at another vehicle's depot: a run moved between
+// vehicles of two profiles has its internal legs added up again.
+void testPreviewsMatchAppliedScore(bool nonMetric, bool waiting = false, bool staggered = false,
+                                   bool profiles = false) {
     std::printf("== Move previews vs applied score (%s) ==\n",
-                waiting     ? "waiting: previews by walking the candidate route"
+                profiles    ? "two profiles, an end at another depot"
+                : waiting   ? "waiting: previews by walking the candidate route"
                 : staggered ? "staggered departures, round trips, late routes"
                 : nonMetric ? "non-metric matrix, late routes"
                             : "metric matrix");
@@ -544,7 +554,7 @@ void testPreviewsMatchAppliedScore(bool nonMetric, bool waiting = false, bool st
     }
     if (waiting) plan.visits.front().minStartTime = 3600;  // opens after the 0s departure
     if (nonMetric) {
-        for (auto& row : plan.drivingSeconds)
+        for (auto& row : plan.durationMatrices.front())
             for (Seconds& cell : row) cell = static_cast<Seconds>(matrixRng() % 3600);
     }
     for (std::size_t v = 0; v < plan.vehicles.size(); ++v) {
@@ -552,8 +562,17 @@ void testPreviewsMatchAppliedScore(bool nonMetric, bool waiting = false, bool st
         // Every window opens at 0, so a later departure never makes a visit
         // wait and previews stay on.
         vehicle.departureTime = staggered ? static_cast<Seconds>(600 * v) : 0;
-        vehicle.returnToDepot = staggered && v % 2 == 1;
+        vehicle.endLocationIndex = (staggered && v % 2 == 1) ? vehicle.startLocationIndex : -1;
         vehicle.visitIndices.clear();
+    }
+    if (profiles) {
+        Matrix slower = plan.durationMatrices.front();
+        for (auto& row : slower)
+            for (Seconds& cell : row) cell = cell * 3 / 2 + static_cast<Seconds>(matrixRng() % 600);
+        plan.durationMatrices.push_back(std::move(slower));
+        plan.distanceMatrices.push_back(plan.distanceMatrices.front());
+        for (std::size_t v = 0; v < plan.vehicles.size(); v += 2) plan.vehicles[v].profileIndex = 1;
+        plan.vehicles[1].endLocationIndex = plan.vehicles[2].startLocationIndex;
     }
     // Round-robin routes, the last four visits parked in the pool so that
     // pool-touching moves are covered too.
@@ -613,6 +632,10 @@ int main() {
     testPreviewsMatchAppliedScore(/*nonMetric=*/false, /*waiting=*/true);
     testPreviewsMatchAppliedScore(/*nonMetric=*/true, /*waiting=*/true);
     testPreviewsMatchAppliedScore(/*nonMetric=*/true, /*waiting=*/false, /*staggered=*/true);
+    testPreviewsMatchAppliedScore(/*nonMetric=*/false, /*waiting=*/false, /*staggered=*/false,
+                                  /*profiles=*/true);
+    testPreviewsMatchAppliedScore(/*nonMetric=*/true, /*waiting=*/false, /*staggered=*/true,
+                                  /*profiles=*/true);
     testSolveIntegrity();
     testFullAssert();
     testSearchStrategiesAreConsistent();

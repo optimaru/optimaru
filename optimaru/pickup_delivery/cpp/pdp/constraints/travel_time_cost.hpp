@@ -6,8 +6,8 @@
 namespace pdp {
 
 // Soft, weight 1: travelTimeCost — each vehicle's driving seconds for the
-// whole route, home -> nodes..., plus the leg back home when the vehicle
-// returns to its depot. Raw cost per vehicle = those driving seconds; a
+// whole route, start depot -> nodes..., plus the leg to the end depot when
+// the route has one. Raw cost per vehicle = those driving seconds; a
 // vehicle that stays parked drives nothing and costs 0 (so does the pool).
 struct TravelTimeCost final : detail::PerVehicleConstraint {
     static constexpr double kDefaultWeight = 1.0;

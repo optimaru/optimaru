@@ -13,7 +13,7 @@ namespace vrp {
 // The smallest enclosing circle of a route's visit points (an incremental
 // minimum-enclosing-circle construction on an equirectangular projection
 // around the mean latitude), used by enclosingCircleRadiusCost.
-// maxRouteRadiusCost measures haversine distances from home instead
+// maxRouteRadiusCost measures haversine distances from the start depot instead
 // (detail::haversineMeters in common.hpp).
 namespace detail {
 

@@ -13,11 +13,13 @@ import optimaru.pickup_delivery as pdp
 from optimaru.pickup_delivery.constraints import get_constraints
 from optimaru.pickup_delivery.models import (
     DeliveryModel,
+    DepotModel,
     PdpInput,
     PdpRequest,
     PdpSolution,
     PdpStop,
     StopModel,
+    TravelProfile,
     VehicleModel,
     solve_request,
     with_initial_solution,
@@ -42,7 +44,7 @@ def problem(timelimit: float = 0, *, routes=None, pinned: int = 0) -> PdpRequest
         VehicleModel(
             id=name,
             capacity=5,
-            home=(37.5, 127.0),
+            start_depot=name,
             max_stops=0,
             initial_route=routes.get(name, []),
             pinned_stops=pinned if name == "v" else 0,
@@ -54,9 +56,12 @@ def problem(timelimit: float = 0, *, routes=None, pinned: int = 0) -> PdpRequest
     return PdpRequest(
         timelimit=timelimit,
         model_input=PdpInput(
+            depots=[DepotModel(id=name, location=(37.5, 127.0)) for name in "vw"],
             vehicles=vehicles,
             deliveries=deliveries,
-            driving_seconds=[[abs(PLACES[a] - PLACES[b]) for b in order] for a in order],
+            profiles={
+                "default": TravelProfile(durations={a: {b: abs(PLACES[a] - PLACES[b]) for b in order} for a in order})
+            },
         ),
     )
 

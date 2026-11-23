@@ -7,8 +7,10 @@ import pytest
 import optimaru.vehicle_routing as vrp
 from optimaru.vehicle_routing.constraints import VisitGroupCost, VisitOrderCost, get_constraints
 from optimaru.vehicle_routing.models import (
+    DepotModel,
     RoutePlanRequest,
     RoutingInput,
+    TravelProfile,
     VehicleModel,
     VisitModel,
     solve_request,
@@ -30,16 +32,20 @@ def visit(name: str, group: str | None = None, after=()) -> VisitModel:
 
 
 def vehicle(name: str, route=(), max_stops: int = 0) -> VehicleModel:
-    return VehicleModel(id=name, capacity=10, depot=(37.5, 127.0), max_stops=max_stops, initial_route=list(route))
+    """A vehicle that starts at a depot of its own, named like it."""
+    return VehicleModel(id=name, capacity=10, start_depot=name, max_stops=max_stops, initial_route=list(route))
 
 
 def line_input(vehicles, visits, places: dict[str, int]) -> RoutingInput:
-    """Everything sits on a line; `places` gives each vehicle and visit its position."""
-    order = [v.id for v in vehicles] + [v.id for v in visits]
+    """Everything sits on a line; `places` gives each vehicle's depot and each visit its position."""
+    order = [v.start_depot for v in vehicles] + [v.id for v in visits]
     return RoutingInput(
+        depots=[DepotModel(id=v.start_depot, location=(37.5, 127.0)) for v in vehicles],
         vehicles=vehicles,
         visits=visits,
-        driving_seconds=[[abs(places[a] - places[b]) for b in order] for a in order],
+        profiles={
+            "default": TravelProfile(durations={a: {b: abs(places[a] - places[b]) for b in order} for a in order})
+        },
     )
 
 
@@ -468,10 +474,10 @@ def grouped_input(visits: int, vehicles: int, size: int, seed: int) -> RoutingIn
             stop.group = f"g{first // size}"
             stop.after = [members[position - 1].id] if position else []
     fleet = [
-        VehicleModel(id=f"v{index}", capacity=visits, depot=(43.78, 11.23), departure_time=7 * 3600 + 1800)
+        VehicleModel(id=f"v{index}", capacity=visits, start_depot="depot", departure_time=7 * 3600 + 1800)
         for index in range(vehicles)
     ]
-    return RoutingInput(vehicles=fleet, visits=stops)
+    return RoutingInput(depots=[DepotModel(id="depot", location=(43.78, 11.23))], vehicles=fleet, visits=stops)
 
 
 def groups_are_whole_and_in_order(model_input: RoutingInput, solution) -> bool:

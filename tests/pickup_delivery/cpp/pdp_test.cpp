@@ -32,7 +32,7 @@ Vehicle vehicleAt(std::string id, int capacity, int home, Seconds departure) {
     Vehicle vehicle;
     vehicle.id = std::move(id);
     vehicle.capacity = capacity;
-    vehicle.homeLocationIndex = home;
+    vehicle.startLocationIndex = home;
     vehicle.departureTime = departure;
     return vehicle;
 }
@@ -58,7 +58,7 @@ PdpRoutePlan buildTinyInstance(int demand = 4) {
             Node{"d2", d2, hourMinute(8, 0), hourMinute(18, 0), 300, 1, false, -1, NULL_TIME},
     };
     plan.deliveries = {Delivery{"r1", 0, 1, demand}, Delivery{"r2", 2, 3, demand}};
-    HaversineDrivingTimeCalculator::initDrivingTimeMatrix(plan);
+    HaversineDrivingTimeCalculator::fillMissingMatrices(plan);
     return plan;
 }
 
@@ -76,22 +76,23 @@ void testCouplingConstraints() {
     check(s.soft < 0, "travel time is penalized on the soft level");
     {
         // The route is open by default: home -> p1 -> d1 -> p2 -> d2 with no
-        // leg back. Turning returnToDepot on adds exactly d2 -> home.
+        // leg back. An end depot at home adds exactly d2 -> home.
         const std::vector<int>& route = legal.vehicles[0].nodeIndices;
         Seconds open = 0;
-        int previous = legal.vehicles[0].homeLocationIndex;
+        int previous = legal.vehicles[0].startLocationIndex;
         for (int nodeIndex : route) {
             const int location = legal.nodes[static_cast<std::size_t>(nodeIndex)].locationIndex;
-            open += legal.drivingTime(previous, location);
+            open += legal.drivingTime(legal.vehicles[0], previous, location);
             previous = location;
         }
-        const Seconds back = legal.drivingTime(previous, legal.vehicles[0].homeLocationIndex);
+        const Seconds back = legal.drivingTime(legal.vehicles[0], previous,
+                                               legal.vehicles[0].startLocationIndex);
         check(back > 0, "the closing leg of the tiny instance is not free");
         check(-s.soft == open, "an open route charges no leg back home");
-        legal.vehicles[0].returnToDepot = true;
+        legal.vehicles[0].endLocationIndex = legal.vehicles[0].startLocationIndex;
         const Score closed = ScoreCalculator::score(legal);
-        check(-closed.soft == open + back, "returnToDepot adds exactly the last-stop -> home leg");
-        legal.vehicles[0].returnToDepot = false;
+        check(-closed.soft == open + back, "an end depot adds exactly the last-stop -> depot leg");
+        legal.vehicles[0].endLocationIndex = -1;
         ScoreCalculator::score(legal);
     }
 
@@ -257,7 +258,7 @@ PdpRoutePlan tighten(PdpRoutePlan plan, int capacity, Seconds windowMinutes) {
         // default) loosen the soft landscape enough that a 4-second budget no
         // longer separates the two configurations reliably, so the fixture
         // keeps the closed routes the measurements were taken on.
-        vehicle.returnToDepot = true;
+        vehicle.endLocationIndex = vehicle.startLocationIndex;
     }
     for (Node& node : plan.nodes) node.maxEndTime = node.minStartTime + windowMinutes * 60;
     return plan;
@@ -346,11 +347,13 @@ PdpRoutePlan buildLine(const std::vector<Seconds>& homes,
         plan.deliveries.push_back(
                 Delivery{id, 2 * request, 2 * request + 1, 1, 0, requests[r].requiredVehicleIndex});
     }
-    plan.drivingSeconds.assign(places.size(), std::vector<Seconds>(places.size(), 0));
+    Matrix seconds(places.size(), std::vector<Seconds>(places.size(), 0));
     for (std::size_t a = 0; a < places.size(); ++a) {
         for (std::size_t b = 0; b < places.size(); ++b)
-            plan.drivingSeconds[a][b] = std::abs(places[a] - places[b]);
+            seconds[a][b] = std::abs(places[a] - places[b]);
     }
+    plan.durationMatrices = {seconds};
+    plan.distanceMatrices = {seconds};
     return plan;
 }
 

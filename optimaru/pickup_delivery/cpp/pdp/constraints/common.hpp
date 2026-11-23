@@ -116,27 +116,45 @@ private:
 //   arrival      = previous departure + drivingTime(previous -> this)
 //   departure    = max(arrival, minStartTime) + serviceDuration
 // Calls onNode(nodeIndex, arrival) in order and returns the driving time of
-// the whole route, home -> nodes... and back home only when the vehicle
-// returns to its depot (0 for an empty route).
+// the whole route, start depot -> nodes... and on to the end depot when the
+// route has one (0 for an empty route).
 template <typename F>
 inline Seconds walkRoute(const PdpRoutePlan& plan, int vehicleIndex,
                          const std::vector<int>& members, F&& onNode) {
     if (members.empty()) return 0;
     const Vehicle& vehicle = plan.vehicles[vehicleIndex];
     Seconds previousDeparture = vehicle.departureTime;
-    int previousLocation = vehicle.homeLocationIndex;
+    int previousLocation = vehicle.startLocationIndex;
     Seconds driving = 0;
     for (int nodeIndex : members) {
         const Node& node = plan.nodes[static_cast<std::size_t>(nodeIndex)];
-        const Seconds leg = plan.drivingTime(previousLocation, node.locationIndex);
+        const Seconds leg = plan.drivingTime(vehicle, previousLocation, node.locationIndex);
         const Seconds arrival = previousDeparture + leg;
         driving += leg;
         onNode(nodeIndex, arrival);
         previousDeparture = std::max(arrival, node.minStartTime) + node.serviceDuration;
         previousLocation = node.locationIndex;
     }
-    driving += vehicle.homeLeg(plan.drivingSeconds, previousLocation);
+    driving += vehicle.endLeg(plan.durationsOf(vehicle), previousLocation);
     return driving;
+}
+
+// The driving meters of the route, start depot -> nodes... and on to the end
+// depot when the route has one (0 for an empty route).
+inline Meters routeMeters(const PdpRoutePlan& plan, int vehicleIndex,
+                          const std::vector<int>& members) {
+    if (members.empty()) return 0;
+    const Vehicle& vehicle = plan.vehicles[vehicleIndex];
+    const Matrix& meters = plan.distancesOf(vehicle);
+    int previousLocation = vehicle.startLocationIndex;
+    Meters total = 0;
+    for (int nodeIndex : members) {
+        const int location = plan.nodes[static_cast<std::size_t>(nodeIndex)].locationIndex;
+        total += meters[static_cast<std::size_t>(previousLocation)]
+                       [static_cast<std::size_t>(location)];
+        previousLocation = location;
+    }
+    return total + vehicle.endLeg(meters, previousLocation);
 }
 
 inline RouteMetrics routeMetrics(const PdpRoutePlan& plan, int vehicleIndex,
@@ -145,10 +163,10 @@ inline RouteMetrics routeMetrics(const PdpRoutePlan& plan, int vehicleIndex,
     RouteMetrics metrics{0, vehicle.departureTime, 0};
     if (members.empty()) return metrics;
     Seconds previousDeparture = vehicle.departureTime;
-    int previousLocation = vehicle.homeLocationIndex;
+    int previousLocation = vehicle.startLocationIndex;
     for (int nodeIndex : members) {
         const Node& node = plan.nodes[static_cast<std::size_t>(nodeIndex)];
-        const Seconds leg = plan.drivingTime(previousLocation, node.locationIndex);
+        const Seconds leg = plan.drivingTime(vehicle, previousLocation, node.locationIndex);
         const Seconds arrival = previousDeparture + leg;
         metrics.driving += leg;
         metrics.latency += std::max<Seconds>(0, arrival - vehicle.departureTime);
@@ -156,10 +174,10 @@ inline RouteMetrics routeMetrics(const PdpRoutePlan& plan, int vehicleIndex,
         previousLocation = node.locationIndex;
     }
     // An open route ends at its last stop's departure; a closed one after
-    // the drive back home.
-    const Seconds homeLeg = vehicle.homeLeg(plan.drivingSeconds, previousLocation);
-    metrics.driving += homeLeg;
-    metrics.endTime = previousDeparture + homeLeg;
+    // the drive to its end depot.
+    const Seconds endLeg = vehicle.endLeg(plan.durationsOf(vehicle), previousLocation);
+    metrics.driving += endLeg;
+    metrics.endTime = previousDeparture + endLeg;
     return metrics;
 }
 

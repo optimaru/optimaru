@@ -23,8 +23,13 @@ namespace vrp {
 // (start of that day). All arithmetic (arrival = departure + drivingSeconds,
 // etc.) is then plain integer math.
 using Seconds = std::int64_t;
+using Meters = std::int64_t;
 
 constexpr Seconds NULL_TIME = -1;  // no time (e.g. an unassigned visit)
+
+// A square matrix over the plan's locations, indexed by Location::index:
+// driving seconds or driving meters from row to column.
+using Matrix = std::vector<std::vector<std::int64_t>>;
 
 // ---------------------------------------------------------------------------
 // Score
@@ -82,13 +87,12 @@ inline Score fromEngineScore(const optimaru::Score& e) {
 // ---------------------------------------------------------------------------
 // Location
 // ---------------------------------------------------------------------------
-// Every distinct point (vehicle home + each visit) is registered once and
-// referenced by index into VehicleRoutePlan::drivingSeconds, the precomputed
-// driving-time matrix.
+// Every distinct point (each depot, each visit) is registered once and
+// referenced by index into the matrices of VehicleRoutePlan.
 struct Location {
     double latitude = 0.0;
     double longitude = 0.0;
-    int index = -1;  // row/column into the driving-time matrix
+    int index = -1;  // row/column into every matrix
 };
 
 // ---------------------------------------------------------------------------
@@ -146,7 +150,13 @@ struct Visit {
 struct Vehicle {
     std::string id;
     int capacity = 0;
-    int homeLocationIndex = -1;
+    // Where the route starts, and where it ends: -1 for an open route, which
+    // ends at its last visit, so no closing leg is driven or counted toward
+    // the route end time. Two vehicles may share a depot's location.
+    int startLocationIndex = -1;
+    int endLocationIndex = -1;
+    // Which of the plan's matrices this vehicle drives on (its profile).
+    int profileIndex = 0;
     Seconds departureTime = 0;
     // Optional route policies. Non-positive means disabled.
     Seconds maxTravelTime = 0;
@@ -156,21 +166,20 @@ struct Vehicle {
     double minLoadRatio = 0.0;
     double fixedCost = 0.0;
     double maxRouteRadiusMeters = 0.0;
-    // Does the route end back at home? Off by default: the route is open and
-    // ends at its last visit, so the last-visit -> home leg counts toward
-    // neither driving time nor the route end time. On, the leg is charged
-    // (a round trip).
-    bool returnToDepot = false;
     std::vector<int> visitIndices;  // ordered route
 
-    // The driving seconds from the last stop back home, or 0 for an open
-    // route. Every scoring path charges the closing leg through this one
-    // helper so the monolithic, incremental and plugin costs cannot drift.
-    Seconds homeLeg(const std::vector<std::vector<Seconds>>& drivingSeconds,
-                    int lastLocation) const {
-        return returnToDepot ? drivingSeconds[static_cast<std::size_t>(lastLocation)]
-                                             [static_cast<std::size_t>(homeLocationIndex)]
-                             : 0;
+    bool returnsToDepot() const { return endLocationIndex >= 0; }
+
+    // The closing leg from the last visit to the end depot in `matrix` (one
+    // of this vehicle's profile), or 0 for an open route. Callers charge it
+    // only for a route with visits: an idle vehicle drives nothing, even when
+    // its two depots differ. Every scoring path charges the closing leg
+    // through this one helper so the monolithic, incremental and plugin costs
+    // cannot drift.
+    std::int64_t endLeg(const Matrix& matrix, int lastLocation) const {
+        return returnsToDepot() ? matrix[static_cast<std::size_t>(lastLocation)]
+                                        [static_cast<std::size_t>(endLocationIndex)]
+                                : 0;
     }
 };
 
@@ -194,14 +203,39 @@ struct VehicleRoutePlan {
     // rebuildUnassignedPool() fill it — Solver::solve does that itself.
     std::vector<int> unassignedVisitIndices;
 
-    // Precomputed driving time in seconds between every pair of locations,
-    // indexed by Location::index. Filled by HaversineDrivingTimeCalculator.
-    std::vector<std::vector<Seconds>> drivingSeconds;
+    // One driving-seconds and one driving-meters matrix per profile
+    // (Vehicle::profileIndex), each square over the locations. Given by the
+    // caller, or filled from the coordinates by HaversineDrivingTimeCalculator.
+    std::vector<Matrix> durationMatrices;
+    std::vector<Matrix> distanceMatrices;
 
     Score score;
 
-    Seconds drivingTime(int fromLocation, int toLocation) const {
-        return drivingSeconds[fromLocation][toLocation];
+    const Matrix& durationsOf(const Vehicle& vehicle) const {
+        return durationMatrices[static_cast<std::size_t>(vehicle.profileIndex)];
+    }
+    const Matrix& distancesOf(const Vehicle& vehicle) const {
+        return distanceMatrices[static_cast<std::size_t>(vehicle.profileIndex)];
+    }
+    Seconds drivingTime(const Vehicle& vehicle, int fromLocation, int toLocation) const {
+        return durationsOf(vehicle)[static_cast<std::size_t>(fromLocation)]
+                                   [static_cast<std::size_t>(toLocation)];
+    }
+
+    // The legs between consecutive visits of elements[begin, end) in
+    // `matrix`, walked backwards when `reversed`: what a run of one route
+    // drives inside another vehicle's route when the two profiles differ.
+    std::int64_t runLegs(const Matrix& matrix, const std::vector<int>& elements, std::size_t begin,
+                         std::size_t end, bool reversed) const {
+        std::int64_t total = 0;
+        for (std::size_t k = begin + 1; k < end; ++k) {
+            const auto a = static_cast<std::size_t>(
+                    visits[static_cast<std::size_t>(elements[k - 1])].locationIndex);
+            const auto b = static_cast<std::size_t>(
+                    visits[static_cast<std::size_t>(elements[k])].locationIndex);
+            total += reversed ? matrix[b][a] : matrix[a][b];
+        }
+        return total;
     }
 
     // Whether some group (Visit::groupIndex) holds two visits or more. Such a

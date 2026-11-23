@@ -2,8 +2,8 @@
 
 The default path (`Solver(cfg).solve(plan)`) enables the four core constraints;
 the per-vehicle route-policy constraints cost 0 while their parameter is 0. The
-enclosing-circle radius, route duration and latency are opt-in objectives with
-default weight 0.
+travel distance, enclosing-circle radius, route duration and latency are opt-in
+objectives with default weight 0.
 This module is the alternative path next to it: pick constraints, change weights, change
 levels, shape the cost, and pass the list to `solve_with_constraints`.
 
@@ -89,6 +89,7 @@ __all__ = [
     "MinCapacityUtilizationCost",
     "RouteDurationCost",
     "Score",
+    "TravelDistanceCost",
     "TravelTimeCost",
     "UnassignedVisitsCost",
     "VehicleCapacityCost",
@@ -107,6 +108,7 @@ __all__ = [
     "min_capacity_utilization_cost",
     "route_duration_cost",
     "score",
+    "travel_distance_cost",
     "travel_time_cost",
     "unassigned_visits_cost",
     "vehicle_capacity_cost",
@@ -154,7 +156,7 @@ class MaxEndTimeCost(Constraint):
 
 
 class TravelTimeCost(Constraint):
-    """Driving seconds per vehicle, home -> visits (-> home with return_to_depot). Default: soft, weight 1.
+    """Driving seconds per vehicle, start depot -> visits (-> end depot). Default: soft, weight 1.
 
     An idle vehicle drives nothing, so it costs nothing."""
 
@@ -162,14 +164,35 @@ class TravelTimeCost(Constraint):
     label_en = "Travel time"
     label_ko = "운행 시간"
     description_en = (
-        "Each vehicle's driving seconds from its home through its visits; the leg back home counts "
-        "only when the vehicle's `return_to_depot` is on. One unit of cost is one second of driving; "
+        "Each vehicle's driving seconds from its `start_depot` through its visits, plus the leg to its "
+        "`end_depot` when it has one. One unit of cost is one second of driving; "
         "0 means no vehicle drives."
     )
     description_ko = (
-        "차량마다 출발지에서 방문지들을 거쳐 가는 운행 시간(초)을 더합니다. 출발지로 돌아오는 구간은 "
-        "`return_to_depot`가 켜져 있을 때만 셉니다. 운행 1초가 비용 1이며, 0이면 아무 차량도 운행하지 "
+        "차량마다 출발 차고지(`start_depot`)에서 방문지들을 거쳐 가는 운행 시간(초)을 더합니다. 도착 "
+        "차고지(`end_depot`)가 있으면 그곳까지의 구간도 셉니다. 운행 1초가 비용 1이며, 0이면 아무 차량도 운행하지 "
         "않습니다."
+    )
+
+
+class TravelDistanceCost(Constraint):
+    """Driving meters per vehicle, start depot -> visits (-> end depot). Default: soft, weight 0 (opt-in).
+
+    Read from the distance matrix of the vehicle's travel profile; an idle vehicle drives nothing."""
+
+    name = "travel_distance_cost"
+    label_en = "Travel distance"
+    label_ko = "운행 거리"
+    description_en = (
+        "Each vehicle's driving meters from its `start_depot` through its visits, plus the leg to its "
+        "`end_depot` when it has one, from the distances of the vehicle's travel profile. One unit of "
+        "cost is one meter; 0 means no vehicle drives. Opt-in: the default weight is 0."
+    )
+    description_ko = (
+        "차량마다 출발 차고지(`start_depot`)에서 방문지들을 거쳐 가는 운행 거리(미터)를 차량의 이동 "
+        "프로필 거리로 더합니다. 도착 차고지(`end_depot`)가 있으면 그곳까지의 구간도 셉니다. 1미터가 비용 "
+        "1이며, 0이면 아무 차량도 운행하지 않습니다. 기본 가중치가 0이므로 쓰려면 가중치를 직접 지정해야 "
+        "합니다."
     )
 
 
@@ -180,13 +203,13 @@ class MaxTravelTimeCost(Constraint):
     label_en = "Maximum travel time"
     label_ko = "최대 운행 시간"
     description_en = (
-        "Driving seconds above the vehicle's `max_travel_time` (the leg home counts only with "
-        "`return_to_depot`). One unit of cost is one second over the limit; 0 means every vehicle "
+        "Driving seconds above the vehicle's `max_travel_time` (the leg to the `end_depot` counts when "
+        "there is one). One unit of cost is one second over the limit; 0 means every vehicle "
         "is within its limit or has none."
     )
     description_ko = (
-        "차량의 운행 시간이 `max_travel_time`을 넘은 시간(초)을 더합니다. 출발지로 돌아오는 구간은 "
-        "`return_to_depot`가 켜져 있을 때만 셉니다. 한도를 넘은 1초가 비용 1이며, 0이면 모든 차량이 "
+        "차량의 운행 시간이 `max_travel_time`을 넘은 시간(초)을 더합니다. 도착 차고지(`end_depot`)가 "
+        "있으면 그곳까지의 구간도 셉니다. 한도를 넘은 1초가 비용 1이며, 0이면 모든 차량이 "
         "한도 안에 있거나 한도가 없습니다."
     )
 
@@ -199,12 +222,12 @@ class MaxRouteDurationCost(Constraint):
     label_ko = "최대 경로 소요 시간"
     description_en = (
         "Seconds by which a route's duration (departure to route end, waiting and service included; "
-        "the return leg only with `return_to_depot`) exceeds the vehicle's `max_route_duration`. "
+        "the leg to the `end_depot` when there is one) exceeds the vehicle's `max_route_duration`. "
         "One unit of cost is one second over the limit; 0 means every route is within its limit or has none."
     )
     description_ko = (
-        "출발부터 경로가 끝날 때까지 걸린 시간(대기와 서비스 포함, 귀환 구간은 `return_to_depot`가 켜져 "
-        "있을 때만)이 차량의 `max_route_duration`을 넘은 시간(초)을 더합니다. 한도를 넘은 1초가 비용 "
+        "출발부터 경로가 끝날 때까지 걸린 시간(대기와 서비스 포함, 도착 차고지(`end_depot`)가 있으면 "
+        "그곳까지)이 차량의 `max_route_duration`을 넘은 시간(초)을 더합니다. 한도를 넘은 1초가 비용 "
         "1이며, 0이면 모든 경로가 한도 안에 있거나 한도가 없습니다."
     )
 
@@ -218,13 +241,13 @@ class VehicleMaxEndTimeCost(Constraint):
     label_en = "Vehicle end time"
     label_ko = "차량 운행 종료 시각"
     description_en = (
-        "Seconds by which a route ends (the last visit's departure, or the return home with "
-        "`return_to_depot`) after the vehicle's `max_end_time`. One unit of cost is one second late; "
+        "Seconds by which a route ends (the last visit's departure, or the arrival at the "
+        "`end_depot` when there is one) after the vehicle's `max_end_time`. One unit of cost is one second late; "
         "0 means every vehicle finishes in time or has no end time."
     )
     description_ko = (
-        "경로가 끝나는 시각(마지막 방문지를 떠나는 시각, `return_to_depot`가 켜져 있으면 출발지에 "
-        "돌아온 시각)이 차량의 `max_end_time`을 넘은 시간(초)을 더합니다. 늦은 1초가 비용 1이며, 0이면 "
+        "경로가 끝나는 시각(마지막 방문지를 떠나는 시각, 도착 차고지(`end_depot`)가 있으면 그곳에 "
+        "도착한 시각)이 차량의 `max_end_time`을 넘은 시간(초)을 더합니다. 늦은 1초가 비용 1이며, 0이면 "
         "모든 차량이 제시간에 끝나거나 종료 시각 제한이 없습니다."
     )
 
@@ -246,18 +269,19 @@ class MaxStopsCost(Constraint):
 
 
 class MaxRouteRadiusCost(Constraint):
-    """Meters of route radius from the vehicle's home above the limit. Default: hard, weight 1."""
+    """Meters of route radius from the vehicle's start depot above the limit. Default: hard, weight 1."""
 
     name = "max_route_radius_cost"
     label_en = "Maximum route radius"
     label_ko = "최대 경로 반경"
     description_en = (
-        "Meters by which the farthest visit's straight-line distance from the vehicle's home exceeds "
+        "Meters by which the farthest visit's straight-line distance from the vehicle's `start_depot` exceeds "
         "`max_route_radius_meters`. One unit of cost is one meter beyond the radius; 0 means every "
         "visit is inside it or no radius is set."
     )
     description_ko = (
-        "출발지에서 가장 먼 방문지까지의 직선거리가 `max_route_radius_meters`를 넘은 거리(미터)를 더합니다. "
+        "출발 차고지(`start_depot`)에서 가장 먼 방문지까지의 직선거리가 `max_route_radius_meters`를 넘은 거리(미터)를 "
+        "더합니다. "
         "반경을 벗어난 1미터가 비용 1이며, 0이면 모든 방문지가 반경 안에 있거나 반경이 설정되지 않았습니다."
     )
 
@@ -265,19 +289,19 @@ class MaxRouteRadiusCost(Constraint):
 class EnclosingCircleRadiusCost(Constraint):
     """Radius (meters) of the minimum circle enclosing a route's visits. Default: soft, weight 0 (opt-in).
 
-    Unlike ``max_route_radius_cost``, which measures from the depot, the depot is
+    Unlike ``max_route_radius_cost``, which measures from the start depot, no depot is
     not one of the circle's points. Give it a weight to prefer compact routes."""
 
     name = "enclosing_circle_radius_cost"
     label_en = "Enclosing circle radius"
     label_ko = "경로 최소 포함 원 반지름"
     description_en = (
-        "Radius in meters of the smallest circle enclosing each route's visits (the depot excluded), "
+        "Radius in meters of the smallest circle enclosing each route's visits (the depots excluded), "
         "to prefer compact routes. One unit of cost is one meter; 0 for a route with fewer than two "
         "visits. Opt-in: the default weight is 0."
     )
     description_ko = (
-        "경로마다 방문지(출발지 제외)를 모두 담는 가장 작은 원의 반지름(미터)을 더해, 방문지가 좁은 "
+        "경로마다 방문지(차고지 제외)를 모두 담는 가장 작은 원의 반지름(미터)을 더해, 방문지가 좁은 "
         "범위에 모인 경로를 선호하게 합니다. 1미터가 비용 1이며, 방문지가 둘 미만인 경로는 0입니다. 기본 "
         "가중치가 0이므로 쓰려면 가중치를 직접 지정해야 합니다."
     )
@@ -309,12 +333,12 @@ class RouteDurationCost(Constraint):
     label_ko = "경로 소요 시간"
     description_en = (
         "Each used vehicle's working time from departure to route end, waiting and service included "
-        "(the return leg only with `return_to_depot`). One unit of cost is one second; 0 means no "
+        "(the leg to the `end_depot` when there is one). One unit of cost is one second; 0 means no "
         "vehicle is used. Opt-in: the default weight is 0."
     )
     description_ko = (
-        "운행하는 차량마다 출발부터 경로가 끝날 때까지의 시간(대기와 서비스 포함, 귀환 구간은 "
-        "`return_to_depot`가 켜져 있을 때만)을 더합니다. 1초가 비용 1이며, 운행하는 차량이 없으면 0입니다. 기본 "
+        "운행하는 차량마다 출발부터 경로가 끝날 때까지의 시간(대기와 서비스 포함, 도착 차고지(`end_depot`)가 "
+        "있으면 그곳까지)을 더합니다. 1초가 비용 1이며, 운행하는 차량이 없으면 0입니다. 기본 "
         "가중치가 0이므로 쓰려면 가중치를 직접 지정해야 합니다."
     )
 
@@ -422,6 +446,7 @@ class UnassignedVisitsCost(Constraint):
 vehicle_capacity_cost = VehicleCapacityCost()
 max_end_time_cost = MaxEndTimeCost()
 travel_time_cost = TravelTimeCost()
+travel_distance_cost = TravelDistanceCost()
 max_travel_time_cost = MaxTravelTimeCost()
 max_route_duration_cost = MaxRouteDurationCost()
 vehicle_max_end_time_cost = VehicleMaxEndTimeCost()
@@ -441,6 +466,7 @@ _DEFAULTS = (
     vehicle_capacity_cost,
     max_end_time_cost,
     travel_time_cost,
+    travel_distance_cost,
     max_travel_time_cost,
     max_route_duration_cost,
     vehicle_max_end_time_cost,
