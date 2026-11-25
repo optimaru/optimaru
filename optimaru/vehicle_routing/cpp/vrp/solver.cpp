@@ -210,9 +210,10 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
 
     engineConfig.search.descent_weight = config.descent_weight;
     engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
-    engineConfig.search.descent_list_advanced = config.granular_descent;
-    engineConfig.search.descent_list_max_segment = config.granular_descent_max_segment;
-    engineConfig.search.descent_list_candidate_routes = config.granular_descent_candidate_routes;
+    engineConfig.search.granular_descent = config.granular_descent;
+    engineConfig.search.granular_descent_max_segment = config.granular_descent_max_segment;
+    engineConfig.search.granular_descent_candidate_routes =
+            config.granular_descent_candidate_routes;
     engineConfig.search.route_elimination_weight = config.route_elimination_weight;
     engineConfig.search.route_elimination_max_size = config.route_elimination_max_size;
     engineConfig.search.ejection_chain_weight = config.ejection_chain_weight;

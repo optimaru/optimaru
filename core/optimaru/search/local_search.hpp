@@ -152,8 +152,8 @@ public:
         [[maybe_unused]] RouteElimination<Solution> route_elimination(
                 index_, repair_, ls.route_elimination_max_size);
         Descent<Solution> descent(index_, nearby_, ls.descent_max_sweeps, ls.entity_hint,
-                                  ls.descent_list_advanced, ls.descent_list_max_segment,
-                                  ls.descent_list_candidate_routes, ls.unassigned_list);
+                                  ls.granular_descent, ls.granular_descent_max_segment,
+                                  ls.granular_descent_candidate_routes, ls.unassigned_list);
         RuinRecreateMove<Solution> ruin_recreate_move(index_, repair_, ruins, *ruin_selector,
                                                       lns.as_move_max_ruin);
         [[maybe_unused]] EjectionChain<Solution> ejection_chain(
@@ -256,19 +256,10 @@ public:
                 // search goes on with the history it has.)
                 steps_since_best_or_lns = 0;
             } else {
-                // A built-in strategy plugin if one is drawn; otherwise a
-                // caller's operator or the ordinary move mix (op == nullptr),
-                // chosen by the adaptive selector when custom operators are
-                // registered. `selector_index` >= 0: the selector was asked
-                // and hears the outcome (0 is the move mix).
-                MoveOperator<Solution>* op = draw_strategy(strategies, rng);
-                int selector_index = -1;
-                if (op == nullptr && custom_operators_get_a_turn(rng, stages.in_later_stage())) {
-                    selector_index = move_selector->select(rng);
-                    if (selector_index > 0) {
-                        op = move_operators_[static_cast<std::size_t>(selector_index) - 1].get();
-                    }
-                }
+                const MoveChoice choice =
+                        choose_move(strategies, *move_selector, rng, stages.in_later_stage());
+                MoveOperator<Solution>* op = choice.op;
+                const int selector_index = choice.selector_index;
                 const bool custom = selector_index > 0;
 
                 // The candidate: its score, the entities it touched (for the
@@ -374,6 +365,38 @@ private:
         double weight;
         MoveOperator<Solution>* op;
     };
+
+    // What one step tries: an operator, or the ordinary move mix (op == nullptr).
+    // `selector_index` >= 0: the adaptive move selector was asked and hears the
+    // outcome (0 is the move mix, i > 0 the caller's operator i - 1).
+    struct MoveChoice {
+        MoveOperator<Solution>* op = nullptr;
+        int selector_index = -1;
+    };
+
+    // How a step chooses its move, in three stages and in this order:
+    //  1. built-in strategies (draw_strategy): each by its own probability, in
+    //     priority order; the first that hits is the move;
+    //  2. the use case's own moves (custom_operators_get_a_turn): within their
+    //     gate the adaptive selector picks one of them or the move mix;
+    //  3. the move mix (sample_move): one ordinary move, drawn by relative
+    //     weight, its entity and value steered by the use case's hints.
+    // The random draws happen in exactly this order; a change to it changes
+    // every seeded result.
+    MoveChoice choose_move(const std::vector<WeightedStrategy>& strategies,
+                           OperatorSelectionScheme& move_selector, std::mt19937_64& rng,
+                           bool in_later_stage) {
+        MoveChoice choice;
+        choice.op = draw_strategy(strategies, rng);
+        if (choice.op == nullptr && custom_operators_get_a_turn(rng, in_later_stage)) {
+            choice.selector_index = move_selector.select(rng);
+            if (choice.selector_index > 0) {
+                choice.op =
+                        move_operators_[static_cast<std::size_t>(choice.selector_index) - 1].get();
+            }
+        }
+        return choice;
+    }
 
     // Offer each strategy its own draw, in vector order, and take the first
     // that hits; null means this step falls through to the ordinary move mix.
