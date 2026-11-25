@@ -184,6 +184,16 @@ std::shared_ptr<const std::vector<int>> construct(AssemblyLineBalancingProblem& 
     return rank;
 }
 
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+void registerMoves(optimaru::Solver<AssemblyLineBalancingProblem>& engine,
+                   const Solver::Config& config, const AssemblyLineBalancingProblem& problem,
+                   const std::shared_ptr<const std::vector<int>>& rank) {
+    if (config.close_station_moves && problem.stationCount >= 2)
+        engine.add_move_operator(std::make_unique<CloseStationMove>(rank));
+}
+
 // Shared engine wiring for both solve() overloads: late-acceptance local
 // search (+ ALNS kicks), plus the domain's macro move and value recommender,
 // driven by whichever calculator the caller brought (the monolithic
@@ -224,8 +234,7 @@ void runEngine(const Solver::Config& config, AssemblyLineBalancingProblem& probl
 
     optimaru::Solver<AssemblyLineBalancingProblem> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
-    if (config.close_station_moves && problem.stationCount >= 2)
-        engine.add_move_operator(std::make_unique<CloseStationMove>(rank));
+    registerMoves(engine, config, problem, rank);
     engine.solve(problem, calculator);
 }
 

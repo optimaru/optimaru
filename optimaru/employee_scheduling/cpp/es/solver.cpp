@@ -830,6 +830,29 @@ void greedyHardRepair(const Solver::Config& config, EmployeeSchedule& schedule,
     }
 }
 
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+void registerMoves(optimaru::Solver<EmployeeSchedule>& engine, const Solver::Config& config,
+                   const EmployeeSchedule& schedule, const std::vector<std::vector<int>>& eligible,
+                   const PenalizedGetter& penalizedRef, const ShiftsOfGetter& shiftsOfRef) {
+    if (config.guided_moves && config.smart_change_moves) {
+        engine.add_move_operator(std::make_unique<SmartChangeMove>(
+                eligible, config.smart_change_candidate_count, penalizedRef, shiftsOfRef));
+    }
+    if (config.guided_moves && config.employee_window_moves) {
+        engine.add_move_operator(std::make_unique<EmployeeWindowSwapMove>(
+                schedule, config.employee_window_max_days, penalizedRef, shiftsOfRef));
+    }
+    if (config.guided_moves && config.employee_ruin_moves) {
+        engine.add_ruin_operator(std::make_unique<EmployeeHotRuinOperator>(
+                config.employee_window_max_days, penalizedRef, shiftsOfRef));
+    }
+    if (config.employee_unassign_moves) {
+        engine.add_move_operator(std::make_unique<UnassignMove>(schedule));
+    }
+}
+
 // Engine setup shared by both solve() overloads. `penalized` / `shiftsOf`
 // abstract over where the violation-guidance state lives: the monolithic
 // calculator's penalizedEmployees()/employeeShifts() or the decomposed
@@ -921,23 +944,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
 
     optimaru::Solver<EmployeeSchedule> engine(std::move(engineConfig));
     if (config.stop_flag) engine.share_stop_flag(config.stop_flag);
-    PenalizedGetter penalizedRef = penalized;
-    ShiftsOfGetter shiftsOfRef = shiftsOf;
-    if (config.guided_moves && config.smart_change_moves) {
-        engine.add_move_operator(std::make_unique<SmartChangeMove>(
-                eligible, config.smart_change_candidate_count, penalizedRef, shiftsOfRef));
-    }
-    if (config.guided_moves && config.employee_window_moves) {
-        engine.add_move_operator(std::make_unique<EmployeeWindowSwapMove>(
-                schedule, config.employee_window_max_days, penalizedRef, shiftsOfRef));
-    }
-    if (config.guided_moves && config.employee_ruin_moves) {
-        engine.add_ruin_operator(std::make_unique<EmployeeHotRuinOperator>(
-                config.employee_window_max_days, penalizedRef, shiftsOfRef));
-    }
-    if (config.employee_unassign_moves) {
-        engine.add_move_operator(std::make_unique<UnassignMove>(schedule));
-    }
+    registerMoves(engine, config, schedule, eligible, penalized, shiftsOf);
     engine.solve(schedule, calculator);
 }
 

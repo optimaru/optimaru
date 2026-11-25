@@ -573,6 +573,19 @@ std::function<int(std::mt19937_64&, int)> solutionValueHint(const TournamentSche
     };
 }
 
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+// `makeCounts` gives the team counts the macro move reads (made only when it runs).
+template <typename MakeCounts>
+void registerMoves(optimaru::Solver<TournamentSchedule>& engine, const Solver::Config& config,
+                   const TournamentSchedule& schedule, MakeCounts makeCounts) {
+    if (config.team_count_moves) {
+        auto teamCount = makeTeamCountMove(schedule, makeCounts());
+        if (teamCount) engine.add_move_operator(std::move(teamCount));
+    }
+}
+
 }  // namespace
 
 void Solver::solve(TournamentSchedule& schedule) {
@@ -630,10 +643,8 @@ void Solver::solve(TournamentSchedule& schedule) {
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     optimaru::Solver<TournamentSchedule> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.team_count_moves) {
-        auto teamCount = makeTeamCountMove(schedule, CalculatorCounts(&calculator));
-        if (teamCount) engine.add_move_operator(std::move(teamCount));
-    }
+    registerMoves(engine, config_, schedule,
+                  [&calculator] { return CalculatorCounts(&calculator); });
     engine.solve(schedule, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
@@ -653,10 +664,7 @@ void Solver::solve(TournamentSchedule& schedule,
         if (config_.value_hint) engineConfig.selection.value_hint = solutionValueHint(schedule);
         optimaru::Solver<TournamentSchedule> engine(std::move(engineConfig));
         if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-        if (config_.team_count_moves) {
-            auto teamCount = makeTeamCountMove(schedule, OwnedCounts(schedule));
-            if (teamCount) engine.add_move_operator(std::move(teamCount));
-        }
+        registerMoves(engine, config_, schedule, [&schedule] { return OwnedCounts(schedule); });
         engine.solve(schedule, calculator);
     }
 

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <type_traits>
 #include <random>
 #include <utility>
 #include <vector>
@@ -118,6 +119,31 @@ GuidedSetup configureEngine(const Solver::Config& config, const Timetable& table
     return setup;
 }
 
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+// `hot` tells the moves which lessons break a hard constraint: the monolithic
+// calculator itself, or a DecomposedHotSource over a constraint assembly.
+template <typename HotSource>
+void registerMoves(optimaru::Solver<Timetable>& engine, const Solver::Config& config,
+                   const GuidedSetup& setup, HotSource* hot, bool allowUnassigned) {
+    if (config.smart_class_swap_moves) {
+        engine.add_move_operator(std::make_unique<SmartClassSwapMove<HotSource>>(
+                setup.lessonsOfClass, *setup.classOf, setup.allowedSlots,
+                config.smart_class_swap_candidates, hot));
+    }
+    if constexpr (std::is_same_v<HotSource, DecomposedHotSource>) {
+        if (allowUnassigned) {
+            engine.add_move_operator(std::make_unique<UnassignMove<HotSource>>(hot));
+            // The way back in. Without it the search only ever drops (dropping is
+            // guided by the hot lessons, re-placing is not) and the run ends with
+            // far more unassigned than the instance requires.
+            engine.add_move_operator(std::make_unique<ReassignMove<HotSource>>(
+                    setup.allowedSlots, config.reassign_candidates));
+        }
+    }
+}
+
 }  // namespace
 
 void Solver::solve(Timetable& table) {
@@ -166,12 +192,7 @@ void Solver::solve(Timetable& table) {
     // Construction heuristic + late-acceptance local search (+ ALNS kicks).
     optimaru::Solver<Timetable> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.smart_class_swap_moves) {
-        engine.add_move_operator(
-                std::make_unique<SmartClassSwapMove<CanonicalIncrementalScoreCalculator>>(
-                        setup.lessonsOfClass, *setup.classOf, setup.allowedSlots,
-                        config_.smart_class_swap_candidates, &calculator));
-    }
+    registerMoves(engine, config_, setup, &calculator, /*allowUnassigned=*/false);
     engine.solve(table, calculator);
 
     // The authoritative final score: a full recompute on the best solution.
@@ -206,22 +227,9 @@ void Solver::solve(Timetable& table, optimaru::DecomposedObjective<Timetable>& c
 
     optimaru::Solver<Timetable> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.smart_class_swap_moves) {
-        engine.add_move_operator(std::make_unique<SmartClassSwapMove<DecomposedHotSource>>(
-                setup.lessonsOfClass, *setup.classOf, setup.allowedSlots,
-                config_.smart_class_swap_candidates, &hotSource));
-    }
-    // Only worth a slot in the move mix when the assembly prices unassignment
-    // as a soft penalty; with unassignedLessonsCost hard, unassigning is
-    // always a hard loss.
-    if (allowsUnassigned(calculator)) {
-        engine.add_move_operator(std::make_unique<UnassignMove<DecomposedHotSource>>(&hotSource));
-        // The way back in. Without it the search only ever drops (dropping is
-        // guided by the hot lessons, re-placing is not) and the run ends with
-        // far more unassigned than the instance requires.
-        engine.add_move_operator(std::make_unique<ReassignMove<DecomposedHotSource>>(
-                setup.allowedSlots, config_.reassign_candidates));
-    }
+    // Unassigning is only worth a slot in the move mix when the assembly prices it as a soft
+    // penalty; with unassignedLessonsCost hard, it is always a hard loss.
+    registerMoves(engine, config_, setup, &hotSource, allowsUnassigned(calculator));
     engine.solve(table, calculator);
 
     // Score the final solution with the caller's constraint assembly (custom

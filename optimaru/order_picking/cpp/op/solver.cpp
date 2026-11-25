@@ -421,6 +421,17 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
 
 }  // namespace
 
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+static void registerMoves(optimaru::Solver<OrderPickingSolution>& engine,
+                          const Solver::Config& config,
+                          OrderPickingIncrementalScoreCalculator& calculator) {
+    if (config.order_consolidate_moves) {
+        engine.add_move_operator(std::make_unique<OrderConsolidateMove>(&calculator));
+    }
+}
+
 void Solver::solve(OrderPickingSolution& solution) {
     if (solution.trolleys.empty() || solution.pickTasks.empty()) {
         ScoreCalculator::score(solution);
@@ -449,9 +460,7 @@ void Solver::solve(OrderPickingSolution& solution) {
     OrderPickingIncrementalScoreCalculator calculator;
     optimaru::Solver<OrderPickingSolution> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.order_consolidate_moves) {
-        engine.add_move_operator(std::make_unique<OrderConsolidateMove>(&calculator));
-    }
+    registerMoves(engine, config_, calculator);
     engine.solve(solution, calculator);
 
     // The authoritative final score: a full recompute on the best solution.

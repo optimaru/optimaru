@@ -112,6 +112,14 @@ std::function<int(std::mt19937_64&, int)> value_hint(const SemiconductorSchedule
 
 }  // namespace
 
+// The use case's own moves (in Python: config.custom_moves), which a step asks for
+// after the built-in strategies (optimaru::LocalSearch::choose_move). To add a move:
+// write it in search/moves/ and register it here, behind a switch of the Config.
+static void registerMoves(optimaru::Solver<SemiconductorSchedule>& engine,
+                          const Solver::Config& config) {
+    if (config.priority_swap_moves) engine.add_move_operator(std::make_unique<PrioritySwapMove>());
+}
+
 void Solver::runSingle(SemiconductorSchedule& schedule,
                        optimaru::Objective<SemiconductorSchedule>& calculator) const {
     optimaru::Settings engineConfig = optimaru::settings_from(config_);
@@ -130,7 +138,7 @@ void Solver::runSingle(SemiconductorSchedule& schedule,
 
     optimaru::Solver<SemiconductorSchedule> engine(std::move(engineConfig));
     if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
-    if (config_.priority_swap_moves) engine.add_move_operator(std::make_unique<PrioritySwapMove>());
+    registerMoves(engine, config_);
     engine.solve(schedule, calculator);
 }
 

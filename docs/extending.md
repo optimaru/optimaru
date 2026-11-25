@@ -12,6 +12,41 @@ finish in one use case, read that use case's `use-cases/<slug>/extending.md`
 constraint from a pick in Python to the default fast path in six steps and measures
 the steps per second at each.
 
+## In short
+
+A cost and a move are independent: adding one never touches the other, and neither
+touches the engine in `core/`.
+
+**Only a cost** (an opt-in one, weight 0 until a caller picks it):
+
+1. `optimaru/<uc>/cpp/<ns>/constraints/<subject>_cost.hpp`: the component, its raw
+   `cost()` and the deltas ([details](#2-the-component)).
+2. `optimaru/<uc>/cpp/<ns>/constraints.hpp`: include it, and one line in
+   `defaultConstraints()`: `assembly.emplace<MyRuleCost>();`.
+3. `optimaru/<uc>/constraints.py`: the spec class (`name`, labels, descriptions), its
+   default instance in `_DEFAULTS` and both names in `__all__`.
+4. Tests, and the row in the use case's constraint table.
+
+Python then picks it: `solve(problem, constraints=get_constraints([..., MyRuleCost(weight=5)]))`.
+A cost that should be **on by default** adds one more step, the fast path
+([step 4](#4-default-fast-path-on-by-default-costs-only)).
+
+**Only a move:**
+
+1. `optimaru/<uc>/cpp/<ns>/search/moves/<name>.hpp`: an `optimaru::MoveOperator<Solution>`
+   (`apply()` and `undo_last()`; [details](#1-write-the-operator)).
+2. `optimaru/<uc>/cpp/<ns>/solver.cpp`: one line in the use case's `registerMoves()`,
+   `if (config.my_moves) engine.add_move_operator(std::make_unique<MyMove>(...));`.
+   Every use case with moves of its own registers them there and nowhere else.
+3. Its switch: a field of the `Solver::Config`, its binding, its row in
+   `optimaru/_config.py` (`"my_moves": ("custom_moves", "my")`) and the stub
+   ([details](#3-expose-a-switch-recommended)).
+4. Tests: `full_assert`, undo, and the same seeds with the move on and off.
+
+The engine asks a use case's moves after the built-in strategies, and picks among them and
+the move mix adaptively (`LocalSearch::choose_move`), so there is no weight to tune.
+Python then switches it: `config.custom_moves.my = False`.
+
 ## Where things are
 
 For a use case `<uc>` (the subpackage name, such as `vehicle_routing`) with the
@@ -20,7 +55,7 @@ C++ namespace `<ns>` (such as `vrp`):
 | What | Where |
 | --- | --- |
 | Problem facts, decision variable, `SolutionTraits`, and the `Score` it reports: the engine's `optimaru::Score`, or `optimaru::HardMediumSoftScore` with a `MediumFold` where there is a medium level (`score/hard_medium_soft_score.hpp`) | `optimaru/<uc>/cpp/<ns>/model/domain.hpp` |
-| Engine wiring: settings, registered moves, construction | `optimaru/<uc>/cpp/<ns>/solver.hpp`, `optimaru/<uc>/cpp/<ns>/solver.cpp` |
+| Engine wiring: settings, construction, and the use case's own moves (`registerMoves()`) | `optimaru/<uc>/cpp/<ns>/solver.hpp`, `optimaru/<uc>/cpp/<ns>/solver.cpp` |
 | One file per constraint | `optimaru/<uc>/cpp/<ns>/constraints/<subject>_cost.hpp` |
 | The default constraint set | `optimaru/<uc>/cpp/<ns>/constraints.hpp` (`defaultConstraints()`) |
 | The fast default-path calculators | `optimaru/<uc>/cpp/<ns>/score/score_calculator.cpp`, `incremental_calculator.cpp` |
@@ -163,8 +198,9 @@ the k-nearest-neighbour lists when the use case configures
 
 ### 2. Register it
 
-In `optimaru/<uc>/cpp/<ns>/solver.cpp`, where the use case builds its
-`optimaru::Solver<MyProblem> engine(...)`:
+In `optimaru/<uc>/cpp/<ns>/solver.cpp`, in the use case's `registerMoves()` (a use case
+without moves of its own yet gets one, called right after it builds its
+`optimaru::Solver<MyProblem> engine(...)`):
 
 ```cpp
 if (config.my_moves)
