@@ -457,14 +457,14 @@ void configureEngine(const Solver::Config& config, const TournamentSchedule& sch
                      optimaru::Settings& engineConfig) {
     engineConfig = optimaru::settings_from(config);
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * schedule.teamAssignments.size(), 400, 3200);
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
-    engineConfig.search.descent_weight = config.descent_weight;
-    engineConfig.search.custom_move_probability = config.custom_move_probability;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
+    engineConfig.strategies.descent_weight = config.descent_weight;
+    engineConfig.custom_moves.share = config.custom_move_probability;
 }
 
 // Builds the macro-move operator for this instance, or nullptr when reshaping
@@ -612,8 +612,8 @@ void Solver::solve(TournamentSchedule& schedule) {
         const TournamentSchedule* solutionPtr = &schedule;
         const Calculator* calculatorPtr = &calculator;
         const int teamCount = schedule.teamCount();
-        engineConfig.search.value_hint = [solutionPtr, calculatorPtr, teamCount](
-                                                 std::mt19937_64& rng, int entityIndex) -> int {
+        engineConfig.selection.value_hint = [solutionPtr, calculatorPtr, teamCount](
+                                                    std::mt19937_64& rng, int entityIndex) -> int {
             const int day = solutionPtr->teamAssignments[entityIndex].day;
             int picked = -1;
             std::uint32_t seen = 0;
@@ -650,7 +650,7 @@ void Solver::solve(TournamentSchedule& schedule,
         // solution, which the engine edits in place.
         optimaru::Settings engineConfig;
         configureEngine(config_, schedule, engineConfig);
-        if (config_.value_hint) engineConfig.search.value_hint = solutionValueHint(schedule);
+        if (config_.value_hint) engineConfig.selection.value_hint = solutionValueHint(schedule);
         optimaru::Solver<TournamentSchedule> engine(std::move(engineConfig));
         if (config_.stop_flag) engine.share_stop_flag(config_.stop_flag);
         if (config_.team_count_moves) {

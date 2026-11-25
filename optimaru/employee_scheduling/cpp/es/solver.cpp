@@ -842,22 +842,22 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
 
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     // Local search gets its share of the budget; the greedy repair has the rest.
-    engineConfig.limits.time_limit = localSearchLimit;
+    engineConfig.stop.time_limit = localSearchLimit;
     if (config.history_length == 0) {
         throw std::invalid_argument("lateAcceptanceSize must be positive");
     }
     optimaru::check_config(config);
-    engineConfig.search.acceptance.history_length = config.history_length;
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
-    engineConfig.search.moves.relocate_weight = config.relocate_weight;
-    engineConfig.search.moves.list_swap_weight = config.list_swap_weight;
-    engineConfig.search.moves.two_opt_weight = config.two_opt_weight;
-    engineConfig.search.moves.or_opt_weight = config.or_opt_weight;
-    engineConfig.search.moves.tail_swap_weight = config.tail_swap_weight;
-    engineConfig.search.descent_weight = config.descent_weight;
-    engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
-    engineConfig.search.custom_move_probability = config.custom_move_probability;
+    engineConfig.acceptance.history_length = config.history_length;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
+    engineConfig.moves.relocate_weight = config.relocate_weight;
+    engineConfig.moves.list_swap_weight = config.list_swap_weight;
+    engineConfig.moves.two_opt_weight = config.two_opt_weight;
+    engineConfig.moves.or_opt_weight = config.or_opt_weight;
+    engineConfig.moves.tail_swap_weight = config.tail_swap_weight;
+    engineConfig.strategies.descent_weight = config.descent_weight;
+    engineConfig.strategies.descent_max_sweeps = config.descent_max_sweeps;
+    engineConfig.custom_moves.share = config.custom_move_probability;
 
     // Guided move selection: the domain heuristics plugged into the engine's
     // recommender hooks (returning -1 falls back to uniform-random selection).
@@ -871,7 +871,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
         // currently has a hard violation (the "hot spots"). Once feasible there
         // are no penalized employees, so this naturally falls back to uniform
         // exploration for soft optimisation.
-        engineConfig.search.entity_hint = [penalized, shiftsOf](std::mt19937_64& rng) -> int {
+        engineConfig.selection.entity_hint = [penalized, shiftsOf](std::mt19937_64& rng) -> int {
             const std::vector<int>& hot = penalized();
             if (hot.empty()) return -1;
             std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -883,7 +883,7 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
 
         // Axis A: 85% from the skill-capable/available pool, 15% fully random
         // (to keep diversity and allow escaping local optima).
-        engineConfig.search.value_hint = [&eligible](std::mt19937_64& rng, int s) -> int {
+        engineConfig.selection.value_hint = [&eligible](std::mt19937_64& rng, int s) -> int {
             const std::vector<int>& pool = eligible[s];
             if (pool.empty()) return -1;
             std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -911,12 +911,12 @@ void runEngine(const Solver::Config& config, EmployeeSchedule& schedule, Calcula
             while (sorted[hi] - sorted[lo] > MINUTES_PER_DAY) ++lo;
             maxWindow = std::max(maxWindow, static_cast<int>(hi - lo + 1));
         }
-        engineConfig.search.nearby.distance = [starts](int a, int b) {
+        engineConfig.selection.nearby.distance = [starts](int a, int b) {
             const Minutes d = (*starts)[a] - (*starts)[b];
             return static_cast<double>(d < 0 ? -d : d);
         };
-        engineConfig.search.nearby.size = std::min(shiftCount - 1, maxWindow);
-        engineConfig.search.nearby.probability = config.nearby_shifts_probability;
+        engineConfig.selection.nearby.size = std::min(shiftCount - 1, maxWindow);
+        engineConfig.selection.nearby.probability = config.nearby_shifts_probability;
     }
 
     optimaru::Solver<EmployeeSchedule> engine(std::move(engineConfig));

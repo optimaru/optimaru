@@ -82,7 +82,7 @@ The engine already draws the generic moves for the solution's shape:
 - every shape: ruin and recreate applied as a move, and descent where the use case
   enables it.
 
-Their relative weights are fields of `MoveMix` (`settings.search.moves`), usually
+Their relative weights are fields of `MoveMix` (`settings.moves`), usually
 exposed through the use case's `Solver::Config` and, in Python, as
 `SolverConfig.*_move_weight`. If a reweighting gets you what you need, stop
 there. Write a domain move when the step you want can't be expressed as one of
@@ -159,7 +159,7 @@ The contract:
 For the sequence shape, `ctx.element_list[e]` and `ctx.element_position[e]` tell
 you where element `e` currently is (`-1` = unassigned), and `ctx.nearby` holds
 the k-nearest-neighbour lists when the use case configures
-`settings.search.nearby.distance`.
+`settings.selection.nearby.distance`.
 
 ### 2. Register it
 

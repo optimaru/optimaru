@@ -296,7 +296,7 @@ core/optimaru/
 ├── optimaru.hpp                  umbrella include for consumers
 ├── solver.hpp                    Solver: construction, then search; multi-start
 ├── settings.hpp                  Settings, Limits, AcceptanceSettings, MoveMix,
-│                                 NeighborSettings, RuinRecreateSettings, ...
+│                                 NeighborSettings, AlnsSettings, ...
 ├── solver_config.hpp             what every use case's Solver::Config shares:
 │                                 its bases, their Settings, parallel starts
 ├── portable_random.hpp           random_index, and seeded draws that match on

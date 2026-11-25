@@ -19,20 +19,21 @@ namespace {
 optimaru::Settings buildEngineConfig(const Solver::Config& config,
                                      const TaskAssigningSolution& solution, int parallel_starts) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
-    engineConfig.parallel_starts = parallel_starts;
+    engineConfig.run.parallel_starts = parallel_starts;
     if (config.on_new_best) {
         auto on_new_best = config.on_new_best;
-        engineConfig.on_new_best = [on_new_best](std::int64_t step, const optimaru::Score& score) {
+        engineConfig.run.on_new_best = [on_new_best](std::int64_t step,
+                                                     const optimaru::Score& score) {
             on_new_best(step, fromEngineScore(score));
         };
     }
-    engineConfig.limits.target_score = toEngineScoreLimit(config.target_score);
+    engineConfig.stop.target_score = toEngineScoreLimit(config.target_score);
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * solution.tasks.size(), 400, 3200);
-    auto& moves = engineConfig.search.moves;
+    auto& moves = engineConfig.moves;
     moves.relocate_weight = config.relocate_weight;
     moves.list_swap_weight = config.list_swap_weight;
     moves.two_opt_weight = config.two_opt_weight;
@@ -91,8 +92,8 @@ void Solver::solve(TaskAssigningSolution& solution,
             // became it, so the calculator holds exactly that solution:
             // report its levels like the final solution.score below.
             auto callback = config_.on_new_best;
-            engineConfig.on_new_best = [callback, &calculator](std::int64_t step,
-                                                               const optimaru::Score&) {
+            engineConfig.run.on_new_best = [callback, &calculator](std::int64_t step,
+                                                                   const optimaru::Score&) {
                 callback(step, levelScoreOf(calculator));
             };
         }

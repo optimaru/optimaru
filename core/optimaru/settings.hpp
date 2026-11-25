@@ -20,11 +20,24 @@
 
 namespace optimaru {
 
-// Plain structs, set field by field; every field has a working default.
+// Plain structs, set field by field; every field has a working default. A
+// solve's settings are grouped by the stage they act in, in the order a solve
+// meets them (the Python SolverConfig has the same groups: optimaru/_config.py):
+//
+//   construction   the first solution
+//   stop           when the search stops
+//   alns_trigger   when a stalled search is kicked
+//   strategies     a step's move, first: a built-in strategy, by its weight
+//   custom_moves   a step's move, next: the caller's operators
+//   moves          a step's move, otherwise: the move mix
+//   selection      what the move mix moves: nearby candidates, entity/value hints
+//   acceptance     whether the candidate becomes the current solution
+//   alns           the kick itself
+//   run            seeds, parallel starts, callbacks, debugging aids
 //
 //   optimaru::Settings settings;
-//   settings.limits.time_limit = std::chrono::seconds(10);
-//   settings.search.acceptance.rule = optimaru::AcceptanceRule::LateAcceptance;
+//   settings.stop.time_limit = std::chrono::seconds(10);
+//   settings.acceptance.rule = optimaru::AcceptanceRule::LateAcceptance;
 
 // When the solve stops: as soon as ANY configured limit is hit.
 struct Limits {
@@ -150,7 +163,7 @@ struct AcceptanceSettings {
     // waits at least two histories, so unimproved_step_trigger has less
     // effect the longer the history gets.
     double history_growth = 0.0;
-    // With history_growth: what SearchSettings::custom_move_probability is
+    // With history_growth: what CustomMoveSettings::share is
     // multiplied by once late acceptance has started over for the first
     // time. The first stage is the descent from the start, where a use
     // case's macro moves do their work at the gate it set. A later stage
@@ -193,9 +206,13 @@ struct AcceptanceSettings {
 // polish_steps hill-climbing moves repair the seams, and the result becomes
 // the new incumbent unconditionally with a fresh acceptor
 // (perturbation-style; the best-solution snapshot is the safety net).
-struct RuinRecreateSettings {
+struct AlnsTriggerSettings {
     bool enabled = false;
     std::int64_t unimproved_step_trigger = 5000;
+};
+
+// The kick itself (see AlnsTriggerSettings for when it runs).
+struct AlnsSettings {
     double min_ruin_fraction = 0.10;
     double max_ruin_fraction = 0.30;
     // Absolute cap on entities ruined per kick (Ropke & Pisinger's q <= ~60):
@@ -223,7 +240,7 @@ struct RuinRecreateSettings {
     int sisr_max_string_size = 12;
 
     // Recreate settings. (The list the repair never places into, a virtual
-    // unassigned pool, is SearchSettings::unassigned_list.)
+    // unassigned pool, is Settings::unassigned_list.)
     // regret_k >= 2 switches the repair from plain cheapest-insertion to
     // regret-k: instead of taking elements in random order, repeatedly insert
     // the element with the largest gap between its best and its k-th best
@@ -239,61 +256,42 @@ struct RuinRecreateSettings {
     // Hill-climbing small moves polishing each kick before it becomes the
     // incumbent. NOT counted against step_limit.
     std::int64_t polish_steps = 5000;
-
-    // Destroy-and-repair as an ORDINARY move, in addition to the stagnation
-    // kick above: a small ruin is applied, repaired, scored, and UNDONE if the
-    // acceptor rejects it. Implemented as a move operator plugin
-    // (search/ruin_recreate/ruin_recreate_move.hpp) drawn with this probability per step.
-    // The candidate is judged by the normal acceptance criterion. The kick
-    // above is the opposite — rare and unconditional.
-    // 0 disables it, which is the default.
-    double as_move_weight = 0.0;
-    // Ruin size for the as-a-move form. Much smaller than a kick's: it has to
-    // be cheap enough to run every few steps and small enough that the
-    // acceptor sees a local change rather than a restart.
-    int as_move_max_ruin = 12;
 };
 
-// Local search: the acceptance rule, the move mix, the guided/nearby
-// selection hooks, ruin-and-recreate and the built-in strategies.
-struct SearchSettings {
-    AcceptanceSettings acceptance;
-    MoveMix moves;
-
-    // Optional guided move selection, assignment shape only. Either hook may return
-    // -1 to fall back to uniform-random selection for that draw.
+// What the move mix moves: the guided entity/value hooks (assignment shape;
+// either may return -1 to fall back to a uniform draw) and nearby selection.
+struct SelectionSettings {
     std::function<int(std::mt19937_64&)> entity_hint;
     std::function<int(std::mt19937_64&, int entity_index)> value_hint;
-
     NeighborSettings nearby;
-    RuinRecreateSettings ruin_recreate;
+};
 
-    // Sequence shape: the list holding unplaced elements, a virtual unassigned
-    // pool, or -1 for none. One field, read by every built-in that must know
-    // the pool:
-    //  - the ruin-and-recreate repair, and the iterated local search's,
-    //    never place into it. Without that, a ruin on a tightly loaded
-    //    instance ends with the elements that fit nowhere parked in the pool,
-    //    a lexicographic loss the kick then makes the incumbent and one the
-    //    ordinary moves never undo (nothing but a chain re-assigns). With it
-    //    the leftover lands on the least overloaded list instead, a hard
-    //    breach the next few relocations and swaps mend. Measured on CVRPLIB
-    //    X-n289-k60 (99.7% loaded): with the pool open the search stalls at
-    //    its first kick;
-    //  - the ejection chain seeds half its chains from it while it is
-    //    non-empty, and never moves anything into it;
-    //  - the descents (Descent, GranularLocalSearch) neither reorder it nor
-    //    move elements in or out of it: its order carries no score, and
-    //    assigning or unassigning is the repair's and the chain's job, where
-    //    hard feasibility is judged as a whole.
-    int unassigned_list = -1;
-
+// The caller's MoveOperators (Solver::add_move_operator), asked after the
+// built-in strategies.
+struct CustomMoveSettings {
     // Upper gate for caller-registered MoveOperators. The adaptive selector
     // still chooses between the built-in mix and custom operators inside the
     // gate; outside it, the ordinary move mix runs directly. This prevents an
     // expensive macro move with one recent reward from monopolizing the clock.
     // 1 preserves the original unrestricted behavior.
-    double custom_move_probability = 1.0;
+    double share = 1.0;
+};
+
+// A step's move, first: the built-in strategies, each drawn by its own weight in
+// a fixed order (LocalSearch::choose_move); the first that hits is the move.
+struct StrategySettings {
+    // Destroy-and-repair as an ORDINARY move, in addition to the stagnation
+    // kick (AlnsSettings): a small ruin is applied, repaired, scored, and UNDONE if the
+    // acceptor rejects it. Implemented as a move operator plugin
+    // (search/ruin_recreate/ruin_recreate_move.hpp) drawn with this probability per step.
+    // The candidate is judged by the normal acceptance criterion. The kick
+    // is the opposite — rare and unconditional.
+    // 0 disables it, which is the default.
+    double ruin_recreate_weight = 0.0;
+    // Ruin size for the as-a-move form. Much smaller than a kick's: it has to
+    // be cheap enough to run every few steps and small enough that the
+    // acceptor sees a local change rather than a restart.
+    int ruin_recreate_max_ruin = 12;
 
     // ---------------------------------------------------------------------
     // Built-in search strategies
@@ -405,8 +403,8 @@ struct SearchSettings {
     std::int64_t iterated_local_search_max_evaluations = 5000000;
 };
 
-// Everything one solve is configured with.
-struct Settings {
+// Seeds, parallel starts, callbacks and debugging aids.
+struct RunSettings {
     std::uint64_t seed = 0;
 
     // ScoreChecks::Full re-verifies the incremental score against a full
@@ -419,10 +417,40 @@ struct Settings {
 
     // Called with (step, score) on every new best, from the solving thread.
     std::function<void(std::int64_t, const Score&)> on_new_best;
+};
 
-    Limits limits;
+// Everything one solve is configured with, by stage of the solve.
+struct Settings {
     ConstructionSettings construction;
-    SearchSettings search;
+    Limits stop;
+    AlnsTriggerSettings alns_trigger;
+    StrategySettings strategies;
+    CustomMoveSettings custom_moves;
+    MoveMix moves;
+    SelectionSettings selection;
+    AcceptanceSettings acceptance;
+    AlnsSettings alns;
+    RunSettings run;
+
+    // Sequence shape: the list holding unplaced elements, a virtual unassigned
+    // pool, or -1 for none. One field, read by every built-in that must know
+    // the pool:
+    //  - the ruin-and-recreate repair, and the iterated local search's,
+    //    never place into it. Without that, a ruin on a tightly loaded
+    //    instance ends with the elements that fit nowhere parked in the pool,
+    //    a lexicographic loss the kick then makes the incumbent and one the
+    //    ordinary moves never undo (nothing but a chain re-assigns). With it
+    //    the leftover lands on the least overloaded list instead, a hard
+    //    breach the next few relocations and swaps mend. Measured on CVRPLIB
+    //    X-n289-k60 (99.7% loaded): with the pool open the search stalls at
+    //    its first kick;
+    //  - the ejection chain seeds half its chains from it while it is
+    //    non-empty, and never moves anything into it;
+    //  - the descents (Descent, GranularLocalSearch) neither reorder it nor
+    //    move elements in or out of it: its order carries no score, and
+    //    assigning or unassigning is the repair's and the chain's job, where
+    //    hard feasibility is judged as a whole.
+    int unassigned_list = -1;
 };
 
 }  // namespace optimaru

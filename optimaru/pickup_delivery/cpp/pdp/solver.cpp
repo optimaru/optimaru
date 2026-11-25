@@ -776,16 +776,16 @@ void checkRequestGroups(const PdpRoutePlan& plan, const RequestGroups& groups) {
 // path too).
 optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRoutePlan& plan) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
-    engineConfig.parallel_starts = 1;
+    engineConfig.run.parallel_starts = 1;
     if (config.on_new_best) {
         auto callback = config.on_new_best;
-        engineConfig.on_new_best = [callback](std::int64_t step, const optimaru::Score& score) {
+        engineConfig.run.on_new_best = [callback](std::int64_t step, const optimaru::Score& score) {
             callback(step, fromEngineScore(score));
         };
     }
 
     if (config.target_score.medium != std::numeric_limits<std::int64_t>::max())
-        engineConfig.limits.target_score = toEngineScoreLimit(config.target_score);
+        engineConfig.stop.target_score = toEngineScoreLimit(config.target_score);
 
     // Construction order: place a request's pickup right before its dropoff by
     // giving the pair adjacent difficulty, tightest window first. The stops are
@@ -806,7 +806,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
         };
     }
 
-    auto& acceptor = engineConfig.search.acceptance;
+    auto& acceptor = engineConfig.acceptance;
     acceptor.history_length =
             config.history_length != 0
                     ? config.history_length
@@ -814,7 +814,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
                                ? 5
                                : std::clamp<std::size_t>(4 * plan.nodes.size(), 200, 1600));
 
-    auto& moves = engineConfig.search.moves;
+    auto& moves = engineConfig.moves;
     moves.relocate_weight = config.relocate_weight;
     moves.list_swap_weight = config.list_swap_weight;
     moves.two_opt_weight = config.two_opt_weight;
@@ -823,13 +823,13 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
     moves.cross_exchange_weight = config.cross_exchange_weight;
     moves.cross_exchange_max_run = config.cross_exchange_max_run;
 
-    engineConfig.search.descent_weight = config.descent_weight;
-    engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
-    engineConfig.search.route_elimination_weight = config.route_elimination_weight;
-    engineConfig.search.route_elimination_max_size = config.route_elimination_max_size;
+    engineConfig.strategies.descent_weight = config.descent_weight;
+    engineConfig.strategies.descent_max_sweeps = config.descent_max_sweeps;
+    engineConfig.strategies.route_elimination_weight = config.route_elimination_weight;
+    engineConfig.strategies.route_elimination_max_size = config.route_elimination_max_size;
     // The ruin & recreate knobs that are this use case's own (settings_from
     // set the shared ones).
-    auto& lns = engineConfig.search.ruin_recreate;
+    auto& lns = engineConfig.alns;
     lns.selection_type = config.ruin_recreate_selection_type;
     lns.selection_segment_length = config.ruin_recreate_selection_segment_length;
     lns.selection_alpha = config.ruin_recreate_selection_alpha;
@@ -854,14 +854,14 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const PdpRout
                 }
             }
         }
-        engineConfig.search.nearby.distance = [locationOfNode, matrix](int a, int b) {
+        engineConfig.selection.nearby.distance = [locationOfNode, matrix](int a, int b) {
             return static_cast<double>((*matrix)[static_cast<std::size_t>((*locationOfNode)[a])]
                                                 [static_cast<std::size_t>((*locationOfNode)[b])]);
         };
-        engineConfig.search.nearby.size = std::max(
+        engineConfig.selection.nearby.size = std::max(
                 1,
                 std::min(config.driving_time_nearby_size, static_cast<int>(plan.nodes.size()) - 1));
-        engineConfig.search.nearby.probability = config.driving_time_nearby_probability;
+        engineConfig.selection.nearby.probability = config.driving_time_nearby_probability;
     }
 
     return engineConfig;
@@ -984,8 +984,8 @@ void Solver::solve(PdpRoutePlan& plan, optimaru::DecomposedObjective<PdpRoutePla
             // solution: report its levels the same way as the final
             // plan.score below, not the decoded engine fold.
             auto callback = config_.on_new_best;
-            engineConfig.on_new_best = [callback, &calculator](std::int64_t step,
-                                                               const optimaru::Score&) {
+            engineConfig.run.on_new_best = [callback, &calculator](std::int64_t step,
+                                                                   const optimaru::Score&) {
                 callback(step, levelScoreOf(calculator));
             };
         }

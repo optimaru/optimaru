@@ -46,14 +46,14 @@ public:
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
         // the stagnation kick (engine
-        // RuinRecreateSettings::as_move_weight). Probability that a step is a
+        // StrategySettings::ruin_recreate_weight). Probability that a step is a
         // small ruin + greedy repair instead of a sampled change/swap; a
         // rejected one is rolled back like any other move.
         double ruin_recreate_as_move_weight = 0.0;
         int ruin_recreate_as_move_max_ruin = 12;
 
         // Best-improvement descent over one nearby lesson pair (engine
-        // SearchSettings::descent_weight): enumerate every allowed period
+        // StrategySettings::descent_weight): enumerate every allowed period
         // for both lessons plus their swap, apply the best improving one,
         // repeat until the pair is locally optimal. Always improving, so it
         // bypasses the acceptor. One descent costs ~2 * periodCount score

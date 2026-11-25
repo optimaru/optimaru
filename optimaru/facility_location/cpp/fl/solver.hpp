@@ -30,7 +30,7 @@ public:
     //                     batch can
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ORDINARY move (the engine's
-        // ruin_recreate.as_move_weight): a small ruin is repaired, scored and
+        // strategies.ruin_recreate_weight): a small ruin is repaired, scored and
         // judged by the acceptor like any other move — unlike the stagnation
         // kick, which is rare and unconditional. One as-move costs
         // ~ruinCount * facilityCount score evaluations, so its weight follows

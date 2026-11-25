@@ -37,14 +37,14 @@ GuidedSetup configureEngine(const Solver::Config& config, const Timetable& table
                             optimaru::Settings& engineConfig) {
     engineConfig = optimaru::settings_from(config);
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(4 * table.lessons.size(), 400, 3200);
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
-    engineConfig.search.descent_weight = config.descent_weight;
-    engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
+    engineConfig.strategies.descent_weight = config.descent_weight;
+    engineConfig.strategies.descent_max_sweeps = config.descent_max_sweeps;
 
     GuidedSetup setup;
 
@@ -62,7 +62,8 @@ GuidedSetup configureEngine(const Solver::Config& config, const Timetable& table
         setup.allowedSlots->push_back(std::move(slots));
     }
     const std::shared_ptr<std::vector<std::vector<int>>>& allowedSlots = setup.allowedSlots;
-    engineConfig.search.value_hint = [allowedSlots](std::mt19937_64& rng, int lessonIndex) -> int {
+    engineConfig.selection.value_hint = [allowedSlots](std::mt19937_64& rng,
+                                                       int lessonIndex) -> int {
         const std::vector<int>& slots = (*allowedSlots)[lessonIndex];
         if (slots.empty()) return -1;
         return slots[rng() % slots.size()];
@@ -88,11 +89,11 @@ GuidedSetup configureEngine(const Solver::Config& config, const Timetable& table
         for (const std::vector<int>& members : setup.lessonsOfClass)
             maxClassSize = std::max(maxClassSize, members.size());
         const std::shared_ptr<std::vector<int>>& classOf = setup.classOf;
-        engineConfig.search.nearby.distance = [classOf](int a, int b) {
+        engineConfig.selection.nearby.distance = [classOf](int a, int b) {
             return (*classOf)[a] == (*classOf)[b] ? 0.0 : 1.0;
         };
-        engineConfig.search.nearby.size = std::max(1, static_cast<int>(maxClassSize) - 1);
-        engineConfig.search.nearby.probability = config.same_class_nearby_probability;
+        engineConfig.selection.nearby.size = std::max(1, static_cast<int>(maxClassSize) - 1);
+        engineConfig.selection.nearby.probability = config.same_class_nearby_probability;
     }
 
     // First Fit Decreasing: initialize the most constrained lessons first —
@@ -154,7 +155,8 @@ void Solver::solve(Timetable& table) {
     // no hot lessons, so this falls back to uniform exploration by itself.
     if (config_.hot_lesson_probability > 0.0) {
         const double probability = config_.hot_lesson_probability;
-        engineConfig.search.entity_hint = [&calculator, probability](std::mt19937_64& rng) -> int {
+        engineConfig.selection.entity_hint = [&calculator,
+                                              probability](std::mt19937_64& rng) -> int {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
             if (unit(rng) >= probability) return -1;
             return calculator.hotLesson(rng);
@@ -194,7 +196,8 @@ void Solver::solve(Timetable& table, optimaru::DecomposedObjective<Timetable>& c
     DecomposedHotSource hotSource(&calculator);
     if (config_.hot_lesson_probability > 0.0) {
         const double probability = config_.hot_lesson_probability;
-        engineConfig.search.entity_hint = [&hotSource, probability](std::mt19937_64& rng) -> int {
+        engineConfig.selection.entity_hint = [&hotSource,
+                                              probability](std::mt19937_64& rng) -> int {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
             if (unit(rng) >= probability) return -1;
             return hotSource.hotLesson(rng);

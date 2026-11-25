@@ -77,7 +77,7 @@ public:
           move_operators_(move_operators),
           ruin_operators_(ruin_operators),
           acceptor_factory_(acceptor_factory),
-          repair_(index_, nearby, config.search.ruin_recreate, config.search.unassigned_list) {}
+          repair_(index_, nearby, config.alns, config.unassigned_list) {}
 
     Score run(Editor<Solution>& editor, StopCondition& stop) {
         Solution& solution = editor.solution();
@@ -87,7 +87,7 @@ public:
             }
             if (all_entities_pinned(solution)) {
                 const Score score = editor.score();
-                if (config_.on_new_best) config_.on_new_best(0, score);
+                if (config_.run.on_new_best) config_.run.on_new_best(0, score);
                 return score;
             }
         } else {
@@ -97,12 +97,13 @@ public:
             index_.build(solution);
         }
 
-        const RuinRecreateSettings& lns = config_.search.ruin_recreate;
-        const SearchSettings& ls = config_.search;
+        const AlnsSettings& lns = config_.alns;                     // the kick itself
+        const AlnsTriggerSettings& trigger = config_.alns_trigger;  // when it runs
+        const StrategySettings& st = config_.strategies;            // the built-in strategies
         Score current_score = editor.score();
         Score best_score = current_score;
         Snapshot best = Snapshot::take(solution);
-        if (config_.on_new_best) config_.on_new_best(0, best_score);
+        if (config_.run.on_new_best) config_.run.on_new_best(0, best_score);
 
         std::unique_ptr<Acceptor> acceptor = make_acceptor(current_score);
         // Custom acceptors may consume the time gradient. Of the built-ins,
@@ -110,7 +111,7 @@ public:
         // floating-point division on every move for the default LA path.
         const bool needs_time_gradient =
                 static_cast<bool>(acceptor_factory_) ||
-                config_.search.acceptance.rule == AcceptanceRule::SimulatedAnnealing;
+                config_.acceptance.rule == AcceptanceRule::SimulatedAnnealing;
         // The built-in ruins are plugins like any other: one file each in
         // ruin_recreate/, registered ahead of the caller's operators so the
         // adaptive selector sees a single uniform list.
@@ -146,51 +147,52 @@ public:
         // The built-in strategies: plugins like any other MoveOperator, drawn
         // by weight before the ordinary move mix gets its turn. Their weights
         // are small by necessity — each costs orders of magnitude more than one
-        // sampled move — and the header of SearchSettings records why that
+        // sampled move — and the header of StrategySettings records why that
         // is a configured number here rather than something the adaptive
         // selector above is asked to discover.
         [[maybe_unused]] RouteElimination<Solution> route_elimination(
-                index_, repair_, ls.route_elimination_max_size);
-        Descent<Solution> descent(index_, nearby_, ls.descent_max_sweeps, ls.entity_hint,
-                                  ls.granular_descent, ls.granular_descent_max_segment,
-                                  ls.granular_descent_candidate_routes, ls.unassigned_list);
+                index_, repair_, st.route_elimination_max_size);
+        Descent<Solution> descent(index_, nearby_, st.descent_max_sweeps,
+                                  config_.selection.entity_hint, st.granular_descent,
+                                  st.granular_descent_max_segment,
+                                  st.granular_descent_candidate_routes, config_.unassigned_list);
         RuinRecreateMove<Solution> ruin_recreate_move(index_, repair_, ruins, *ruin_selector,
-                                                      lns.as_move_max_ruin);
+                                                      st.ruin_recreate_max_ruin);
         [[maybe_unused]] EjectionChain<Solution> ejection_chain(
-                index_, nearby_, ls.unassigned_list, ls.ejection_chain_max_steps,
-                ls.ejection_chain_candidate_lists, ls.ejection_chain_max_evaluations);
+                index_, nearby_, config_.unassigned_list, st.ejection_chain_max_steps,
+                st.ejection_chain_candidate_lists, st.ejection_chain_max_evaluations);
         [[maybe_unused]] GranularLocalSearch<Solution> granular_local_search(
-                index_, nearby_, ls.iterated_local_search_max_segment);
+                index_, nearby_, st.iterated_local_search_max_segment);
         // Its own adaptive ruin weights: an ILS outcome is measured after the
         // descent and would otherwise retrain the destroy-repair move's.
         auto ils_ruin_selector = make_selector(ruins.size());
         [[maybe_unused]] IteratedLocalSearchMove<Solution> iterated_local_search(
                 index_, repair_, granular_local_search, ruins, *ils_ruin_selector,
-                ls.iterated_local_search_min_ruin, ls.iterated_local_search_max_ruin,
-                ls.unassigned_list, ls.iterated_local_search_max_evaluations);
+                st.iterated_local_search_min_ruin, st.iterated_local_search_max_ruin,
+                config_.unassigned_list, st.iterated_local_search_max_evaluations);
         std::vector<WeightedStrategy> strategies;
         // Route elimination is sequence-only, for the same reason the SISR and
         // route ruins are: it declines on assignment solutions, so registering it
         // there would only burn steps on an operator that can never move.
         // Descent has a neighbourhood on both shapes and is registered on both.
         if constexpr (Traits::shape == Shape::Sequence) {
-            if (ls.route_elimination_weight > 0.0) {
-                strategies.push_back({ls.route_elimination_weight, &route_elimination});
+            if (st.route_elimination_weight > 0.0) {
+                strategies.push_back({st.route_elimination_weight, &route_elimination});
             }
-            if (ls.ejection_chain_weight > 0.0) {
-                strategies.push_back({ls.ejection_chain_weight, &ejection_chain});
+            if (st.ejection_chain_weight > 0.0) {
+                strategies.push_back({st.ejection_chain_weight, &ejection_chain});
             }
-            if (ls.iterated_local_search_weight > 0.0) {
-                strategies.push_back({ls.iterated_local_search_weight, &iterated_local_search});
+            if (st.iterated_local_search_weight > 0.0) {
+                strategies.push_back({st.iterated_local_search_weight, &iterated_local_search});
             }
         }
-        if (ls.descent_weight > 0.0) {
-            strategies.push_back({ls.descent_weight, &descent});
+        if (st.descent_weight > 0.0) {
+            strategies.push_back({st.descent_weight, &descent});
         }
-        if (lns.as_move_weight > 0.0) {
-            strategies.push_back({lns.as_move_weight, &ruin_recreate_move});
+        if (st.ruin_recreate_weight > 0.0) {
+            strategies.push_back({st.ruin_recreate_weight, &ruin_recreate_move});
         }
-        std::mt19937_64 rng(config_.seed);
+        std::mt19937_64 rng(config_.run.seed);
         // Reused by caller-provided operators. Keeping it out of AppliedMove
         // avoids constructing and destroying a std::vector on every built-in
         // move, which is the hot path for all use cases.
@@ -216,8 +218,8 @@ public:
         //  - exponential backoff: every kick that fails to reach a new best
         //    before the next trigger doubles the interval (capped so kicks
         //    never stop entirely); any new best resets it.
-        std::int64_t lns_trigger = lns.unimproved_step_trigger;
-        const std::int64_t lns_trigger_cap = lns.unimproved_step_trigger << 12;
+        std::int64_t lns_trigger = trigger.unimproved_step_trigger;
+        const std::int64_t lns_trigger_cap = trigger.unimproved_step_trigger << 12;
         std::int64_t last_best_step = 0;
         std::int64_t ema_best_gap = 0;
         bool force_time_check = false;
@@ -233,10 +235,11 @@ public:
             if (stages.enabled()) patience = std::max(patience, stages.min_patience());
             // Stalled: the next stage if one is due, else a kick, else wait.
             const bool stalled = steps_since_best_or_lns >= patience;
-            if (stalled && stages.enabled() && stages.on_converged(stop.progress(), !lns.enabled)) {
+            if (stalled && stages.enabled() &&
+                stages.on_converged(stop.progress(), !trigger.enabled)) {
                 acceptor = stages.start_next(stop.progress());
                 steps_since_best_or_lns = 0;
-            } else if (stalled && lns.enabled) {
+            } else if (stalled && trigger.enabled) {
                 current_score = lns_iteration(editor, current_score, best_score, *ruin_selector,
                                               ruins, operator_context, rng);
                 force_time_check = true;
@@ -339,7 +342,7 @@ public:
                 stop.on_improvement(step);
                 stages.on_new_best(stop.progress());
                 steps_since_best_or_lns = 0;
-                lns_trigger = lns.unimproved_step_trigger;
+                lns_trigger = trigger.unimproved_step_trigger;
                 const std::int64_t gap = step - last_best_step;
                 // The gap that spans a stage's restart is the length of the
                 // restart, not how often this search improves: it stays out
@@ -348,7 +351,7 @@ public:
                     ema_best_gap = ema_best_gap == 0 ? gap : (3 * ema_best_gap + gap) / 4;
                 }
                 last_best_step = step;
-                if (config_.on_new_best) config_.on_new_best(step, best_score);
+                if (config_.run.on_new_best) config_.run.on_new_best(step, best_score);
             } else {
                 ++steps_since_best_or_lns;
             }
@@ -419,11 +422,11 @@ private:
     }
 
     // Whether this step asks the adaptive selector to choose between the move
-    // mix and the caller's operators (SearchSettings::custom_move_probability).
+    // mix and the caller's operators (CustomMoveSettings::share).
     bool custom_operators_get_a_turn(std::mt19937_64& rng, bool in_later_stage) {
         if (move_operators_.empty()) return false;
-        double gate = config_.search.custom_move_probability;
-        if (in_later_stage) gate *= config_.search.acceptance.later_stage_custom_move_share;
+        double gate = config_.custom_moves.share;
+        if (in_later_stage) gate *= config_.acceptance.later_stage_custom_move_share;
         return gate >= 1.0 || (gate > 0.0 && unit_(rng) < gate);
     }
 
@@ -452,7 +455,7 @@ private:
 
     std::unique_ptr<Acceptor> make_acceptor(const Score& initial_score) const {
         if (acceptor_factory_) return acceptor_factory_(initial_score);
-        const AcceptanceSettings& c = config_.search.acceptance;
+        const AcceptanceSettings& c = config_.acceptance;
         switch (c.rule) {
             case AcceptanceRule::HillClimbing:
                 return std::make_unique<HillClimbing>();
@@ -479,7 +482,7 @@ private:
                 // threshold decay more slowly, which RRT tolerates, whereas
                 // undershooting collapses it to hill climbing immediately.
                 const std::int64_t steps =
-                        config_.limits.step_limit > 0 ? config_.limits.step_limit : 1000000;
+                        config_.stop.step_limit > 0 ? config_.stop.step_limit : 1000000;
                 return std::make_unique<RecordToRecordTravel>(RecordToRecordTravel::autofit(
                         initial_score.soft, c.rrt_start_gap, c.rrt_end_gap, steps));
             }
@@ -492,7 +495,7 @@ private:
     // A random nearby neighbour of `e`, drawn with NeighborSettings::probability
     // when nearby selection is configured; -1 means draw uniformly instead.
     int nearby_pick(int e, std::mt19937_64& rng) {
-        if (!nearby_.enabled() || !(unit_(rng) < config_.search.nearby.probability)) return -1;
+        if (!nearby_.enabled() || !(unit_(rng) < config_.selection.nearby.probability)) return -1;
         const std::vector<int>& neighbours = nearby_.of(e);
         return neighbours.empty() ? -1 : neighbours[rng() % neighbours.size()];
     }
@@ -529,14 +532,14 @@ private:
 
     AppliedMove apply_basic_move(Editor<Solution>& editor, std::mt19937_64& rng) {
         Solution& solution = editor.solution();
-        const SearchSettings& ls = config_.search;
-        const MoveMix& ms = ls.moves;
+        const SelectionSettings& select = config_.selection;
+        const MoveMix& ms = config_.moves;
         const int entity_count = Traits::entity_count(solution);
         const int value_count = Traits::value_count(solution);
         std::uniform_int_distribution<int> entity_pick(0, entity_count - 1);
         std::uniform_int_distribution<int> value_pick(0, value_count - 1);
 
-        int e = ls.entity_hint ? ls.entity_hint(rng) : -1;
+        int e = select.entity_hint ? select.entity_hint(rng) : -1;
         if (e < 0) e = entity_pick(rng);
         e = movable_entity(solution, e, entity_pick, rng);  // never move a pinned entity
         const int old_value = Traits::value_of(solution, e);
@@ -550,7 +553,7 @@ private:
         if (unit_(rng) * total < ms.change_weight || total <= 0) {
             // Change: another value for e (never its current one, when there
             // is a choice).
-            int v = ls.value_hint ? ls.value_hint(rng, e) : -1;
+            int v = select.value_hint ? select.value_hint(rng, e) : -1;
             if (v < 0 || (value_count > 1 && v == old_value)) {
                 if (value_count > 1 && old_value >= 0 && old_value < value_count) {
                     v = random_other(value_count, old_value, rng);
@@ -606,8 +609,8 @@ private:
     // pre-move index when source and destination are the same list.
     AppliedMove sample_list_move(Editor<Solution>& editor, std::mt19937_64& rng) {
         Solution& solution = editor.solution();
-        const SearchSettings& ls = config_.search;
-        const MoveMix& ms = ls.moves;
+        const SelectionSettings& select = config_.selection;
+        const MoveMix& ms = config_.moves;
         const int list_count = Traits::list_count(solution);
         const int element_count = Traits::element_count(solution);
 
@@ -808,7 +811,7 @@ private:
                         const Score& best_score, OperatorSelectionScheme& ruin_selector,
                         const std::vector<RuinOperator<Solution>*>& ruins,
                         OperatorContext<Solution>& operator_context, std::mt19937_64& rng) {
-        const RuinRecreateSettings& lns = config_.search.ruin_recreate;
+        const AlnsSettings& lns = config_.alns;
         const int n = ruin_candidate_count(operator_context);
         std::uniform_real_distribution<double> fraction(lns.min_ruin_fraction,
                                                         lns.max_ruin_fraction);

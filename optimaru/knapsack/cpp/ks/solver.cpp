@@ -27,7 +27,7 @@ namespace {
 optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackProblem& problem,
                                   bool seeded) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * problem.items.size(), 400, 3200);
@@ -37,24 +37,24 @@ optimaru::Settings engineConfigOf(const Solver::Config& config, const KnapsackPr
     // worse (by 1 in 17,470). A solve that starts from a selection the caller
     // gave has no stages: the start's score is then no lower than where the
     // search stands, and a stage would take the place of the kicks.
-    if (!seeded) engineConfig.search.acceptance.history_growth = 2.0;
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
-    engineConfig.search.descent_weight = config.descent_weight;
+    if (!seeded) engineConfig.acceptance.history_growth = 2.0;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
+    engineConfig.strategies.descent_weight = config.descent_weight;
     // CoreRepackMove costs a pass over the items and a table per draw, so a
     // step may draw it only this often; inside the gate the adaptive selector
     // chooses between it and the move mix. (With the move off no operator is
     // registered and the gate has nothing to gate.)
-    engineConfig.search.custom_move_probability = 0.001;
+    engineConfig.custom_moves.share = 0.001;
 
     // Nearby swap partners: items of similar weight. The meter owns a copy of
     // the weights.
     if (config.nearby_probability > 0.0 && config.nearby_size > 0) {
         auto weights = std::make_shared<std::vector<std::int64_t>>();
         for (const Item& item : problem.items) weights->push_back(item.weight);
-        engineConfig.search.nearby.probability = config.nearby_probability;
-        engineConfig.search.nearby.size = config.nearby_size;
-        engineConfig.search.nearby.distance = [weights](int a, int b) {
+        engineConfig.selection.nearby.probability = config.nearby_probability;
+        engineConfig.selection.nearby.size = config.nearby_size;
+        engineConfig.selection.nearby.distance = [weights](int a, int b) {
             return static_cast<double>(std::llabs((*weights)[a] - (*weights)[b]));
         };
     }

@@ -199,15 +199,15 @@ void testAcceptors(const Score& separableOptimum, const Score& optimum) {
     for (const Case& c : cases) {
         TaskAssignment s = buildSeparableInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(10);
-        config.limits.step_limit = 200000;
-        config.search.acceptance.rule = c.type;
-        config.search.acceptance.history_length = 50;
-        config.search.acceptance.tabu_tenure = 3;
-        config.search.acceptance.start_temperature = {2, 50.0};
-        config.search.acceptance.water_level_step = {0, 0.01};
-        config.search.acceptance.recount_interval = 50;
-        config.seed = 7;
+        config.stop.time_limit = std::chrono::seconds(10);
+        config.stop.step_limit = 200000;
+        config.acceptance.rule = c.type;
+        config.acceptance.history_length = 50;
+        config.acceptance.tabu_tenure = 3;
+        config.acceptance.start_temperature = {2, 50.0};
+        config.acceptance.water_level_step = {0, 0.01};
+        config.acceptance.recount_interval = 50;
+        config.run.seed = 7;
         optimaru::Solver<TaskAssignment> solver(config);
         TaskAssignmentCalculator calculator;
         Score result = solver.solve(s, calculator);
@@ -219,11 +219,11 @@ void testAcceptors(const Score& separableOptimum, const Score& optimum) {
     {
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(10);
-        config.limits.step_limit = 200000;
-        config.search.acceptance.rule = optimaru::AcceptanceRule::SimulatedAnnealing;
-        config.search.acceptance.start_temperature = {2, 50.0};
-        config.seed = 7;
+        config.stop.time_limit = std::chrono::seconds(10);
+        config.stop.step_limit = 200000;
+        config.acceptance.rule = optimaru::AcceptanceRule::SimulatedAnnealing;
+        config.acceptance.start_temperature = {2, 50.0};
+        config.run.seed = 7;
         TaskAssignmentCalculator calculator;
         Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
         check(result == optimum && fullScore(s) == optimum,
@@ -241,14 +241,14 @@ void testHistoryGrowth(const Score& separableOptimum) {
     const auto run = [](bool kicks, optimaru::ScoreChecks checks, std::int64_t steps) {
         TaskAssignment s = buildSeparableInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::minutes(10);
-        config.limits.step_limit = steps;
-        config.search.acceptance.history_length = 1;
-        config.search.acceptance.history_growth = 2.0;
-        config.search.ruin_recreate.enabled = kicks;
-        config.search.ruin_recreate.unimproved_step_trigger = 200;
-        config.score_checks = checks;
-        config.seed = 7;
+        config.stop.time_limit = std::chrono::minutes(10);
+        config.stop.step_limit = steps;
+        config.acceptance.history_length = 1;
+        config.acceptance.history_growth = 2.0;
+        config.alns_trigger.enabled = kicks;
+        config.alns_trigger.unimproved_step_trigger = 200;
+        config.run.score_checks = checks;
+        config.run.seed = 7;
         TaskAssignmentCalculator calculator;
         const Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
         return std::make_pair(result, s.assignment);
@@ -281,9 +281,9 @@ void testHistoryStages() {
                                      optimaru::AcceptanceRule::LateAcceptance,
                              bool customAcceptor = false) {
         optimaru::Settings config;
-        config.search.acceptance.rule = rule;
-        config.search.acceptance.history_length = history;
-        config.search.acceptance.history_growth = growth;
+        config.acceptance.rule = rule;
+        config.acceptance.history_length = history;
+        config.acceptance.history_growth = growth;
         return optimaru::HistoryStages(config, customAcceptor, Score{0, -100.0}, 0.0);
     };
     check(stagesOf(400, 2.0).enabled(), "late acceptance with a factor above 1: on");
@@ -370,11 +370,11 @@ void testHistoryGrowthOnAWarmStart(const Score& optimum) {
     TaskAssignment stuck = buildTaskInstance();
     {
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::minutes(10);
-        config.limits.step_limit = 20000;
-        config.search.acceptance.history_length = 50;
-        config.search.ruin_recreate.enabled = false;
-        config.seed = 7;
+        config.stop.time_limit = std::chrono::minutes(10);
+        config.stop.step_limit = 20000;
+        config.acceptance.history_length = 50;
+        config.alns_trigger.enabled = false;
+        config.run.seed = 7;
         TaskAssignmentCalculator calculator;
         const Score local = optimaru::Solver<TaskAssignment>(config).solve(stuck, calculator);
         check(local < optimum, "late acceptance alone stops below the optimum: the warm start");
@@ -382,15 +382,15 @@ void testHistoryGrowthOnAWarmStart(const Score& optimum) {
     const auto run = [&stuck](double growth) {
         TaskAssignment s = stuck;
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::minutes(10);
-        config.limits.step_limit = 100000;
-        config.search.acceptance.history_length = 50;
-        config.search.acceptance.history_growth = growth;
-        config.search.ruin_recreate.enabled = true;
-        config.search.ruin_recreate.unimproved_step_trigger = 200;
-        config.search.ruin_recreate.min_ruin_fraction = 0.34;
-        config.search.ruin_recreate.max_ruin_fraction = 0.67;
-        config.seed = 7;
+        config.stop.time_limit = std::chrono::minutes(10);
+        config.stop.step_limit = 100000;
+        config.acceptance.history_length = 50;
+        config.acceptance.history_growth = growth;
+        config.alns_trigger.enabled = true;
+        config.alns_trigger.unimproved_step_trigger = 200;
+        config.alns.min_ruin_fraction = 0.34;
+        config.alns.max_ruin_fraction = 0.67;
+        config.run.seed = 7;
         TaskAssignmentCalculator calculator;
         const Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
         return std::make_pair(result, s.assignment);
@@ -410,8 +410,8 @@ void testTerminations(const Score& optimum) {
     {  // step_limit fires long before the 30s time_limit.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.limits.step_limit = 1000;
+        config.stop.time_limit = std::chrono::seconds(30);
+        config.stop.step_limit = 1000;
         auto t0 = Clock::now();
         TaskAssignmentCalculator calculator;
         optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
@@ -422,10 +422,10 @@ void testTerminations(const Score& optimum) {
         // because it reliably reaches the conflicted instance's optimum).
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.limits.target_score = optimum;
-        config.search.acceptance.rule = optimaru::AcceptanceRule::SimulatedAnnealing;
-        config.search.acceptance.start_temperature = {2, 50.0};
+        config.stop.time_limit = std::chrono::seconds(30);
+        config.stop.target_score = optimum;
+        config.acceptance.rule = optimaru::AcceptanceRule::SimulatedAnnealing;
+        config.acceptance.start_temperature = {2, 50.0};
         auto t0 = Clock::now();
         TaskAssignmentCalculator calculator;
         Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
@@ -437,8 +437,8 @@ void testTerminations(const Score& optimum) {
         // 200ms without improvement ends the solve well before 30s.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.limits.stall_time_limit = std::chrono::milliseconds(200);
+        config.stop.time_limit = std::chrono::seconds(30);
+        config.stop.stall_time_limit = std::chrono::milliseconds(200);
         auto t0 = Clock::now();
         TaskAssignmentCalculator calculator;
         optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
@@ -466,9 +466,9 @@ void testEnvironmentMode() {
     {  // A correct calculator survives ScoreChecks::Full.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(10);
-        config.limits.step_limit = 2000;
-        config.score_checks = optimaru::ScoreChecks::Full;
+        config.stop.time_limit = std::chrono::seconds(10);
+        config.stop.step_limit = 2000;
+        config.run.score_checks = optimaru::ScoreChecks::Full;
         TaskAssignmentCalculator calculator;
         bool threw = false;
         try {
@@ -481,9 +481,9 @@ void testEnvironmentMode() {
     {  // A buggy calculator is caught.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(10);
-        config.limits.step_limit = 2000;
-        config.score_checks = optimaru::ScoreChecks::Full;
+        config.stop.time_limit = std::chrono::seconds(10);
+        config.stop.step_limit = 2000;
+        config.run.score_checks = optimaru::ScoreChecks::Full;
         CorruptedCalculator calculator;
         bool threw = false;
         try {
@@ -500,11 +500,11 @@ void testMultiStartAndFfd(const Score& optimum) {
     {  // 4 SA threads on the conflicted instance; the best start must win.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(10);
-        config.limits.step_limit = 200000;
-        config.parallel_starts = 4;
-        config.search.acceptance.rule = optimaru::AcceptanceRule::SimulatedAnnealing;
-        config.search.acceptance.start_temperature = {2, 50.0};
+        config.stop.time_limit = std::chrono::seconds(10);
+        config.stop.step_limit = 200000;
+        config.run.parallel_starts = 4;
+        config.acceptance.rule = optimaru::AcceptanceRule::SimulatedAnnealing;
+        config.acceptance.start_temperature = {2, 50.0};
         optimaru::Solver<TaskAssignment> solver(config);
         Score result = solver.solve_multistart(
                 s, [] { return std::make_unique<TaskAssignmentCalculator>(); });
@@ -517,11 +517,11 @@ void testMultiStartAndFfd(const Score& optimum) {
         // is also the one the comparison picks.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.limits.target_score = optimum;
-        config.parallel_starts = 3;
-        config.search.acceptance.rule = optimaru::AcceptanceRule::SimulatedAnnealing;
-        config.search.acceptance.start_temperature = {2, 50.0};
+        config.stop.time_limit = std::chrono::seconds(30);
+        config.stop.target_score = optimum;
+        config.run.parallel_starts = 3;
+        config.acceptance.rule = optimaru::AcceptanceRule::SimulatedAnnealing;
+        config.acceptance.start_temperature = {2, 50.0};
         optimaru::Solver<TaskAssignment> solver(config);
         int made = 0;
         const auto start = std::chrono::steady_clock::now();
@@ -543,9 +543,11 @@ void testMultiStartAndFfd(const Score& optimum) {
         TaskAssignment s = buildTaskInstance();
         const TaskAssignment before = s;
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.parallel_starts = 3;
-        config.on_new_best = [](std::int64_t, const Score&) { throw std::runtime_error("boom"); };
+        config.stop.time_limit = std::chrono::seconds(30);
+        config.run.parallel_starts = 3;
+        config.run.on_new_best = [](std::int64_t, const Score&) {
+            throw std::runtime_error("boom");
+        };
         optimaru::Solver<TaskAssignment> solver(config);
         const auto start = std::chrono::steady_clock::now();
         std::string caught;
@@ -568,8 +570,8 @@ void testMultiStartAndFfd(const Score& optimum) {
         TaskAssignment s = buildTaskInstance();
         const TaskAssignment before = s;
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.parallel_starts = 3;
+        config.stop.time_limit = std::chrono::seconds(30);
+        config.run.parallel_starts = 3;
         optimaru::Solver<TaskAssignment> solver(config);
         optimaru::worker_thread_start_hook = [](int index) {
             if (index == 1) {
@@ -636,8 +638,8 @@ void testMultiStartAndFfd(const Score& optimum) {
     {  // request_stop() reaches every start.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.parallel_starts = 3;
+        config.stop.time_limit = std::chrono::seconds(30);
+        config.run.parallel_starts = 3;
         optimaru::Solver<TaskAssignment> solver(config);
         solver.request_stop();
         const auto start = std::chrono::steady_clock::now();
@@ -652,8 +654,8 @@ void testMultiStartAndFfd(const Score& optimum) {
             return static_cast<double>(*std::max_element(s.cost[t].begin(), s.cost[t].end()));
         };
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(10);
-        config.limits.step_limit = 50000;
+        config.stop.time_limit = std::chrono::seconds(10);
+        config.stop.step_limit = 50000;
         config.construction.difficulty = rowMax;
         TaskAssignmentCalculator calculator;
         Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
@@ -764,9 +766,9 @@ void testListVariable() {
     {  // Single route: cheapest-insertion CH + LS must find the optimal tour.
         TspSolution s = buildTsp(1);
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(10);
-        config.limits.step_limit = 300000;
-        config.seed = 3;
+        config.stop.time_limit = std::chrono::seconds(10);
+        config.stop.step_limit = 300000;
+        config.run.seed = 3;
         TspCalculator calculator;
         Score result = optimaru::Solver<TspSolution>(config).solve(s, calculator);
         bool allAssigned = s.routes[0].size() == s.city.size();
@@ -779,9 +781,9 @@ void testListVariable() {
         // lists with every step verified against a full recompute.
         TspSolution s = buildTsp(2);
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(10);
-        config.limits.step_limit = 3000;
-        config.score_checks = optimaru::ScoreChecks::Full;
+        config.stop.time_limit = std::chrono::seconds(10);
+        config.stop.step_limit = 3000;
+        config.run.score_checks = optimaru::ScoreChecks::Full;
         TspCalculator calculator;
         bool threw = false;
         Score result{0, 0};
@@ -878,13 +880,13 @@ private:
 PinnedTasks solvePinned(std::vector<int> assignment, std::vector<char> pinned, int* customCalls) {
     PinnedTasks s{6, std::move(assignment), std::move(pinned)};
     optimaru::Settings config;
-    config.limits.step_limit = 4000;
-    config.seed = 3;
-    config.score_checks = optimaru::ScoreChecks::Full;
-    config.search.descent_weight = 0.05;
-    config.search.custom_move_probability = 0.3;
-    config.search.ruin_recreate.unimproved_step_trigger = 20;
-    config.search.ruin_recreate.as_move_weight = 0.1;
+    config.stop.step_limit = 4000;
+    config.run.seed = 3;
+    config.run.score_checks = optimaru::ScoreChecks::Full;
+    config.strategies.descent_weight = 0.05;
+    config.custom_moves.share = 0.3;
+    config.alns_trigger.unimproved_step_trigger = 20;
+    config.strategies.ruin_recreate_weight = 0.1;
     optimaru::Solver<PinnedTasks> solver(config);
     if (customCalls != nullptr)
         solver.add_move_operator(std::make_unique<AnyTaskMove>(*customCalls));
@@ -915,7 +917,7 @@ void testPinnedEntities() {
     PinnedTasks reported{6, high, std::vector<char>(high.size(), 1)};
     optimaru::Settings reporting;
     std::vector<double> softScores;
-    reporting.on_new_best = [&](std::int64_t, const Score& score) {
+    reporting.run.on_new_best = [&](std::int64_t, const Score& score) {
         softScores.push_back(score.soft);
     };
     PinnedTasksCalculator reportingCalculator;
@@ -953,7 +955,7 @@ void testPinnedEntities() {
     // a multi-start must refuse before it starts one.
     PinnedTasks multiStart{6, pinnedUnassigned, allButOne};
     optimaru::Settings threaded;
-    threaded.parallel_starts = 2;
+    threaded.run.parallel_starts = 2;
     optimaru::Solver<PinnedTasks> multiStartSolver(threaded);
     check(refusesPinnedWithoutValue([&] {
               multiStartSolver.solve_multistart(
@@ -1005,11 +1007,11 @@ void testCustomMoveProbability() {
     auto run = [](double probability) {
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::minutes(1);
-        config.limits.step_limit = 1000;
-        config.search.ruin_recreate.enabled = false;
-        config.search.custom_move_probability = probability;
-        config.seed = 7;
+        config.stop.time_limit = std::chrono::minutes(1);
+        config.stop.step_limit = 1000;
+        config.alns_trigger.enabled = false;
+        config.custom_moves.share = probability;
+        config.run.seed = 7;
         int calls = 0;
         optimaru::Solver<TaskAssignment> solver(config);
         solver.add_move_operator(std::make_unique<CountingMove<TaskAssignment>>(calls));
@@ -1035,16 +1037,16 @@ void testLnsEscapesLocalOptimum(const Score& optimum) {
     // failing locally 3/3 — the check could not do its job. The budget below
     // is far above the ~0.1s these 100000 steps take; it exists only so the
     // run cannot hang forever.
-    config.limits.time_limit = std::chrono::minutes(10);
-    config.limits.step_limit = 100000;
-    config.search.acceptance.rule = optimaru::AcceptanceRule::HillClimbing;
-    config.search.ruin_recreate.enabled = true;
-    config.search.ruin_recreate.unimproved_step_trigger = 200;
+    config.stop.time_limit = std::chrono::minutes(10);
+    config.stop.step_limit = 100000;
+    config.acceptance.rule = optimaru::AcceptanceRule::HillClimbing;
+    config.alns_trigger.enabled = true;
+    config.alns_trigger.unimproved_step_trigger = 200;
     // 6 entities: ruin 2-4 of them per kick (the default 10-30% would remove
     // just one, too weak to escape the conflict cycle's local optimum).
-    config.search.ruin_recreate.min_ruin_fraction = 0.34;
-    config.search.ruin_recreate.max_ruin_fraction = 0.67;
-    config.seed = 7;
+    config.alns.min_ruin_fraction = 0.34;
+    config.alns.max_ruin_fraction = 0.67;
+    config.run.seed = 7;
     TaskAssignmentCalculator calculator;
     Score result = optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
     check(result == optimum && fullScore(s) == optimum,
@@ -1053,9 +1055,9 @@ void testLnsEscapesLocalOptimum(const Score& optimum) {
     // The same under ScoreChecks::Full: ruin (unassign) and greedy recreate must
     // keep the incremental score consistent at every step.
     TaskAssignment s2 = buildTaskInstance();
-    config.limits.step_limit = 3000;
-    config.search.ruin_recreate.unimproved_step_trigger = 50;
-    config.score_checks = optimaru::ScoreChecks::Full;
+    config.stop.step_limit = 3000;
+    config.alns_trigger.unimproved_step_trigger = 50;
+    config.run.score_checks = optimaru::ScoreChecks::Full;
     TaskAssignmentCalculator calculator2;
     bool threw = false;
     try {
@@ -1109,14 +1111,14 @@ void testNearbyAndLnsOnRandomTsp() {
     auto solveWith = [&](bool performanceFeatures) {
         TspSolution s = buildRandomTsp(1, 100);
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(60);
-        config.limits.step_limit = performanceFeatures ? 200000 : 400000;  // fairness: see above
-        config.seed = 11;
+        config.stop.time_limit = std::chrono::seconds(60);
+        config.stop.step_limit = performanceFeatures ? 200000 : 400000;  // fairness: see above
+        config.run.seed = 11;
         if (performanceFeatures) {
             TspSolution ref = s;  // meter closes over the coordinates
-            config.search.nearby.distance = [ref](int a, int b) { return dist(ref, a, b); };
-            config.search.nearby.size = 10;
-            config.search.ruin_recreate.enabled = true;  // trigger/polish: engine defaults
+            config.selection.nearby.distance = [ref](int a, int b) { return dist(ref, a, b); };
+            config.selection.nearby.size = 10;
+            config.alns_trigger.enabled = true;  // trigger/polish: engine defaults
         }
         TspCalculator calculator;
         Score result = optimaru::Solver<TspSolution>(config).solve(s, calculator);
@@ -1133,16 +1135,15 @@ void testNearbyAndLnsOnRandomTsp() {
     // conservation (ruin/recreate must not lose or duplicate visits).
     TspSolution s = buildRandomTsp(2, 24);
     optimaru::Settings config;
-    config.limits.time_limit = std::chrono::seconds(30);
-    config.limits.step_limit = 3000;
-    config.seed = 5;
+    config.stop.time_limit = std::chrono::seconds(30);
+    config.stop.step_limit = 3000;
+    config.run.seed = 5;
     TspSolution ref = s;
-    config.search.nearby.distance = [ref](int a, int b) { return dist(ref, a, b); };
-    config.search.ruin_recreate.enabled = true;
-    config.search.ruin_recreate.unimproved_step_trigger = 100;
-    config.search.ruin_recreate.polish_steps =
-            50;  // keep ScoreChecks::Full (full recompute per move) fast
-    config.score_checks = optimaru::ScoreChecks::Full;
+    config.selection.nearby.distance = [ref](int a, int b) { return dist(ref, a, b); };
+    config.alns_trigger.enabled = true;
+    config.alns_trigger.unimproved_step_trigger = 100;
+    config.alns.polish_steps = 50;  // keep ScoreChecks::Full (full recompute per move) fast
+    config.run.score_checks = optimaru::ScoreChecks::Full;
     TspCalculator calculator;
     bool threw = false;
     try {
@@ -1179,13 +1180,13 @@ void testCustomMoveShareInLaterStages() {
     auto staged = [](double share) {
         TspSolution s = buildRandomTsp(1, 100);
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::minutes(10);  // the step limit binds
-        config.limits.step_limit = 600000;
-        config.seed = 11;
-        config.search.custom_move_probability = 0.1;
-        config.search.acceptance.history_length = 1;
-        config.search.acceptance.history_growth = 2.0;
-        config.search.acceptance.later_stage_custom_move_share = share;
+        config.stop.time_limit = std::chrono::minutes(10);  // the step limit binds
+        config.stop.step_limit = 600000;
+        config.run.seed = 11;
+        config.custom_moves.share = 0.1;
+        config.acceptance.history_length = 1;
+        config.acceptance.history_growth = 2.0;
+        config.acceptance.later_stage_custom_move_share = share;
         int calls = 0;
         optimaru::Solver<TspSolution> solver(config);
         solver.add_move_operator(std::make_unique<CountingMove<TspSolution>>(calls));
@@ -1214,11 +1215,11 @@ void testHistoryGrowthOnRandomTsp() {
     auto solveWith = [&](double growth) {
         TspSolution s = buildRandomTsp(1, 100);
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::minutes(10);  // the step limit binds
-        config.limits.step_limit = 600000;
-        config.seed = 11;
-        config.search.acceptance.history_length = 1;
-        config.search.acceptance.history_growth = growth;
+        config.stop.time_limit = std::chrono::minutes(10);  // the step limit binds
+        config.stop.step_limit = 600000;
+        config.run.seed = 11;
+        config.acceptance.history_length = 1;
+        config.acceptance.history_growth = growth;
         TspCalculator calculator;
         Score result = optimaru::Solver<TspSolution>(config).solve(s, calculator);
         return -result.soft;  // tour length
@@ -1241,11 +1242,11 @@ void testHistoryGrowthOnRandomTsp() {
     auto solveOther = [&](double growth, bool factory) {
         TspSolution s = buildRandomTsp(1, 100);
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::minutes(10);
-        config.limits.step_limit = 200000;
-        config.seed = 11;
-        config.search.acceptance.rule = optimaru::AcceptanceRule::StepCountingHillClimbing;
-        config.search.acceptance.history_growth = growth;
+        config.stop.time_limit = std::chrono::minutes(10);
+        config.stop.step_limit = 200000;
+        config.run.seed = 11;
+        config.acceptance.rule = optimaru::AcceptanceRule::StepCountingHillClimbing;
+        config.acceptance.history_growth = growth;
         optimaru::Solver<TspSolution> solver(config);
         if (factory) {
             solver.set_acceptor_factory([](const Score& initial) {
@@ -1265,13 +1266,13 @@ void testExpandedMoves() {
     {  // 2 routes with the full move mix under ScoreChecks::Full + conservation.
         TspSolution s = buildRandomTsp(2, 24);
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.limits.step_limit = 4000;
-        config.seed = 5;
-        config.search.moves.or_opt_weight = 0.2;
-        config.search.moves.tail_swap_weight = 0.2;
-        config.search.moves.cross_exchange_weight = 0.2;
-        config.score_checks = optimaru::ScoreChecks::Full;
+        config.stop.time_limit = std::chrono::seconds(30);
+        config.stop.step_limit = 4000;
+        config.run.seed = 5;
+        config.moves.or_opt_weight = 0.2;
+        config.moves.tail_swap_weight = 0.2;
+        config.moves.cross_exchange_weight = 0.2;
+        config.run.score_checks = optimaru::ScoreChecks::Full;
         TspCalculator calculator;
         bool threw = false;
         try {
@@ -1294,12 +1295,12 @@ void testExpandedMoves() {
         TspSolution s = buildTsp(1);
         const double optimum = bruteForceTspOptimum(buildTsp(1));
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(10);
-        config.limits.step_limit = 300000;
-        config.seed = 3;
-        config.search.moves.or_opt_weight = 0.2;
-        config.search.moves.tail_swap_weight = 0.2;
-        config.search.moves.cross_exchange_weight = 0.2;
+        config.stop.time_limit = std::chrono::seconds(10);
+        config.stop.step_limit = 300000;
+        config.run.seed = 3;
+        config.moves.or_opt_weight = 0.2;
+        config.moves.tail_swap_weight = 0.2;
+        config.moves.cross_exchange_weight = 0.2;
         TspCalculator calculator;
         optimaru::Score result = optimaru::Solver<TspSolution>(config).solve(s, calculator);
         check(std::fabs(-result.soft - optimum) < 1e-9,
@@ -2342,29 +2343,31 @@ void testSolverConfig() {
         config.ruin_recreate_rewards = {4.0, 3.0, 2.0, 1.0};
         config.ruin_recreate_polish_steps = 17;
         const optimaru::Settings settings = optimaru::settings_from(config);
-        const optimaru::Limits& limits = settings.limits;
-        check(settings.seed == 99 && settings.score_checks == optimaru::ScoreChecks::Full &&
+        const optimaru::Limits& limits = settings.stop;
+        check(settings.run.seed == 99 && settings.run.score_checks == optimaru::ScoreChecks::Full &&
                       limits.time_limit == std::chrono::milliseconds(1234) &&
                       limits.stall_time_limit == std::chrono::milliseconds(77) &&
                       limits.step_limit == 11 && limits.stall_step_limit == 13,
               "settings_from: the seed, the score checks and the four limits");
-        settings.on_new_best(1, Score{0, 0.0});
+        settings.run.on_new_best(1, Score{0, 0.0});
         check(limits.target_score == Score{0, -5.0} && calls == 1,
               "settings_from: target_score and on_new_best of an engine-Score Config");
-        const optimaru::RuinRecreateSettings& kicks = settings.search.ruin_recreate;
-        check(!kicks.enabled && kicks.unimproved_step_trigger == 3 &&
+        const optimaru::AlnsSettings& kicks = settings.alns;
+        check(!settings.alns_trigger.enabled &&
+                      settings.alns_trigger.unimproved_step_trigger == 3 &&
                       kicks.min_ruin_fraction == 0.2 && kicks.max_ruin_fraction == 0.4 &&
                       kicks.max_ruin_count == 9 && kicks.operator_decay == 0.5 &&
                       kicks.rewards == std::vector<double>({4.0, 3.0, 2.0, 1.0}) &&
                       kicks.polish_steps == 17,
               "settings_from: the ruin & recreate knobs");
-        check(kicks.as_move_weight == 0.25 && kicks.as_move_max_ruin == 7,
+        check(settings.strategies.ruin_recreate_weight == 0.25 &&
+                      settings.strategies.ruin_recreate_max_ruin == 7,
               "settings_from: the two as-move knobs of a Config that declares them");
-        check(settings.parallel_starts == 1,
+        check(settings.run.parallel_starts == 1,
               "settings_from leaves parallel_starts alone (how the starts run is the solver's)");
         const optimaru::Settings defaults = optimaru::settings_from(ToyConfig{});
-        check(defaults.limits.target_score == Score::unreachable() && !defaults.on_new_best &&
-                      defaults.search.ruin_recreate.enabled,
+        check(defaults.stop.target_score == Score::unreachable() && !defaults.run.on_new_best &&
+                      defaults.alns_trigger.enabled,
               "settings_from: a default Config never stops on its target, reports nothing, kicks");
     }
     {  // check_config
@@ -2582,7 +2585,7 @@ void testAcceptanceConfig() {
     {  // The defaults are the engine's, with the automatic starting temperature on.
         const optimaru::AcceptanceSettings engine;
         const optimaru::AcceptanceSettings from =
-                optimaru::settings_from(AcceptingConfig{}).search.acceptance;
+                optimaru::settings_from(AcceptingConfig{}).acceptance;
         check(from.rule == engine.rule && from.tabu_tenure == engine.tabu_tenure &&
                       from.start_temperature == engine.start_temperature &&
                       from.water_level_step == engine.water_level_step &&
@@ -2603,7 +2606,7 @@ void testAcceptanceConfig() {
         config.recount_interval = 9;
         config.record_to_record_start_gap = 0.3;
         config.record_to_record_end_gap = 0.1;
-        const optimaru::AcceptanceSettings from = optimaru::settings_from(config).search.acceptance;
+        const optimaru::AcceptanceSettings from = optimaru::settings_from(config).acceptance;
         check(from.rule == optimaru::AcceptanceRule::GreatDeluge && from.tabu_tenure == 3 &&
                       from.start_temperature == Score{2, 50.0} &&
                       from.start_temperature_fraction == 0.05 &&
@@ -2668,8 +2671,8 @@ void testStallStepLimitAndRequestStop() {
     {  // stall_step_limit fires long before the 30s time_limit.
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
-        config.limits.stall_step_limit = 5000;
+        config.stop.time_limit = std::chrono::seconds(30);
+        config.stop.stall_step_limit = 5000;
         auto t0 = Clock::now();
         TaskAssignmentCalculator calculator;
         optimaru::Solver<TaskAssignment>(config).solve(s, calculator);
@@ -2681,7 +2684,7 @@ void testStallStepLimitAndRequestStop() {
         // background: a thread of the caller's own).
         TaskAssignment s = buildTaskInstance();
         optimaru::Settings config;
-        config.limits.time_limit = std::chrono::seconds(30);
+        config.stop.time_limit = std::chrono::seconds(30);
         optimaru::Solver<TaskAssignment> solver(config);
         TaskAssignmentCalculator calculator;
         Score result;

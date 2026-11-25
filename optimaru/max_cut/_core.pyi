@@ -152,7 +152,7 @@ class SolverConfig:
 
         ruin_recreate_weight: float
         """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
-        ruin_recreate.as_move_weight); 0 (default) = off; off in exact-size mode."""
+        strategies.ruin_recreate_weight); 0 (default) = off; off in exact-size mode."""
         ruin_recreate_max_ruin: int
         descent_weight: float
         """Assignment-shape best-improvement descent strategy weight. 0 = off (off in exact-size mode)."""

@@ -24,13 +24,14 @@ optimaru::Settings configureEngine(const Solver::Config& config, const BedPlan& 
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     if (config.on_new_best) {
         auto on_new_best = config.on_new_best;
-        engineConfig.on_new_best = [on_new_best](std::int64_t step, const optimaru::Score& score) {
+        engineConfig.run.on_new_best = [on_new_best](std::int64_t step,
+                                                     const optimaru::Score& score) {
             on_new_best(step, fromEngineScore(score));
         };
     }
-    engineConfig.limits.target_score = toEngineScoreLimit(config.target_score);
+    engineConfig.stop.target_score = toEngineScoreLimit(config.target_score);
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * plan.stays.size(), 8000, 12000);
@@ -44,12 +45,12 @@ optimaru::Settings configureEngine(const Solver::Config& config, const BedPlan& 
     // A solve that starts from a solution the caller gave has no stages: the
     // start's score is then no lower than where the search stands, and a stage
     // would take the place of the kicks that find something there.
-    if (optimaru::nothing_placed(plan)) engineConfig.search.acceptance.history_growth = 2.0;
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
+    if (optimaru::nothing_placed(plan)) engineConfig.acceptance.history_growth = 2.0;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
     // Exhaustive assignment descent at the budget-share rule:
     // weight x value range = 0.2 (the small-value-range regime).
-    engineConfig.search.descent_weight = 0.2 / static_cast<double>(plan.beds.size() + 1);
+    engineConfig.strategies.descent_weight = 0.2 / static_cast<double>(plan.beds.size() + 1);
 
     // Nearby selection over the stays' date windows: two stays are close when
     // they occupy nearly the same nights. Such a pair can trade beds without
@@ -58,14 +59,14 @@ optimaru::Settings configureEngine(const Solver::Config& config, const BedPlan& 
     // (the contended nights) instead of a scattered set.
     if (config.nearby_probability > 0.0) {
         const BedPlan* planPtr = &plan;
-        engineConfig.search.nearby.distance = [planPtr](int a, int b) {
+        engineConfig.selection.nearby.distance = [planPtr](int a, int b) {
             const Stay& x = planPtr->stays[a];
             const Stay& y = planPtr->stays[b];
             return static_cast<double>(std::abs(x.arrivalDay - y.arrivalDay) +
                                        std::abs(x.departureDay - y.departureDay));
         };
-        engineConfig.search.nearby.size = std::max(1, config.nearby_size);
-        engineConfig.search.nearby.probability = config.nearby_probability;
+        engineConfig.selection.nearby.size = std::max(1, config.nearby_size);
+        engineConfig.selection.nearby.probability = config.nearby_probability;
     }
     return engineConfig;
 }
@@ -106,8 +107,8 @@ void solveSingle(const Solver::Config& config, BedPlan& plan,
     optimaru::Settings engineConfig = configureEngine(config, plan);
     if (config.on_new_best) {
         auto on_new_best = config.on_new_best;
-        engineConfig.on_new_best = [on_new_best, &calculator](std::int64_t step,
-                                                              const optimaru::Score&) {
+        engineConfig.run.on_new_best = [on_new_best, &calculator](std::int64_t step,
+                                                                  const optimaru::Score&) {
             on_new_best(step, levelScoreOf(calculator));
         };
     }

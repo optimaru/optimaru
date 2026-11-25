@@ -18,19 +18,19 @@ namespace {
 optimaru::Settings buildEngineConfig(const Solver::Config& config,
                                      const FlightCrewSchedule& schedule, int parallel_starts) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
-    engineConfig.parallel_starts = parallel_starts;
+    engineConfig.run.parallel_starts = parallel_starts;
     // history_length 0 = auto-scale with the instance (see Config).
     // Coefficient 4 measured against 8 and 2 (10s, 6 seeds, single thread):
     // the score is hard-lexicographic with a rugged soft landscape, so a long
     // acceptance history keeps re-accepting soft regressions it cannot pay
     // back — 4 wins by 15% soft on the 4x instance and 4% on 2x, with 2 (and
     // every larger coefficient) losing on 2x.
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(4 * schedule.flightAssignments.size(), 400, 3200);
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
 
     return engineConfig;
 }

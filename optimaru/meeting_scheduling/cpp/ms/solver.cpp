@@ -59,12 +59,12 @@ void runEngine(const Solver::Config& config, MeetingSchedule& schedule, int para
                const Search& search) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(128 * schedule.meetingAssignments.size(), 3200, 6400);
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
 
     // Guided value selection over the composite (grain x room) value range:
     // with probability day_fit_value_probability a change move draws its start
@@ -86,8 +86,9 @@ void runEngine(const Solver::Config& config, MeetingSchedule& schedule, int para
         const double dayFitProbability = config.day_fit_value_probability;
         const MeetingSchedule* working = &schedule;
         const std::vector<std::vector<int>>* starts = &dayFitStarts;
-        engineConfig.search.value_hint = [working, starts, dayFitProbability](
-                                                 std::mt19937_64& rng, int assignmentIndex) -> int {
+        engineConfig.selection.value_hint = [working, starts, dayFitProbability](
+                                                    std::mt19937_64& rng,
+                                                    int assignmentIndex) -> int {
             std::uniform_real_distribution<double> unit(0.0, 1.0);
             if (unit(rng) >= dayFitProbability) return -1;
             const std::vector<int>& fit = (*starts)[assignmentIndex];
@@ -99,7 +100,7 @@ void runEngine(const Solver::Config& config, MeetingSchedule& schedule, int para
         };
     }
 
-    engineConfig.parallel_starts = parallel_starts;
+    engineConfig.run.parallel_starts = parallel_starts;
     // Everything above travels in the Settings, which every start copies. A
     // custom move or ruin registered on this engine would not:
     // solve_multistart() runs its starts with the built-ins only.

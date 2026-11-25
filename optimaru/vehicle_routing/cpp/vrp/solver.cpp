@@ -154,10 +154,10 @@ void addGroupOperators(optimaru::Solver<VehicleRoutePlan>& engine, const Solver:
 // path too).
 optimaru::Settings buildEngineConfig(const Solver::Config& config, const VehicleRoutePlan& plan) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
-    engineConfig.parallel_starts = 1;
+    engineConfig.run.parallel_starts = 1;
     if (config.on_new_best) {
         auto callback = config.on_new_best;
-        engineConfig.on_new_best = [callback](std::int64_t step, const optimaru::Score& score) {
+        engineConfig.run.on_new_best = [callback](std::int64_t step, const optimaru::Score& score) {
             callback(step, fromEngineScore(score));
         };
     }
@@ -166,7 +166,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
     // overflow the medium*10^9 packing; leave the engine's own never-fires
     // default in place instead.
     if (config.target_score.medium != std::numeric_limits<std::int64_t>::max()) {
-        engineConfig.limits.target_score = toEngineScoreLimit(config.target_score);
+        engineConfig.stop.target_score = toEngineScoreLimit(config.target_score);
     }
 
     // First Fit Decreasing: place the hardest visits while the routes are
@@ -184,7 +184,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
         };
     }
 
-    auto& acceptor = engineConfig.search.acceptance;
+    auto& acceptor = engineConfig.acceptance;
     // history_length 0 = auto-scale with the instance (see Config). The
     // horizon shrinks as the instance grows: steps get slower with route
     // count/length, and what matters is the horizon in wall-time, not in
@@ -199,7 +199,7 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
                     : std::clamp<std::size_t>(60000 / std::max<std::size_t>(plan.visits.size(), 1),
                                               100, 400);
 
-    auto& moves = engineConfig.search.moves;
+    auto& moves = engineConfig.moves;
     moves.relocate_weight = config.relocate_weight;
     moves.list_swap_weight = config.list_swap_weight;
     moves.two_opt_weight = config.two_opt_weight;
@@ -208,35 +208,35 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
     moves.cross_exchange_weight = config.cross_exchange_weight;
     moves.cross_exchange_max_run = config.cross_exchange_max_run;
 
-    engineConfig.search.descent_weight = config.descent_weight;
-    engineConfig.search.descent_max_sweeps = config.descent_max_sweeps;
-    engineConfig.search.granular_descent = config.granular_descent;
-    engineConfig.search.granular_descent_max_segment = config.granular_descent_max_segment;
-    engineConfig.search.granular_descent_candidate_routes =
+    engineConfig.strategies.descent_weight = config.descent_weight;
+    engineConfig.strategies.descent_max_sweeps = config.descent_max_sweeps;
+    engineConfig.strategies.granular_descent = config.granular_descent;
+    engineConfig.strategies.granular_descent_max_segment = config.granular_descent_max_segment;
+    engineConfig.strategies.granular_descent_candidate_routes =
             config.granular_descent_candidate_routes;
-    engineConfig.search.route_elimination_weight = config.route_elimination_weight;
-    engineConfig.search.route_elimination_max_size = config.route_elimination_max_size;
-    engineConfig.search.ejection_chain_weight = config.ejection_chain_weight;
+    engineConfig.strategies.route_elimination_weight = config.route_elimination_weight;
+    engineConfig.strategies.route_elimination_max_size = config.route_elimination_max_size;
+    engineConfig.strategies.ejection_chain_weight = config.ejection_chain_weight;
     // The virtual unassigned pool is the list after the vehicles: the chains
     // seed from it, and no repair or descent ever parks a visit in it (on a
     // tightly loaded fleet that is where a ruin's leftover would go, and the
     // kick that makes it the incumbent then stalls the search; see
-    // SearchSettings::unassigned_list).
-    engineConfig.search.unassigned_list =
+    // Settings::unassigned_list).
+    engineConfig.unassigned_list =
             optimaru::SolutionTraits<VehicleRoutePlan>::unassigned_list(plan);
-    engineConfig.search.ejection_chain_max_steps = config.ejection_chain_max_steps;
-    engineConfig.search.ejection_chain_candidate_lists = config.ejection_chain_candidate_lists;
-    engineConfig.search.iterated_local_search_weight = config.iterated_local_search_weight;
-    engineConfig.search.iterated_local_search_min_ruin = config.iterated_local_search_min_ruin;
-    engineConfig.search.iterated_local_search_max_ruin = config.iterated_local_search_max_ruin;
-    engineConfig.search.iterated_local_search_max_segment =
+    engineConfig.strategies.ejection_chain_max_steps = config.ejection_chain_max_steps;
+    engineConfig.strategies.ejection_chain_candidate_lists = config.ejection_chain_candidate_lists;
+    engineConfig.strategies.iterated_local_search_weight = config.iterated_local_search_weight;
+    engineConfig.strategies.iterated_local_search_min_ruin = config.iterated_local_search_min_ruin;
+    engineConfig.strategies.iterated_local_search_max_ruin = config.iterated_local_search_max_ruin;
+    engineConfig.strategies.iterated_local_search_max_segment =
             config.iterated_local_search_max_segment;
-    engineConfig.search.iterated_local_search_max_evaluations =
+    engineConfig.strategies.iterated_local_search_max_evaluations =
             config.iterated_local_search_max_evaluations;
-    engineConfig.search.ejection_chain_max_evaluations = config.ejection_chain_max_evaluations;
+    engineConfig.strategies.ejection_chain_max_evaluations = config.ejection_chain_max_evaluations;
     // The ruin & recreate knobs that are this use case's own (settings_from
     // set the shared ones).
-    auto& lns = engineConfig.search.ruin_recreate;
+    auto& lns = engineConfig.alns;
     lns.selection_type = config.ruin_recreate_selection_type;
     lns.selection_segment_length = config.ruin_recreate_selection_segment_length;
     lns.selection_alpha = config.ruin_recreate_selection_alpha;
@@ -264,14 +264,14 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config, const Vehicle
                 }
             }
         }
-        engineConfig.search.nearby.distance = [locationOfVisit, matrix](int a, int b) {
+        engineConfig.selection.nearby.distance = [locationOfVisit, matrix](int a, int b) {
             return static_cast<double>((*matrix)[static_cast<std::size_t>((*locationOfVisit)[a])]
                                                 [static_cast<std::size_t>((*locationOfVisit)[b])]);
         };
-        engineConfig.search.nearby.size =
+        engineConfig.selection.nearby.size =
                 std::max(1, std::min(config.driving_time_nearby_size,
                                      static_cast<int>(plan.visits.size()) - 1));
-        engineConfig.search.nearby.probability = config.driving_time_nearby_probability;
+        engineConfig.selection.nearby.probability = config.driving_time_nearby_probability;
     }
     return engineConfig;
 }
@@ -362,8 +362,8 @@ void Solver::solve(VehicleRoutePlan& plan,
             // the new best, so the calculator's accumulators hold exactly that
             // solution; the folded engine score it passes is not decoded.
             auto callback = config_.on_new_best;
-            engineConfig.on_new_best = [callback, &calculator](std::int64_t step,
-                                                               const optimaru::Score&) {
+            engineConfig.run.on_new_best = [callback, &calculator](std::int64_t step,
+                                                                   const optimaru::Score&) {
                 callback(step, levelScore(calculator));
             };
         }

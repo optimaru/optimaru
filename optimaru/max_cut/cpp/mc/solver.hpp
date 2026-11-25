@@ -46,7 +46,7 @@ public:
     //                          better side. Ignored in exact-size mode
     struct Config : optimaru::SolverConfigBase<Score>, optimaru::RuinRecreateConfig {
         // Destroy-and-repair as an ordinary acceptor-judged move (engine
-        // ruin_recreate.as_move_weight). 0 (default) disables it; ignored in
+        // strategies.ruin_recreate_weight). 0 (default) disables it; ignored in
         // exact-size mode.
         double ruin_recreate_as_move_weight = 0.0;
         int ruin_recreate_as_move_max_ruin = 12;

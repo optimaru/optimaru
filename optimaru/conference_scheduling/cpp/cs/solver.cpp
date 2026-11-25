@@ -22,21 +22,21 @@ namespace {
 optimaru::Settings buildEngineConfig(const Solver::Config& config,
                                      const ConferenceSchedule& schedule) {
     optimaru::Settings engineConfig = optimaru::settings_from(config);
-    engineConfig.parallel_starts = 1;  // parallel starts are fanned out above
+    engineConfig.run.parallel_starts = 1;  // parallel starts are fanned out above
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config.history_length != 0
                     ? config.history_length
                     : std::clamp<std::size_t>(8 * schedule.talks.size(), 800, 3200);
-    engineConfig.search.moves.change_weight = config.change_weight;
-    engineConfig.search.moves.swap_weight = config.swap_weight;
+    engineConfig.moves.change_weight = config.change_weight;
+    engineConfig.moves.swap_weight = config.swap_weight;
     // as_move_weight < 0 = auto: the budget-share rule (weight * valueRange
     // ~ 0.2; see Config).
-    engineConfig.search.ruin_recreate.as_move_weight =
+    engineConfig.strategies.ruin_recreate_weight =
             config.ruin_recreate_as_move_weight >= 0.0
                     ? config.ruin_recreate_as_move_weight
                     : 0.2 / std::max(1, schedule.slotRoomCount());
-    engineConfig.search.descent_weight = config.descent_weight;
+    engineConfig.strategies.descent_weight = config.descent_weight;
 
     // Per-talk type-compatible (timeslot, room) cells. Change moves draw from this
     // list with compatible_value_probability; the construction heuristic
@@ -62,8 +62,8 @@ optimaru::Settings buildEngineConfig(const Solver::Config& config,
     };
     if (config.compatible_value_probability > 0.0) {
         const double probability = config.compatible_value_probability;
-        engineConfig.search.value_hint = [compatibleValues, probability](std::mt19937_64& rng,
-                                                                         int talkIndex) -> int {
+        engineConfig.selection.value_hint = [compatibleValues, probability](std::mt19937_64& rng,
+                                                                            int talkIndex) -> int {
             const std::vector<int>& values = (*compatibleValues)[talkIndex];
             if (values.empty()) return -1;  // fall back to the uniform draw
             std::uniform_real_distribution<double> unit(0.0, 1.0);
@@ -144,15 +144,15 @@ void Solver::solve(ConferenceSchedule& schedule) {
             const auto remaining =
                     std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
             if (segment > 0 && remaining.count() <= 0) break;
-            segmentConfig.limits.time_limit =
+            segmentConfig.stop.time_limit =
                     std::max(std::chrono::milliseconds(1), remaining / (segments - segment));
             // A distinct stream per segment, kept far away from the
             // parallel-worker offsets above.
-            segmentConfig.seed =
+            segmentConfig.run.seed =
                     config_.seed + static_cast<std::uint64_t>(segment) * 0x9E3779B97F4A7C15ULL;
         }
-        segmentConfig.on_new_best = [&lastStep, &stepOffset, this](std::int64_t step,
-                                                                   const Score& sc) {
+        segmentConfig.run.on_new_best = [&lastStep, &stepOffset, this](std::int64_t step,
+                                                                       const Score& sc) {
             lastStep = step;
             if (config_.on_new_best) config_.on_new_best(stepOffset + step, sc);
         };
@@ -162,8 +162,8 @@ void Solver::solve(ConferenceSchedule& schedule) {
         if (config_.hot_talk_probability > 0.0) {
             const double probability = config_.hot_talk_probability;
             const int talkCount = static_cast<int>(schedule.talks.size());
-            segmentConfig.search.entity_hint = [&calculator, probability,
-                                                talkCount](std::mt19937_64& rng) -> int {
+            segmentConfig.selection.entity_hint = [&calculator, probability,
+                                                   talkCount](std::mt19937_64& rng) -> int {
                 std::uniform_real_distribution<double> unit(0.0, 1.0);
                 if (unit(rng) >= probability) return -1;
                 for (int attempt = 0; attempt < 4; ++attempt) {

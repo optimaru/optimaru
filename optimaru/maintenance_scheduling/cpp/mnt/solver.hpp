@@ -42,7 +42,7 @@ public:
 
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
         // the stagnation kick (engine
-        // RuinRecreateSettings::as_move_weight): probability that a step is a
+        // StrategySettings::ruin_recreate_weight): probability that a step is a
         // small ruin + greedy best-placement repair instead of a sampled
         // change/swap; a rejected one is rolled back like any other move.
         // 0 disables (measured: no win on the demo instances at 10s), a
@@ -51,7 +51,7 @@ public:
         int ruin_recreate_as_move_max_ruin = 12;
 
         // Best-improvement descent over one entity pair (engine
-        // SearchSettings::descent_weight): enumerate every crewDate for
+        // StrategySettings::descent_weight): enumerate every crewDate for
         // both jobs plus their swap, apply the best improving one, repeat
         // until the pair is locally optimal. 0 disables (measured: loses
         // budget on the demo instances at 10s).

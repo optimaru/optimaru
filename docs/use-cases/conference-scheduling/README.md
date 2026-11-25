@@ -170,7 +170,7 @@ Two changed defaults / structures:
   gates); moves/s go up ~7-10x at scaled:200, which accounts for most of the quality gain
   in the table above, especially at 120/200.
 - **Automatic `strategies.ruin_recreate_weight` default** — ruin & recreate also runs as an
-  ordinary move judged by the acceptor (engine `RuinRecreateSettings::as_move_weight`). The
+  ordinary move judged by the acceptor (engine `StrategySettings::ruin_recreate_weight`). The
   default negative value = automatic `0.2 / slotRoomCount` (the budget-share rule of
   benchmarks/school-timetabling/RESULTS.md; 1.6e-3 for this domain's 126 cells). Sweeping
   the weight at scaled:120, 0.8e-3 / 3e-3 lose and only 1.6e-3 wins, so the rule value is

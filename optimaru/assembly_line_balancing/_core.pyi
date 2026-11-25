@@ -165,7 +165,7 @@ class SolverConfig:
 
         ruin_recreate_weight: float
         """Destroy-and-repair as an ordinary acceptor-judged move (the engine's
-        ruin_recreate.as_move_weight); one such move costs ~ruinCount * station count
+        strategies.ruin_recreate_weight); one such move costs ~ruinCount * station count
         score evaluations. 0 = off."""
         ruin_recreate_max_ruin: int
         descent_weight: float

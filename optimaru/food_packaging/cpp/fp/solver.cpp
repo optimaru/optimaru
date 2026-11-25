@@ -185,35 +185,35 @@ void Solver::solve(PackagingSchedule& schedule) {
         // The shared fields come from settings_from(); a leg's seed, its time
         // limit and its kick switch are computed here, below.
         optimaru::Settings engineConfig = optimaru::settings_from(config_);
-        engineConfig.seed = config_.seed + static_cast<std::uint64_t>(round) *
-                                                   static_cast<std::uint64_t>(std::max(
-                                                           1, config_.parallel_solver_count));
-        engineConfig.parallel_starts = std::max(1, config_.parallel_solver_count);
+        engineConfig.run.seed = config_.seed + static_cast<std::uint64_t>(round) *
+                                                       static_cast<std::uint64_t>(std::max(
+                                                               1, config_.parallel_solver_count));
+        engineConfig.run.parallel_starts = std::max(1, config_.parallel_solver_count);
         if (config_.on_new_best) {
             auto callback = config_.on_new_best;
-            engineConfig.on_new_best = [callback](std::int64_t step, const optimaru::Score& score) {
+            engineConfig.run.on_new_best = [callback](std::int64_t step,
+                                                      const optimaru::Score& score) {
                 callback(step, fromEngineScore(score));
             };
         }
-        engineConfig.limits.time_limit = remaining / (rounds - round);
-        engineConfig.limits.target_score = config_.target_score;
-        setLateAcceptance(engineConfig.search.acceptance, config_.history_length, movableJobs,
-                          schedule);
-        auto& moves = engineConfig.search.moves;
+        engineConfig.stop.time_limit = remaining / (rounds - round);
+        engineConfig.stop.target_score = config_.target_score;
+        setLateAcceptance(engineConfig.acceptance, config_.history_length, movableJobs, schedule);
+        auto& moves = engineConfig.moves;
         moves.relocate_weight = config_.relocate_weight;
         moves.list_swap_weight = config_.list_swap_weight;
         moves.two_opt_weight = config_.two_opt_weight;
         moves.or_opt_weight = config_.or_opt_weight;
         moves.tail_swap_weight = config_.tail_swap_weight;
         if (config_.nearby_probability > 0 && movableJobs >= 2) {
-            engineConfig.search.nearby.probability = config_.nearby_probability;
-            engineConfig.search.nearby.size = config_.nearby_size;
+            engineConfig.selection.nearby.probability = config_.nearby_probability;
+            engineConfig.selection.nearby.size = config_.nearby_size;
             // Element ids are engine ids; the meter reads only immutable
             // problem facts (products, cleanup matrix, id mapping), so the
             // lambda stays valid across the engine's worker copies. Missing
             // cleanup pairs rank as "very far" instead of throwing (the
             // meter must never evaluate score semantics).
-            engineConfig.search.nearby.distance = [&schedule](int a, int b) {
+            engineConfig.selection.nearby.distance = [&schedule](int a, int b) {
                 const Job& jobA = schedule.jobs[schedule.engineToJob[a]];
                 const Job& jobB = schedule.jobs[schedule.engineToJob[b]];
                 const Minutes ab = schedule.cleanup(jobA.productIndex, jobB.productIndex);
@@ -226,7 +226,7 @@ void Solver::solve(PackagingSchedule& schedule) {
                 return changeover * 1e6 + idealGap;
             };
         }
-        engineConfig.search.ruin_recreate.enabled = config_.ruin_recreate && movableJobs >= 4;
+        engineConfig.alns_trigger.enabled = config_.ruin_recreate && movableJobs >= 4;
 
         // Construction heuristic (cheapest insertion over lines + the
         // unassigned pool) + late-acceptance local search with ALNS kicks;
@@ -268,7 +268,7 @@ void Solver::solve(PackagingSchedule& schedule,
         // caller-assembled plugin cannot be cloned. The move mix, the
         // changeover-nearby selection and the ALNS kicks are the same.
         optimaru::Settings engineConfig = optimaru::settings_from(config_);
-        engineConfig.parallel_starts = 1;
+        engineConfig.run.parallel_starts = 1;
         if (config_.on_new_best) {
             // Report the same three levels as the final schedule.score below.
             // The engine calls on_new_best right after the working solution
@@ -276,24 +276,23 @@ void Solver::solve(PackagingSchedule& schedule,
             // exactly that solution; the folded engine score it passes is not
             // decoded.
             auto callback = config_.on_new_best;
-            engineConfig.on_new_best = [callback, &calculator](std::int64_t step,
-                                                               const optimaru::Score&) {
+            engineConfig.run.on_new_best = [callback, &calculator](std::int64_t step,
+                                                                   const optimaru::Score&) {
                 callback(step, levelScoreOf(calculator));
             };
         }
-        engineConfig.limits.target_score = config_.target_score;
-        setLateAcceptance(engineConfig.search.acceptance, config_.history_length, movableJobs,
-                          schedule);
-        auto& moves = engineConfig.search.moves;
+        engineConfig.stop.target_score = config_.target_score;
+        setLateAcceptance(engineConfig.acceptance, config_.history_length, movableJobs, schedule);
+        auto& moves = engineConfig.moves;
         moves.relocate_weight = config_.relocate_weight;
         moves.list_swap_weight = config_.list_swap_weight;
         moves.two_opt_weight = config_.two_opt_weight;
         moves.or_opt_weight = config_.or_opt_weight;
         moves.tail_swap_weight = config_.tail_swap_weight;
         if (config_.nearby_probability > 0 && movableJobs >= 2) {
-            engineConfig.search.nearby.probability = config_.nearby_probability;
-            engineConfig.search.nearby.size = config_.nearby_size;
-            engineConfig.search.nearby.distance = [&schedule](int a, int b) {
+            engineConfig.selection.nearby.probability = config_.nearby_probability;
+            engineConfig.selection.nearby.size = config_.nearby_size;
+            engineConfig.selection.nearby.distance = [&schedule](int a, int b) {
                 const Job& jobA = schedule.jobs[schedule.engineToJob[a]];
                 const Job& jobB = schedule.jobs[schedule.engineToJob[b]];
                 const Minutes ab = schedule.cleanup(jobA.productIndex, jobB.productIndex);
@@ -306,7 +305,7 @@ void Solver::solve(PackagingSchedule& schedule,
                 return changeover * 1e6 + idealGap;
             };
         }
-        engineConfig.search.ruin_recreate.enabled = config_.ruin_recreate && movableJobs >= 4;
+        engineConfig.alns_trigger.enabled = config_.ruin_recreate && movableJobs >= 4;
 
         auto engine = optimaru::Solver<PackagingSchedule>(std::move(engineConfig));
         engine.solve(schedule, calculator);

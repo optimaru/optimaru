@@ -50,7 +50,7 @@ public:
 
         // Destroy-and-repair as an ORDINARY acceptor-judged move, on top of
         // the stagnation kick (engine
-        // RuinRecreateSettings::as_move_weight). Probability that a step is a
+        // StrategySettings::ruin_recreate_weight). Probability that a step is a
         // small ruin + greedy repair instead of a sampled change/swap; a
         // rejected one is rolled back like any other move. It draws from the
         // same adaptive ruin-operator pool as the kick, so with
@@ -62,7 +62,7 @@ public:
         int ruin_recreate_as_move_max_ruin = 12;
 
         // Best-improvement descent over one nearby shift pair (engine
-        // SearchSettings::descent_weight): enumerate every employee for
+        // StrategySettings::descent_weight): enumerate every employee for
         // both shifts plus their swap, apply the best improving one, repeat
         // until the pair is locally optimal. Always improving, so it bypasses
         // the acceptor. Picks its first shift through the same violation

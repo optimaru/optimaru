@@ -21,24 +21,24 @@ void Solver::solve(Timetable& table) {
     optimaru::check_config(config_);
 
     optimaru::Settings engineConfig = optimaru::settings_from(config_);
-    engineConfig.parallel_starts = std::max(1, config_.parallel_solver_count);
+    engineConfig.run.parallel_starts = std::max(1, config_.parallel_solver_count);
     // history_length 0 = auto-scale with the instance (see Config).
-    engineConfig.search.acceptance.history_length =
+    engineConfig.acceptance.history_length =
             config_.history_length != 0
                     ? config_.history_length
                     : std::clamp<std::size_t>(8 * table.lessons.size(), 400, 3200);
-    engineConfig.search.moves.change_weight = config_.change_weight;
-    engineConfig.search.moves.swap_weight = config_.swap_weight;
+    engineConfig.moves.change_weight = config_.change_weight;
+    engineConfig.moves.swap_weight = config_.swap_weight;
     // AUTO as-move weight (negative sentinel): budget-share 0.2 inside the
     // measured [900, 1300]-cell pay-off window, off outside it (see Config).
     // settings_from() copied a weight >= 0 as it is.
     if (config_.ruin_recreate_as_move_weight < 0.0) {
         const int cells = table.slotRoomCount();
-        engineConfig.search.ruin_recreate.as_move_weight =
+        engineConfig.strategies.ruin_recreate_weight =
                 (cells >= 900 && cells <= 1300) ? 0.2 / cells : 0.0;
     }
-    engineConfig.search.descent_weight = config_.descent_weight;
-    engineConfig.search.descent_max_sweeps = config_.descent_max_sweeps;
+    engineConfig.strategies.descent_weight = config_.descent_weight;
+    engineConfig.strategies.descent_max_sweeps = config_.descent_max_sweeps;
 
     // Same-group nearby neighborhoods (see Config::same_group_nearby): the
     // groupId is interned by prepare().
@@ -51,11 +51,11 @@ void Solver::solve(Timetable& table) {
             ++groupSize[lesson.groupId];
         }
         const std::size_t maxGroupSize = *std::max_element(groupSize.begin(), groupSize.end());
-        engineConfig.search.nearby.distance = [groupOf](int a, int b) {
+        engineConfig.selection.nearby.distance = [groupOf](int a, int b) {
             return (*groupOf)[a] == (*groupOf)[b] ? 0.0 : 1.0;
         };
-        engineConfig.search.nearby.size = std::max(1, static_cast<int>(maxGroupSize) - 1);
-        engineConfig.search.nearby.probability = config_.same_group_nearby_probability;
+        engineConfig.selection.nearby.size = std::max(1, static_cast<int>(maxGroupSize) - 1);
+        engineConfig.selection.nearby.probability = config_.same_group_nearby_probability;
     }
 
     // Construction heuristic + late-acceptance local search (+ ALNS kicks),

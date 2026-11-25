@@ -89,8 +89,8 @@ public:
     // Solves in place; returns the best score found.
     Score solve(Solution& solution, Objective<Solution>& objective) {
         require_pinned_values<Traits>(solution);
-        Editor<Solution> editor(solution, objective, config_.score_checks);
-        StopCondition stop(config_.limits, stop_requested_.get(), run_stop_.get());
+        Editor<Solution> editor(solution, objective, config_.run.score_checks);
+        StopCondition stop(config_.stop, stop_requested_.get(), run_stop_.get());
         build_nearby(solution);
         Construction<Solution>::run(editor, config_.construction);
         LocalSearch<Solution> local_search(config_, nearby_, move_operators_, ruin_operators_,
@@ -107,7 +107,7 @@ public:
         stop_requested_ = std::move(flag);
     }
 
-    // Multi-start solving: config_.parallel_starts independent solves on
+    // Multi-start solving: config_.run.parallel_starts independent solves on
     // copies of the solution (seeds seed + i), keeping the best.
     // make_objective() is invoked once per start, on the calling thread.
     // Solution must be copy-constructible and copy-assignable.
@@ -131,7 +131,7 @@ public:
     template <typename ObjectiveFactory>
     Score solve_multistart(Solution& solution, ObjectiveFactory&& make_objective) {
         require_pinned_values<Traits>(solution);
-        const int starts = std::max(1, config_.parallel_starts);
+        const int starts = std::max(1, config_.run.parallel_starts);
         if (starts == 1) {
             auto objective = make_objective();
             return solve(solution, *objective);
@@ -155,16 +155,17 @@ public:
                  &first_failure](int i) {
                     try {
                         Settings thread_config = config_;
-                        thread_config.seed = config_.seed + static_cast<std::uint64_t>(i);
-                        thread_config.parallel_starts = 1;
-                        if (i != 0) thread_config.on_new_best = nullptr;  // only thread 0 reports
+                        thread_config.run.seed = config_.run.seed + static_cast<std::uint64_t>(i);
+                        thread_config.run.parallel_starts = 1;
+                        if (i != 0)
+                            thread_config.run.on_new_best = nullptr;  // only thread 0 reports
                         Solver thread_solver(std::move(thread_config));
                         if (acceptor_factory_)
                             thread_solver.set_acceptor_factory(acceptor_factory_);
                         thread_solver.share_stop_flag(stop_requested_);
                         thread_solver.run_stop_ = stop;
                         scores[i] = thread_solver.solve(copies[i], *objectives[i]);
-                        if (scores[i] >= config_.limits.target_score) stop->store(true);
+                        if (scores[i] >= config_.stop.target_score) stop->store(true);
                     } catch (...) {
                         {
                             std::lock_guard<std::mutex> lock(failure_mutex);
@@ -195,7 +196,7 @@ private:
     std::shared_ptr<std::atomic<bool>> run_stop_;
 
     void build_nearby(const Solution& solution) {
-        const NeighborSettings& nearby_config = config_.search.nearby;
+        const NeighborSettings& nearby_config = config_.selection.nearby;
         if (!nearby_config.distance) return;
         int n = 0;
         if constexpr (Traits::shape == Shape::Assignment) {
